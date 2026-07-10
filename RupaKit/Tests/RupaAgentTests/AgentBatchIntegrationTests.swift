@@ -86,5 +86,9 @@ import SwiftCAD
     #expect(result.dirty)
     #expect(session.document.cadDocument.metadata.name == "After Batch")
     #expect(session.generation == DocumentGeneration(2))
-    #expect(session.commandStack.undoEntries.count == 2)
+    #expect(session.commandStack.undoEntries.count == 1)
+
+    _ = try session.undo()
+
+    #expect(session.document.cadDocument.metadata.name == "Before Batch")
 }

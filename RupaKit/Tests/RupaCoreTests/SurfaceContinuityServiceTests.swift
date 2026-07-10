@@ -10,7 +10,7 @@ import SwiftCAD
         options: PolySplineOptions(mergePatches: false)
     )
 
-    let summary = try SurfaceContinuityService().summarize(document: document)
+    let summary = try SurfaceContinuityService().summarize(document: document, displayUnit: .millimeter)
 
     #expect(summary.counts.bSplineFaceCount == 2)
     #expect(summary.counts.sharedEdgeCount == 1)

@@ -61,7 +61,6 @@ extension DesignDocument {
                 featureID: featureID,
                 sourceSection: .profile(profile),
                 typeID: typeID,
-                ruler: ruler,
                 objectRegistry: objectRegistry
             )
         )
@@ -130,7 +129,6 @@ extension DesignDocument {
                 featureID: featureID,
                 sourceSection: .profile(profile),
                 typeID: nil,
-                ruler: ruler,
                 objectRegistry: objectRegistry
             )
         )
@@ -230,7 +228,6 @@ extension DesignDocument {
                 sourceSection: sections.first.map(BodySourceSectionReference.init(sweepSection:)),
                 typeID: nil,
                 geometryRole: options.resultKind.objectGeometryRole,
-                ruler: ruler,
                 objectRegistry: objectRegistry
             )
         )
@@ -307,7 +304,6 @@ extension DesignDocument {
                 sourceSection: sections.first.map { .profile($0.profile) },
                 typeID: nil,
                 geometryRole: options.resultKind.objectGeometryRole,
-                ruler: ruler,
                 objectRegistry: objectRegistry
             )
         )
@@ -389,7 +385,6 @@ extension DesignDocument {
                 sourceSection: nil,
                 typeID: nil,
                 geometryRole: .solid,
-                ruler: ruler,
                 objectRegistry: objectRegistry
             )
         )
@@ -414,7 +409,7 @@ extension DesignDocument {
             return false
         }
         let parameters = try ParameterResolver().resolve(cadDocument.parameters)
-        let tolerance = ModelingTolerance.workspaceScaleAware(for: self)
+        let tolerance = modelingSettings.tolerance
         do {
             return try SketchProfileExtractor(tolerance: tolerance)
                 .extractProfiles(

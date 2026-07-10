@@ -155,6 +155,7 @@ public struct ViewportProjectedGrid: Equatable {
 
     public init(
         document: DesignDocument,
+        ruler: RulerConfiguration,
         size: CGSize,
         camera: ViewportCamera = .identity,
         basis: ViewportProjectionBasis = .isometric,
@@ -162,12 +163,13 @@ public struct ViewportProjectedGrid: Equatable {
     ) {
         let layout = ViewportModelCoordinateMapper(
             document: document,
+            ruler: ruler,
             size: size,
             camera: camera,
             basis: basis
         ).layout
         self.init(
-            document: document,
+            ruler: ruler,
             layout: layout,
             size: size,
             visualSpacingMode: visualSpacingMode
@@ -175,12 +177,12 @@ public struct ViewportProjectedGrid: Equatable {
     }
 
     public init(
-        document: DesignDocument,
+        ruler: RulerConfiguration,
         layout: ViewportLayout,
         size: CGSize,
         visualSpacingMode: VisualSpacingMode = .adaptive
     ) {
-        let ruler = document.ruler.normalizedForWorkspaceScale()
+        let ruler = ruler.normalizedForWorkspaceScale()
         let requestedMinorStepMeters = Self.requestedVisualMinorStep(
             ruler: ruler,
             scale: layout.scale,
@@ -241,7 +243,7 @@ public struct ViewportProjectedGrid: Equatable {
             plane: plane,
             modelBounds: modelBounds,
             majorStepMeters: resolvedMajorStepMeters,
-            unit: document.displayUnit,
+            unit: ruler.displayUnit,
             maximumLabelMeters: RulerConfiguration.visibleSpanMetersRange.upperBound
         )
         self.scaleReadout = Self.makeScaleReadout(
@@ -251,7 +253,7 @@ public struct ViewportProjectedGrid: Equatable {
             visibleSpanMeters: max(Double(modelBounds.width), Double(modelBounds.height)),
             workspaceSpanMeters: ruler.visibleSpanMeters,
             minorStepPixels: minorStepPixels,
-            unit: document.displayUnit,
+            unit: ruler.displayUnit,
             visualSpacingMode: visualSpacingMode,
             isVisualStepCapped: isVisualStepCapped
         )

@@ -16,6 +16,9 @@ public struct CLIWriteDocumentOptions: ParsableArguments {
     @Option(help: "Expected document generation for live mode.")
     public var expectedGeneration: UInt64?
 
+    @Option(help: "Expected workspace revision for live workspace mutations.")
+    public var expectedWorkspaceRevision: UInt64?
+
     @Flag(help: "Validate the command without saving the changed file.")
     public var dryRun: Bool = false
 
@@ -51,6 +54,10 @@ public struct CLIWriteDocumentOptions: ParsableArguments {
 
     public func generation() -> DocumentGeneration? {
         expectedGeneration.map(DocumentGeneration.init)
+    }
+
+    public func workspaceRevision() -> WorkspaceRevision? {
+        expectedWorkspaceRevision.map(WorkspaceRevision.init)
     }
 
     public func agentClient(sessionID: UUID?) -> AgentClient? {

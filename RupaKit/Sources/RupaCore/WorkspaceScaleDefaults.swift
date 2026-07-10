@@ -46,9 +46,3 @@ public struct WorkspaceScaleDefaults: Equatable, Sendable {
         return min(candidateMeters, fitLimitMeters)
     }
 }
-
-public extension DesignDocument {
-    var workspaceScaleDefaults: WorkspaceScaleDefaults {
-        WorkspaceScaleDefaults(ruler: ruler)
-    }
-}

@@ -390,7 +390,7 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
-    _ = try AutomationRunner().execute(.setDisplayUnit(.meter), in: session)
+    _ = try AutomationRunner().execute(.renameDocument(name: "Current"), in: session)
 
     let response = server.handle(
         .execute(
@@ -405,7 +405,8 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
         return
     }
     #expect(error.code == .documentGenerationMismatch)
-    #expect(session.document.cadDocument.metadata.name == "Untitled")
+    #expect(session.document.cadDocument.metadata.name == "Current")
+    #expect(session.generation == DocumentGeneration(1))
 }
 
 @Test func agentReportsSessionNotFoundForUnknownSession() async throws {

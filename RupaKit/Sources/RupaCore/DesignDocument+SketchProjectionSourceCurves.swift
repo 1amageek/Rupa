@@ -8,7 +8,7 @@ extension DesignDocument {
         targetSystem: SketchPlaneCoordinateSystem,
         operationName: String,
         objectRegistry: ObjectTypeRegistry,
-        topology: inout TopologySummaryResult?
+        topology: inout TopologySnapshot?
     ) throws -> (entity: SketchEntity, sourceName: String) {
         if case .sketchEntity = target.component {
             let selection = try editableSketchEntity(

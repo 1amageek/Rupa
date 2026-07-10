@@ -26,7 +26,7 @@ import SwiftCAD
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(sourceLine.selectionTarget())
     server.register(session: session, id: sessionID)
@@ -48,7 +48,7 @@ import SwiftCAD
         Issue.record("Agent must return an offsetCurve command result.")
         return
     }
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let lines = after.entries.filter { $0.entityKind == "line" }
     let offset = try #require(lines.first { entry in
         abs((entry.start?.y ?? -1.0) - 0.002) < 1.0e-12 &&
@@ -82,7 +82,7 @@ import SwiftCAD
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let bottomLine = try #require(before.entries.first { entry in
         entry.entityKind == "line" &&
             abs((entry.start?.x ?? -1.0) - 0.0) < 1.0e-12 &&
@@ -109,7 +109,7 @@ import SwiftCAD
         Issue.record("Agent must return an offsetSketchVertex command result.")
         return
     }
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let lines = after.entries.filter { $0.sourceFeatureID == bottomLine.sourceFeatureID && $0.entityKind == "line" }
     #expect(result.commandName == "offsetSketchVertex")
     #expect(result.didMutate)
@@ -138,7 +138,7 @@ import SwiftCAD
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let bottomLine = try #require(before.entries.first { entry in
         entry.entityKind == "line" &&
             abs((entry.start?.x ?? -1.0) - 0.0) < 1.0e-12 &&
@@ -166,7 +166,7 @@ import SwiftCAD
         Issue.record("Agent must return an offsetCurve vertex branch command result.")
         return
     }
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let lines = after.entries.filter { $0.sourceFeatureID == bottomLine.sourceFeatureID && $0.entityKind == "line" }
     #expect(result.commandName == "offsetCurve")
     #expect(result.didMutate)
@@ -182,7 +182,7 @@ import SwiftCAD
     let sessionID = UUID()
     let setup = try agentLineArcOffsetVertexSketchDocument()
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceArc = try #require(before.entries.first { $0.entityID == setup.arcID.description })
     let target = try #require(sourceArc.selectionTarget())
     server.register(session: session, id: sessionID)
@@ -204,7 +204,7 @@ import SwiftCAD
         Issue.record("Agent must return an offsetCurve arc vertex branch command result.")
         return
     }
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceEntries = after.entries.filter { $0.sourceFeatureID == setup.featureID.description }
     #expect(result.commandName == "offsetCurve")
     #expect(result.didMutate)
@@ -221,7 +221,7 @@ import SwiftCAD
     let sessionID = UUID()
     let setup = try agentArcArcOffsetVertexSketchDocument()
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceArc = try #require(before.entries.first { $0.entityID == setup.upperArcID.description })
     let target = try #require(sourceArc.selectionTarget())
     server.register(session: session, id: sessionID)
@@ -243,7 +243,7 @@ import SwiftCAD
         Issue.record("Agent must return an offsetCurve arc-arc vertex branch command result.")
         return
     }
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceEntries = after.entries.filter { $0.sourceFeatureID == setup.featureID.description }
     #expect(result.commandName == "offsetCurve")
     #expect(result.didMutate)
@@ -273,7 +273,7 @@ import SwiftCAD
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(sourceLine.selectionTarget())
     server.register(session: session, id: sessionID)
@@ -293,7 +293,7 @@ import SwiftCAD
         Issue.record("Agent must return a createSlotSketch command result.")
         return
     }
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let slotFeature = try #require(
         session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Agent Slot Source Line Slot" }
     )
@@ -313,7 +313,7 @@ import SwiftCAD
     let sessionID = UUID()
     let setup = try agentOpenLineChainSlotDocument(name: "Agent Slot Source Chain")
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityID == setup.lineIDs[0].description })
     let target = try #require(sourceLine.selectionTarget())
     server.register(session: session, id: sessionID)
@@ -333,7 +333,7 @@ import SwiftCAD
         Issue.record("Agent must return a createSlotSketch command result for an open line-chain.")
         return
     }
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let slotFeature = try #require(
         session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Agent Slot Source Chain Slot" }
     )
@@ -387,7 +387,7 @@ import SwiftCAD
             endAngle: .angle(Double.pi / 2.0, .radian)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceArc = try #require(before.entries.first { $0.entityKind == "arc" })
     let target = try #require(sourceArc.selectionTarget())
     server.register(session: session, id: sessionID)
@@ -407,7 +407,7 @@ import SwiftCAD
         Issue.record("Agent must return a createSlotSketch command result for a source arc.")
         return
     }
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let slotFeature = try #require(
         session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Agent Slot Source Arc Slot" }
     )
@@ -460,7 +460,7 @@ import SwiftCAD
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceSpline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(sourceSpline.selectionTarget())
     server.register(session: session, id: sessionID)
@@ -480,7 +480,7 @@ import SwiftCAD
         Issue.record("Agent must return a createSlotSketch command result for a source spline.")
         return
     }
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let slotFeature = try #require(
         session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Agent Slot Source Spline Slot" }
     )
@@ -528,7 +528,7 @@ import SwiftCAD
     let sessionID = UUID()
     let setup = try agentOpenLineArcChainSlotDocument(name: "Agent Slot Source Line Arc Chain")
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityID == setup.lineID.description })
     let target = try #require(sourceLine.selectionTarget())
     server.register(session: session, id: sessionID)
@@ -548,7 +548,7 @@ import SwiftCAD
         Issue.record("Agent must return a createSlotSketch command result for an open line-arc chain.")
         return
     }
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let slotFeature = try #require(
         session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Agent Slot Source Line Arc Chain Slot" }
     )
@@ -603,7 +603,7 @@ import SwiftCAD
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(sourceLine.selectionTarget())
     server.register(session: session, id: sessionID)
@@ -625,7 +625,7 @@ import SwiftCAD
         Issue.record("Agent must return an offsetCurve Slot mode command result.")
         return
     }
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let slotFeature = try #require(
         session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Agent Offset Slot Source Line Slot" }
     )

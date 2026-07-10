@@ -190,7 +190,7 @@ import SwiftCAD
         Issue.record("Agent must return a command result.")
         return
     }
-    let afterTopology = try TopologySummaryService().summarize(document: session.document)
+    let afterTopology = try TopologySnapshotService().snapshot(document: session.document)
     let movedArcEdge = try #require(afterTopology.entries.first {
         guard let radius = $0.curveRadius else {
             return false
@@ -261,7 +261,7 @@ import SwiftCAD
         Issue.record("Agent Face Knife command must create a FaceKnife feature.")
         return
     }
-    let afterTopology = try TopologySummaryService().summarize(document: session.document)
+    let afterTopology = try TopologySnapshotService().snapshot(document: session.document)
     let faceKnifeFaces = afterTopology.entries.filter {
         $0.kind == .face && $0.sceneNodeID == faceKnifeSceneNodeID.description
     }
@@ -317,7 +317,7 @@ import SwiftCAD
         Issue.record("Agent Delete Face command must create a FaceDelete feature.")
         return
     }
-    let afterTopology = try TopologySummaryService().summarize(document: session.document)
+    let afterTopology = try TopologySnapshotService().snapshot(document: session.document)
     let evaluation = try #require(session.currentEvaluationCache?.evaluatedDocument)
     let body = try #require(evaluation.brep.bodies.values.first)
     let carriedFaces = afterTopology.entries.filter {
@@ -386,7 +386,7 @@ import SwiftCAD
         Issue.record("Agent Draft Face command must create a FaceDraft feature.")
         return
     }
-    let afterTopology = try TopologySummaryService().summarize(document: session.document)
+    let afterTopology = try TopologySnapshotService().snapshot(document: session.document)
     let evaluation = try #require(session.currentEvaluationCache?.evaluatedDocument)
     let body = try #require(evaluation.brep.bodies.values.first)
     let draftFaces = afterTopology.entries.filter {
@@ -456,7 +456,7 @@ import SwiftCAD
         Issue.record("Agent Draft Face command must create a FaceDraft feature.")
         return
     }
-    let afterTopology = try TopologySummaryService().summarize(document: session.document)
+    let afterTopology = try TopologySnapshotService().snapshot(document: session.document)
     let evaluation = try #require(session.currentEvaluationCache?.evaluatedDocument)
     let body = try #require(evaluation.brep.bodies.values.first)
     let draftFaces = afterTopology.entries.filter {
@@ -534,7 +534,7 @@ import SwiftCAD
         Issue.record("Agent Offset Curve edge target must create an EdgeOffset feature.")
         return
     }
-    let afterTopology = try TopologySummaryService().summarize(document: session.document)
+    let afterTopology = try TopologySnapshotService().snapshot(document: session.document)
     let generatedOffsetEdges = afterTopology.entries.filter {
         $0.kind == .edge &&
             $0.sourceFeatureID == offsetFeatureID.description &&
@@ -621,7 +621,7 @@ import SwiftCAD
         Issue.record("Agent Offset Curve edge target must create an EdgeOffset feature from selection context.")
         return
     }
-    let afterTopology = try TopologySummaryService().summarize(document: session.document)
+    let afterTopology = try TopologySnapshotService().snapshot(document: session.document)
     let generatedOffsetEdges = afterTopology.entries.filter {
         $0.kind == .edge &&
             $0.sourceFeatureID == offsetFeatureID.description &&
@@ -705,7 +705,7 @@ import SwiftCAD
         Issue.record("Agent Offset Curve edge target must create an EdgeOffset feature from cap edge context.")
         return
     }
-    let afterTopology = try TopologySummaryService().summarize(document: session.document)
+    let afterTopology = try TopologySnapshotService().snapshot(document: session.document)
     let generatedOffsetEdges = afterTopology.entries.filter {
         $0.kind == .edge &&
             $0.sourceFeatureID == offsetFeatureID.description &&

@@ -4,15 +4,18 @@ import RupaCoreTypes
 public struct DocumentEvaluationContext: Sendable {
     public let generation: DocumentGeneration
     public let sourceFingerprint: CADDocumentSourceFingerprint
+    public let modelingSettings: DocumentModelingSettings
     public let evaluatedDocument: EvaluatedDocument
 
     init(
         generation: DocumentGeneration,
         sourceFingerprint: CADDocumentSourceFingerprint,
+        modelingSettings: DocumentModelingSettings,
         evaluatedDocument: EvaluatedDocument
     ) {
         self.generation = generation
         self.sourceFingerprint = sourceFingerprint
+        self.modelingSettings = modelingSettings
         self.evaluatedDocument = evaluatedDocument
     }
 
@@ -20,6 +23,7 @@ public struct DocumentEvaluationContext: Sendable {
         self.init(
             generation: cache.generation,
             sourceFingerprint: cache.sourceFingerprint,
+            modelingSettings: cache.modelingSettings,
             evaluatedDocument: cache.evaluatedDocument
         )
     }
@@ -28,21 +32,23 @@ public struct DocumentEvaluationContext: Sendable {
         EvaluatedDocumentCache(
             generation: generation,
             sourceFingerprint: sourceFingerprint,
+            modelingSettings: modelingSettings,
             evaluatedDocument: evaluatedDocument
         )
     }
 
     public func matches(
         document: DesignDocument,
-        generation expectedGeneration: DocumentGeneration?,
-        tolerance: ModelingTolerance? = nil
+        generation expectedGeneration: DocumentGeneration?
     ) throws -> Bool {
         guard let expectedGeneration,
-              generation == expectedGeneration else {
+              generation == expectedGeneration,
+              modelingSettings == document.modelingSettings else {
             return false
         }
-        let resolvedTolerance = tolerance ?? .workspaceScaleAware(for: document)
-        let currentFingerprint = try document.cadDocument.sourceFingerprint(tolerance: resolvedTolerance)
+        let currentFingerprint = try document.cadDocument.sourceFingerprint(
+            tolerance: document.modelingSettings.tolerance
+        )
         return currentFingerprint == sourceFingerprint
     }
 }

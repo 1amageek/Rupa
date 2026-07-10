@@ -8,7 +8,10 @@ import SwiftCAD
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
 
-    let result = try TopologySummaryService().summarize(document: session.document)
+    let result = try TopologySummaryService().summarize(
+        document: session.document,
+        displayUnit: session.workspaceState.displayUnit
+    )
 
     #expect(result.counts.bodyCount == 1)
     #expect(result.counts.faceCount == 6)
@@ -78,7 +81,10 @@ import SwiftCAD
         )
     )
 
-    let result = try TopologySummaryService().summarize(document: session.document)
+    let result = try TopologySummaryService().summarize(
+        document: session.document,
+        displayUnit: session.workspaceState.displayUnit
+    )
     let faceAreas = result.entries
         .filter { $0.kind == .face }
         .compactMap(\.areaSquareMeters)
@@ -98,7 +104,7 @@ import SwiftCAD
 @Test func topologySummaryServiceReportsBSplineEdgeLengthsFromSmoothLoft() throws {
     let document = try topologySummarySmoothLoftDocument()
 
-    let result = try TopologySummaryService().summarize(document: document)
+    let result = try TopologySnapshotService().snapshot(document: document)
     let bSplineEdges = result.entries.filter {
         $0.kind == .edge
             && $0.curveKind == "bSpline"
@@ -128,7 +134,10 @@ import SwiftCAD
     let session = EditorSession()
     _ = try #require(session.createDefaultCircleSketch())
 
-    let result = try TopologySummaryService().summarize(document: session.document)
+    let result = try TopologySummaryService().summarize(
+        document: session.document,
+        displayUnit: session.workspaceState.displayUnit
+    )
 
     #expect(result.counts.bodyCount == 0)
     #expect(result.counts.faceCount == 0)
@@ -143,7 +152,7 @@ import SwiftCAD
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedCircle())
 
-    let result = try TopologySummaryService().summarize(document: session.document)
+    let result = try TopologySnapshotService().snapshot(document: session.document)
 
     #expect(result.counts.bodyCount == 1)
     #expect(result.counts.faceCount == 6)
@@ -164,11 +173,17 @@ import SwiftCAD
 @Test func topologySummaryServiceReportsSemanticSweepSubshapeRoles() async throws {
     let session = EditorSession()
     _ = try session.execute(
-        .createRectangleSketch(
+        .createRectangleSketchFromCorners(
             name: "Semantic Sweep Profile",
             plane: .xy,
-            width: .length(4.0, .millimeter),
-            height: .length(2.0, .millimeter)
+            firstCorner: SketchPoint(
+                x: .length(-2.0, .millimeter),
+                y: .length(59.0, .millimeter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(2.0, .millimeter),
+                y: .length(61.0, .millimeter)
+            )
         )
     )
     let profileID = try #require(session.document.cadDocument.designGraph.order.last)
@@ -197,7 +212,7 @@ import SwiftCAD
         )
     )
 
-    let result = try TopologySummaryService().summarize(document: session.document)
+    let result = try TopologySnapshotService().snapshot(document: session.document)
     let ringVertex = try #require(result.entries.first {
         $0.kind == .vertex
             && $0.generatedRole == "vertex"
@@ -233,7 +248,7 @@ import SwiftCAD
     #expect(result.didMutate)
     #expect(session.evaluationStatus == .valid)
 
-    let summary = try TopologySummaryService().summarize(document: session.document)
+    let summary = try TopologySnapshotService().snapshot(document: session.document)
 
     #expect(summary.counts.bodyCount == 1)
     #expect(summary.counts.faceCount == 1)
@@ -307,7 +322,7 @@ import SwiftCAD
         options: SweepOptions(booleanOperation: .union)
     )
 
-    let result = try TopologySummaryService().summarize(document: document)
+    let result = try TopologySnapshotService().snapshot(document: document)
     let boxFace = try #require(result.entries.first {
         $0.kind == .face
             && $0.generatedRole == "sideFace"
@@ -384,7 +399,7 @@ import SwiftCAD
         options: SweepOptions(booleanOperation: .difference)
     )
 
-    let result = try TopologySummaryService().summarize(document: document)
+    let result = try TopologySnapshotService().snapshot(document: document)
     let cellUnionFace = try #require(result.entries.first {
         $0.kind == .face
             && $0.generatedRole == "sideFace"

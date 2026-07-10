@@ -4,7 +4,10 @@ import SwiftCAD
 public struct SketchDisplaySnapshotService: Sendable {
     public init() {}
 
-    public func snapshots(document: DesignDocument) -> [FeatureID: SketchDisplaySnapshot] {
+    public func snapshots(
+        document: DesignDocument,
+        ruler: RulerConfiguration
+    ) -> [FeatureID: SketchDisplaySnapshot] {
         let graph = document.cadDocument.designGraph
         let parameters = document.cadDocument.parameters
         var snapshots: [FeatureID: SketchDisplaySnapshot] = [:]
@@ -15,7 +18,7 @@ public struct SketchDisplaySnapshotService: Sendable {
                       featureID: featureID,
                       sketch: sketch,
                       parameters: parameters,
-                      ruler: document.ruler
+                      ruler: ruler
                   ) else {
                 continue
             }

@@ -44,6 +44,7 @@ import Testing
 
     let evaluation = try SelectionDimensionService().evaluate(
         document: session.document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let measurement = try #require(evaluation.measurements.first)
@@ -102,6 +103,7 @@ import Testing
     )
     let appliedEvaluation = try SelectionDimensionService().evaluate(
         document: session.document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
@@ -167,6 +169,7 @@ import Testing
     )
     let appliedEvaluation = try SelectionDimensionService().evaluate(
         document: session.document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
@@ -184,7 +187,7 @@ private func lineEndpointTargets(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> (start: SelectionTarget, end: SelectionTarget) {
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entry = try #require(summary.entries.first {
         $0.sourceFeatureID == featureID.description && $0.entityKind == "line"
     })
@@ -209,7 +212,7 @@ private func circleCenterAndCurveTargets(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> (center: SelectionTarget, curve: SelectionTarget) {
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entry = try #require(summary.entries.first {
         $0.sourceFeatureID == featureID.description && $0.entityKind == "circle"
     })

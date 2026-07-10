@@ -30,7 +30,7 @@ public struct SketchRebuildCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Refit tolerance numeric literal.")
     public var tolerance: Double?
 
-    @Option(help: "Length unit for the refit tolerance. Defaults to the document display unit.")
+    @Option(help: "Length unit for the refit tolerance. Defaults to the workspace display unit.")
     public var unit: String?
 
     @Flag(help: "Keep sharp internal corners during refit when supported.")

@@ -130,7 +130,7 @@ public struct ViewportSectionAnalysisOverlay: Equatable {
 
     public static func build(
         result: SectionAnalysisResult?,
-        document: DesignDocument,
+        ruler: RulerConfiguration,
         maximumVisibleSegments: Int = 2_048,
         maximumVisibleContours: Int = 128,
         maximumVisibleHatches: Int = 512
@@ -138,7 +138,7 @@ public struct ViewportSectionAnalysisOverlay: Equatable {
         guard let result else {
             return ViewportSectionAnalysisOverlay()
         }
-        let ruler = document.ruler.normalizedForWorkspaceScale()
+        let ruler = ruler.normalizedForWorkspaceScale()
         let visibleLimit = max(0, maximumVisibleSegments)
         let visibleSegments = result.intersectionSegments.prefix(visibleLimit)
         let segmentItems = visibleSegments.enumerated().map { index, segment in

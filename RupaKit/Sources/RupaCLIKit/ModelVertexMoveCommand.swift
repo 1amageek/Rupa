@@ -20,7 +20,7 @@ public struct ModelVertexMoveCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Delta Y numeric literal in the source profile plane.")
     public var deltaY: Double = 0.0
 
-    @Option(help: "Length unit for delta values. Defaults to the document display unit.")
+    @Option(help: "Length unit for delta values. Defaults to the workspace display unit.")
     public var unit: String?
 
     public init() {}

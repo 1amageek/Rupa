@@ -44,11 +44,12 @@ public enum WorkspaceLaunchSessionFactory {
                 normal: normal
             )
         )
-        guard session.createConstructionPlane(
+        guard let result = session.createConstructionPlane(
             name: activeCustomConstructionPlaneFixtureName,
-            plane: plane,
-            activates: true
-        ) != nil else {
+            plane: plane
+        ),
+        let id = result.createdConstructionPlaneID,
+        session.setActiveConstructionPlane(id: id) != nil else {
             throw WorkspaceLaunchSessionFactoryError.fixtureCommandRejected
         }
     }
@@ -56,7 +57,10 @@ public enum WorkspaceLaunchSessionFactory {
     private static func selectActiveCustomConstructionPlane(
         in session: EditorSession
     ) throws {
-        let summary = ConstructionPlaneSummaryService().summarize(document: session.document)
+        let summary = ConstructionPlaneSummaryService().summarize(
+            document: session.document,
+            activePlaneID: session.workspaceState.activeConstructionPlaneID
+        )
         guard let entry = summary.planes.first(where: {
             $0.name == activeCustomConstructionPlaneFixtureName
         }) else {

@@ -24,6 +24,7 @@ public enum CLIExitCode: Int32, Codable, Equatable, Sendable {
             return .usage
         case .documentOpenInApp,
              .documentGenerationMismatch,
+             .workspaceRevisionMismatch,
              .sessionNotFound,
              .referenceUnresolved:
             return .data

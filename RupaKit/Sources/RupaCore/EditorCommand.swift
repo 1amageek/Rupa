@@ -3,9 +3,6 @@ import SwiftCAD
 import RupaCoreTypes
 
 public enum EditorCommand: Codable, Equatable, Sendable {
-    case setDisplayUnit(LengthDisplayUnit)
-    case setRulerConfiguration(RulerConfiguration)
-    case setViewportGridSettings(ViewportGridSettings)
     case createSavedView(SavedView)
     case updateSavedView(SavedView)
     case removeSavedView(id: SavedViewID)
@@ -13,6 +10,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     case renameDocument(name: String)
     case resetDocument(name: String)
     case replaceProductMetadata(ProductMetadata)
+    case applySemanticExtensionMutations([SemanticExtensionMutation])
     case upsertParameter(name: String, expression: CADExpression, kind: QuantityKind)
     case renameParameter(currentName: String, newName: String)
     case deleteParameter(name: String)
@@ -41,46 +39,46 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     case setSceneNodeLock(id: SceneNodeID, isLocked: Bool)
     case setSceneNodeTransform(id: SceneNodeID, localTransform: Transform3D)
     case setSceneNodeMaterial(id: SceneNodeID, materialID: MaterialID?)
+    case setTopologyMaterialBinding(
+        target: SelectionTarget,
+        materialID: MaterialID?,
+        process: TopologyMaterialBinding.Process?
+    )
     case setSceneNodeObjectProperty(id: SceneNodeID, propertyID: ObjectPropertyID, value: ObjectPropertyValue?)
     case setComponentInstanceVisibility(id: ComponentInstanceID, isVisible: Bool)
     case setComponentInstanceLock(id: ComponentInstanceID, isLocked: Bool)
     case setComponentInstanceTransform(id: ComponentInstanceID, localTransform: Transform3D)
     case createSectionPlane(name: String)
-    case createConstructionPlane(name: String, plane: SketchPlane, activates: Bool)
-    case createConstructionPlaneFromTarget(name: String, target: SelectionTarget, activates: Bool)
+    case createConstructionPlane(name: String, plane: SketchPlane)
+    case createConstructionPlaneFromTarget(name: String, target: SelectionTarget)
     case createConstructionPlaneFromTargets(
         name: String,
         targets: [SelectionTarget],
-        viewNormal: Vector3D?,
-        activates: Bool
+        viewNormal: Vector3D?
     )
     case createViewAlignedConstructionPlane(
         name: String,
         origin: Point3D,
-        viewNormal: Vector3D,
-        activates: Bool
+        viewNormal: Vector3D
     )
-    case setActiveConstructionPlane(id: ConstructionPlaneSourceID?)
     case renameConstructionPlane(id: ConstructionPlaneSourceID, name: String)
     case setConstructionPlane(id: ConstructionPlaneSourceID, plane: SketchPlane)
-    case setCurveCurvatureDisplay(target: SelectionTarget, isVisible: Bool?, combScale: Double?)
-    case setPointDisplay(target: SelectionTarget, isVisible: Bool?)
     case createSketch(name: String, sketch: Sketch, geometryRole: ObjectDescriptor.GeometryRole)
-    case createLineSketch(name: String, plane: SketchPlaneReference?, start: SketchPoint, end: SketchPoint)
-    case createCircleSketch(name: String, plane: SketchPlaneReference?, center: SketchPoint, radius: CADExpression)
+    case createLineSketch(name: String, plane: SketchPlane, start: SketchPoint, end: SketchPoint)
+    case createCircleSketch(name: String, plane: SketchPlane, center: SketchPoint, radius: CADExpression)
     case createArcSketch(
         name: String,
-        plane: SketchPlaneReference?,
+        plane: SketchPlane,
         center: SketchPoint,
         radius: CADExpression,
         startAngle: CADExpression,
         endAngle: CADExpression
     )
-    case createSplineSketch(name: String, plane: SketchPlaneReference?, spline: SketchSpline)
-    case createRectangleSketch(name: String, plane: SketchPlaneReference?, width: CADExpression, height: CADExpression)
+    case createSplineSketch(name: String, plane: SketchPlane, spline: SketchSpline)
+    case createRectangleSketch(name: String, plane: SketchPlane, width: CADExpression, height: CADExpression)
     case createPolygonSketch(
         name: String,
-        plane: SketchPlaneReference?,
+        plane: SketchPlane,
         center: SketchPoint,
         radius: CADExpression,
         sides: Int,
@@ -91,7 +89,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     case createFaceKnife(name: String, target: SelectionTarget, loop: [Point3D])
     case projectSketchCurvesToConstructionPlane(
         targets: [SelectionTarget],
-        plane: SketchPlaneReference?,
+        plane: SketchPlane,
         name: String?
     )
     case projectCurvesToGeneratedFace(
@@ -101,7 +99,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     )
     case projectBodyOutlinesToConstructionPlane(
         targets: [SelectionTarget],
-        plane: SketchPlaneReference?,
+        plane: SketchPlane,
         name: String?
     )
     case addSketchConstraint(featureID: FeatureID, constraint: SketchConstraint)
@@ -122,7 +120,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     )
     case createRectangleSketchFromCorners(
         name: String,
-        plane: SketchPlaneReference?,
+        plane: SketchPlane,
         firstCorner: SketchPoint,
         oppositeCorner: SketchPoint
     )
@@ -274,14 +272,6 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         sourceMesh: Mesh,
         options: PolySplineOptions
     )
-    case setSurfaceControlPointDisplay(
-        target: SelectionReference,
-        isVisible: Bool?
-    )
-    case setSurfaceFrameDisplay(
-        query: SurfaceFrameQuery,
-        isVisible: Bool?
-    )
     case movePolySplineSurfaceVertex(
         target: SelectionTarget,
         deltaX: CADExpression,
@@ -382,7 +372,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     )
     case createExtrudedRectangle(
         name: String,
-        plane: SketchPlaneReference?,
+        plane: SketchPlane,
         width: CADExpression,
         height: CADExpression,
         depth: CADExpression,
@@ -390,7 +380,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     )
     case createExtrudedRectangleFromCorners(
         name: String,
-        plane: SketchPlaneReference?,
+        plane: SketchPlane,
         firstCorner: SketchPoint,
         oppositeCorner: SketchPoint,
         depth: CADExpression,
@@ -398,7 +388,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     )
     case createExtrudedCircle(
         name: String,
-        plane: SketchPlaneReference?,
+        plane: SketchPlane,
         center: SketchPoint,
         radius: CADExpression,
         depth: CADExpression,
@@ -408,12 +398,6 @@ public enum EditorCommand: Codable, Equatable, Sendable {
 
     public var name: String {
         switch self {
-        case .setDisplayUnit:
-            "setDisplayUnit"
-        case .setRulerConfiguration:
-            "setRulerConfiguration"
-        case .setViewportGridSettings:
-            "setViewportGridSettings"
         case .createSavedView:
             "createSavedView"
         case .updateSavedView:
@@ -428,6 +412,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "resetDocument"
         case .replaceProductMetadata:
             "replaceProductMetadata"
+        case .applySemanticExtensionMutations:
+            "applySemanticExtensionMutations"
         case .upsertParameter:
             "upsertParameter"
         case .renameParameter:
@@ -454,6 +440,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "setSceneNodeTransform"
         case .setSceneNodeMaterial:
             "setSceneNodeMaterial"
+        case .setTopologyMaterialBinding:
+            "setTopologyMaterialBinding"
         case .setSceneNodeObjectProperty:
             "setSceneNodeObjectProperty"
         case .setComponentInstanceVisibility:
@@ -472,16 +460,10 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "createConstructionPlaneFromTargets"
         case .createViewAlignedConstructionPlane:
             "createViewAlignedConstructionPlane"
-        case .setActiveConstructionPlane:
-            "setActiveConstructionPlane"
         case .renameConstructionPlane:
             "renameConstructionPlane"
         case .setConstructionPlane:
             "setConstructionPlane"
-        case .setCurveCurvatureDisplay:
-            "setCurveCurvatureDisplay"
-        case .setPointDisplay:
-            "setPointDisplay"
         case .createSketch:
             "createSketch"
         case .createLineSketch:
@@ -606,10 +588,6 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "createBSplineSurface"
         case .createPolySplineSurface:
             "createPolySplineSurface"
-        case .setSurfaceControlPointDisplay:
-            "setSurfaceControlPointDisplay"
-        case .setSurfaceFrameDisplay:
-            "setSurfaceFrameDisplay"
         case .movePolySplineSurfaceVertex:
             "movePolySplineSurfaceVertex"
         case .moveSurfaceControlPoint:
@@ -661,16 +639,14 @@ public enum EditorCommand: Codable, Equatable, Sendable {
 
     public var mutatesDocument: Bool {
         switch self {
-        case .setDisplayUnit,
-             .setRulerConfiguration,
-             .setViewportGridSettings,
-             .createSavedView,
+        case .createSavedView,
              .updateSavedView,
              .removeSavedView,
              .rebaseWorkspaceOrigin,
              .renameDocument,
              .resetDocument,
              .replaceProductMetadata,
+             .applySemanticExtensionMutations,
              .upsertParameter,
              .renameParameter,
              .deleteParameter,
@@ -684,6 +660,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .setSceneNodeLock,
              .setSceneNodeTransform,
              .setSceneNodeMaterial,
+             .setTopologyMaterialBinding,
              .setSceneNodeObjectProperty,
              .setComponentInstanceVisibility,
              .setComponentInstanceLock,
@@ -693,11 +670,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .createConstructionPlaneFromTarget,
              .createConstructionPlaneFromTargets,
              .createViewAlignedConstructionPlane,
-             .setActiveConstructionPlane,
              .renameConstructionPlane,
              .setConstructionPlane,
-             .setCurveCurvatureDisplay,
-             .setPointDisplay,
              .createSketch,
              .createLineSketch,
              .createCircleSketch,
@@ -760,8 +734,6 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .createBoolean,
              .createBSplineSurface,
              .createPolySplineSurface,
-             .setSurfaceControlPointDisplay,
-             .setSurfaceFrameDisplay,
              .movePolySplineSurfaceVertex,
              .moveSurfaceControlPoint,
              .moveSurfaceControlPointsInFrame,

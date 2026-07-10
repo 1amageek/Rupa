@@ -42,7 +42,6 @@ extension DesignDocument {
                 typeID: typeID,
                 geometryRole: geometryRole,
                 properties: properties,
-                ruler: ruler,
                 objectRegistry: objectRegistry
             )
         )

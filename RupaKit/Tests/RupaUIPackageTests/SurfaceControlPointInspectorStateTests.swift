@@ -11,7 +11,10 @@ import Testing
         options: PolySplineOptions(mergePatches: false)
     )
 
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(
+        document: document,
+        displayUnit: .millimeter
+    )
     let patch = try #require(summary.sources.first?.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     let state = try #require(SurfaceControlPointInspectorState(
@@ -47,7 +50,7 @@ import Testing
         options: PolySplineOptions(mergePatches: false)
     )
 
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let corner = try #require(patch.controlPoints.first { $0.uIndex == 0 && $0.vIndex == 0 })
     let state = try #require(SurfaceControlPointInspectorState(
@@ -72,7 +75,7 @@ import Testing
         options: PolySplineOptions(mergePatches: false)
     )
 
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let boundary = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 0 })
     let state = try #require(SurfaceControlPointInspectorState(
@@ -97,7 +100,7 @@ import Testing
         surface: surfaceControlPointInspectorDirectBSplineSurface()
     )
 
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let boundary = try #require(patch.controlPoints.first { $0.uIndex == 0 && $0.vIndex == 0 })
     let state = try #require(SurfaceControlPointInspectorState(
@@ -120,7 +123,7 @@ import Testing
         surface: surfaceControlPointInspectorDirectBSplineSurface()
     )
 
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     let builder = WorkspaceSurfaceInspectorStateBuilder(
@@ -129,7 +132,8 @@ import Testing
         currentEvaluation: nil,
         documentGeneration: DocumentGeneration(),
         objectRegistry: .builtIn,
-        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard)
+        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard),
+        workspaceState: WorkspaceState()
     )
 
     let state = try #require(try builder.surfaceControlPointStateResult().get())
@@ -153,7 +157,7 @@ import Testing
         options: PolySplineOptions(mergePatches: false)
     ))
 
-    let initialSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let initialSummary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let initialPatch = try #require(initialSummary.sources.first?.patches.first)
     let controlPoint = try #require(initialPatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     _ = try #require(session.setSurfaceControlPointDisplay(
@@ -161,10 +165,11 @@ import Testing
         isVisible: true
     ))
 
-    let visibleSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let visibleSummary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let state = try #require(SurfaceControlPointInspectorState(
         selectedReferences: [controlPoint.selectionReference],
-        summaryResult: visibleSummary
+        summaryResult: visibleSummary,
+        surfaceControlPointDisplays: session.workspaceState.surfaceControlPointDisplays
     ))
 
     #expect(state.displayTitle == "Visible")
@@ -180,7 +185,7 @@ import Testing
         options: PolySplineOptions(mergePatches: false)
     ))
 
-    let initialSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let initialSummary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let initialPatch = try #require(initialSummary.sources.first?.patches.first)
     let controlPoint = try #require(initialPatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     let query = SurfaceFrameQuery(selectionReference: controlPoint.selectionReference)
@@ -189,11 +194,11 @@ import Testing
         isVisible: true
     ))
 
-    let visibleSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let visibleSummary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let state = try #require(SurfaceControlPointInspectorState(
         selectedReferences: [controlPoint.selectionReference],
         summaryResult: visibleSummary,
-        surfaceFrameDisplays: session.document.productMetadata.surfaceFrameDisplays
+        surfaceFrameDisplays: session.workspaceState.surfaceFrameDisplays
     ))
 
     #expect(state.frameDisplayTitle == "Visible")
@@ -209,7 +214,7 @@ import Testing
         options: PolySplineOptions(mergePatches: false)
     )
 
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let faceReference = try #require(patch.faceSelectionReference)
 

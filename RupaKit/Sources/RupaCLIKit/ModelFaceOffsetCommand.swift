@@ -17,7 +17,7 @@ public struct ModelFaceOffsetCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Offset distance numeric literal.")
     public var distance: Double
 
-    @Option(help: "Length unit for the offset distance. Defaults to the document display unit.")
+    @Option(help: "Length unit for the offset distance. Defaults to the workspace display unit.")
     public var unit: String?
 
     public init() {}

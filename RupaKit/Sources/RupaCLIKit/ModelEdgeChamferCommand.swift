@@ -17,7 +17,7 @@ public struct ModelEdgeChamferCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Chamfer distance numeric literal.")
     public var distance: Double
 
-    @Option(help: "Length unit for the chamfer distance. Defaults to the document display unit.")
+    @Option(help: "Length unit for the chamfer distance. Defaults to the workspace display unit.")
     public var unit: String?
 
     public init() {}

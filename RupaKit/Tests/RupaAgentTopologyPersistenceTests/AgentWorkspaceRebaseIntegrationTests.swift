@@ -10,7 +10,12 @@ import Testing
 func agentCanRebaseFarOriginWorkspaceThroughAutomationCommand() throws {
     let server = AgentCommandController()
     let sessionID = UUID()
-    let session = EditorSession(document: try agentFarFromOriginRectangleDocument())
+    let session = EditorSession(
+        document: try agentFarFromOriginRectangleDocument(),
+        workspaceState: WorkspaceState(
+            ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+        )
+    )
     server.register(session: session, id: sessionID)
 
     let initialMeasurementResponse = server.handle(.measure(
@@ -82,7 +87,6 @@ func agentMeasureReportsWorkspaceScaleRecommendationForLargeModel() throws {
 
 private func agentFarFromOriginRectangleDocument() throws -> DesignDocument {
     var document = DesignDocument.empty(named: "Agent Remote Site")
-    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
     let profileID = try document.createRectangleSketchFromCorners(
         name: "Remote Profile",
         plane: .xy,

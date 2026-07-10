@@ -2,6 +2,7 @@ import Foundation
 import RupaAgentRuntime
 import RupaAgentTransport
 import RupaCore
+import RupaDomainFoundation
 import RupaUI
 
 public enum AgentHostState: Equatable, Sendable {
@@ -20,9 +21,18 @@ public final class AgentHost: WorkspaceAgentSessionPublishing {
     private let socketPath: AgentSocketPath
     private var lifecycleGeneration: Int
 
-    public init(socketPath: AgentSocketPath = AgentSocketPath()) {
+    public init(
+        socketPath: AgentSocketPath = AgentSocketPath(),
+        exportService: DocumentExportService = DocumentExportService(),
+        domainRegistry: DomainRegistry = DomainRegistry()
+    ) {
         self.socketPath = socketPath
-        self.bridge = MainActorAgentBridge()
+        self.bridge = MainActorAgentBridge(
+            controller: AgentCommandController(
+                exportService: exportService,
+                domainRegistry: domainRegistry
+            )
+        )
         self.listener = AgentSocketListener(
             mainActorBridge: bridge,
             socketPath: socketPath
@@ -33,10 +43,17 @@ public final class AgentHost: WorkspaceAgentSessionPublishing {
 
     init(
         socketPath: AgentSocketPath,
-        listener: any AgentHostListening
+        listener: any AgentHostListening,
+        exportService: DocumentExportService = DocumentExportService(),
+        domainRegistry: DomainRegistry = DomainRegistry()
     ) {
         self.socketPath = socketPath
-        self.bridge = MainActorAgentBridge()
+        self.bridge = MainActorAgentBridge(
+            controller: AgentCommandController(
+                exportService: exportService,
+                domainRegistry: domainRegistry
+            )
+        )
         self.listener = listener
         self.state = .stopped
         self.lifecycleGeneration = 0

@@ -4,7 +4,9 @@ import RupaCore
 struct WorkspaceSketchEntityInspectorStateBuilder {
     var document: DesignDocument
     var selection: SelectionModel
+    var displayUnit: LengthDisplayUnit
     var objectRegistry: ObjectTypeRegistry
+    var curveCurvatureDisplays: [SelectionComponentID: CurveCurvatureDisplay] = [:]
 
     func selectedEntityResult() -> Result<InspectorSketchEntity?, Error> {
         do {
@@ -469,7 +471,7 @@ struct WorkspaceSketchEntityInspectorStateBuilder {
             secondEndpoint: source.secondEndpoint,
             continuity: source.continuity,
             trimsSourceCurves: source.trimsSourceCurves,
-            curvatureDisplay: document.productMetadata.curveCurvatureDisplays[
+            curvatureDisplay: curveCurvatureDisplays[
                 .sketchEntity(featureID: source.featureID, entityID: source.entityID)
             ],
             firstParameter: try bridgeCurveParameter(source.firstEndpoint),
@@ -517,6 +519,7 @@ struct WorkspaceSketchEntityInspectorStateBuilder {
             document: document,
             featureID: featureID,
             entityID: entityID,
+            displayUnit: displayUnit,
             objectRegistry: objectRegistry
         )
         guard let curve = result.curves.first else {

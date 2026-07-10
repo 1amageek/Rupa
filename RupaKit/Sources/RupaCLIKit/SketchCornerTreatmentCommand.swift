@@ -40,7 +40,7 @@ public struct SketchCornerTreatmentCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Fillet radius or chamfer distance numeric literal.")
     public var distance: Double
 
-    @Option(help: "Length unit for the treatment distance. Defaults to the document display unit.")
+    @Option(help: "Length unit for the treatment distance. Defaults to the workspace display unit.")
     public var unit: String?
 
     public init() {}

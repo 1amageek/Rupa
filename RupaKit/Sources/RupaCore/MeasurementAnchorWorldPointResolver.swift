@@ -27,7 +27,7 @@ public struct MeasurementAnchorWorldPointResolver: Sendable {
     public func resolvedAnchor(
         _ anchor: MeasurementAnchor,
         in document: DesignDocument,
-        topology: TopologySummaryResult? = nil
+        topology: TopologySnapshot? = nil
     ) throws -> ResolvedAnchor? {
         guard let worldPoint = try worldPoint(
             for: anchor,
@@ -46,7 +46,7 @@ public struct MeasurementAnchorWorldPointResolver: Sendable {
     public func worldPoint(
         for anchor: MeasurementAnchor,
         in document: DesignDocument,
-        topology: TopologySummaryResult? = nil
+        topology: TopologySnapshot? = nil
     ) throws -> Point3D? {
         let resolvedWorldPoint: Point3D?
         switch anchor.kind {
@@ -332,7 +332,7 @@ public struct MeasurementAnchorWorldPointResolver: Sendable {
     private func worldPoint(
         for anchor: MeasurementTopologyAnchor,
         role: MeasurementAnchor.Role,
-        in topology: TopologySummaryResult
+        in topology: TopologySnapshot
     ) -> Point3D? {
         guard let entry = topologyEntry(for: anchor, in: topology) else {
             return nil
@@ -366,7 +366,7 @@ public struct MeasurementAnchorWorldPointResolver: Sendable {
 
     private func worldPoint(
         for anchor: MeasurementTopologyEdgeAnchor,
-        in topology: TopologySummaryResult
+        in topology: TopologySnapshot
     ) -> Point3D? {
         guard let parameter = normalizedParameter(anchor.parameter),
               let entry = topologyEdgeEntry(for: anchor, in: topology) else {
@@ -442,7 +442,7 @@ public struct MeasurementAnchorWorldPointResolver: Sendable {
 
     private func topologyEntry(
         for anchor: MeasurementTopologyAnchor,
-        in topology: TopologySummaryResult
+        in topology: TopologySnapshot
     ) -> TopologySummaryResult.Entry? {
         topology.entries.first { entry in
             guard entry.kind == anchor.kind,
@@ -457,7 +457,7 @@ public struct MeasurementAnchorWorldPointResolver: Sendable {
 
     private func topologyEdgeEntry(
         for anchor: MeasurementTopologyEdgeAnchor,
-        in topology: TopologySummaryResult
+        in topology: TopologySnapshot
     ) -> TopologySummaryResult.Entry? {
         topology.entries.first { entry in
             guard entry.kind == .edge,

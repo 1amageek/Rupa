@@ -38,6 +38,7 @@ public struct ViewportSnapResolutionService: Sendable {
     public func resolution(
         for query: ViewportSnapQuery?,
         document: DesignDocument,
+        ruler: RulerConfiguration,
         options baseOptions: SnapResolutionOptions?,
         modifierFlags: ViewportInputModifierFlags
     ) -> ViewportSnapResolution {
@@ -60,6 +61,7 @@ public struct ViewportSnapResolutionService: Sendable {
             let result = try SnapResolver().resolve(
                 point: query.point,
                 in: document,
+                ruler: ruler,
                 options: options
             )
             return ViewportSnapResolution(

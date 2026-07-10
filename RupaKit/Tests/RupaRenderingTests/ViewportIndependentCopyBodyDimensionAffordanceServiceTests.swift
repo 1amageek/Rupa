@@ -13,7 +13,7 @@ import Testing
         arrayName: "Body Dimension Box Array"
     )
     let firstOutputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(
         scene: scene,
         size: CGSize(width: 900.0, height: 700.0)
@@ -59,7 +59,7 @@ import Testing
             sizeZ: .length(12.0, .millimeter)
         )
     )
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(
         scene: scene,
         size: CGSize(width: 900.0, height: 700.0)
@@ -100,7 +100,7 @@ import Testing
         ))
     )
     let firstOutputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(
         scene: scene,
         size: CGSize(width: 900.0, height: 700.0)
@@ -136,7 +136,7 @@ import Testing
         ))
     )
     let firstOutputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let outputBodyItem = try bodyItem(
         rootedAt: firstOutputSceneNodeID,
         source: source,
@@ -185,7 +185,7 @@ import Testing
     )
     let firstOutputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
     let outputTransform = try #require(session.document.productMetadata.sceneNodes[firstOutputSceneNodeID]?.localTransform)
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(
         scene: scene,
         size: CGSize(width: 900.0, height: 700.0)
@@ -229,7 +229,7 @@ import Testing
             sizeY: .length(13.0, .millimeter)
         )
     )
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(
         scene: scene,
         size: CGSize(width: 900.0, height: 700.0)
@@ -279,7 +279,7 @@ import Testing
         $0.name == "Body Dimension Component Array"
     })
     let outputSceneNodeID = try componentOutputSceneNodeID(for: source, document: session.document)
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(
         scene: scene,
         size: CGSize(width: 900.0, height: 700.0)

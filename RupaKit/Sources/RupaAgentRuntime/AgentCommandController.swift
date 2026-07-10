@@ -2,6 +2,7 @@ import Foundation
 import RupaAgentProtocol
 import RupaAutomation
 import RupaCore
+import RupaDomainFoundation
 
 public final class AgentCommandController: AgentClientProtocol {
     public var name: String
@@ -10,6 +11,7 @@ public final class AgentCommandController: AgentClientProtocol {
     private let runner: AutomationRunner
     private let exportService: DocumentExportService
     private let fileService: DocumentFileService
+    private let domainRegistry: DomainRegistry
 
     public init(
         name: String = "Rupa Agent",
@@ -17,7 +19,8 @@ public final class AgentCommandController: AgentClientProtocol {
         registry: WorkspaceRegistry = WorkspaceRegistry(),
         runner: AutomationRunner = AutomationRunner(),
         exportService: DocumentExportService = DocumentExportService(),
-        fileService: DocumentFileService = DocumentFileService()
+        fileService: DocumentFileService = DocumentFileService(),
+        domainRegistry: DomainRegistry = DomainRegistry()
     ) {
         self.name = name
         self.socketPath = socketPath
@@ -25,6 +28,7 @@ public final class AgentCommandController: AgentClientProtocol {
         self.runner = runner
         self.exportService = exportService
         self.fileService = fileService
+        self.domainRegistry = domainRegistry
     }
 
     public func capabilities() -> [String] {
@@ -36,7 +40,7 @@ public final class AgentCommandController: AgentClientProtocol {
     }
 
     public func capabilityDescriptors() -> [AgentCapabilityDescriptor] {
-        AgentCapabilityCatalog.descriptors
+        AgentCapabilityCatalog.descriptors(domainRegistry: domainRegistry)
     }
 
     @discardableResult
@@ -71,12 +75,19 @@ public final class AgentCommandController: AgentClientProtocol {
                 return .cadInteractionQualityAssessment(
                     CADInteractionQualityAssessmentService().assess()
                 )
-            case let .execute(sessionID, command, expectedGeneration):
+            case let .execute(sessionID, command, expectedGeneration, expectedWorkspaceRevision):
                 let session = try registry.session(id: sessionID)
+                try requireCommandPreconditions(
+                    command: command,
+                    expectedGeneration: expectedGeneration,
+                    expectedWorkspaceRevision: expectedWorkspaceRevision,
+                    session: session
+                )
                 let result = try runner.executeBatch(
                     AutomationBatch(
                         commands: [command],
-                        expectedGeneration: expectedGeneration
+                        expectedGeneration: expectedGeneration,
+                        expectedWorkspaceRevision: expectedWorkspaceRevision
                     ),
                     in: session
                 )
@@ -89,14 +100,23 @@ public final class AgentCommandController: AgentClientProtocol {
                 return .command(commandResult)
             case let .executeBatch(sessionID, batch):
                 let session = try registry.session(id: sessionID)
+                try requireBatchPreconditions(batch, session: session)
                 let results = try runner.executeBatch(batch, in: session)
                 return .batch(
                     AgentBatchResult(
                         results: results,
                         generation: session.generation,
+                        workspaceRevision: session.workspaceState.revision,
                         dirty: session.isDirty
                     )
                 )
+            case let .executeDomain(sessionID, request):
+                let session = try registry.session(id: sessionID)
+                let result = try DomainCommandExecutor(
+                    registry: domainRegistry,
+                    automationRunner: runner
+                ).execute(request, in: session)
+                return .domainExecution(result)
             case let .parameters(sessionID, expectedGeneration):
                 let session = try registry.session(id: sessionID)
                 try session.store.requireGeneration(expectedGeneration)
@@ -228,6 +248,7 @@ public final class AgentCommandController: AgentClientProtocol {
                     try MeasurementService().measure(
                         document: session.document,
                         selection: session.selection,
+                        ruler: session.workspaceState.ruler,
                         objectRegistry: session.objectRegistry,
                         currentEvaluation: session.currentEvaluation,
                         currentGeneration: session.generation
@@ -240,6 +261,7 @@ public final class AgentCommandController: AgentClientProtocol {
                     try SelectionMeasurementService().measure(
                         query: query,
                         document: session.document,
+                        displayUnit: session.workspaceState.displayUnit,
                         objectRegistry: session.objectRegistry,
                         currentEvaluation: session.currentEvaluation,
                         currentGeneration: session.generation
@@ -248,11 +270,17 @@ public final class AgentCommandController: AgentClientProtocol {
             case let .resolveSnap(sessionID, point, options, expectedGeneration):
                 let session = try registry.session(id: sessionID)
                 try session.store.requireGeneration(expectedGeneration)
+                var workspaceOptions = options
+                if workspaceOptions.constructionPlane == nil {
+                    workspaceOptions.constructionPlane = session.activeConstructionPlane?.plane
+                }
                 return .snapResolution(
                     try SnapResolver().resolve(
                         point: point,
                         in: session.document,
-                        options: options
+                        ruler: session.workspaceState.ruler,
+                        options: workspaceOptions,
+                        surfaceFrameDisplays: session.workspaceState.surfaceFrameDisplays
                     )
                 )
             case let .constructionPlaneSummary(sessionID, expectedGeneration):
@@ -260,7 +288,8 @@ public final class AgentCommandController: AgentClientProtocol {
                 try session.store.requireGeneration(expectedGeneration)
                 return .constructionPlaneSummary(
                     ConstructionPlaneSummaryService().summarize(
-                        document: session.document
+                        document: session.document,
+                        activePlaneID: session.workspaceState.activeConstructionPlaneID
                     )
                 )
             case let .designDisplaySnapshot(sessionID, expectedGeneration):
@@ -269,6 +298,7 @@ public final class AgentCommandController: AgentClientProtocol {
                 return .designDisplaySnapshot(
                     try DesignDisplaySnapshotService().result(
                         document: session.document,
+                        workspaceState: session.workspaceState,
                         objectRegistry: session.objectRegistry,
                         currentEvaluation: session.currentEvaluation,
                         generation: session.generation,
@@ -291,6 +321,7 @@ public final class AgentCommandController: AgentClientProtocol {
                 return .meshSummary(
                     try MeshSummaryService().summarize(
                         document: session.document,
+                        ruler: session.workspaceState.ruler,
                         objectRegistry: session.objectRegistry,
                         currentEvaluation: session.currentEvaluation,
                         currentGeneration: session.generation
@@ -311,6 +342,7 @@ public final class AgentCommandController: AgentClientProtocol {
                 return .sketchEntitySummary(
                     try SketchEntitySummaryService().summarize(
                         document: session.document,
+                        displayUnit: session.workspaceState.displayUnit,
                         objectRegistry: session.objectRegistry
                     )
                 )
@@ -322,6 +354,7 @@ public final class AgentCommandController: AgentClientProtocol {
                     try SketchDimensionSummaryService().summarize(
                         document: session.document,
                         targets: resolvedTargets,
+                        displayUnit: session.workspaceState.displayUnit,
                         objectRegistry: session.objectRegistry
                     )
                 )
@@ -331,6 +364,7 @@ public final class AgentCommandController: AgentClientProtocol {
                 return .selectionDimensionEvaluation(
                     try SelectionDimensionService().evaluate(
                         document: session.document,
+                        displayUnit: session.workspaceState.displayUnit,
                         dimensionID: dimensionID,
                         objectRegistry: session.objectRegistry,
                         currentEvaluation: session.currentEvaluation,
@@ -343,6 +377,7 @@ public final class AgentCommandController: AgentClientProtocol {
                 return .curveAnalysis(
                     try CurveAnalysisService().analyze(
                         document: session.document,
+                        displayUnit: session.workspaceState.displayUnit,
                         objectRegistry: session.objectRegistry
                     )
                 )
@@ -352,6 +387,7 @@ public final class AgentCommandController: AgentClientProtocol {
                 return .topologySummary(
                     try TopologySummaryService().summarize(
                         document: session.document,
+                        displayUnit: session.workspaceState.displayUnit,
                         objectRegistry: session.objectRegistry,
                         currentEvaluation: session.currentEvaluation,
                         currentGeneration: session.generation
@@ -405,6 +441,7 @@ public final class AgentCommandController: AgentClientProtocol {
                     try ObjectDimensionSummaryService().summarize(
                         document: session.document,
                         targets: resolvedTargets,
+                        displayUnit: session.workspaceState.displayUnit,
                         objectRegistry: session.objectRegistry
                     )
                 )
@@ -414,6 +451,9 @@ public final class AgentCommandController: AgentClientProtocol {
                 return .surfaceSourceSummary(
                     try SurfaceSourceSummaryService().summarize(
                         document: session.document,
+                        displayUnit: session.workspaceState.displayUnit,
+                        surfaceControlPointDisplays: session.workspaceState.surfaceControlPointDisplays,
+                        surfaceFrameDisplays: session.workspaceState.surfaceFrameDisplays,
                         objectRegistry: session.objectRegistry,
                         currentEvaluation: session.currentEvaluation,
                         currentGeneration: session.generation
@@ -425,6 +465,7 @@ public final class AgentCommandController: AgentClientProtocol {
                 return .surfaceAnalysis(
                     try SurfaceAnalysisService(options: options).analyze(
                         document: session.document,
+                        displayUnit: session.workspaceState.displayUnit,
                         objectRegistry: session.objectRegistry,
                         currentEvaluation: session.currentEvaluation,
                         currentGeneration: session.generation
@@ -437,6 +478,7 @@ public final class AgentCommandController: AgentClientProtocol {
                     try SurfaceFrameService().resolve(
                         document: session.document,
                         queries: queries,
+                        displayUnit: session.workspaceState.displayUnit,
                         objectRegistry: session.objectRegistry,
                         currentEvaluation: session.currentEvaluation,
                         currentGeneration: session.generation
@@ -448,6 +490,7 @@ public final class AgentCommandController: AgentClientProtocol {
                 return .surfaceContinuitySummary(
                     try SurfaceContinuityService().summarize(
                         document: session.document,
+                        displayUnit: session.workspaceState.displayUnit,
                         objectRegistry: session.objectRegistry,
                         currentEvaluation: session.currentEvaluation,
                         currentGeneration: session.generation
@@ -544,6 +587,50 @@ public final class AgentCommandController: AgentClientProtocol {
         }
     }
 
+    private func requireCommandPreconditions(
+        command: AutomationCommand,
+        expectedGeneration: DocumentGeneration?,
+        expectedWorkspaceRevision: WorkspaceRevision?,
+        session: EditorSession
+    ) throws {
+        guard let expectedGeneration else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Agent command execution requires an expected source generation."
+            )
+        }
+        try session.store.requireGeneration(expectedGeneration)
+
+        if command.effect == .workspaceMutation {
+            guard let expectedWorkspaceRevision else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Workspace mutation commands require an expected workspace revision."
+                )
+            }
+            try session.workspaceState.requireRevision(expectedWorkspaceRevision)
+        }
+    }
+
+    private func requireBatchPreconditions(
+        _ batch: AutomationBatch,
+        session: EditorSession
+    ) throws {
+        guard batch.expectedGeneration != nil else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Agent batch execution requires an expected source generation."
+            )
+        }
+        let effect = try batch.validatedEffect()
+        if effect == .workspaceMutation, batch.expectedWorkspaceRevision == nil {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Workspace mutation batches require an expected workspace revision."
+            )
+        }
+    }
+
     private func parseDimensionExpression(
         _ expression: String,
         targetKind: QuantityKind,
@@ -573,7 +660,7 @@ public final class AgentCommandController: AgentClientProtocol {
         session: EditorSession
     ) -> ParameterExpressionDefaults {
         defaults ?? ParameterExpressionDefaults(
-            lengthUnit: session.document.displayUnit,
+            lengthUnit: session.workspaceState.displayUnit,
             angleUnit: .degree
         )
     }

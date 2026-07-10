@@ -183,7 +183,7 @@ import Testing
     _ = try #require(session.createDefaultExtrudedCircle())
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let beforeRadius = try cylinderRadius(forBody: bodyFeatureID, in: session.document)
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let faceEntry = try #require(topology.entries.first { entry in
         entry.kind == .face && entry.surfaceKind == "cylinder"
     })

@@ -74,11 +74,13 @@ import SwiftCAD
 
     let meshSummary = try MeshSummaryService(pipeline: failingPipeline).summarize(
         document: session.document,
+        ruler: session.workspaceState.ruler,
         currentEvaluation: currentEvaluation,
         currentGeneration: session.generation
     )
     let topologySummary = try TopologySummaryService(pipeline: failingPipeline).summarize(
         document: session.document,
+        displayUnit: session.workspaceState.displayUnit,
         currentEvaluation: currentEvaluation,
         currentGeneration: session.generation
     )
@@ -87,18 +89,21 @@ import SwiftCAD
         options: SurfaceAnalysisOptions(sampleDensity: .low)
     ).analyze(
         document: session.document,
+        displayUnit: .millimeter,
         currentEvaluation: currentEvaluation,
         currentGeneration: session.generation
     )
     let surfaceContinuity = try SurfaceContinuityService(pipeline: failingPipeline).summarize(
         document: session.document,
+        displayUnit: session.workspaceState.displayUnit,
         currentEvaluation: currentEvaluation,
         currentGeneration: session.generation
     )
     let displaySnapshot = try DesignDisplaySnapshotService(
-        bodyService: BodyDisplaySnapshotService(pipeline: failingPipeline)
+        pipeline: failingPipeline
     ).result(
         document: session.document,
+        workspaceState: session.workspaceState,
         currentEvaluation: currentEvaluation,
         generation: session.generation,
         dirty: session.isDirty
@@ -123,6 +128,7 @@ import SwiftCAD
     do {
         _ = try MeshSummaryService(pipeline: failingPipeline).summarize(
             document: session.document,
+            ruler: session.workspaceState.ruler,
             currentEvaluation: currentEvaluation,
             currentGeneration: DocumentGeneration(session.generation.value + 1)
         )
@@ -148,6 +154,7 @@ import SwiftCAD
     do {
         _ = try MeshSummaryService(pipeline: failingPipeline).summarize(
             document: circleSession.document,
+            ruler: circleSession.workspaceState.ruler,
             currentEvaluation: currentEvaluation,
             currentGeneration: rectangleSession.generation
         )
@@ -188,6 +195,7 @@ import SwiftCAD
 
     let result = try MeasurementService(pipeline: failingPipeline).measure(
         document: session.document,
+        ruler: session.workspaceState.ruler,
         currentEvaluation: currentEvaluation,
         currentGeneration: session.generation
     )
@@ -207,7 +215,7 @@ import SwiftCAD
     let session = EditorSession(document: document)
     session.store.evaluateCurrentDocument()
     let currentEvaluation = try #require(session.currentEvaluation)
-    let topology = try TopologySummaryService().summarize(
+    let topology = try TopologySnapshotService().snapshot(
         document: session.document,
         currentEvaluation: currentEvaluation,
         currentGeneration: session.generation
@@ -226,6 +234,7 @@ import SwiftCAD
                 v: 0.5
             ),
         ],
+        displayUnit: session.workspaceState.displayUnit,
         currentEvaluation: currentEvaluation,
         currentGeneration: session.generation
     )
@@ -244,6 +253,7 @@ import SwiftCAD
 
     let result = try SelectionDimensionService(pipeline: failingPipeline).evaluate(
         document: session.document,
+        displayUnit: session.workspaceState.displayUnit,
         currentEvaluation: currentEvaluation,
         currentGeneration: session.generation
     )

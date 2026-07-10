@@ -8,7 +8,7 @@ extension DesignDocument {
         targetSystem: SketchPlaneCoordinateSystem,
         operationName: String,
         objectRegistry: ObjectTypeRegistry,
-        topology: inout TopologySummaryResult?
+        topology: inout TopologySnapshot?
     ) throws -> SketchEntity {
         guard case .edge(let componentID) = target.component,
               let persistentName = componentID.generatedTopologyPersistentName else {
@@ -18,7 +18,7 @@ extension DesignDocument {
             )
         }
         if topology == nil {
-            topology = try TopologySummaryService().summarize(
+            topology = try TopologySnapshotService().snapshot(
                 document: self,
                 objectRegistry: objectRegistry
             )

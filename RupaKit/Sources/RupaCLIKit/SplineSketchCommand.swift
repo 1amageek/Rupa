@@ -19,7 +19,7 @@ public struct SplineSketchCommand: ParsableCommand {
     )
     public var controlPoints: [CLISketchPointArgument] = []
 
-    @Option(help: "Length unit for control point coordinates. Defaults to the document display unit.")
+    @Option(help: "Length unit for control point coordinates. Defaults to the workspace display unit.")
     public var unit: LengthDisplayUnit?
 
     @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")

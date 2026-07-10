@@ -6,6 +6,7 @@ import RupaAgentRuntime
 import RupaAgentTransport
 import RupaAutomation
 import RupaCore
+import RupaDomainFoundation
 import SwiftCAD
 @testable import RupaCLIKit
 
@@ -16,6 +17,92 @@ func cliExecutablePrintsCapabilities() async throws {
     #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
     #expect(result.standardOutput.contains("describeDocument"))
     #expect(result.standardOutput.contains("exportDocument"))
+}
+
+@Test(.timeLimit(.minutes(1)))
+func cliServiceCapabilitiesIncludeInjectedDomainCapabilities() throws {
+    let namespace: SemanticNamespaceID = "manufacturing"
+    let capabilityID: DomainCapabilityID = "manufacturing.validatePrintability"
+    let registry = try DomainRegistry(
+        namespaces: [
+            DomainNamespaceRegistration(
+                namespace: namespace,
+                supportedSchemaVersions: [SemanticSchemaVersion(major: 0, minor: 1, patch: 0)]
+            ),
+        ],
+        capabilityDescriptors: [
+            DomainCapabilityDescriptor(
+                id: capabilityID,
+                namespace: namespace,
+                name: "Validate Printability",
+                summary: "Validate manufacturing constraints for additive output.",
+                effect: .documentMutation,
+                resultKind: .documentTransaction,
+                supportsDryRun: true,
+                targetKinds: ["body"],
+                failureMode: "Reports typed diagnostics without mutating the document."
+            ),
+        ],
+        commandLowerings: [
+            CLIDomainRenameLowering(capabilityID: capabilityID),
+        ]
+    )
+
+    #expect(CLIService(domainRegistry: registry).capabilities().contains(capabilityID.rawValue))
+}
+
+@Test(.timeLimit(.minutes(1)))
+func cliServiceExecutesDomainFileThroughRegisteredLowering() throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let documentURL = temporaryDirectory.appendingPathComponent("domain-file.swcad")
+    try DocumentFileService().save(.empty(named: "Before Domain"), to: documentURL)
+
+    let response = try CLIService(domainRegistry: try cliDomainExecutionRegistry()).executeDomain(
+        target: CLIDocumentTarget(fileURL: documentURL),
+        request: cliDomainRenameRequest(name: "Domain File"),
+        mode: .file
+    )
+    let loaded = try DocumentFileService().load(from: documentURL)
+
+    #expect(response.message == "Domain capability architecture.rename executed.")
+    #expect(response.generation == 1)
+    #expect(response.dirty == false)
+    #expect(response.saved)
+    #expect(response.didMutate)
+    #expect(!response.dryRun)
+    #expect(response.capabilityID == "architecture.rename")
+    #expect(response.namespace == "architecture")
+    #expect(loaded.cadDocument.metadata.name == "Domain File")
+}
+
+@Test(.timeLimit(.minutes(1)))
+func cliServiceDomainFileDryRunDoesNotPersist() throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let documentURL = temporaryDirectory.appendingPathComponent("domain-file-dry-run.swcad")
+    try DocumentFileService().save(.empty(named: "Before Domain Dry"), to: documentURL)
+
+    var request = cliDomainRenameRequest(name: "Dry Domain")
+    request.dryRun = true
+    let response = try CLIService(domainRegistry: try cliDomainExecutionRegistry()).executeDomain(
+        target: CLIDocumentTarget(fileURL: documentURL),
+        request: request,
+        mode: .file
+    )
+    let loaded = try DocumentFileService().load(from: documentURL)
+
+    #expect(response.message == "Domain capability architecture.rename dry-run completed.")
+    #expect(response.generation == 0)
+    #expect(!response.dirty)
+    #expect(!response.saved)
+    #expect(!response.didMutate)
+    #expect(response.dryRun)
+    #expect(loaded.cadDocument.metadata.name == "Before Domain Dry")
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -759,7 +846,7 @@ func cliExecutableModelExtrudeExistingProfilePersistsClosedDocumentAsJSON() asyn
 @Suite(.serialized)
 struct CLIModelCommandTests {
     @Test(.timeLimit(.minutes(1)))
-    func executableModelBoxDefaultsToDocumentDisplayUnit() async throws {
+    func executableModelBoxUsesExplicitFileModeUnit() async throws {
         let temporaryDirectory = try makeTemporaryDirectory()
         defer {
             removeTemporaryDirectory(temporaryDirectory)
@@ -767,15 +854,6 @@ struct CLIModelCommandTests {
         let documentURL = temporaryDirectory.appendingPathComponent("process-box-workspace-unit.swcad")
         try DocumentFileService().save(.empty(named: "Process Workspace Unit Box"), to: documentURL)
 
-        _ = try await runCLI([
-            "command",
-            "set-scale-preset",
-            documentURL.path,
-            "sitePlanning",
-            "--mode",
-            "file",
-            "--json",
-        ])
         let result = try await runCLI([
             "model",
             "box",
@@ -788,6 +866,8 @@ struct CLIModelCommandTests {
             "8",
             "--depth",
             "3",
+            "--unit",
+            "kilometer",
             "--mode",
             "file",
             "--json",
@@ -810,10 +890,8 @@ struct CLIModelCommandTests {
 
         #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
         #expect(response.saved)
-        #expect(response.workspaceScale?.displayUnit == .kilometer)
-        #expect(response.workspaceScale?.matchedPreset == .sitePlanning)
-        #expect(response.viewportGridScale?.snapStep.text == "0.1 km")
-        #expect(loaded.displayUnit == .kilometer)
+        #expect(response.effect == .sourceMutation)
+        #expect(response.workspaceScale?.displayUnit == .millimeter)
         #expect(resolvedDepth.kind == .length)
         #expect(cliNearlyEqual(resolvedDepth.value, 3_000.0))
         #expect(sketchNode.object?.properties["size.x"] == .length(12_000.0))
@@ -1519,7 +1597,7 @@ func cliExecutableSelectionReferencesSelectsLiveSurfaceControlPointAsJSON() asyn
     ))
     let generation = session.generation
     let wasDirty = session.isDirty
-    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     let referenceData = try JSONEncoder().encode(controlPoint.selectionReference)
@@ -1681,11 +1759,12 @@ func cliExecutableInspectsConstructionPlanesAndSnapAsJSON() async throws {
     )
 
     #expect(planesResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: planesResult.standardError))
-    #expect(planesResponse.constructionPlaneSummary.activePlaneID == planeID)
+    #expect(planesResponse.constructionPlaneSummary.activePlaneID == nil)
     #expect(planesResponse.constructionPlaneSummary.planes.count == 1)
     let plane = try #require(planesResponse.constructionPlaneSummary.planes.first)
+    #expect(plane.id == planeID)
     #expect(plane.name == "CLI Work Plane")
-    #expect(plane.isActive)
+    #expect(!plane.isActive)
     #expect(snapResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: snapResult.standardError))
     #expect(snapResponse.snapResolution.selectedCandidate?.kind == .grid)
     #expect(abs(snapResponse.snapResolution.originalPoint.x - 0.0012) < 0.000_000_000_001)
@@ -1695,14 +1774,13 @@ func cliExecutableInspectsConstructionPlanesAndSnapAsJSON() async throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
-func cliExecutableSnapDefaultsToDocumentRulerGridAsJSON() async throws {
+func cliExecutableSnapUsesFreshFileWorkspaceRulerAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {
         removeTemporaryDirectory(temporaryDirectory)
     }
     let documentURL = temporaryDirectory.appendingPathComponent("process-site-snap.swcad")
-    var document = DesignDocument.empty(named: "Process Site Snap")
-    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    let document = DesignDocument.empty(named: "Process Site Snap")
     try DocumentFileService().save(document, to: documentURL)
 
     let snapResult = try await runCLI([
@@ -1726,14 +1804,14 @@ func cliExecutableSnapDefaultsToDocumentRulerGridAsJSON() async throws {
 
     #expect(snapResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: snapResult.standardError))
     #expect(snapResponse.snapResolution.selectedCandidate?.kind == .grid)
-    #expect(abs(snapResponse.snapResolution.resolvedPoint.x - 100.0) < 0.000_000_000_001)
-    #expect(abs(snapResponse.snapResolution.resolvedPoint.y - 300.0) < 0.000_000_000_001)
+    #expect(abs(snapResponse.snapResolution.resolvedPoint.x - 149.0) < 0.000_000_000_001)
+    #expect(abs(snapResponse.snapResolution.resolvedPoint.y - 251.0) < 0.000_000_000_001)
 }
 
 @Suite(.serialized)
 struct CLISketchCommandTests {
     @Test(.timeLimit(.minutes(1)))
-    func executableSketchArcDefaultsToDocumentDisplayUnit() async throws {
+    func executableSketchArcUsesExplicitFileModeUnit() async throws {
         let temporaryDirectory = try makeTemporaryDirectory()
         defer {
             removeTemporaryDirectory(temporaryDirectory)
@@ -1741,15 +1819,6 @@ struct CLISketchCommandTests {
         let documentURL = temporaryDirectory.appendingPathComponent("process-arc-workspace-unit.swcad")
         try DocumentFileService().save(.empty(named: "Process Workspace Unit Arc"), to: documentURL)
 
-        _ = try await runCLI([
-            "command",
-            "set-scale-preset",
-            documentURL.path,
-            "architecture",
-            "--mode",
-            "file",
-            "--json",
-        ])
         let result = try await runCLI([
             "sketch",
             "arc",
@@ -1762,6 +1831,8 @@ struct CLISketchCommandTests {
             "3",
             "--radius",
             "4",
+            "--unit",
+            "meter",
             "--start-angle",
             "0",
             "--end-angle",
@@ -1784,8 +1855,8 @@ struct CLISketchCommandTests {
 
         #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
         #expect(response.saved)
-        #expect(response.workspaceScale?.displayUnit == .meter)
-        #expect(loaded.displayUnit == .meter)
+        #expect(response.effect == .sourceMutation)
+        #expect(response.workspaceScale?.displayUnit == .millimeter)
         #expect(arcNode.object?.properties["radius"] == .length(4.0))
     }
 
@@ -2041,7 +2112,7 @@ struct CLISketchEditCommandTests {
         ])
         let splitResponse = try JSONDecoder().decode(CLIResponse.self, from: splitResult.standardOutputData)
         let split = try DocumentFileService().load(from: documentURL)
-        let splitSummary = try SketchEntitySummaryService().summarize(document: split)
+        let splitSummary = try SketchEntitySnapshotService().snapshot(document: split)
         let trimEntry = try #require(splitSummary.entries.first { entry in
             entry.entityKind == "line" && entry.entityID != initialLine.entityID
         })
@@ -2059,7 +2130,7 @@ struct CLISketchEditCommandTests {
         ])
         let trimResponse = try JSONDecoder().decode(CLIResponse.self, from: trimResult.standardOutputData)
         let trimmed = try DocumentFileService().load(from: documentURL)
-        let trimmedSummary = try SketchEntitySummaryService().summarize(document: trimmed)
+        let trimmedSummary = try SketchEntitySnapshotService().snapshot(document: trimmed)
 
         #expect(extendResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: extendResult.standardError))
         #expect(extendResponse.message == "Sketch curve extended.")
@@ -2120,7 +2191,7 @@ struct CLISketchEditCommandTests {
         ])
         let response = try JSONDecoder().decode(CLIResponse.self, from: result.standardOutputData)
         let loaded = try DocumentFileService().load(from: documentURL)
-        let summary = try SketchEntitySummaryService().summarize(document: loaded)
+        let summary = try SketchEntitySnapshotService().snapshot(document: loaded)
         let slotFeature = try #require(
             loaded.cadDocument.designGraph.nodes.values.first { $0.name == "Slot Source Slot" }
         )
@@ -2187,7 +2258,7 @@ struct CLISketchEditCommandTests {
         document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
         try DocumentFileService().save(document, to: documentURL)
 
-        let before = try SketchEntitySummaryService().summarize(document: document)
+        let before = try SketchEntitySnapshotService().snapshot(document: document)
         let firstLine = try #require(before.entries.first { $0.entityID == firstLineID.description })
         let secondLine = try #require(before.entries.first { $0.entityID == secondLineID.description })
         let joinResult = try await runCLI([
@@ -2207,7 +2278,7 @@ struct CLISketchEditCommandTests {
             from: joinResult.standardOutputData
         )
         let joined = try DocumentFileService().load(from: documentURL)
-        let joinedSummary = try SketchEntitySummaryService().summarize(document: joined)
+        let joinedSummary = try SketchEntitySnapshotService().snapshot(document: joined)
         let joinedLine = try #require(joinedSummary.entries.first { $0.entityID == firstLineID.description })
 
         let unjoinResult = try await runCLI([
@@ -2225,7 +2296,7 @@ struct CLISketchEditCommandTests {
             from: unjoinResult.standardOutputData
         )
         let unjoined = try DocumentFileService().load(from: documentURL)
-        let unjoinedSummary = try SketchEntitySummaryService().summarize(document: unjoined)
+        let unjoinedSummary = try SketchEntitySnapshotService().snapshot(document: unjoined)
 
         #expect(joinResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: joinResult.standardError))
         #expect(joinResponse.message == "Sketch curves joined.")
@@ -2302,7 +2373,7 @@ struct CLISketchEditCommandTests {
         document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
         try DocumentFileService().save(document, to: documentURL)
 
-        let before = try SketchEntitySummaryService().summarize(document: document)
+        let before = try SketchEntitySnapshotService().snapshot(document: document)
         let line = try #require(before.entries.first { $0.entityID == lineID.description })
         let arc = try #require(before.entries.first { $0.entityID == arcID.description })
         let joinResult = try await runCLI([
@@ -2324,7 +2395,7 @@ struct CLISketchEditCommandTests {
             from: joinResult.standardOutputData
         )
         let joined = try DocumentFileService().load(from: documentURL)
-        let joinedSummary = try SketchEntitySummaryService().summarize(document: joined)
+        let joinedSummary = try SketchEntitySnapshotService().snapshot(document: joined)
         let joinedArc = try #require(joinedSummary.entries.first { $0.entityID == arcID.description })
         let joinedFeature = try #require(joined.cadDocument.designGraph.nodes[featureID])
         guard case .sketch(let joinedSketch) = joinedFeature.operation else {
@@ -2375,7 +2446,7 @@ struct CLISketchEditCommandTests {
     }
 
     private func sourceLine(in document: DesignDocument) throws -> SketchEntitySummaryResult.EntityEntry {
-        let summary = try SketchEntitySummaryService().summarize(document: document)
+        let summary = try SketchEntitySnapshotService().snapshot(document: document)
         return try #require(summary.entries.first { $0.entityKind == "line" })
     }
 
@@ -2416,7 +2487,7 @@ struct CLISketchOffsetCommandTests {
         )
         try DocumentFileService().save(document, to: documentURL)
 
-        let sourceLine = try #require(try SketchEntitySummaryService().summarize(document: document).entries.first {
+        let sourceLine = try #require(try SketchEntitySnapshotService().snapshot(document: document).entries.first {
             $0.entityKind == "line"
         })
         let target = try #require(sourceLine.selectionTarget())
@@ -2438,7 +2509,7 @@ struct CLISketchOffsetCommandTests {
         ])
         let response = try JSONDecoder().decode(CLIResponse.self, from: result.standardOutputData)
         let loaded = try DocumentFileService().load(from: documentURL)
-        let summary = try SketchEntitySummaryService().summarize(document: loaded)
+        let summary = try SketchEntitySnapshotService().snapshot(document: loaded)
         let lines = summary.entries.filter { $0.entityKind == "line" }
         let offsetLine = try #require(lines.first { entry in
             abs((entry.start?.y ?? -1.0) - 0.002) < 1.0e-12
@@ -2477,7 +2548,7 @@ struct CLISketchOffsetCommandTests {
         )
         try DocumentFileService().save(document, to: documentURL)
 
-        let before = try SketchEntitySummaryService().summarize(document: document)
+        let before = try SketchEntitySnapshotService().snapshot(document: document)
         let sourceRegion = try #require(before.regions.first)
         let target = try #require(sourceRegion.selectionTarget())
         let result = try await runCLI([
@@ -2498,7 +2569,7 @@ struct CLISketchOffsetCommandTests {
         ])
         let response = try JSONDecoder().decode(CLIResponse.self, from: result.standardOutputData)
         let loaded = try DocumentFileService().load(from: documentURL)
-        let after = try SketchEntitySummaryService().summarize(document: loaded)
+        let after = try SketchEntitySnapshotService().snapshot(document: loaded)
         let newRegion = try #require(after.regions.first { region in
             region.sourceFeatureID != sourceRegion.sourceFeatureID
         })
@@ -2533,7 +2604,7 @@ struct CLISketchOffsetCommandTests {
         )
         try DocumentFileService().save(document, to: documentURL)
 
-        let before = try SketchEntitySummaryService().summarize(document: document)
+        let before = try SketchEntitySnapshotService().snapshot(document: document)
         let bottomLine = try #require(bottomRectangleLine(in: before))
         let target = try lineHandleTarget(bottomLine, handle: .lineEnd)
         let result = try await runCLI([
@@ -2554,7 +2625,7 @@ struct CLISketchOffsetCommandTests {
         ])
         let response = try JSONDecoder().decode(CLIResponse.self, from: result.standardOutputData)
         let loaded = try DocumentFileService().load(from: documentURL)
-        let after = try SketchEntitySummaryService().summarize(document: loaded)
+        let after = try SketchEntitySnapshotService().snapshot(document: loaded)
         let lines = after.entries.filter { $0.sourceFeatureID == bottomLine.sourceFeatureID && $0.entityKind == "line" }
         let arcs = after.entries.filter { $0.sourceFeatureID == bottomLine.sourceFeatureID && $0.entityKind == "arc" }
         let filletArc = try #require(arcs.first)
@@ -2570,7 +2641,7 @@ struct CLISketchOffsetCommandTests {
     }
 
     private func bottomRectangleLine(
-        in summary: SketchEntitySummaryResult
+        in summary: SketchEntitySnapshot
     ) -> SketchEntitySummaryResult.EntityEntry? {
         summary.entries.first { entry in
             entry.entityKind == "line"
@@ -2798,7 +2869,7 @@ struct CLISketchAdvancedCurveEditCommandTests {
                 message: "Constraint CLI result requires the constrained line."
             )
         }
-        let summary = try SketchEntitySummaryService().summarize(document: loaded)
+        let summary = try SketchEntitySnapshotService().snapshot(document: loaded)
         let line = try #require(summary.entries.first { $0.entityID == lineID.description })
 
         #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
@@ -2995,7 +3066,7 @@ struct CLISketchAdvancedCurveEditCommandTests {
         ])
         let response = try JSONDecoder().decode(CLIResponse.self, from: result.standardOutputData)
         let loaded = try DocumentFileService().load(from: documentURL)
-        let summary = try SketchEntitySummaryService().summarize(document: loaded)
+        let summary = try SketchEntitySnapshotService().snapshot(document: loaded)
         let targetSegments = summary.entries.filter { $0.sourceFeatureName == "Cut Target" }
         let cutterSegments = summary.entries.filter { $0.sourceFeatureName == "Cut Cutter" }
 
@@ -3082,7 +3153,7 @@ struct CLISketchAdvancedCurveEditCommandTests {
         ])
         let response = try JSONDecoder().decode(CLIResponse.self, from: result.standardOutputData)
         let loaded = try DocumentFileService().load(from: documentURL)
-        let summary = try SketchEntitySummaryService().summarize(document: loaded)
+        let summary = try SketchEntitySnapshotService().snapshot(document: loaded)
         let bridgeSpline = try #require(summary.entries.first { entry in
             entry.sourceFeatureID == featureID.description && entry.entityKind == "spline"
         })
@@ -3187,7 +3258,7 @@ struct CLISketchAdvancedCurveEditCommandTests {
     }
 
     @Test(.timeLimit(.minutes(1)))
-    func executableSketchDisplayCommandsPersistClosedDocumentAsJSON() async throws {
+    func executableSketchDisplayCommandsRejectFileModeWithoutMutatingSource() async throws {
         let temporaryDirectory = try makeTemporaryDirectory()
         defer {
             removeTemporaryDirectory(temporaryDirectory)
@@ -3214,15 +3285,16 @@ struct CLISketchAdvancedCurveEditCommandTests {
             ])
         )
         try DocumentFileService().save(document, to: documentURL)
+        let sourceFingerprint = try document.cadDocument.sourceFingerprint(
+            tolerance: document.modelingSettings.tolerance
+        )
+        let sourceMetadata = document.productMetadata
         let circleTarget = try #require(
             try namedSketchEntity("Curvature Circle", kind: "circle", in: document).selectionTarget()
         )
         let splineTarget = try #require(
             try namedSketchEntity("Point Display Spline", kind: "spline", in: document).selectionTarget()
         )
-        let circleComponentID = try sketchEntityComponentID(from: circleTarget)
-        let splineComponentID = try sketchEntityComponentID(from: splineTarget)
-
         let curvatureResult = try await runCLI([
             "sketch",
             "curvature-display",
@@ -3236,7 +3308,6 @@ struct CLISketchAdvancedCurveEditCommandTests {
             "file",
             "--json",
         ])
-        let curvatureResponse = try JSONDecoder().decode(CLIResponse.self, from: curvatureResult.standardOutputData)
         let loadedAfterCurvature = try DocumentFileService().load(from: documentURL)
 
         let pointResult = try await runCLI([
@@ -3250,17 +3321,20 @@ struct CLISketchAdvancedCurveEditCommandTests {
             "file",
             "--json",
         ])
-        let pointResponse = try JSONDecoder().decode(CLIResponse.self, from: pointResult.standardOutputData)
         let loadedAfterPoint = try DocumentFileService().load(from: documentURL)
 
-        #expect(curvatureResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: curvatureResult.standardError))
-        #expect(curvatureResponse.message == "Curve curvature display enabled at comb scale 0.25.")
-        #expect(curvatureResponse.saved)
-        #expect(loadedAfterCurvature.productMetadata.curveCurvatureDisplays[circleComponentID]?.combScale == 0.25)
-        #expect(pointResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: pointResult.standardError))
-        #expect(pointResponse.message == "Point display hidden.")
-        #expect(pointResponse.saved)
-        #expect(loadedAfterPoint.productMetadata.pointDisplays[splineComponentID]?.isVisible == false)
+        #expect(curvatureResult.terminationStatus == CLIExitCode.usage.rawValue)
+        #expect(curvatureResult.standardError.contains("Workspace mutations require live mode"))
+        #expect(pointResult.terminationStatus == CLIExitCode.usage.rawValue)
+        #expect(pointResult.standardError.contains("Workspace mutations require live mode"))
+        #expect(loadedAfterCurvature.productMetadata == sourceMetadata)
+        #expect(loadedAfterPoint.productMetadata == sourceMetadata)
+        #expect(try loadedAfterCurvature.cadDocument.sourceFingerprint(
+            tolerance: loadedAfterCurvature.modelingSettings.tolerance
+        ) == sourceFingerprint)
+        #expect(try loadedAfterPoint.cadDocument.sourceFingerprint(
+            tolerance: loadedAfterPoint.modelingSettings.tolerance
+        ) == sourceFingerprint)
     }
 
     private func namedSketchEntity(
@@ -3268,21 +3342,12 @@ struct CLISketchAdvancedCurveEditCommandTests {
         kind: String,
         in document: DesignDocument
     ) throws -> SketchEntitySummaryResult.EntityEntry {
-        let summary = try SketchEntitySummaryService().summarize(document: document)
+        let summary = try SketchEntitySnapshotService().snapshot(document: document)
         return try #require(summary.entries.first { entry in
             entry.sourceFeatureName == name && entry.entityKind == kind
         })
     }
 
-    private func sketchEntityComponentID(from target: SelectionTarget) throws -> SelectionComponentID {
-        guard case .sketchEntity(let componentID) = target.component else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "Expected a sketch entity selection target."
-            )
-        }
-        return componentID
-    }
 }
 
 @Suite(.serialized)
@@ -3475,8 +3540,8 @@ struct CLICommandApplyTests {
 
         let batch = AutomationBatch(
             commands: [
-                .createConstructionPlane(name: "Batch Plane A", plane: .xy, activates: true),
-                .createConstructionPlane(name: "Batch Plane B", plane: .yz, activates: false),
+                .createConstructionPlane(name: "Batch Plane A", plane: .xy),
+                .createConstructionPlane(name: "Batch Plane B", plane: .yz),
             ]
         )
         try JSONEncoder().encode(batch).write(to: batchURL)
@@ -3519,7 +3584,7 @@ struct CLICommandApplyTests {
 
         let batch = AutomationBatch(
             commands: [
-                .createConstructionPlane(name: "Output Batch Plane", plane: .yz, activates: true),
+                .createConstructionPlane(name: "Output Batch Plane", plane: .yz),
             ]
         )
         try JSONEncoder().encode(batch).write(to: batchURL)
@@ -3913,8 +3978,7 @@ struct CLICommandApplyTests {
 
         let createCommand = AutomationCommand.createConstructionPlane(
             name: "Applied Plane",
-            plane: .xy,
-            activates: true
+            plane: .xy
         )
         let createPayload = String(
             decoding: try JSONEncoder().encode(createCommand),
@@ -3963,7 +4027,8 @@ struct CLICommandApplyTests {
         #expect(createResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: createResult.standardError))
         #expect(createResponse.message == "Construction plane Applied Plane created.")
         #expect(createResponse.saved)
-        #expect(loadedAfterCreate.productMetadata.activeConstructionPlaneID == createdPlane.id)
+        #expect(createResponse.effect == .sourceMutation)
+        #expect(createResponse.createdConstructionPlaneID == createdPlane.id)
         #expect(renameResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: renameResult.standardError))
         #expect(renameResponse.message == "Construction plane renamed to Applied Plane Renamed.")
         #expect(renameResponse.saved)
@@ -4116,13 +4181,17 @@ struct CLICommandApplyTests {
     }
 
     @Test(.timeLimit(.minutes(1)))
-    func executableWorkspaceScaleCommandsMutateClosedDocumentAsJSON() async throws {
+    func executableWorkspaceScaleCommandsRejectFileModeAndPreserveSource() async throws {
         let temporaryDirectory = try makeTemporaryDirectory()
         defer {
             removeTemporaryDirectory(temporaryDirectory)
         }
         let documentURL = temporaryDirectory.appendingPathComponent("process-command-scale.swcad")
-        try DocumentFileService().save(.empty(named: "Process Command Scale"), to: documentURL)
+        let source = DesignDocument.empty(named: "Process Command Scale")
+        let sourceFingerprint = try source.cadDocument.sourceFingerprint(
+            tolerance: source.modelingSettings.tolerance
+        )
+        try DocumentFileService().save(source, to: documentURL)
 
         let presetResult = try await runCLI([
             "command",
@@ -4133,12 +4202,6 @@ struct CLICommandApplyTests {
             "file",
             "--json",
         ])
-        let presetResponse = try JSONDecoder().decode(
-            CLIResponse.self,
-            from: presetResult.standardOutputData
-        )
-        let loadedAfterPreset = try DocumentFileService().load(from: documentURL)
-
         let describeResult = try await runCLI([
             "command",
             "describe",
@@ -4161,12 +4224,6 @@ struct CLICommandApplyTests {
             "file",
             "--json",
         ])
-        let gridResponse = try JSONDecoder().decode(
-            CLIResponse.self,
-            from: gridResult.standardOutputData
-        )
-        let loadedAfterGrid = try DocumentFileService().load(from: documentURL)
-
         let rulerResult = try await runCLI([
             "command",
             "set-ruler",
@@ -4183,12 +4240,6 @@ struct CLICommandApplyTests {
             "file",
             "--json",
         ])
-        let rulerResponse = try JSONDecoder().decode(
-            CLIResponse.self,
-            from: rulerResult.standardOutputData
-        )
-        let loadedAfterRuler = try DocumentFileService().load(from: documentURL)
-
         let unitResult = try await runCLI([
             "command",
             "set-display-unit",
@@ -4198,31 +4249,6 @@ struct CLICommandApplyTests {
             "file",
             "--json",
         ])
-        let unitResponse = try JSONDecoder().decode(
-            CLIResponse.self,
-            from: unitResult.standardOutputData
-        )
-        let loadedAfterUnit = try DocumentFileService().load(from: documentURL)
-
-        #expect(presetResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: presetResult.standardError))
-        #expect(presetResponse.saved)
-        #expect(presetResponse.workspaceScale?.matchedPreset == .sitePlanning)
-        #expect(presetResponse.workspaceScale?.displayUnit == .kilometer)
-        #expect(presetResponse.workspaceScale?.displayUnitSymbol == "km")
-        #expect(presetResponse.workspaceScale?.visibleSpanMeters == 100_000.0)
-        #expect(presetResponse.workspaceScale?.visibleSpanDisplayValue == 100.0)
-        #expect(presetResponse.viewportGridScale?.snapStep.meters == 100.0)
-        #expect(presetResponse.viewportGridScale?.snapStep.displayValue == 0.1)
-        #expect(presetResponse.viewportGridScale?.workspaceSpan.text == "100 km")
-        #expect(presetResponse.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
-        #expect(presetResponse.workspaceScalePresetOptions?.contains { option in
-            option.preset == .regionalPlanning
-                && option.visibleSpanTitle == "1,000 km"
-                && option.comfortableModelSpanTitle == "10 km to 800 km"
-        } == true)
-        #expect(loadedAfterPreset.displayUnit == .kilometer)
-        #expect(loadedAfterPreset.ruler == WorkspaceScalePreset.sitePlanning.rulerConfiguration.normalizedForWorkspaceScale())
-
         let imperialPresetResult = try await runCLI([
             "command",
             "set-scale-preset",
@@ -4232,61 +4258,20 @@ struct CLICommandApplyTests {
             "file",
             "--json",
         ])
-        let imperialPresetResponse = try JSONDecoder().decode(
-            CLIResponse.self,
-            from: imperialPresetResult.standardOutputData
-        )
-        let loadedAfterImperialPreset = try DocumentFileService().load(from: documentURL)
-
-        #expect(imperialPresetResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: imperialPresetResult.standardError))
-        #expect(imperialPresetResponse.saved)
-        #expect(imperialPresetResponse.workspaceScale?.displayUnit == .foot)
-        #expect(imperialPresetResponse.workspaceScale?.matchedPreset == .sitePlanningImperial)
-        #expect(imperialPresetResponse.workspaceScale?.minorTickDisplayValue == 100.0)
-        #expect(imperialPresetResponse.workspaceScale?.majorTickDisplayValue == 1_000.0)
-        #expect(loadedAfterImperialPreset.ruler == WorkspaceScalePreset.sitePlanningImperial.rulerConfiguration.normalizedForWorkspaceScale())
-
         #expect(describeResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: describeResult.standardError))
         #expect(!describeResponse.saved)
-        #expect(describeResponse.workspaceScale?.matchedPreset == .sitePlanning)
-        #expect(describeResponse.workspaceScale?.displayUnit == .kilometer)
+        #expect(describeResponse.effect == .readOnly)
+        #expect(describeResponse.workspaceScale?.displayUnit == .millimeter)
         #expect(describeResponse.viewportGridSettings == .standard)
-        #expect(describeResponse.viewportGridScale?.configuredMajorStep.text == "1 km")
-        #expect(describeResponse.message.contains("Site Planning"))
-
-        #expect(gridResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: gridResult.standardError))
-        #expect(gridResponse.saved)
-        #expect(gridResponse.viewportGridSettings?.visualSpacingMode == .fixed)
-        #expect(gridResponse.viewportGridScale?.visualSpacingMode == .fixed)
-        #expect(gridResponse.viewportGridScale?.snapStep.text == "0.1 km")
-        #expect(loadedAfterGrid.productMetadata.viewportGridSettings.visualSpacingMode == .fixed)
-
-        #expect(rulerResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: rulerResult.standardError))
-        #expect(rulerResponse.saved)
-        #expect(rulerResponse.workspaceScale?.displayUnit == .foot)
-        #expect(rulerResponse.workspaceScale?.displayUnitSymbol == "ft")
-        #expect(rulerResponse.workspaceScale?.matchedPreset == nil)
-        #expect(cliNearlyEqual(rulerResponse.workspaceScale?.minorTickMeters ?? 0.0, 0.3048))
-        #expect(cliNearlyEqual(rulerResponse.workspaceScale?.majorTickMeters ?? 0.0, 3.048))
-        #expect(cliNearlyEqual(rulerResponse.workspaceScale?.visibleSpanMeters ?? 0.0, 3048.0))
-        #expect(cliNearlyEqual(rulerResponse.workspaceScale?.minorTickDisplayValue ?? 0.0, 1.0))
-        #expect(cliNearlyEqual(rulerResponse.workspaceScale?.majorTickDisplayValue ?? 0.0, 10.0))
-        #expect(cliNearlyEqual(rulerResponse.workspaceScale?.visibleSpanDisplayValue ?? 0.0, 10_000.0))
-        #expect(loadedAfterRuler.displayUnit == .foot)
-        #expect(cliNearlyEqual(loadedAfterRuler.ruler.visibleSpanMeters, 3048.0))
-
-        #expect(unitResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: unitResult.standardError))
-        #expect(unitResponse.saved)
-        #expect(unitResponse.workspaceScale?.displayUnit == .inch)
-        #expect(unitResponse.workspaceScale?.displayUnitSymbol == "in")
-        #expect(cliNearlyEqual(unitResponse.workspaceScale?.minorTickMeters ?? 0.0, 0.3048))
-        #expect(cliNearlyEqual(unitResponse.workspaceScale?.majorTickMeters ?? 0.0, 3.048))
-        #expect(cliNearlyEqual(unitResponse.workspaceScale?.visibleSpanMeters ?? 0.0, 3048.0))
-        #expect(loadedAfterUnit.displayUnit == .inch)
-        #expect(loadedAfterUnit.ruler.displayUnit == .inch)
-        #expect(cliNearlyEqual(loadedAfterUnit.ruler.minorTickMeters, 0.3048))
-        #expect(cliNearlyEqual(loadedAfterUnit.ruler.majorTickMeters, 3.048))
-        #expect(cliNearlyEqual(loadedAfterUnit.ruler.visibleSpanMeters, 3048.0))
+        for mutationResult in [presetResult, imperialPresetResult, gridResult, rulerResult, unitResult] {
+            #expect(mutationResult.terminationStatus == CLIExitCode.usage.rawValue)
+            #expect(mutationResult.standardError.contains("Workspace mutations require live mode"))
+        }
+        let loaded = try DocumentFileService().load(from: documentURL)
+        #expect(try loaded.cadDocument.sourceFingerprint(
+            tolerance: loaded.modelingSettings.tolerance
+        ) == sourceFingerprint)
+        #expect(loaded.productMetadata == source.productMetadata)
     }
 
     @Test(.timeLimit(.minutes(1)))
@@ -4350,12 +4335,14 @@ struct CLICommandApplyTests {
     }
 
     @Test(.timeLimit(.minutes(1)))
-    func executableWorkspaceFitScaleAppliesRecommendedPresetAsJSON() async throws {
+    func executableWorkspaceFitScaleAppliesRecommendedPresetToLiveSessionAsJSON() async throws {
         let temporaryDirectory = try makeTemporaryDirectory()
         defer {
             removeTemporaryDirectory(temporaryDirectory)
         }
         let documentURL = temporaryDirectory.appendingPathComponent("process-command-fit-scale.swcad")
+        let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
+        let sessionID = UUID()
         var document = DesignDocument.empty(named: "Process Command Fit Site")
         let profileID = try document.createRectangleSketchFromCorners(
             name: "Process Command Fit Footprint",
@@ -4375,33 +4362,60 @@ struct CLICommandApplyTests {
             distance: .length(100.0, .meter),
             direction: .normal
         )
-        try DocumentFileService().save(document, to: documentURL)
-
-        let result = try await runCLI([
-            "command",
-            "fit-workspace-scale",
-            documentURL.path,
-            "--mode",
-            "file",
-            "--json",
-        ])
-        let response = try JSONDecoder().decode(
-            CLIResponse.self,
-            from: result.standardOutputData
+        let sourceFingerprint = try document.cadDocument.sourceFingerprint(
+            tolerance: document.modelingSettings.tolerance
         )
-        let loaded = try DocumentFileService().load(from: documentURL)
+        let sourceMetadata = document.productMetadata
+        try DocumentFileService().save(document, to: documentURL)
+        let server = AgentCommandController()
+        server.register(session: EditorSession(document: document), id: sessionID)
+        let listener = AgentSocketListener(
+            controller: server,
+            socketPath: AgentSocketPath(socketURL.path)
+        )
 
-        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
-        #expect(response.saved)
-        #expect(response.generation == 1)
-        #expect(response.workspaceScale?.matchedPreset == .sitePlanning)
-        #expect(response.workspaceScale?.displayUnit == .kilometer)
-        #expect(response.workspaceScale?.visibleSpanDisplayValue == 100.0)
-        #expect(response.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
-        #expect(response.workspaceScaleRecommendation == nil)
-        #expect(response.message.contains("Workspace scale fitted to Site Planning"))
-        #expect(loaded.displayUnit == .kilometer)
-        #expect(loaded.ruler == WorkspaceScalePreset.sitePlanning.rulerConfiguration.normalizedForWorkspaceScale())
+        try await listener.start()
+        do {
+            let result = try await runCLI([
+                "command",
+                "fit-workspace-scale",
+                "--session-id",
+                sessionID.uuidString,
+                "--mode",
+                "live",
+                "--expected-generation",
+                "0",
+                "--expected-workspace-revision",
+                "0",
+                "--agent-socket",
+                socketURL.path,
+                "--json",
+            ])
+            let response = try JSONDecoder().decode(
+                CLIResponse.self,
+                from: result.standardOutputData
+            )
+            let loaded = try DocumentFileService().load(from: documentURL)
+
+            #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+            #expect(!response.saved)
+            #expect(response.generation == 0)
+            #expect(response.workspaceRevision == 1)
+            #expect(response.workspaceScale?.matchedPreset == .sitePlanning)
+            #expect(response.workspaceScale?.displayUnit == .kilometer)
+            #expect(response.workspaceScale?.visibleSpanDisplayValue == 100.0)
+            #expect(response.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
+            #expect(response.workspaceScaleRecommendation == nil)
+            #expect(response.message.contains("Workspace scale fitted to Site Planning"))
+            #expect(try loaded.cadDocument.sourceFingerprint(
+                tolerance: loaded.modelingSettings.tolerance
+            ) == sourceFingerprint)
+            #expect(loaded.productMetadata == sourceMetadata)
+            await listener.stop()
+        } catch {
+            await listener.stop()
+            throw error
+        }
     }
 
     @Test(.timeLimit(.minutes(1)))
@@ -4412,11 +4426,12 @@ struct CLICommandApplyTests {
         }
         let documentURL = temporaryDirectory.appendingPathComponent("process-command-rebase-origin.swcad")
         let fixture = try cliFarFromOriginRectangleDocument()
+        let measurementRuler = WorkspaceScalePreset.sitePlanning.rulerConfiguration
         try DocumentFileService().save(fixture.document, to: documentURL)
 
         let initialMeasurement = try MeasurementService(
-            tolerance: .workspaceScaleAware(for: fixture.document)
-        ).measure(document: fixture.document)
+            tolerance: fixture.document.modelingSettings.tolerance
+        ).measure(document: fixture.document, ruler: measurementRuler)
         #expect(initialMeasurement.diagnostics.contains { $0.code == .workspacePrecisionWarning })
 
         let measurementResult = try await runCLI([
@@ -4452,8 +4467,8 @@ struct CLICommandApplyTests {
         let loaded = try DocumentFileService().load(from: documentURL)
         let bounds = try cliProfileBounds(forBody: fixture.bodyFeatureID, in: loaded)
         let translatedMeasurement = try MeasurementService(
-            tolerance: .workspaceScaleAware(for: loaded)
-        ).measure(document: loaded)
+            tolerance: loaded.modelingSettings.tolerance
+        ).measure(document: loaded, ruler: measurementRuler)
 
         #expect(
             measurementResult.terminationStatus == CLIExitCode.success.rawValue,
@@ -4467,7 +4482,7 @@ struct CLICommandApplyTests {
         #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
         #expect(response.message.contains("Workspace origin rebased"))
         #expect(response.saved)
-        #expect(response.workspaceScale?.matchedPreset == .sitePlanning)
+        #expect(response.workspaceScale?.displayUnit == .millimeter)
         #expect(response.diagnostics.contains { $0.code == .workspacePrecisionWarning } == false)
         #expect(translatedMeasurement.diagnostics.contains { $0.code == .workspacePrecisionWarning } == false)
         #expect(cliNearlyEqual(bounds.minX, 0.0, tolerance: 1.0e-6))
@@ -4813,7 +4828,7 @@ struct CLIViewCommandTests {
 @Suite(.serialized)
 struct CLIPlaneCommandTests {
     @Test(.timeLimit(.minutes(1)))
-    func executableConstructionPlaneCommandsMutateClosedDocumentAsJSON() async throws {
+    func executableConstructionPlaneCommandsSeparateFileSourceFromLiveWorkspace() async throws {
         let temporaryDirectory = try makeTemporaryDirectory()
         defer {
             removeTemporaryDirectory(temporaryDirectory)
@@ -4885,11 +4900,6 @@ struct CLIPlaneCommandTests {
             "file",
             "--json",
         ])
-        let setActiveResponse = try JSONDecoder().decode(
-            CLIResponse.self,
-            from: setActiveResult.standardOutputData
-        )
-
         let renameResult = try await runCLI([
             "plane",
             "rename",
@@ -4923,19 +4933,20 @@ struct CLIPlaneCommandTests {
         #expect(createResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: createResult.standardError))
         #expect(createResponse.message == "Construction plane Base XY created.")
         #expect(createResponse.saved)
-        #expect(loadedAfterCreate.productMetadata.activeConstructionPlaneID == basePlane.id)
+        #expect(createResponse.effect == .sourceMutation)
+        #expect(createResponse.createdConstructionPlaneID == basePlane.id)
         #expect(createViewResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: createViewResult.standardError))
         #expect(createViewResponse.message == "View-aligned construction plane Camera Plane created.")
         #expect(createViewResponse.saved)
-        #expect(loadedAfterView.productMetadata.activeConstructionPlaneID == viewPlane.id)
-        #expect(setActiveResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: setActiveResult.standardError))
-        #expect(setActiveResponse.message == "Active construction plane set to Base XY.")
-        #expect(setActiveResponse.saved)
+        #expect(createViewResponse.effect == .sourceMutation)
+        #expect(createViewResponse.createdConstructionPlaneID == viewPlane.id)
+        #expect(setActiveResult.terminationStatus == CLIExitCode.usage.rawValue)
+        #expect(setActiveResult.standardError.contains("Workspace mutations require live mode"))
         #expect(renameResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: renameResult.standardError))
         #expect(renameResponse.message == "Construction plane renamed to Renamed View Plane.")
         #expect(renameResponse.saved)
         #expect(inspectResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: inspectResult.standardError))
-        #expect(inspectResponse.constructionPlaneSummary.activePlaneID == basePlane.id)
+        #expect(inspectResponse.constructionPlaneSummary.activePlaneID == nil)
         #expect(inspectResponse.constructionPlaneSummary.planes.map(\.name) == ["Base XY", "Renamed View Plane"])
     }
 
@@ -4949,7 +4960,7 @@ struct CLIPlaneCommandTests {
         let fixture = try cliDefaultBoxFixture()
         let documentURL = temporaryDirectory.appendingPathComponent("process-plane-target-commands.swcad")
         try DocumentFileService().save(fixture.document, to: documentURL)
-        let topology = try TopologySummaryService().summarize(document: fixture.document)
+        let topology = try TopologySnapshotService().snapshot(document: fixture.document)
         let faceTarget = try #require(topology.entries.first { entry in
             entry.kind == .face && entry.selectionTarget() != nil
         }?.selectionTarget())
@@ -4996,7 +5007,7 @@ struct CLIPlaneCommandTests {
         #expect(targetResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: targetResult.standardError))
         #expect(targetResponse.message.hasPrefix("Construction plane Top Face Plane created from target"))
         #expect(targetResponse.saved)
-        #expect(loadedAfterTarget.productMetadata.activeConstructionPlaneID == topFacePlane.id)
+        #expect(targetResponse.createdConstructionPlaneID == topFacePlane.id)
         if case .plane = topFacePlane.plane {
             #expect(true)
         } else {
@@ -5005,7 +5016,7 @@ struct CLIPlaneCommandTests {
         #expect(targetsResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: targetsResult.standardError))
         #expect(targetsResponse.message == "Construction plane Left Right Midplane created from 2 targets.")
         #expect(targetsResponse.saved)
-        #expect(loadedAfterTargets.productMetadata.activeConstructionPlaneID == midplane.id)
+        #expect(targetsResponse.createdConstructionPlaneID == midplane.id)
         #expect(loadedAfterTargets.productMetadata.constructionPlanes.count == 2)
         if case .plane = midplane.plane {
             #expect(true)
@@ -5015,7 +5026,7 @@ struct CLIPlaneCommandTests {
     }
 
     private func parallelFaceTargets(
-        in topology: TopologySummaryResult
+        in topology: TopologySnapshot
     ) throws -> (first: SelectionTarget, second: SelectionTarget) {
         let faces = topology.entries.filter { $0.kind == .face }
         for firstIndex in faces.indices {
@@ -5215,7 +5226,7 @@ func cliExecutableSurfaceMoveControlPointMutatesClosedDocumentAsJSON() async thr
         sourceMesh: cliPolySplinePatchNetworkMesh(centerZ: 0.0),
         options: PolySplineOptions(mergePatches: false)
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     let referenceJSON = try encodedSelectionReference(controlPoint.selectionReference)
@@ -5240,7 +5251,7 @@ func cliExecutableSurfaceMoveControlPointMutatesClosedDocumentAsJSON() async thr
         from: result.standardOutputData
     )
     let loaded = try DocumentFileService().load(from: documentURL)
-    let movedSummary = try SurfaceSourceSummaryService().summarize(document: loaded)
+    let movedSummary = try SurfaceSourceSummaryService().summarize(document: loaded, displayUnit: .millimeter)
     let movedPatch = try #require(movedSummary.sources.first?.patches.first)
     let movedControlPoint = try #require(movedPatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
 
@@ -5264,7 +5275,7 @@ func cliExecutableSurfaceMoveControlPointWritesOutputDocumentAsJSON() async thro
         sourceMesh: cliPolySplinePatchNetworkMesh(centerZ: 0.0),
         options: PolySplineOptions(mergePatches: false)
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     let referenceJSON = try encodedSelectionReference(controlPoint.selectionReference)
@@ -5292,8 +5303,8 @@ func cliExecutableSurfaceMoveControlPointWritesOutputDocumentAsJSON() async thro
     )
     let input = try DocumentFileService().load(from: inputURL)
     let output = try DocumentFileService().load(from: outputURL)
-    let inputSummary = try SurfaceSourceSummaryService().summarize(document: input)
-    let outputSummary = try SurfaceSourceSummaryService().summarize(document: output)
+    let inputSummary = try SurfaceSourceSummaryService().summarize(document: input, displayUnit: .millimeter)
+    let outputSummary = try SurfaceSourceSummaryService().summarize(document: output, displayUnit: .millimeter)
     let inputPoint = try #require(inputSummary.sources.first?.patches.first?.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     let outputPoint = try #require(outputSummary.sources.first?.patches.first?.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
 
@@ -5316,7 +5327,7 @@ func cliExecutableSurfaceMoveControlPointsInFrameMutatesClosedDocumentAsJSON() a
         sourceMesh: cliPolySplinePatchNetworkMesh(centerZ: 0.0),
         options: PolySplineOptions(mergePatches: false)
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     let referenceJSON = try encodedSelectionReference(controlPoint.selectionReference)
@@ -5364,7 +5375,7 @@ func cliExecutableSurfaceMoveControlPointsInFrameMutatesClosedDocumentAsJSON() a
         from: result.standardOutputData
     )
     let loaded = try DocumentFileService().load(from: documentURL)
-    let movedSummary = try SurfaceSourceSummaryService().summarize(document: loaded)
+    let movedSummary = try SurfaceSourceSummaryService().summarize(document: loaded, displayUnit: .millimeter)
     let movedPatch = try #require(movedSummary.sources.first?.patches.first)
     let movedControlPoint = try #require(movedPatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     let expectedX = controlPoint.point.x
@@ -5402,7 +5413,7 @@ func cliExecutableSurfaceWeightAndKnotCommandsMutateClosedDocumentAsJSON() async
         name: "CLI Editable B-spline Surface",
         surface: sourceSurface
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     let editableKnot = try #require(patch.basis.uKnotVector.first { $0.index == 3 })
@@ -5503,7 +5514,7 @@ func cliExecutableSurfaceKnotMultiplicityCommandMutatesClosedDocumentAsJSON() as
         name: "CLI Explicit Multiplicity B-spline Surface",
         surface: sourceSurface
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let editableKnot = try #require(patch.basis.uKnotVector.first { $0.index == 3 })
     let knotJSON = try encodedSelectionReference(try #require(editableKnot.selectionReference))
@@ -5554,7 +5565,7 @@ func cliExecutableSurfaceTrimDomainCommandMutatesClosedDocumentAsJSON() async th
         name: "CLI Trim Domain B-spline Surface",
         surface: sourceSurface
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
     let faceJSON = try encodedSelectionReference(faceReference)
     try DocumentFileService().save(document, to: documentURL)
@@ -5588,7 +5599,7 @@ func cliExecutableSurfaceTrimDomainCommandMutatesClosedDocumentAsJSON() async th
         return
     }
     let trimDomain = try #require(surfaceFeature.outerTrimDomain)
-    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: loaded)
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: loaded, displayUnit: .millimeter)
     let updatedPatch = try #require(updatedSummary.sources.first?.patches.first)
 
     #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
@@ -5617,7 +5628,7 @@ func cliExecutableSurfaceTrimLoopsCommandMutatesClosedDocumentAsJSON() async thr
         name: "CLI Trim Loops B-spline Surface",
         surface: sourceSurface
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
     let trimLoop = BSplineSurfaceTrimLoop(
         role: .outer,
@@ -5662,7 +5673,7 @@ func cliExecutableSurfaceTrimLoopsCommandMutatesClosedDocumentAsJSON() async thr
         Issue.record("Expected a direct B-spline surface feature.")
         return
     }
-    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: loaded)
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: loaded, displayUnit: .millimeter)
     let updatedTrimLoop = try #require(updatedSummary.sources.first?.patches.first?.trimLoops.first)
 
     #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
@@ -5688,7 +5699,7 @@ func cliExecutableSurfaceTrimEndpointCommandMutatesClosedDocumentAsJSON() async 
         name: "CLI Trim Endpoint B-spline Surface",
         surface: sourceSurface
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
     let trimLoop = BSplineSurfaceTrimLoop(
         role: .outer,
@@ -5748,7 +5759,7 @@ func cliExecutableSurfaceTrimEndpointCommandMutatesClosedDocumentAsJSON() async 
     let updatedLoop = try #require(surfaceFeature.trimLoops.first)
     let updatedFirst = try #require(updatedLoop.edges.first).parameterCurve.endParameter()
     let updatedSecond = try #require(updatedLoop.edges.dropFirst().first).parameterCurve.startParameter()
-    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: loaded)
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: loaded, displayUnit: .millimeter)
     let updatedSummaryTrimLoop = try #require(updatedSummary.sources.first?.patches.first?.trimLoops.first)
 
     #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
@@ -5773,7 +5784,7 @@ func cliExecutableSurfaceTrimControlPointCommandMutatesClosedDocumentAsJSON() as
         name: "CLI Trim Control Point B-spline Surface",
         surface: sourceSurface
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
     let trimLoop = BSplineSurfaceTrimLoop(
         role: .outer,
@@ -5840,7 +5851,7 @@ func cliExecutableSurfaceTrimControlPointCommandMutatesClosedDocumentAsJSON() as
         Issue.record("Expected a B-spline trim parameter curve.")
         return
     }
-    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: loaded)
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: loaded, displayUnit: .millimeter)
     let updatedSummaryTrimLoop = try #require(updatedSummary.sources.first?.patches.first?.trimLoops.first)
 
     #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
@@ -5866,7 +5877,7 @@ func cliExecutableSurfaceTrimControlPointWeightCommandMutatesClosedDocumentAsJSO
         name: "CLI Trim Control Point Weight B-spline Surface",
         surface: sourceSurface
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
     let trimLoop = BSplineSurfaceTrimLoop(
         role: .outer,
@@ -5932,7 +5943,7 @@ func cliExecutableSurfaceTrimControlPointWeightCommandMutatesClosedDocumentAsJSO
         Issue.record("Expected a B-spline trim parameter curve.")
         return
     }
-    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: loaded)
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: loaded, displayUnit: .millimeter)
     let updatedSummaryEdge = try #require(
         updatedSummary.sources.first?.patches.first?.trimLoops.first?.edges.first
     )
@@ -5961,7 +5972,7 @@ func cliExecutableSurfaceTrimKnotCommandMutatesClosedDocumentAsJSON() async thro
         name: "CLI Trim Knot B-spline Surface",
         surface: sourceSurface
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
     let trimLoop = BSplineSurfaceTrimLoop(
         role: .outer,
@@ -5998,110 +6009,112 @@ func cliExecutableSurfaceTrimKnotCommandMutatesClosedDocumentAsJSON() async thro
     let trimJSON = try encodedSelectionReference(trimReference)
     try DocumentFileService().save(document, to: documentURL)
 
-    let result = try await runCLI([
-        "surface",
-        "insert-trim-knot",
-        documentURL.path,
-        "--reference",
-        trimJSON,
-        "--value",
-        "0.5",
-        "--mode",
-        "file",
-        "--json",
-    ])
-    let response = try JSONDecoder().decode(
-        CLIResponse.self,
-        from: result.standardOutputData
-    )
-    let loaded = try DocumentFileService().load(from: documentURL)
-    let feature = try #require(loaded.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
-        Issue.record("Expected a direct B-spline surface feature.")
-        return
-    }
-    let updatedLoop = try #require(surfaceFeature.trimLoops.first)
-    guard case .bSpline(let refinedCurve) = updatedLoop.edges[0].parameterCurve else {
-        Issue.record("Expected a B-spline trim parameter curve.")
-        return
-    }
-    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: loaded)
-    let updatedSummaryEdge = try #require(
-        updatedSummary.sources.first?.patches.first?.trimLoops.first?.edges.first
-    )
+    try await withCLIProcessSequence {
+        let result = try await runCLI([
+            "surface",
+            "insert-trim-knot",
+            documentURL.path,
+            "--reference",
+            trimJSON,
+            "--value",
+            "0.5",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: result.standardOutputData
+        )
+        let loaded = try DocumentFileService().load(from: documentURL)
+        let feature = try #require(loaded.cadDocument.designGraph.nodes[featureID])
+        guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+            Issue.record("Expected a direct B-spline surface feature.")
+            return
+        }
+        let updatedLoop = try #require(surfaceFeature.trimLoops.first)
+        guard case .bSpline(let refinedCurve) = updatedLoop.edges[0].parameterCurve else {
+            Issue.record("Expected a B-spline trim parameter curve.")
+            return
+        }
+        let updatedSummary = try SurfaceSourceSummaryService().summarize(document: loaded, displayUnit: .millimeter)
+        let updatedSummaryEdge = try #require(
+            updatedSummary.sources.first?.patches.first?.trimLoops.first?.edges.first
+        )
 
-    #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
-    #expect(response.message == "Surface trim p-curve knot inserted.")
-    #expect(response.saved)
-    #expect(refinedCurve.knots == [0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0])
-    #expect(refinedCurve.controlPoints.count == 4)
-    #expect(updatedSummaryEdge.parameterCurve.knots == refinedCurve.knots)
-    #expect(updatedSummaryEdge.parameterCurve.spans.count == 2)
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message == "Surface trim p-curve knot inserted.")
+        #expect(response.saved)
+        #expect(refinedCurve.knots == [0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0])
+        #expect(refinedCurve.controlPoints.count == 4)
+        #expect(updatedSummaryEdge.parameterCurve.knots == refinedCurve.knots)
+        #expect(updatedSummaryEdge.parameterCurve.spans.count == 2)
 
-    let valueResult = try await runCLI([
-        "surface",
-        "set-trim-knot-value",
-        documentURL.path,
-        "--reference",
-        trimJSON,
-        "--knot-index",
-        "3",
-        "--value",
-        "0.4",
-        "--mode",
-        "file",
-        "--json",
-    ])
-    let valueResponse = try JSONDecoder().decode(
-        CLIResponse.self,
-        from: valueResult.standardOutputData
-    )
-    let retimed = try DocumentFileService().load(from: documentURL)
-    let retimedFeature = try #require(retimed.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(retimedSurfaceFeature) = retimedFeature.operation,
-          let retimedLoop = retimedSurfaceFeature.trimLoops.first,
-          case .bSpline(let retimedCurve) = retimedLoop.edges[0].parameterCurve else {
-        Issue.record("Expected a retimed B-spline trim parameter curve.")
-        return
-    }
-    #expect(valueResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: valueResult.standardError))
-    #expect(valueResponse.message == "Surface trim p-curve knot value updated.")
-    #expect(valueResponse.saved)
-    #expect(retimedCurve.knots == [0.0, 0.0, 0.0, 0.4, 1.0, 1.0, 1.0])
+        let valueResult = try await runCLI([
+            "surface",
+            "set-trim-knot-value",
+            documentURL.path,
+            "--reference",
+            trimJSON,
+            "--knot-index",
+            "3",
+            "--value",
+            "0.4",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let valueResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: valueResult.standardOutputData
+        )
+        let retimed = try DocumentFileService().load(from: documentURL)
+        let retimedFeature = try #require(retimed.cadDocument.designGraph.nodes[featureID])
+        guard case let .bSplineSurface(retimedSurfaceFeature) = retimedFeature.operation,
+              let retimedLoop = retimedSurfaceFeature.trimLoops.first,
+              case .bSpline(let retimedCurve) = retimedLoop.edges[0].parameterCurve else {
+            Issue.record("Expected a retimed B-spline trim parameter curve.")
+            return
+        }
+        #expect(valueResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: valueResult.standardError))
+        #expect(valueResponse.message == "Surface trim p-curve knot value updated.")
+        #expect(valueResponse.saved)
+        #expect(retimedCurve.knots == [0.0, 0.0, 0.0, 0.4, 1.0, 1.0, 1.0])
 
-    let multiplicityResult = try await runCLI([
-        "surface",
-        "set-trim-knot-multiplicity",
-        documentURL.path,
-        "--reference",
-        trimJSON,
-        "--knot-index",
-        "3",
-        "--multiplicity",
-        "2",
-        "--mode",
-        "file",
-        "--json",
-    ])
-    let multiplicityResponse = try JSONDecoder().decode(
-        CLIResponse.self,
-        from: multiplicityResult.standardOutputData
-    )
-    let saturated = try DocumentFileService().load(from: documentURL)
-    let saturatedFeature = try #require(saturated.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(saturatedSurfaceFeature) = saturatedFeature.operation,
-          let saturatedLoop = saturatedSurfaceFeature.trimLoops.first,
-          case .bSpline(let saturatedCurve) = saturatedLoop.edges[0].parameterCurve else {
-        Issue.record("Expected a saturated B-spline trim parameter curve.")
-        return
+        let multiplicityResult = try await runCLI([
+            "surface",
+            "set-trim-knot-multiplicity",
+            documentURL.path,
+            "--reference",
+            trimJSON,
+            "--knot-index",
+            "3",
+            "--multiplicity",
+            "2",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let multiplicityResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: multiplicityResult.standardOutputData
+        )
+        let saturated = try DocumentFileService().load(from: documentURL)
+        let saturatedFeature = try #require(saturated.cadDocument.designGraph.nodes[featureID])
+        guard case let .bSplineSurface(saturatedSurfaceFeature) = saturatedFeature.operation,
+              let saturatedLoop = saturatedSurfaceFeature.trimLoops.first,
+              case .bSpline(let saturatedCurve) = saturatedLoop.edges[0].parameterCurve else {
+            Issue.record("Expected a saturated B-spline trim parameter curve.")
+            return
+        }
+        #expect(
+            multiplicityResult.terminationStatus == CLIExitCode.success.rawValue,
+            Comment(rawValue: multiplicityResult.standardError)
+        )
+        #expect(multiplicityResponse.message == "Surface trim p-curve knot multiplicity updated.")
+        #expect(multiplicityResponse.saved)
+        #expect(saturatedCurve.knots == [0.0, 0.0, 0.0, 0.4, 0.4, 1.0, 1.0, 1.0])
     }
-    #expect(
-        multiplicityResult.terminationStatus == CLIExitCode.success.rawValue,
-        Comment(rawValue: multiplicityResult.standardError)
-    )
-    #expect(multiplicityResponse.message == "Surface trim p-curve knot multiplicity updated.")
-    #expect(multiplicityResponse.saved)
-    #expect(saturatedCurve.knots == [0.0, 0.0, 0.0, 0.4, 0.4, 1.0, 1.0, 1.0])
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -6117,7 +6130,7 @@ func cliExecutableSurfaceSpanSplitMutatesClosedDocumentAsJSON() async throws {
         name: "CLI Split Span B-spline Surface",
         surface: sourceSurface
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let editableSpan = try #require(patch.basis.vSpans.first { $0.index == 1 })
     let spanJSON = try encodedSelectionReference(try #require(editableSpan.selectionReference))
@@ -6311,7 +6324,7 @@ func cliExecutableSketchDimensionSummaryAndSetMutateClosedDocumentAsJSON() async
             y: .length(0.0, .millimeter)
         )
     )
-    let sketchSummary = try SketchEntitySummaryService().summarize(document: document)
+    let sketchSummary = try SketchEntitySnapshotService().snapshot(document: document)
     let line = try #require(sketchSummary.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
     let targetJSON = try encodedSelectionTarget(target)
@@ -6352,7 +6365,7 @@ func cliExecutableSketchDimensionSummaryAndSetMutateClosedDocumentAsJSON() async
         from: setResult.standardOutputData
     )
     let loaded = try DocumentFileService().load(from: documentURL)
-    let updatedSummary = try SketchDimensionSummaryService().summarize(
+    let updatedSummary = try SketchDimensionSnapshotService().snapshot(
         document: loaded,
         targets: [target]
     )
@@ -6388,7 +6401,7 @@ func cliExecutableSketchDimensionSetWritesOutputDocumentAsJSON() async throws {
             y: .length(0.0, .millimeter)
         )
     )
-    let sketchSummary = try SketchEntitySummaryService().summarize(document: document)
+    let sketchSummary = try SketchEntitySnapshotService().snapshot(document: document)
     let line = try #require(sketchSummary.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
     let targetJSON = try encodedSelectionTarget(target)
@@ -6418,11 +6431,11 @@ func cliExecutableSketchDimensionSetWritesOutputDocumentAsJSON() async throws {
     )
     let input = try DocumentFileService().load(from: inputURL)
     let output = try DocumentFileService().load(from: outputURL)
-    let inputSummary = try SketchDimensionSummaryService().summarize(
+    let inputSummary = try SketchDimensionSnapshotService().snapshot(
         document: input,
         targets: [target]
     )
-    let outputSummary = try SketchDimensionSummaryService().summarize(
+    let outputSummary = try SketchDimensionSnapshotService().snapshot(
         document: output,
         targets: [target]
     )
@@ -6489,6 +6502,7 @@ struct CLISelectionDimensionCommandTests {
         let dimension = try #require(loaded.cadDocument.selectionDimensions.first { $0.id == dimensionID })
         let evaluation = try SelectionDimensionService().evaluate(
             document: loaded,
+            displayUnit: .millimeter,
             dimensionID: dimensionID
         )
         let measurement = try #require(evaluation.measurements.first)
@@ -6528,6 +6542,7 @@ struct CLISelectionDimensionCommandTests {
         let setLoaded = try DocumentFileService().load(from: documentURL)
         let setEvaluation = try SelectionDimensionService().evaluate(
             document: setLoaded,
+            displayUnit: .millimeter,
             dimensionID: dimensionID
         )
         let setMeasurement = try #require(setEvaluation.measurements.first)
@@ -6564,6 +6579,7 @@ struct CLISelectionDimensionCommandTests {
         let appliedLoaded = try DocumentFileService().load(from: documentURL)
         let appliedEvaluation = try SelectionDimensionService().evaluate(
             document: appliedLoaded,
+            displayUnit: .millimeter,
             dimensionID: dimensionID
         )
         let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
@@ -6713,6 +6729,7 @@ struct CLISelectionDimensionCommandTests {
         let appliedLoaded = try DocumentFileService().load(from: documentURL)
         let appliedEvaluation = try SelectionDimensionService().evaluate(
             document: appliedLoaded,
+            displayUnit: .millimeter,
             dimensionID: dimensionID
         )
         let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
@@ -6844,6 +6861,7 @@ struct CLISelectionDimensionCommandTests {
         let appliedLoaded = try DocumentFileService().load(from: documentURL)
         let appliedEvaluation = try SelectionDimensionService().evaluate(
             document: appliedLoaded,
+            displayUnit: .millimeter,
             dimensionID: dimensionID
         )
         let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
@@ -6977,6 +6995,7 @@ struct CLISelectionDimensionCommandTests {
         let appliedLoaded = try DocumentFileService().load(from: documentURL)
         let appliedEvaluation = try SelectionDimensionService().evaluate(
             document: appliedLoaded,
+            displayUnit: .millimeter,
             dimensionID: dimensionID
         )
         let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
@@ -7065,7 +7084,7 @@ func cliExecutableObjectDimensionSummaryAndSetMutateClosedDocumentAsJSON() async
         from: setResult.standardOutputData
     )
     let loaded = try DocumentFileService().load(from: documentURL)
-    let updatedSummary = try ObjectDimensionSummaryService().summarize(
+    let updatedSummary = try ObjectDimensionSnapshotService().snapshot(
         document: loaded,
         targets: [target]
     )
@@ -7860,6 +7879,46 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     #expect(session.document.cadDocument.metadata.name == "Live")
 }
 
+@Test(.timeLimit(.minutes(1)))
+func cliServiceExecutesDomainLiveSessionThroughAgent() throws {
+    let sessionID = UUID()
+    let request = cliDomainRenameRequest(name: "Domain Live")
+    let result = DomainExecutionResult(
+        capabilityID: "architecture.rename",
+        namespace: "architecture",
+        message: "Domain capability architecture.rename executed.",
+        baseGeneration: DocumentGeneration(3),
+        generation: DocumentGeneration(4),
+        proposedGeneration: DocumentGeneration(4),
+        didMutate: true,
+        wouldMutate: true,
+        dryRun: false,
+        commandName: "renameDocument"
+    )
+    let client = DomainExecutionAgentClient(
+        sessionID: sessionID,
+        expectedRequest: request,
+        result: result
+    )
+
+    let response = try CLIService().executeDomainLiveSession(
+        sessionID: sessionID,
+        request: request,
+        client: client
+    )
+
+    #expect(response.message == result.message)
+    #expect(response.generation == 4)
+    #expect(response.baseGeneration == 3)
+    #expect(response.proposedGeneration == 4)
+    #expect(response.dirty)
+    #expect(!response.saved)
+    #expect(response.didMutate)
+    #expect(response.wouldMutate)
+    #expect(response.commandName == "renameDocument")
+    #expect(client.requestCount == 1)
+}
+
 @Test func cliServiceDerivesInteractionScaleForLegacyLiveAgentResponse() async throws {
     let id = UUID()
     let client = LegacyWorkspaceScaleAgentClient(sessionID: id)
@@ -7923,7 +7982,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     ))
     let generation = session.generation
     let dirty = session.isDirty
-    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     server.register(session: session, id: id)
@@ -8663,8 +8722,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     }
 
     let url = temporaryDirectory.appendingPathComponent("regional-cylinder.swcad")
-    var document = DesignDocument.empty(named: "Before")
-    try document.setRulerConfiguration(WorkspaceScalePreset.regionalPlanning.rulerConfiguration)
+    let document = DesignDocument.empty(named: "Before")
     try DocumentFileService().save(document, to: url)
 
     let response = try CLIService().createExtrudedCircle(
@@ -8687,8 +8745,8 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
         .evaluate(loaded.cadDocument)
     #expect(response.saved)
     #expect(!response.dirty)
-    #expect(response.workspaceScale?.matchedPreset == .regionalPlanning)
-    #expect(loaded.ruler == WorkspaceScalePreset.regionalPlanning.rulerConfiguration.normalizedForWorkspaceScale())
+    #expect(response.workspaceScale?.displayUnit == .millimeter)
+    #expect(response.workspaceScaleRecommendation?.recommendedPreset == .regionalPlanning)
     #expect(evaluated.brep.bodies.count == 1)
     #expect(evaluated.brep.geometry.surfaces.values.filter {
         if case .cylinder = $0 {
@@ -8919,8 +8977,7 @@ func cliExecutableSketchLineAcceptsConstructionPlaneReference() async throws {
     var document = DesignDocument.empty(named: "Before")
     let planeID = try document.createConstructionPlane(
         name: "CLI Referenced Plane",
-        plane: .yz,
-        activates: false
+        plane: .yz
     )
     try DocumentFileService().save(document, to: url)
 
@@ -9871,7 +9928,7 @@ private func cliSurfaceTrimReference(
     edgeIndex: Int,
     in document: DesignDocument
 ) throws -> SelectionReference {
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let source = try #require(summary.sources.first { $0.featureID == featureID.description })
     let trimLoop = try #require(source.patches.first?.trimLoops.first)
     guard trimLoop.selectionReferences.indices.contains(edgeIndex) else {
@@ -9931,6 +9988,7 @@ private func cliDefaultBoxFixture() throws -> (
         let response = CLIBatchResponse(
             results: [result1, result2],
             generation: DocumentGeneration(2),
+            workspaceRevision: WorkspaceRevision(3),
             dirty: false,
             saved: true
         )
@@ -9944,6 +10002,7 @@ private func cliDefaultBoxFixture() throws -> (
         #expect(response.diagnostics.contains { $0.severity == .info && $0.message == "Command applied." })
         #expect(response.commandCount == 2)
         #expect(response.didMutate)
+        #expect(response.workspaceRevision == 3)
     }
 }
 
@@ -9952,7 +10011,6 @@ private func cliFarFromOriginRectangleDocument() throws -> (
     bodyFeatureID: FeatureID
 ) {
     var document = DesignDocument.empty(named: "CLI Remote Site")
-    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
     let profileID = try document.createRectangleSketchFromCorners(
         name: "Remote Profile",
         plane: .xy,
@@ -10083,7 +10141,7 @@ private func cliLineEndpointTargets(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> (start: SelectionTarget, end: SelectionTarget) {
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entry = try #require(summary.entries.first {
         $0.sourceFeatureID == featureID.description && $0.entityKind == "line"
     })
@@ -10108,7 +10166,7 @@ private func cliArcEndpointTargets(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> (start: SelectionTarget, end: SelectionTarget) {
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entry = try #require(summary.entries.first {
         $0.sourceFeatureID == featureID.description && $0.entityKind == "arc"
     })
@@ -10160,7 +10218,7 @@ private func cliStandalonePointTarget(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> SelectionTarget {
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entry = try #require(summary.entries.first {
         $0.sourceFeatureID == featureID.description && $0.entityKind == "point"
     })
@@ -10177,7 +10235,7 @@ private func cliSplineControlPointTargets(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> [SelectionTarget] {
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entry = try #require(summary.entries.first {
         $0.sourceFeatureID == featureID.description && $0.entityKind == "spline"
     })
@@ -10255,6 +10313,104 @@ private func cliStandalonePoint(
     )
 }
 
+private func cliDomainRenameRequest(name: String) -> DomainCommandRequest {
+    DomainCommandRequest(
+        capabilityID: "architecture.rename",
+        namespace: "architecture",
+        payload: .object([
+            "name": .string(name),
+        ])
+    )
+}
+
+private func cliDomainExecutionRegistry() throws -> DomainRegistry {
+    let namespace: SemanticNamespaceID = "architecture"
+    let capabilityID: DomainCapabilityID = "architecture.rename"
+    return try DomainRegistry(
+        namespaces: [
+            DomainNamespaceRegistration(
+                namespace: namespace,
+                supportedSchemaVersions: [SemanticSchemaVersion(major: 0, minor: 1, patch: 0)]
+            ),
+        ],
+        capabilityDescriptors: [
+            DomainCapabilityDescriptor(
+                id: capabilityID,
+                namespace: namespace,
+                name: "Rename Architecture Model",
+                summary: "Renames the current document through a registered domain command.",
+                effect: .documentMutation,
+                resultKind: .documentTransaction,
+                supportsDryRun: true,
+                targetKinds: ["document"],
+                failureMode: "Rejects missing or non-string names before mutation."
+            ),
+        ],
+        commandLowerings: [
+            CLIDomainRenameLowering(capabilityID: capabilityID),
+        ]
+    )
+}
+
+private struct CLIDomainRenameLowering: DomainCommandLowering {
+    var capabilityID: DomainCapabilityID
+
+    func lower(_ request: DomainCommandRequest) throws -> DomainCommandPlan {
+        guard case .object(let object) = request.payload,
+              case .string(let name)? = object["name"] else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Domain rename payload requires a string name."
+            )
+        }
+        return .automationBatch(
+            AutomationBatch(
+                commands: [
+                    .renameDocument(name: name),
+                ]
+            )
+        )
+    }
+}
+
+private final class DomainExecutionAgentClient: AgentClientProtocol {
+    let sessionID: UUID
+    let expectedRequest: DomainCommandRequest
+    let result: DomainExecutionResult
+    private(set) var requestCount = 0
+
+    init(
+        sessionID: UUID,
+        expectedRequest: DomainCommandRequest,
+        result: DomainExecutionResult
+    ) {
+        self.sessionID = sessionID
+        self.expectedRequest = expectedRequest
+        self.result = result
+    }
+
+    func send(_ request: AgentRequest) throws -> AgentResponse {
+        try handle(request)
+    }
+
+    func send(_ request: AgentRequest) async throws -> AgentResponse {
+        try handle(request)
+    }
+
+    private func handle(_ request: AgentRequest) throws -> AgentResponse {
+        requestCount += 1
+        guard case let .executeDomain(requestSessionID, domainRequest) = request,
+              requestSessionID == sessionID,
+              domainRequest == expectedRequest else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Unexpected domain execution agent request."
+            )
+        }
+        return .domainExecution(result)
+    }
+}
+
 private final class LegacyWorkspaceScaleAgentClient: AgentClientProtocol {
     let sessionID: UUID
     private(set) var describeRequestCount = 0
@@ -10272,7 +10428,7 @@ private final class LegacyWorkspaceScaleAgentClient: AgentClientProtocol {
     }
 
     private func handle(_ request: AgentRequest) throws -> AgentResponse {
-        guard case let .execute(requestSessionID, command, _) = request,
+        guard case let .execute(requestSessionID, command, _, _) = request,
               requestSessionID == sessionID else {
             throw EditorError(
                 code: .commandInvalid,

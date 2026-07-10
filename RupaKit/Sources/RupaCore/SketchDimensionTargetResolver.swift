@@ -19,13 +19,13 @@ public struct SketchDimensionTargetResolver: Sendable {
         }
     }
 
-    private let topologyService: TopologySummaryService
-    private let sketchEntityService: SketchEntitySummaryService
+    private let topologyService: TopologySnapshotService
+    private let sketchEntityService: SketchEntitySnapshotService
     private let tolerance: Double
 
     public init(
-        topologyService: TopologySummaryService = TopologySummaryService(),
-        sketchEntityService: SketchEntitySummaryService = SketchEntitySummaryService(),
+        topologyService: TopologySnapshotService = TopologySnapshotService(),
+        sketchEntityService: SketchEntitySnapshotService = SketchEntitySnapshotService(),
         tolerance: Double = 1.0e-8
     ) {
         self.topologyService = topologyService
@@ -38,7 +38,7 @@ public struct SketchDimensionTargetResolver: Sendable {
         targets: [SelectionTarget],
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> [ResolvedTarget] {
-        let sketchSummary = try sketchEntityService.summarize(
+        let sketchSummary = try sketchEntityService.snapshot(
             document: document,
             objectRegistry: objectRegistry
         )
@@ -48,7 +48,7 @@ public struct SketchDimensionTargetResolver: Sendable {
             }
         )
 
-        var topologySummary: TopologySummaryResult?
+        var topologySummary: TopologySnapshot?
         return try targets.map { target in
             if case .sketchEntity = target.component {
                 guard let entity = entriesByTarget[target] else {
@@ -72,7 +72,7 @@ public struct SketchDimensionTargetResolver: Sendable {
             }
 
             if topologySummary == nil {
-                topologySummary = try topologyService.summarize(
+                topologySummary = try topologyService.snapshot(
                     document: document,
                     objectRegistry: objectRegistry
                 )

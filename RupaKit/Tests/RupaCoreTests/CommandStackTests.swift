@@ -4,11 +4,11 @@ import Testing
 @testable import RupaCore
 
 @MainActor
-@Test func commandStackUpdatesGenerationAndDirtyState() async throws {
+@Test func commandStackUpdatesSourceGenerationAndDirtyState() async throws {
     let session = EditorSession()
 
     let result = try session.execute(
-        .setDisplayUnit(.meter),
+        .renameDocument(name: "Renamed"),
         expectedGeneration: DocumentGeneration(0)
     )
 
@@ -16,7 +16,7 @@ import Testing
     #expect(result.generation == DocumentGeneration(1))
     #expect(session.generation == DocumentGeneration(1))
     #expect(session.isDirty)
-    #expect(session.document.displayUnit == .meter)
+    #expect(session.document.cadDocument.metadata.name == "Renamed")
     #expect(session.commandStack.canUndo)
     #expect(session.evaluationStatus == .valid)
     #expect(session.evaluatedGeneration == DocumentGeneration(1))
@@ -63,7 +63,7 @@ import Testing
     let originalGeneration = session.generation
     let originalCache = try #require(session.currentEvaluationCache)
 
-    _ = try session.execute(.setDisplayUnit(.meter))
+    _ = try session.execute(.renameDocument(name: "Changed"))
     let changedCache = try #require(session.currentEvaluationCache)
     #expect(changedCache.generation == session.generation)
     #expect(changedCache.generation != originalCache.generation)
@@ -83,7 +83,7 @@ import Testing
 @MainActor
 @Test func commandStackRejectsStaleGenerationBeforeMutation() async throws {
     let session = EditorSession()
-    _ = try session.execute(.setDisplayUnit(.meter))
+    _ = try session.execute(.renameDocument(name: "Current"))
 
     var caught: EditorError?
     do {
@@ -97,7 +97,7 @@ import Testing
 
     #expect(caught?.code == .documentGenerationMismatch)
     #expect(session.generation == DocumentGeneration(1))
-    #expect(session.document.cadDocument.metadata.name == "Untitled")
+    #expect(session.document.cadDocument.metadata.name == "Current")
     #expect(session.evaluatedGeneration == DocumentGeneration(1))
 }
 
@@ -105,11 +105,11 @@ import Testing
 @Test func commandStackSupportsUndoAndRedo() async throws {
     let session = EditorSession()
 
-    _ = try session.execute(.setDisplayUnit(.meter))
-    #expect(session.document.displayUnit == .meter)
+    _ = try session.execute(.renameDocument(name: "Renamed"))
+    #expect(session.document.cadDocument.metadata.name == "Renamed")
 
     _ = try session.undo()
-    #expect(session.document.displayUnit == .millimeter)
+    #expect(session.document.cadDocument.metadata.name == "Untitled")
     #expect(session.generation == DocumentGeneration(2))
     #expect(session.evaluatedGeneration == DocumentGeneration(2))
     #expect(session.renderInvalidation.generation == DocumentGeneration(2))
@@ -117,7 +117,7 @@ import Testing
     #expect(session.commandStack.canRedo)
 
     _ = try session.redo()
-    #expect(session.document.displayUnit == .meter)
+    #expect(session.document.cadDocument.metadata.name == "Renamed")
     #expect(session.generation == DocumentGeneration(3))
     #expect(session.evaluatedGeneration == DocumentGeneration(3))
     #expect(session.renderInvalidation.generation == DocumentGeneration(3))
@@ -129,16 +129,16 @@ import Testing
 @Test func markCleanKeepsSavedStateCleanAcrossUndoAndRedo() async throws {
     let session = EditorSession()
 
-    _ = try session.execute(.setDisplayUnit(.meter))
+    _ = try session.execute(.renameDocument(name: "Saved Name"))
     session.markClean()
     #expect(!session.isDirty)
 
     _ = try session.undo()
-    #expect(session.document.displayUnit == .millimeter)
+    #expect(session.document.cadDocument.metadata.name == "Untitled")
     #expect(session.isDirty)
 
     _ = try session.redo()
-    #expect(session.document.displayUnit == .meter)
+    #expect(session.document.cadDocument.metadata.name == "Saved Name")
     #expect(!session.isDirty)
 }
 
@@ -146,20 +146,19 @@ import Testing
 @Test func markCleanAfterUndoKeepsRedoTargetDirtyAndUndoTargetClean() async throws {
     let session = EditorSession()
 
-    _ = try session.execute(.setDisplayUnit(.meter))
+    _ = try session.execute(.renameDocument(name: "First Target"))
     _ = try session.execute(.renameDocument(name: "Redo Target"))
     _ = try session.undo()
     session.markClean()
     #expect(!session.isDirty)
-    #expect(session.document.displayUnit == .meter)
-    #expect(session.document.cadDocument.metadata.name == "Untitled")
+    #expect(session.document.cadDocument.metadata.name == "First Target")
 
     _ = try session.redo()
     #expect(session.document.cadDocument.metadata.name == "Redo Target")
     #expect(session.isDirty)
 
     _ = try session.undo()
-    #expect(session.document.cadDocument.metadata.name == "Untitled")
+    #expect(session.document.cadDocument.metadata.name == "First Target")
     #expect(!session.isDirty)
 }
 
@@ -443,7 +442,7 @@ import Testing
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
 
-    let result = try MeasurementService().measure(document: session.document)
+    let result = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
     let bounds = try #require(result.bounds)
 
     #expect(result.counts.sourceFeatures == 2)
@@ -482,7 +481,7 @@ import Testing
     )
 
     let offsetFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let result = try MeasurementService().measure(document: session.document)
+    let result = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
     let solid = try #require(result.solids.first { $0.featureID == offsetFeatureID.description })
     let surfaceArea = try #require(solid.surfaceAreaSquareMeters)
     let bounds = try #require(result.bounds)
@@ -505,7 +504,7 @@ import Testing
     _ = try #require(session.createDefaultExtrudedRectangle())
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let supportFaceEntry = try #require(
         topology.entries.first {
             $0.kind == .face &&
@@ -540,7 +539,7 @@ import Testing
     )
 
     let offsetFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let result = try MeasurementService().measure(document: session.document)
+    let result = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
     let solid = try #require(result.solids.first { $0.featureID == offsetFeatureID.description })
     let surfaceArea = try #require(solid.surfaceAreaSquareMeters)
     let bounds = try #require(result.bounds)
@@ -563,7 +562,7 @@ import Testing
     _ = try #require(session.createDefaultExtrudedRectangle())
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let supportFaceEntry = try #require(
         topology.entries.first {
             $0.kind == .face &&
@@ -626,7 +625,7 @@ import Testing
     _ = try #require(session.createDefaultExtrudedRectangle())
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let supportFaceEntry = try #require(
         topology.entries.first {
             $0.kind == .face &&
@@ -683,7 +682,7 @@ import Testing
     _ = try #require(session.createDefaultExtrudedRectangle())
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let supportFaceEntry = try #require(
         topology.entries.first {
             $0.kind == .face &&
@@ -724,7 +723,7 @@ import Testing
     _ = try #require(session.createDefaultExtrudedRectangle())
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let supportFaceEntry = try #require(
         topology.entries.first {
             $0.kind == .face &&
@@ -765,7 +764,7 @@ import Testing
     _ = try #require(session.createDefaultExtrudedRectangle())
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let faceTargets = topology.entries
         .filter {
             $0.kind == .face &&
@@ -810,7 +809,8 @@ import Testing
 
     let result = try MeasurementService().measure(
         document: session.document,
-        selection: session.selection
+        selection: session.selection,
+        ruler: session.workspaceState.ruler
     )
     let bounds = try #require(result.bounds)
 
@@ -843,7 +843,7 @@ import Testing
         )
     )
 
-    let result = try MeasurementService().measure(document: session.document)
+    let result = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
     let bounds = try #require(result.bounds)
 
     #expect(result.counts.sourceFeatures == 1)
@@ -867,7 +867,8 @@ import Testing
 
     let result = try MeasurementService().measure(
         document: session.document,
-        selection: session.selection
+        selection: session.selection,
+        ruler: session.workspaceState.ruler
     )
     let bounds = try #require(result.bounds)
 
@@ -900,7 +901,7 @@ import Testing
         )
     )
 
-    let result = try MeasurementService().measure(document: session.document)
+    let result = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
     let bounds = try #require(result.bounds)
 
     #expect(result.profiles.first?.kind == .circle)
@@ -932,7 +933,7 @@ import Testing
         )
     )
 
-    let result = try MeasurementService().measure(document: session.document)
+    let result = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
     let area = result.totals.profileAreaSquareMeters
 
     #expect(result.profiles.first?.kind == .curveLoop)
@@ -979,7 +980,7 @@ import Testing
             options: SweepOptions()
         )
     )
-    let result = try MeasurementService().measure(document: session.document)
+    let result = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
     let solid = try #require(result.solids.first)
     let normalHeight = try linearDimensionMeters(.sweepNormalHeight, in: solid)
     let pathLength = try linearDimensionMeters(.sweepPathLength, in: solid)
@@ -1040,7 +1041,7 @@ import Testing
         )
     )
 
-    let result = try MeasurementService().measure(document: session.document)
+    let result = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
     let solid = try #require(result.solids.first)
     let bounds = try #require(result.bounds)
     let surfaceArea = try #require(solid.surfaceAreaSquareMeters)
@@ -1102,7 +1103,7 @@ import Testing
         )
     )
 
-    let result = try MeasurementService().measure(document: session.document)
+    let result = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
     #expect(result.diagnostics.map(\.message) == [])
     let solid = try #require(result.solids.first)
     let pathLength = try linearDimensionMeters(.sweepPathLength, in: solid)
@@ -1172,7 +1173,7 @@ import Testing
     )
 
     #expect(sweepResult.didMutate)
-    let result = try MeasurementService().measure(document: session.document)
+    let result = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
     #expect(result.diagnostics.map(\.message) == [])
     #expect(result.counts.sourceFeatures == 4)
     let solid = try #require(result.solids.first)
@@ -1258,7 +1259,7 @@ import Testing
         )
     )
 
-    let result = try MeasurementService().measure(document: session.document)
+    let result = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
     let solid = try #require(result.solids.first)
     let pathLength = try linearDimensionMeters(.sweepPathLength, in: solid)
     let surfaceArea = try #require(solid.surfaceAreaSquareMeters)
@@ -1290,7 +1291,7 @@ import Testing
         )
     )
 
-    let result = try MeasurementService().measure(document: session.document)
+    let result = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
     let bounds = try #require(result.bounds)
 
     #expect(result.counts.sourceFeatures == 1)
@@ -1322,7 +1323,10 @@ import Testing
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
 
-    let result = try MeshSummaryService().summarize(document: session.document)
+    let result = try MeshSummaryService().summarize(
+        document: session.document,
+        ruler: session.workspaceState.ruler
+    )
     let bounds = try #require(result.bounds)
     let body = try #require(result.bodies.first)
 
@@ -1338,11 +1342,108 @@ import Testing
 }
 
 @MainActor
+@Test func meshSummaryServiceReportsSceneNodeMaterialAssignments() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let material = Material(
+        name: "PETG",
+        baseColor: ColorRGBA(r: 0.1, g: 0.5, b: 0.8, a: 1.0),
+        metallic: 0.0,
+        roughness: 0.45,
+        opacity: 1.0
+    )
+    var metadata = session.document.productMetadata
+    metadata.materialLibrary = MaterialLibrary(
+        materials: [material.id: material],
+        defaultMaterialID: material.id
+    )
+    _ = try session.execute(.replaceProductMetadata(metadata))
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(
+        commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document)
+    )
+    _ = try session.execute(.setSceneNodeMaterial(id: bodySceneNodeID, materialID: material.id))
+
+    let result = try MeshSummaryService().summarize(
+        document: session.document,
+        ruler: session.workspaceState.ruler,
+        currentEvaluation: session.currentEvaluation,
+        currentGeneration: session.generation
+    )
+    let body = try #require(result.bodies.first)
+
+    #expect(result.bodyCount == 1)
+    #expect(body.materialID == material.id.description)
+}
+
+@MainActor
+@Test func meshSummaryServiceReportsCompleteFaceMaterialAssignments() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let material = Material(
+        name: "PETG",
+        baseColor: ColorRGBA(r: 0.1, g: 0.5, b: 0.8, a: 1.0),
+        metallic: 0.0,
+        roughness: 0.45,
+        opacity: 1.0
+    )
+    var metadata = session.document.productMetadata
+    metadata.materialLibrary = MaterialLibrary(
+        materials: [material.id: material],
+        defaultMaterialID: material.id
+    )
+    _ = try session.execute(.replaceProductMetadata(metadata))
+
+    let topology = try TopologySnapshotService().snapshot(
+        document: session.document,
+        currentEvaluation: session.currentEvaluation,
+        currentGeneration: session.generation
+    )
+    let faceTargets = topology.entries
+        .filter { $0.kind == .face }
+        .compactMap { $0.selectionTarget() }
+    #expect(faceTargets.count > 1)
+
+    for target in faceTargets {
+        _ = try session.execute(
+            .setTopologyMaterialBinding(
+                target: target,
+                materialID: material.id,
+                process: TopologyMaterialBinding.Process(
+                    namespace: "manufacturing",
+                    processID: "fff"
+                )
+            )
+        )
+    }
+
+    let result = try MeshSummaryService().summarize(
+        document: session.document,
+        ruler: session.workspaceState.ruler,
+        currentEvaluation: session.currentEvaluation,
+        currentGeneration: session.generation
+    )
+    let body = try #require(result.bodies.first)
+
+    #expect(result.bodyCount == 1)
+    #expect(body.materialID == nil)
+    #expect(body.materialCoverage == .completeFace)
+    #expect(body.generatedFaceCount == faceTargets.count)
+    #expect(body.unassignedFaceMaterialCount == 0)
+    #expect(body.faceMaterialBindings?.count == faceTargets.count)
+    #expect(body.faceMaterialBindings?.allSatisfy { $0.materialID == material.id.description } == true)
+    #expect(body.faceMaterialBindings?.allSatisfy { $0.processNamespace == "manufacturing" } == true)
+}
+
+@MainActor
 @Test func meshSummaryServiceReportsEmptySketchOnlyDocumentWithoutEvaluationFailure() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultCircleSketch())
 
-    let result = try MeshSummaryService().summarize(document: session.document)
+    let result = try MeshSummaryService().summarize(
+        document: session.document,
+        ruler: session.workspaceState.ruler
+    )
 
     #expect(result.bodyCount == 0)
     #expect(result.vertexCount == 0)
@@ -1417,11 +1518,16 @@ import Testing
             plane: .yz
         )
     )
+    let planeID = try #require(planeResult.createdConstructionPlaneID)
+    _ = try #require(session.setActiveConstructionPlane(id: planeID))
 
     #expect(planeResult.commandName == "createConstructionPlane")
     #expect(planeResult.didMutate)
     #expect(session.generation == DocumentGeneration(1))
-    let summary = ConstructionPlaneSummaryService().summarize(document: session.document)
+    let summary = ConstructionPlaneSummaryService().summarize(
+        document: session.document,
+        activePlaneID: session.workspaceState.activeConstructionPlaneID
+    )
     let entry = try #require(summary.planes.first)
     #expect(entry.name == "Right CPlane")
     #expect(entry.plane == .yz)
@@ -1450,22 +1556,22 @@ import Testing
 @Test func editorSessionSwitchesAndClearsActiveConstructionPlane() async throws {
     let session = EditorSession()
 
-    _ = try #require(
+    let firstResult = try #require(
         session.createConstructionPlane(
             name: "Plane A",
-            plane: .xy,
-            activates: false
+            plane: .xy
         )
     )
-    let firstID = try #require(
-        session.document.productMetadata.constructionPlanes.values.first { $0.name == "Plane A" }?.id
-    )
-    _ = try #require(
+    let firstID = try #require(firstResult.createdConstructionPlaneID)
+    let secondResult = try #require(
         session.createConstructionPlane(
             name: "Plane B",
             plane: .zx
         )
     )
+    let secondID = try #require(secondResult.createdConstructionPlaneID)
+    #expect(session.activeConstructionPlane == nil)
+    _ = try #require(session.setActiveConstructionPlane(id: secondID))
     #expect(session.activeConstructionPlane?.name == "Plane B")
 
     let activateResult = try #require(session.setActiveConstructionPlane(id: firstID))
@@ -1485,7 +1591,7 @@ import Testing
 @Test func editorSessionRenamesSavedConstructionPlaneAndLinkedSceneNode() async throws {
     let session = EditorSession()
 
-    _ = try #require(
+    let firstResult = try #require(
         session.createConstructionPlane(
             name: "Plane A",
             plane: .xy
@@ -1494,13 +1600,11 @@ import Testing
     _ = try #require(
         session.createConstructionPlane(
             name: "Plane B",
-            plane: .yz,
-            activates: false
+            plane: .yz
         )
     )
-    let planeID = try #require(
-        session.document.productMetadata.constructionPlanes.values.first { $0.name == "Plane A" }?.id
-    )
+    let planeID = try #require(firstResult.createdConstructionPlaneID)
+    _ = try #require(session.setActiveConstructionPlane(id: planeID))
 
     let renameResult = try #require(
         session.renameConstructionPlane(
@@ -1512,7 +1616,10 @@ import Testing
     #expect(renameResult.commandName == "renameConstructionPlane")
     #expect(renameResult.didMutate)
     #expect(session.activeConstructionPlane?.name == "Renamed Plane")
-    let summary = ConstructionPlaneSummaryService().summarize(document: session.document)
+    let summary = ConstructionPlaneSummaryService().summarize(
+        document: session.document,
+        activePlaneID: session.workspaceState.activeConstructionPlaneID
+    )
     let entry = try #require(summary.planes.first { $0.id == planeID })
     #expect(entry.name == "Renamed Plane")
     let sceneNodeID = try #require(entry.sceneNodeID)
@@ -1533,13 +1640,14 @@ import Testing
 @Test func editorSessionEditsSavedConstructionPlaneSource() async throws {
     let session = EditorSession()
 
-    _ = try #require(
+    let planeResult = try #require(
         session.createConstructionPlane(
             name: "Editable Plane",
             plane: .xy
         )
     )
-    let planeID = try #require(session.document.productMetadata.activeConstructionPlaneID)
+    let planeID = try #require(planeResult.createdConstructionPlaneID)
+    _ = try #require(session.setActiveConstructionPlane(id: planeID))
     let editedPlane = SketchPlane.plane(
         Plane3D(
             origin: Point3D(x: 0.020, y: 0.030, z: 0.040),
@@ -1557,7 +1665,10 @@ import Testing
     #expect(editResult.commandName == "setConstructionPlane")
     #expect(editResult.didMutate)
     #expect(session.activeConstructionPlane?.plane == editedPlane)
-    let summary = ConstructionPlaneSummaryService().summarize(document: session.document)
+    let summary = ConstructionPlaneSummaryService().summarize(
+        document: session.document,
+        activePlaneID: session.workspaceState.activeConstructionPlaneID
+    )
     let entry = try #require(summary.planes.first { $0.id == planeID })
     #expect(entry.plane == editedPlane)
     #expect(entry.name == "Editable Plane")
@@ -2096,7 +2207,7 @@ import Testing
     _ = try #require(session.createDefaultExtrudedRectangle())
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let startFaceEntry = try #require(
         topology.entries.first {
             $0.kind == .face &&
@@ -2126,7 +2237,7 @@ import Testing
         Issue.record("Polygon Knife should create a source-owned Face Knife feature.")
         return
     }
-    let afterTopology = try TopologySummaryService().summarize(document: session.document)
+    let afterTopology = try TopologySnapshotService().snapshot(document: session.document)
     let faceKnifeFaces = afterTopology.entries.filter {
         $0.kind == .face && $0.sceneNodeID == faceKnifeSceneNodeID.description
     }
@@ -2149,7 +2260,7 @@ import Testing
     _ = try #require(session.createDefaultExtrudedRectangle())
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let sideFaceEntry = try #require(
         topology.entries.first {
             $0.kind == .face &&
@@ -2199,7 +2310,7 @@ import Testing
     _ = try #require(session.createDefaultExtrudedRectangle())
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let sideFaceEntry = try #require(
         topology.entries.first {
             $0.kind == .face &&
@@ -6633,7 +6744,7 @@ private func twoCircleConstraintCommandDocument(
     let bodyNodeID = try #require(session.document.productMetadata.sceneNodes.first {
         $0.value.reference == .body(bodyFeatureID)
     }?.key)
-    let before = try MeasurementService().measure(document: session.document)
+    let before = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
     let beforeBounds = try #require(before.bounds)
 
     let result = session.moveBody(
@@ -6646,7 +6757,7 @@ private func twoCircleConstraintCommandDocument(
     // so the rebuilt body shifts by exactly the drag delta (the consumed
     // sketch itself is hidden and does not appear in sketch summaries).
     #expect(result != nil)
-    let after = try MeasurementService().measure(document: session.document)
+    let after = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
     let afterBounds = try #require(after.bounds)
     #expect(abs(afterBounds.minX - beforeBounds.minX - 0.005) < 1.0e-9)
     #expect(abs(afterBounds.minY - beforeBounds.minY - 0.003) < 1.0e-9)
@@ -6738,7 +6849,10 @@ private func twoCircleConstraintCommandDocument(
 @MainActor
 @Test func editorSessionCanvasSolidClickFallsBackToWorkspaceScaleForInvalidCell() async throws {
     // Default (millimeter) ruler places a 0.04 m cube; half-side is 0.02 m.
-    let fallbackSideMeters = EditorSession().document.workspaceScaleDefaults.placedSolidSideMeters
+    let session = EditorSession()
+    let fallbackSideMeters = WorkspaceScaleDefaults(
+        ruler: session.workspaceState.ruler
+    ).placedSolidSideMeters
     let halfFallback = fallbackSideMeters / 2.0
 
     // nil = not supplied; 0 / negative / non-finite = rejected. All must fall back.
@@ -6990,9 +7104,7 @@ private func commandStackApproximatelyEqual(
                 nodes: [:],
                 order: [missingFeatureID]
             )
-        ),
-        displayUnit: .millimeter,
-        ruler: .standard(for: .millimeter)
+        )
     )
     let session = EditorSession(document: document)
 

@@ -8,17 +8,24 @@ import SwiftCAD
 @Test func automationCanChangeDisplayUnit() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()
-    let originalRuler = session.document.ruler
+    let originalRuler = session.workspaceState.ruler
+    let sourceState = try AutomationDocumentSourceState(document: session.document)
 
     let result = try runner.execute(.setDisplayUnit(.meter), in: session)
 
-    #expect(session.document.displayUnit == .meter)
-    #expect(session.document.ruler.displayUnit == .meter)
-    #expect(session.document.ruler.minorTickMeters == originalRuler.minorTickMeters)
-    #expect(session.document.ruler.majorTickMeters == originalRuler.majorTickMeters)
-    #expect(session.document.ruler.visibleSpanMeters == originalRuler.visibleSpanMeters)
-    #expect(session.generation == DocumentGeneration(1))
+    #expect(session.workspaceState.displayUnit == .meter)
+    #expect(session.workspaceState.ruler.displayUnit == .meter)
+    #expect(session.workspaceState.ruler.minorTickMeters == originalRuler.minorTickMeters)
+    #expect(session.workspaceState.ruler.majorTickMeters == originalRuler.majorTickMeters)
+    #expect(session.workspaceState.ruler.visibleSpanMeters == originalRuler.visibleSpanMeters)
+    #expect(try AutomationDocumentSourceState(document: session.document) == sourceState)
+    #expect(session.generation == DocumentGeneration(0))
+    #expect(session.commandStack.undoEntries.isEmpty)
+    #expect(!session.isDirty)
     #expect(result.didMutate)
+    #expect(result.effect == .workspaceMutation)
+    #expect(result.workspaceRevision == WorkspaceRevision(1))
+    #expect(!result.sourceDirty)
     #expect(result.message.contains("m"))
     #expect(result.workspaceScale?.minorTickMeters == originalRuler.minorTickMeters)
 }
@@ -33,12 +40,15 @@ import SwiftCAD
         majorTickMeters: 10.0,
         visibleSpanMeters: 10_000.0
     )
+    let sourceState = try AutomationDocumentSourceState(document: session.document)
 
     let result = try runner.execute(.setRulerConfiguration(configuration), in: session)
 
-    #expect(session.document.displayUnit == .meter)
-    #expect(session.document.ruler == configuration)
-    #expect(session.generation == DocumentGeneration(1))
+    #expect(session.workspaceState.displayUnit == .meter)
+    #expect(session.workspaceState.ruler == configuration)
+    #expect(try AutomationDocumentSourceState(document: session.document) == sourceState)
+    #expect(session.generation == DocumentGeneration(0))
+    #expect(session.commandStack.undoEntries.isEmpty)
     #expect(result.commandName == "setRulerConfiguration")
     #expect(result.didMutate)
     #expect(result.workspaceScale?.displayUnit == .meter)
@@ -51,7 +61,7 @@ import SwiftCAD
 @Test func automationRejectsNonFiniteRulerConfigurationBeforeNormalization() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()
-    let originalRuler = session.document.ruler
+    let originalRuler = session.workspaceState.ruler
 
     do {
         _ = try runner.execute(
@@ -72,7 +82,7 @@ import SwiftCAD
         Issue.record("Expected invalidProductMetadata, got \(error).")
     }
 
-    #expect(session.document.ruler == originalRuler)
+    #expect(session.workspaceState.ruler == originalRuler)
     #expect(session.generation == DocumentGeneration(0))
 }
 
@@ -81,12 +91,15 @@ import SwiftCAD
     let session = EditorSession()
     let runner = AutomationRunner()
     let preset = WorkspaceScalePreset.sitePlanning
+    let sourceState = try AutomationDocumentSourceState(document: session.document)
 
     let result = try runner.execute(.setWorkspaceScalePreset(preset), in: session)
 
-    #expect(session.document.displayUnit == .kilometer)
-    #expect(session.document.ruler == preset.rulerConfiguration.normalizedForWorkspaceScale())
-    #expect(session.generation == DocumentGeneration(1))
+    #expect(session.workspaceState.displayUnit == .kilometer)
+    #expect(session.workspaceState.ruler == preset.rulerConfiguration.normalizedForWorkspaceScale())
+    #expect(try AutomationDocumentSourceState(document: session.document) == sourceState)
+    #expect(session.generation == DocumentGeneration(0))
+    #expect(!session.isDirty)
     #expect(result.commandName == "setRulerConfiguration")
     #expect(result.didMutate)
     #expect(result.workspaceScale?.matchedPreset == .sitePlanning)
@@ -115,12 +128,14 @@ import SwiftCAD
     let session = EditorSession()
     let runner = AutomationRunner()
     let preset = WorkspaceScalePreset.urbanPlanning
+    let sourceState = try AutomationDocumentSourceState(document: session.document)
 
     let result = try runner.execute(.setWorkspaceScalePreset(preset), in: session)
 
-    #expect(session.document.displayUnit == .kilometer)
-    #expect(session.document.ruler == preset.rulerConfiguration.normalizedForWorkspaceScale())
-    #expect(session.generation == DocumentGeneration(1))
+    #expect(session.workspaceState.displayUnit == .kilometer)
+    #expect(session.workspaceState.ruler == preset.rulerConfiguration.normalizedForWorkspaceScale())
+    #expect(try AutomationDocumentSourceState(document: session.document) == sourceState)
+    #expect(session.generation == DocumentGeneration(0))
     #expect(result.commandName == "setRulerConfiguration")
     #expect(result.didMutate)
     #expect(result.workspaceScale?.matchedPreset == .urbanPlanning)
@@ -140,12 +155,14 @@ import SwiftCAD
     let session = EditorSession()
     let runner = AutomationRunner()
     let preset = WorkspaceScalePreset.regionalPlanning
+    let sourceState = try AutomationDocumentSourceState(document: session.document)
 
     let result = try runner.execute(.setWorkspaceScalePreset(preset), in: session)
 
-    #expect(session.document.displayUnit == .kilometer)
-    #expect(session.document.ruler == preset.rulerConfiguration.normalizedForWorkspaceScale())
-    #expect(session.generation == DocumentGeneration(1))
+    #expect(session.workspaceState.displayUnit == .kilometer)
+    #expect(session.workspaceState.ruler == preset.rulerConfiguration.normalizedForWorkspaceScale())
+    #expect(try AutomationDocumentSourceState(document: session.document) == sourceState)
+    #expect(session.generation == DocumentGeneration(0))
     #expect(result.commandName == "setRulerConfiguration")
     #expect(result.didMutate)
     #expect(result.workspaceScale?.matchedPreset == .regionalPlanning)
@@ -165,12 +182,14 @@ import SwiftCAD
 @Test func automationCanFitWorkspaceScaleToLargeModel() async throws {
     let session = EditorSession(document: try automationSiteDocument())
     let runner = AutomationRunner()
+    let sourceState = try AutomationDocumentSourceState(document: session.document)
 
     let result = try runner.execute(.fitWorkspaceScaleToModel, in: session)
 
-    #expect(session.document.displayUnit == .kilometer)
-    #expect(session.document.ruler == WorkspaceScalePreset.sitePlanning.rulerConfiguration.normalizedForWorkspaceScale())
-    #expect(session.generation == DocumentGeneration(1))
+    #expect(session.workspaceState.displayUnit == .kilometer)
+    #expect(session.workspaceState.ruler == WorkspaceScalePreset.sitePlanning.rulerConfiguration.normalizedForWorkspaceScale())
+    #expect(try AutomationDocumentSourceState(document: session.document) == sourceState)
+    #expect(session.generation == DocumentGeneration(0))
     #expect(result.commandName == "setRulerConfiguration")
     #expect(result.didMutate)
     #expect(result.workspaceScale?.matchedPreset == .sitePlanning)
@@ -189,12 +208,14 @@ import SwiftCAD
 @Test func automationCanFitWorkspaceScaleToUrbanModel() async throws {
     let session = EditorSession(document: try automationUrbanDocument())
     let runner = AutomationRunner()
+    let sourceState = try AutomationDocumentSourceState(document: session.document)
 
     let result = try runner.execute(.fitWorkspaceScaleToModel, in: session)
 
-    #expect(session.document.displayUnit == .kilometer)
-    #expect(session.document.ruler == WorkspaceScalePreset.urbanPlanning.rulerConfiguration.normalizedForWorkspaceScale())
-    #expect(session.generation == DocumentGeneration(1))
+    #expect(session.workspaceState.displayUnit == .kilometer)
+    #expect(session.workspaceState.ruler == WorkspaceScalePreset.urbanPlanning.rulerConfiguration.normalizedForWorkspaceScale())
+    #expect(try AutomationDocumentSourceState(document: session.document) == sourceState)
+    #expect(session.generation == DocumentGeneration(0))
     #expect(result.commandName == "setRulerConfiguration")
     #expect(result.didMutate)
     #expect(result.workspaceScale?.matchedPreset == .urbanPlanning)
@@ -208,14 +229,15 @@ import SwiftCAD
 
 @MainActor
 @Test func automationFitWorkspaceScaleLeavesFittingModelUnchanged() async throws {
-    var document = try automationSiteDocument()
-    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
-    let session = EditorSession(document: document)
+    let session = EditorSession(document: try automationSiteDocument())
     let runner = AutomationRunner()
+    _ = try runner.execute(.setWorkspaceScalePreset(.sitePlanning), in: session)
+    let sourceState = try AutomationDocumentSourceState(document: session.document)
 
     let result = try runner.execute(.fitWorkspaceScaleToModel, in: session)
 
-    #expect(session.document.ruler == WorkspaceScalePreset.sitePlanning.rulerConfiguration.normalizedForWorkspaceScale())
+    #expect(session.workspaceState.ruler == WorkspaceScalePreset.sitePlanning.rulerConfiguration.normalizedForWorkspaceScale())
+    #expect(try AutomationDocumentSourceState(document: session.document) == sourceState)
     #expect(session.generation == DocumentGeneration(0))
     #expect(result.commandName == nil)
     #expect(!result.didMutate)
@@ -299,13 +321,14 @@ import SwiftCAD
 
     let result = try runner.execute(.setViewportGridSettings(settings), in: session)
 
-    #expect(session.document.productMetadata.viewportGridSettings == settings)
-    #expect(session.generation == DocumentGeneration(1))
+    #expect(session.workspaceState.viewportGridSettings == settings)
+    #expect(session.generation == DocumentGeneration(0))
+    #expect(session.workspaceState.revision == WorkspaceRevision(1))
     #expect(result.commandName == "setViewportGridSettings")
     #expect(result.didMutate)
     #expect(result.viewportGridSettings == settings)
     #expect(result.viewportGridScale?.visualSpacingMode == .fixed)
-    #expect(result.viewportGridScale?.snapStep.meters == session.document.ruler.minorTickMeters)
+    #expect(result.viewportGridScale?.snapStep.meters == session.workspaceState.ruler.minorTickMeters)
     #expect(result.message.contains("fixed"))
 }
 
@@ -892,7 +915,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let circle = try #require(summary.entries.first { $0.entityKind == "circle" })
     let target = try #require(circle.selectionTarget())
     let componentID = try #require(automationSketchEntityComponentID(from: target))
@@ -909,8 +932,8 @@ import SwiftCAD
     #expect(result.message == "Curve curvature display enabled at comb scale 0.3.")
     #expect(result.commandName == "setCurveCurvatureDisplay")
     #expect(result.didMutate)
-    #expect(result.generation == DocumentGeneration(2))
-    #expect(session.document.productMetadata.curveCurvatureDisplays[componentID]?.combScale == 0.3)
+    #expect(result.generation == DocumentGeneration(1))
+    #expect(session.workspaceState.curveCurvatureDisplays[componentID]?.combScale == 0.3)
 
     let hideResult = try runner.execute(
         .setCurveCurvatureDisplay(
@@ -922,7 +945,7 @@ import SwiftCAD
     )
     #expect(hideResult.message == "Curve curvature display disabled.")
     #expect(hideResult.didMutate)
-    #expect(session.document.productMetadata.curveCurvatureDisplays[componentID] == nil)
+    #expect(session.workspaceState.curveCurvatureDisplays[componentID] == nil)
 }
 
 @MainActor
@@ -942,7 +965,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(summary.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
     let componentID = try #require(automationSketchEntityComponentID(from: target))
@@ -955,8 +978,8 @@ import SwiftCAD
     #expect(hideResult.message == "Point display toggled.")
     #expect(hideResult.commandName == "setPointDisplay")
     #expect(hideResult.didMutate)
-    #expect(hideResult.generation == DocumentGeneration(2))
-    #expect(session.document.productMetadata.pointDisplays[componentID]?.isVisible == false)
+    #expect(hideResult.generation == DocumentGeneration(1))
+    #expect(session.workspaceState.pointDisplays[componentID]?.isVisible == false)
 
     let showResult = try runner.execute(
         .setPointDisplay(target: target, isVisible: nil),
@@ -964,7 +987,7 @@ import SwiftCAD
     )
     #expect(showResult.message == "Point display toggled.")
     #expect(showResult.didMutate)
-    #expect(session.document.productMetadata.pointDisplays[componentID]?.isVisible == true)
+    #expect(session.workspaceState.pointDisplays[componentID]?.isVisible == true)
 }
 
 @MainActor
@@ -979,7 +1002,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     let displayID = try SurfaceControlPointDisplayID(selectionReference: controlPoint.selectionReference)
@@ -992,10 +1015,14 @@ import SwiftCAD
     #expect(showResult.message == "Surface control point display visible.")
     #expect(showResult.commandName == "setSurfaceControlPointDisplay")
     #expect(showResult.didMutate)
-    #expect(showResult.generation == DocumentGeneration(2))
-    #expect(session.document.productMetadata.surfaceControlPointDisplays[displayID]?.isVisible == true)
+    #expect(showResult.generation == DocumentGeneration(1))
+    #expect(session.workspaceState.surfaceControlPointDisplays[displayID]?.isVisible == true)
 
-    let visibleSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let visibleSummary = try SurfaceSourceSummaryService().summarize(
+        document: session.document,
+        displayUnit: .millimeter,
+        surfaceControlPointDisplays: session.workspaceState.surfaceControlPointDisplays
+    )
     let visiblePatch = try #require(visibleSummary.sources.first?.patches.first)
     let visibleControlPoint = try #require(visiblePatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     #expect(visibleControlPoint.isPointDisplayVisible)
@@ -1013,7 +1040,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 2 && $0.vIndex == 1 })
     let query = SurfaceFrameQuery(selectionReference: controlPoint.selectionReference)
@@ -1027,8 +1054,8 @@ import SwiftCAD
     #expect(showResult.message == "Surface frame display visible.")
     #expect(showResult.commandName == "setSurfaceFrameDisplay")
     #expect(showResult.didMutate)
-    #expect(showResult.generation == DocumentGeneration(2))
-    #expect(session.document.productMetadata.surfaceFrameDisplays[displayID]?.isVisible == true)
+    #expect(showResult.generation == DocumentGeneration(1))
+    #expect(session.workspaceState.surfaceFrameDisplays[displayID]?.isVisible == true)
 }
 
 @MainActor
@@ -1043,13 +1070,14 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     let frameQuery = SurfaceFrameQuery(selectionReference: controlPoint.selectionReference)
     let frameResult = try SurfaceFrameService().resolve(
         document: session.document,
         queries: [frameQuery],
+        displayUnit: session.workspaceState.displayUnit,
         objectRegistry: session.objectRegistry,
         currentEvaluation: session.currentEvaluation,
         currentGeneration: session.generation
@@ -1070,7 +1098,7 @@ import SwiftCAD
         in: session
     )
 
-    let movedSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let movedSummary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let movedPatch = try #require(movedSummary.sources.first?.patches.first)
     let movedControlPoint = try #require(movedPatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     let expectedX = controlPoint.point.x
@@ -1107,7 +1135,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let knot = try #require(
         summary.sources.first?.patches.first?.basis.uKnotVector.first { $0.index == 3 }
     )
@@ -1148,7 +1176,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
 
     let result = try runner.execute(
@@ -1190,7 +1218,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
     let trimLoop = BSplineSurfaceTrimLoop(
         role: .outer,
@@ -1224,7 +1252,7 @@ import SwiftCAD
         Issue.record("Automation must keep a direct B-spline surface feature.")
         return
     }
-    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let updatedTrimLoop = try #require(updatedSummary.sources.first?.patches.first?.trimLoops.first)
     #expect(result.message == "Surface trim loops updated.")
     #expect(result.commandName == "setSurfaceTrimLoops")
@@ -1247,7 +1275,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
     let trimLoop = BSplineSurfaceTrimLoop(
         role: .outer,
@@ -1270,7 +1298,7 @@ import SwiftCAD
         .setSurfaceTrimLoops(target: faceReference, trimLoops: [trimLoop]),
         in: session
     )
-    let trimmedSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let trimmedSummary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let trimReference = try #require(
         trimmedSummary.sources.first?.patches.first?.trimLoops.first?.selectionReferences.first
     )
@@ -1317,7 +1345,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
     let trimLoop = BSplineSurfaceTrimLoop(
         role: .outer,
@@ -1345,7 +1373,7 @@ import SwiftCAD
         .setSurfaceTrimLoops(target: faceReference, trimLoops: [trimLoop]),
         in: session
     )
-    let trimmedSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let trimmedSummary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let trimReference = try #require(
         trimmedSummary.sources.first?.patches.first?.trimLoops.first?.selectionReferences.first
     )
@@ -1476,7 +1504,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let span = try #require(
         summary.sources.first?.patches.first?.basis.vSpans.first { $0.index == 1 }
     )
@@ -1643,7 +1671,7 @@ import SwiftCAD
         in: session
     )
     let featureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let vertexEntry = try #require(topology.entries.first {
         $0.kind == .vertex
             && $0.subshapeRole == "patch:0:vertex:uMax:vMax"
@@ -1686,7 +1714,7 @@ import SwiftCAD
         in: session
     )
     let featureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let vertexEntry = try #require(topology.entries.first {
         $0.kind == .vertex
             && $0.subshapeRole == "patch:0:vertex:uMax:vMin"
@@ -1767,7 +1795,7 @@ import SwiftCAD
     )
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodyNodeID = try #require(automationSceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let startFaceEntry = try #require(
         topology.entries.first {
             $0.kind == .face &&
@@ -1793,7 +1821,7 @@ import SwiftCAD
 
     let faceKnifeFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let faceKnifeSceneNodeID = try #require(automationSceneNodeID(for: faceKnifeFeatureID, in: session.document))
-    let afterTopology = try TopologySummaryService().summarize(document: session.document)
+    let afterTopology = try TopologySnapshotService().snapshot(document: session.document)
     let faceKnifeFaces = afterTopology.entries.filter {
         $0.kind == .face && $0.sceneNodeID == faceKnifeSceneNodeID.description
     }
@@ -1826,7 +1854,7 @@ import SwiftCAD
     )
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodyNodeID = try #require(automationSceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let startFaceEntry = try #require(
         topology.entries.first {
             $0.kind == .face &&
@@ -1841,7 +1869,7 @@ import SwiftCAD
         in: session
     )
 
-    let afterTopology = try TopologySummaryService().summarize(document: session.document)
+    let afterTopology = try TopologySnapshotService().snapshot(document: session.document)
     let evaluation = try #require(session.currentEvaluationCache?.evaluatedDocument)
     let body = try #require(evaluation.brep.bodies.values.first)
     #expect(result.message == "Body face deletion applied.")
@@ -1871,7 +1899,7 @@ import SwiftCAD
     )
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodyNodeID = try #require(automationSceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let targetEntry = try #require(
         topology.entries.first {
             $0.kind == .face &&
@@ -1900,7 +1928,7 @@ import SwiftCAD
 
     let draftFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let draftSceneNodeID = try #require(automationSceneNodeID(for: draftFeatureID, in: session.document))
-    let afterTopology = try TopologySummaryService().summarize(document: session.document)
+    let afterTopology = try TopologySnapshotService().snapshot(document: session.document)
     let evaluation = try #require(session.currentEvaluationCache?.evaluatedDocument)
     let body = try #require(evaluation.brep.bodies.values.first)
     let draftFaces = afterTopology.entries.filter {
@@ -1938,7 +1966,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(sourceLine.selectionTarget())
 
@@ -1952,7 +1980,7 @@ import SwiftCAD
         in: session
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let lines = after.entries.filter { $0.entityKind == "line" }
     #expect(result.message == "Sketch curve offset created.")
     #expect(result.commandName == "offsetCurve")
@@ -1983,7 +2011,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let bottomLine = try #require(before.entries.first { entry in
         entry.entityKind == "line" &&
             abs((entry.start?.y ?? -1.0) + 0.003) < 1.0e-12 &&
@@ -2000,7 +2028,7 @@ import SwiftCAD
         in: session
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let lines = after.entries.filter { $0.sourceFeatureID == bottomLine.sourceFeatureID && $0.entityKind == "line" }
     #expect(result.message == "Sketch vertex offset created.")
     #expect(result.commandName == "offsetSketchVertex")
@@ -2023,7 +2051,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceRegion = try #require(before.regions.first)
     let target = try #require(sourceRegion.selectionTarget())
 
@@ -2037,7 +2065,7 @@ import SwiftCAD
         in: session
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let offsetRegions = after.regions.filter { $0.sourceFeatureID != sourceRegion.sourceFeatureID }
     let areas = offsetRegions.map(\.areaSquareMeters).sorted()
     #expect(result.commandName == "offsetCurve")
@@ -2076,7 +2104,7 @@ import SwiftCAD
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targets = try before.regions.map { region in
         try #require(region.selectionTarget())
     }
@@ -2091,7 +2119,7 @@ import SwiftCAD
         in: session
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let newRegions = after.regions.filter { region in
         before.regions.contains { $0.sourceFeatureID == region.sourceFeatureID } == false
     }
@@ -2120,7 +2148,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let bottomLine = try #require(before.entries.first { entry in
         entry.entityKind == "line" &&
             abs((entry.start?.y ?? -1.0) + 0.003) < 1.0e-12 &&
@@ -2138,7 +2166,7 @@ import SwiftCAD
         in: session
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let lines = after.entries.filter { $0.sourceFeatureID == bottomLine.sourceFeatureID && $0.entityKind == "line" }
     #expect(result.message == "Sketch vertex offset created.")
     #expect(result.commandName == "offsetCurve")
@@ -2153,7 +2181,7 @@ import SwiftCAD
     let setup = try automationLineArcOffsetVertexSketchDocument()
     let session = EditorSession(document: setup.document)
     let runner = AutomationRunner()
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceArc = try #require(before.entries.first { $0.entityID == setup.arcID.description })
     let target = try #require(sourceArc.selectionTarget())
 
@@ -2167,7 +2195,7 @@ import SwiftCAD
         in: session
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceEntries = after.entries.filter { $0.sourceFeatureID == setup.featureID.description }
     #expect(result.message == "Sketch vertex offset created.")
     #expect(result.commandName == "offsetCurve")
@@ -2183,7 +2211,7 @@ import SwiftCAD
     let setup = try automationArcArcOffsetVertexSketchDocument()
     let session = EditorSession(document: setup.document)
     let runner = AutomationRunner()
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceArc = try #require(before.entries.first { $0.entityID == setup.upperArcID.description })
     let target = try #require(sourceArc.selectionTarget())
 
@@ -2197,7 +2225,7 @@ import SwiftCAD
         in: session
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceEntries = after.entries.filter { $0.sourceFeatureID == setup.featureID.description }
     #expect(result.message == "Sketch vertex offset created.")
     #expect(result.commandName == "offsetCurve")
@@ -2227,7 +2255,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(sourceLine.selectionTarget())
 
@@ -2239,7 +2267,7 @@ import SwiftCAD
         in: session
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let slotFeature = try #require(
         session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Automation Slot Source Line Slot" }
     )
@@ -2258,7 +2286,7 @@ import SwiftCAD
     let runner = AutomationRunner()
     let setup = try automationOpenLineChainSlotDocument(name: "Automation Slot Source Chain")
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityID == setup.lineIDs[0].description })
     let target = try #require(sourceLine.selectionTarget())
 
@@ -2270,7 +2298,7 @@ import SwiftCAD
         in: session
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let slotFeature = try #require(
         session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Automation Slot Source Chain Slot" }
     )
@@ -2316,7 +2344,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceArc = try #require(before.entries.first { $0.entityKind == "arc" })
     let target = try #require(sourceArc.selectionTarget())
 
@@ -2328,7 +2356,7 @@ import SwiftCAD
         in: session
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let slotFeature = try #require(
         session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Automation Slot Source Arc Slot" }
     )
@@ -2361,7 +2389,7 @@ import SwiftCAD
     let runner = AutomationRunner()
     let setup = try automationOpenLineArcChainSlotDocument(name: "Automation Slot Source Line Arc Chain")
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityID == setup.lineID.description })
     let target = try #require(sourceLine.selectionTarget())
 
@@ -2373,7 +2401,7 @@ import SwiftCAD
         in: session
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let slotFeature = try #require(
         session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Automation Slot Source Line Arc Chain Slot" }
     )
@@ -2420,7 +2448,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(sourceLine.selectionTarget())
 
@@ -2434,7 +2462,7 @@ import SwiftCAD
         in: session
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let slotFeature = try #require(
         session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Automation Offset Slot Source Line Slot" }
     )
@@ -2468,7 +2496,7 @@ import SwiftCAD
     )
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let beforeRadius = try automationCylinderRadius(forBody: bodyFeatureID, in: session.document)
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let sideFaceEntry = try #require(topology.entries.first { entry in
         entry.kind == .face && entry.surfaceKind == "cylinder"
     })
@@ -2588,7 +2616,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let edgeEntry = try #require(topology.entries.first(where: isAutomationVerticalGeneratedEdge))
     let target = try #require(edgeEntry.selectionTarget())
 
@@ -2635,7 +2663,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let edgeEntry = try #require(topology.entries.first {
         isAutomationVerticalGeneratedEdge($0, x: -0.020, y: -0.010)
     })
@@ -2684,7 +2712,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let edgeEntry = try #require(topology.entries.first {
         isAutomationVerticalGeneratedEdge($0, x: 0.020, y: 0.009)
     })
@@ -2720,7 +2748,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let vertexEntry = try #require(topology.entries.first { $0.kind == .vertex })
     let target = try #require(vertexEntry.selectionTarget())
 
@@ -2767,7 +2795,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let vertexEntry = try #require(topology.entries.first {
         isAutomationGeneratedVertex($0, x: -0.020, y: -0.010)
     })
@@ -2941,7 +2969,7 @@ import SwiftCAD
 
     #expect(result.commandName == "createLineSketch")
     #expect(result.didMutate)
-    #expect(result.generation == DocumentGeneration(2))
+    #expect(result.generation == DocumentGeneration(1))
     #expect(result.workspaceBounds?.sizeX == 1_200_000.0)
     #expect(result.workspaceBounds?.maximumSpan == 1_200_000.0)
     #expect(result.workspaceScaleRecommendation?.reason == .modelExceedsSupportedScaleRange)
@@ -3156,7 +3184,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(summary.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
 
@@ -3168,7 +3196,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedSpline = try #require(updatedSummary.entries.first { $0.entityID == spline.entityID })
     #expect(result.message == "Sketch spline control point inserted.")
     #expect(result.commandName == "insertSketchSplineControlPoint")
@@ -3197,7 +3225,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(summary.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
 
@@ -3211,7 +3239,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedSpline = try #require(updatedSummary.entries.first { $0.entityID == spline.entityID })
     #expect(result.message == "Sketch spline control points slid.")
     #expect(result.commandName == "slideSketchSplineControlPoints")
@@ -3244,7 +3272,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(summary.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
 
@@ -3256,7 +3284,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let rebuiltSpline = try #require(updatedSummary.entries.first { $0.entityID == spline.entityID })
     #expect(result.message == "Sketch curve rebuilt.")
     #expect(result.commandName == "rebuildSketchCurve")
@@ -3300,7 +3328,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(summary.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
 
@@ -3315,7 +3343,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let rebuiltSpline = try #require(updatedSummary.entries.first { $0.entityID == spline.entityID })
     #expect(result.message == "Sketch curve rebuilt.")
     #expect(result.commandName == "rebuildSketchCurve")
@@ -3359,7 +3387,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(summary.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
 
@@ -3375,7 +3403,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let rebuiltSpline = try #require(updatedSummary.entries.first { $0.entityID == spline.entityID })
     #expect(result.message == "Sketch curve rebuilt.")
     #expect(result.commandName == "rebuildSketchCurve")
@@ -3403,7 +3431,7 @@ import SwiftCAD
             ])
         )
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(summary.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
     let featureID = try #require(UUID(uuidString: spline.sourceFeatureID)).featureID
@@ -3467,7 +3495,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let referenceLine = try #require(summary.entries.first { $0.entityID == referenceLineID.description })
     let targetLine = try #require(summary.entries.first { $0.entityID == targetLineID.description })
 
@@ -3486,7 +3514,7 @@ import SwiftCAD
         Issue.record("Automation Align Vertex feature must remain a sketch.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let movedReferenceLine = try #require(updatedSummary.entries.first { $0.entityID == referenceLineID.description })
     let movedTargetLine = try #require(updatedSummary.entries.first { $0.entityID == targetLineID.description })
 
@@ -3523,7 +3551,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(before.entries.first { $0.entityID == splineID.description })
 
     let result = try runner.execute(
@@ -3538,7 +3566,7 @@ import SwiftCAD
         in: session
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let projected = try #require(after.entries.first { $0.sourceFeatureName == "Automation Projected Spline" })
 
     #expect(result.message == "Sketch curves projected.")
@@ -3575,7 +3603,7 @@ import SwiftCAD
     )
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodyNodeID = try #require(automationSceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let supportFace = try #require(topology.entries.first {
         $0.kind == .face &&
             $0.sceneNodeID == bodyNodeID.description &&
@@ -3601,7 +3629,7 @@ import SwiftCAD
         in: session
     )
 
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let projected = try #require(summary.entries.first {
         $0.sourceFeatureName == "Automation Projected Generated Edge"
     })
@@ -3652,11 +3680,11 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(summary.entries.first { $0.entityID == lineID.description })
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodyNodeID = try #require(automationSceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let face = try #require(topology.entries.first {
         $0.kind == .face &&
             $0.sceneNodeID == bodyNodeID.description &&
@@ -3673,7 +3701,7 @@ import SwiftCAD
         in: session
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let projected = try #require(after.entries.first {
         $0.sourceFeatureName == "Automation Face Projected Line"
     })
@@ -3719,7 +3747,7 @@ import SwiftCAD
         in: session
     )
 
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let projectedEntries = summary.entries.filter {
         $0.sourceFeatureName == "Automation Projected Body Outline"
     }
@@ -3749,7 +3777,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let point = try #require(summary.entries.first { $0.entityID == setup.pointID.description })
     let center = try #require(point.center)
 
@@ -3782,7 +3810,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(summary.entries.first { $0.entityKind == "spline" })
     let featureID = try #require(UUID(uuidString: spline.sourceFeatureID)).featureID
     let entityID = try #require(UUID(uuidString: spline.entityID)).sketchEntityID
@@ -3795,7 +3823,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedSpline = try #require(updatedSummary.entries.first { $0.entityID == spline.entityID })
     let outgoingHandle = try #require(updatedSpline.controlPoints.dropFirst(4).first)
     #expect(result.message == "Sketch constraint added to \(featureID.description).")
@@ -3918,7 +3946,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let arc = try #require(summary.entries.first { $0.entityKind == "arc" })
     let target = try #require(arc.selectionTarget())
 
@@ -3933,7 +3961,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedArc = try #require(updatedSummary.entries.first { $0.entityKind == "arc" })
     #expect(result.message == "Sketch arc parameters updated.")
     #expect(result.commandName == "setSketchArcParameters")
@@ -3963,7 +3991,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(summary.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
 
@@ -3976,7 +4004,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedLine = try #require(updatedSummary.entries.first { $0.entityID == line.entityID })
     let dimension = try #require(updatedLine.dimensions.first { $0.kind == "distance" })
     #expect(result.message == "Sketch entity dimension updated.")
@@ -4006,7 +4034,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let arc = try #require(summary.entries.first { $0.entityKind == "arc" })
     let target = try #require(arc.selectionTarget())
 
@@ -4019,7 +4047,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedArc = try #require(updatedSummary.entries.first { $0.entityID == arc.entityID })
     let dimension = try #require(updatedArc.dimensions.first { $0.kind == "angle" })
     #expect(result.message == "Sketch entity dimension updated.")
@@ -4050,7 +4078,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let arc = try #require(summary.entries.first { $0.entityKind == "arc" })
     let target = try #require(arc.selectionTarget())
     let featureID = try #require(UUID(uuidString: arc.sourceFeatureID)).featureID
@@ -4072,7 +4100,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedArc = try #require(updatedSummary.entries.first { $0.entityID == arc.entityID })
     let dimension = try #require(updatedArc.dimensions.first { $0.kind == "angle" })
     #expect(result.message == "Sketch entity dimension updated.")
@@ -4104,7 +4132,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(summary.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
 
@@ -4117,7 +4145,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedLine = try #require(updatedSummary.entries.first { $0.entityID == line.entityID })
     let dimension = try #require(updatedLine.dimensions.first { $0.kind == "angle" })
     #expect(result.message == "Sketch entity dimension updated.")
@@ -4149,7 +4177,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(summary.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
 
@@ -4161,7 +4189,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let arc = try #require(updatedSummary.entries.first { $0.entityID == line.entityID })
     #expect(result.message == "Sketch line converted to an arc.")
     #expect(result.commandName == "convertSketchLineToArc")
@@ -4191,7 +4219,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(summary.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
 
@@ -4200,7 +4228,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(updatedSummary.entries.first { $0.entityID == line.entityID })
     #expect(result.message == "Sketch line converted to a spline.")
     #expect(result.commandName == "convertSketchLineToSpline")
@@ -4230,7 +4258,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(summary.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
 
@@ -4239,7 +4267,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let reversedLine = try #require(updatedSummary.entries.first { $0.entityID == line.entityID })
     #expect(result.message == "Sketch curve direction reversed.")
     #expect(result.commandName == "reverseSketchCurve")
@@ -4269,7 +4297,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(summary.entries.first { $0.entityKind == "line" })
     let target = try automationPointHandleSelectionTarget(line, handle: .lineEnd)
 
@@ -4282,7 +4310,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let extendedLine = try #require(updatedSummary.entries.first { $0.entityID == line.entityID })
     #expect(result.message == "Sketch curve extended.")
     #expect(result.commandName == "extendSketchCurve")
@@ -4311,7 +4339,7 @@ import SwiftCAD
             )
         )
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let bottomLine = try #require(automationBottomRectangleLine(in: summary))
     let target = try automationPointHandleSelectionTarget(bottomLine, handle: .lineEnd)
 
@@ -4325,7 +4353,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let arcs = updatedSummary.entries.filter { $0.sourceFeatureID == bottomLine.sourceFeatureID && $0.entityKind == "arc" }
     let filletArc = try #require(arcs.first)
     #expect(result.message == "Sketch corner fillet applied.")
@@ -4344,7 +4372,7 @@ import SwiftCAD
     let setup = try automationLineArcCornerTreatmentSketchDocument()
     let session = EditorSession(document: setup.document)
     let runner = AutomationRunner()
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityID == setup.lineID.description })
     let target = try automationPointHandleSelectionTarget(sourceLine, handle: .lineEnd)
 
@@ -4358,7 +4386,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceEntries = updatedSummary.entries.filter { $0.sourceFeatureID == setup.featureID.description }
     let lines = sourceEntries.filter { $0.entityKind == "line" }
     let arcs = sourceEntries.filter { $0.entityKind == "arc" }
@@ -4381,7 +4409,7 @@ import SwiftCAD
     let setup = try automationLineArcCornerTreatmentSketchDocument()
     let session = EditorSession(document: setup.document)
     let runner = AutomationRunner()
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityID == setup.lineID.description })
     let sourceArc = try #require(before.entries.first { $0.entityID == setup.arcID.description })
     let target = try #require(sourceLine.selectionTarget())
@@ -4397,7 +4425,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceEntries = updatedSummary.entries.filter { $0.sourceFeatureID == setup.featureID.description }
     let lines = sourceEntries.filter { $0.entityKind == "line" }
     let arcs = sourceEntries.filter { $0.entityKind == "arc" }
@@ -4434,7 +4462,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(summary.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
 
@@ -4446,7 +4474,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let lines = updatedSummary.entries.filter { $0.entityKind == "line" }
     #expect(result.message == "Sketch curve segment split.")
     #expect(result.commandName == "splitSketchCurve")
@@ -4482,7 +4510,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let arc = try #require(summary.entries.first { $0.entityKind == "arc" })
     let target = try #require(arc.selectionTarget())
 
@@ -4494,7 +4522,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let arcs = updatedSummary.entries.filter { $0.entityKind == "arc" }
     #expect(result.message == "Sketch curve segment split.")
     #expect(result.commandName == "splitSketchCurve")
@@ -4523,7 +4551,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(summary.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
     _ = try runner.execute(
@@ -4533,7 +4561,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let splitSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let splitSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let trimmedLine = try #require(splitSummary.entries.first { entry in
         entry.entityKind == "line" && entry.entityID != line.entityID
     })
@@ -4544,7 +4572,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let lines = updatedSummary.entries.filter { $0.entityKind == "line" }
     #expect(result.message == "Sketch curve segment trimmed.")
     #expect(result.commandName == "trimSketchCurveSegment")
@@ -4591,7 +4619,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetLine = try #require(summary.entries.first { $0.sourceFeatureName == "Automation Cut Target" })
     let cutterLine = try #require(summary.entries.first { $0.sourceFeatureName == "Automation Cut Cutter" })
     let target = try #require(targetLine.selectionTarget())
@@ -4606,7 +4634,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Automation Cut Target" }
     #expect(result.message == "Cut Curve applied.")
     #expect(result.commandName == "cutSketchCurve")
@@ -4655,7 +4683,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetLine = try #require(summary.entries.first { $0.sourceFeatureName == "Automation Circle Cut Target" })
     let cutterCircle = try #require(summary.entries.first { $0.sourceFeatureName == "Automation Circle Cut Cutter" })
     let target = try #require(targetLine.selectionTarget())
@@ -4670,7 +4698,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Automation Circle Cut Target" }
     #expect(result.message == "Cut Curve applied.")
     #expect(result.commandName == "cutSketchCurve")
@@ -4723,7 +4751,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetCircle = try #require(summary.entries.first { $0.sourceFeatureName == "Automation Circle Target Cut Target" })
     let cutterLine = try #require(summary.entries.first { $0.sourceFeatureName == "Automation Circle Target Cut Cutter" })
     let target = try #require(targetCircle.selectionTarget())
@@ -4738,7 +4766,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Automation Circle Target Cut Target" }
     #expect(result.message == "Cut Curve applied.")
     #expect(result.commandName == "cutSketchCurve")
@@ -4790,7 +4818,7 @@ import SwiftCAD
         ),
         in: session
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetArc = try #require(summary.entries.first { $0.sourceFeatureName == "Automation Arc Cut Target" })
     let cutterLine = try #require(summary.entries.first { $0.sourceFeatureName == "Automation Arc Cut Cutter" })
     let target = try #require(targetArc.selectionTarget())
@@ -4805,7 +4833,7 @@ import SwiftCAD
         in: session
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Automation Arc Cut Target" }
     #expect(result.message == "Cut Curve applied.")
     #expect(result.commandName == "cutSketchCurve")
@@ -5165,12 +5193,15 @@ import SwiftCAD
     let createResult = try runner.execute(
         .createConstructionPlane(
             name: "Automation CPlane",
-            plane: .zx,
-            activates: true
+            plane: .zx
         ),
         in: session
     )
-    let activeID = try #require(session.document.productMetadata.activeConstructionPlaneID)
+    let activeID = try #require(createResult.createdConstructionPlaneID)
+    let activateResult = try runner.execute(
+        .setActiveConstructionPlane(id: activeID),
+        in: session
+    )
     let renameResult = try runner.execute(
         .renameConstructionPlane(
             id: activeID,
@@ -5200,6 +5231,8 @@ import SwiftCAD
     #expect(createResult.message == "Construction plane Automation CPlane created.")
     #expect(createResult.commandName == "createConstructionPlane")
     #expect(createResult.didMutate)
+    #expect(createResult.effect == .sourceMutation)
+    #expect(activateResult.effect == .workspaceMutation)
     #expect(renameResult.message == "Construction plane renamed to Renamed CPlane.")
     #expect(renameResult.commandName == "renameConstructionPlane")
     #expect(renameResult.didMutate)
@@ -5211,11 +5244,11 @@ import SwiftCAD
     #expect(!summaryResult.didMutate)
     #expect(session.document.productMetadata.constructionPlanes[activeID]?.plane == editedPlane)
     #expect(session.document.productMetadata.constructionPlanes[activeID]?.name == "Renamed CPlane")
-    #expect(session.document.productMetadata.activeConstructionPlaneID == nil)
+    #expect(session.workspaceState.activeConstructionPlaneID == nil)
     #expect(clearResult.message == "Active construction plane set to none.")
     #expect(clearResult.commandName == "setActiveConstructionPlane")
     #expect(clearResult.didMutate)
-    #expect(session.generation == DocumentGeneration(4))
+    #expect(session.generation == DocumentGeneration(3))
 }
 
 @MainActor
@@ -5228,16 +5261,16 @@ import SwiftCAD
         .createViewAlignedConstructionPlane(
             name: "Automation View Plane",
             origin: origin,
-            viewNormal: Vector3D(x: 0.0, y: 0.0, z: 2.0),
-            activates: true
+            viewNormal: Vector3D(x: 0.0, y: 0.0, z: 2.0)
         ),
         in: session
     )
 
-    let source = try #require(session.activeConstructionPlane)
+    let source = try automationCreatedConstructionPlane(result, in: session)
     #expect(result.message == "View-aligned construction plane Automation View Plane created.")
     #expect(result.commandName == "createViewAlignedConstructionPlane")
     #expect(result.didMutate)
+    #expect(session.workspaceState.activeConstructionPlaneID == nil)
     guard case .plane(let plane) = source.plane else {
         Issue.record("View-aligned construction plane should create a custom plane.")
         return
@@ -5252,15 +5285,16 @@ import SwiftCAD
     let runner = AutomationRunner()
     let origin = Point3D(x: 0.0, y: 0.0, z: 0.040)
 
-    _ = try runner.execute(
+    let planeResult = try runner.execute(
         .createViewAlignedConstructionPlane(
             name: "Loft Section Plane",
             origin: origin,
-            viewNormal: Vector3D(x: 0.0, y: 0.0, z: 1.0),
-            activates: true
+            viewNormal: Vector3D(x: 0.0, y: 0.0, z: 1.0)
         ),
         in: session
     )
+    let planeID = try #require(planeResult.createdConstructionPlaneID)
+    _ = try runner.execute(.setActiveConstructionPlane(id: planeID), in: session)
     let activePlane = try #require(session.activeConstructionPlane).plane
 
     let result = try runner.execute(
@@ -5289,15 +5323,16 @@ import SwiftCAD
     let session = EditorSession()
     let runner = AutomationRunner()
 
-    _ = try runner.execute(
+    let planeResult = try runner.execute(
         .createViewAlignedConstructionPlane(
             name: "Ignored Active Plane",
             origin: Point3D(x: 0.0, y: 0.0, z: 0.040),
-            viewNormal: Vector3D(x: 0.0, y: 0.0, z: 1.0),
-            activates: true
+            viewNormal: Vector3D(x: 0.0, y: 0.0, z: 1.0)
         ),
         in: session
     )
+    let planeID = try #require(planeResult.createdConstructionPlaneID)
+    _ = try runner.execute(.setActiveConstructionPlane(id: planeID), in: session)
 
     _ = try runner.execute(
         .createRectangleSketch(
@@ -5324,19 +5359,14 @@ import SwiftCAD
     let session = EditorSession()
     let runner = AutomationRunner()
 
-    _ = try runner.execute(
+    let planeResult = try runner.execute(
         .createConstructionPlane(
             name: "Referenced Sketch Plane",
-            plane: .yz,
-            activates: false
+            plane: .yz
         ),
         in: session
     )
-    let planeID = try #require(
-        session.document.productMetadata.constructionPlanes.values.first {
-            $0.name == "Referenced Sketch Plane"
-        }?.id
-    )
+    let planeID = try #require(planeResult.createdConstructionPlaneID)
 
     let result = try runner.execute(
         .createLineSketch(
@@ -5364,7 +5394,7 @@ import SwiftCAD
     #expect(result.message == "Line sketch Referenced Plane Line created.")
     #expect(result.commandName == "createLineSketch")
     #expect(result.didMutate)
-    #expect(session.document.productMetadata.activeConstructionPlaneID == nil)
+    #expect(session.workspaceState.activeConstructionPlaneID == nil)
     #expect(sketch.plane == .yz)
 }
 
@@ -5405,7 +5435,7 @@ import SwiftCAD
     let session = EditorSession()
     let runner = AutomationRunner()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let faceTarget = try #require(topology.entries.first {
         $0.kind == .face && $0.center != nil && $0.normal != nil
     }?.selectionTarget())
@@ -5413,16 +5443,16 @@ import SwiftCAD
     let result = try runner.execute(
         .createConstructionPlaneFromTarget(
             name: "Automation Face CPlane",
-            target: faceTarget,
-            activates: true
+            target: faceTarget
         ),
         in: session
     )
 
-    let source = try #require(session.activeConstructionPlane)
+    let source = try automationCreatedConstructionPlane(result, in: session)
     #expect(result.message.contains("Automation Face CPlane"))
     #expect(result.commandName == "createConstructionPlaneFromTarget")
     #expect(result.didMutate)
+    #expect(session.workspaceState.activeConstructionPlaneID == nil)
     #expect(source.name == "Automation Face CPlane")
     guard case .plane = source.plane else {
         Issue.record("Generated face target should create a custom construction plane.")
@@ -5435,23 +5465,23 @@ import SwiftCAD
     let session = EditorSession()
     let runner = AutomationRunner()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let targets = try automationParallelFaceTargets(in: topology)
 
     let result = try runner.execute(
         .createConstructionPlaneFromTargets(
             name: "Automation Midplane",
             targets: targets,
-            viewNormal: nil,
-            activates: true
+            viewNormal: nil
         ),
         in: session
     )
 
-    let source = try #require(session.activeConstructionPlane)
+    let source = try automationCreatedConstructionPlane(result, in: session)
     #expect(result.message == "Construction plane Automation Midplane created from 2 targets.")
     #expect(result.commandName == "createConstructionPlaneFromTargets")
     #expect(result.didMutate)
+    #expect(session.workspaceState.activeConstructionPlaneID == nil)
     #expect(source.name == "Automation Midplane")
     guard case .plane = source.plane else {
         Issue.record("Parallel generated face targets should create a custom midplane.")
@@ -5464,23 +5494,23 @@ import SwiftCAD
     let session = EditorSession()
     let runner = AutomationRunner()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let targets = try automationTwoPointVertexTargets(in: topology, viewNormal: .unitZ)
 
     let result = try runner.execute(
         .createConstructionPlaneFromTargets(
             name: "Automation Two Point Plane",
             targets: targets,
-            viewNormal: .unitZ,
-            activates: true
+            viewNormal: .unitZ
         ),
         in: session
     )
 
-    let source = try #require(session.activeConstructionPlane)
+    let source = try automationCreatedConstructionPlane(result, in: session)
     #expect(result.message == "Construction plane Automation Two Point Plane created from 2 targets.")
     #expect(result.commandName == "createConstructionPlaneFromTargets")
     #expect(result.didMutate)
+    #expect(session.workspaceState.activeConstructionPlaneID == nil)
     #expect(source.name == "Automation Two Point Plane")
 }
 
@@ -5493,16 +5523,16 @@ import SwiftCAD
         .createConstructionPlaneFromTargets(
             name: "Automation Source Point Plane",
             targets: setup.targets,
-            viewNormal: .unitZ,
-            activates: true
+            viewNormal: .unitZ
         ),
         in: setup.session
     )
 
-    let source = try #require(setup.session.activeConstructionPlane)
+    let source = try automationCreatedConstructionPlane(result, in: setup.session)
     #expect(result.message == "Construction plane Automation Source Point Plane created from 2 targets.")
     #expect(result.commandName == "createConstructionPlaneFromTargets")
     #expect(result.didMutate)
+    #expect(setup.session.workspaceState.activeConstructionPlaneID == nil)
     #expect(source.name == "Automation Source Point Plane")
 }
 
@@ -5510,7 +5540,7 @@ import SwiftCAD
 @Test func automationBatchRejectsGenerationMismatch() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()
-    _ = try runner.execute(.setDisplayUnit(.meter), in: session)
+    _ = try runner.execute(.renameDocument(name: "Current"), in: session)
 
     var caught: EditorError?
     do {
@@ -5526,7 +5556,7 @@ import SwiftCAD
     }
 
     #expect(caught?.code == .documentGenerationMismatch)
-    #expect(session.document.cadDocument.metadata.name == "Untitled")
+    #expect(session.document.cadDocument.metadata.name == "Current")
 }
 
 private func automationSiteDocument() throws -> DesignDocument {
@@ -5598,7 +5628,7 @@ private func automationSingleSketchEntityID(
 }
 
 private func automationParallelFaceTargets(
-    in topology: TopologySummaryResult
+    in topology: TopologySnapshot
 ) throws -> [SelectionTarget] {
     let faces = topology.entries.filter { $0.kind == .face }
     for firstIndex in faces.indices {
@@ -5633,7 +5663,7 @@ private func automationParallelFaceTargets(
 }
 
 private func automationTwoPointVertexTargets(
-    in topology: TopologySummaryResult,
+    in topology: TopologySnapshot,
     viewNormal: Vector3D
 ) throws -> [SelectionTarget] {
     let vertices = topology.entries.compactMap { entry -> (target: SelectionTarget, point: Point3D)? in
@@ -5692,7 +5722,7 @@ private func automationSourcePointSession() throws -> (
     document.cadDocument.designGraph.nodes[featureID] = feature
     document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
 
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entries = summary.entries.filter { $0.entityKind == "point" }
     #expect(entries.count == 2)
     let targets = try entries.map { entry in
@@ -6229,7 +6259,7 @@ private func automationPointHandleSelectionTarget(
 }
 
 private func automationBottomRectangleLine(
-    in summary: SketchEntitySummaryResult
+    in summary: SketchEntitySnapshot
 ) -> SketchEntitySummaryResult.EntityEntry? {
     summary.entries.first { entry in
         entry.entityKind == "line" &&
@@ -6292,7 +6322,7 @@ private func automationSurfaceTrimReference(
     edgeIndex: Int,
     in document: DesignDocument
 ) throws -> SelectionReference {
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let source = try #require(summary.sources.first { $0.featureID == featureID.description })
     let trimLoop = try #require(source.patches.first?.trimLoops.first)
     guard trimLoop.selectionReferences.indices.contains(edgeIndex) else {
@@ -6451,6 +6481,28 @@ private func automationSavedView(
             scaleBarLengthMeters: 1_000.0
         )
     )
+}
+
+private func automationCreatedConstructionPlane(
+    _ result: AutomationResult,
+    in session: EditorSession
+) throws -> ConstructionPlaneSource {
+    let sourceID = try #require(result.createdConstructionPlaneID)
+    return try #require(session.document.productMetadata.constructionPlanes[sourceID])
+}
+
+private struct AutomationDocumentSourceState: Equatable {
+    var fingerprint: CADDocumentSourceFingerprint
+    var modelingSettings: DocumentModelingSettings
+    var productMetadata: ProductMetadata
+
+    init(document: DesignDocument) throws {
+        fingerprint = try document.cadDocument.sourceFingerprint(
+            tolerance: document.modelingSettings.tolerance
+        )
+        modelingSettings = document.modelingSettings
+        productMetadata = document.productMetadata
+    }
 }
 
 private extension UUID {

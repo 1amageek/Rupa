@@ -13,7 +13,7 @@ struct ObjectFaceDimensionResolver: Sendable {
         source: ObjectDimensionSource,
         in document: DesignDocument,
         objectRegistry: ObjectTypeRegistry = .builtIn,
-        topology: TopologySummaryResult? = nil,
+        topology: TopologySnapshot? = nil,
         operationName: String = "Object face dimension"
     ) throws -> ObjectFaceDimension? {
         guard let face = try bodyFaceIfPresent(
@@ -46,7 +46,7 @@ struct ObjectFaceDimensionResolver: Sendable {
         second: SelectionTarget,
         in document: DesignDocument,
         objectRegistry: ObjectTypeRegistry = .builtIn,
-        topology: TopologySummaryResult? = nil,
+        topology: TopologySnapshot? = nil,
         operationName: String = "Object face-pair dimension"
     ) throws -> ObjectFaceDimension? {
         guard first.sceneNodeID == second.sceneNodeID else {
@@ -97,7 +97,7 @@ struct ObjectFaceDimensionResolver: Sendable {
         for target: SelectionTarget,
         in document: DesignDocument,
         objectRegistry: ObjectTypeRegistry,
-        topology: TopologySummaryResult?,
+        topology: TopologySnapshot?,
         operationName: String
     ) throws -> BodyFace? {
         guard case .face(let componentID) = target.component else {

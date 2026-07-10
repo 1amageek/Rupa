@@ -2,7 +2,15 @@
 
 ## Goal
 
-Rupa is complete when it provides a reliable, general-purpose CAD workflow for precise modeling across video 3D assets, 3D printing objects, and architecture, while preserving one shared document model, command pipeline, validation system, and automation surface.
+Rupa fulfills its long-term product vision when it provides reliable,
+general-purpose CAD workflows across visual assets, manufacturing,
+architecture, turbomachinery, and Agent-driven design while preserving one
+shared document model, command pipeline, validation system, and automation
+surface.
+
+A release is complete only for versioned conformance manifests governed by
+`CONFORMANCE_MANIFEST_CONTRACT.md`; `CONFORMANCE_PROFILES.md` is their human
+catalog. The product vision does not silently broaden one release claim.
 
 ```mermaid
 flowchart LR
@@ -48,13 +56,21 @@ the capability is broadened.
 | Fixes | Review findings, test failures, build failures, and specification mismatches are corrected without hiding or bypassing the underlying issue. |
 | Re-verification | The corrected change is built and tested again, and the final state is reported with commands and results. |
 
+The product implementation order and parallelization policy are maintained in
+`COMPLETE_IMPLEMENTATION_PLAN.md`. That plan schedules work; required gates come
+from conformance manifests, normative contracts, and capability case sets.
+
+`COMPLETE_IMPLEMENTATION_PLAN.md` schedules work but does not define release
+scope. Only `CONFORMANCE_PROFILES.md` may define which workflows are required by
+a release.
+
 ## Definition of Done
 
 A task is done only when all of these statements are true.
 
 | Area | Done state |
 |---|---|
-| Scope | The implementation satisfies the stated requirement without adding unrelated product behavior. |
+| Scope | The implementation satisfies the named conformance profile and capability case set without adding unrelated product behavior. |
 | Architecture | The app host remains thin, RupaKit owns product behavior, and Swift-CAD remains the CAD foundation. |
 | Generality | The solution supports the universal CAD direction and does not encode video, printing, or architecture as separate product forks. |
 | Design process | The feature has an explicit design packet or an assessment entry that covers the same DBN artifacts. |
@@ -72,7 +88,7 @@ A task is done only when all of these statements are true.
 | Does the change preserve one shared CAD model? | Yes. |
 | Does every mutation pass through an intentional command or session boundary? | Yes. |
 | Does the UI distinguish component Browser, canvas tools, logs, and Inspector? | Yes, `NavigationSplitView` owns the component Browser sidebar, modeling tools float on the bottom of the canvas as Liquid Glass controls, and `MacComponent` owns the collapsed-by-default logs pane plus the right-side Inspector Pane for contextual properties. |
-| Does the change respect the deferred `ApplicationProfile` requirement? | Yes, profiles can later group defaults without changing core semantics. |
+| Does the change respect the deferred `WorkspacePreset` boundary? | Yes, presets can later group defaults and UI emphasis without changing capability availability or core semantics. |
 | Do tests prove the behavior rather than only proving construction? | Yes. |
 | Were failed tests or review findings fixed and re-run? | Yes. |
 

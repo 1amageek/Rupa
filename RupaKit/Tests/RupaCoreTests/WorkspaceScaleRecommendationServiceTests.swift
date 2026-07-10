@@ -34,7 +34,10 @@ import Testing
 @Test func workspaceScaleFitPlanAppliesSitePlanningForKilometerScaleDocument() throws {
     let document = try workspaceScaleFitSiteDocument()
 
-    let plan = try WorkspaceScaleFitService().plan(document: document)
+    let plan = try WorkspaceScaleFitService().plan(
+        document: document,
+        ruler: .standard(for: .millimeter)
+    )
 
     #expect(plan.action == .applyPreset(.sitePlanning))
     #expect(plan.measurement.bounds?.maximumSpan == 25_000.0)
@@ -91,7 +94,10 @@ import Testing
         direction: .normal
     )
 
-    let plan = try WorkspaceScaleFitService().plan(document: document)
+    let plan = try WorkspaceScaleFitService().plan(
+        document: document,
+        ruler: .standard(for: .millimeter)
+    )
 
     #expect(plan.action == .applyPreset(.urbanPlanning))
     #expect(plan.measurement.bounds?.maximumSpan == 5_000.0)
@@ -100,10 +106,12 @@ import Testing
 }
 
 @Test func workspaceScaleFitPlanReportsAlreadyFittingDocument() throws {
-    var document = try workspaceScaleFitSiteDocument()
-    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    let document = try workspaceScaleFitSiteDocument()
 
-    let plan = try WorkspaceScaleFitService().plan(document: document)
+    let plan = try WorkspaceScaleFitService().plan(
+        document: document,
+        ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+    )
 
     #expect(plan.action == .alreadyFits)
     #expect(plan.measurement.bounds?.maximumSpan == 25_000.0)
@@ -112,7 +120,6 @@ import Testing
 
 @Test func workspaceScaleFitPlanReportsUnsupportedRegionalRange() throws {
     var document = DesignDocument.empty(named: "Unsupported Regional")
-    try document.setRulerConfiguration(WorkspaceScalePreset.regionalPlanning.rulerConfiguration)
     let profileID = try document.createRectangleSketchFromCorners(
         name: "Regional Footprint",
         plane: .xy,
@@ -132,7 +139,10 @@ import Testing
         direction: .normal
     )
 
-    let plan = try WorkspaceScaleFitService().plan(document: document)
+    let plan = try WorkspaceScaleFitService().plan(
+        document: document,
+        ruler: WorkspaceScalePreset.regionalPlanning.rulerConfiguration
+    )
 
     #expect(plan.action == .unsupportedRange)
     #expect(plan.measurement.bounds?.maximumSpan == 1_200_000.0)
@@ -284,7 +294,10 @@ import Testing
         direction: .normal
     )
 
-    let result = try MeasurementService().measure(document: document)
+    let result = try MeasurementService().measure(
+        document: document,
+        ruler: .standard(for: .millimeter)
+    )
 
     #expect(result.workspaceScaleRecommendation?.recommendedPreset == .sitePlanning)
     #expect(result.workspaceScaleRecommendation?.recommendedScale.displayUnit == .kilometer)
@@ -299,7 +312,7 @@ import Testing
 }
 
 @MainActor
-@Test func evaluationSnapshotIncludesWorkspaceScaleRecommendationForSiteModel() throws {
+@Test func evaluationSnapshotExcludesWorkspaceScaleAndDisplaySnapshotRecommendsIt() throws {
     var document = DesignDocument.empty(named: "Evaluated Site")
     let profileID = try document.createRectangleSketchFromCorners(
         name: "Evaluated Site Footprint",
@@ -320,24 +333,29 @@ import Testing
         direction: .normal
     )
 
-    let snapshot = EvaluationScheduler().evaluate(
+    let evaluation = EvaluationScheduler().evaluate(
         document: document,
         generation: DocumentGeneration(1)
     )
+    let display = try DesignDisplaySnapshotService().result(
+        document: document,
+        workspaceState: WorkspaceState(),
+        generation: DocumentGeneration(1),
+        dirty: false
+    )
 
-    #expect(snapshot.status == .valid)
-    #expect(snapshot.diagnostics.contains {
-        $0.severity == .info
-            && $0.code == .workspaceScaleRecommendation
-            && $0.message.contains("Site Planning")
-            && $0.message.contains("1 km to 80 km")
+    #expect(evaluation.status == .valid)
+    #expect(!evaluation.diagnostics.contains {
+        $0.code == .workspaceScaleRecommendation || $0.code == .workspaceScaleWarning
     })
+    #expect(display.workspaceScaleRecommendation?.recommendedPreset == .sitePlanning)
+    #expect(display.workspaceScaleRecommendation?.recommendedScale.displayUnit == .kilometer)
+    #expect(display.workspaceScaleRecommendation?.recommendedScaleProfile.comfortableModelSpanTitle == "1 km to 80 km")
 }
 
 @MainActor
 @Test func measurementIncludesWorkspaceScaleWarningForModelBeyondLargestPreset() throws {
     var document = DesignDocument.empty(named: "Regional Context")
-    try document.setRulerConfiguration(WorkspaceScalePreset.regionalPlanning.rulerConfiguration)
     let profileID = try document.createRectangleSketchFromCorners(
         name: "Regional Footprint",
         plane: .xy,
@@ -357,7 +375,10 @@ import Testing
         direction: .normal
     )
 
-    let result = try MeasurementService().measure(document: document)
+    let result = try MeasurementService().measure(
+        document: document,
+        ruler: WorkspaceScalePreset.regionalPlanning.rulerConfiguration
+    )
 
     #expect(result.workspaceScaleRecommendation?.reason == .modelExceedsSupportedScaleRange)
     #expect(result.workspaceScaleRecommendation?.isActionable == false)

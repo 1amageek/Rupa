@@ -3,6 +3,7 @@ import RupaAgentProtocol
 import RupaAgentRuntime
 import RupaAutomation
 import RupaCore
+import RupaDomainFoundation
 
 public enum CLIEditMode: String, Codable, Equatable, Sendable, CaseIterable {
     case auto
@@ -50,17 +51,20 @@ private struct CLIAutomationMutationExecution: Sendable {
 public struct CLIService {
     private let fileService: DocumentFileService
     private let exportService: DocumentExportService
+    private let domainRegistry: DomainRegistry
 
     public init(
         fileService: DocumentFileService = DocumentFileService(),
-        exportService: DocumentExportService = DocumentExportService()
+        exportService: DocumentExportService = DocumentExportService(),
+        domainRegistry: DomainRegistry = DomainRegistry()
     ) {
         self.fileService = fileService
         self.exportService = exportService
+        self.domainRegistry = domainRegistry
     }
 
     public func capabilities() -> [String] {
-        AgentCommandController().capabilities()
+        AgentCommandController(domainRegistry: domainRegistry).capabilities()
     }
 
     public func agentStatus(
@@ -677,7 +681,7 @@ public struct CLIService {
         )
         ensureWorkspaceScaleContext(
             in: &result,
-            document: session.document
+            workspaceState: session.workspaceState
         )
 
         let shouldSave = !dryRun && (result.didMutate || writePolicy.outputURL != nil)
@@ -1153,7 +1157,10 @@ public struct CLIService {
     ) throws -> CLIMeasurementResponse {
         let session = EditorSession(document: try fileService.load(from: url))
         return CLIMeasurementResponse(
-            measurement: try MeasurementService().measure(document: session.document),
+            measurement: try MeasurementService().measure(
+                document: session.document,
+                ruler: session.workspaceState.ruler
+            ),
             generation: session.generation,
             dirty: session.isDirty
         )
@@ -1166,6 +1173,7 @@ public struct CLIService {
         return CLIMeshSummaryResponse(
             meshSummary: try MeshSummaryService().summarize(
                 document: session.document,
+                ruler: session.workspaceState.ruler,
                 objectRegistry: session.objectRegistry
             ),
             generation: session.generation,
@@ -1178,7 +1186,10 @@ public struct CLIService {
     ) throws -> CLIConstructionPlaneSummaryResponse {
         let session = EditorSession(document: try fileService.load(from: url))
         return CLIConstructionPlaneSummaryResponse(
-            constructionPlaneSummary: ConstructionPlaneSummaryService().summarize(document: session.document),
+            constructionPlaneSummary: ConstructionPlaneSummaryService().summarize(
+                document: session.document,
+                activePlaneID: session.workspaceState.activeConstructionPlaneID
+            ),
             generation: session.generation,
             dirty: session.isDirty
         )
@@ -1194,6 +1205,7 @@ public struct CLIService {
             snapResolution: try SnapResolver().resolve(
                 point: point,
                 in: session.document,
+                ruler: session.workspaceState.ruler,
                 options: options
             ),
             generation: session.generation,
@@ -1210,6 +1222,7 @@ public struct CLIService {
             selectionMeasurement: try SelectionMeasurementService().measure(
                 query: query,
                 document: session.document,
+                displayUnit: session.workspaceState.displayUnit,
                 objectRegistry: session.objectRegistry,
                 currentEvaluation: session.currentEvaluation,
                 currentGeneration: session.generation
@@ -1226,6 +1239,7 @@ public struct CLIService {
         return CLISketchEntitySummaryResponse(
             sketchEntitySummary: try SketchEntitySummaryService().summarize(
                 document: session.document,
+                displayUnit: session.workspaceState.displayUnit,
                 objectRegistry: session.objectRegistry
             ),
             generation: session.generation,
@@ -1240,6 +1254,7 @@ public struct CLIService {
         return CLITopologySummaryResponse(
             topologySummary: try TopologySummaryService().summarize(
                 document: session.document,
+                displayUnit: session.workspaceState.displayUnit,
                 objectRegistry: session.objectRegistry,
                 currentEvaluation: session.currentEvaluation,
                 currentGeneration: session.generation
@@ -1256,6 +1271,7 @@ public struct CLIService {
         return CLICurveAnalysisResponse(
             curveAnalysis: try CurveAnalysisService().analyze(
                 document: session.document,
+                displayUnit: session.workspaceState.displayUnit,
                 objectRegistry: session.objectRegistry
             ),
             generation: session.generation,
@@ -1271,6 +1287,7 @@ public struct CLIService {
         return CLISurfaceAnalysisResponse(
             surfaceAnalysis: try SurfaceAnalysisService(options: options).analyze(
                 document: session.document,
+                displayUnit: session.workspaceState.displayUnit,
                 objectRegistry: session.objectRegistry,
                 currentEvaluation: session.currentEvaluation,
                 currentGeneration: session.generation
@@ -1287,6 +1304,7 @@ public struct CLIService {
         return CLISurfaceContinuitySummaryResponse(
             surfaceContinuitySummary: try SurfaceContinuityService().summarize(
                 document: session.document,
+                displayUnit: session.workspaceState.displayUnit,
                 objectRegistry: session.objectRegistry,
                 currentEvaluation: session.currentEvaluation,
                 currentGeneration: session.generation
@@ -1321,6 +1339,7 @@ public struct CLIService {
             surfaceFrames: try SurfaceFrameService().resolve(
                 document: session.document,
                 queries: queries,
+                displayUnit: session.workspaceState.displayUnit,
                 objectRegistry: session.objectRegistry,
                 currentEvaluation: session.currentEvaluation,
                 currentGeneration: session.generation
@@ -1335,7 +1354,10 @@ public struct CLIService {
     ) throws -> CLISurfaceSourceSummaryResponse {
         let session = EditorSession(document: try fileService.load(from: url))
         return CLISurfaceSourceSummaryResponse(
-            surfaceSourceSummary: try SurfaceSourceSummaryService().summarize(document: session.document),
+            surfaceSourceSummary: try SurfaceSourceSummaryService().summarize(
+                document: session.document,
+                displayUnit: session.workspaceState.displayUnit
+            ),
             generation: session.generation,
             dirty: session.isDirty
         )
@@ -1350,6 +1372,7 @@ public struct CLIService {
             sketchDimensionSummary: try SketchDimensionSummaryService().summarize(
                 document: session.document,
                 targets: targets,
+                displayUnit: session.workspaceState.displayUnit,
                 objectRegistry: session.objectRegistry
             ),
             generation: session.generation,
@@ -1366,6 +1389,7 @@ public struct CLIService {
             objectDimensionSummary: try ObjectDimensionSummaryService().summarize(
                 document: session.document,
                 targets: targets,
+                displayUnit: session.workspaceState.displayUnit,
                 objectRegistry: session.objectRegistry
             ),
             generation: session.generation,
@@ -1502,6 +1526,7 @@ public struct CLIService {
         command: AutomationCommand,
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
+        expectedWorkspaceRevision: WorkspaceRevision? = nil,
         dryRun: Bool = false,
         writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool = false,
@@ -1512,6 +1537,7 @@ public struct CLIService {
             target: target,
             mode: mode,
             expectedGeneration: expectedGeneration,
+            expectedWorkspaceRevision: expectedWorkspaceRevision,
             dryRun: dryRun,
             writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
@@ -1557,7 +1583,6 @@ public struct CLIService {
         target: CLIDocumentTarget,
         name: String,
         plane: SketchPlane,
-        activates: Bool = true,
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,
@@ -1568,8 +1593,7 @@ public struct CLIService {
         try executeDocumentMutationCommand(
             .createConstructionPlane(
                 name: name,
-                plane: plane,
-                activates: activates
+                plane: plane
             ),
             target: target,
             mode: mode,
@@ -1587,7 +1611,6 @@ public struct CLIService {
         name: String,
         origin: Point3D,
         viewNormal: Vector3D,
-        activates: Bool = true,
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,
@@ -1599,8 +1622,7 @@ public struct CLIService {
             .createViewAlignedConstructionPlane(
                 name: name,
                 origin: origin,
-                viewNormal: viewNormal,
-                activates: activates
+                viewNormal: viewNormal
             ),
             target: target,
             mode: mode,
@@ -4424,6 +4446,7 @@ public struct CLIService {
         target: CLIDocumentTarget,
         mode: CLIEditMode,
         expectedGeneration: DocumentGeneration?,
+        expectedWorkspaceRevision: WorkspaceRevision? = nil,
         dryRun: Bool,
         writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool,
@@ -4434,6 +4457,7 @@ public struct CLIService {
             target: target,
             mode: mode,
             expectedGeneration: expectedGeneration,
+            expectedWorkspaceRevision: expectedWorkspaceRevision,
             dryRun: dryRun,
             writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
@@ -4496,7 +4520,8 @@ public struct CLIService {
     private func workspaceScaleContextFile(
         at url: URL
     ) throws -> CLIWorkspaceScaleContext {
-        CLIWorkspaceScaleContext(document: try fileService.load(from: url))
+        let session = EditorSession(document: try fileService.load(from: url))
+        return CLIWorkspaceScaleContext(workspaceState: session.workspaceState)
     }
 
     private func workspaceScaleLiveSession(
@@ -4541,6 +4566,7 @@ public struct CLIService {
         target: CLIDocumentTarget,
         mode: CLIEditMode,
         expectedGeneration: DocumentGeneration?,
+        expectedWorkspaceRevision: WorkspaceRevision? = nil,
         dryRun: Bool,
         writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool,
@@ -4551,6 +4577,7 @@ public struct CLIService {
             target: target,
             mode: mode,
             expectedGeneration: expectedGeneration,
+            expectedWorkspaceRevision: expectedWorkspaceRevision,
             dryRun: dryRun,
             writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
@@ -4564,6 +4591,7 @@ public struct CLIService {
         target: CLIDocumentTarget,
         mode: CLIEditMode,
         expectedGeneration: DocumentGeneration?,
+        expectedWorkspaceRevision: WorkspaceRevision? = nil,
         dryRun: Bool,
         writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool,
@@ -4575,6 +4603,7 @@ public struct CLIService {
             target: target,
             mode: mode,
             expectedGeneration: expectedGeneration,
+            expectedWorkspaceRevision: expectedWorkspaceRevision,
             dryRun: dryRun,
             writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
@@ -4593,6 +4622,7 @@ public struct CLIService {
         target: CLIDocumentTarget,
         mode: CLIEditMode,
         expectedGeneration: DocumentGeneration?,
+        expectedWorkspaceRevision: WorkspaceRevision? = nil,
         dryRun: Bool,
         writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool,
@@ -4605,6 +4635,7 @@ public struct CLIService {
                 command,
                 target: target,
                 expectedGeneration: expectedGeneration,
+                expectedWorkspaceRevision: expectedWorkspaceRevision,
                 dryRun: dryRun,
                 writePolicy: writePolicy,
                 forceFileEdit: forceFileEdit,
@@ -4633,6 +4664,7 @@ public struct CLIService {
                 command,
                 sessionID: sessionID,
                 expectedGeneration: expectedGeneration,
+                expectedWorkspaceRevision: expectedWorkspaceRevision,
                 client: requiredClient(client)
             )
         }
@@ -4642,6 +4674,7 @@ public struct CLIService {
         _ command: AutomationCommand,
         target: CLIDocumentTarget,
         expectedGeneration: DocumentGeneration?,
+        expectedWorkspaceRevision: WorkspaceRevision?,
         dryRun: Bool,
         writePolicy: CLIDocumentWritePolicy,
         forceFileEdit: Bool,
@@ -4654,6 +4687,7 @@ public struct CLIService {
                 command,
                 sessionID: sessionID,
                 expectedGeneration: expectedGeneration,
+                expectedWorkspaceRevision: expectedWorkspaceRevision,
                 client: requiredClient(client)
             )
         }
@@ -4670,6 +4704,7 @@ public struct CLIService {
                 command,
                 sessionID: session.id,
                 expectedGeneration: expectedGeneration,
+                expectedWorkspaceRevision: expectedWorkspaceRevision,
                 client: client
             )
         }
@@ -4695,6 +4730,11 @@ public struct CLIService {
         forceFileEdit: Bool,
         conflictClient: AgentClientProtocol?
     ) throws -> CLIAutomationMutationExecution {
+        guard command.effect != .workspaceMutation else {
+            throw invalidCommand(
+                "Workspace mutations require live mode because .swcad files contain source state only."
+            )
+        }
         let saveURL = try fileMutationDestinationURL(
             sourceURL: url,
             writePolicy: writePolicy,
@@ -4706,7 +4746,7 @@ public struct CLIService {
         var result = try AutomationRunner().execute(command, in: session)
         ensureWorkspaceScaleContext(
             in: &result,
-            document: session.document
+            workspaceState: session.workspaceState
         )
         let shouldSave = !dryRun && (result.didMutate || writePolicy.outputURL != nil)
 
@@ -4726,13 +4766,22 @@ public struct CLIService {
         _ command: AutomationCommand,
         sessionID: UUID,
         expectedGeneration: DocumentGeneration?,
+        expectedWorkspaceRevision: WorkspaceRevision?,
         client: AgentClientProtocol
     ) throws -> CLIAutomationMutationExecution {
+        let preconditions = try resolvedCommandPreconditions(
+            command: command,
+            sessionID: sessionID,
+            expectedGeneration: expectedGeneration,
+            expectedWorkspaceRevision: expectedWorkspaceRevision,
+            client: client
+        )
         let response = try client.send(
             .execute(
                 sessionID: sessionID,
                 command: command,
-                expectedGeneration: expectedGeneration
+                expectedGeneration: preconditions.generation,
+                expectedWorkspaceRevision: preconditions.workspaceRevision
             )
         )
         var result = try commandResult(from: response)
@@ -4742,6 +4791,140 @@ public struct CLIService {
             client: client
         )
         return CLIAutomationMutationExecution(
+            result: result,
+            dirty: result.sourceDirty,
+            saved: false
+        )
+    }
+
+    public func executeDomain(
+        target: CLIDocumentTarget,
+        request: DomainCommandRequest,
+        mode: CLIEditMode = .auto,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIDomainExecutionResponse {
+        switch mode {
+        case .auto:
+            return try executeDomainAutomatically(
+                request,
+                target: target,
+                writePolicy: writePolicy,
+                forceFileEdit: forceFileEdit,
+                client: client
+            )
+        case .file:
+            guard let url = target.fileURL else {
+                throw invalidCommand("File mode requires a document file path.")
+            }
+            return try executeDomainFile(
+                request,
+                at: url,
+                writePolicy: writePolicy,
+                forceFileEdit: forceFileEdit,
+                conflictClient: client
+            )
+        case .live:
+            try validateLiveMutationWritePolicy(writePolicy)
+            let sessionID = try resolvedLiveSessionID(
+                target: target,
+                client: client
+            )
+            return try executeDomainLiveSession(
+                sessionID: sessionID,
+                request: request,
+                client: requiredClient(client)
+            )
+        }
+    }
+
+    private func executeDomainAutomatically(
+        _ request: DomainCommandRequest,
+        target: CLIDocumentTarget,
+        writePolicy: CLIDocumentWritePolicy,
+        forceFileEdit: Bool,
+        client: AgentClientProtocol?
+    ) throws -> CLIDomainExecutionResponse {
+        if let sessionID = target.sessionID {
+            try validateLiveMutationWritePolicy(writePolicy)
+            return try executeDomainLiveSession(
+                sessionID: sessionID,
+                request: request,
+                client: requiredClient(client)
+            )
+        }
+
+        if let url = target.fileURL,
+           !writePolicy.requiresFileMode,
+           !forceFileEdit,
+           let client,
+           let session = try openSession(for: url, client: client) {
+            return try executeDomainLiveSession(
+                sessionID: session.id,
+                request: request,
+                client: client
+            )
+        }
+
+        guard let url = target.fileURL else {
+            throw invalidCommand("Domain execution requires a document file path or live session ID.")
+        }
+        return try executeDomainFile(
+            request,
+            at: url,
+            writePolicy: writePolicy,
+            forceFileEdit: forceFileEdit,
+            conflictClient: client
+        )
+    }
+
+    public func executeDomainFile(
+        _ request: DomainCommandRequest,
+        at url: URL,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
+        forceFileEdit: Bool = false,
+        conflictClient: AgentClientProtocol? = nil
+    ) throws -> CLIDomainExecutionResponse {
+        let saveURL = try fileMutationDestinationURL(
+            sourceURL: url,
+            writePolicy: writePolicy,
+            forceFileEdit: forceFileEdit,
+            client: conflictClient
+        )
+
+        let session = EditorSession(document: try fileService.load(from: url))
+        let result = try DomainCommandExecutor(registry: domainRegistry).execute(
+            request,
+            in: session
+        )
+        let shouldSave = !request.dryRun && (result.didMutate || writePolicy.outputURL != nil)
+
+        if shouldSave {
+            try fileService.save(session.document, to: saveURL)
+            session.markClean()
+        }
+
+        return CLIDomainExecutionResponse(
+            result: result,
+            dirty: session.isDirty,
+            saved: shouldSave
+        )
+    }
+
+    public func executeDomainLiveSession(
+        sessionID: UUID,
+        request: DomainCommandRequest,
+        client: AgentClientProtocol
+    ) throws -> CLIDomainExecutionResponse {
+        let response = try client.send(
+            .executeDomain(
+                sessionID: sessionID,
+                request: request
+            )
+        )
+        let result = try domainExecutionResult(from: response)
+        return CLIDomainExecutionResponse(
             result: result,
             dirty: result.didMutate,
             saved: false
@@ -4846,6 +5029,11 @@ public struct CLIService {
         forceFileEdit: Bool,
         conflictClient: AgentClientProtocol?
     ) throws -> CLIBatchResponse {
+        guard batch.commands.allSatisfy({ $0.effect != .workspaceMutation }) else {
+            throw invalidCommand(
+                "File-mode batches cannot contain workspace mutations because .swcad files contain source state only."
+            )
+        }
         let saveURL = try fileMutationDestinationURL(
             sourceURL: url,
             writePolicy: writePolicy,
@@ -4858,7 +5046,7 @@ public struct CLIService {
         for index in results.indices {
             ensureWorkspaceScaleContext(
                 in: &results[index],
-                document: session.document
+                workspaceState: session.workspaceState
             )
         }
         let didMutate = results.contains { $0.didMutate }
@@ -4872,6 +5060,7 @@ public struct CLIService {
         return CLIBatchResponse(
             results: results,
             generation: session.generation,
+            workspaceRevision: session.workspaceState.revision,
             dirty: session.isDirty,
             saved: shouldSave
         )
@@ -4882,10 +5071,15 @@ public struct CLIService {
         sessionID: UUID,
         client: AgentClientProtocol
     ) throws -> CLIBatchResponse {
+        let effectiveBatch = try batchApplyingLivePreconditions(
+            batch,
+            sessionID: sessionID,
+            client: client
+        )
         let response = try client.send(
             .executeBatch(
                 sessionID: sessionID,
-                batch: batch
+                batch: effectiveBatch
             )
         )
         let batchResult = try batchResult(from: response)
@@ -4900,6 +5094,7 @@ public struct CLIService {
         return CLIBatchResponse(
             results: results,
             generation: batchResult.generation,
+            workspaceRevision: batchResult.workspaceRevision,
             dirty: batchResult.dirty,
             saved: false
         )
@@ -4907,9 +5102,9 @@ public struct CLIService {
 
     private func ensureWorkspaceScaleContext(
         in result: inout AutomationResult,
-        document: DesignDocument
+        workspaceState: WorkspaceState
     ) {
-        let context = CLIWorkspaceScaleContext(document: document)
+        let context = CLIWorkspaceScaleContext(workspaceState: workspaceState)
         if result.workspaceScale == nil {
             result.workspaceScale = context.scale
         }
@@ -5122,6 +5317,17 @@ public struct CLIService {
         }
     }
 
+    private func domainExecutionResult(from response: AgentResponse) throws -> DomainExecutionResult {
+        switch response {
+        case .domainExecution(let result):
+            return result
+        case .failure(let error):
+            throw error
+        default:
+            throw unexpectedResponse("Domain execution request returned an unexpected response.")
+        }
+    }
+
     private func selectionResult(from response: AgentResponse) throws -> SelectionStateResult {
         switch response {
         case .selection(let result):
@@ -5193,6 +5399,66 @@ public struct CLIService {
             }
     }
 
+    private func resolvedCommandPreconditions(
+        command: AutomationCommand,
+        sessionID: UUID,
+        expectedGeneration: DocumentGeneration?,
+        expectedWorkspaceRevision: WorkspaceRevision?,
+        client: AgentClientProtocol
+    ) throws -> (
+        generation: DocumentGeneration,
+        workspaceRevision: WorkspaceRevision?
+    ) {
+        let requiresWorkspaceRevision = command.effect == .workspaceMutation
+        if let expectedGeneration,
+           !requiresWorkspaceRevision || expectedWorkspaceRevision != nil {
+            return (expectedGeneration, expectedWorkspaceRevision)
+        }
+
+        let summary = try sessionSummary(id: sessionID, client: client)
+        return (
+            expectedGeneration ?? summary.generation,
+            requiresWorkspaceRevision
+                ? expectedWorkspaceRevision ?? summary.workspaceRevision
+                : expectedWorkspaceRevision
+        )
+    }
+
+    private func batchApplyingLivePreconditions(
+        _ batch: AutomationBatch,
+        sessionID: UUID,
+        client: AgentClientProtocol
+    ) throws -> AutomationBatch {
+        let effect = try batch.validatedEffect()
+        let requiresWorkspaceRevision = effect == .workspaceMutation
+        if batch.expectedGeneration != nil,
+           !requiresWorkspaceRevision || batch.expectedWorkspaceRevision != nil {
+            return batch
+        }
+
+        let summary = try sessionSummary(id: sessionID, client: client)
+        return AutomationBatch(
+            commands: batch.commands,
+            expectedGeneration: batch.expectedGeneration ?? summary.generation,
+            expectedWorkspaceRevision: requiresWorkspaceRevision
+                ? batch.expectedWorkspaceRevision ?? summary.workspaceRevision
+                : batch.expectedWorkspaceRevision
+        )
+    }
+
+    private func sessionSummary(
+        id: UUID,
+        client: AgentClientProtocol
+    ) throws -> WorkspaceSessionSummary {
+        guard let summary = try sessions(client: client).sessions.first(where: { $0.id == id }) else {
+            throw EditorError(
+                code: .sessionNotFound,
+                message: "No open Rupa session matches \(id.uuidString)."
+            )
+        }
+        return summary
+    }
+
     private func canonicalPath(_ url: URL) -> String {
         url
             .resolvingSymlinksInPath()
@@ -5208,15 +5474,15 @@ private struct CLIWorkspaceScaleContext {
     var viewportGridSettings: ViewportGridSettings
     var viewportGridScale: ViewportGridScaleSnapshot
 
-    init(document: DesignDocument) {
-        let normalized = document.ruler.normalizedForWorkspaceScale()
+    init(workspaceState: WorkspaceState) {
+        let normalized = workspaceState.ruler.normalizedForWorkspaceScale()
         self.scale = WorkspaceScaleSnapshot(ruler: normalized)
         self.interactionScale = WorkspaceInteractionScaleSnapshot(ruler: normalized)
         self.scalePresetOptions = WorkspaceScalePreset.profiles
-        self.viewportGridSettings = document.productMetadata.viewportGridSettings
+        self.viewportGridSettings = workspaceState.viewportGridSettings
         self.viewportGridScale = ViewportGridScaleSnapshot(
             ruler: normalized,
-            settings: document.productMetadata.viewportGridSettings
+            settings: workspaceState.viewportGridSettings
         )
     }
 

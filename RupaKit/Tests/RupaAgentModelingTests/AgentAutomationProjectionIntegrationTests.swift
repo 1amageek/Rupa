@@ -74,7 +74,7 @@ import SwiftCAD
     )
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodyNodeID = try #require(agentSceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let supportFace = try #require(topology.entries.first {
         $0.kind == .face &&
             $0.sceneNodeID == bodyNodeID.description &&
@@ -108,7 +108,7 @@ import SwiftCAD
         Issue.record("Agent must return a command result.")
         return
     }
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let projected = try #require(summary.entries.first {
         $0.sourceFeatureName == "Agent Projected Generated Edge"
     })
@@ -161,7 +161,7 @@ import SwiftCAD
         Issue.record("Agent must return a command result.")
         return
     }
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let projectedEntries = summary.entries.filter {
         $0.sourceFeatureName == "Agent Projected Body Outline"
     }
@@ -211,11 +211,11 @@ import SwiftCAD
             direction: .normal
         )
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(summary.entries.first { $0.entityID == lineID.description })
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodyNodeID = try #require(agentSceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let face = try #require(topology.entries.first {
         $0.kind == .face &&
             $0.sceneNodeID == bodyNodeID.description &&
@@ -240,7 +240,7 @@ import SwiftCAD
         Issue.record("Agent must return a command result.")
         return
     }
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let projected = try #require(after.entries.first {
         $0.sourceFeatureName == "Agent Face Projected Line"
     })

@@ -8,6 +8,7 @@ import Testing
     let fixture = try constructionPlaneHandleFixture()
     let targets = ViewportConstructionPlaneHandleGeometry().targets(
         document: fixture.document,
+        ruler: fixture.ruler,
         selection: fixture.selection,
         layout: fixture.layout
     )
@@ -25,6 +26,7 @@ import Testing
     let service = ViewportConstructionPlaneHandleGeometry()
     let targets = service.targets(
         document: fixture.document,
+        ruler: fixture.ruler,
         selection: fixture.selection,
         layout: fixture.layout
     )
@@ -34,12 +36,14 @@ import Testing
     let originHit = try #require(service.target(
         at: originTarget.projectedOrigin,
         document: fixture.document,
+        ruler: fixture.ruler,
         selection: fixture.selection,
         layout: fixture.layout
     ))
     let normalHit = try #require(service.target(
         at: normalTarget.projectedNormalEnd,
         document: fixture.document,
+        ruler: fixture.ruler,
         selection: fixture.selection,
         layout: fixture.layout
     ))
@@ -52,6 +56,7 @@ import Testing
     let fixture = try constructionPlaneHandleFixture()
     let originTarget = try #require(ViewportConstructionPlaneHandleGeometry().targets(
         document: fixture.document,
+        ruler: fixture.ruler,
         selection: fixture.selection,
         layout: fixture.layout
     ).first { $0.handle == .origin })
@@ -74,6 +79,7 @@ import Testing
     let fixture = try constructionPlaneHandleFixture()
     let normalTarget = try #require(ViewportConstructionPlaneHandleGeometry().targets(
         document: fixture.document,
+        ruler: fixture.ruler,
         selection: fixture.selection,
         layout: fixture.layout
     ).first { $0.handle == .normal })
@@ -95,16 +101,20 @@ import Testing
 
 private func constructionPlaneHandleFixture() throws -> (
     document: DesignDocument,
+    ruler: RulerConfiguration,
     selection: SelectionModel,
     entry: ConstructionPlaneSummaryResult.Entry,
     layout: ViewportLayout
 ) {
     var document = DesignDocument.empty()
-    _ = try document.createConstructionPlane(
+    let planeID = try document.createConstructionPlane(
         name: "Viewport Plane",
         plane: .yz
     )
-    let entry = try #require(ConstructionPlaneSummaryService().summarize(document: document).planes.first)
+    let entry = try #require(ConstructionPlaneSummaryService().summarize(
+        document: document,
+        activePlaneID: planeID
+    ).planes.first)
     let target = try #require(entry.selectionTarget())
     var selection = SelectionModel()
     try selection.selectTarget(target, in: document)
@@ -114,7 +124,13 @@ private func constructionPlaneHandleFixture() throws -> (
         basis: .axisFront(.z),
         verticalBounds: -0.25 ... 0.25
     )
-    return (document, selection, entry, layout)
+    return (
+        document,
+        .standard(for: .millimeter),
+        selection,
+        entry,
+        layout
+    )
 }
 
 private func pointDistance(_ lhs: Point3D, _ rhs: Point3D) -> Double {

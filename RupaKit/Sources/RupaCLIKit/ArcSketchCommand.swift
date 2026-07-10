@@ -28,7 +28,7 @@ public struct ArcSketchCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Arc end angle numeric literal.")
     public var endAngle: Double
 
-    @Option(help: "Length unit for center coordinates and radius. Defaults to the document display unit.")
+    @Option(help: "Length unit for center coordinates and radius. Defaults to the workspace display unit.")
     public var unit: LengthDisplayUnit?
 
     @Option(help: "Angle unit for start and end: degree or radian.")

@@ -28,6 +28,9 @@ public struct SurfaceSourceSummaryService: Sendable {
 
     public func summarize(
         document: DesignDocument,
+        displayUnit: LengthDisplayUnit,
+        surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay] = [:],
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay] = [:],
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
@@ -61,8 +64,8 @@ public struct SurfaceSourceSummaryService: Sendable {
                     feature: feature,
                     polySpline: polySpline,
                     sceneNodeID: sceneNodeIDsByFeatureID[featureID],
-                    surfaceControlPointDisplays: document.productMetadata.surfaceControlPointDisplays,
-                    surfaceFrameDisplays: document.productMetadata.surfaceFrameDisplays,
+                    surfaceControlPointDisplays: surfaceControlPointDisplays,
+                    surfaceFrameDisplays: surfaceFrameDisplays,
                     topologyEntriesByPersistentName: topologyEntriesByPersistentName
                 ))
             case let .bSplineSurface(surfaceFeature):
@@ -71,8 +74,8 @@ public struct SurfaceSourceSummaryService: Sendable {
                     feature: feature,
                     surfaceFeature: surfaceFeature,
                     sceneNodeID: sceneNodeIDsByFeatureID[featureID],
-                    surfaceControlPointDisplays: document.productMetadata.surfaceControlPointDisplays,
-                    surfaceFrameDisplays: document.productMetadata.surfaceFrameDisplays,
+                    surfaceControlPointDisplays: surfaceControlPointDisplays,
+                    surfaceFrameDisplays: surfaceFrameDisplays,
                     topologyEntriesByPersistentName: topologyEntriesByPersistentName
                 ) {
                     sources.append(surfaceSource)
@@ -83,7 +86,7 @@ public struct SurfaceSourceSummaryService: Sendable {
         }
 
         return SurfaceSourceSummaryResult(
-            displayUnit: document.displayUnit,
+            displayUnit: displayUnit,
             counts: counts(for: sources),
             sources: sources,
             diagnostics: [
@@ -738,7 +741,7 @@ public struct SurfaceSourceSummaryService: Sendable {
         currentEvaluation: DocumentEvaluationContext?,
         currentGeneration: DocumentGeneration?
     ) throws -> [String: TopologySummaryResult.Entry] {
-        let summary = try TopologySummaryService(pipeline: pipelineOverride).summarize(
+        let summary = try TopologySnapshotService(pipeline: pipelineOverride).snapshot(
             document: document,
             objectRegistry: objectRegistry,
             currentEvaluation: currentEvaluation,

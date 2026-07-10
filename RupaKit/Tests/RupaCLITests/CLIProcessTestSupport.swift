@@ -116,10 +116,35 @@ struct CLIProcessGateSnapshot: Sendable, Equatable {
     var cancelledWaiterCount: Int
 }
 
+private enum CLIProcessGateContext {
+    @TaskLocal static var ownsSlot = false
+}
+
+func withCLIProcessSequence<Result>(
+    _ operation: () async throws -> Result
+) async throws -> Result {
+    try await CLIProcessGate.shared.acquire()
+    do {
+        let result = try await CLIProcessGateContext.$ownsSlot.withValue(true) {
+            try await operation()
+        }
+        await CLIProcessGate.shared.release()
+        return result
+    } catch {
+        await CLIProcessGate.shared.release()
+        throw error
+    }
+}
+
 func runCLI(
     _ arguments: [String],
     timeout: TimeInterval = 45
 ) async throws -> CLIProcessResult {
+    guard !CLIProcessGateContext.ownsSlot else {
+        try Task.checkCancellation()
+        return try runCLIProcess(arguments, timeout: timeout)
+    }
+
     try await CLIProcessGate.shared.acquire()
     do {
         try Task.checkCancellation()

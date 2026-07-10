@@ -61,8 +61,8 @@ struct WorkspaceConstructionPlaneTargetSelectionBuilder {
         let explicitPointTargetSet = Set(explicitPointTargets)
 
         do {
-            let pointTargets = try SketchEntitySummaryService()
-                .summarize(document: document)
+            let pointTargets = try SketchEntitySnapshotService()
+                .snapshot(document: document)
                 .entries
                 .filter { $0.entityKind == "point" }
                 .compactMap { $0.selectionTarget() }

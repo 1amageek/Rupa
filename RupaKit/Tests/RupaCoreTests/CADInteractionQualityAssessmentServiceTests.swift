@@ -477,7 +477,7 @@ import RupaCore
         evidence.notes.contains("Generated fillet arc edges resolve back to editable source arc radius, diameter, and angle dimensions with radius as the primary target.")
     })
     #expect(dimension.evidence.contains { evidence in
-        evidence.notes.contains("Agent expression requests can omit defaults and then resolve unitless length literals through the current document display unit, so site and regional scale edits are not millimeter-locked.")
+        evidence.notes.contains("Agent expression requests can omit defaults and then resolve unitless length literals through the current workspace display unit, so site and regional scale edits are not millimeter-locked.")
     })
     #expect(dimension.evidence.contains { evidence in
         evidence.notes.contains("Generated solid face pairs resolve to SwiftCAD selection dimensions and evaluate through the shared CAD kernel.")

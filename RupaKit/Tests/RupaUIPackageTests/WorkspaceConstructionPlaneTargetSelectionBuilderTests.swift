@@ -150,7 +150,7 @@ private func workspaceConstructionPlaneSketchFixture() throws -> WorkspaceConstr
             geometryRole: .curve
         )
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let firstPointEntry = try #require(summary.entries.first { $0.entityID == firstPointID.description })
     let secondPointEntry = try #require(summary.entries.first { $0.entityID == secondPointID.description })
     let lineEntry = try #require(summary.entries.first { $0.entityID == lineID.description })

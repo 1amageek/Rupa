@@ -11,12 +11,17 @@ public struct ViewportSceneBuilder {
 
     public func build(
         document: DesignDocument,
+        ruler: RulerConfiguration,
+        overlayState: ViewportSceneOverlayState = .empty,
         currentEvaluation: DocumentEvaluationContext? = nil,
         documentGeneration: DocumentGeneration? = nil,
         evaluationCache: EvaluatedDocumentCache? = nil
     ) -> ViewportScene {
         let graph = document.cadDocument.designGraph
-        let designDisplaySnapshot = DesignDisplaySnapshotService().snapshot(document: document)
+        let designDisplaySnapshot = DesignDisplaySnapshotService().snapshot(
+            document: document,
+            ruler: ruler
+        )
         let bodyDisplaySnapshots: [FeatureID: BodyDisplaySnapshot]
         if let evaluatedDocument = currentEvaluatedDocument(
             for: document,
@@ -39,7 +44,9 @@ public struct ViewportSceneBuilder {
         }
 
         let surfaceControlPointDisplaysByFeatureID = visibleSurfaceControlPointDisplaysByFeatureID(
-            in: document
+            in: document,
+            ruler: ruler,
+            displays: overlayState.surfaceControlPointDisplays
         )
         let surfaceTrimEndpointDisplaysByFeatureID = surfaceTrimEndpointDisplaysByFeatureID(
             in: document
@@ -61,6 +68,7 @@ public struct ViewportSceneBuilder {
         )
         let surfaceFrameDisplaysByFeatureID = visibleSurfaceFrameDisplaysByFeatureID(
             in: document,
+            displays: overlayState.surfaceFrameDisplays,
             currentEvaluation: currentEvaluation,
             currentGeneration: documentGeneration
         )
@@ -75,7 +83,7 @@ public struct ViewportSceneBuilder {
                 guard let sketchSnapshot = designDisplaySnapshot.sketches[featureID] else {
                     return nil
                 }
-                let bounds = viewportBounds(sketchSnapshot.bounds, ruler: document.ruler)
+                let bounds = viewportBounds(sketchSnapshot.bounds, ruler: ruler)
                 return ViewportSceneItem(
                     id: featureID.description,
                     featureID: featureID,
@@ -90,7 +98,7 @@ public struct ViewportSceneBuilder {
                       let sketchSnapshot = designDisplaySnapshot.sketches[extrudeSnapshot.profileFeatureID] else {
                     return nil
                 }
-                let bounds = viewportBounds(sketchSnapshot.bounds, ruler: document.ruler)
+                let bounds = viewportBounds(sketchSnapshot.bounds, ruler: ruler)
                 let object = objectDescriptor(
                     featureID: featureID,
                     kind: .body,
@@ -132,7 +140,7 @@ public struct ViewportSceneBuilder {
                 }
                 if let sweepSnapshot = designDisplaySnapshot.straightPrismSweeps[featureID],
                    let sketchSnapshot = designDisplaySnapshot.sketches[sweepSnapshot.profileFeatureID] {
-                    let bounds = viewportBounds(sketchSnapshot.bounds, ruler: document.ruler)
+                    let bounds = viewportBounds(sketchSnapshot.bounds, ruler: ruler)
                     let object = objectDescriptor(
                         featureID: featureID,
                         kind: .body,
@@ -846,9 +854,11 @@ public struct ViewportSceneBuilder {
     }
 
     private func visibleSurfaceControlPointDisplaysByFeatureID(
-        in document: DesignDocument
+        in document: DesignDocument,
+        ruler: RulerConfiguration,
+        displays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay]
     ) -> [FeatureID: [ViewportSurfaceControlPointDisplay]] {
-        guard document.productMetadata.surfaceControlPointDisplays.values.contains(where: { $0.isVisible }) else {
+        guard displays.values.contains(where: { $0.isVisible }) else {
             return [:]
         }
         let featureIDsByDescription = Dictionary(
@@ -857,7 +867,11 @@ public struct ViewportSceneBuilder {
             }
         )
         do {
-            let summary = try SurfaceSourceSummaryService().summarize(document: document)
+            let summary = try SurfaceSourceSummaryService().summarize(
+                document: document,
+                displayUnit: ruler.displayUnit,
+                surfaceControlPointDisplays: displays
+            )
             var displaysByFeatureID: [FeatureID: [ViewportSurfaceControlPointDisplay]] = [:]
             for source in summary.sources {
                 guard let featureID = featureIDsByDescription[source.featureID] else {
@@ -1391,19 +1405,20 @@ public struct ViewportSceneBuilder {
 
     private func visibleSurfaceFrameDisplaysByFeatureID(
         in document: DesignDocument,
+        displays: [SurfaceFrameDisplayID: SurfaceFrameDisplay],
         currentEvaluation: DocumentEvaluationContext?,
         currentGeneration: DocumentGeneration?
     ) -> [FeatureID: [ViewportSurfaceFrameDisplay]] {
-        let displays = document.productMetadata.surfaceFrameDisplays.values
+        let visibleDisplays = displays.values
             .filter(\.isVisible)
             .sorted { $0.id.rawValue < $1.id.rawValue }
-        guard displays.isEmpty == false else {
+        guard visibleDisplays.isEmpty == false else {
             return [:]
         }
         do {
-            let result = try SurfaceFrameService().resolve(
+            let frames = try SurfaceFrameService().resolveFrames(
                 document: document,
-                queries: displays.map(\.query),
+                queries: visibleDisplays.map(\.query),
                 currentEvaluation: currentEvaluation,
                 currentGeneration: currentGeneration
             )
@@ -1413,7 +1428,7 @@ public struct ViewportSceneBuilder {
                 }
             )
             var displaysByFeatureID: [FeatureID: [ViewportSurfaceFrameDisplay]] = [:]
-            for (display, frame) in zip(displays, result.frames) {
+            for (display, frame) in zip(visibleDisplays, frames) {
                 guard let sourceFeatureID = frame.sourceFeatureID,
                       let featureID = featureIDsByDescription[sourceFeatureID] else {
                     continue

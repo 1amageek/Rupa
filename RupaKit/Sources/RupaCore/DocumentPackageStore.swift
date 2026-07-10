@@ -28,8 +28,7 @@ public struct DocumentPackageStore: Sendable {
             updatedAt: document.cadDocument.metadata.updatedAt
         )
         let payload = PackagePayload(
-            displayUnit: document.displayUnit,
-            ruler: document.ruler,
+            modelingSettings: document.modelingSettings,
             productMetadata: document.productMetadata
         )
 
@@ -60,8 +59,7 @@ public struct DocumentPackageStore: Sendable {
         let cadDocument = try CADPipeline().loadDocument(from: source)
         return DesignDocument(
             cadDocument: cadDocument,
-            displayUnit: .millimeter,
-            ruler: .standard(for: .millimeter),
+            modelingSettings: .standard,
             productMetadata: .empty()
         )
     }
@@ -101,8 +99,7 @@ public struct DocumentPackageStore: Sendable {
 
         let document = DesignDocument(
             cadDocument: cadDocument,
-            displayUnit: payload.displayUnit,
-            ruler: payload.ruler,
+            modelingSettings: payload.modelingSettings,
             productMetadata: payload.productMetadata
         )
         try document.validate()
@@ -146,8 +143,7 @@ private struct PackageManifest: Codable, Sendable {
 }
 
 private struct PackagePayload: Codable, Sendable {
-    var displayUnit: LengthDisplayUnit
-    var ruler: RulerConfiguration
+    var modelingSettings: DocumentModelingSettings
     var productMetadata: ProductMetadata
 }
 

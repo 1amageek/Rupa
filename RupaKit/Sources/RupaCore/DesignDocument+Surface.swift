@@ -47,7 +47,6 @@ extension DesignDocument {
                     "control.point.v": .integer(surface.vControlPointCount),
                     "surface.rational": .boolean(surface.isRational),
                 ]),
-                ruler: ruler,
                 objectRegistry: objectRegistry
             )
         )
@@ -111,7 +110,6 @@ extension DesignDocument {
                     "merge.patches": .boolean(options.mergePatches),
                     "interpolate.boundary": .boolean(options.interpolateBoundaryExactly),
                 ]),
-                ruler: ruler,
                 objectRegistry: objectRegistry
             )
         )
@@ -397,12 +395,12 @@ extension DesignDocument {
         objectRegistry: ObjectTypeRegistry,
         owner: String
     ) throws -> SurfaceFrameResult.Frame {
-        let result = try SurfaceFrameService().resolve(
+        let frames = try SurfaceFrameService().resolveFrames(
             document: self,
             queries: [query],
             objectRegistry: objectRegistry
         )
-        guard let frame = result.frames.first else {
+        guard let frame = frames.first else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "\(owner) requires a resolvable surface frame."

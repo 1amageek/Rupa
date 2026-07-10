@@ -60,7 +60,7 @@ public extension SketchPlaneReference {
     }
 }
 
-public extension DesignDocument {
+public extension EditorSession {
     func resolveSketchPlane(
         _ reference: SketchPlaneReference?,
         fallback: SketchPlane = .xy
@@ -68,11 +68,21 @@ public extension DesignDocument {
         let plane: SketchPlane
         switch reference {
         case nil, .some(.active):
-            plane = activeConstructionPlane?.plane ?? fallback
+            if let activeID = workspaceState.activeConstructionPlaneID {
+                guard let activePlane = document.productMetadata.constructionPlanes[activeID] else {
+                    throw EditorError(
+                        code: .referenceUnresolved,
+                        message: "The active construction plane no longer exists in the document source."
+                    )
+                }
+                plane = activePlane.plane
+            } else {
+                plane = fallback
+            }
         case .some(.sketchPlane(let explicitPlane)):
             plane = explicitPlane
         case .some(.constructionPlane(let id)):
-            guard let source = productMetadata.constructionPlanes[id] else {
+            guard let source = document.productMetadata.constructionPlanes[id] else {
                 throw EditorError(
                     code: .referenceUnresolved,
                     message: "Sketch plane reference requires an existing construction plane source."

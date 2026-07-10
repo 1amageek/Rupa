@@ -33,7 +33,7 @@ import Testing
     let source = try #require(session.document.productMetadata.patternArrays.values.first {
         $0.name == "Curve Point Pattern"
     })
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(scene: scene, size: CGSize(width: 900.0, height: 700.0)))
 
     let candidates = ViewportPatternArrayCurvePathPointAffordanceService().candidates(
@@ -85,7 +85,7 @@ import Testing
         source: source,
         document: session.document
     )
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(scene: scene, size: CGSize(width: 900.0, height: 700.0)))
 
     let candidates = ViewportPatternArrayCurvePathPointAffordanceService().candidates(
@@ -134,7 +134,7 @@ import Testing
     let source = try #require(session.document.productMetadata.patternArrays.values.first {
         $0.name == "Sketch Entity Curve Point Pattern"
     })
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(scene: scene, size: CGSize(width: 900.0, height: 700.0)))
 
     let candidates = ViewportPatternArrayCurvePathPointAffordanceService().candidates(

@@ -51,6 +51,30 @@ public final class CommandStack {
         redoEntries = snapshot.redoEntries
     }
 
+    func collapseUndoEntries(
+        startingAt startIndex: Int,
+        commandName: String
+    ) {
+        guard undoEntries.indices.contains(startIndex) else {
+            return
+        }
+        let groupedEntries = undoEntries[startIndex...]
+        guard let firstEntry = groupedEntries.first,
+              let lastEntry = groupedEntries.last else {
+            return
+        }
+        undoEntries.replaceSubrange(
+            startIndex...,
+            with: [
+                CommandHistoryEntry(
+                    commandName: commandName,
+                    before: firstEntry.before,
+                    after: lastEntry.after
+                ),
+            ]
+        )
+    }
+
     public func markCurrentStateClean() {
         for index in undoEntries.indices {
             undoEntries[index].before.isDirty = true

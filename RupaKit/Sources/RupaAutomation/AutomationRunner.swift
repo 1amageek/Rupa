@@ -8,16 +8,27 @@ public struct AutomationRunner {
         _ command: AutomationCommand,
         in session: EditorSession
     ) throws -> AutomationResult {
+        var result = try executeCommand(command, in: session)
+        result.effect = command.effect
+        result.sourceDirty = session.isDirty
+        result.workspaceRevision = session.workspaceState.revision
+        return result
+    }
+
+    private func executeCommand(
+        _ command: AutomationCommand,
+        in session: EditorSession
+    ) throws -> AutomationResult {
         switch command {
         case .describeDocument:
-            let scale = WorkspaceScaleSnapshot(ruler: session.document.ruler)
+            let scale = WorkspaceScaleSnapshot(ruler: session.workspaceState.ruler)
             return workspaceAutomationResult(
-                message: "Document uses \(session.document.displayUnit.symbol) display units. \(scale.summary)",
+                message: "Document uses \(session.workspaceState.displayUnit.symbol) display units. \(scale.summary)",
                 in: session
             )
         case .setDisplayUnit(let unit):
-            let result = try session.execute(.setDisplayUnit(unit))
-            let scale = WorkspaceScaleSnapshot(ruler: session.document.ruler)
+            let result = try session.execute(WorkspaceCommand.setDisplayUnit(unit))
+            let scale = WorkspaceScaleSnapshot(ruler: session.workspaceState.ruler)
             return workspaceAutomationResult(
                 message: "Display unit changed to \(unit.symbol). \(scale.summary)",
                 commandResult: result,
@@ -25,8 +36,8 @@ public struct AutomationRunner {
             )
         case .setRulerConfiguration(let configuration):
             let normalized = try normalizedRulerConfiguration(for: configuration)
-            let result = try session.execute(.setRulerConfiguration(normalized))
-            let scale = WorkspaceScaleSnapshot(ruler: session.document.ruler)
+            let result = try session.execute(WorkspaceCommand.setRulerConfiguration(normalized))
+            let scale = WorkspaceScaleSnapshot(ruler: session.workspaceState.ruler)
             return workspaceAutomationResult(
                 message: "Ruler configuration changed. \(scale.summary)",
                 commandResult: result,
@@ -34,8 +45,8 @@ public struct AutomationRunner {
             )
         case .setWorkspaceScalePreset(let preset):
             let configuration = preset.rulerConfiguration.normalizedForWorkspaceScale()
-            let result = try session.execute(.setRulerConfiguration(configuration))
-            let scale = WorkspaceScaleSnapshot(ruler: session.document.ruler)
+            let result = try session.execute(WorkspaceCommand.setRulerConfiguration(configuration))
+            let scale = WorkspaceScaleSnapshot(ruler: session.workspaceState.ruler)
             return workspaceAutomationResult(
                 message: "Workspace scale preset changed to \(preset.title). \(scale.summary)",
                 commandResult: result,
@@ -44,7 +55,7 @@ public struct AutomationRunner {
         case .fitWorkspaceScaleToModel:
             return try fitWorkspaceScaleToModel(in: session)
         case .setViewportGridSettings(let settings):
-            let result = try session.execute(.setViewportGridSettings(settings))
+            let result = try session.execute(WorkspaceCommand.setViewportGridSettings(settings))
             return workspaceAutomationResult(
                 message: "Viewport grid settings changed. \(settings.summary)",
                 commandResult: result,
@@ -293,6 +304,8 @@ public struct AutomationRunner {
             let result = try SectionAnalysisService().analyze(
                 document: session.document,
                 query: query,
+                activeConstructionPlaneID: session.workspaceState.activeConstructionPlaneID,
+                displayUnit: session.workspaceState.displayUnit,
                 objectRegistry: session.objectRegistry,
                 currentEvaluation: session.currentEvaluation,
                 currentGeneration: session.generation
@@ -304,7 +317,8 @@ public struct AutomationRunner {
             )
         case .describeConstructionPlanes:
             let summary = ConstructionPlaneSummaryService().summarize(
-                document: session.document
+                document: session.document,
+                activePlaneID: session.workspaceState.activeConstructionPlaneID
             )
             let activeName = summary.planes.first { $0.isActive }?.name ?? "none"
             return AutomationResult(
@@ -312,12 +326,11 @@ public struct AutomationRunner {
                 generation: session.generation,
                 diagnostics: session.diagnostics
             )
-        case .createConstructionPlane(let name, let plane, let activates):
+        case .createConstructionPlane(let name, let plane):
             let result = try session.execute(
                 .createConstructionPlane(
                     name: name,
-                    plane: plane,
-                    activates: activates
+                    plane: plane
                 )
             )
             return commandAutomationResult(
@@ -325,12 +338,11 @@ public struct AutomationRunner {
                 commandResult: result,
                 in: session
             )
-        case .createConstructionPlaneFromTarget(let name, let target, let activates):
+        case .createConstructionPlaneFromTarget(let name, let target):
             let result = try session.execute(
                 .createConstructionPlaneFromTarget(
                     name: name,
-                    target: target,
-                    activates: activates
+                    target: target
                 )
             )
             return commandAutomationResult(
@@ -338,13 +350,12 @@ public struct AutomationRunner {
                 commandResult: result,
                 in: session
             )
-        case .createConstructionPlaneFromTargets(let name, let targets, let viewNormal, let activates):
+        case .createConstructionPlaneFromTargets(let name, let targets, let viewNormal):
             let result = try session.execute(
                 .createConstructionPlaneFromTargets(
                     name: name,
                     targets: targets,
-                    viewNormal: viewNormal,
-                    activates: activates
+                    viewNormal: viewNormal
                 )
             )
             return commandAutomationResult(
@@ -352,13 +363,12 @@ public struct AutomationRunner {
                 commandResult: result,
                 in: session
             )
-        case .createViewAlignedConstructionPlane(let name, let origin, let viewNormal, let activates):
+        case .createViewAlignedConstructionPlane(let name, let origin, let viewNormal):
             let result = try session.execute(
                 .createViewAlignedConstructionPlane(
                     name: name,
                     origin: origin,
-                    viewNormal: viewNormal,
-                    activates: activates
+                    viewNormal: viewNormal
                 )
             )
             return commandAutomationResult(
@@ -367,9 +377,9 @@ public struct AutomationRunner {
                 in: session
             )
         case .setActiveConstructionPlane(let id):
-            let result = try session.execute(.setActiveConstructionPlane(id: id))
+            let result = try session.execute(WorkspaceCommand.setActiveConstructionPlane(id))
             let activeName = session.activeConstructionPlane?.name ?? "none"
-            return commandAutomationResult(
+            return workspaceAutomationResult(
                 message: "Active construction plane set to \(activeName).",
                 commandResult: result,
                 in: session
@@ -392,7 +402,7 @@ public struct AutomationRunner {
             )
         case .setCurveCurvatureDisplay(let target, let isVisible, let combScale):
             let result = try session.execute(
-                .setCurveCurvatureDisplay(
+                WorkspaceCommand.setCurveCurvatureDisplay(
                     target: target,
                     isVisible: isVisible,
                     combScale: combScale
@@ -400,27 +410,30 @@ public struct AutomationRunner {
             )
             let visibility = isVisible.map { $0 ? "enabled" : "disabled" } ?? "toggled"
             let scale = combScale.map { " at comb scale \($0)" } ?? ""
-            return commandAutomationResult(
+            return workspaceAutomationResult(
                 message: "Curve curvature display \(visibility)\(scale).",
                 commandResult: result,
                 in: session
             )
         case .setPointDisplay(let target, let isVisible):
             let result = try session.execute(
-                .setPointDisplay(target: target, isVisible: isVisible)
+                WorkspaceCommand.setPointDisplay(target: target, isVisible: isVisible)
             )
             let visibility = isVisible.map { $0 ? "visible" : "hidden" } ?? "toggled"
-            return commandAutomationResult(
+            return workspaceAutomationResult(
                 message: "Point display \(visibility).",
                 commandResult: result,
                 in: session
             )
         case .setSurfaceControlPointDisplay(let target, let isVisible):
             let result = try session.execute(
-                .setSurfaceControlPointDisplay(target: target, isVisible: isVisible)
+                WorkspaceCommand.setSurfaceControlPointDisplay(
+                    target: target,
+                    isVisible: isVisible
+                )
             )
             let visibility = isVisible.map { $0 ? "visible" : "hidden" } ?? "toggled"
-            return commandAutomationResult(
+            return workspaceAutomationResult(
                 message: "Surface control point display \(visibility).",
                 commandResult: result,
                 in: session
@@ -440,10 +453,11 @@ public struct AutomationRunner {
                 in: session
             )
         case .createLineSketch(let name, let plane, let start, let end):
+            let resolvedPlane = try session.resolveSketchPlane(plane)
             let result = try session.execute(
                 .createLineSketch(
                     name: name,
-                    plane: plane,
+                    plane: resolvedPlane,
                     start: start,
                     end: end
                 )
@@ -454,10 +468,11 @@ public struct AutomationRunner {
                 in: session
             )
         case .createCircleSketch(let name, let plane, let center, let radius):
+            let resolvedPlane = try session.resolveSketchPlane(plane)
             let result = try session.execute(
                 .createCircleSketch(
                     name: name,
-                    plane: plane,
+                    plane: resolvedPlane,
                     center: center,
                     radius: radius
                 )
@@ -468,10 +483,11 @@ public struct AutomationRunner {
                 in: session
             )
         case .createArcSketch(let name, let plane, let center, let radius, let startAngle, let endAngle):
+            let resolvedPlane = try session.resolveSketchPlane(plane)
             let result = try session.execute(
                 .createArcSketch(
                     name: name,
-                    plane: plane,
+                    plane: resolvedPlane,
                     center: center,
                     radius: radius,
                     startAngle: startAngle,
@@ -484,10 +500,11 @@ public struct AutomationRunner {
                 in: session
             )
         case .createSplineSketch(let name, let plane, let spline):
+            let resolvedPlane = try session.resolveSketchPlane(plane)
             let result = try session.execute(
                 .createSplineSketch(
                     name: name,
-                    plane: plane,
+                    plane: resolvedPlane,
                     spline: spline
                 )
             )
@@ -497,10 +514,11 @@ public struct AutomationRunner {
                 in: session
             )
         case .createRectangleSketch(let name, let plane, let width, let height):
+            let resolvedPlane = try session.resolveSketchPlane(plane)
             let result = try session.execute(
                 .createRectangleSketch(
                     name: name,
-                    plane: plane,
+                    plane: resolvedPlane,
                     width: width,
                     height: height
                 )
@@ -520,10 +538,11 @@ public struct AutomationRunner {
             let inclinationMode,
             let rotationAngle
         ):
+            let resolvedPlane = try session.resolveSketchPlane(plane)
             let result = try session.execute(
                 .createPolygonSketch(
                     name: name,
-                    plane: plane,
+                    plane: resolvedPlane,
                     center: center,
                     radius: radius,
                     sides: sides,
@@ -551,10 +570,11 @@ public struct AutomationRunner {
                 in: session
             )
         case .projectSketchCurvesToConstructionPlane(let targets, let plane, let name):
+            let resolvedPlane = try session.resolveSketchPlane(plane)
             let result = try session.execute(
                 .projectSketchCurvesToConstructionPlane(
                     targets: targets,
-                    plane: plane,
+                    plane: resolvedPlane,
                     name: name
                 )
             )
@@ -577,10 +597,11 @@ public struct AutomationRunner {
                 in: session
             )
         case .projectBodyOutlinesToConstructionPlane(let targets, let plane, let name):
+            let resolvedPlane = try session.resolveSketchPlane(plane)
             let result = try session.execute(
                 .projectBodyOutlinesToConstructionPlane(
                     targets: targets,
-                    plane: plane,
+                    plane: resolvedPlane,
                     name: name
                 )
             )
@@ -1215,10 +1236,13 @@ public struct AutomationRunner {
             )
         case .setSurfaceFrameDisplay(let query, let isVisible):
             let result = try session.execute(
-                .setSurfaceFrameDisplay(query: query, isVisible: isVisible)
+                WorkspaceCommand.setSurfaceFrameDisplay(
+                    query: query,
+                    isVisible: isVisible
+                )
             )
             let visibility = isVisible.map { $0 ? "visible" : "hidden" } ?? "toggled"
-            return commandAutomationResult(
+            return workspaceAutomationResult(
                 message: "Surface frame display \(visibility).",
                 commandResult: result,
                 in: session
@@ -1477,10 +1501,11 @@ public struct AutomationRunner {
                 in: session
             )
         case .createExtrudedRectangle(let name, let plane, let width, let height, let depth, let direction):
+            let resolvedPlane = try session.resolveSketchPlane(plane)
             let result = try session.execute(
                 .createExtrudedRectangle(
                     name: name,
-                    plane: plane,
+                    plane: resolvedPlane,
                     width: width,
                     height: height,
                     depth: depth,
@@ -1500,10 +1525,11 @@ public struct AutomationRunner {
             let depth,
             let direction
         ):
+            let resolvedPlane = try session.resolveSketchPlane(plane)
             let result = try session.execute(
                 .createExtrudedRectangleFromCorners(
                     name: name,
-                    plane: plane,
+                    plane: resolvedPlane,
                     firstCorner: firstCorner,
                     oppositeCorner: oppositeCorner,
                     depth: depth,
@@ -1516,10 +1542,11 @@ public struct AutomationRunner {
                 in: session
             )
         case .createExtrudedCircle(let name, let plane, let center, let radius, let depth, let direction):
+            let resolvedPlane = try session.resolveSketchPlane(plane)
             let result = try session.execute(
                 .createExtrudedCircle(
                     name: name,
-                    plane: plane,
+                    plane: resolvedPlane,
                     center: center,
                     radius: radius,
                     depth: depth,
@@ -1538,20 +1565,6 @@ public struct AutomationRunner {
                 commandResult: result,
                 in: session
             )
-        }
-    }
-
-    public func executeBatch(
-        _ batch: AutomationBatch,
-        in session: EditorSession
-    ) throws -> [AutomationResult] {
-        try session.store.requireGeneration(batch.expectedGeneration)
-        return try session.withTransaction {
-            var results: [AutomationResult] = []
-            for command in batch.commands {
-                results.append(try execute(command, in: session))
-            }
-            return results
         }
     }
 
@@ -1589,6 +1602,7 @@ public struct AutomationRunner {
             createdFeatureIDs: commandResult?.createdFeatureIDs ?? [],
             curveRebuildReport: commandResult?.curveRebuildReport,
             addedSelectionDimensionID: commandResult?.addedSelectionDimensionID,
+            createdConstructionPlaneID: commandResult?.createdConstructionPlaneID,
             workspaceScale: context.scale,
             workspaceInteractionScale: context.interactionScale,
             workspaceBounds: context.bounds,
@@ -1602,11 +1616,36 @@ public struct AutomationRunner {
         )
     }
 
+    private func workspaceAutomationResult(
+        message: String,
+        commandResult: WorkspaceCommandResult,
+        in session: EditorSession
+    ) -> AutomationResult {
+        let context = workspaceAutomationContext(in: session)
+        return AutomationResult(
+            message: message,
+            commandName: commandResult.commandName,
+            generation: session.generation,
+            didMutate: true,
+            diagnostics: mergedDiagnostics(session.diagnostics, context.diagnostics),
+            workspaceScale: context.scale,
+            workspaceInteractionScale: context.interactionScale,
+            workspaceBounds: context.bounds,
+            workspacePrecision: context.precision,
+            workspaceScaleRecommendation: context.scaleRecommendation,
+            workspaceScalePresetOptions: context.scalePresetOptions,
+            viewportGridSettings: context.viewportGridSettings,
+            viewportGridScale: context.viewportGridScale,
+            savedViews: context.savedViews
+        )
+    }
+
     private func fitWorkspaceScaleToModel(
         in session: EditorSession
     ) throws -> AutomationResult {
         let plan = try WorkspaceScaleFitService().plan(
             document: session.document,
+            ruler: session.workspaceState.ruler,
             objectRegistry: session.objectRegistry,
             currentEvaluation: session.currentEvaluation,
             currentGeneration: session.generation
@@ -1627,8 +1666,8 @@ public struct AutomationRunner {
             )
         case .applyPreset(let preset):
             let configuration = preset.rulerConfiguration.normalizedForWorkspaceScale()
-            let result = try session.execute(.setRulerConfiguration(configuration))
-            let scale = WorkspaceScaleSnapshot(ruler: session.document.ruler)
+            let result = try session.execute(WorkspaceCommand.setRulerConfiguration(configuration))
+            let scale = WorkspaceScaleSnapshot(ruler: session.workspaceState.ruler)
             return workspaceAutomationResult(
                 message: "Workspace scale fitted to \(preset.title). \(scale.summary)",
                 commandResult: result,
@@ -1647,16 +1686,16 @@ public struct AutomationRunner {
             generation: session.generation,
             didMutate: false,
             diagnostics: measurement.diagnostics,
-            workspaceScale: WorkspaceScaleSnapshot(ruler: session.document.ruler),
-            workspaceInteractionScale: WorkspaceInteractionScaleSnapshot(ruler: session.document.ruler),
+            workspaceScale: WorkspaceScaleSnapshot(ruler: session.workspaceState.ruler),
+            workspaceInteractionScale: WorkspaceInteractionScaleSnapshot(ruler: session.workspaceState.ruler),
             workspaceBounds: measurement.bounds,
             workspacePrecision: measurement.workspacePrecision,
             workspaceScaleRecommendation: measurement.workspaceScaleRecommendation,
             workspaceScalePresetOptions: WorkspaceScalePreset.profiles,
-            viewportGridSettings: session.document.productMetadata.viewportGridSettings,
+            viewportGridSettings: session.workspaceState.viewportGridSettings,
             viewportGridScale: ViewportGridScaleSnapshot(
-                ruler: session.document.ruler,
-                settings: session.document.productMetadata.viewportGridSettings
+                ruler: session.workspaceState.ruler,
+                settings: session.workspaceState.viewportGridSettings
             ),
             savedViews: sortedSavedViews(in: session)
         )
@@ -1758,30 +1797,30 @@ public struct AutomationRunner {
         let precision = measurementContext.measurement?.workspacePrecision
             ?? WorkspacePrecisionDiagnosticService().report(
                 for: bounds,
-                ruler: session.document.ruler
+                ruler: session.workspaceState.ruler
             )
         let recommendation = measurementContext.measurement?.workspaceScaleRecommendation
             ?? WorkspaceScaleRecommendationService().recommendation(
                 for: bounds,
-                currentRuler: session.document.ruler
+                currentRuler: session.workspaceState.ruler
             )
         return WorkspaceAutomationContext(
-            scale: WorkspaceScaleSnapshot(ruler: session.document.ruler),
-            interactionScale: WorkspaceInteractionScaleSnapshot(ruler: session.document.ruler),
+            scale: WorkspaceScaleSnapshot(ruler: session.workspaceState.ruler),
+            interactionScale: WorkspaceInteractionScaleSnapshot(ruler: session.workspaceState.ruler),
             bounds: bounds,
             precision: precision,
             scaleRecommendation: recommendation,
             scalePresetOptions: WorkspaceScalePreset.profiles,
-            viewportGridSettings: session.document.productMetadata.viewportGridSettings,
+            viewportGridSettings: session.workspaceState.viewportGridSettings,
             viewportGridScale: ViewportGridScaleSnapshot(
-                ruler: session.document.ruler,
-                settings: session.document.productMetadata.viewportGridSettings
+                ruler: session.workspaceState.ruler,
+                settings: session.workspaceState.viewportGridSettings
             ),
             savedViews: sortedSavedViews(in: session),
             diagnostics: workspaceContextDiagnostics(
                 precision: precision,
                 recommendation: recommendation,
-                displayUnit: session.document.displayUnit
+                displayUnit: session.workspaceState.displayUnit
             ) + measurementContext.diagnostics
         )
     }
@@ -1820,6 +1859,7 @@ public struct AutomationRunner {
         do {
             let measurement = try MeasurementService().measure(
                 document: session.document,
+                ruler: session.workspaceState.ruler,
                 objectRegistry: session.objectRegistry,
                 currentEvaluation: session.currentEvaluation,
                 currentGeneration: session.generation

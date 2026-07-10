@@ -6,6 +6,7 @@ public struct EditorError: Error, Codable, Equatable, Sendable {
         case agentConnectionFailed = "agent.connectionFailed"
         case documentOpenInApp = "document.openInApp"
         case documentGenerationMismatch = "document.generationMismatch"
+        case workspaceRevisionMismatch = "workspace.revisionMismatch"
         case documentLoadFailed = "document.loadFailed"
         case documentSaveFailed = "document.saveFailed"
         case commandInvalid = "command.invalid"

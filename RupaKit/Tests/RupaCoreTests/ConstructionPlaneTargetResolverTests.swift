@@ -8,7 +8,7 @@ import SwiftCAD
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
 
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let faceEntry = try #require(topology.entries.first {
         $0.kind == .face && $0.center != nil && $0.normal != nil && $0.selectionTarget() != nil
     })
@@ -19,12 +19,11 @@ import SwiftCAD
     let result = try session.execute(
         .createConstructionPlaneFromTarget(
             name: "Face Plane",
-            target: faceTarget,
-            activates: true
+            target: faceTarget
         )
     )
 
-    let source = try #require(session.activeConstructionPlane)
+    let source = try createdConstructionPlane(from: result, in: session)
     #expect(result.commandName == "createConstructionPlaneFromTarget")
     #expect(result.didMutate)
     #expect(source.name == "Face Plane")
@@ -47,19 +46,18 @@ import SwiftCAD
         )
     )
 
-    let sketchSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let sketchSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let region = try #require(sketchSummary.regions.first)
     let regionTarget = try #require(region.selectionTarget())
 
     let result = try session.execute(
         .createConstructionPlaneFromTarget(
             name: "Region Plane",
-            target: regionTarget,
-            activates: true
+            target: regionTarget
         )
     )
 
-    let source = try #require(session.activeConstructionPlane)
+    let source = try createdConstructionPlane(from: result, in: session)
     #expect(result.commandName == "createConstructionPlaneFromTarget")
     #expect(result.didMutate)
     #expect(source.name == "Region Plane")
@@ -76,23 +74,24 @@ import SwiftCAD
     _ = try session.execute(
         .createConstructionPlane(
             name: "Saved Source Plane",
-            plane: .yz,
-            activates: true
+            plane: .yz
         )
     )
-    let summary = ConstructionPlaneSummaryService().summarize(document: session.document)
+    let summary = ConstructionPlaneSummaryService().summarize(
+        document: session.document,
+        activePlaneID: nil
+    )
     let sourceEntry = try #require(summary.planes.first { $0.name == "Saved Source Plane" })
     let sourceTarget = try #require(sourceEntry.selectionTarget())
 
     let result = try session.execute(
         .createConstructionPlaneFromTarget(
             name: "Copied Saved Plane",
-            target: sourceTarget,
-            activates: true
+            target: sourceTarget
         )
     )
 
-    let source = try #require(session.activeConstructionPlane)
+    let source = try createdConstructionPlane(from: result, in: session)
     #expect(result.commandName == "createConstructionPlaneFromTarget")
     #expect(result.didMutate)
     #expect(source.name == "Copied Saved Plane")
@@ -109,8 +108,7 @@ import SwiftCAD
     _ = try session.execute(
         .createConstructionPlane(
             name: "First Saved Plane",
-            plane: .yz,
-            activates: true
+            plane: .yz
         )
     )
     _ = try session.execute(
@@ -119,11 +117,13 @@ import SwiftCAD
             plane: .plane(Plane3D(
                 origin: Point3D(x: 0.020, y: 0.0, z: 0.0),
                 normal: .unitX
-            )),
-            activates: false
+            ))
         )
     )
-    let summary = ConstructionPlaneSummaryService().summarize(document: session.document)
+    let summary = ConstructionPlaneSummaryService().summarize(
+        document: session.document,
+        activePlaneID: nil
+    )
     let firstTarget = try #require(summary.planes.first { $0.name == "First Saved Plane" }?.selectionTarget())
     let secondTarget = try #require(summary.planes.first { $0.name == "Second Saved Plane" }?.selectionTarget())
 
@@ -131,12 +131,11 @@ import SwiftCAD
         .createConstructionPlaneFromTargets(
             name: "Saved Midplane",
             targets: [firstTarget, secondTarget],
-            viewNormal: nil,
-            activates: true
+            viewNormal: nil
         )
     )
 
-    let source = try #require(session.activeConstructionPlane)
+    let source = try createdConstructionPlane(from: result, in: session)
     #expect(result.commandName == "createConstructionPlaneFromTargets")
     #expect(result.didMutate)
     assertPlane(
@@ -150,19 +149,18 @@ import SwiftCAD
 @Test func editorSessionCreatesPerpendicularConstructionPlaneFromFaceAndEdgeTargets() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let pair = try perpendicularFaceEdgePair(in: topology)
 
     let result = try session.execute(
         .createConstructionPlaneFromTargets(
             name: "Face Edge Plane",
             targets: [pair.faceTarget, pair.edgeTarget],
-            viewNormal: nil,
-            activates: true
+            viewNormal: nil
         )
     )
 
-    let source = try #require(session.activeConstructionPlane)
+    let source = try createdConstructionPlane(from: result, in: session)
     #expect(result.commandName == "createConstructionPlaneFromTargets")
     #expect(result.didMutate)
     assertPlane(
@@ -176,19 +174,18 @@ import SwiftCAD
 @Test func editorSessionCreatesMidplaneFromParallelGeneratedFaceTargets() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let pair = try parallelFacePair(in: topology)
 
     let result = try session.execute(
         .createConstructionPlaneFromTargets(
             name: "Generated Midplane",
             targets: [pair.firstTarget, pair.secondTarget],
-            viewNormal: nil,
-            activates: true
+            viewNormal: nil
         )
     )
 
-    let source = try #require(session.activeConstructionPlane)
+    let source = try createdConstructionPlane(from: result, in: session)
     #expect(result.commandName == "createConstructionPlaneFromTargets")
     #expect(result.didMutate)
     assertPlane(
@@ -229,7 +226,7 @@ import SwiftCAD
             )
         )
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targets = try summary.regions.map { region in
         try #require(region.selectionTarget())
     }
@@ -240,8 +237,7 @@ import SwiftCAD
             .createConstructionPlaneFromTargets(
                 name: "Invalid Coplanar Midplane",
                 targets: targets,
-                viewNormal: nil,
-                activates: true
+                viewNormal: nil
             )
         )
         Issue.record("Coplanar regions must not produce an opposing midplane.")
@@ -257,19 +253,18 @@ import SwiftCAD
 @Test func editorSessionCreatesTwoPointConstructionPlaneFromGeneratedVerticesAndViewNormal() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let pair = try twoPointVertexPair(in: topology, viewNormal: .unitZ)
 
     let result = try session.execute(
         .createConstructionPlaneFromTargets(
             name: "Two Point Plane",
             targets: pair.targets,
-            viewNormal: .unitZ,
-            activates: true
+            viewNormal: .unitZ
         )
     )
 
-    let source = try #require(session.activeConstructionPlane)
+    let source = try createdConstructionPlane(from: result, in: session)
     let expectedNormal = try projectedNormal(viewNormal: .unitZ, along: pair.points[1] - pair.points[0])
     #expect(result.commandName == "createConstructionPlaneFromTargets")
     #expect(result.didMutate)
@@ -286,7 +281,7 @@ import SwiftCAD
 @Test func editorSessionRejectsTwoPointConstructionPlaneWithoutViewNormal() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let pair = try twoPointVertexPair(in: topology, viewNormal: .unitZ)
 
     do {
@@ -294,8 +289,7 @@ import SwiftCAD
             .createConstructionPlaneFromTargets(
                 name: "Invalid Two Point Plane",
                 targets: pair.targets,
-                viewNormal: nil,
-                activates: true
+                viewNormal: nil
             )
         )
         Issue.record("Two-point construction planes must require an explicit view normal.")
@@ -315,12 +309,11 @@ import SwiftCAD
         .createConstructionPlaneFromTargets(
             name: "Source Point Plane",
             targets: setup.targets,
-            viewNormal: .unitZ,
-            activates: true
+            viewNormal: .unitZ
         )
     )
 
-    let source = try #require(setup.session.activeConstructionPlane)
+    let source = try createdConstructionPlane(from: result, in: setup.session)
     let expectedNormal = try projectedNormal(viewNormal: .unitZ, along: setup.points[1] - setup.points[0])
     #expect(result.commandName == "createConstructionPlaneFromTargets")
     #expect(result.didMutate)
@@ -371,12 +364,11 @@ import SwiftCAD
         .createConstructionPlaneFromTargets(
             name: "Line Endpoint Plane",
             targets: targets,
-            viewNormal: .unitZ,
-            activates: true
+            viewNormal: .unitZ
         )
     )
 
-    let source = try #require(session.activeConstructionPlane)
+    let source = try createdConstructionPlane(from: result, in: session)
     let expectedNormal = try projectedNormal(
         viewNormal: .unitZ,
         along: expectedPoints[1] - expectedPoints[0]
@@ -433,12 +425,11 @@ import SwiftCAD
         .createConstructionPlaneFromTargets(
             name: "Arc Endpoint Plane",
             targets: targets,
-            viewNormal: .unitZ,
-            activates: true
+            viewNormal: .unitZ
         )
     )
 
-    let source = try #require(session.activeConstructionPlane)
+    let source = try createdConstructionPlane(from: result, in: session)
     let expectedNormal = try projectedNormal(
         viewNormal: .unitZ,
         along: expectedPoints[1] - expectedPoints[0]
@@ -497,12 +488,11 @@ import SwiftCAD
         .createConstructionPlaneFromTargets(
             name: "Spline CV Plane",
             targets: targets,
-            viewNormal: .unitZ,
-            activates: true
+            viewNormal: .unitZ
         )
     )
 
-    let source = try #require(session.activeConstructionPlane)
+    let source = try createdConstructionPlane(from: result, in: session)
     let expectedNormal = try projectedNormal(
         viewNormal: .unitZ,
         along: expectedPoints[1] - expectedPoints[0]
@@ -523,19 +513,18 @@ import SwiftCAD
 @Test func editorSessionCreatesThreePointConstructionPlaneFromGeneratedVertices() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let triplet = try threePointVertexTriplet(in: topology)
 
     let result = try session.execute(
         .createConstructionPlaneFromTargets(
             name: "Three Point Plane",
             targets: triplet.targets,
-            viewNormal: nil,
-            activates: true
+            viewNormal: nil
         )
     )
 
-    let source = try #require(session.activeConstructionPlane)
+    let source = try createdConstructionPlane(from: result, in: session)
     #expect(result.commandName == "createConstructionPlaneFromTargets")
     #expect(result.didMutate)
     assertPlane(
@@ -556,12 +545,11 @@ import SwiftCAD
         .createViewAlignedConstructionPlane(
             name: "View Origin Plane",
             origin: .origin,
-            viewNormal: Vector3D(x: 0.0, y: 0.0, z: 5.0),
-            activates: true
+            viewNormal: Vector3D(x: 0.0, y: 0.0, z: 5.0)
         )
     )
 
-    let source = try #require(session.activeConstructionPlane)
+    let source = try createdConstructionPlane(from: result, in: session)
     #expect(result.commandName == "createViewAlignedConstructionPlane")
     #expect(result.didMutate)
     #expect(source.name == "View Origin Plane")
@@ -582,12 +570,11 @@ import SwiftCAD
         .createViewAlignedConstructionPlane(
             name: "View Pick Plane",
             origin: origin,
-            viewNormal: viewNormal,
-            activates: true
+            viewNormal: viewNormal
         )
     )
 
-    let source = try #require(session.activeConstructionPlane)
+    let source = try createdConstructionPlane(from: result, in: session)
     #expect(result.commandName == "createViewAlignedConstructionPlane")
     #expect(result.didMutate)
     assertPlane(
@@ -606,8 +593,7 @@ import SwiftCAD
             .createViewAlignedConstructionPlane(
                 name: "Invalid View Plane",
                 origin: .origin,
-                viewNormal: .zero,
-                activates: true
+                viewNormal: .zero
             )
         )
         Issue.record("View-aligned construction planes must reject zero view normals.")
@@ -617,6 +603,14 @@ import SwiftCAD
     } catch {
         Issue.record("Expected EditorError for invalid view normal.")
     }
+}
+
+private func createdConstructionPlane(
+    from result: CommandExecutionResult,
+    in session: EditorSession
+) throws -> ConstructionPlaneSource {
+    let sourceID = try #require(result.createdConstructionPlaneID)
+    return try #require(session.document.productMetadata.constructionPlanes[sourceID])
 }
 
 private func assertPlane(
@@ -662,7 +656,7 @@ private func assertPoint(
 }
 
 private func perpendicularFaceEdgePair(
-    in topology: TopologySummaryResult
+    in topology: TopologySnapshot
 ) throws -> (
     faceTarget: SelectionTarget,
     edgeTarget: SelectionTarget,
@@ -710,7 +704,7 @@ private func perpendicularFaceEdgePair(
 }
 
 private func parallelFacePair(
-    in topology: TopologySummaryResult
+    in topology: TopologySnapshot
 ) throws -> (
     firstTarget: SelectionTarget,
     secondTarget: SelectionTarget,
@@ -761,7 +755,7 @@ private func parallelFacePair(
 }
 
 private func twoPointVertexPair(
-    in topology: TopologySummaryResult,
+    in topology: TopologySnapshot,
     viewNormal: Vector3D
 ) throws -> (
     targets: [SelectionTarget],
@@ -791,7 +785,7 @@ private func twoPointVertexPair(
 }
 
 private func threePointVertexTriplet(
-    in topology: TopologySummaryResult
+    in topology: TopologySnapshot
 ) throws -> (
     targets: [SelectionTarget],
     points: [Point3D],
@@ -855,7 +849,7 @@ private func sourcePointSession(
     document.cadDocument.designGraph.nodes[featureID] = feature
     document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
 
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entries = summary.entries.filter { $0.entityKind == "point" }
     #expect(entries.count == 2)
     let targets = try entries.map { entry in
@@ -876,7 +870,7 @@ private func sketchEntityTargetSetup(
     sceneNodeID: SceneNodeID,
     entityID: SketchEntityID
 ) {
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entry = try #require(summary.entries.first { entry in
         entry.sourceFeatureID == featureID.description && entry.entityKind == entityKind
     })

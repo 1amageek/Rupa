@@ -189,6 +189,7 @@ public struct DrawingProjectionService: Sendable {
         }
         let basis = try projectionBasis(for: savedView)
         let projectionMode = projectionMode(for: savedView.projection.mode)
+        let displayUnit = savedView.displayScale.displayUnit
         let viewFrame = DrawingProjectionResult.ViewFrame(
             target: savedView.camera.target,
             right: basis.right,
@@ -209,7 +210,8 @@ public struct DrawingProjectionService: Sendable {
                 document: document,
                 savedView: savedView,
                 basis: basis,
-                topology: topologySummary
+                topology: topologySummary,
+                displayUnit: displayUnit
             ),
             viewFrame: viewFrame
         )
@@ -218,7 +220,7 @@ public struct DrawingProjectionService: Sendable {
             var annotationBounds = BoundsAccumulator()
             includeAnnotations(annotations, in: &annotationBounds)
             return DrawingProjectionResult(
-                displayUnit: document.displayUnit,
+                displayUnit: displayUnit,
                 savedViewID: savedView.id,
                 savedViewName: savedView.name,
                 projectionMode: projectionMode,
@@ -331,7 +333,7 @@ public struct DrawingProjectionService: Sendable {
         includeAnnotations(annotations, in: &bounds)
 
         return DrawingProjectionResult(
-            displayUnit: document.displayUnit,
+            displayUnit: displayUnit,
             savedViewID: savedView.id,
             savedViewName: savedView.name,
             projectionMode: projectionMode,
@@ -373,7 +375,7 @@ public struct DrawingProjectionService: Sendable {
         _ tolerance: Double?,
         document: DesignDocument
     ) throws -> Double {
-        let resolved = tolerance ?? ModelingTolerance.workspaceScaleAware(for: document).distance
+        let resolved = tolerance ?? document.modelingSettings.tolerance.distance
         guard resolved.isFinite,
               resolved > 0.0 else {
             throw EditorError(
@@ -400,12 +402,12 @@ public struct DrawingProjectionService: Sendable {
         objectRegistry: ObjectTypeRegistry,
         currentEvaluation: DocumentEvaluationContext?,
         currentGeneration: DocumentGeneration?
-    ) throws -> TopologySummaryResult? {
+    ) throws -> TopologySnapshot? {
         guard measurementAnnotationsRequireTopology(in: document),
               document.cadDocument.hasActiveRenderableTopologyFeatures else {
             return nil
         }
-        return try TopologySummaryService(pipeline: pipelineOverride).summarize(
+        return try TopologySnapshotService(pipeline: pipelineOverride).snapshot(
             document: document,
             objectRegistry: objectRegistry,
             currentEvaluation: currentEvaluation,
@@ -427,7 +429,8 @@ public struct DrawingProjectionService: Sendable {
         document: DesignDocument,
         savedView: SavedView,
         basis: ProjectionBasis,
-        topology: TopologySummaryResult?
+        topology: TopologySnapshot?,
+        displayUnit: LengthDisplayUnit
     ) throws -> [DrawingProjectionResult.Annotation] {
         let resolver = MeasurementAnchorWorldPointResolver()
         let sortedMeasurements = document.productMetadata.measurements.values.sorted {
@@ -455,7 +458,7 @@ public struct DrawingProjectionService: Sendable {
                 measurement: measurement,
                 anchors: anchors,
                 topology: topology,
-                displayUnit: document.displayUnit,
+                displayUnit: displayUnit,
                 fallbackName: measurement.name
             )
             let label = annotationLabelPoint(
@@ -488,7 +491,7 @@ public struct DrawingProjectionService: Sendable {
         document: DesignDocument,
         savedView: SavedView,
         basis: ProjectionBasis,
-        topology: TopologySummaryResult?
+        topology: TopologySnapshot?
     ) throws -> [DrawingProjectionResult.AnnotationAnchor] {
         var anchors: [DrawingProjectionResult.AnnotationAnchor] = []
         anchors.reserveCapacity(sourceAnchors.count)
@@ -513,7 +516,7 @@ public struct DrawingProjectionService: Sendable {
     private func annotationMetrics(
         measurement: MeasurementAnnotation,
         anchors: [DrawingProjectionResult.AnnotationAnchor],
-        topology: TopologySummaryResult?,
+        topology: TopologySnapshot?,
         displayUnit: LengthDisplayUnit,
         fallbackName: String
     ) -> (
@@ -610,7 +613,7 @@ public struct DrawingProjectionService: Sendable {
 
     private func topologyFaceAreaSquareMeters(
         for measurement: MeasurementAnnotation,
-        topology: TopologySummaryResult?
+        topology: TopologySnapshot?
     ) -> Double? {
         topologyEntry(
             for: measurement,
@@ -621,7 +624,7 @@ public struct DrawingProjectionService: Sendable {
 
     private func topologyEdgeLengthMeters(
         for measurement: MeasurementAnnotation,
-        topology: TopologySummaryResult?
+        topology: TopologySnapshot?
     ) -> Double? {
         topologyEntry(
             for: measurement,
@@ -633,7 +636,7 @@ public struct DrawingProjectionService: Sendable {
     private func topologyEntry(
         for measurement: MeasurementAnnotation,
         topologyKind: TopologySummaryResult.Entry.Kind,
-        topology: TopologySummaryResult?
+        topology: TopologySnapshot?
     ) -> TopologySummaryResult.Entry? {
         guard let topology else {
             return nil
@@ -933,6 +936,8 @@ public struct DrawingProjectionService: Sendable {
                         maximumHatchCount
                     )
                 ),
+                activeConstructionPlaneID: nil,
+                displayUnit: savedView.displayScale.displayUnit,
                 objectRegistry: objectRegistry,
                 currentEvaluation: currentEvaluation,
                 currentGeneration: currentGeneration

@@ -15,7 +15,7 @@ public extension DesignDocument {
             }
         }
 
-        let tolerance = ModelingTolerance.workspaceScaleAware(for: self)
+        let tolerance = modelingSettings.tolerance
         cadDocument = try cadDocument.translatingSources(
             by: translation,
             tolerance: tolerance

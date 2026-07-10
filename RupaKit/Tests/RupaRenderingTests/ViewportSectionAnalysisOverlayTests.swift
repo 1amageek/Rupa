@@ -4,8 +4,7 @@ import Testing
 @testable import RupaRendering
 
 @Test func viewportSectionAnalysisOverlayBuildsPlaneAndSegments() throws {
-    var document = DesignDocument.empty()
-    try document.setRulerConfiguration(WorkspaceScalePreset.architecture.rulerConfiguration)
+    let ruler = WorkspaceScalePreset.architecture.rulerConfiguration
     let result = viewportSectionAnalysisResult(
         segments: [
             viewportSectionSegment(bodyID: "body-a", startX: -2.0, endX: 2.0, z: 0.0),
@@ -15,7 +14,7 @@ import Testing
 
     let overlay = ViewportSectionAnalysisOverlay.build(
         result: result,
-        document: document,
+        ruler: ruler,
         maximumVisibleSegments: 32
     )
 
@@ -25,31 +24,29 @@ import Testing
     #expect(overlay.omittedSegmentCount == 0)
     #expect(!overlay.hasTruncatedSourcePayload)
     #expect(plane.corners.count == 4)
-    #expect(plane.halfExtentMeters >= document.ruler.normalizedForWorkspaceScale().majorTickMeters)
+    #expect(plane.halfExtentMeters >= ruler.normalizedForWorkspaceScale().majorTickMeters)
     #expect(plane.normalEnd.y > plane.origin.y)
     #expect(overlay.segments.allSatisfy { $0.bodyID == "body-a" })
 }
 
 @Test func viewportSectionAnalysisOverlayKeepsPlaneVisibleWithoutSegments() throws {
-    var document = DesignDocument.empty()
-    try document.setRulerConfiguration(WorkspaceScalePreset.urbanPlanning.rulerConfiguration)
+    let ruler = WorkspaceScalePreset.urbanPlanning.rulerConfiguration
     let result = viewportSectionAnalysisResult(segments: [])
 
     let overlay = ViewportSectionAnalysisOverlay.build(
         result: result,
-        document: document
+        ruler: ruler
     )
 
     let plane = try #require(overlay.plane)
-    let ruler = document.ruler.normalizedForWorkspaceScale()
+    let normalizedRuler = ruler.normalizedForWorkspaceScale()
     #expect(overlay.segments.isEmpty)
     #expect(overlay.sourceSegmentCount == 0)
-    #expect(plane.halfExtentMeters >= ruler.visibleSpanMeters * 0.04)
+    #expect(plane.halfExtentMeters >= normalizedRuler.visibleSpanMeters * 0.04)
 }
 
 @Test func viewportSectionAnalysisOverlayCapsVisibleSegmentsForCanvasBudget() throws {
-    var document = DesignDocument.empty()
-    try document.setRulerConfiguration(WorkspaceScalePreset.productDesign.rulerConfiguration)
+    let ruler = WorkspaceScalePreset.productDesign.rulerConfiguration
     let segments = (0..<5).map { index in
         viewportSectionSegment(
             bodyID: "body-\(index)",
@@ -65,7 +62,7 @@ import Testing
 
     let overlay = ViewportSectionAnalysisOverlay.build(
         result: result,
-        document: document,
+        ruler: ruler,
         maximumVisibleSegments: 2
     )
 
@@ -77,8 +74,7 @@ import Testing
 }
 
 @Test func viewportSectionAnalysisOverlayBuildsClosedContourHatches() throws {
-    var document = DesignDocument.empty()
-    try document.setRulerConfiguration(WorkspaceScalePreset.architecture.rulerConfiguration)
+    let ruler = WorkspaceScalePreset.architecture.rulerConfiguration
     let contour = viewportSectionContour(
         points2D: [
             Point2D(x: -1.0, y: -1.0),
@@ -94,7 +90,7 @@ import Testing
 
     let overlay = ViewportSectionAnalysisOverlay.build(
         result: result,
-        document: document,
+        ruler: ruler,
         maximumVisibleHatches: 16
     )
 

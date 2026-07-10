@@ -8,11 +8,14 @@ extension CLIResponse {
     ) {
         self.init(
             message: result.message,
+            effect: result.effect,
             generation: result.generation.value,
             dirty: dirty,
             saved: saved,
+            workspaceRevision: result.workspaceRevision.value,
             primaryFeatureID: result.primaryFeatureID,
             createdFeatureIDs: result.createdFeatureIDs.isEmpty ? nil : result.createdFeatureIDs,
+            createdConstructionPlaneID: result.createdConstructionPlaneID,
             diagnostics: result.diagnostics,
             workspaceScale: result.workspaceScale,
             workspaceInteractionScale: result.workspaceInteractionScale,

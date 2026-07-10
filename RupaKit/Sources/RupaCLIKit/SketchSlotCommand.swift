@@ -17,7 +17,7 @@ public struct SketchSlotCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Slot width numeric literal.")
     public var width: Double
 
-    @Option(help: "Length unit for the slot width. Defaults to the document display unit.")
+    @Option(help: "Length unit for the slot width. Defaults to the workspace display unit.")
     public var unit: String?
 
     public init() {}

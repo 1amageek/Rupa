@@ -7,18 +7,21 @@ public struct WorkspaceSessionSummary: Codable, Equatable, Identifiable, Sendabl
     public var displayName: String
     public var dirty: Bool
     public var generation: DocumentGeneration
+    public var workspaceRevision: WorkspaceRevision
 
     public init(
         id: UUID,
         path: String?,
         displayName: String,
         dirty: Bool,
-        generation: DocumentGeneration
+        generation: DocumentGeneration,
+        workspaceRevision: WorkspaceRevision
     ) {
         self.id = id
         self.path = path
         self.displayName = displayName
         self.dirty = dirty
         self.generation = generation
+        self.workspaceRevision = workspaceRevision
     }
 }

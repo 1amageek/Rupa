@@ -11,7 +11,7 @@ import SwiftCAD
         options: PolySplineOptions(mergePatches: false)
     )
 
-    let result = try SurfaceSourceSummaryService().summarize(document: document)
+    let result = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
 
     #expect(result.counts.sourceCount == 1)
     #expect(result.counts.patchCount == 2)
@@ -110,7 +110,8 @@ import SwiftCAD
     #expect(abs(frameParameterReference.v - 0.5) <= 1.0e-12)
     let resolvedFrame = try SurfaceFrameService().resolve(
         document: document,
-        queries: [SurfaceFrameQuery(selectionReference: frameSample.selectionReference)]
+        queries: [SurfaceFrameQuery(selectionReference: frameSample.selectionReference)],
+        displayUnit: .millimeter
     )
     let resolvedFrameSample = try #require(resolvedFrame.frames.first)
     #expect(abs(resolvedFrameSample.u - frameSample.u) <= 1.0e-12)
@@ -159,7 +160,8 @@ import SwiftCAD
     #expect(interiorReference.vIndex == 1)
     let measurement = try SelectionMeasurementService().measure(
         query: CADAgentMeasurementQuery(kind: .point, first: controlVertex.selectionReference),
-        document: document
+        document: document,
+        displayUnit: .millimeter
     )
     guard case .point(let measuredPoint) = measurement else {
         Issue.record("Surface control-point measurement must return a point result.")
@@ -178,7 +180,7 @@ import SwiftCAD
         surface: surface
     )
 
-    let result = try SurfaceSourceSummaryService().summarize(document: document)
+    let result = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
 
     #expect(result.counts.sourceCount == 1)
     #expect(result.counts.patchCount == 1)
@@ -269,7 +271,8 @@ import SwiftCAD
     #expect(controlPointReference.vIndex == 1)
     let measurement = try SelectionMeasurementService().measure(
         query: CADAgentMeasurementQuery(kind: .point, first: weightedControlPoint.selectionReference),
-        document: document
+        document: document,
+        displayUnit: .millimeter
     )
     guard case .point(let measuredPoint) = measurement else {
         Issue.record("Direct B-spline control point measurement must return a point result.")
@@ -286,7 +289,7 @@ import SwiftCAD
         name: "Direct Authored Trim Surface",
         surface: surfaceSourceSummaryDirectBSplineSurface()
     )
-    let initialSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let initialSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(initialSummary.sources.first?.patches.first?.faceSelectionReference)
     try document.setSurfaceTrimLoops(
         target: faceReference,
@@ -317,7 +320,7 @@ import SwiftCAD
         ]
     )
 
-    let result = try SurfaceSourceSummaryService().summarize(document: document)
+    let result = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
 
     let loop = try #require(result.sources.first?.patches.first?.trimLoops.first)
     let bSplineEdge = try #require(loop.edges.first)
@@ -383,47 +386,45 @@ import SwiftCAD
     ))
     #expect(createResult.commandName == "createPolySplineSurface")
 
-    let initialSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let initialSummary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let initialPatch = try #require(initialSummary.sources.first?.patches.first)
     let interiorControlPoint = try #require(initialPatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     #expect(interiorControlPoint.isPointDisplayVisible == false)
+    let sourceGeneration = session.generation
+    let sourceUndoCount = session.commandStack.undoEntries.count
 
     let displayResult = try #require(session.setSurfaceControlPointDisplay(
         target: interiorControlPoint.selectionReference,
         isVisible: true
     ))
     #expect(displayResult.commandName == "setSurfaceControlPointDisplay")
-    #expect(displayResult.didMutate)
 
     let displayID = try SurfaceControlPointDisplayID(selectionReference: interiorControlPoint.selectionReference)
-    #expect(session.document.productMetadata.surfaceControlPointDisplays[displayID]?.isVisible == true)
-    let visibleSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    #expect(session.workspaceState.surfaceControlPointDisplays[displayID]?.isVisible == true)
+    let visibleSummary = try surfaceSourceSummary(in: session)
     let visiblePatch = try #require(visibleSummary.sources.first?.patches.first)
     let visibleControlPoint = try #require(visiblePatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     let visibleControlVertex = try #require(visiblePatch.controlVertices.first { $0.role == "uMin:vMin" })
     #expect(visibleControlPoint.isPointDisplayVisible)
     #expect(visibleControlVertex.isPointDisplayVisible == false)
 
-    _ = try session.undo()
-    #expect(session.document.productMetadata.surfaceControlPointDisplays[displayID] == nil)
-
-    _ = try session.redo()
-    #expect(session.document.productMetadata.surfaceControlPointDisplays[displayID]?.isVisible == true)
-
     let hiddenResult = try #require(session.setSurfaceControlPointDisplay(
         target: interiorControlPoint.selectionReference,
         isVisible: false
     ))
     #expect(hiddenResult.commandName == "setSurfaceControlPointDisplay")
+    #expect(session.workspaceState.surfaceControlPointDisplays[displayID]?.isVisible == false)
 
-    let hiddenSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let hiddenSummary = try surfaceSourceSummary(in: session)
     let hiddenPatch = try #require(hiddenSummary.sources.first?.patches.first)
     let hiddenControlPoint = try #require(hiddenPatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     #expect(hiddenControlPoint.isPointDisplayVisible == false)
+    #expect(session.generation == sourceGeneration)
+    #expect(session.commandStack.undoEntries.count == sourceUndoCount)
 }
 
 @MainActor
-@Test func surfaceFrameDisplayStateRoundTripsThroughDocumentMetadata() async throws {
+@Test func surfaceFrameDisplayStateRoundTripsThroughWorkspaceState() async throws {
     let session = EditorSession()
     let createResult = try #require(session.createPolySplineSurface(
         name: "Surface Frame Display State",
@@ -432,40 +433,36 @@ import SwiftCAD
     ))
     #expect(createResult.commandName == "createPolySplineSurface")
 
-    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 2 && $0.vIndex == 1 })
     let query = SurfaceFrameQuery(selectionReference: controlPoint.selectionReference)
+    let sourceGeneration = session.generation
+    let sourceUndoCount = session.commandStack.undoEntries.count
 
     let displayResult = try #require(session.setSurfaceFrameDisplay(
         query: query,
         isVisible: true
     ))
     #expect(displayResult.commandName == "setSurfaceFrameDisplay")
-    #expect(displayResult.didMutate)
 
     let displayID = try SurfaceFrameDisplayID(query: query)
-    #expect(session.document.productMetadata.surfaceFrameDisplays[displayID]?.isVisible == true)
+    #expect(session.workspaceState.surfaceFrameDisplays[displayID]?.isVisible == true)
     let frameResult = try SurfaceFrameService().resolve(
         document: session.document,
-        queries: [query]
+        queries: [query],
+        displayUnit: session.workspaceState.displayUnit
     )
     let frame = try #require(frameResult.frames.first)
     #expect(abs(frame.u - (2.0 / 3.0)) <= 1.0e-12)
     #expect(abs(frame.v - (1.0 / 3.0)) <= 1.0e-12)
-
-    _ = try session.undo()
-    #expect(session.document.productMetadata.surfaceFrameDisplays[displayID] == nil)
-
-    _ = try session.redo()
-    #expect(session.document.productMetadata.surfaceFrameDisplays[displayID]?.isVisible == true)
 
     let hiddenResult = try #require(session.setSurfaceFrameDisplay(
         query: query,
         isVisible: false
     ))
     #expect(hiddenResult.commandName == "setSurfaceFrameDisplay")
-    #expect(session.document.productMetadata.surfaceFrameDisplays[displayID] == nil)
+    #expect(session.workspaceState.surfaceFrameDisplays[displayID] == nil)
 
     let sourceFrameSample = try #require(patch.frameSamples.first)
     let sampleQuery = SurfaceFrameQuery(selectionReference: sourceFrameSample.selectionReference)
@@ -474,7 +471,7 @@ import SwiftCAD
         isVisible: true
     ))
     #expect(sampleDisplayResult.commandName == "setSurfaceFrameDisplay")
-    let sampleSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let sampleSummary = try surfaceSourceSummary(in: session)
     let visibleSample = try #require(sampleSummary.sources.first?.patches.first?.frameSamples.first)
     #expect(visibleSample.isFrameDisplayVisible)
 
@@ -483,10 +480,32 @@ import SwiftCAD
         u: 0.5,
         v: 0.5
     )
-    var staleDocument = DesignDocument.empty()
-    try staleDocument.setSurfaceFrameDisplay(query: staleQuery, isVisible: false)
+    let staleDocument = DesignDocument.empty()
+    var staleWorkspace = WorkspaceState()
+    let staleRevision = staleWorkspace.revision
     let staleDisplayID = try SurfaceFrameDisplayID(query: staleQuery)
-    #expect(staleDocument.productMetadata.surfaceFrameDisplays[staleDisplayID] == nil)
+    #expect(throws: EditorError.self) {
+        _ = try staleWorkspace.apply(
+            .setSurfaceFrameDisplay(query: staleQuery, isVisible: true),
+            document: staleDocument
+        )
+    }
+    #expect(staleWorkspace.surfaceFrameDisplays[staleDisplayID] == nil)
+    #expect(staleWorkspace.revision == staleRevision)
+    #expect(session.generation == sourceGeneration)
+    #expect(session.commandStack.undoEntries.count == sourceUndoCount)
+}
+
+private func surfaceSourceSummary(in session: EditorSession) throws -> SurfaceSourceSummaryResult {
+    try SurfaceSourceSummaryService().summarize(
+        document: session.document,
+        displayUnit: session.workspaceState.displayUnit,
+        surfaceControlPointDisplays: session.workspaceState.surfaceControlPointDisplays,
+        surfaceFrameDisplays: session.workspaceState.surfaceFrameDisplays,
+        objectRegistry: session.objectRegistry,
+        currentEvaluation: session.currentEvaluation,
+        currentGeneration: session.generation
+    )
 }
 
 private func expectSurfaceSourceVector(

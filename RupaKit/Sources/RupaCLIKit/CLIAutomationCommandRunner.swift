@@ -65,6 +65,7 @@ enum CLIAutomationCommandRunner {
             command: command,
             mode: document.mode,
             expectedGeneration: document.generation(),
+            expectedWorkspaceRevision: document.workspaceRevision(),
             dryRun: document.dryRun,
             writePolicy: try document.writePolicy(sessionID: sessionID),
             forceFileEdit: document.forceFileEdit,

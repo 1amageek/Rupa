@@ -21,6 +21,7 @@ import Testing
         sourceTarget: sourceTarget,
         screenPoint: layout.project(rawOrigin),
         document: .empty(),
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: true,
             usesObjects: false,
@@ -55,6 +56,7 @@ import Testing
         sourceTarget: sourceTarget,
         screenPoint: layout.project(rawNormalEnd),
         document: .empty(),
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: true,
             usesObjects: false,
@@ -98,10 +100,10 @@ import Testing
         sourceTarget: sourceTarget,
         screenPoint: layout.project(rawNormalEnd),
         document: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
-            usesConstructionPlaneProjection: true,
             constructionPlane: .yz,
             gridIntervalMeters: 0.001,
             objectSearchRadiusMeters: 0.001

@@ -9,8 +9,14 @@ This document lists the general-purpose CAD capabilities Rupa must define before
 | Product | Rupa |
 | Scope | Universal CAD requirements |
 | Core rule | No domain-specific app branches, document branches, or command branches |
+| Domain extension rule | Specialized workflows attach through `DOMAIN_EXTENSION_ARCHITECTURE.md`; domains extend the universal model through registered semantic metadata, projections, validators, and capabilities. |
+| Workflow completion rule | `ACCEPTANCE_WORKFLOW_CONTRACTS.md` defines the workflow-level evidence required before a universal or domain workflow can be marked complete. |
+| Release completion rule | Versioned manifests under `CONFORMANCE_MANIFEST_CONTRACT.md` define exact release claims; `CONFORMANCE_PROFILES.md` is the human catalog. |
+| Reference rule | `REFERENCE_ARTIFACT_CONTRACT.md` defines persistent and derived identity. |
+| Validation rule | `VALIDATION_CONTRACT.md` defines outcomes, fidelity, regions, and policy. |
+| State/project rule | `STATE_AND_PROJECT_CONTRACT.md` separates editable source, workspace state, artifacts, decisions, and jobs. |
 | Required scale support | Micrometer (μm) detail through kilometer (km) scale modeling and drawing |
-| Deferred extension | ApplicationProfile switching after the universal CAD implementation is complete |
+| Deferred convenience | WorkspacePreset switching after shared source/project contracts are stable |
 
 ## Universal CAD Concept
 
@@ -36,7 +42,7 @@ Rupa must support modeling across small mechanical detail, building-scale contex
 | Internal length unit | Meter, inherited from Swift-CAD quantity rules. |
 | Display length units | Micrometer (μm), millimeter, centimeter, meter, kilometer, inch, foot, and fractional architectural feet/inches. |
 | Supported range intent | Kilometer support is a workspace and coordinate-range contract, not a requirement to show km as the default unit. UI should choose readable units by magnitude and active ruler settings. |
-| Scale ownership | Changing the display unit must preserve the current physical ruler distances; workspace scale changes belong to ruler configuration or named scale presets. |
+| Scale ownership | Document unit settings define canonical input/export defaults. Active ruler, visual grid, camera span, and readable display override are workspace state unless explicitly captured in a saved/drawing view. |
 | Ruler scale | View rulers, grid labels, and compact canvas readouts must auto-scale from μm detail to km-scale layouts while suppressing labels outside the supported workspace range. |
 | Editable length fields | Length inputs should display the current value in readable units while storing the canonical meter value. |
 | Length sliders | Large-range length controls should avoid linear-only sliders that make small-scale edits unusable. |
@@ -209,6 +215,11 @@ Generic CAD must remain usable across model sizes.
 
 ## 14. Required Acceptance Matrix
 
+This matrix summarizes the required range. The complete workflow contracts,
+including Source, Command, Evaluation, Selection, UI, Agent/CLI, export or
+handoff, diagnostics, performance, and test gates, live in
+`ACCEPTANCE_WORKFLOW_CONTRACTS.md`.
+
 The same universal CAD model must satisfy these cases.
 
 | Case | Scale | Required proof |
@@ -219,9 +230,10 @@ The same universal CAD model must satisfy these cases.
 | Interior/building element | Meter | Levels or layout references, drawings, dimensions, schedules, DXF/PDF/IFC-oriented export. |
 | Site and regional planning | Meter to kilometer | Grid labels, dimensions, Agent measurements, and exchange units remain readable without changing internal meter storage. |
 
-## 15. Deferred ApplicationProfile Readiness
+## 15. Deferred WorkspacePreset Readiness
 
-The universal CAD implementation must be profile-ready without requiring profiles during initial development.
+The universal CAD implementation must expose composable defaults without requiring
+workspace presets during initial development.
 
 ```mermaid
 flowchart TD
@@ -230,7 +242,7 @@ flowchart TD
     Generic --> Validation["Composable validation rules"]
     Generic --> Export["Composable export presets"]
     Generic --> Template["Composable template defaults"]
-    Units --> Future["Future ApplicationProfile"]
+    Units --> Future["Future WorkspacePreset"]
     UI --> Future
     Validation --> Future
     Export --> Future
@@ -239,11 +251,13 @@ flowchart TD
 
 | Design hook | Initial requirement |
 |---|---|
-| Unit defaults | Unit and ruler defaults are stored as generic document or template settings. |
-| UI surface defaults | Component Browser visibility, bottom canvas toolbar tool groups, detail pane layout, and inspector property groups are configurable without changing command availability. |
-| Validation rule sets | Validation rules are independently selectable and serializable. |
+| Unit defaults | Document input/export defaults and initial workspace ruler defaults are represented separately. |
+| UI surface defaults | Browser visibility, canvas tool groups, pane layout, and Inspector emphasis are workspace preferences and never change capability availability. |
+| Validation rule sets | Rule configurations and versioned policies are independently selectable and serializable. |
 | Export preset sets | Export presets are independently selectable and serializable. |
-| Template defaults | Templates configure defaults but produce the same `.swcad` document type. |
-| CLI support | CLI can list and apply validation rules, export presets, and templates before profiles exist. |
+| Template definitions | Templates create normal source plus initial workspace state and are not embedded as active defaults in every document. |
+| CLI support | CLI can list and apply rule configurations, policies, export presets, and templates before workspace presets exist. |
 
-Future `ApplicationProfile` may group these hooks under names such as visualization, fabrication, or building workflows, but those names must remain preset bundles over the universal CAD model.
+Future `WorkspacePreset` values may group these hooks under names such as
+visualization, fabrication, or building workflows, but remain reversible defaults
+and UI emphasis over the universal CAD model.

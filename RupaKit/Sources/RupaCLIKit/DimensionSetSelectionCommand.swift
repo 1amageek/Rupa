@@ -20,7 +20,7 @@ public struct DimensionSetSelectionCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Target dimension value numeric literal.")
     public var targetValue: Double
 
-    @Option(help: "Length unit for distance dimensions. Defaults to the document display unit.")
+    @Option(help: "Length unit for distance dimensions. Defaults to the workspace display unit.")
     public var lengthUnit: LengthDisplayUnit?
 
     @Option(help: "Angle unit for angle dimensions: degree or radian. Defaults to degree.")

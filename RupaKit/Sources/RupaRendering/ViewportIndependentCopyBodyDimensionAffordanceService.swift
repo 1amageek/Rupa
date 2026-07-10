@@ -91,9 +91,9 @@ struct ViewportIndependentCopyBodyDimensionAffordanceService: Sendable {
         guard !targets.isEmpty else {
             return [:]
         }
-        let summary: ObjectDimensionSummaryResult
+        let summary: ObjectDimensionSnapshot
         do {
-            summary = try ObjectDimensionSummaryService().summarize(
+            summary = try ObjectDimensionSnapshotService().snapshot(
                 document: document,
                 targets: targets
             )

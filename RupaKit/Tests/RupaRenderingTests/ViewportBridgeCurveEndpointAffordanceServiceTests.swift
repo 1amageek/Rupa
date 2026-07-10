@@ -122,9 +122,7 @@ private func bridgeCurveEndpointAffordanceFixture(
     ruler: RulerConfiguration? = nil
 ) throws -> BridgeCurveEndpointAffordanceFixture {
     var document = DesignDocument.empty()
-    if let ruler {
-        try document.setRulerConfiguration(ruler)
-    }
+    let resolvedRuler = ruler ?? .standard(for: .millimeter)
     let featureID = try document.createLineSketch(
         name: "Bridge Endpoint Affordance",
         plane: .xy,
@@ -167,7 +165,7 @@ private func bridgeCurveEndpointAffordanceFixture(
         entityID: bridgeID,
         document: document
     )
-    let scene = ViewportSceneBuilder().build(document: document)
+    let scene = ViewportSceneBuilder().build(document: document, ruler: resolvedRuler)
     let layout = try #require(ViewportLayout(
         scene: scene,
         size: CGSize(width: 900.0, height: 700.0)
@@ -188,7 +186,7 @@ private func sourceLineSelectionTarget(
     entityID: SketchEntityID,
     document: DesignDocument
 ) throws -> SelectionTarget {
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entry = try #require(summary.entries.first { $0.entityID == entityID.description })
     return try #require(entry.selectionTarget())
 }

@@ -5,14 +5,16 @@ public struct WorkspaceScaleFitService: Sendable {
 
     public func plan(
         document: DesignDocument,
+        ruler: RulerConfiguration,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
     ) throws -> WorkspaceScaleFitPlan {
         let measurement = try MeasurementService(
-            tolerance: .workspaceScaleAware(for: document)
+            tolerance: document.modelingSettings.tolerance
         ).measure(
             document: document,
+            ruler: ruler,
             objectRegistry: objectRegistry,
             currentEvaluation: currentEvaluation,
             currentGeneration: currentGeneration

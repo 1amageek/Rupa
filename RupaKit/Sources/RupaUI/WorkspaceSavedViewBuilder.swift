@@ -6,11 +6,11 @@ import SwiftCAD
 struct WorkspaceSavedViewBuilder: Sendable {
     func makeSavedView(
         name: String,
-        document: DesignDocument,
+        workspaceState: WorkspaceState,
         projectionBasis: ViewportProjectionBasis,
         cameraFrame: ViewportCameraFrame? = nil
     ) -> SavedView {
-        let ruler = document.ruler.normalizedForWorkspaceScale()
+        let ruler = workspaceState.ruler.normalizedForWorkspaceScale()
         let visibleHeightMeters = ViewportCameraFrame.normalizedVisibleHeightMeters(
             cameraFrame?.visibleHeightMeters ?? ruler.visibleSpanMeters
         )
@@ -26,7 +26,7 @@ struct WorkspaceSavedViewBuilder: Sendable {
             clipping: SavedViewClipping(),
             visibility: SavedViewVisibility(),
             sectionState: SavedViewSectionState(
-                activeConstructionPlaneID: document.productMetadata.activeConstructionPlaneID
+                activeConstructionPlaneID: workspaceState.activeConstructionPlaneID
             ),
             displayScale: SavedViewDisplayScale(
                 ruler: ruler,

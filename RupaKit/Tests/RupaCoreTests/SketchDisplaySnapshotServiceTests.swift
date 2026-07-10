@@ -11,7 +11,10 @@ import Testing
         height: .length(2.0, .millimeter)
     )
 
-    let snapshots = SketchDisplaySnapshotService().snapshots(document: document)
+    let snapshots = SketchDisplaySnapshotService().snapshots(
+        document: document,
+        ruler: .standard(for: .millimeter)
+    )
     let snapshot = try #require(snapshots[featureID])
 
     #expect(snapshot.featureID == featureID)
@@ -36,7 +39,10 @@ import Testing
         radius: .length(5.0, .millimeter)
     )
 
-    let snapshots = SketchDisplaySnapshotService().snapshots(document: document)
+    let snapshots = SketchDisplaySnapshotService().snapshots(
+        document: document,
+        ruler: .standard(for: .millimeter)
+    )
     let snapshot = try #require(snapshots[featureID])
 
     #expect(abs(snapshot.bounds.width - 0.010) <= 1.0e-12)
@@ -68,7 +74,10 @@ import Testing
         )
     )
 
-    let snapshots = SketchDisplaySnapshotService().snapshots(document: document)
+    let snapshots = SketchDisplaySnapshotService().snapshots(
+        document: document,
+        ruler: .standard(for: .millimeter)
+    )
     let snapshot = try #require(snapshots[featureID])
     let vector = try #require(snapshot.straightOpenPathVector)
 
@@ -118,7 +127,10 @@ import Testing
         )
     )
 
-    let snapshot = DesignDisplaySnapshotService().snapshot(document: document)
+    let snapshot = DesignDisplaySnapshotService().snapshot(
+        document: document,
+        ruler: .standard(for: .millimeter)
+    )
     let extrude = try #require(snapshot.extrudes[extrudeID])
     let sweep = try #require(snapshot.straightPrismSweeps[sweepID])
 
@@ -144,6 +156,7 @@ import Testing
 
     let result = try DesignDisplaySnapshotService().result(
         document: session.document,
+        workspaceState: session.workspaceState,
         generation: session.generation,
         dirty: session.isDirty
     )

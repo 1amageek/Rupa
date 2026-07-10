@@ -3,6 +3,7 @@ import RupaCore
 
 struct WorkspaceObjectOverviewInspectorStateBuilder {
     var document: DesignDocument
+    var displayUnit: LengthDisplayUnit
     var objectRegistry: ObjectTypeRegistry
     var selectedTargetSummary: String
     var selectedTargetCount: Int
@@ -554,7 +555,7 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
     private func formatted(_ meters: Double) -> String {
         WorkspaceInspectorNumberText.readableLengthString(
             fromMeters: meters,
-            preferredUnit: document.displayUnit
+            preferredUnit: displayUnit
         )
     }
 

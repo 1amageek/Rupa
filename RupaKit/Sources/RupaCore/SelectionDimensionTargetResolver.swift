@@ -3,13 +3,13 @@ import SwiftCAD
 import RupaCoreTypes
 
 public struct SelectionDimensionTargetResolver: Sendable {
-    private let topologyService: TopologySummaryService
-    private let sketchEntityService: SketchEntitySummaryService
+    private let topologyService: TopologySnapshotService
+    private let sketchEntityService: SketchEntitySnapshotService
     private let persistentNameParser: GeneratedTopologyPersistentNameParser
 
     public init(
-        topologyService: TopologySummaryService = TopologySummaryService(),
-        sketchEntityService: SketchEntitySummaryService = SketchEntitySummaryService()
+        topologyService: TopologySnapshotService = TopologySnapshotService(),
+        sketchEntityService: SketchEntitySnapshotService = SketchEntitySnapshotService()
     ) {
         self.topologyService = topologyService
         self.sketchEntityService = sketchEntityService
@@ -86,7 +86,7 @@ public struct SelectionDimensionTargetResolver: Sendable {
                 message: "Selection dimension generated topology target requires a generated topology component ID."
             )
         }
-        let topology = try topologyService.summarize(
+        let topology = try topologyService.snapshot(
             document: document,
             objectRegistry: objectRegistry
         )
@@ -281,7 +281,7 @@ public struct SelectionDimensionTargetResolver: Sendable {
         document: DesignDocument,
         objectRegistry: ObjectTypeRegistry
     ) throws -> Int {
-        let summary = try sketchEntityService.summarize(
+        let summary = try sketchEntityService.snapshot(
             document: document,
             objectRegistry: objectRegistry
         )
@@ -315,7 +315,7 @@ public struct SelectionDimensionTargetResolver: Sendable {
         document: DesignDocument,
         objectRegistry: ObjectTypeRegistry
     ) throws {
-        let summary = try sketchEntityService.summarize(
+        let summary = try sketchEntityService.snapshot(
             document: document,
             objectRegistry: objectRegistry
         )

@@ -20,7 +20,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
 
@@ -33,7 +33,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let movedLine = try #require(after.entries.first { $0.entityKind == "line" })
     #expect(result.commandName == "moveSketchEntityPoint")
     #expect(result.didMutate)
@@ -69,7 +69,7 @@ import Testing
             geometryRole: .curve
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let referenceLine = try #require(before.entries.first { $0.entityID == referenceLineID.description })
     let targetLine = try #require(before.entries.first { $0.entityID == targetLineID.description })
 
@@ -81,7 +81,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let movedReferenceLine = try #require(after.entries.first { $0.entityID == referenceLineID.description })
     let movedTargetLine = try #require(after.entries.first { $0.entityID == targetLineID.description })
     let featureID = try #require(UUID(uuidString: referenceLine.sourceFeatureID)).featureID
@@ -130,7 +130,7 @@ import Testing
             geometryRole: .curve
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let referenceSpline = try #require(before.entries.first { $0.entityID == referenceSplineID.description })
     let targetSpline = try #require(before.entries.first { $0.entityID == targetSplineID.description })
 
@@ -142,7 +142,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let movedReferenceSpline = try #require(after.entries.first { $0.entityID == referenceSplineID.description })
     let movedTargetSpline = try #require(after.entries.first { $0.entityID == targetSplineID.description })
     let featureID = try #require(UUID(uuidString: referenceSpline.sourceFeatureID)).featureID
@@ -151,7 +151,10 @@ import Testing
         Issue.record("Align Vertex feature must remain a sketch.")
         return
     }
-    let analysis = try CurveAnalysisService().analyze(document: session.document)
+    let analysis = try CurveAnalysisService().analyze(
+        document: session.document,
+        displayUnit: session.workspaceState.displayUnit
+    )
     let continuityJoin = try #require(analysis.continuityJoins.first { join in
         Set([join.firstEntityID, join.secondEntityID]) == Set([
             referenceSplineID.description,
@@ -208,7 +211,7 @@ import Testing
             geometryRole: .curve
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let referenceSpline = try #require(before.entries.first { $0.entityID == referenceSplineID.description })
     let targetSpline = try #require(before.entries.first { $0.entityID == targetSplineID.description })
 
@@ -223,10 +226,13 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let solvedReferenceSpline = try #require(after.entries.first { $0.entityID == referenceSplineID.description })
     let solvedTargetSpline = try #require(after.entries.first { $0.entityID == targetSplineID.description })
-    let analysis = try CurveAnalysisService().analyze(document: session.document)
+    let analysis = try CurveAnalysisService().analyze(
+        document: session.document,
+        displayUnit: session.workspaceState.displayUnit
+    )
     let continuityJoin = try #require(analysis.continuityJoins.first { join in
         Set([join.firstEntityID, join.secondEntityID]) == Set([
             referenceSplineID.description,
@@ -248,10 +254,10 @@ import Testing
 }
 
 @MainActor
-@Test func alignSketchVertexCommandPersistsCurvatureDisplaysForAlignedCurveEndpoints() async throws {
+@Test func alignSketchVertexKeepsCurvatureWorkspaceStateAcrossSourceUndoRedo() async throws {
     let setup = try twoSplineTangentSketchDocument(name: "Align Vertex Show Curvature")
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let firstSpline = try #require(before.entries.first { $0.entityID == setup.firstSplineID.description })
     let secondSpline = try #require(before.entries.first { $0.entityID == setup.secondSplineID.description })
     let firstComponentID = SelectionComponentID.sketchEntity(
@@ -262,19 +268,34 @@ import Testing
         featureID: setup.featureID,
         entityID: setup.secondSplineID
     )
+    let firstCurveTarget = try #require(firstSpline.selectionTarget())
+    let secondCurveTarget = try #require(secondSpline.selectionTarget())
 
     let result = try session.execute(
         .alignSketchVertex(
             target: try controlPointSelectionTarget(secondSpline, index: 0),
             reference: try controlPointSelectionTarget(firstSpline, index: 3),
             options: SketchVertexAlignmentOptions(
-                continuity: .g2,
-                showsCurvature: true
+                continuity: .g2
             )
         )
     )
 
-    let analysis = try CurveAnalysisService().analyze(document: session.document)
+    _ = try session.execute(.setCurveCurvatureDisplay(
+        target: firstCurveTarget,
+        isVisible: true,
+        combScale: CurveCurvatureDisplay.defaultCombScale
+    ))
+    _ = try session.execute(.setCurveCurvatureDisplay(
+        target: secondCurveTarget,
+        isVisible: true,
+        combScale: CurveCurvatureDisplay.defaultCombScale
+    ))
+
+    let analysis = try CurveAnalysisService().analyze(
+        document: session.document,
+        displayUnit: session.workspaceState.displayUnit
+    )
     let continuityJoin = try #require(analysis.continuityJoins.first { join in
         Set([join.firstEntityID, join.secondEntityID]) == Set([
             setup.firstSplineID.description,
@@ -284,11 +305,11 @@ import Testing
 
     #expect(result.commandName == "alignSketchVertex")
     #expect(result.didMutate)
-    #expect(session.document.productMetadata.curveCurvatureDisplays[firstComponentID] == CurveCurvatureDisplay(
+    #expect(session.workspaceState.curveCurvatureDisplays[firstComponentID] == CurveCurvatureDisplay(
         componentID: firstComponentID,
         combScale: CurveCurvatureDisplay.defaultCombScale
     ))
-    #expect(session.document.productMetadata.curveCurvatureDisplays[secondComponentID] == CurveCurvatureDisplay(
+    #expect(session.workspaceState.curveCurvatureDisplays[secondComponentID] == CurveCurvatureDisplay(
         componentID: secondComponentID,
         combScale: CurveCurvatureDisplay.defaultCombScale
     ))
@@ -296,19 +317,19 @@ import Testing
     #expect(session.evaluationStatus == .valid)
 
     _ = try session.undo()
-    #expect(session.document.productMetadata.curveCurvatureDisplays[firstComponentID] == nil)
-    #expect(session.document.productMetadata.curveCurvatureDisplays[secondComponentID] == nil)
+    #expect(session.workspaceState.curveCurvatureDisplays[firstComponentID] != nil)
+    #expect(session.workspaceState.curveCurvatureDisplays[secondComponentID] != nil)
 
     _ = try session.redo()
-    #expect(session.document.productMetadata.curveCurvatureDisplays[firstComponentID] != nil)
-    #expect(session.document.productMetadata.curveCurvatureDisplays[secondComponentID] != nil)
+    #expect(session.workspaceState.curveCurvatureDisplays[firstComponentID] != nil)
+    #expect(session.workspaceState.curveCurvatureDisplays[secondComponentID] != nil)
 }
 
 @MainActor
 @Test func alignSketchVertexCommandAllowsSeparateG1SplineContinuityDistances() async throws {
     let setup = try twoSplineTangentSketchDocument(name: "Align Vertex G1 Distance Controls")
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let firstSpline = try #require(before.entries.first { $0.entityID == setup.firstSplineID.description })
     let secondSpline = try #require(before.entries.first { $0.entityID == setup.secondSplineID.description })
 
@@ -324,10 +345,13 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let solvedReferenceSpline = try #require(after.entries.first { $0.entityID == setup.firstSplineID.description })
     let solvedTargetSpline = try #require(after.entries.first { $0.entityID == setup.secondSplineID.description })
-    let analysis = try CurveAnalysisService().analyze(document: session.document)
+    let analysis = try CurveAnalysisService().analyze(
+        document: session.document,
+        displayUnit: session.workspaceState.displayUnit
+    )
     let continuityJoin = try #require(analysis.continuityJoins.first { join in
         Set([join.firstEntityID, join.secondEntityID]) == Set([
             setup.firstSplineID.description,
@@ -351,7 +375,7 @@ import Testing
 @Test func alignSketchVertexRejectsMismatchedG2ContinuityDistanceControlsBeforeMutation() async throws {
     let setup = try twoSplineTangentSketchDocument(name: "Reject Mismatched G2 Distances")
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let firstSpline = try #require(before.entries.first { $0.entityID == setup.firstSplineID.description })
     let secondSpline = try #require(before.entries.first { $0.entityID == setup.secondSplineID.description })
     let beforeEvaluationStatus = session.evaluationStatus
@@ -376,60 +400,10 @@ import Testing
         Issue.record("Align Vertex must throw EditorError.")
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     #expect(session.generation == DocumentGeneration(0))
     #expect(after.counts.constraintCount == before.counts.constraintCount)
     #expect(session.evaluationStatus == beforeEvaluationStatus)
-}
-
-@MainActor
-@Test func alignSketchVertexRejectsShowCurvatureForStandalonePointsBeforeMutation() async throws {
-    let session = EditorSession()
-    let lineID = SketchEntityID()
-    let pointID = SketchEntityID()
-    _ = try session.execute(
-        .createSketch(
-            name: "Invalid Align Vertex Show Curvature",
-            sketch: Sketch(
-                plane: .xy,
-                entities: [
-                    lineID: .line(SketchLine(
-                        start: SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
-                        end: SketchPoint(x: .length(10.0, .millimeter), y: .length(0.0, .millimeter))
-                    )),
-                    pointID: .point(
-                        SketchPoint(x: .length(3.0, .millimeter), y: .length(2.0, .millimeter))
-                    ),
-                ]
-            ),
-            geometryRole: .curve
-        )
-    )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
-    let line = try #require(before.entries.first { $0.entityID == lineID.description })
-    let point = try #require(before.entries.first { $0.entityID == pointID.description })
-
-    do {
-        _ = try session.execute(
-            .alignSketchVertex(
-                target: try pointHandleSelectionTarget(point, handle: .point),
-                reference: try pointHandleSelectionTarget(line, handle: .lineStart),
-                options: SketchVertexAlignmentOptions(showsCurvature: true)
-            )
-        )
-        Issue.record("Align Vertex Show Curvature must reject standalone point targets.")
-    } catch let error as EditorError {
-        #expect(error.code == .commandInvalid)
-        #expect(error.message.contains("source curve endpoint"))
-    } catch {
-        Issue.record("Align Vertex Show Curvature must throw EditorError.")
-    }
-
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
-    #expect(session.generation == DocumentGeneration(1))
-    #expect(after.counts.entityCount == before.counts.entityCount)
-    #expect(after.counts.constraintCount == before.counts.constraintCount)
-    #expect(session.document.productMetadata.curveCurvatureDisplays.isEmpty)
 }
 
 @MainActor
@@ -443,7 +417,7 @@ import Testing
             end: SketchPoint(x: .length(10.0, .millimeter), y: .length(0.0, .millimeter))
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityKind == "line" })
 
     do {
@@ -463,7 +437,7 @@ import Testing
         #expect(error.message.contains("reference parameter"))
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     #expect(session.generation == DocumentGeneration(1))
     #expect(after.counts.entityCount == before.counts.entityCount)
     #expect(after.counts.constraintCount == before.counts.constraintCount)
@@ -500,7 +474,7 @@ import Testing
             geometryRole: .curve
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityID == lineID.description })
     let circle = try #require(before.entries.first { $0.entityID == circleID.description })
     let spline = try #require(before.entries.first { $0.entityID == splineID.description })
@@ -525,7 +499,7 @@ import Testing
         }
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     #expect(session.generation == DocumentGeneration(1))
     #expect(after.counts.entityCount == before.counts.entityCount)
     #expect(after.counts.constraintCount == before.counts.constraintCount)
@@ -550,7 +524,7 @@ import Testing
             geometryRole: .curve
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityID == lineID.description })
     let targetPlane = SketchPlane.plane(Plane3D(
         origin: Point3D(x: 0.0, y: 0.0, z: 0.010),
@@ -560,12 +534,12 @@ import Testing
     let result = try session.execute(
         .projectSketchCurvesToConstructionPlane(
             targets: [try #require(line.selectionTarget())],
-            plane: .sketchPlane(targetPlane),
+            plane: targetPlane,
             name: "Projected Line"
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let projected = try #require(after.entries.first { $0.sourceFeatureName == "Projected Line" })
     let featureID = try #require(UUID(uuidString: projected.sourceFeatureID)).featureID
     let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
@@ -623,11 +597,11 @@ import Testing
             direction: .normal
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityID == lineID.description })
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let face = try #require(topology.entries.first {
         $0.kind == .face &&
             $0.sceneNodeID == bodyNodeID.description &&
@@ -645,7 +619,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let projected = try #require(after.entries.first { $0.sourceFeatureName == "Face Projected Line" })
     let projectedStart = try #require(projected.start)
     let projectedEnd = try #require(projected.end)
@@ -705,11 +679,11 @@ import Testing
             direction: .normal
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityID == lineID.description })
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let sideFace = try #require(topology.entries.first {
         $0.kind == .face &&
             $0.sceneNodeID == bodyNodeID.description &&
@@ -731,7 +705,7 @@ import Testing
         #expect(error.message.contains("planar face"))
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     #expect(session.generation == DocumentGeneration(2))
     #expect(after.counts.entityCount == before.counts.entityCount)
     #expect(after.counts.constraintCount == before.counts.constraintCount)
@@ -758,7 +732,7 @@ import Testing
     )
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let supportFace = try #require(topology.entries.first {
         $0.kind == .face &&
             $0.sceneNodeID == bodyNodeID.description &&
@@ -783,7 +757,7 @@ import Testing
         )
     )
 
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let projected = try #require(summary.entries.first { $0.sourceFeatureName == "Projected Generated Edge" })
     let featureID = try #require(UUID(uuidString: projected.sourceFeatureID)).featureID
     let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
@@ -825,7 +799,7 @@ import Testing
     )
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let supportFace = try #require(topology.entries.first {
         $0.kind == .face &&
             $0.sceneNodeID == bodyNodeID.description &&
@@ -850,7 +824,7 @@ import Testing
         )
     )
 
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let projected = try #require(summary.entries.first {
         $0.sourceFeatureName == "Projected Generated Circular Edge"
     })
@@ -897,7 +871,7 @@ import Testing
         )
     )
 
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let projectedEntries = summary.entries.filter {
         $0.sourceFeatureName == "Projected Box Outline"
     }
@@ -945,7 +919,7 @@ import Testing
         )
     )
 
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let projectedEntries = summary.entries.filter {
         $0.sourceFeatureName == "Projected Cylinder Outline"
     }
@@ -983,7 +957,7 @@ import Testing
             geometryRole: .curve
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let arc = try #require(before.entries.first { $0.entityID == arcID.description })
 
     do {
@@ -1000,7 +974,7 @@ import Testing
         #expect(error.message.contains("circle and arc"))
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     #expect(session.generation == DocumentGeneration(1))
     #expect(after.counts.entityCount == before.counts.entityCount)
     #expect(after.counts.constraintCount == before.counts.constraintCount)
@@ -1023,7 +997,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(sourceLine.selectionTarget())
 
@@ -1036,7 +1010,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let lines = after.entries.filter { $0.entityKind == "line" }
     let original = try #require(lines.first { entry in
         abs((entry.start?.y ?? -1.0) - 0.0) < 1.0e-12 &&
@@ -1075,7 +1049,7 @@ import Testing
             radius: .length(4.0, .millimeter)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceCircle = try #require(before.entries.first { $0.entityKind == "circle" })
     let target = try #require(sourceCircle.selectionTarget())
 
@@ -1088,7 +1062,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let circles = after.entries.filter { $0.entityKind == "circle" }
     let offset = try #require(circles.first { entry in
         abs((entry.radius ?? -1.0) - 0.006) < 1.0e-12
@@ -1119,7 +1093,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let bottomLine = try #require(before.entries.first { entry in
         entry.entityKind == "line" &&
             abs((entry.start?.x ?? -1.0) - 0.0) < 1.0e-12 &&
@@ -1138,7 +1112,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let lines = after.entries.filter { $0.sourceFeatureID == bottomLine.sourceFeatureID && $0.entityKind == "line" }
     #expect(result.commandName == "offsetSketchVertex")
     #expect(result.didMutate)
@@ -1223,7 +1197,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let lines = after.entries.filter {
         $0.sourceFeatureID == extrude.profile.featureID.description &&
             $0.entityKind == "line"
@@ -1267,7 +1241,7 @@ import Testing
         )
     )
     let target = SelectionTarget(sceneNodeID: bodyNodeID, component: .vertex(componentID))
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let beforeGeneration = session.generation
 
     do {
@@ -1285,7 +1259,7 @@ import Testing
         #expect(error.message.contains("vertex dispatch"))
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     #expect(session.generation == beforeGeneration)
     #expect(after.counts.entityCount == before.counts.entityCount)
     #expect(session.evaluationStatus == .valid)
@@ -1337,7 +1311,7 @@ import Testing
         Issue.record("Face target Offset Curve must create a FaceLoopOffset feature.")
         return
     }
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let generatedOffsetEdges = topology.entries.filter {
         $0.kind == .edge &&
             $0.sourceFeatureID == offsetFeatureID.description &&
@@ -1384,7 +1358,7 @@ import Testing
     )
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
-    let beforeTopology = try TopologySummaryService().summarize(document: session.document)
+    let beforeTopology = try TopologySnapshotService().snapshot(document: session.document)
     let supportFaceEntry = try #require(
         beforeTopology.entries.first {
             $0.kind == .face &&
@@ -1428,7 +1402,7 @@ import Testing
         return
     }
     let parser = GeneratedTopologyPersistentNameParser()
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let generatedOffsetEdges = topology.entries.filter {
         $0.kind == .edge &&
             $0.sourceFeatureID == offsetFeatureID.description &&
@@ -1478,7 +1452,7 @@ import Testing
     )
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
-    let beforeTopology = try TopologySummaryService().summarize(document: session.document)
+    let beforeTopology = try TopologySnapshotService().snapshot(document: session.document)
     let supportFaceEntry = try #require(
         beforeTopology.entries.first {
             $0.kind == .face &&
@@ -1521,7 +1495,7 @@ import Testing
         Issue.record("Symmetric edge target Offset Curve must create an EdgeOffset feature.")
         return
     }
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let generatedOffsetEdges = topology.entries.filter {
         $0.kind == .edge &&
             $0.sourceFeatureID == offsetFeatureID.description &&
@@ -1572,7 +1546,7 @@ import Testing
             in: session.document
         )
     )
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let startFaceEntry = try #require(topology.entries.first {
         $0.kind == .face &&
             $0.sceneNodeID == bodyNodeID.description &&
@@ -1634,7 +1608,7 @@ import Testing
             y: .length(6.0, .millimeter)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: document)
+    let before = try SketchEntitySnapshotService().snapshot(document: document)
     let bottomLine = try #require(bottomRectangleLine(in: before))
     let rightLine = try #require(before.entries.first { entry in
         entry.entityKind == "line" &&
@@ -1728,7 +1702,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let bottomLine = try #require(before.entries.first { entry in
         entry.entityKind == "line" &&
             abs((entry.start?.x ?? -1.0) - 0.0) < 1.0e-12 &&
@@ -1747,7 +1721,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let lines = after.entries.filter { $0.sourceFeatureID == bottomLine.sourceFeatureID && $0.entityKind == "line" }
     #expect(result.commandName == "offsetCurve")
     #expect(result.didMutate)
@@ -1773,7 +1747,7 @@ import Testing
 @Test func offsetSketchVertexCommandSplitsLineArcCornerAndKeepsProfileExtrudable() async throws {
     let setup = try lineArcOffsetVertexSketchDocument()
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityID == setup.lineID.description })
     let target = try #require(sourceLine.selectionTarget())
 
@@ -1785,7 +1759,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceEntries = after.entries.filter { $0.sourceFeatureID == setup.featureID.description }
     let lines = sourceEntries.filter { $0.entityKind == "line" }
     let arcs = sourceEntries.filter { $0.entityKind == "arc" }
@@ -1852,7 +1826,7 @@ import Testing
     document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
 
     let session = EditorSession(document: document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityID == setup.lineID.description })
     let target = try #require(sourceLine.selectionTarget())
 
@@ -1901,7 +1875,7 @@ import Testing
 @Test func offsetCurveCommandDispatchesArcEndpointToOffsetVertex() async throws {
     let setup = try lineArcOffsetVertexSketchDocument()
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceArc = try #require(before.entries.first { $0.entityID == setup.arcID.description })
     let target = try #require(sourceArc.selectionTarget())
 
@@ -1914,7 +1888,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceEntries = after.entries.filter { $0.sourceFeatureID == setup.featureID.description }
     #expect(result.commandName == "offsetCurve")
     #expect(result.didMutate)
@@ -1928,7 +1902,7 @@ import Testing
 @Test func offsetSketchVertexCommandSplitsArcArcCornerAndKeepsProfileExtrudable() async throws {
     let setup = try arcArcOffsetVertexSketchDocument()
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceArc = try #require(before.entries.first { $0.entityID == setup.upperArcID.description })
     let target = try #require(sourceArc.selectionTarget())
 
@@ -1940,7 +1914,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceEntries = after.entries.filter { $0.sourceFeatureID == setup.featureID.description }
     let arcs = sourceEntries.filter { $0.entityKind == "arc" }
     #expect(result.commandName == "offsetSketchVertex")
@@ -1984,7 +1958,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let bottomLine = try #require(before.entries.first { entry in
         entry.entityKind == "line" &&
             abs((entry.start?.y ?? -1.0) - 0.0) < 1.0e-12 &&
@@ -2007,7 +1981,7 @@ import Testing
         #expect(error.message.contains("vertex dispatch"))
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     #expect(session.generation == DocumentGeneration(1))
     #expect(after.counts.sketchCount == before.counts.sketchCount)
     #expect(after.counts.entityCount == before.counts.entityCount)
@@ -2030,7 +2004,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
 
@@ -2048,7 +2022,7 @@ import Testing
         #expect(error.message.contains("exactly one adjacent line or arc endpoint"))
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     #expect(session.generation == DocumentGeneration(1))
     #expect(after.counts.entityCount == before.counts.entityCount)
 }
@@ -2070,7 +2044,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(sourceLine.selectionTarget())
 
@@ -2081,7 +2055,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let slotFeature = try #require(
         session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Slot Source Line Slot" }
     )
@@ -2141,7 +2115,7 @@ import Testing
             SketchPoint(x: .length(10.0, .millimeter), y: .length(6.0, .millimeter)),
         ]
     )
-    let before = try SketchEntitySummaryService().summarize(document: setup.session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: setup.session.document)
     let sourceLine = try #require(before.entries.first { entry in
         entry.sourceFeatureID == setup.featureID.description &&
             entry.entityKind == "line" &&
@@ -2156,7 +2130,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: setup.session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: setup.session.document)
     let slotFeature = try #require(
         setup.session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Slot Source Chain Slot" }
     )
@@ -2195,7 +2169,7 @@ import Testing
 @MainActor
 @Test func createSlotSketchCommandCreatesExtrudableProfileFromOpenLineArcChain() async throws {
     let setup = try lineArcChainSlotSession(name: "Slot Source Line Arc Chain")
-    let before = try SketchEntitySummaryService().summarize(document: setup.session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: setup.session.document)
     let sourceLine = try #require(before.entries.first { $0.entityID == setup.lineID.description })
     let target = try #require(sourceLine.selectionTarget())
 
@@ -2206,7 +2180,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: setup.session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: setup.session.document)
     let slotFeature = try #require(
         setup.session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Slot Source Line Arc Chain Slot" }
     )
@@ -2261,7 +2235,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceSpline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(sourceSpline.selectionTarget())
 
@@ -2272,7 +2246,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let slotFeature = try #require(
         session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Slot Source Spline Slot" }
     )
@@ -2332,7 +2306,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(sourceLine.selectionTarget())
 
@@ -2345,7 +2319,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let slotFeature = try #require(
         session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Offset Slot Source Line Slot" }
     )
@@ -2382,7 +2356,7 @@ import Testing
             endAngle: .angle(Double.pi / 2.0, .radian)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceArc = try #require(before.entries.first { $0.entityKind == "arc" })
     let target = try #require(sourceArc.selectionTarget())
 
@@ -2395,7 +2369,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let slotFeature = try #require(
         session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Offset Slot Source Arc Slot" }
     )
@@ -2419,7 +2393,7 @@ import Testing
 @MainActor
 @Test func offsetCurveCommandActivatesSlotModeForSourceLineArcChain() async throws {
     let setup = try lineArcChainSlotSession(name: "Offset Slot Source Line Arc Chain")
-    let before = try SketchEntitySummaryService().summarize(document: setup.session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: setup.session.document)
     let sourceLine = try #require(before.entries.first { $0.entityID == setup.lineID.description })
     let target = try #require(sourceLine.selectionTarget())
 
@@ -2432,7 +2406,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: setup.session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: setup.session.document)
     let slotFeature = try #require(
         setup.session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Offset Slot Source Line Arc Chain Slot" }
     )
@@ -2460,7 +2434,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceSpline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(sourceSpline.selectionTarget())
 
@@ -2473,7 +2447,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let slotFeature = try #require(
         session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Offset Slot Source Spline Slot" }
     )
@@ -2511,7 +2485,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(sourceLine.selectionTarget())
 
@@ -2528,7 +2502,7 @@ import Testing
         #expect(error.message.contains("open curve"))
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     #expect(session.generation == DocumentGeneration(1))
     #expect(after.counts.sketchCount == before.counts.sketchCount)
     #expect(after.counts.entityCount == before.counts.entityCount)
@@ -2552,7 +2526,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceSpline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(sourceSpline.selectionTarget())
 
@@ -2569,7 +2543,7 @@ import Testing
         #expect(error.message.contains("closed spline"))
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     #expect(session.generation == DocumentGeneration(1))
     #expect(after.counts.sketchCount == before.counts.sketchCount)
     #expect(after.counts.entityCount == before.counts.entityCount)
@@ -2592,7 +2566,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(sourceLine.selectionTarget())
 
@@ -2611,7 +2585,7 @@ import Testing
         #expect(error.message.contains("not a vertex handle"))
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     #expect(session.generation == DocumentGeneration(1))
     #expect(after.counts.sketchCount == before.counts.sketchCount)
     #expect(after.counts.entityCount == before.counts.entityCount)
@@ -2634,7 +2608,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(sourceLine.selectionTarget())
     let invalidOptions: [(OffsetCurveOptions, String)] = [
@@ -2659,7 +2633,7 @@ import Testing
         }
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     #expect(session.generation == DocumentGeneration(1))
     #expect(after.counts.sketchCount == before.counts.sketchCount)
     #expect(after.counts.entityCount == before.counts.entityCount)
@@ -2681,7 +2655,7 @@ import Testing
             endAngle: .angle(Double.pi / 2.0, .radian)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceArc = try #require(before.entries.first { $0.entityKind == "arc" })
     let target = try #require(sourceArc.selectionTarget())
 
@@ -2692,7 +2666,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let slotFeature = try #require(
         session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Slot Source Arc Slot" }
     )
@@ -2750,7 +2724,7 @@ import Testing
             endAngle: .angle(Double.pi / 2.0, .radian)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceArc = try #require(before.entries.first { $0.entityKind == "arc" })
     let target = try #require(sourceArc.selectionTarget())
 
@@ -2767,7 +2741,7 @@ import Testing
         #expect(error.message.contains("inner arc radius"))
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     #expect(session.generation == DocumentGeneration(1))
     #expect(after.counts.sketchCount == before.counts.sketchCount)
     #expect(after.counts.entityCount == before.counts.entityCount)
@@ -2787,7 +2761,7 @@ import Testing
             radius: .length(5.0, .millimeter)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceCircle = try #require(before.entries.first { $0.entityKind == "circle" })
     let target = try #require(sourceCircle.selectionTarget())
 
@@ -2800,7 +2774,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let circles = after.entries.filter { $0.entityKind == "circle" }
     #expect(result.commandName == "offsetCurve")
     #expect(result.didMutate)
@@ -2827,7 +2801,7 @@ import Testing
             endAngle: .angle(Double.pi / 2.0, .radian)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceArc = try #require(before.entries.first { $0.entityKind == "arc" })
     let target = try #require(sourceArc.selectionTarget())
 
@@ -2840,7 +2814,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let arcs = after.entries.filter { $0.entityKind == "arc" }
     let offset = try #require(arcs.first { entry in
         abs((entry.radius ?? -1.0) - 0.004) < 1.0e-12
@@ -2869,7 +2843,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceSpline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(sourceSpline.selectionTarget())
 
@@ -2888,7 +2862,7 @@ import Testing
         #expect(error.message.contains("source line, circle, and arc"))
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     #expect(session.generation == DocumentGeneration(1))
     #expect(after.counts.sketchCount == before.counts.sketchCount)
     #expect(after.counts.entityCount == before.counts.entityCount)
@@ -2911,7 +2885,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(sourceLine.selectionTarget())
 
@@ -2924,7 +2898,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let lines = after.entries.filter { $0.entityKind == "line" }
     #expect(result.commandName == "offsetCurve")
     #expect(result.didMutate)
@@ -2963,7 +2937,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceRegion = try #require(before.regions.first)
     let target = try #require(sourceRegion.selectionTarget())
 
@@ -2975,7 +2949,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let offsetRegion = try #require(after.regions.first { $0.sourceFeatureID != sourceRegion.sourceFeatureID })
     #expect(result.commandName == "offsetCurve")
     #expect(result.didMutate)
@@ -3003,7 +2977,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceRegion = try #require(before.regions.first)
     let target = try #require(sourceRegion.selectionTarget())
 
@@ -3016,7 +2990,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let offsetRegion = try #require(after.regions.first { $0.sourceFeatureID != sourceRegion.sourceFeatureID })
     let minX = try #require(offsetRegion.boundaryPoints.map(\.x).min())
     let maxX = try #require(offsetRegion.boundaryPoints.map(\.x).max())
@@ -3054,7 +3028,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceRegion = try #require(before.regions.first)
     let target = try #require(sourceRegion.selectionTarget())
 
@@ -3067,7 +3041,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let offsetRegion = try #require(after.regions.first { $0.sourceFeatureID != sourceRegion.sourceFeatureID })
     #expect(result.commandName == "offsetCurve")
     #expect(result.didMutate)
@@ -3081,7 +3055,7 @@ import Testing
 @MainActor
 @Test func offsetCurveCommandCreatesNaturalOffsetConcaveSourceRegion() async throws {
     let session = EditorSession(document: try concaveLineLoopDocument())
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceRegion = try #require(before.regions.first)
     let target = try #require(sourceRegion.selectionTarget())
 
@@ -3094,7 +3068,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let offsetRegion = try #require(after.regions.first { $0.sourceFeatureID != sourceRegion.sourceFeatureID })
     #expect(result.commandName == "offsetCurve")
     #expect(result.didMutate)
@@ -3108,7 +3082,7 @@ import Testing
 @MainActor
 @Test func offsetCurveCommandCreatesRoundOffsetConcaveSourceRegion() async throws {
     let session = EditorSession(document: try concaveLineLoopDocument())
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceRegion = try #require(before.regions.first)
     let target = try #require(sourceRegion.selectionTarget())
 
@@ -3121,7 +3095,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let offsetRegion = try #require(after.regions.first { $0.sourceFeatureID != sourceRegion.sourceFeatureID })
     let offsetEntries = after.entries.filter { $0.sourceFeatureID == offsetRegion.sourceFeatureID }
     #expect(result.commandName == "offsetCurve")
@@ -3153,7 +3127,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceRegion = try #require(before.regions.first)
     let target = try #require(sourceRegion.selectionTarget())
 
@@ -3166,7 +3140,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let offsetRegion = try #require(after.regions.first { $0.sourceFeatureID != sourceRegion.sourceFeatureID })
     let offsetEntries = after.entries.filter { $0.sourceFeatureID == offsetRegion.sourceFeatureID }
     #expect(result.commandName == "offsetCurve")
@@ -3197,7 +3171,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceRegion = try #require(before.regions.first)
     let target = try #require(sourceRegion.selectionTarget())
 
@@ -3210,7 +3184,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let offsetRegions = after.regions.filter { $0.sourceFeatureID != sourceRegion.sourceFeatureID }
     let areas = offsetRegions.map(\.areaSquareMeters).sorted()
     #expect(result.commandName == "offsetCurve")
@@ -3256,7 +3230,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targets = try before.regions.map { region in
         try #require(region.selectionTarget())
     }
@@ -3270,7 +3244,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let newSketches = after.sketches.filter { sketch in
         before.sketches.contains { $0.sourceFeatureID == sketch.sourceFeatureID } == false
     }
@@ -3318,7 +3292,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targets = try before.regions.map { region in
         try #require(region.selectionTarget())
     }
@@ -3332,7 +3306,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let newSketches = after.sketches.filter { sketch in
         before.sketches.contains { $0.sourceFeatureID == sketch.sourceFeatureID } == false
     }
@@ -3382,7 +3356,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targets = try before.regions.map { region in
         try #require(region.selectionTarget())
     }
@@ -3396,7 +3370,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let newSketches = after.sketches.filter { sketch in
         before.sketches.contains { $0.sourceFeatureID == sketch.sourceFeatureID } == false
     }
@@ -3432,7 +3406,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceRegion = try #require(before.regions.first)
     let target = try #require(sourceRegion.selectionTarget())
 
@@ -3451,7 +3425,7 @@ import Testing
         #expect(error.message.contains("collapse") || error.message.contains("invert"))
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     #expect(session.generation == DocumentGeneration(1))
     #expect(after.counts.sketchCount == before.counts.sketchCount)
     #expect(after.counts.regionCount == before.counts.regionCount)
@@ -3529,7 +3503,7 @@ import Testing
             radius: .length(1.0, .millimeter)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceCircle = try #require(before.entries.first { $0.entityKind == "circle" })
     let target = try #require(sourceCircle.selectionTarget())
 
@@ -3548,7 +3522,7 @@ import Testing
         #expect(error.message.contains("collapse the radius"))
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     #expect(session.generation == DocumentGeneration(1))
     #expect(after.counts.sketchCount == before.counts.sketchCount)
     #expect(after.counts.entityCount == before.counts.entityCount)
@@ -3573,7 +3547,7 @@ import Testing
             direction: .normal
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let bottomLine = try #require(before.entries.first { entry in
         isHorizontalLine(entry, y: 0.0)
     })
@@ -3589,7 +3563,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let movedBottom = try #require(after.entries.first { $0.entityID == bottomLine.entityID })
     let bodyNode = try #require(bodySceneNode(for: bodyFeatureID, in: session.document))
     #expect(result.commandName == "moveSketchEntityPoint")
@@ -3626,7 +3600,7 @@ import Testing
             direction: .normal
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let bottomLine = try #require(before.entries.first { entry in
         isHorizontalLine(entry, y: 0.0)
     })
@@ -3655,7 +3629,7 @@ import Testing
         #expect(error.message == "Sketch point move cannot move a fixed sketch point.")
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     #expect(session.generation == DocumentGeneration(2))
     #expect(containsSketchPoint(after, x: 0.0, y: 0.0))
     #expect(containsSketchPoint(after, x: 0.010, y: 0.0))
@@ -3670,7 +3644,7 @@ import Testing
         constraint: { .parallel($0, $1) }
     )
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityID == setup.firstLineID.description })
     let target = try #require(sourceLine.selectionTarget())
 
@@ -3683,7 +3657,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let movedSource = try #require(after.entries.first { $0.entityID == setup.firstLineID.description })
     let movedFollower = try #require(after.entries.first { $0.entityID == setup.secondLineID.description })
     let expectedFollowerEndOffset = 0.005 / sqrt(2.0)
@@ -3702,7 +3676,7 @@ import Testing
 @Test func moveSketchEntityPointPropagatesChainedParallelLineAngles() async throws {
     let setup = try threeLineParallelSketchDocument(name: "Chained Parallel Line Pair")
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityID == setup.firstLineID.description })
     let target = try #require(sourceLine.selectionTarget())
 
@@ -3715,7 +3689,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let movedSource = try #require(after.entries.first { $0.entityID == setup.firstLineID.description })
     let firstFollower = try #require(after.entries.first { $0.entityID == setup.secondLineID.description })
     let secondFollower = try #require(after.entries.first { $0.entityID == setup.thirdLineID.description })
@@ -3733,7 +3707,7 @@ import Testing
         constraint: { .perpendicular($0, $1) }
     )
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityID == setup.firstLineID.description })
     let target = try #require(sourceLine.selectionTarget())
 
@@ -3746,7 +3720,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let movedSource = try #require(after.entries.first { $0.entityID == setup.firstLineID.description })
     let movedFollower = try #require(after.entries.first { $0.entityID == setup.secondLineID.description })
     #expect(result.commandName == "moveSketchEntityPoint")
@@ -3762,7 +3736,7 @@ import Testing
         constraint: { .equalLength($0, $1) }
     )
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityID == setup.firstLineID.description })
     let target = try #require(sourceLine.selectionTarget())
 
@@ -3775,7 +3749,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let movedSource = try #require(after.entries.first { $0.entityID == setup.firstLineID.description })
     let resizedFollower = try #require(after.entries.first { $0.entityID == setup.secondLineID.description })
     #expect(result.commandName == "moveSketchEntityPoint")
@@ -3788,7 +3762,7 @@ import Testing
 @Test func moveSketchEntityPointPropagatesTangentCircleConstraint() async throws {
     let setup = try lineCircleTangentSketchDocument(name: "Tangent Circle Source")
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityID == setup.lineID.description })
     let target = try #require(line.selectionTarget())
 
@@ -3801,7 +3775,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let movedLine = try #require(after.entries.first { $0.entityID == setup.lineID.description })
     let movedCircle = try #require(after.entries.first { $0.entityID == setup.circleID.description })
     #expect(result.commandName == "moveSketchEntityPoint")
@@ -3817,7 +3791,7 @@ import Testing
         constraint: { .concentric($0, $1) }
     )
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceCircle = try #require(before.entries.first { $0.entityID == setup.firstCircleID.description })
     let target = try #require(sourceCircle.selectionTarget())
 
@@ -3830,7 +3804,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let movedSource = try #require(after.entries.first { $0.entityID == setup.firstCircleID.description })
     let movedFollower = try #require(after.entries.first { $0.entityID == setup.secondCircleID.description })
     #expect(result.commandName == "moveSketchEntityPoint")
@@ -3847,7 +3821,7 @@ import Testing
         constraint: { .equalRadius($0, $1) }
     )
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceCircle = try #require(before.entries.first { $0.entityID == setup.firstCircleID.description })
     let target = try #require(sourceCircle.selectionTarget())
 
@@ -3859,7 +3833,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedSource = try #require(after.entries.first { $0.entityID == setup.firstCircleID.description })
     let updatedFollower = try #require(after.entries.first { $0.entityID == setup.secondCircleID.description })
     #expect(result.commandName == "setSketchCircleParameters")
@@ -3884,7 +3858,7 @@ import Testing
         in: &setup.document
     )
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityID == setup.firstLineID.description })
     let target = try #require(sourceLine.selectionTarget())
 
@@ -3903,7 +3877,7 @@ import Testing
         #expect(error.message == "Sketch point move cannot satisfy a fixed sketch line angle constraint.")
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let follower = try #require(after.entries.first { $0.entityID == setup.secondLineID.description })
     #expect(session.generation == DocumentGeneration(0))
     #expect(abs((follower.start?.x ?? -1.0) - 0.0) < 1.0e-12)
@@ -3926,7 +3900,7 @@ import Testing
             radius: .length(3.0, .millimeter)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let circle = try #require(before.entries.first { $0.entityKind == "circle" })
     let target = try #require(circle.selectionTarget())
 
@@ -3941,7 +3915,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedCircle = try #require(after.entries.first { $0.entityKind == "circle" })
     let featureID = try #require(UUID(uuidString: updatedCircle.sourceFeatureID)).featureID
     let sceneNode = try #require(sketchEditSceneNode(for: featureID, in: session.document))
@@ -3970,7 +3944,7 @@ import Testing
             endAngle: .angle(90.0, .degree)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let arc = try #require(before.entries.first { $0.entityKind == "arc" })
     let target = try #require(arc.selectionTarget())
 
@@ -3984,7 +3958,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedArc = try #require(after.entries.first { $0.entityKind == "arc" })
     let featureID = try #require(UUID(uuidString: updatedArc.sourceFeatureID)).featureID
     let sceneNode = try #require(sketchEditSceneNode(for: featureID, in: session.document))
@@ -4015,7 +3989,7 @@ import Testing
             endAngle: .angle(90.0, .degree)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let arc = try #require(before.entries.first { $0.entityKind == "arc" })
     let target = try #require(arc.selectionTarget())
 
@@ -4034,7 +4008,7 @@ import Testing
         #expect(error.code == .commandInvalid)
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let unchangedArc = try #require(after.entries.first { $0.entityKind == "arc" })
     #expect(session.generation == DocumentGeneration(1))
     #expect(abs((unchangedArc.endAngle ?? -1.0) - (Double.pi / 2.0)) < 1.0e-12)
@@ -4057,7 +4031,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try pointHandleSelectionTarget(line, handle: .lineEnd)
 
@@ -4069,7 +4043,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let extendedLine = try #require(after.entries.first { $0.entityID == line.entityID })
     #expect(result.commandName == "extendSketchCurve")
     #expect(result.didMutate)
@@ -4079,13 +4053,13 @@ import Testing
     #expect(abs((extendedLine.end?.y ?? -1.0) - 0.0) < 1.0e-12)
 
     _ = try session.undo()
-    let undone = try SketchEntitySummaryService().summarize(document: session.document)
+    let undone = try SketchEntitySnapshotService().snapshot(document: session.document)
     let restoredLine = try #require(undone.entries.first { $0.entityID == line.entityID })
     #expect(session.generation == DocumentGeneration(3))
     #expect(abs((restoredLine.end?.x ?? -1.0) - 0.010) < 1.0e-12)
 
     _ = try session.redo()
-    let redone = try SketchEntitySummaryService().summarize(document: session.document)
+    let redone = try SketchEntitySnapshotService().snapshot(document: session.document)
     let redoneLine = try #require(redone.entries.first { $0.entityID == line.entityID })
     #expect(session.generation == DocumentGeneration(4))
     #expect(abs((redoneLine.end?.x ?? -1.0) - 0.012) < 1.0e-12)
@@ -4108,7 +4082,7 @@ import Testing
             endAngle: .angle(Double.pi / 2.0, .radian)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let arc = try #require(before.entries.first { $0.entityKind == "arc" })
     let target = try pointHandleSelectionTarget(arc, handle: .arcEnd)
 
@@ -4120,7 +4094,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let extendedArc = try #require(after.entries.first { $0.entityID == arc.entityID })
     #expect(result.commandName == "extendSketchCurve")
     #expect(result.didMutate)
@@ -4145,7 +4119,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try controlPointSelectionTarget(spline, index: 3)
 
@@ -4157,7 +4131,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let extendedSpline = try #require(after.entries.first { $0.entityID == spline.entityID })
     #expect(result.commandName == "extendSketchCurve")
     #expect(result.didMutate)
@@ -4186,7 +4160,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
 
@@ -4203,7 +4177,7 @@ import Testing
         #expect(error.code == .commandInvalid)
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let unchangedLine = try #require(after.entries.first { $0.entityID == line.entityID })
     #expect(session.generation == DocumentGeneration(1))
     #expect(abs((unchangedLine.end?.x ?? -1.0) - 0.010) < 1.0e-12)
@@ -4226,7 +4200,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let bottomLine = try #require(bottomRectangleLine(in: before))
     let sourceFeatureID = try #require(UUID(uuidString: bottomLine.sourceFeatureID)).featureID
     let target = try pointHandleSelectionTarget(bottomLine, handle: .lineEnd)
@@ -4240,7 +4214,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let lines = after.entries.filter { $0.sourceFeatureID == bottomLine.sourceFeatureID && $0.entityKind == "line" }
     let arcs = after.entries.filter { $0.sourceFeatureID == bottomLine.sourceFeatureID && $0.entityKind == "arc" }
     let filletArc = try #require(arcs.first)
@@ -4296,7 +4270,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let bottomLine = try #require(bottomRectangleLine(in: before))
     let target = try pointHandleSelectionTarget(bottomLine, handle: .lineEnd)
 
@@ -4309,7 +4283,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let lines = after.entries.filter { $0.sourceFeatureID == bottomLine.sourceFeatureID && $0.entityKind == "line" }
     let arcs = after.entries.filter { $0.sourceFeatureID == bottomLine.sourceFeatureID && $0.entityKind == "arc" }
     #expect(result.commandName == "applySketchCornerTreatment")
@@ -4330,7 +4304,7 @@ import Testing
 @Test func applySketchCornerTreatmentFilletsLineArcCorner() async throws {
     let setup = try lineArcCornerTreatmentSketchDocument()
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityID == setup.lineID.description })
     let target = try pointHandleSelectionTarget(sourceLine, handle: .lineEnd)
 
@@ -4343,7 +4317,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceEntries = after.entries.filter { $0.sourceFeatureID == setup.featureID.description }
     let lines = sourceEntries.filter { $0.entityKind == "line" }
     let arcs = sourceEntries.filter { $0.entityKind == "arc" }
@@ -4377,7 +4351,7 @@ import Testing
 @Test func applySketchCornerTreatmentFilletsCurvePairSelection() async throws {
     let setup = try lineArcCornerTreatmentSketchDocument()
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityID == setup.lineID.description })
     let sourceArc = try #require(before.entries.first { $0.entityID == setup.arcID.description })
     let target = try #require(sourceLine.selectionTarget())
@@ -4392,7 +4366,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceEntries = after.entries.filter { $0.sourceFeatureID == setup.featureID.description }
     let lines = sourceEntries.filter { $0.entityKind == "line" }
     let arcs = sourceEntries.filter { $0.entityKind == "arc" }
@@ -4440,7 +4414,7 @@ import Testing
     document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
 
     let session = EditorSession(document: document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityID == setup.lineID.description })
     let target = try pointHandleSelectionTarget(sourceLine, handle: .lineEnd)
 
@@ -4510,7 +4484,7 @@ import Testing
 @Test func applySketchCornerTreatmentChamfersArcLineCorner() async throws {
     let setup = try lineArcCornerTreatmentSketchDocument()
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceArc = try #require(before.entries.first { $0.entityID == setup.arcID.description })
     let target = try pointHandleSelectionTarget(sourceArc, handle: .arcEnd)
 
@@ -4523,7 +4497,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceEntries = after.entries.filter { $0.sourceFeatureID == setup.featureID.description }
     let lines = sourceEntries.filter { $0.entityKind == "line" }
     let arcs = sourceEntries.filter { $0.entityKind == "arc" }
@@ -4569,7 +4543,7 @@ import Testing
 @Test func applySketchCornerTreatmentFilletsArcArcCorner() async throws {
     let setup = try arcArcCornerTreatmentSketchDocument()
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceArc = try #require(before.entries.first { $0.entityID == setup.previousArcID.description })
     let target = try pointHandleSelectionTarget(sourceArc, handle: .arcEnd)
 
@@ -4582,7 +4556,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceEntries = after.entries.filter { $0.sourceFeatureID == setup.featureID.description }
     let lines = sourceEntries.filter { $0.entityKind == "line" }
     let arcs = sourceEntries.filter { $0.entityKind == "arc" }
@@ -4626,7 +4600,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let bottomLine = try #require(bottomRectangleLine(in: before))
     let target = try #require(bottomLine.selectionTarget())
 
@@ -4644,7 +4618,7 @@ import Testing
         #expect(error.code == .referenceUnresolved)
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let lines = after.entries.filter { $0.sourceFeatureID == bottomLine.sourceFeatureID && $0.entityKind == "line" }
     #expect(session.generation == DocumentGeneration(1))
     #expect(lines.count == 4)
@@ -4667,7 +4641,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let bottomLine = try #require(bottomRectangleLine(in: before))
     let target = try pointHandleSelectionTarget(bottomLine, handle: .lineEnd)
 
@@ -4685,7 +4659,7 @@ import Testing
         #expect(error.code == .commandInvalid)
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let lines = after.entries.filter { $0.sourceFeatureID == bottomLine.sourceFeatureID && $0.entityKind == "line" }
     let arcs = after.entries.filter { $0.sourceFeatureID == bottomLine.sourceFeatureID && $0.entityKind == "arc" }
     #expect(session.generation == DocumentGeneration(1))
@@ -4708,7 +4682,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
     let featureID = try #require(UUID(uuidString: spline.sourceFeatureID)).featureID
@@ -4722,7 +4696,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedSpline = try #require(after.entries.first { $0.entityID == spline.entityID })
     let unchangedControlPoint = try #require(updatedSpline.controlPoints.dropFirst(1).first)
     let movedControlPoint = try #require(updatedSpline.controlPoints.dropFirst(2).first)
@@ -4754,7 +4728,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
 
@@ -4766,7 +4740,7 @@ import Testing
             distance: .length(1.0, .millimeter)
         )
     )
-    let afterPositiveU = try SketchEntitySummaryService().summarize(document: session.document)
+    let afterPositiveU = try SketchEntitySnapshotService().snapshot(document: session.document)
     let positiveUSpline = try #require(afterPositiveU.entries.first { $0.entityID == spline.entityID })
     #expect(positiveUResult.commandName == "slideSketchSplineControlPoints")
     #expect(positiveUResult.didMutate)
@@ -4782,7 +4756,7 @@ import Testing
             distance: .length(2.0, .millimeter)
         )
     )
-    let afterNormal = try SketchEntitySummaryService().summarize(document: session.document)
+    let afterNormal = try SketchEntitySnapshotService().snapshot(document: session.document)
     let normalSpline = try #require(afterNormal.entries.first { $0.entityID == spline.entityID })
     #expect(normalResult.commandName == "slideSketchSplineControlPoints")
     #expect(normalResult.didMutate)
@@ -4798,7 +4772,7 @@ import Testing
             distance: .length(-1.0, .millimeter)
         )
     )
-    let afterSignedDistance = try SketchEntitySummaryService().summarize(document: session.document)
+    let afterSignedDistance = try SketchEntitySnapshotService().snapshot(document: session.document)
     let signedDistanceSpline = try #require(afterSignedDistance.entries.first { $0.entityID == spline.entityID })
     #expect(signedDistanceResult.commandName == "slideSketchSplineControlPoints")
     #expect(signedDistanceResult.didMutate)
@@ -4823,7 +4797,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
 
@@ -4836,7 +4810,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedSpline = try #require(after.entries.first { $0.entityID == spline.entityID })
     #expect(result.commandName == "slideSketchSplineControlPoints")
     #expect(result.didMutate)
@@ -4867,7 +4841,7 @@ import Testing
             ])
         )
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(summary.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
 
@@ -4918,7 +4892,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
     let featureID = try #require(UUID(uuidString: spline.sourceFeatureID)).featureID
@@ -4930,7 +4904,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedSpline = try #require(after.entries.first { $0.entityID == spline.entityID })
     let sceneNode = try #require(sketchEditSceneNode(for: featureID, in: session.document))
     #expect(result.commandName == "insertSketchSplineControlPoint")
@@ -4966,7 +4940,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
     let featureID = try #require(UUID(uuidString: spline.sourceFeatureID)).featureID
@@ -4985,7 +4959,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedSpline = try #require(after.entries.first { $0.entityID == spline.entityID })
     let constraint = try #require(updatedSpline.constraints.first { $0.kind == "fixed" })
     #expect(result.commandName == "insertSketchSplineControlPoint")
@@ -5011,7 +4985,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
     let featureID = try #require(UUID(uuidString: spline.sourceFeatureID)).featureID
@@ -5036,7 +5010,7 @@ import Testing
         #expect(error.message == "Sketch spline control point insertion cannot preserve references to replaced spline handles yet.")
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let unchangedSpline = try #require(after.entries.first { $0.entityID == spline.entityID })
     #expect(session.generation == DocumentGeneration(2))
     #expect(unchangedSpline.controlPoints.count == 4)
@@ -5061,7 +5035,7 @@ import Testing
             spline: SketchSpline(controlPoints: originalControlPoints)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
 
@@ -5072,7 +5046,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let rebuilt = try #require(after.entries.first { $0.entityID == spline.entityID })
     #expect(result.commandName == "rebuildSketchCurve")
     #expect(result.didMutate)
@@ -5121,7 +5095,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
 
@@ -5132,7 +5106,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let rebuilt = try #require(after.entries.first { $0.entityID == spline.entityID })
     #expect(result.commandName == "rebuildSketchCurve")
     #expect(result.didMutate)
@@ -5163,7 +5137,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
 
@@ -5177,7 +5151,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let rebuilt = try #require(after.entries.first { $0.entityID == spline.entityID })
     #expect(result.commandName == "rebuildSketchCurve")
     #expect(result.didMutate)
@@ -5209,7 +5183,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
     let featureID = try #require(UUID(uuidString: spline.sourceFeatureID)).featureID
@@ -5231,7 +5205,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let rebuilt = try #require(after.entries.first { $0.entityID == spline.entityID })
     let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
     guard case .sketch(let sketch) = feature.operation else {
@@ -5273,7 +5247,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
 
@@ -5287,7 +5261,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let rebuilt = try #require(after.entries.first { $0.entityID == spline.entityID })
     let report = try #require(result.curveRebuildReport)
     #expect(result.commandName == "rebuildSketchCurve")
@@ -5318,7 +5292,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
 
@@ -5333,7 +5307,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let rebuilt = try #require(after.entries.first { $0.entityID == spline.entityID })
     #expect(result.commandName == "rebuildSketchCurve")
     #expect(result.didMutate)
@@ -5378,7 +5352,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
 
@@ -5421,7 +5395,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
     let featureID = try #require(UUID(uuidString: spline.sourceFeatureID)).featureID
@@ -5471,7 +5445,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
     let featureID = try #require(UUID(uuidString: spline.sourceFeatureID)).featureID
@@ -5496,7 +5470,7 @@ import Testing
         #expect(error.message.contains("internal spline control-point references"))
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let unchanged = try #require(after.entries.first { $0.entityID == spline.entityID })
     #expect(session.generation == DocumentGeneration(2))
     #expect(unchanged.controlPoints.count == 7)
@@ -5517,7 +5491,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
     let featureID = try #require(UUID(uuidString: spline.sourceFeatureID)).featureID
@@ -5530,7 +5504,7 @@ import Testing
         )
     )
 
-    let constrained = try SketchEntitySummaryService().summarize(document: session.document)
+    let constrained = try SketchEntitySnapshotService().snapshot(document: session.document)
     let constrainedSpline = try #require(constrained.entries.first { $0.entityID == spline.entityID })
     let constraint = try #require(constrainedSpline.constraints.first { $0.kind == "fixed" })
     #expect(result.commandName == "addSketchConstraint")
@@ -5570,7 +5544,7 @@ import Testing
             )
         )
     )
-    let afterConstraint = try SketchEntitySummaryService().summarize(document: session.document)
+    let afterConstraint = try SketchEntitySnapshotService().snapshot(document: session.document)
     let constrainedPoint = try #require(afterConstraint.entries.first { $0.entityID == setup.pointID.description })
     let target = try #require(
         afterConstraint.entries.first { $0.entityID == setup.splineID.description }?.selectionTarget()
@@ -5591,7 +5565,7 @@ import Testing
         )
     )
 
-    let afterMove = try SketchEntitySummaryService().summarize(document: session.document)
+    let afterMove = try SketchEntitySnapshotService().snapshot(document: session.document)
     let movedSpline = try #require(afterMove.entries.first { $0.entityID == setup.splineID.description })
     let movedPoint = try #require(afterMove.entries.first { $0.entityID == setup.pointID.description })
     let movedControlPoint = try #require(movedSpline.controlPoints.first)
@@ -5624,7 +5598,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
     let featureID = try #require(UUID(uuidString: spline.sourceFeatureID)).featureID
@@ -5637,7 +5611,7 @@ import Testing
         )
     )
 
-    let afterConstraint = try SketchEntitySummaryService().summarize(document: session.document)
+    let afterConstraint = try SketchEntitySnapshotService().snapshot(document: session.document)
     let constrainedSpline = try #require(afterConstraint.entries.first { $0.entityID == spline.entityID })
     let smoothedHandle = try #require(constrainedSpline.controlPoints.dropFirst(4).first)
     let constraint = try #require(constrainedSpline.constraints.first { $0.kind == "smoothSplineControlPoint" })
@@ -5657,7 +5631,7 @@ import Testing
         )
     )
 
-    let afterMove = try SketchEntitySummaryService().summarize(document: session.document)
+    let afterMove = try SketchEntitySnapshotService().snapshot(document: session.document)
     let movedSpline = try #require(afterMove.entries.first { $0.entityID == spline.entityID })
     let incomingHandle = try #require(movedSpline.controlPoints.dropFirst(2).first)
     let outgoingHandle = try #require(movedSpline.controlPoints.dropFirst(4).first)
@@ -5687,7 +5661,7 @@ import Testing
         )
     )
 
-    let afterConstraint = try SketchEntitySummaryService().summarize(document: session.document)
+    let afterConstraint = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(afterConstraint.entries.first { $0.entityID == setup.splineID.description })
     let alignedHandle = try #require(spline.controlPoints.dropFirst(1).first)
     let constraint = try #require(spline.constraints.first { $0.kind == "splineEndpointTangent" })
@@ -5717,7 +5691,7 @@ import Testing
         )
     )
 
-    let afterConstraint = try SketchEntitySummaryService().summarize(document: session.document)
+    let afterConstraint = try SketchEntitySnapshotService().snapshot(document: session.document)
     let secondSpline = try #require(afterConstraint.entries.first {
         $0.entityID == setup.secondSplineID.description
     })
@@ -5748,7 +5722,7 @@ import Testing
             )
         )
     )
-    let beforeMove = try SketchEntitySummaryService().summarize(document: session.document)
+    let beforeMove = try SketchEntitySnapshotService().snapshot(document: session.document)
     let firstSpline = try #require(beforeMove.entries.first { $0.entityID == setup.firstSplineID.description })
     let target = try #require(firstSpline.selectionTarget())
 
@@ -5761,7 +5735,7 @@ import Testing
         )
     )
 
-    let afterMove = try SketchEntitySummaryService().summarize(document: session.document)
+    let afterMove = try SketchEntitySnapshotService().snapshot(document: session.document)
     let secondSpline = try #require(afterMove.entries.first { $0.entityID == setup.secondSplineID.description })
     let alignedHandle = try #require(secondSpline.controlPoints.dropFirst(1).first)
     let expectedOffset = 0.003 / sqrt(2.0)
@@ -5787,7 +5761,7 @@ import Testing
         )
     )
 
-    let afterConstraint = try SketchEntitySummaryService().summarize(document: session.document)
+    let afterConstraint = try SketchEntitySnapshotService().snapshot(document: session.document)
     let secondSpline = try #require(afterConstraint.entries.first {
         $0.entityID == setup.secondSplineID.description
     })
@@ -5821,7 +5795,7 @@ import Testing
             )
         )
     )
-    let beforeMove = try SketchEntitySummaryService().summarize(document: session.document)
+    let beforeMove = try SketchEntitySnapshotService().snapshot(document: session.document)
     let firstSpline = try #require(beforeMove.entries.first { $0.entityID == setup.firstSplineID.description })
     let target = try #require(firstSpline.selectionTarget())
 
@@ -5834,7 +5808,7 @@ import Testing
         )
     )
 
-    let afterMove = try SketchEntitySummaryService().summarize(document: session.document)
+    let afterMove = try SketchEntitySnapshotService().snapshot(document: session.document)
     let secondSpline = try #require(afterMove.entries.first { $0.entityID == setup.secondSplineID.description })
     let alignedEndpoint = try #require(secondSpline.controlPoints.first)
     let alignedHandle = try #require(secondSpline.controlPoints.dropFirst(1).first)
@@ -5862,7 +5836,7 @@ import Testing
             )
         )
     )
-    let beforeMove = try SketchEntitySummaryService().summarize(document: session.document)
+    let beforeMove = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(beforeMove.entries.first { $0.entityID == setup.lineID.description })
     let target = try #require(line.selectionTarget())
 
@@ -5875,7 +5849,7 @@ import Testing
         )
     )
 
-    let afterMove = try SketchEntitySummaryService().summarize(document: session.document)
+    let afterMove = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(afterMove.entries.first { $0.entityID == setup.splineID.description })
     let alignedHandle = try #require(spline.controlPoints.dropFirst(1).first)
     let expectedOffset = 0.005 / sqrt(2.0)
@@ -5901,7 +5875,7 @@ import Testing
             )
         )
     )
-    let beforeMove = try SketchEntitySummaryService().summarize(document: session.document)
+    let beforeMove = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(beforeMove.entries.first { $0.entityID == setup.splineID.description })
     let target = try #require(spline.selectionTarget())
 
@@ -5914,7 +5888,7 @@ import Testing
         )
     )
 
-    let afterMove = try SketchEntitySummaryService().summarize(document: session.document)
+    let afterMove = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(afterMove.entries.first { $0.entityID == setup.lineID.description })
     let end = try #require(line.end)
     let expectedOffset = 0.010 / sqrt(2.0)
@@ -5943,7 +5917,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
     let featureID = try #require(UUID(uuidString: line.sourceFeatureID)).featureID
@@ -5956,7 +5930,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedLine = try #require(after.entries.first { $0.entityID == line.entityID })
     let sceneNode = try #require(sketchEditSceneNode(for: featureID, in: session.document))
     let dimension = try #require(updatedLine.dimensions.first { $0.kind == "distance" })
@@ -5985,7 +5959,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
     let featureID = try #require(UUID(uuidString: line.sourceFeatureID)).featureID
@@ -6005,7 +5979,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedLine = try #require(after.entries.first { $0.entityID == line.entityID })
     let sceneNode = try #require(sketchEditSceneNode(for: featureID, in: session.document))
     let dimension = try #require(updatedLine.dimensions.first { $0.kind == "distance" })
@@ -6038,7 +6012,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
     let featureID = try #require(UUID(uuidString: line.sourceFeatureID)).featureID
@@ -6051,7 +6025,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedLine = try #require(after.entries.first { $0.entityID == line.entityID })
     let sceneNode = try #require(sketchEditSceneNode(for: featureID, in: session.document))
     let dimension = try #require(updatedLine.dimensions.first { $0.kind == "angle" })
@@ -6085,7 +6059,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
     let featureID = try #require(UUID(uuidString: line.sourceFeatureID)).featureID
@@ -6105,7 +6079,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedLine = try #require(after.entries.first { $0.entityID == line.entityID })
     let dimension = try #require(updatedLine.dimensions.first { $0.kind == "angle" })
     #expect(result.commandName == "setSketchEntityDimension")
@@ -6136,7 +6110,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
     let featureID = try #require(UUID(uuidString: line.sourceFeatureID)).featureID
@@ -6164,7 +6138,7 @@ import Testing
         Issue.record("Conflicting line angle dimension must throw EditorError.")
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let unchangedLine = try #require(after.entries.first { $0.entityID == line.entityID })
     #expect(session.generation == DocumentGeneration(2))
     #expect(abs((unchangedLine.start?.x ?? -1.0) - 0.0) < 1.0e-12)
@@ -6194,7 +6168,7 @@ import Testing
             direction: .normal
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let bottomLine = try #require(before.entries.first { entry in
         isHorizontalLine(entry, y: 0.0)
     })
@@ -6210,7 +6184,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedBottom = try #require(after.entries.first { $0.entityID == bottomLine.entityID })
     let dimension = try #require(updatedBottom.dimensions.first { $0.kind == "distance" })
     let sketchFeature = try #require(session.document.cadDocument.designGraph.nodes[sketchFeatureID])
@@ -6251,7 +6225,7 @@ import Testing
             radius: .length(5.0, .millimeter)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let circle = try #require(before.entries.first { $0.entityKind == "circle" })
     let target = try #require(circle.selectionTarget())
     let featureID = try #require(UUID(uuidString: circle.sourceFeatureID)).featureID
@@ -6264,7 +6238,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedCircle = try #require(after.entries.first { $0.entityID == circle.entityID })
     let sceneNode = try #require(sketchEditSceneNode(for: featureID, in: session.document))
     let dimension = try #require(updatedCircle.dimensions.first { $0.kind == "diameter" })
@@ -6291,7 +6265,7 @@ import Testing
             endAngle: .angle(90.0, .degree)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let arc = try #require(before.entries.first { $0.entityKind == "arc" })
     let target = try #require(arc.selectionTarget())
     let featureID = try #require(UUID(uuidString: arc.sourceFeatureID)).featureID
@@ -6304,7 +6278,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedArc = try #require(after.entries.first { $0.entityID == arc.entityID })
     let sceneNode = try #require(sketchEditSceneNode(for: featureID, in: session.document))
     let dimension = try #require(updatedArc.dimensions.first { $0.kind == "radius" })
@@ -6323,7 +6297,7 @@ import Testing
     _ = try #require(session.createDefaultExtrudedRectangle())
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
-    let baseSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let baseSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let bounds = try #require(sketchSummaryBounds(baseSummary))
     _ = try session.execute(
         .filletBodyEdges(
@@ -6334,7 +6308,7 @@ import Testing
             segmentCount: 8
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let arc = try #require(before.entries.first {
         $0.entityKind == "arc" &&
             abs(($0.radius ?? -1.0) - 0.001) < 1.0e-12
@@ -6349,7 +6323,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedArc = try #require(after.entries.first { $0.entityID == arc.entityID })
     let dimension = try #require(updatedArc.dimensions.first { $0.kind == "radius" })
     #expect(result.commandName == "setSketchEntityDimension")
@@ -6372,7 +6346,7 @@ import Testing
     _ = try #require(session.createDefaultExtrudedRectangle())
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
-    let baseSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let baseSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let bounds = try #require(sketchSummaryBounds(baseSummary))
     _ = try session.execute(
         .filletBodyEdges(
@@ -6383,7 +6357,7 @@ import Testing
             segmentCount: 8
         )
     )
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let filletArcEdge = try #require(topology.entries.first {
         guard let radius = $0.curveRadius else {
             return false
@@ -6403,12 +6377,12 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedArc = try #require(after.entries.first {
         $0.entityKind == "arc" &&
             abs(($0.radius ?? -1.0) - 0.002) < 1.0e-12
     })
-    let updatedTopology = try TopologySummaryService().summarize(document: session.document)
+    let updatedTopology = try TopologySnapshotService().snapshot(document: session.document)
     let updatedGeneratedArc = try #require(updatedTopology.entries.first {
         guard let radius = $0.curveRadius else {
             return false
@@ -6445,7 +6419,7 @@ import Testing
             endAngle: .angle(80.0, .degree)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let arc = try #require(before.entries.first { $0.entityKind == "arc" })
     let target = try #require(arc.selectionTarget())
 
@@ -6457,7 +6431,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedArc = try #require(after.entries.first { $0.entityID == arc.entityID })
     let dimension = try #require(updatedArc.dimensions.first { $0.kind == "angle" })
     #expect(result.commandName == "setSketchEntityDimension")
@@ -6484,7 +6458,7 @@ import Testing
             endAngle: .angle(80.0, .degree)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let arc = try #require(before.entries.first { $0.entityKind == "arc" })
     let target = try #require(arc.selectionTarget())
     let featureID = try #require(UUID(uuidString: arc.sourceFeatureID)).featureID
@@ -6504,7 +6478,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedArc = try #require(after.entries.first { $0.entityID == arc.entityID })
     let dimension = try #require(updatedArc.dimensions.first { $0.kind == "angle" })
     #expect(result.commandName == "setSketchEntityDimension")
@@ -6532,7 +6506,7 @@ import Testing
             endAngle: .angle(80.0, .degree)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let arc = try #require(before.entries.first { $0.entityKind == "arc" })
     let target = try #require(arc.selectionTarget())
     let featureID = try #require(UUID(uuidString: arc.sourceFeatureID)).featureID
@@ -6566,7 +6540,7 @@ import Testing
         Issue.record("Conflicting fixed endpoint arc span dimension must throw EditorError.")
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let unchangedArc = try #require(after.entries.first { $0.entityID == arc.entityID })
     #expect(session.generation == DocumentGeneration(3))
     #expect(abs((unchangedArc.startAngle ?? -1.0) - (10.0 * Double.pi / 180.0)) < 1.0e-12)
@@ -6592,7 +6566,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
     let featureID = try #require(UUID(uuidString: line.sourceFeatureID)).featureID
@@ -6611,7 +6585,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let arc = try #require(after.entries.first { $0.entityID == line.entityID })
     let sceneNode = try #require(sketchEditSceneNode(for: featureID, in: session.document))
     let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
@@ -6660,7 +6634,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
     let featureID = try #require(UUID(uuidString: line.sourceFeatureID)).featureID
@@ -6681,7 +6655,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     #expect(after.entries.contains { $0.entityKind == "arc" })
     #expect(sceneNode.object?.typeID == nil)
     #expect(extrudeResult.commandName == "extrudeProfile")
@@ -6707,7 +6681,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
     let featureID = try #require(UUID(uuidString: line.sourceFeatureID)).featureID
@@ -6724,7 +6698,7 @@ import Testing
         )
     )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(after.entries.first { $0.entityID == line.entityID })
     let firstPoint = try #require(spline.controlPoints.first)
     let firstHandle = try #require(spline.controlPoints.dropFirst(1).first)
@@ -6768,7 +6742,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
     let featureID = try #require(UUID(uuidString: line.sourceFeatureID)).featureID
@@ -6789,7 +6763,7 @@ import Testing
 
     let result = try session.execute(.convertSketchLineToSpline(target: target))
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(after.entries.first { $0.entityID == line.entityID })
     let dimension = try #require(spline.dimensions.first { $0.kind == "distance" })
     let constraint = try #require(spline.constraints.first { $0.kind == "fixed" })
@@ -6826,7 +6800,7 @@ import Testing
 @Test func convertSketchLineToSplineMigratesSplineEndpointTangency() async throws {
     let setup = try splineLineTangentSketchDocument(name: "Spline Tangent Line Conversion")
     let session = EditorSession(document: setup.document)
-    let beforeConstraint = try SketchEntitySummaryService().summarize(document: session.document)
+    let beforeConstraint = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(beforeConstraint.entries.first { $0.entityID == setup.lineID.description })
     let target = try #require(line.selectionTarget())
     _ = try session.execute(
@@ -6842,7 +6816,7 @@ import Testing
 
     let result = try session.execute(.convertSketchLineToSpline(target: target))
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceSpline = try #require(after.entries.first { $0.entityID == setup.splineID.description })
     let convertedSpline = try #require(after.entries.first { $0.entityID == setup.lineID.description })
     let sourceConstraint = try #require(sourceSpline.constraints.first { $0.kind == "tangentSplineEndpoints" })
@@ -6877,7 +6851,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
     let featureID = try #require(UUID(uuidString: line.sourceFeatureID)).featureID
@@ -6898,7 +6872,7 @@ import Testing
         #expect(error.code == .commandInvalid)
         #expect(error.message == "Sketch line spline conversion cannot preserve line orientation constraints as spline point references.")
     }
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     #expect(session.generation == DocumentGeneration(2))
     #expect(after.entries.contains { $0.entityID == line.entityID && $0.entityKind == "line" })
 }
@@ -6920,7 +6894,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
     let featureID = try #require(UUID(uuidString: line.sourceFeatureID)).featureID
@@ -6941,7 +6915,7 @@ import Testing
 
     let result = try session.execute(.reverseSketchCurve(target: target))
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let reversedLine = try #require(after.entries.first { $0.entityID == line.entityID })
     let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
     guard case .sketch(let sketch) = feature.operation else {
@@ -6981,7 +6955,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
     let featureID = try #require(UUID(uuidString: spline.sourceFeatureID)).featureID
@@ -6995,7 +6969,7 @@ import Testing
 
     let result = try session.execute(.reverseSketchCurve(target: target))
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let reversedSpline = try #require(after.entries.first { $0.entityID == spline.entityID })
     let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
     guard case .sketch(let sketch) = feature.operation else {
@@ -7049,7 +7023,7 @@ import Testing
         continuity: .g1
     )
     let session = EditorSession(document: document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceLine = try #require(before.entries.first { $0.entityID == firstLineID.description })
     let target = try #require(sourceLine.selectionTarget())
 
@@ -7093,7 +7067,7 @@ import Testing
             endAngle: .angle(90.0, .degree)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let arc = try #require(before.entries.first { $0.entityKind == "arc" })
     let target = try #require(arc.selectionTarget())
 
@@ -7106,7 +7080,7 @@ import Testing
     } catch {
         Issue.record("Arc reverse must throw EditorError.")
     }
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let unchangedArc = try #require(after.entries.first { $0.entityID == arc.entityID })
     #expect(session.generation == DocumentGeneration(1))
     #expect(unchangedArc.entityKind == "arc")
@@ -7134,7 +7108,7 @@ import Testing
             constraint: .fixed(.lineEnd(secondLineID))
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let firstLine = try #require(before.entries.first { $0.entityID == firstLineID.description })
     let secondLine = try #require(before.entries.first { $0.entityID == secondLineID.description })
 
@@ -7191,7 +7165,7 @@ import Testing
             constraint: .fixed(.lineEnd(secondLineID))
         )
     )
-    let beforeJoin = try SketchEntitySummaryService().summarize(document: session.document)
+    let beforeJoin = try SketchEntitySnapshotService().snapshot(document: session.document)
     let firstLine = try #require(beforeJoin.entries.first { $0.entityID == firstLineID.description })
     let secondLine = try #require(beforeJoin.entries.first { $0.entityID == secondLineID.description })
 
@@ -7201,7 +7175,7 @@ import Testing
             adjacentTarget: try #require(secondLine.selectionTarget())
         )
     )
-    let joined = try SketchEntitySummaryService().summarize(document: session.document)
+    let joined = try SketchEntitySnapshotService().snapshot(document: session.document)
     let joinedLine = try #require(joined.entries.first { $0.entityID == firstLineID.description })
 
     let result = try session.execute(
@@ -7240,7 +7214,7 @@ import Testing
         includeCoincidentConstraint: false
     )
     let session = setup.session
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityID == setup.lineID.description })
     let arc = try #require(before.entries.first { $0.entityID == setup.arcID.description })
 
@@ -7280,7 +7254,7 @@ import Testing
         includeCoincidentConstraint: false
     )
     let session = setup.session
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityID == setup.lineID.description })
     let arc = try #require(before.entries.first { $0.entityID == setup.arcID.description })
 
@@ -7298,7 +7272,10 @@ import Testing
         return
     }
     let joinedSource = try #require(session.document.productMetadata.joinedCurveGroupSources.values.first)
-    let analysis = try CurveAnalysisService().analyze(document: session.document)
+    let analysis = try CurveAnalysisService().analyze(
+        document: session.document,
+        displayUnit: session.workspaceState.displayUnit
+    )
     let continuityJoin = try #require(analysis.continuityJoins.first { join in
         Set([join.firstEntityID, join.secondEntityID]) == Set([setup.lineID.description, setup.arcID.description])
     })
@@ -7318,7 +7295,7 @@ import Testing
 @Test func joinSketchCurvesStoresSolvedG2SplineContinuityAndAnalysisReadback() async throws {
     let setup = try twoSplineTangentSketchDocument(name: "Join Source Splines G2")
     let session = EditorSession(document: setup.document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let firstSpline = try #require(before.entries.first { $0.entityID == setup.firstSplineID.description })
     let secondSpline = try #require(before.entries.first { $0.entityID == setup.secondSplineID.description })
 
@@ -7336,14 +7313,17 @@ import Testing
         return
     }
     let joinedSource = try #require(session.document.productMetadata.joinedCurveGroupSources.values.first)
-    let analysis = try CurveAnalysisService().analyze(document: session.document)
+    let analysis = try CurveAnalysisService().analyze(
+        document: session.document,
+        displayUnit: session.workspaceState.displayUnit
+    )
     let continuityJoin = try #require(analysis.continuityJoins.first { join in
         Set([join.firstEntityID, join.secondEntityID]) == Set([
             setup.firstSplineID.description,
             setup.secondSplineID.description,
         ])
     })
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let solvedSecondSpline = try #require(after.entries.first { $0.entityID == setup.secondSplineID.description })
     let solvedEndpoint = try #require(solvedSecondSpline.controlPoints.first)
     let solvedHandle = try #require(solvedSecondSpline.controlPoints.dropFirst().first)
@@ -7406,7 +7386,7 @@ import Testing
     document.cadDocument.designGraph.nodes[featureID] = feature
     document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
     let session = EditorSession(document: document)
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityID == lineID.description })
     let arc = try #require(before.entries.first { $0.entityID == arcID.description })
     let beforeEvaluationStatus = session.evaluationStatus
@@ -7442,7 +7422,7 @@ import Testing
         includeCoincidentConstraint: false
     )
     let session = setup.session
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityID == setup.lineID.description })
     let arc = try #require(before.entries.first { $0.entityID == setup.arcID.description })
     _ = try session.execute(
@@ -7451,7 +7431,7 @@ import Testing
             adjacentTarget: try #require(arc.selectionTarget())
         )
     )
-    let joined = try SketchEntitySummaryService().summarize(document: session.document)
+    let joined = try SketchEntitySnapshotService().snapshot(document: session.document)
     let joinedArc = try #require(joined.entries.first { $0.entityID == setup.arcID.description })
 
     let result = try session.execute(
@@ -7487,7 +7467,7 @@ import Testing
     let session = setup.session
     let firstLineID = setup.lineIDs[0]
     let secondLineID = setup.lineIDs[1]
-    let beforeJoin = try SketchEntitySummaryService().summarize(document: session.document)
+    let beforeJoin = try SketchEntitySnapshotService().snapshot(document: session.document)
     let firstLine = try #require(beforeJoin.entries.first { $0.entityID == firstLineID.description })
     let secondLine = try #require(beforeJoin.entries.first { $0.entityID == secondLineID.description })
     _ = try session.execute(
@@ -7496,7 +7476,7 @@ import Testing
             adjacentTarget: try #require(secondLine.selectionTarget())
         )
     )
-    let joined = try SketchEntitySummaryService().summarize(document: session.document)
+    let joined = try SketchEntitySnapshotService().snapshot(document: session.document)
     let joinedLine = try #require(joined.entries.first { $0.entityID == firstLineID.description })
     let joinedTarget = try #require(joinedLine.selectionTarget())
     _ = try session.execute(
@@ -7545,7 +7525,7 @@ import Testing
     let firstLineID = setup.lineIDs[0]
     let secondLineID = setup.lineIDs[1]
     let beforeGeneration = session.generation
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let firstLine = try #require(before.entries.first { $0.entityID == firstLineID.description })
     let secondLine = try #require(before.entries.first { $0.entityID == secondLineID.description })
 
@@ -7594,7 +7574,7 @@ import Testing
         )
     )
     let beforeGeneration = session.generation
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let firstLine = try #require(before.entries.first { $0.entityID == firstLineID.description })
     let secondLine = try #require(before.entries.first { $0.entityID == secondLineID.description })
 
@@ -7641,7 +7621,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
     let featureID = try #require(UUID(uuidString: line.sourceFeatureID)).featureID
@@ -7726,7 +7706,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
     let featureID = try #require(UUID(uuidString: spline.sourceFeatureID)).featureID
@@ -7791,7 +7771,7 @@ import Testing
             endAngle: .angle(90.0, .degree)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let arc = try #require(before.entries.first { $0.entityKind == "arc" })
     let target = try #require(arc.selectionTarget())
     let featureID = try #require(UUID(uuidString: arc.sourceFeatureID)).featureID
@@ -7869,7 +7849,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(before.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
     let featureID = try #require(UUID(uuidString: line.sourceFeatureID)).featureID
@@ -7880,7 +7860,7 @@ import Testing
             fraction: .scalar(0.5)
         )
     )
-    let splitSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let splitSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let trimmedLine = try #require(splitSummary.entries.first { entry in
         entry.entityKind == "line" && entry.entityID != line.entityID
     })
@@ -7933,7 +7913,7 @@ import Testing
             radius: .length(4.0, .millimeter)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let circle = try #require(before.entries.first { $0.entityKind == "circle" })
     let target = try #require(circle.selectionTarget())
 
@@ -7947,7 +7927,7 @@ import Testing
         Issue.record("Circle trim must throw EditorError.")
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     #expect(after.entries.filter { $0.entityKind == "circle" }.count == 1)
     #expect(session.generation == DocumentGeneration(1))
     #expect(session.evaluationStatus == .valid)
@@ -7984,7 +7964,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetLine = try #require(before.entries.first { $0.sourceFeatureName == "Cut Target" })
     let cutterLine = try #require(before.entries.first { $0.sourceFeatureName == "Cut Cutter" })
     let target = try #require(targetLine.selectionTarget())
@@ -7998,7 +7978,7 @@ import Testing
         )
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Target" }
     let cutterSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Cutter" }
     #expect(result.commandName == "cutSketchCurve")
@@ -8050,7 +8030,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetLine = try #require(before.entries.first { $0.sourceFeatureName == "Cut Extend Target" })
     let cutterLine = try #require(before.entries.first { $0.sourceFeatureName == "Cut Extend Cutter" })
     let target = try #require(targetLine.selectionTarget())
@@ -8080,7 +8060,7 @@ import Testing
         )
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Extend Target" }
     #expect(result.commandName == "cutSketchCurve")
     #expect(result.didMutate)
@@ -8125,7 +8105,7 @@ import Testing
             radius: .length(2.0, .millimeter)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetLine = try #require(before.entries.first { $0.sourceFeatureName == "Cut Circle Target" })
     let cutterCircle = try #require(before.entries.first { $0.sourceFeatureName == "Cut Circle Cutter" })
     let target = try #require(targetLine.selectionTarget())
@@ -8139,7 +8119,7 @@ import Testing
         )
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Circle Target" }
     let cutterSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Circle Cutter" }
     #expect(result.commandName == "cutSketchCurve")
@@ -8192,7 +8172,7 @@ import Testing
             endAngle: .angle(Double.pi / 2.0, .radian)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetLine = try #require(before.entries.first { $0.sourceFeatureName == "Cut Arc Target" })
     let cutterArc = try #require(before.entries.first { $0.sourceFeatureName == "Cut Arc Cutter" })
     let target = try #require(targetLine.selectionTarget())
@@ -8206,7 +8186,7 @@ import Testing
         )
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Arc Target" }
     #expect(result.commandName == "cutSketchCurve")
     #expect(result.didMutate)
@@ -8252,7 +8232,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetLine = try #require(before.entries.first { $0.sourceFeatureName == "Cut Line Spline Target" })
     let cutterSpline = try #require(before.entries.first { $0.sourceFeatureName == "Cut Line Spline Cutter" })
     let target = try #require(targetLine.selectionTarget())
@@ -8266,7 +8246,7 @@ import Testing
         )
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Line Spline Target" }
     let cutterSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Line Spline Cutter" }
     #expect(result.commandName == "cutSketchCurve")
@@ -8314,7 +8294,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSpline = try #require(before.entries.first { $0.sourceFeatureName == "Cut Spline Target" })
     let cutterLine = try #require(before.entries.first { $0.sourceFeatureName == "Cut Spline Line Cutter" })
     let target = try #require(targetSpline.selectionTarget())
@@ -8328,7 +8308,7 @@ import Testing
         )
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Spline Target" }
     let cutterSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Spline Line Cutter" }
     #expect(result.commandName == "cutSketchCurve")
@@ -8371,7 +8351,7 @@ import Testing
             radius: .length(5.0, .millimeter)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSpline = try #require(
         before.entries.first { $0.sourceFeatureName == "Cut Multi Segment Spline Target" }
     )
@@ -8393,7 +8373,7 @@ import Testing
     // 0.25 and 0.75, i.e. at (0.005, 0) and (0.010, 0.005) meters. The buggy
     // linear remap placed the second cut at original 0.667 -> (0.010, 0.00333),
     // 1.67 mm off the cutter.
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter {
         $0.sourceFeatureName == "Cut Multi Segment Spline Target"
     }
@@ -8464,7 +8444,7 @@ import Testing
             radius: .length(2.0, .millimeter)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSpline = try #require(before.entries.first { $0.sourceFeatureName == "Cut Spline Circle Target" })
     let cutterCircle = try #require(before.entries.first { $0.sourceFeatureName == "Cut Spline Circle Cutter" })
     let target = try #require(targetSpline.selectionTarget())
@@ -8478,7 +8458,7 @@ import Testing
         )
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Spline Circle Target" }
     #expect(result.commandName == "cutSketchCurve")
     #expect(result.didMutate)
@@ -8518,7 +8498,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSpline = try #require(before.entries.first { $0.sourceFeatureName == "Cut Spline Spline Target" })
     let cutterSpline = try #require(before.entries.first { $0.sourceFeatureName == "Cut Spline Spline Cutter" })
     let target = try #require(targetSpline.selectionTarget())
@@ -8532,7 +8512,7 @@ import Testing
         )
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Spline Spline Target" }
     let cutterSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Spline Spline Cutter" }
     #expect(result.commandName == "cutSketchCurve")
@@ -8576,7 +8556,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetArc = try #require(before.entries.first { $0.sourceFeatureName == "Cut Arc Target" })
     let cutterLine = try #require(before.entries.first { $0.sourceFeatureName == "Cut Arc Line Cutter" })
     let target = try #require(targetArc.selectionTarget())
@@ -8590,7 +8570,7 @@ import Testing
         )
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Arc Target" }
     let cutterSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Arc Line Cutter" }
     #expect(result.commandName == "cutSketchCurve")
@@ -8631,7 +8611,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetArc = try #require(before.entries.first { $0.sourceFeatureName == "Cut Arc Spline Target" })
     let cutterSpline = try #require(before.entries.first { $0.sourceFeatureName == "Cut Arc Spline Cutter" })
     let target = try #require(targetArc.selectionTarget())
@@ -8645,7 +8625,7 @@ import Testing
         )
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Arc Spline Target" }
     let cutterSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Arc Spline Cutter" }
     #expect(result.commandName == "cutSketchCurve")
@@ -8685,7 +8665,7 @@ import Testing
             radius: .length(3.0, .millimeter)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetArc = try #require(before.entries.first { $0.sourceFeatureName == "Cut Arc Circle Target" })
     let cutterCircle = try #require(before.entries.first { $0.sourceFeatureName == "Cut Arc Circle Cutter" })
     let target = try #require(targetArc.selectionTarget())
@@ -8701,7 +8681,7 @@ import Testing
 
     let firstCutAngle = atan2(4.0, 3.0)
     let secondCutAngle = atan2(4.0, -3.0)
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Arc Circle Target" }
     let cutterSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Arc Circle Cutter" }
     #expect(result.commandName == "cutSketchCurve")
@@ -8741,7 +8721,7 @@ import Testing
             ])
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetCircle = try #require(before.entries.first { $0.sourceFeatureName == "Cut Circle Spline Target" })
     let cutterSpline = try #require(before.entries.first { $0.sourceFeatureName == "Cut Circle Spline Cutter" })
     let target = try #require(targetCircle.selectionTarget())
@@ -8755,7 +8735,7 @@ import Testing
         )
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Circle Spline Target" }
     let cutterSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Circle Spline Cutter" }
     #expect(result.commandName == "cutSketchCurve")
@@ -8801,7 +8781,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetCircle = try #require(before.entries.first { $0.sourceFeatureName == "Cut Circle Target" })
     let cutterLine = try #require(before.entries.first { $0.sourceFeatureName == "Cut Circle Line Cutter" })
     let target = try #require(targetCircle.selectionTarget())
@@ -8815,7 +8795,7 @@ import Testing
         )
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Circle Target" }
     let cutterSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Circle Line Cutter" }
     #expect(result.commandName == "cutSketchCurve")
@@ -8858,7 +8838,7 @@ import Testing
             radius: .length(3.0, .millimeter)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetCircle = try #require(before.entries.first { $0.sourceFeatureName == "Cut Circle Circle Target" })
     let cutterCircle = try #require(before.entries.first { $0.sourceFeatureName == "Cut Circle Circle Cutter" })
     let target = try #require(targetCircle.selectionTarget())
@@ -8874,7 +8854,7 @@ import Testing
 
     let firstCutAngle = atan2(4.0, 3.0)
     let secondCutAngle = atan2(4.0, -3.0)
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Circle Circle Target" }
     let cutterSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Circle Circle Cutter" }
     #expect(result.commandName == "cutSketchCurve")
@@ -8916,7 +8896,7 @@ import Testing
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetCircle = try #require(before.entries.first { $0.sourceFeatureName == "Cut Circle Tangent Target" })
     let cutterLine = try #require(before.entries.first { $0.sourceFeatureName == "Cut Circle Tangent Cutter" })
     let target = try #require(targetCircle.selectionTarget())
@@ -8938,7 +8918,7 @@ import Testing
         Issue.record("Cut Curve must throw EditorError.")
     }
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     #expect(after.entries.filter { $0.sourceFeatureName == "Cut Circle Tangent Target" && $0.entityKind == "circle" }.count == 1)
     #expect(session.generation == DocumentGeneration(2))
     #expect(session.evaluationStatus == .valid)
@@ -8974,7 +8954,7 @@ import Testing
             endAngle: .angle(Double.pi / 2.0, .radian)
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetLine = try #require(before.entries.first { $0.sourceFeatureName == "Cut Arc Extend Target" })
     let cutterArc = try #require(before.entries.first { $0.sourceFeatureName == "Cut Arc Extend Cutter" })
     let target = try #require(targetLine.selectionTarget())
@@ -8988,7 +8968,7 @@ import Testing
         )
     )
 
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Arc Extend Target" }
     let cutterSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Arc Extend Cutter" }
     #expect(result.commandName == "cutSketchCurve")
@@ -9039,13 +9019,13 @@ private func bodySceneNodeID(
 }
 
 private func sketchLineEntries(
-    _ summary: SketchEntitySummaryResult
+    _ summary: SketchEntitySnapshot
 ) -> [SketchEntitySummaryResult.EntityEntry] {
     summary.entries.filter { $0.entityKind == "line" }
 }
 
 private func sketchSummaryBounds(
-    _ summary: SketchEntitySummaryResult
+    _ summary: SketchEntitySnapshot
 ) -> (minX: Double, minY: Double, maxX: Double, maxY: Double)? {
     var points: [SketchEntitySummaryResult.Point] = []
     for entry in sketchLineEntries(summary) {
@@ -9086,7 +9066,7 @@ private func isHorizontalLine(
 }
 
 private func containsSketchPoint(
-    _ summary: SketchEntitySummaryResult,
+    _ summary: SketchEntitySnapshot,
     x: Double,
     y: Double
 ) -> Bool {
@@ -10056,7 +10036,7 @@ private func controlPointSelectionTarget(
 }
 
 private func bottomRectangleLine(
-    in summary: SketchEntitySummaryResult
+    in summary: SketchEntitySnapshot
 ) -> SketchEntitySummaryResult.EntityEntry? {
     summary.entries.first { entry in
         entry.entityKind == "line" &&

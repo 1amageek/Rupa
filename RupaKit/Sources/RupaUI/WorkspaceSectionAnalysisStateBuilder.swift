@@ -4,6 +4,7 @@ struct WorkspaceSectionAnalysisStateBuilder {
     var document: DesignDocument
     var currentEvaluation: DocumentEvaluationContext?
     var documentGeneration: DocumentGeneration
+    var displayUnit: LengthDisplayUnit
     var objectRegistry: ObjectTypeRegistry
 
     func analysisSummary(for nodes: [SceneNode]) -> SectionAnalysisResult? {
@@ -30,6 +31,8 @@ struct WorkspaceSectionAnalysisStateBuilder {
         return try SectionAnalysisService().analyze(
             document: document,
             query: query,
+            activeConstructionPlaneID: nil,
+            displayUnit: displayUnit,
             objectRegistry: objectRegistry,
             currentEvaluation: currentEvaluation,
             currentGeneration: documentGeneration

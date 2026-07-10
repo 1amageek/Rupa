@@ -9,6 +9,7 @@ struct ViewportConstructionPlaneDragSnapResolver: Sendable {
         sourceTarget: ViewportConstructionPlaneHandleTarget,
         screenPoint: CGPoint,
         document: DesignDocument,
+        ruler: RulerConfiguration,
         options: SnapResolutionOptions?,
         layout: ViewportLayout
     ) -> ViewportConstructionPlaneDragTarget {
@@ -22,6 +23,7 @@ struct ViewportConstructionPlaneDragSnapResolver: Sendable {
                 rawWorldPoint: target.origin,
                 screenPoint: screenPoint,
                 document: document,
+                ruler: ruler,
                 options: options,
                 layout: layout,
                 allowsPlanarFallback: true
@@ -41,6 +43,7 @@ struct ViewportConstructionPlaneDragSnapResolver: Sendable {
                 rawWorldPoint: rawNormalEnd,
                 screenPoint: screenPoint,
                 document: document,
+                ruler: ruler,
                 options: options,
                 layout: layout,
                 allowsPlanarFallback: false
@@ -66,21 +69,20 @@ struct ViewportConstructionPlaneDragSnapResolver: Sendable {
         rawWorldPoint: Point3D,
         screenPoint: CGPoint,
         document: DesignDocument,
+        ruler: RulerConfiguration,
         options: SnapResolutionOptions,
         layout: ViewportLayout,
         allowsPlanarFallback: Bool
     ) -> Point3D? {
         let queryPoint = snapQueryPoint(
             rawWorldPoint: rawWorldPoint,
-            screenPoint: screenPoint,
-            document: document,
-            options: options,
-            layout: layout
+            options: options
         )
         do {
             let result = try SnapResolver().resolve(
                 point: queryPoint,
                 in: document,
+                ruler: ruler,
                 options: options
             )
             if let selectedWorldPoint = result.selectedWorldPoint {
@@ -93,7 +95,6 @@ struct ViewportConstructionPlaneDragSnapResolver: Sendable {
             return try planarFallbackWorldPoint(
                 resolvedPoint: result.resolvedPoint,
                 rawWorldPoint: rawWorldPoint,
-                document: document,
                 options: options
             )
         } catch {
@@ -103,13 +104,9 @@ struct ViewportConstructionPlaneDragSnapResolver: Sendable {
 
     private func snapQueryPoint(
         rawWorldPoint: Point3D,
-        screenPoint _: CGPoint,
-        document: DesignDocument,
-        options: SnapResolutionOptions,
-        layout _: ViewportLayout
+        options: SnapResolutionOptions
     ) -> Point2D {
-        if options.usesConstructionPlaneProjection,
-           let sketchPlane = options.constructionPlane ?? document.activeConstructionPlane?.plane,
+        if let sketchPlane = options.constructionPlane,
            let point = projectedPoint(rawWorldPoint, on: sketchPlane) {
             return point
         }
@@ -119,11 +116,9 @@ struct ViewportConstructionPlaneDragSnapResolver: Sendable {
     private func planarFallbackWorldPoint(
         resolvedPoint: Point2D,
         rawWorldPoint: Point3D,
-        document: DesignDocument,
         options: SnapResolutionOptions
     ) throws -> Point3D {
-        if options.usesConstructionPlaneProjection,
-           let sketchPlane = options.constructionPlane ?? document.activeConstructionPlane?.plane {
+        if let sketchPlane = options.constructionPlane {
             return try SketchPlaneCoordinateSystem(plane: sketchPlane).point(from: resolvedPoint)
         }
         return Point3D(

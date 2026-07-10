@@ -5,9 +5,31 @@ import RupaCoreTypes
 
 @Observable
 public final class EditorSession {
-    public private(set) var store: CADDocumentStore
-    public private(set) var commandStack: CommandStack
-    public private(set) var selection: SelectionModel
+    private struct DocumentState {
+        var store: CADDocumentStore
+        var commandStack: CommandStack
+        var selection: SelectionModel
+    }
+
+    private var documentState: DocumentState
+    public private(set) var workspaceState: WorkspaceState
+
+    public var store: CADDocumentStore {
+        documentState.store
+    }
+
+    public var commandStack: CommandStack {
+        documentState.commandStack
+    }
+
+    public private(set) var selection: SelectionModel {
+        get {
+            documentState.selection
+        }
+        set {
+            documentState.selection = newValue
+        }
+    }
     public private(set) var polygonToolState: PolygonToolState
     public private(set) var sketchInputState: SketchInputState
     public var selectedTool: ModelingTool
@@ -69,7 +91,14 @@ public final class EditorSession {
     }
 
     public var activeConstructionPlane: ConstructionPlaneSource? {
-        document.activeConstructionPlane
+        guard let id = workspaceState.activeConstructionPlaneID else {
+            return nil
+        }
+        return document.productMetadata.constructionPlanes[id]
+    }
+
+    private var workspaceScaleDefaults: WorkspaceScaleDefaults {
+        WorkspaceScaleDefaults(ruler: workspaceState.ruler)
     }
 
     public var selectedSceneNode: SceneNode? {
@@ -85,36 +114,108 @@ public final class EditorSession {
         polygonToolState: PolygonToolState = .standard,
         sketchInputState: SketchInputState = .standard,
         selection: SelectionModel = .empty,
+        workspaceState: WorkspaceState = WorkspaceState(),
         diagnostics: [EditorDiagnostic] = [],
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) {
-        self.store = CADDocumentStore(
+        let store = CADDocumentStore(
             document: document,
             diagnostics: diagnostics,
             objectRegistry: objectRegistry
         )
-        self.commandStack = CommandStack()
+        var initialSelection = selection
+        initialSelection.pruneMissingReferences(in: document)
+        var initialWorkspaceState = workspaceState
+        initialWorkspaceState.pruneMissingReferences(in: document)
+        self.documentState = DocumentState(
+            store: store,
+            commandStack: CommandStack(),
+            selection: initialSelection
+        )
+        self.workspaceState = initialWorkspaceState
         self.selectedTool = selectedTool
         self.polygonToolState = polygonToolState
         self.sketchInputState = sketchInputState
-        var initialSelection = selection
-        initialSelection.pruneMissingReferences(in: document)
-        self.selection = initialSelection
     }
 
     public func transactionSnapshot() -> EditorSessionTransactionSnapshot {
         EditorSessionTransactionSnapshot(
             store: store.transactionSnapshot(),
             commandStack: commandStack.snapshot(),
-            selection: selection
+            selection: selection,
+            workspaceState: workspaceState
         )
     }
 
     public func restoreTransactionSnapshot(_ snapshot: EditorSessionTransactionSnapshot) {
-        store.restoreTransactionSnapshot(snapshot.store)
-        commandStack.restore(snapshot.commandStack)
-        selection = snapshot.selection
-        selection.pruneMissingReferences(in: document)
+        let restoredStore = CADDocumentStore(
+            transactionSnapshot: snapshot.store,
+            objectRegistry: objectRegistry
+        )
+        let restoredCommandStack = CommandStack(
+            undoEntries: snapshot.commandStack.undoEntries,
+            redoEntries: snapshot.commandStack.redoEntries
+        )
+        var restoredSelection = snapshot.selection
+        restoredSelection.pruneMissingReferences(in: restoredStore.document)
+        documentState = DocumentState(
+            store: restoredStore,
+            commandStack: restoredCommandStack,
+            selection: restoredSelection
+        )
+        workspaceState = snapshot.workspaceState
+        workspaceState.pruneMissingReferences(in: restoredStore.document)
+    }
+
+    func makeIsolatedTransactionSession(
+        from snapshot: EditorSessionTransactionSnapshot
+    ) -> EditorSession {
+        let stagedSession = EditorSession(
+            document: snapshot.store.document.document,
+            selectedTool: selectedTool,
+            polygonToolState: polygonToolState,
+            sketchInputState: sketchInputState,
+            selection: snapshot.selection,
+            workspaceState: snapshot.workspaceState,
+            diagnostics: snapshot.store.document.diagnostics,
+            objectRegistry: objectRegistry
+        )
+        stagedSession.restoreTransactionSnapshot(snapshot)
+        return stagedSession
+    }
+
+    func publishWorkspaceState(_ state: WorkspaceState) throws {
+        try state.validate(against: document)
+        workspaceState = state
+    }
+
+    func requireUnchangedSourceState(
+        in stagedSession: EditorSession,
+        from snapshot: EditorSessionTransactionSnapshot,
+        transactionName: String
+    ) throws {
+        guard stagedSession.generation == snapshot.store.document.generation,
+              stagedSession.isDirty == snapshot.store.document.isDirty,
+              stagedSession.commandStack.undoEntries.count == snapshot.commandStack.undoEntries.count,
+              stagedSession.commandStack.redoEntries.count == snapshot.commandStack.redoEntries.count else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(transactionName) cannot execute source mutations."
+            )
+        }
+    }
+
+    func requireUnchangedWorkspaceState(
+        in stagedSession: EditorSession,
+        from snapshot: EditorSessionTransactionSnapshot,
+        transactionName: String
+    ) throws {
+        guard stagedSession.workspaceState.revision == snapshot.workspaceState.revision else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(transactionName) cannot execute workspace mutations."
+            )
+        }
     }
 
     public func markClean() {
@@ -717,7 +818,15 @@ public final class EditorSession {
             expectedGeneration: expectedGeneration
         )
         selection.pruneMissingReferences(in: document)
+        workspaceState.pruneMissingReferences(in: document)
         return result
+    }
+
+    @discardableResult
+    public func execute(
+        _ command: WorkspaceCommand
+    ) throws -> WorkspaceCommandResult {
+        try workspaceState.apply(command, document: document)
     }
 
     private func commandResolvingSelectionContext(_ command: EditorCommand) throws -> EditorCommand {
@@ -759,7 +868,7 @@ public final class EditorSession {
 
     public func setDisplayUnit(_ unit: LengthDisplayUnit) {
         do {
-            try execute(.setDisplayUnit(unit))
+            try execute(WorkspaceCommand.setDisplayUnit(unit))
         } catch {
             record(error)
         }
@@ -767,7 +876,7 @@ public final class EditorSession {
 
     public func setRulerConfiguration(_ configuration: RulerConfiguration) {
         do {
-            try execute(.setRulerConfiguration(configuration))
+            try execute(WorkspaceCommand.setRulerConfiguration(configuration))
         } catch {
             record(error)
         }
@@ -775,7 +884,7 @@ public final class EditorSession {
 
     public func setViewportGridSettings(_ settings: ViewportGridSettings) {
         do {
-            try execute(.setViewportGridSettings(settings))
+            try execute(WorkspaceCommand.setViewportGridSettings(settings))
         } catch {
             record(error)
         }
@@ -844,25 +953,15 @@ public final class EditorSession {
         activeConstructionPlane?.plane ?? fallback
     }
 
-    private func sketchPlaneReference(_ plane: SketchPlane) -> SketchPlaneReference {
-        SketchPlaneReference(sketchPlane: plane)
-    }
-
-    private func sketchPlaneReference(_ plane: SketchPlane?) -> SketchPlaneReference? {
-        plane.map(SketchPlaneReference.init(sketchPlane:))
-    }
-
     @discardableResult
     public func createConstructionPlane(
         name: String,
-        plane: SketchPlane,
-        activates: Bool = true
+        plane: SketchPlane
     ) -> CommandExecutionResult? {
         perform(
             .createConstructionPlane(
                 name: name,
-                plane: plane,
-                activates: activates
+                plane: plane
             )
         )
     }
@@ -870,27 +969,23 @@ public final class EditorSession {
     @discardableResult
     public func createConstructionPlaneFromTarget(
         name: String,
-        target: SelectionTarget,
-        activates: Bool = true
+        target: SelectionTarget
     ) -> CommandExecutionResult? {
         perform(
             .createConstructionPlaneFromTarget(
                 name: name,
-                target: target,
-                activates: activates
+                target: target
             )
         )
     }
 
     @discardableResult
     public func createConstructionPlaneFromTarget(
-        _ target: SelectionTarget,
-        activates: Bool = true
+        _ target: SelectionTarget
     ) -> CommandExecutionResult? {
         createConstructionPlaneFromTarget(
             name: nextSceneNodeName(prefix: "Custom Plane"),
-            target: target,
-            activates: activates
+            target: target
         )
     }
 
@@ -898,15 +993,13 @@ public final class EditorSession {
     public func createConstructionPlaneFromTargets(
         name: String,
         targets: [SelectionTarget],
-        viewNormal: Vector3D? = nil,
-        activates: Bool = true
+        viewNormal: Vector3D? = nil
     ) -> CommandExecutionResult? {
         perform(
             .createConstructionPlaneFromTargets(
                 name: name,
                 targets: targets,
-                viewNormal: viewNormal,
-                activates: activates
+                viewNormal: viewNormal
             )
         )
     }
@@ -914,14 +1007,12 @@ public final class EditorSession {
     @discardableResult
     public func createConstructionPlaneFromTargets(
         _ targets: [SelectionTarget],
-        viewNormal: Vector3D? = nil,
-        activates: Bool = true
+        viewNormal: Vector3D? = nil
     ) -> CommandExecutionResult? {
         createConstructionPlaneFromTargets(
             name: nextSceneNodeName(prefix: "Custom Plane"),
             targets: targets,
-            viewNormal: viewNormal,
-            activates: activates
+            viewNormal: viewNormal
         )
     }
 
@@ -929,15 +1020,13 @@ public final class EditorSession {
     public func createViewAlignedConstructionPlane(
         name: String,
         origin: Point3D = .origin,
-        viewNormal: Vector3D,
-        activates: Bool = true
+        viewNormal: Vector3D
     ) -> CommandExecutionResult? {
         perform(
             .createViewAlignedConstructionPlane(
                 name: name,
                 origin: origin,
-                viewNormal: viewNormal,
-                activates: activates
+                viewNormal: viewNormal
             )
         )
     }
@@ -945,22 +1034,25 @@ public final class EditorSession {
     @discardableResult
     public func createViewAlignedConstructionPlane(
         origin: Point3D = .origin,
-        viewNormal: Vector3D,
-        activates: Bool = true
+        viewNormal: Vector3D
     ) -> CommandExecutionResult? {
         createViewAlignedConstructionPlane(
             name: nextSceneNodeName(prefix: "Custom Plane"),
             origin: origin,
-            viewNormal: viewNormal,
-            activates: activates
+            viewNormal: viewNormal
         )
     }
 
     @discardableResult
     public func setActiveConstructionPlane(
         id: ConstructionPlaneSourceID?
-    ) -> CommandExecutionResult? {
-        perform(.setActiveConstructionPlane(id: id))
+    ) -> WorkspaceCommandResult? {
+        do {
+            return try execute(WorkspaceCommand.setActiveConstructionPlane(id))
+        } catch {
+            record(error)
+            return nil
+        }
     }
 
     @discardableResult
@@ -984,14 +1076,19 @@ public final class EditorSession {
         target: SelectionTarget,
         isVisible: Bool? = nil,
         combScale: Double? = nil
-    ) -> CommandExecutionResult? {
-        perform(
-            .setCurveCurvatureDisplay(
-                target: target,
-                isVisible: isVisible,
-                combScale: combScale
+    ) -> WorkspaceCommandResult? {
+        do {
+            return try execute(
+                WorkspaceCommand.setCurveCurvatureDisplay(
+                    target: target,
+                    isVisible: isVisible,
+                    combScale: combScale
+                )
             )
-        )
+        } catch {
+            record(error)
+            return nil
+        }
     }
 
     public func deleteParameter(named name: String) {
@@ -1175,6 +1272,20 @@ public final class EditorSession {
         )
     }
 
+    public func setTopologyMaterialBinding(
+        target: SelectionTarget,
+        materialID: MaterialID?,
+        process: TopologyMaterialBinding.Process? = nil
+    ) {
+        perform(
+            .setTopologyMaterialBinding(
+                target: target,
+                materialID: materialID,
+                process: process
+            )
+        )
+    }
+
     public func setSceneNodeObjectProperty(
         _ id: SceneNodeID,
         propertyID: ObjectPropertyID,
@@ -1219,33 +1330,63 @@ public final class EditorSession {
     public func setPointDisplay(
         target: SelectionTarget,
         isVisible: Bool? = nil
-    ) -> CommandExecutionResult? {
-        perform(.setPointDisplay(target: target, isVisible: isVisible))
+    ) -> WorkspaceCommandResult? {
+        do {
+            return try execute(
+                WorkspaceCommand.setPointDisplay(
+                    target: target,
+                    isVisible: isVisible
+                )
+            )
+        } catch {
+            record(error)
+            return nil
+        }
     }
 
     @discardableResult
     public func setSurfaceControlPointDisplay(
         target: SelectionReference,
         isVisible: Bool? = nil
-    ) -> CommandExecutionResult? {
-        perform(.setSurfaceControlPointDisplay(target: target, isVisible: isVisible))
+    ) -> WorkspaceCommandResult? {
+        do {
+            return try execute(
+                WorkspaceCommand.setSurfaceControlPointDisplay(
+                    target: target,
+                    isVisible: isVisible
+                )
+            )
+        } catch {
+            record(error)
+            return nil
+        }
     }
 
     @discardableResult
     public func setSurfaceFrameDisplay(
         query: SurfaceFrameQuery,
         isVisible: Bool? = nil
-    ) -> CommandExecutionResult? {
-        perform(.setSurfaceFrameDisplay(query: query, isVisible: isVisible))
+    ) -> WorkspaceCommandResult? {
+        do {
+            return try execute(
+                WorkspaceCommand.setSurfaceFrameDisplay(
+                    query: query,
+                    isVisible: isVisible
+                )
+            )
+        } catch {
+            record(error)
+            return nil
+        }
     }
 
     @discardableResult
     public func createDefaultRectangleSketch() -> CommandExecutionResult? {
-        let defaults = document.workspaceScaleDefaults
+        let defaults = workspaceScaleDefaults
         return perform(
             .createRectangleSketch(
                 name: nextFeatureName(prefix: "Rectangle Sketch"),
-                plane: sketchPlaneReference(activeSketchPlane()),
+                plane: activeSketchPlane(),
                 width: lengthExpressionMeters(defaults.sketchWidthMeters),
                 height: lengthExpressionMeters(defaults.sketchHeightMeters)
             )
@@ -1266,7 +1407,7 @@ public final class EditorSession {
             return nil
         }
 
-        let defaults = document.workspaceScaleDefaults
+        let defaults = workspaceScaleDefaults
         let widthMeters = activeSketchWidthInputMeters ?? defaults.placedRectangleWidthMeters
         let heightMeters = activeSketchHeightInputMeters ?? defaults.placedRectangleHeightMeters
         let halfWidthMeters = widthMeters / 2.0
@@ -1275,7 +1416,7 @@ public final class EditorSession {
         return perform(
             .createRectangleSketchFromCorners(
                 name: nextFeatureName(prefix: "Rectangle Sketch"),
-                plane: sketchPlaneReference(sketchPlane),
+                plane: sketchPlane,
                 firstCorner: SketchPoint(
                     x: lengthExpressionMeters(center.x - halfWidthMeters),
                     y: lengthExpressionMeters(center.y - halfHeightMeters)
@@ -1328,7 +1469,7 @@ public final class EditorSession {
         return perform(
             .createRectangleSketchFromCorners(
                 name: nextFeatureName(prefix: "Rectangle Sketch"),
-                plane: sketchPlaneReference(sketchPlane),
+                plane: sketchPlane,
                 firstCorner: SketchPoint(
                     x: lengthExpressionMeters(minX),
                     y: lengthExpressionMeters(minY)
@@ -1343,11 +1484,11 @@ public final class EditorSession {
 
     @discardableResult
     public func createDefaultCircleSketch() -> CommandExecutionResult? {
-        let defaults = document.workspaceScaleDefaults
+        let defaults = workspaceScaleDefaults
         return perform(
             .createCircleSketch(
                 name: nextFeatureName(prefix: "Circle Sketch"),
-                plane: sketchPlaneReference(activeSketchPlane()),
+                plane: activeSketchPlane(),
                 center: SketchPoint(
                     x: lengthExpressionMeters(0.0),
                     y: lengthExpressionMeters(0.0)
@@ -1366,7 +1507,7 @@ public final class EditorSession {
         perform(
             .createSplineSketch(
                 name: name,
-                plane: sketchPlaneReference(plane),
+                plane: plane,
                 spline: spline
             )
         )
@@ -1387,11 +1528,11 @@ public final class EditorSession {
         }
 
         let center = sketchPoint2D(from: centerModelPoint, on: sketchPlane)
-        let radiusMeters = activeSketchLengthInputMeters ?? document.workspaceScaleDefaults.curveRadiusMeters
+        let radiusMeters = activeSketchLengthInputMeters ?? workspaceScaleDefaults.curveRadiusMeters
         return perform(
             .createCircleSketch(
                 name: nextFeatureName(prefix: "Circle Sketch"),
-                plane: sketchPlaneReference(sketchPlane),
+                plane: sketchPlane,
                 center: SketchPoint(
                     x: .length(center.x, .meter),
                     y: .length(center.y, .meter)
@@ -1434,7 +1575,7 @@ public final class EditorSession {
         return perform(
             .createCircleSketch(
                 name: nextFeatureName(prefix: "Circle Sketch"),
-                plane: sketchPlaneReference(sketchPlane),
+                plane: sketchPlane,
                 center: SketchPoint(
                     x: .length(center.x, .meter),
                     y: .length(center.y, .meter)
@@ -1458,7 +1599,7 @@ public final class EditorSession {
         let result = perform(
             .createPolygonSketch(
                 name: name,
-                plane: sketchPlaneReference(plane),
+                plane: plane,
                 center: center,
                 radius: radius,
                 sides: sides,
@@ -1503,7 +1644,7 @@ public final class EditorSession {
                     sides: sides,
                     sizingMode: sizingMode,
                     inclinationMode: inclinationMode,
-                    defaults: document.workspaceScaleDefaults,
+                    defaults: workspaceScaleDefaults,
                     radiusMeters: activeSketchLengthInputMeters,
                     rotationAngleRadians: activeSketchAngleInputRadians
                 )
@@ -1536,7 +1677,7 @@ public final class EditorSession {
                 sides: sides,
                 sizingMode: sizingMode,
                 inclinationMode: inclinationMode,
-                defaults: document.workspaceScaleDefaults,
+                defaults: workspaceScaleDefaults,
                 radiusMeters: activeSketchLengthInputMeters,
                 rotationAngleRadians: activeSketchAngleInputRadians
             )
@@ -1551,7 +1692,7 @@ public final class EditorSession {
         let result = perform(
             .createPolygonSketch(
                 name: nextFeatureName(prefix: "Polygon Sketch"),
-                plane: sketchPlaneReference(sketchPlane),
+                plane: sketchPlane,
                 center: sketchPoint(draft.center),
                 radius: lengthExpressionMeters(draft.radiusMeters),
                 sides: draft.sides,
@@ -1652,7 +1793,7 @@ public final class EditorSession {
         let result = perform(
             .createPolygonSketch(
                 name: nextFeatureName(prefix: "Polygon Sketch"),
-                plane: sketchPlaneReference(sketchPlane),
+                plane: sketchPlane,
                 center: sketchPoint(draft.center),
                 radius: lengthExpressionMeters(draft.radiusMeters),
                 sides: draft.sides,
@@ -1695,7 +1836,7 @@ public final class EditorSession {
         perform(
             .projectSketchCurvesToConstructionPlane(
                 targets: targets,
-                plane: sketchPlaneReference(plane),
+                plane: plane ?? activeSketchPlane(),
                 name: name
             )
         )
@@ -1725,7 +1866,7 @@ public final class EditorSession {
         perform(
             .projectBodyOutlinesToConstructionPlane(
                 targets: targets,
-                plane: sketchPlaneReference(plane),
+                plane: plane ?? activeSketchPlane(),
                 name: name
             )
         )
@@ -1819,7 +1960,7 @@ public final class EditorSession {
         do {
             draft = try CanvasSketchCurveDrafts.arc(
                 centeredAt: center,
-                defaults: document.workspaceScaleDefaults,
+                defaults: workspaceScaleDefaults,
                 radiusMeters: activeSketchLengthInputMeters,
                 spanAngleRadians: activeSketchAngleInputRadians
             )
@@ -1834,7 +1975,7 @@ public final class EditorSession {
         return perform(
             .createArcSketch(
                 name: nextFeatureName(prefix: "Arc Sketch"),
-                plane: sketchPlaneReference(sketchPlane),
+                plane: sketchPlane,
                 center: sketchPoint(x: draft.center.x, y: draft.center.y),
                 radius: lengthExpressionMeters(draft.radiusMeters),
                 startAngle: .angle(draft.startAngleRadians, .radian),
@@ -1870,7 +2011,7 @@ public final class EditorSession {
         return perform(
             .createArcSketch(
                 name: nextFeatureName(prefix: "Arc Sketch"),
-                plane: sketchPlaneReference(sketchPlane),
+                plane: sketchPlane,
                 center: sketchPoint(x: draft.center.x, y: draft.center.y),
                 radius: lengthExpressionMeters(draft.radiusMeters),
                 startAngle: .angle(draft.startAngleRadians, .radian),
@@ -1941,7 +2082,7 @@ public final class EditorSession {
         do {
             draft = try CanvasSketchCurveDrafts.spline(
                 centeredAt: center,
-                defaults: document.workspaceScaleDefaults
+                defaults: workspaceScaleDefaults
             )
         } catch let failure as CanvasSketchCurveDrafts.Failure {
             reportToolStatus(failure.message, severity: .warning)
@@ -1954,7 +2095,7 @@ public final class EditorSession {
         return perform(
             .createSplineSketch(
                 name: nextFeatureName(prefix: "Spline Sketch"),
-                plane: sketchPlaneReference(sketchPlane),
+                plane: sketchPlane,
                 spline: SketchSpline(
                     controlPoints: draft.controlPoints.map(sketchPoint)
                 )
@@ -1975,7 +2116,7 @@ public final class EditorSession {
             draft = try CanvasSketchCurveDrafts.spline(
                 from: start,
                 to: end,
-                defaults: document.workspaceScaleDefaults
+                defaults: workspaceScaleDefaults
             )
         } catch let failure as CanvasSketchCurveDrafts.Failure {
             reportToolStatus(failure.message, severity: .warning)
@@ -1988,7 +2129,7 @@ public final class EditorSession {
         return perform(
             .createSplineSketch(
                 name: nextFeatureName(prefix: "Spline Sketch"),
-                plane: sketchPlaneReference(sketchPlane),
+                plane: sketchPlane,
                 spline: SketchSpline(
                     controlPoints: draft.controlPoints.map(sketchPoint)
                 )
@@ -1998,11 +2139,11 @@ public final class EditorSession {
 
     @discardableResult
     public func createDefaultExtrudedRectangle() -> CommandExecutionResult? {
-        let defaults = document.workspaceScaleDefaults
+        let defaults = workspaceScaleDefaults
         return perform(
             .createExtrudedRectangle(
                 name: nextFeatureName(prefix: "Box"),
-                plane: sketchPlaneReference(activeSketchPlane()),
+                plane: activeSketchPlane(),
                 width: lengthExpressionMeters(defaults.sketchWidthMeters),
                 height: lengthExpressionMeters(defaults.sketchHeightMeters),
                 depth: lengthExpressionMeters(defaults.sketchDepthMeters),
@@ -2034,7 +2175,7 @@ public final class EditorSession {
         if let cellMeters, cellMeters.isFinite, cellMeters > 0.0 {
             sideMeters = cellMeters
         } else {
-            sideMeters = document.workspaceScaleDefaults.placedSolidSideMeters
+            sideMeters = workspaceScaleDefaults.placedSolidSideMeters
         }
         // Typed width/height overrides take precedence over the visible cell,
         // matching the sketch tool's click placement.
@@ -2044,7 +2185,7 @@ public final class EditorSession {
         return perform(
             .createExtrudedRectangleFromCorners(
                 name: nextFeatureName(prefix: "Box"),
-                plane: sketchPlaneReference(sketchPlane),
+                plane: sketchPlane,
                 firstCorner: SketchPoint(
                     x: lengthExpressionMeters(center.x - widthMeters / 2.0),
                     y: lengthExpressionMeters(center.y - heightMeters / 2.0)
@@ -2102,7 +2243,7 @@ public final class EditorSession {
         return perform(
             .createExtrudedRectangleFromCorners(
                 name: nextFeatureName(prefix: "Box"),
-                plane: sketchPlaneReference(sketchPlane),
+                plane: sketchPlane,
                 firstCorner: SketchPoint(
                     x: lengthExpressionMeters(minX),
                     y: lengthExpressionMeters(minY)
@@ -2111,7 +2252,7 @@ public final class EditorSession {
                     x: lengthExpressionMeters(maxX),
                     y: lengthExpressionMeters(maxY)
                 ),
-                depth: lengthExpressionMeters(document.workspaceScaleDefaults.sketchDepthMeters),
+                depth: lengthExpressionMeters(workspaceScaleDefaults.sketchDepthMeters),
                 direction: .normal
             )
         )
@@ -2135,7 +2276,7 @@ public final class EditorSession {
             .extrudeProfile(
                 name: nextFeatureName(prefix: "\(sceneNode.name) Body"),
                 profile: ProfileReference(featureID: featureID),
-                distance: lengthExpressionMeters(document.workspaceScaleDefaults.sketchDepthMeters),
+                distance: lengthExpressionMeters(workspaceScaleDefaults.sketchDepthMeters),
                 direction: .normal
             )
         )
@@ -3572,11 +3713,11 @@ public final class EditorSession {
 
     @discardableResult
     public func createDefaultExtrudedCircle() -> CommandExecutionResult? {
-        let defaults = document.workspaceScaleDefaults
+        let defaults = workspaceScaleDefaults
         return perform(
             .createExtrudedCircle(
                 name: nextFeatureName(prefix: "Cylinder"),
-                plane: sketchPlaneReference(activeSketchPlane()),
+                plane: activeSketchPlane(),
                 center: SketchPoint(
                     x: lengthExpressionMeters(0.0),
                     y: lengthExpressionMeters(0.0)
@@ -3602,6 +3743,7 @@ public final class EditorSession {
             let result = try MeasurementService().measure(
                 document: document,
                 selection: selection,
+                ruler: workspaceState.ruler,
                 objectRegistry: objectRegistry,
                 currentEvaluation: currentEvaluation,
                 currentGeneration: generation
@@ -3616,6 +3758,7 @@ public final class EditorSession {
         do {
             let result = try MeshSummaryService().summarize(
                 document: document,
+                ruler: workspaceState.ruler,
                 objectRegistry: objectRegistry,
                 currentEvaluation: currentEvaluation,
                 currentGeneration: generation

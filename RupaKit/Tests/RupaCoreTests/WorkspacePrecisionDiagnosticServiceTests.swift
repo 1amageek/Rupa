@@ -79,19 +79,32 @@ import Testing
 }
 
 @MainActor
-@Test func evaluationSnapshotIncludesWorkspacePrecisionDiagnostic() throws {
+@Test func evaluationSnapshotExcludesWorkspacePrecisionAndDisplaySnapshotReportsIt() throws {
     let document = try farFromOriginDocument()
 
-    let snapshot = EvaluationScheduler().evaluate(
+    let evaluation = EvaluationScheduler().evaluate(
         document: document,
         generation: DocumentGeneration(1)
     )
+    let display = try DesignDisplaySnapshotService().result(
+        document: document,
+        workspaceState: WorkspaceState(
+            ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+        ),
+        generation: DocumentGeneration(1),
+        dirty: false
+    )
 
-    #expect(snapshot.status == .valid)
-    #expect(snapshot.diagnostics.contains {
-        $0.severity == .warning
-            && $0.code == .workspacePrecisionWarning
+    #expect(evaluation.status == .valid)
+    #expect(!evaluation.diagnostics.contains {
+        $0.code == .workspacePrecisionWarning || $0.code == .workspacePrecisionNotice
     })
+    #expect(display.workspacePrecision?.reason == .coordinateResolution)
+    #expect(display.workspacePrecision?.recommendedRebaseTranslation == Vector3D(
+        x: -(1.0e12 + 5.0),
+        y: -(1.0e12 + 5.0),
+        z: 0.0
+    ))
 }
 
 @MainActor
@@ -99,8 +112,11 @@ import Testing
     let document = try farFromOriginDocument()
 
     let result = try MeasurementService(
-        tolerance: .workspaceScaleAware(for: document)
-    ).measure(document: document)
+        tolerance: document.modelingSettings.tolerance
+    ).measure(
+        document: document,
+        ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+    )
 
     #expect(result.diagnostics.contains {
         $0.severity == .warning
@@ -118,7 +134,10 @@ import Testing
 @Test func meshSummaryIncludesWorkspacePrecisionDiagnostic() throws {
     let document = try farFromOriginDocument()
 
-    let result = try MeshSummaryService().summarize(document: document)
+    let result = try MeshSummaryService().summarize(
+        document: document,
+        ruler: .standard(for: .millimeter)
+    )
 
     #expect(result.diagnostics.contains {
         $0.severity == .warning
@@ -134,7 +153,7 @@ import Testing
     let bounds = WorkspaceBoundsService().bounds(for: evaluated)
     let report = WorkspacePrecisionDiagnosticService().report(
         for: evaluated,
-        ruler: document.ruler
+        ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
     )
 
     #expect(bounds?.sizeX == 10.0)
@@ -153,7 +172,6 @@ import Testing
 @MainActor
 @Test func workspacePrecisionReportIncludesEvaluatedCurvesForSketchOnlyDocuments() throws {
     var document = DesignDocument.empty(named: "Remote Sketch")
-    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
     _ = try document.createRectangleSketchFromCorners(
         name: "Remote Sketch Profile",
         plane: .xy,
@@ -171,7 +189,7 @@ import Testing
     let bounds = WorkspaceBoundsService().bounds(for: evaluated)
     let report = WorkspacePrecisionDiagnosticService().report(
         for: evaluated,
-        ruler: document.ruler
+        ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
     )
 
     #expect(bounds?.sizeX == 10.0)
@@ -190,7 +208,6 @@ import Testing
 @MainActor
 private func farFromOriginDocument() throws -> DesignDocument {
     var document = DesignDocument.empty(named: "Far Origin")
-    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
     let profileID = try document.createRectangleSketchFromCorners(
         name: "Remote Profile",
         plane: .xy,

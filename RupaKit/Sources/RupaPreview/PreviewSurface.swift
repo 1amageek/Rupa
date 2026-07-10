@@ -3,6 +3,7 @@ import RupaCore
 
 public struct PreviewSurface: View {
     private let document: DesignDocument
+    private let ruler: RulerConfiguration
     private let evaluationStatus: EvaluationStatus
     private let evaluatedGeneration: DocumentGeneration?
     private let evaluatedBodyCount: Int
@@ -10,12 +11,14 @@ public struct PreviewSurface: View {
 
     public init(
         document: DesignDocument,
+        ruler: RulerConfiguration,
         evaluationStatus: EvaluationStatus = .notEvaluated,
         evaluatedGeneration: DocumentGeneration? = nil,
         evaluatedBodyCount: Int = 0,
         diagnostics: [EditorDiagnostic]
     ) {
         self.document = document
+        self.ruler = ruler
         self.evaluationStatus = evaluationStatus
         self.evaluatedGeneration = evaluatedGeneration
         self.evaluatedBodyCount = evaluatedBodyCount
@@ -25,9 +28,9 @@ public struct PreviewSurface: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 16) {
-                metric(title: "Unit", value: document.displayUnit.symbol)
-                metric(title: "Minor", value: formatted(document.ruler.minorTickMeters))
-                metric(title: "Major", value: formatted(document.ruler.majorTickMeters))
+                metric(title: "Unit", value: ruler.displayUnit.symbol)
+                metric(title: "Minor", value: formatted(ruler.minorTickMeters))
+                metric(title: "Major", value: formatted(ruler.majorTickMeters))
                 metric(title: "Eval", value: evaluationTitle)
                 metric(title: "Bodies", value: "\(evaluatedBodyCount)")
                 Spacer(minLength: 0)
@@ -62,8 +65,8 @@ public struct PreviewSurface: View {
     }
 
     private func formatted(_ meters: Double) -> String {
-        let value = document.displayUnit.value(fromMeters: meters)
-        return "\(value.formatted(.number.precision(.fractionLength(0...4)))) \(document.displayUnit.symbol)"
+        let value = ruler.displayUnit.value(fromMeters: meters)
+        return "\(value.formatted(.number.precision(.fractionLength(0...4)))) \(ruler.displayUnit.symbol)"
     }
 
     private var evaluationTitle: String {

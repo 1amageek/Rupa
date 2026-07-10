@@ -5,7 +5,6 @@ import SwiftCAD
 
 @Test func curveAnalysisServiceReportsSamplesCurvatureAndLength() throws {
     var document = DesignDocument.empty()
-    document.setDisplayUnit(.millimeter)
     _ = try document.createLineSketch(
         name: "Analysis Line",
         plane: .xy,
@@ -37,7 +36,7 @@ import SwiftCAD
         ])
     )
 
-    let result = try CurveAnalysisService(samplesPerSegment: 16).analyze(document: document)
+    let result = try CurveAnalysisService(samplesPerSegment: 16).analyze(document: document, displayUnit: .millimeter)
 
     #expect(result.displayUnit == .millimeter)
     #expect(result.displayUnitSymbol == "mm")
@@ -81,7 +80,7 @@ import SwiftCAD
         ])
     )
 
-    let result = try CurveAnalysisService(samplesPerSegment: 8).analyze(document: document)
+    let result = try CurveAnalysisService(samplesPerSegment: 8).analyze(document: document, displayUnit: .millimeter)
 
     #expect(result.counts.curveCount == 1)
     #expect(result.counts.continuityJoinCount == 1)
@@ -106,7 +105,7 @@ import SwiftCAD
         }
     )
 
-    let result = try CurveAnalysisService(samplesPerSegment: 8).analyze(document: setup.document)
+    let result = try CurveAnalysisService(samplesPerSegment: 8).analyze(document: setup.document, displayUnit: .millimeter)
 
     #expect(result.counts.curveCount == 2)
     #expect(result.counts.continuityJoinCount == 1)
@@ -127,7 +126,8 @@ import SwiftCAD
     let selectedResult = try CurveAnalysisService(samplesPerSegment: 8).analyze(
         document: setup.document,
         featureID: setup.featureID,
-        entityID: setup.firstLineID
+        entityID: setup.firstLineID,
+        displayUnit: .millimeter
     )
     #expect(selectedResult.counts.curveCount == 1)
     #expect(selectedResult.counts.continuityJoinCount == 1)
@@ -138,7 +138,7 @@ import SwiftCAD
 @Test func curveAnalysisServiceAggregatesConstrainedEndpointContinuity() throws {
     let setup = try twoSplineCurveAnalysisDocument()
 
-    let result = try CurveAnalysisService(samplesPerSegment: 8).analyze(document: setup.document)
+    let result = try CurveAnalysisService(samplesPerSegment: 8).analyze(document: setup.document, displayUnit: .millimeter)
 
     #expect(result.counts.curveCount == 2)
     #expect(result.counts.continuityJoinCount == 1)
@@ -158,14 +158,13 @@ import SwiftCAD
 
 @Test func curveAnalysisResultDecodesMissingDisplayValues() throws {
     var document = DesignDocument.empty()
-    document.setDisplayUnit(.millimeter)
     _ = try document.createLineSketch(
         name: "Legacy Analysis Line",
         plane: .xy,
         start: curveAnalysisPoint(x: 0.0, y: 0.0),
         end: curveAnalysisPoint(x: 0.010, y: 0.0)
     )
-    let result = try CurveAnalysisService(samplesPerSegment: 8).analyze(document: document)
+    let result = try CurveAnalysisService(samplesPerSegment: 8).analyze(document: document, displayUnit: .millimeter)
     let json = try JSONSerialization.jsonObject(
         with: try JSONEncoder().encode(result)
     ) as? [String: Any]

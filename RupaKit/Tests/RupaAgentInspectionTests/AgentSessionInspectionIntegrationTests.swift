@@ -436,7 +436,7 @@ import SwiftCAD
         #expect(Bool(false))
         return
     }
-    let evaluatedTopology = try TopologySummaryService().summarize(document: session.document)
+    let evaluatedTopology = try TopologySnapshotService().snapshot(document: session.document)
     let generatedOffsetEdges = evaluatedTopology.entries.filter { entry in
         entry.kind == .edge &&
             entry.sourceFeatureID == offsetFeatureID.description &&
@@ -655,7 +655,7 @@ import SwiftCAD
         Issue.record("Agent must return an offsetCurve command result for a round region offset.")
         return
     }
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let offsetRegion = try #require(after.regions.first { $0.sourceFeatureID != region.sourceFeatureID })
     let offsetEntries = after.entries.filter { $0.sourceFeatureID == offsetRegion.sourceFeatureID }
     #expect(result.commandName == "offsetCurve")
@@ -683,7 +683,7 @@ import SwiftCAD
             height: .length(6.0, .millimeter)
         )
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let region = try #require(summary.regions.first)
     let target = try #require(region.selectionTarget())
     server.register(session: session, id: sessionID)
@@ -705,7 +705,7 @@ import SwiftCAD
         Issue.record("Agent must return an offsetCurve command result for symmetric Offset Region.")
         return
     }
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let offsetRegions = after.regions.filter { $0.sourceFeatureID != region.sourceFeatureID }
     let areas = offsetRegions.map(\.areaSquareMeters).sorted()
     #expect(result.commandName == "offsetCurve")
@@ -755,7 +755,7 @@ import SwiftCAD
         Issue.record("Agent must return an offsetCurve command result for a concave region offset.")
         return
     }
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let offsetRegion = try #require(after.regions.first { $0.sourceFeatureID != region.sourceFeatureID })
     #expect(result.commandName == "offsetCurve")
     #expect(result.didMutate)
@@ -805,7 +805,7 @@ import SwiftCAD
         Issue.record("Agent must return an offsetCurve command result for a round concave region offset.")
         return
     }
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let offsetRegion = try #require(after.regions.first { $0.sourceFeatureID != region.sourceFeatureID })
     let offsetEntries = after.entries.filter { $0.sourceFeatureID == offsetRegion.sourceFeatureID }
     #expect(result.commandName == "offsetCurve")
@@ -855,7 +855,7 @@ import SwiftCAD
             )
         )
     )
-    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targets = try before.regions.map { region in
         try #require(region.selectionTarget())
     }
@@ -878,7 +878,7 @@ import SwiftCAD
         Issue.record("Agent must return an offsetRegions command result.")
         return
     }
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let newSketches = after.sketches.filter { sketch in
         before.sketches.contains { $0.sourceFeatureID == sketch.sourceFeatureID } == false
     }
@@ -1166,12 +1166,14 @@ import SwiftCAD
             )
         )
     )
-    _ = try #require(
+    let planeResult = try #require(
         session.createConstructionPlane(
             name: "Agent Right CPlane",
             plane: .yz
         )
     )
+    let planeID = try #require(planeResult.createdConstructionPlaneID)
+    _ = try #require(session.setActiveConstructionPlane(id: planeID))
     server.register(session: session, id: sessionID)
 
     let response = server.handle(
@@ -1181,7 +1183,6 @@ import SwiftCAD
             options: SnapResolutionOptions(
                 usesGrid: false,
                 usesObjects: true,
-                usesConstructionPlaneProjection: true,
                 gridIntervalMeters: 0.001,
                 objectSearchRadiusMeters: 0.0002,
                 maximumCandidateCount: 8
@@ -1206,7 +1207,7 @@ import SwiftCAD
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let edge = try #require(topology.entries.first { entry in
         entry.kind == .edge && entry.start != nil && entry.end != nil && entry.selectionTarget() != nil
     })
@@ -1258,7 +1259,7 @@ import SwiftCAD
         name: "Agent Surface CV Snap PolySpline",
         sourceMesh: agentPolySplineQuadMesh()
     ))
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let vertex = try #require(topology.entries.first { entry in
         entry.kind == .vertex
             && PolySplineSurfaceVertexTarget.canParsePersistentName(entry.persistentName)
@@ -1370,7 +1371,8 @@ import SwiftCAD
         .execute(
             sessionID: sessionID,
             command: .setSurfaceFrameDisplay(query: query, isVisible: true),
-            expectedGeneration: DocumentGeneration(2)
+            expectedGeneration: DocumentGeneration(2),
+            expectedWorkspaceRevision: WorkspaceRevision(0)
         )
     )
     guard case .command(let displayResult) = displayResponse else {
@@ -1383,7 +1385,7 @@ import SwiftCAD
         .surfaceFrames(
             sessionID: sessionID,
             queries: [query],
-            expectedGeneration: DocumentGeneration(3)
+            expectedGeneration: DocumentGeneration(2)
         )
     )
     guard case .surfaceFrames(let frames) = frameResponse,
@@ -1403,7 +1405,7 @@ import SwiftCAD
                 objectSearchRadiusMeters: 0.0002,
                 maximumCandidateCount: 32
             ),
-            expectedGeneration: DocumentGeneration(3)
+            expectedGeneration: DocumentGeneration(2)
         )
     )
 
@@ -1422,7 +1424,8 @@ import SwiftCAD
     #expect(abs((candidate.surfaceFrameSource?.worldPoint.x ?? 0.0) - frame.position.x) <= 1.0e-12)
     #expect(abs((candidate.surfaceFrameSource?.worldPoint.y ?? 0.0) - frame.position.y) <= 1.0e-12)
     #expect(abs((candidate.surfaceFrameSource?.worldPoint.z ?? 0.0) - frame.position.z) <= 1.0e-12)
-    #expect(session.generation == DocumentGeneration(3))
+    #expect(session.generation == DocumentGeneration(2))
+    #expect(session.workspaceState.revision == WorkspaceRevision(1))
     #expect(session.commandStack.canUndo)
 }
 

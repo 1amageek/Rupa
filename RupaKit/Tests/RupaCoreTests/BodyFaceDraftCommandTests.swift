@@ -8,7 +8,7 @@ import Testing
     _ = try #require(session.createDefaultExtrudedRectangle())
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodySceneNodeID = try #require(draftSceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let targetEntry = try #require(topology.entries.first {
         $0.kind == .face &&
             $0.sceneNodeID == bodySceneNodeID.description &&
@@ -40,8 +40,8 @@ import Testing
     }
     let evaluation = try #require(session.currentEvaluationCache?.evaluatedDocument)
     let body = try #require(evaluation.brep.bodies.values.first)
-    let afterTopology = try TopologySummaryService().summarize(document: session.document)
-    let measurement = try MeasurementService().measure(document: session.document)
+    let afterTopology = try TopologySnapshotService().snapshot(document: session.document)
+    let measurement = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
     let draftFaces = afterTopology.entries.filter {
         $0.kind == .face &&
             $0.sceneNodeID == draftSceneNodeID.description &&
@@ -70,7 +70,7 @@ import Testing
     _ = try #require(session.createDefaultExtrudedRectangle())
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodySceneNodeID = try #require(draftSceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let targetEntries = topology.entries
         .filter {
             $0.kind == .face &&
@@ -105,8 +105,8 @@ import Testing
     }
     let evaluation = try #require(session.currentEvaluationCache?.evaluatedDocument)
     let body = try #require(evaluation.brep.bodies.values.first)
-    let afterTopology = try TopologySummaryService().summarize(document: session.document)
-    let measurement = try MeasurementService().measure(document: session.document)
+    let afterTopology = try TopologySnapshotService().snapshot(document: session.document)
+    let measurement = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
     let draftFaces = afterTopology.entries.filter {
         $0.kind == .face &&
             $0.sceneNodeID == draftSceneNodeID.description &&

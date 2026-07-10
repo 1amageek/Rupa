@@ -44,6 +44,7 @@ public struct Viewport: View {
     @State private var sceneSnapshotCache = ViewportSceneSnapshotCache()
 
     private let document: DesignDocument
+    private let workspaceRenderState: ViewportWorkspaceRenderState
     private let currentEvaluation: DocumentEvaluationContext?
     private let documentGeneration: DocumentGeneration?
     private let evaluationCache: EvaluatedDocumentCache?
@@ -57,8 +58,6 @@ public struct Viewport: View {
     private let surfaceContinuity: RupaCore.SurfaceContinuityResult?
     private let sectionAnalysis: SectionAnalysisResult?
     private let sectionClippingPlan: SectionAnalysisClippingPlan?
-    private let curveCurvatureDisplays: [SelectionComponentID: CurveCurvatureDisplay]
-    private let pointDisplays: [SelectionComponentID: PointDisplay]
     private let snapResolutionOptions: SnapResolutionOptions?
     private let canvasDragPreviewKind: ViewportCanvasDragPreviewKind?
     private let canvasPlacementPreviewKind: ViewportCanvasPlacementPreviewKind?
@@ -130,6 +129,14 @@ public struct Viewport: View {
     private let onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)?
     private let onCameraFrameChange: ((ViewportCameraFrame) -> Void)?
     private let onProjectedGridStepChange: ((Double) -> Void)?
+
+    private var workspaceRuler: RulerConfiguration {
+        workspaceRenderState.ruler
+    }
+
+    private var sceneOverlayState: ViewportSceneOverlayState {
+        workspaceRenderState.sceneOverlayState
+    }
 
     private var activeAffordanceDrag: ViewportAffordanceDragState? {
         get { activeInteractionDrags.affordance }
@@ -263,6 +270,7 @@ public struct Viewport: View {
 
     public init(
         document: DesignDocument,
+        workspaceRenderState: ViewportWorkspaceRenderState,
         currentEvaluation: DocumentEvaluationContext? = nil,
         documentGeneration: DocumentGeneration? = nil,
         evaluationCache: EvaluatedDocumentCache? = nil,
@@ -276,8 +284,6 @@ public struct Viewport: View {
         surfaceContinuity: RupaCore.SurfaceContinuityResult? = nil,
         sectionAnalysis: SectionAnalysisResult? = nil,
         sectionClippingPlan: SectionAnalysisClippingPlan? = nil,
-        curveCurvatureDisplays: [SelectionComponentID: CurveCurvatureDisplay] = [:],
-        pointDisplays: [SelectionComponentID: PointDisplay] = [:],
         snapResolutionOptions: SnapResolutionOptions? = nil,
         canvasDragPreviewKind: ViewportCanvasDragPreviewKind? = .rectangle(widthMeters: nil, heightMeters: nil),
         canvasPlacementPreviewKind: ViewportCanvasPlacementPreviewKind? = nil,
@@ -351,6 +357,7 @@ public struct Viewport: View {
         onProjectedGridStepChange: ((Double) -> Void)? = nil
     ) {
         self.document = document
+        self.workspaceRenderState = workspaceRenderState
         self.currentEvaluation = currentEvaluation
         self.documentGeneration = documentGeneration
         self.evaluationCache = evaluationCache
@@ -364,8 +371,6 @@ public struct Viewport: View {
         self.surfaceContinuity = surfaceContinuity
         self.sectionAnalysis = sectionAnalysis
         self.sectionClippingPlan = sectionClippingPlan
-        self.curveCurvatureDisplays = curveCurvatureDisplays
-        self.pointDisplays = pointDisplays
         self.snapResolutionOptions = snapResolutionOptions
         self.canvasDragPreviewKind = canvasDragPreviewKind
         self.canvasPlacementPreviewKind = canvasPlacementPreviewKind
@@ -391,7 +396,7 @@ public struct Viewport: View {
         self.showsConstructionPlaneHover = showsConstructionPlaneHover
         self.allowsSelectionRectangle = allowsSelectionRectangle
         self.allowsObjectAffordances = allowsObjectAffordances
-        let interactionScaleDefaults = WorkspaceInteractionScaleDefaults(ruler: document.ruler)
+        let interactionScaleDefaults = WorkspaceInteractionScaleDefaults(ruler: workspaceRenderState.ruler)
         self.slotWidthMeters = slotWidthMeters ?? interactionScaleDefaults.slotWidthMeters
         self.sketchVertexOffsetDistanceMeters = sketchVertexOffsetDistanceMeters
             ?? interactionScaleDefaults.operationStepMeters
@@ -458,7 +463,7 @@ public struct Viewport: View {
                     fittingInsets: fittingChromeLayout.fittingInsets
                 )
                 let projectedGrid = ViewportProjectedGrid(
-                    document: sceneDocument(usesDragPreviewDocument: true),
+                    ruler: workspaceRuler,
                     layout: sceneContext.layout,
                     size: proxy.size,
                     visualSpacingMode: gridVisualSpacingMode
@@ -774,6 +779,7 @@ public struct Viewport: View {
         if onConstructionPlaneHandleDrag != nil {
             let targets = ViewportConstructionPlaneHandleGeometry().targets(
                 document: document,
+                ruler: workspaceRuler,
                 selection: selection,
                 layout: layout
             )
@@ -850,7 +856,7 @@ public struct Viewport: View {
             scaleReadout: scaleReadout,
             presetTitle: workspaceScalePresetTitle,
             selectedPreset: WorkspaceScalePreset.matching(
-                document.ruler.normalizedForWorkspaceScale()
+                workspaceRuler
             ),
             presetProfiles: workspaceScalePresetOptions,
             canFitWorkspaceScaleToModel: canFitWorkspaceScaleToModel
@@ -929,7 +935,7 @@ public struct Viewport: View {
         basis: ViewportProjectionBasis
     ) {
         let resolver = ViewportCameraFrameResolver(
-            workspaceVisibleSpanMeters: document.ruler.normalizedForWorkspaceScale().visibleSpanMeters
+            workspaceVisibleSpanMeters: workspaceRuler.visibleSpanMeters
         )
         let layout = makeLayout(
             size: size,
@@ -969,7 +975,7 @@ public struct Viewport: View {
         size: CGSize
     ) {
         let resolver = ViewportCameraFrameResolver(
-            workspaceVisibleSpanMeters: document.ruler.normalizedForWorkspaceScale().visibleSpanMeters
+            workspaceVisibleSpanMeters: workspaceRuler.visibleSpanMeters
         )
         camera = resolver.camera(framing: request) { frameCamera in
             makeLayout(
@@ -1032,10 +1038,9 @@ public struct Viewport: View {
         usesDragPreviewDocument: Bool = true,
         fittingInsets: ViewportLayout.FittingInsets? = nil
     ) -> ViewportSceneContext {
-        let document = sceneDocument(usesDragPreviewDocument: usesDragPreviewDocument)
         let scene = cachedScene(usesDragPreviewDocument: usesDragPreviewDocument)
         return ViewportSceneContext(
-            document: document,
+            ruler: workspaceRuler,
             scene: scene,
             size: size,
             camera: camera,
@@ -1056,6 +1061,8 @@ public struct Viewport: View {
         sceneApplyingSectionClipping(
             ViewportSceneBuilder(objectRegistry: objectRegistry).build(
                 document: sceneDocument(usesDragPreviewDocument: usesDragPreviewDocument),
+                ruler: workspaceRuler,
+                overlayState: sceneOverlayState,
                 currentEvaluation: sceneCurrentEvaluation(usesDragPreviewDocument: usesDragPreviewDocument),
                 documentGeneration: sceneDocumentGeneration(usesDragPreviewDocument: usesDragPreviewDocument),
                 evaluationCache: sceneEvaluationCache(usesDragPreviewDocument: usesDragPreviewDocument)
@@ -1069,11 +1076,17 @@ public struct Viewport: View {
         let source: ViewportSceneSnapshotKey.Source
         if usesDragPreviewDocument,
            dragPreviewDocument != nil {
-            source = .dragPreview(dragPreviewRevision)
+            source = .dragPreview(
+                documentID: sceneDocument(usesDragPreviewDocument: true).id,
+                revision: dragPreviewRevision
+            )
         } else if let generation = sceneDocumentGeneration(
             usesDragPreviewDocument: usesDragPreviewDocument
         ) {
-            source = .document(generation)
+            source = .document(
+                id: sceneDocument(usesDragPreviewDocument: usesDragPreviewDocument).id,
+                generation: generation
+            )
         } else {
             return nil
         }
@@ -1086,6 +1099,7 @@ public struct Viewport: View {
             evaluationCacheGeneration: sceneEvaluationCache(
                 usesDragPreviewDocument: usesDragPreviewDocument
             )?.generation,
+            workspaceRenderState: workspaceRenderState,
             renderInvalidation: renderInvalidation,
             sectionClippingPlan: sectionClippingPlan,
             objectDefinitions: objectRegistry.definitions.values.sorted { lhs, rhs in
@@ -1112,10 +1126,9 @@ public struct Viewport: View {
         usesDragPreviewDocument: Bool = true,
         fittingInsets: ViewportLayout.FittingInsets? = nil
     ) -> ViewportModelCoordinateMapper {
-        let document = sceneDocument(usesDragPreviewDocument: usesDragPreviewDocument)
         let scene = cachedScene(usesDragPreviewDocument: usesDragPreviewDocument)
         return ViewportModelCoordinateMapper(
-            document: document,
+            ruler: workspaceRuler,
             scene: scene,
             size: size,
             camera: camera,
@@ -1756,7 +1769,7 @@ public struct Viewport: View {
     ) {
         let overlay = ViewportSectionAnalysisOverlay.build(
             result: sectionAnalysis,
-            document: document
+            ruler: workspaceRuler
         )
         guard overlay.plane != nil || overlay.segments.isEmpty == false else {
             return
@@ -1886,6 +1899,7 @@ public struct Viewport: View {
         let geometry = ViewportConstructionPlaneHandleGeometry()
         let targets = geometry.targets(
             document: document,
+            ruler: workspaceRuler,
             selection: selection,
             layout: layout
         )
@@ -2294,6 +2308,7 @@ public struct Viewport: View {
             ViewportSnapResolutionService().resolution(
                 for: snapOverlayQuery(layout: layout),
                 document: document,
+                ruler: workspaceRuler,
                 options: snapResolutionOptions,
                 modifierFlags: modifierFlags
             )
@@ -2337,6 +2352,7 @@ public struct Viewport: View {
         let resolution = ViewportSnapResolutionService().resolution(
             for: ViewportSnapQuery(point: hoveredModelPoint, referencePoint: nil),
             document: document,
+            ruler: workspaceRuler,
             options: snapResolutionOptions,
             modifierFlags: modifierFlags
         )
@@ -2408,6 +2424,7 @@ public struct Viewport: View {
         let resolution = ViewportSnapResolutionService().resolution(
             for: ViewportSnapQuery(point: modelPoint, referencePoint: nil),
             document: document,
+            ruler: workspaceRuler,
             options: snapResolutionOptions,
             modifierFlags: modifierFlags
         )
@@ -4279,7 +4296,7 @@ public struct Viewport: View {
     private func formattedViewportLength(_ meters: Double) -> String {
         ViewportLengthLabelFormatter.string(
             fromMeters: meters,
-            preferredUnit: document.displayUnit
+            preferredUnit: workspaceRuler.displayUnit
         )
     }
 
@@ -4479,7 +4496,7 @@ public struct Viewport: View {
         featureID: FeatureID,
         entityID: SketchEntityID
     ) -> CurveCurvatureDisplay? {
-        curveCurvatureDisplays[
+        sceneOverlayState.curveCurvatureDisplays[
             .sketchEntity(featureID: featureID, entityID: entityID)
         ]
     }
@@ -4488,7 +4505,7 @@ public struct Viewport: View {
         featureID: FeatureID,
         entityID: SketchEntityID
     ) -> PointDisplay? {
-        pointDisplays[
+        sceneOverlayState.pointDisplays[
             .sketchEntity(featureID: featureID, entityID: entityID)
         ]
     }
@@ -4770,7 +4787,7 @@ public struct Viewport: View {
         guard let geometry = ViewportPlacementPreviewGeometry(
             placement: placement,
             layout: layout,
-            defaults: document.workspaceScaleDefaults,
+            defaults: WorkspaceScaleDefaults(ruler: workspaceRuler),
             visibleCellMeters: visibleCellMeters
         ) else {
             return
@@ -7581,6 +7598,7 @@ public struct Viewport: View {
         let previewDrag = ViewportCanvasDragSnapResolver().resolvedDrag(
             drag,
             document: document,
+            ruler: workspaceRuler,
             snapOptions: snapResolutionOptions,
             axisConstraint: canvasDragAxisConstraint
         )
@@ -9745,7 +9763,6 @@ public struct Viewport: View {
         } else {
             dragPreviewRevision += 1
         }
-        sceneSnapshotCache.invalidate()
     }
 
     private func beginViewportPress(at point: CGPoint, size: CGSize) {
@@ -10542,7 +10559,7 @@ public struct Viewport: View {
             ) else {
                 continue
             }
-            if nearest == nil || distance < nearest!.distance {
+            if nearest.map({ distance < $0.distance }) ?? true {
                 nearest = (candidate.target, distance)
             }
         }
@@ -10570,7 +10587,7 @@ public struct Viewport: View {
             ) else {
                 continue
             }
-            if nearest == nil || distance < nearest!.distance {
+            if nearest.map({ distance < $0.distance }) ?? true {
                 nearest = (candidate.target, distance)
             }
         }
@@ -10598,7 +10615,7 @@ public struct Viewport: View {
             ) else {
                 continue
             }
-            if nearest == nil || distance < nearest!.distance {
+            if nearest.map({ distance < $0.distance }) ?? true {
                 nearest = (candidate.target, distance)
             }
         }
@@ -10845,7 +10862,7 @@ public struct Viewport: View {
                   ) else {
                 continue
             }
-            if nearest == nil || distance < nearest!.distance {
+            if nearest.map({ distance < $0.distance }) ?? true {
                 nearest = (axis, distance)
             }
         }
@@ -10872,7 +10889,7 @@ public struct Viewport: View {
                   ) else {
                 continue
             }
-            if nearest == nil || distance < nearest!.distance {
+            if nearest.map({ distance < $0.distance }) ?? true {
                 nearest = (axis, distance)
             }
         }
@@ -10910,7 +10927,7 @@ public struct Viewport: View {
                 axis: localAxis,
                 direction: direction
             )
-            if nearest == nil || distance < nearest!.distance {
+            if nearest.map({ distance < $0.distance }) ?? true {
                 nearest = (hit, distance)
             }
         }
@@ -11321,6 +11338,7 @@ public struct Viewport: View {
         return ViewportConstructionPlaneHandleGeometry().target(
             at: point,
             document: document,
+            ruler: workspaceRuler,
             selection: selection,
             layout: sceneContext.layout
         )
@@ -11964,6 +11982,7 @@ public struct Viewport: View {
             sourceTarget: target,
             screenPoint: current,
             document: document,
+            ruler: workspaceRuler,
             options: snapResolutionOptions,
             layout: layout
         )

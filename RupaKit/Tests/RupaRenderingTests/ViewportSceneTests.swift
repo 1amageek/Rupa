@@ -6,6 +6,8 @@ import SwiftCAD
 import Testing
 @testable import RupaRendering
 
+private let viewportSceneSnapshotTestDocumentID = DocumentID()
+
 @Test func viewportSceneSnapshotCacheReusesMatchingKey() {
     let cache = ViewportSceneSnapshotCache()
     let key = viewportSceneSnapshotTestKey(generation: 1)
@@ -39,10 +41,92 @@ import Testing
     #expect(buildCount == 2)
 }
 
+@Test func viewportSceneSnapshotCacheRebuildsWhenWorkspaceRevisionChanges() {
+    let cache = ViewportSceneSnapshotCache()
+    let source = ViewportSceneSnapshotKey.Source.document(
+        id: viewportSceneSnapshotTestDocumentID,
+        generation: DocumentGeneration(1)
+    )
+    let initialState = ViewportWorkspaceRenderState(
+        revision: WorkspaceRevision(0),
+        ruler: .standard(for: .millimeter)
+    )
+    let updatedState = ViewportWorkspaceRenderState(
+        revision: WorkspaceRevision(1),
+        ruler: .standard(for: .millimeter)
+    )
+    var buildCount = 0
+
+    _ = cache.scene(for: viewportSceneSnapshotTestKey(
+        source: source,
+        workspaceRenderState: initialState
+    )) {
+        buildCount += 1
+        return ViewportScene(items: [])
+    }
+    _ = cache.scene(for: viewportSceneSnapshotTestKey(
+        source: source,
+        workspaceRenderState: updatedState
+    )) {
+        buildCount += 1
+        return ViewportScene(items: [])
+    }
+
+    #expect(buildCount == 2)
+}
+
+@Test func viewportSceneSnapshotCacheKeysExactWorkspaceRenderInputs() {
+    let cache = ViewportSceneSnapshotCache()
+    let source = ViewportSceneSnapshotKey.Source.document(
+        id: viewportSceneSnapshotTestDocumentID,
+        generation: DocumentGeneration(1)
+    )
+    let componentID = SelectionComponentID.sketchEntity(
+        featureID: FeatureID(),
+        entityID: SketchEntityID()
+    )
+    let baseState = ViewportWorkspaceRenderState(
+        revision: WorkspaceRevision(0),
+        ruler: .standard(for: .millimeter)
+    )
+    let rulerState = ViewportWorkspaceRenderState(
+        revision: WorkspaceRevision(0),
+        ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+    )
+    let overlayState = ViewportWorkspaceRenderState(
+        revision: WorkspaceRevision(0),
+        ruler: .standard(for: .millimeter),
+        sceneOverlayState: ViewportSceneOverlayState(
+            pointDisplays: [
+                componentID: PointDisplay(componentID: componentID, isVisible: true),
+            ]
+        )
+    )
+    var buildCount = 0
+
+    for workspaceRenderState in [baseState, rulerState, overlayState] {
+        _ = cache.scene(for: viewportSceneSnapshotTestKey(
+            source: source,
+            workspaceRenderState: workspaceRenderState
+        )) {
+            buildCount += 1
+            return ViewportScene(items: [])
+        }
+    }
+
+    #expect(buildCount == 3)
+}
+
 @Test func viewportSceneSnapshotCacheRetainsMultipleRecentKeys() {
     let cache = ViewportSceneSnapshotCache()
-    let documentKey = viewportSceneSnapshotTestKey(source: .document(DocumentGeneration(1)))
-    let previewKey = viewportSceneSnapshotTestKey(source: .dragPreview(1))
+    let documentKey = viewportSceneSnapshotTestKey(source: .document(
+        id: viewportSceneSnapshotTestDocumentID,
+        generation: DocumentGeneration(1)
+    ))
+    let previewKey = viewportSceneSnapshotTestKey(source: .dragPreview(
+        documentID: viewportSceneSnapshotTestDocumentID,
+        revision: 1
+    ))
     var buildCount = 0
 
     _ = cache.scene(for: documentKey) {
@@ -54,6 +138,30 @@ import Testing
         return ViewportScene(items: [])
     }
     _ = cache.scene(for: documentKey) {
+        buildCount += 1
+        return ViewportScene(items: [])
+    }
+
+    #expect(buildCount == 2)
+}
+
+@Test func viewportSceneSnapshotCacheSeparatesDocumentsAtMatchingGenerations() {
+    let cache = ViewportSceneSnapshotCache()
+    let firstSource = ViewportSceneSnapshotKey.Source.document(
+        id: DocumentID(),
+        generation: DocumentGeneration(1)
+    )
+    let secondSource = ViewportSceneSnapshotKey.Source.document(
+        id: DocumentID(),
+        generation: DocumentGeneration(1)
+    )
+    var buildCount = 0
+
+    _ = cache.scene(for: viewportSceneSnapshotTestKey(source: firstSource)) {
+        buildCount += 1
+        return ViewportScene(items: [])
+    }
+    _ = cache.scene(for: viewportSceneSnapshotTestKey(source: secondSource)) {
         buildCount += 1
         return ViewportScene(items: [])
     }
@@ -118,16 +226,24 @@ import Testing
 }
 
 private func viewportSceneSnapshotTestKey(generation: UInt64) -> ViewportSceneSnapshotKey {
-    viewportSceneSnapshotTestKey(source: .document(DocumentGeneration(generation)))
+    viewportSceneSnapshotTestKey(source: .document(
+        id: viewportSceneSnapshotTestDocumentID,
+        generation: DocumentGeneration(generation)
+    ))
 }
 
 private func viewportSceneSnapshotTestKey(
-    source: ViewportSceneSnapshotKey.Source
+    source: ViewportSceneSnapshotKey.Source,
+    workspaceRenderState: ViewportWorkspaceRenderState = ViewportWorkspaceRenderState(
+        revision: WorkspaceRevision(),
+        ruler: .standard(for: .millimeter)
+    )
 ) -> ViewportSceneSnapshotKey {
     ViewportSceneSnapshotKey(
         source: source,
         currentEvaluationGeneration: nil,
         evaluationCacheGeneration: nil,
+        workspaceRenderState: workspaceRenderState,
         renderInvalidation: RenderInvalidation(),
         sectionClippingPlan: nil,
         objectDefinitions: []
@@ -155,7 +271,7 @@ private func viewportSceneSnapshotTestKey(
         )
     )
 
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
 
     #expect(scene.items.count == 2)
     #expect(scene.items.contains { item in
@@ -184,7 +300,7 @@ private func viewportSceneSnapshotTestKey(
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
 
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
 
     // A placed primitive reads as one object: its consumed profile sketch is
     // nested under the body and hidden, so only the body item is built.
@@ -207,7 +323,7 @@ private func viewportSceneSnapshotTestKey(
 @MainActor
 @Test func viewportSceneBuilderUsesRulerScaledMinimumSketchBounds() throws {
     var document = DesignDocument.empty()
-    try document.setRulerConfiguration(WorkspaceScalePreset.microFabrication.rulerConfiguration)
+    let ruler = WorkspaceScalePreset.microFabrication.rulerConfiguration
     let featureID = try document.createLineSketch(
         name: "Micro Vertical Line",
         plane: .xy,
@@ -221,7 +337,7 @@ private func viewportSceneSnapshotTestKey(
         )
     )
 
-    let scene = ViewportSceneBuilder().build(document: document)
+    let scene = ViewportSceneBuilder().build(document: document, ruler: ruler)
     let item = try #require(scene.items.first { $0.featureID == featureID })
 
     #expect(abs(item.modelBounds.width - 1.0e-6) < 1.0e-18)
@@ -262,7 +378,7 @@ private func viewportSceneSnapshotTestKey(
     )
     let source = try #require(session.document.productMetadata.patternArrays.values.first)
 
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let baseBody = try #require(scene.items.first { item in
         item.componentInstanceID == nil && item.featureID == bodyFeatureID
     })
@@ -295,7 +411,7 @@ private func viewportSceneSnapshotTestKey(
     #expect(hit.sceneNodeID == instanceItems[0].sceneNodeID)
 
     _ = try session.execute(.setSceneNodeVisibility(id: source.rootSceneNodeID, isVisible: false))
-    let hiddenScene = ViewportSceneBuilder().build(document: session.document)
+    let hiddenScene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     #expect(hiddenScene.items.contains { $0.componentInstanceID != nil } == false)
 }
 
@@ -340,7 +456,7 @@ private func viewportSceneSnapshotTestKey(
     )
     let outputInstanceID = try #require(source.outputInstanceIDs.first)
 
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let baseBody = try #require(scene.items.first { item in
         item.componentInstanceID == nil && item.featureID == bodyFeatureID
     })
@@ -387,7 +503,7 @@ private func viewportSceneSnapshotTestKey(
     let outputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
     let outputSubtreeIDs = Set(sceneSubtreeIDs(rootedAt: outputSceneNodeID, document: session.document))
 
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let baseBody = try #require(scene.items.first { item in
         item.sceneNodeID == bodyNodeID && item.featureID == bodyFeatureID
     })
@@ -458,7 +574,7 @@ private func viewportSceneSnapshotTestKey(
     })
     let outputInstanceID = try #require(source.outputInstanceIDs.first)
 
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let outputItems = scene.items.filter {
         $0.componentInstanceID == outputInstanceID && $0.featureID == bodyFeatureID
     }
@@ -473,9 +589,10 @@ private func viewportSceneSnapshotTestKey(
     _ = try #require(session.createDefaultExtrudedRectangle())
     let evaluationCache = try #require(session.currentEvaluationCache)
 
-    let documentScene = ViewportSceneBuilder().build(document: session.document)
+    let documentScene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let cachedScene = ViewportSceneBuilder().build(
         document: session.document,
+        ruler: session.workspaceState.ruler,
         documentGeneration: session.generation,
         evaluationCache: evaluationCache
     )
@@ -489,9 +606,10 @@ private func viewportSceneSnapshotTestKey(
     _ = try #require(session.createDefaultExtrudedRectangle())
     let currentEvaluation = try #require(session.currentEvaluation)
 
-    let documentScene = ViewportSceneBuilder().build(document: session.document)
+    let documentScene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let contextScene = ViewportSceneBuilder().build(
         document: session.document,
+        ruler: session.workspaceState.ruler,
         currentEvaluation: currentEvaluation,
         documentGeneration: session.generation
     )
@@ -505,9 +623,10 @@ private func viewportSceneSnapshotTestKey(
     _ = try #require(session.createDefaultExtrudedRectangle())
     let currentEvaluation = try #require(session.currentEvaluation)
 
-    let documentScene = ViewportSceneBuilder().build(document: session.document)
+    let documentScene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let staleScene = ViewportSceneBuilder().build(
         document: session.document,
+        ruler: session.workspaceState.ruler,
         currentEvaluation: currentEvaluation,
         documentGeneration: DocumentGeneration(session.generation.value + 1)
     )
@@ -524,9 +643,10 @@ private func viewportSceneSnapshotTestKey(
     let circleSession = EditorSession()
     _ = try #require(circleSession.createDefaultExtrudedCircle())
 
-    let circleScene = ViewportSceneBuilder().build(document: circleSession.document)
+    let circleScene = ViewportSceneBuilder().build(document: circleSession.document, ruler: circleSession.workspaceState.ruler)
     let mismatchedScene = ViewportSceneBuilder().build(
         document: circleSession.document,
+        ruler: circleSession.workspaceState.ruler,
         currentEvaluation: currentEvaluation,
         documentGeneration: rectangleSession.generation
     )
@@ -540,9 +660,10 @@ private func viewportSceneSnapshotTestKey(
     _ = try #require(session.createDefaultExtrudedRectangle())
     let evaluationCache = try #require(session.currentEvaluationCache)
 
-    let documentScene = ViewportSceneBuilder().build(document: session.document)
+    let documentScene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let staleScene = ViewportSceneBuilder().build(
         document: session.document,
+        ruler: session.workspaceState.ruler,
         documentGeneration: DocumentGeneration(session.generation.value + 1),
         evaluationCache: evaluationCache
     )
@@ -559,9 +680,10 @@ private func viewportSceneSnapshotTestKey(
     let circleSession = EditorSession()
     _ = try #require(circleSession.createDefaultExtrudedCircle())
 
-    let circleScene = ViewportSceneBuilder().build(document: circleSession.document)
+    let circleScene = ViewportSceneBuilder().build(document: circleSession.document, ruler: circleSession.workspaceState.ruler)
     let mismatchedScene = ViewportSceneBuilder().build(
         document: circleSession.document,
+        ruler: circleSession.workspaceState.ruler,
         documentGeneration: rectangleCache.generation,
         evaluationCache: rectangleCache
     )
@@ -609,8 +731,14 @@ private func viewportSceneSnapshotTestKey(
         options: PolySplineOptions(mergePatches: false)
     )
     let surfaceNodeID = try #require(bodySceneNodeID(for: featureID, in: document))
-    let summary = try SurfaceContinuityService().summarize(document: document)
-    let scene = ViewportSceneBuilder().build(document: document)
+    let summary = try SurfaceContinuityService().summarize(
+        document: document,
+        displayUnit: .millimeter
+    )
+    let scene = ViewportSceneBuilder().build(
+        document: document,
+        ruler: .standard(for: .millimeter)
+    )
     var selection = SelectionModel()
     try selection.selectTarget(
         SelectionTarget(sceneNodeID: surfaceNodeID),
@@ -643,10 +771,16 @@ private func viewportSceneSnapshotTestKey(
         options: PolySplineOptions(mergePatches: false)
     )
     let surfaceNodeID = try #require(bodySceneNodeID(for: featureID, in: document))
-    let summary = try SurfaceContinuityService().summarize(document: document)
+    let summary = try SurfaceContinuityService().summarize(
+        document: document,
+        displayUnit: .millimeter
+    )
     let adjacency = try #require(summary.adjacencies.first)
     let faceName = try #require(adjacency.firstFacePersistentName)
-    let scene = ViewportSceneBuilder().build(document: document)
+    let scene = ViewportSceneBuilder().build(
+        document: document,
+        ruler: .standard(for: .millimeter)
+    )
     var selection = SelectionModel()
     try selection.selectTarget(
         SelectionTarget(
@@ -677,7 +811,7 @@ private func viewportSceneSnapshotTestKey(
     )
     let surfaceNodeID = try #require(bodySceneNodeID(for: featureID, in: document))
     let analysis = try SurfaceAnalysisService(options: SurfaceAnalysisOptions(sampleDensity: .low))
-        .analyze(document: document)
+        .analyze(document: document, displayUnit: .millimeter)
     var selection = SelectionModel()
     try selection.selectTarget(
         SelectionTarget(sceneNodeID: surfaceNodeID),
@@ -714,7 +848,7 @@ private func viewportSceneSnapshotTestKey(
     )
     let surfaceNodeID = try #require(bodySceneNodeID(for: featureID, in: document))
     let analysis = try SurfaceAnalysisService(options: SurfaceAnalysisOptions(sampleDensity: .low))
-        .analyze(document: document)
+        .analyze(document: document, displayUnit: .millimeter)
     let face = try #require(analysis.faces.first)
     let faceName = try #require(face.facePersistentNames.first)
     var selection = SelectionModel()
@@ -750,7 +884,7 @@ private func viewportSceneSnapshotTestKey(
     )
     let surfaceNodeID = try #require(bodySceneNodeID(for: featureID, in: document))
     let analysis = try SurfaceAnalysisService(options: SurfaceAnalysisOptions(sampleDensity: .low))
-        .analyze(document: document)
+        .analyze(document: document, displayUnit: .millimeter)
     var selection = SelectionModel()
     try selection.selectTarget(
         SelectionTarget(sceneNodeID: surfaceNodeID),
@@ -796,7 +930,7 @@ private func viewportSceneSnapshotTestKey(
     )
     let surfaceNodeID = try #require(bodySceneNodeID(for: featureID, in: document))
     let analysis = try SurfaceAnalysisService(options: SurfaceAnalysisOptions(sampleDensity: .low))
-        .analyze(document: document)
+        .analyze(document: document, displayUnit: .millimeter)
     var selection = SelectionModel()
     try selection.selectTarget(
         SelectionTarget(sceneNodeID: surfaceNodeID),
@@ -823,12 +957,16 @@ private func viewportSceneSnapshotTestKey(
 @MainActor
 @Test func viewportSceneBuilderExposesVisibleSurfaceControlPointDisplays() async throws {
     var document = DesignDocument.empty()
+    var workspaceState = WorkspaceState()
     let featureID = try document.createPolySplineSurface(
         name: "Viewport Surface CV Display",
         sourceMesh: viewportSurfaceAnalysisSingleQuadMesh(topRightZ: 0.0),
         options: PolySplineOptions()
     )
-    let initialScene = ViewportSceneBuilder().build(document: document)
+    let initialScene = ViewportSceneBuilder().build(
+        document: document,
+        ruler: workspaceState.ruler
+    )
     let initialBody = try #require(initialScene.items.first { $0.featureID == featureID })
     guard case .body(let initialComponent) = initialBody.kind else {
         Issue.record("Expected a PolySpline body scene item.")
@@ -836,15 +974,25 @@ private func viewportSceneSnapshotTestKey(
     }
     #expect(initialComponent.surfaceControlPointDisplays.isEmpty)
 
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(
+        document: document,
+        displayUnit: workspaceState.displayUnit
+    )
     let patch = try #require(summary.sources.first?.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
-    try document.setSurfaceControlPointDisplay(
-        target: controlPoint.selectionReference,
-        isVisible: true
+    _ = try workspaceState.apply(
+        .setSurfaceControlPointDisplay(
+            target: controlPoint.selectionReference,
+            isVisible: true
+        ),
+        document: document
     )
 
-    let visibleScene = ViewportSceneBuilder().build(document: document)
+    let visibleScene = ViewportSceneBuilder().build(
+        document: document,
+        ruler: workspaceState.ruler,
+        overlayState: viewportSceneOverlayState(from: workspaceState)
+    )
     let visibleBody = try #require(visibleScene.items.first { $0.featureID == featureID })
     guard case .body(let visibleComponent) = visibleBody.kind else {
         Issue.record("Expected a PolySpline body scene item.")
@@ -872,11 +1020,18 @@ private func viewportSceneSnapshotTestKey(
     #expect(hit.selectionReference == controlPoint.selectionReference)
     #expect(hit.selectionComponent == nil)
 
-    try document.setSurfaceControlPointDisplay(
-        target: controlPoint.selectionReference,
-        isVisible: false
+    _ = try workspaceState.apply(
+        .setSurfaceControlPointDisplay(
+            target: controlPoint.selectionReference,
+            isVisible: false
+        ),
+        document: document
     )
-    let hiddenScene = ViewportSceneBuilder().build(document: document)
+    let hiddenScene = ViewportSceneBuilder().build(
+        document: document,
+        ruler: workspaceState.ruler,
+        overlayState: viewportSceneOverlayState(from: workspaceState)
+    )
     let hiddenBody = try #require(hiddenScene.items.first { $0.featureID == featureID })
     guard case .body(let hiddenComponent) = hiddenBody.kind else {
         Issue.record("Expected a PolySpline body scene item.")
@@ -891,7 +1046,10 @@ private func viewportSceneSnapshotTestKey(
         name: "Viewport Surface Trim Endpoint",
         surface: viewportDirectBSplineSurface()
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(
+        document: document,
+        displayUnit: .millimeter
+    )
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
     let trimLoop = BSplineSurfaceTrimLoop(
         role: .outer,
@@ -912,7 +1070,10 @@ private func viewportSceneSnapshotTestKey(
     )
     try document.setSurfaceTrimLoops(target: faceReference, trimLoops: [trimLoop])
 
-    let scene = ViewportSceneBuilder().build(document: document)
+    let scene = ViewportSceneBuilder().build(
+        document: document,
+        ruler: .standard(for: .millimeter)
+    )
     let body = try #require(scene.items.first { $0.featureID == featureID })
     guard case .body(let component) = body.kind else {
         Issue.record("Expected a B-spline surface body scene item.")
@@ -947,7 +1108,10 @@ private func viewportSceneSnapshotTestKey(
         name: "Viewport Surface Trim Control Point",
         surface: viewportDirectBSplineSurface()
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(
+        document: document,
+        displayUnit: .millimeter
+    )
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
     let trimLoop = BSplineSurfaceTrimLoop(
         role: .outer,
@@ -973,7 +1137,10 @@ private func viewportSceneSnapshotTestKey(
     )
     try document.setSurfaceTrimLoops(target: faceReference, trimLoops: [trimLoop])
 
-    let scene = ViewportSceneBuilder().build(document: document)
+    let scene = ViewportSceneBuilder().build(
+        document: document,
+        ruler: .standard(for: .millimeter)
+    )
     let body = try #require(scene.items.first { $0.featureID == featureID })
     guard case .body(let component) = body.kind else {
         Issue.record("Expected a B-spline surface body scene item.")
@@ -996,7 +1163,10 @@ private func viewportSceneSnapshotTestKey(
         name: "Viewport Surface Trim Parameters",
         surface: viewportDirectBSplineSurface()
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(
+        document: document,
+        displayUnit: .millimeter
+    )
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
     let trimLoop = BSplineSurfaceTrimLoop(
         role: .outer,
@@ -1023,7 +1193,10 @@ private func viewportSceneSnapshotTestKey(
     )
     try document.setSurfaceTrimLoops(target: faceReference, trimLoops: [trimLoop])
 
-    let scene = ViewportSceneBuilder().build(document: document)
+    let scene = ViewportSceneBuilder().build(
+        document: document,
+        ruler: .standard(for: .millimeter)
+    )
     let body = try #require(scene.items.first { $0.featureID == featureID })
     guard case .body(let component) = body.kind else {
         Issue.record("Expected a B-spline surface body scene item.")
@@ -1076,7 +1249,10 @@ private func viewportSceneSnapshotTestKey(
         surface: viewportEditableDirectBSplineSurface()
     )
 
-    let scene = ViewportSceneBuilder().build(document: document)
+    let scene = ViewportSceneBuilder().build(
+        document: document,
+        ruler: .standard(for: .millimeter)
+    )
     let body = try #require(scene.items.first { $0.featureID == featureID })
     guard case .body(let component) = body.kind else {
         Issue.record("Expected a B-spline surface body scene item.")
@@ -1127,12 +1303,16 @@ private func viewportSceneSnapshotTestKey(
 @MainActor
 @Test func viewportSceneBuilderExposesVisibleSurfaceFrameDisplays() async throws {
     var document = DesignDocument.empty()
+    var workspaceState = WorkspaceState()
     let featureID = try document.createPolySplineSurface(
         name: "Viewport Surface Frame Display",
         sourceMesh: viewportSurfaceAnalysisSingleQuadMesh(topRightZ: 0.0),
         options: PolySplineOptions()
     )
-    let initialScene = ViewportSceneBuilder().build(document: document)
+    let initialScene = ViewportSceneBuilder().build(
+        document: document,
+        ruler: workspaceState.ruler
+    )
     let initialBody = try #require(initialScene.items.first { $0.featureID == featureID })
     guard case .body(let initialComponent) = initialBody.kind else {
         Issue.record("Expected a PolySpline body scene item.")
@@ -1140,20 +1320,31 @@ private func viewportSceneSnapshotTestKey(
     }
     #expect(initialComponent.surfaceFrameDisplays.isEmpty)
 
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(
+        document: document,
+        displayUnit: workspaceState.displayUnit
+    )
     let patch = try #require(summary.sources.first?.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 2 && $0.vIndex == 1 })
     let query = SurfaceFrameQuery(selectionReference: controlPoint.selectionReference)
-    try document.setSurfaceFrameDisplay(
-        query: query,
-        isVisible: true
+    _ = try workspaceState.apply(
+        .setSurfaceFrameDisplay(
+            query: query,
+            isVisible: true
+        ),
+        document: document
     )
 
     let expectedFrame = try #require(SurfaceFrameService().resolve(
         document: document,
-        queries: [query]
+        queries: [query],
+        displayUnit: workspaceState.displayUnit
     ).frames.first)
-    let visibleScene = ViewportSceneBuilder().build(document: document)
+    let visibleScene = ViewportSceneBuilder().build(
+        document: document,
+        ruler: workspaceState.ruler,
+        overlayState: viewportSceneOverlayState(from: workspaceState)
+    )
     let visibleBody = try #require(visibleScene.items.first { $0.featureID == featureID })
     guard case .body(let visibleComponent) = visibleBody.kind else {
         Issue.record("Expected a PolySpline body scene item.")
@@ -1171,11 +1362,18 @@ private func viewportSceneSnapshotTestKey(
     #expect(abs(display.vAxis.length - 1.0) <= 1.0e-8)
     #expect(abs(display.normal.length - 1.0) <= 1.0e-8)
 
-    try document.setSurfaceFrameDisplay(
-        query: query,
-        isVisible: false
+    _ = try workspaceState.apply(
+        .setSurfaceFrameDisplay(
+            query: query,
+            isVisible: false
+        ),
+        document: document
     )
-    let hiddenScene = ViewportSceneBuilder().build(document: document)
+    let hiddenScene = ViewportSceneBuilder().build(
+        document: document,
+        ruler: workspaceState.ruler,
+        overlayState: viewportSceneOverlayState(from: workspaceState)
+    )
     let hiddenBody = try #require(hiddenScene.items.first { $0.featureID == featureID })
     guard case .body(let hiddenComponent) = hiddenBody.kind else {
         Issue.record("Expected a PolySpline body scene item.")
@@ -1215,7 +1413,7 @@ private func viewportSceneSnapshotTestKey(
         options: SweepOptions()
     ))
 
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let bodyItem = try #require(scene.items.first { item in
         if case .body = item.kind {
             return true
@@ -1269,7 +1467,7 @@ private func viewportSceneSnapshotTestKey(
         )
     ))
 
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let bodyItem = try #require(scene.items.first { item in
         if case .body = item.kind {
             return true
@@ -1321,7 +1519,7 @@ private func viewportSceneSnapshotTestKey(
         options: SweepOptions(resultKind: .sheet)
     ))
 
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let bodyItem = try #require(scene.items.first { item in
         if case .body = item.kind {
             return true
@@ -1379,7 +1577,7 @@ private func viewportSceneSnapshotTestKey(
         options: SweepOptions(resultKind: .sheet)
     ))
 
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let bodyItem = try #require(scene.items.first { item in
         if case .body = item.kind {
             return true
@@ -1443,7 +1641,7 @@ private func viewportSceneSnapshotTestKey(
         options: SweepOptions(guideMethod: .point)
     ))
 
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let bodyItem = try #require(scene.items.first { item in
         if case .body = item.kind {
             return true
@@ -1468,7 +1666,7 @@ private func viewportSceneSnapshotTestKey(
 @Test func viewportSceneBuilderCreatesMeshBodyItemForCurvedPathSweep() async throws {
     let setup = try makeCurvedSweepViewportSession()
 
-    let scene = ViewportSceneBuilder().build(document: setup.session.document)
+    let scene = ViewportSceneBuilder().build(document: setup.session.document, ruler: setup.session.workspaceState.ruler)
     let bodyItem = try #require(scene.items.first { item in
         if case .body = item.kind {
             return true
@@ -1497,7 +1695,7 @@ private func viewportSceneSnapshotTestKey(
 @MainActor
 @Test func viewportHitTesterReturnsGeneratedTopologyForCurvedSweepMesh() async throws {
     let setup = try makeCurvedSweepViewportSession()
-    let scene = ViewportSceneBuilder().build(document: setup.session.document)
+    let scene = ViewportSceneBuilder().build(document: setup.session.document, ruler: setup.session.workspaceState.ruler)
     let bodyItem = try #require(scene.items.first { item in
         if case .body = item.kind {
             return true
@@ -1557,7 +1755,10 @@ private func viewportSceneSnapshotTestKey(
         sourceMesh: viewportSurfaceAnalysisSingleQuadMesh(topRightZ: 0.004),
         options: PolySplineOptions()
     )
-    let scene = ViewportSceneBuilder().build(document: document)
+    let scene = ViewportSceneBuilder().build(
+        document: document,
+        ruler: .standard(for: .millimeter)
+    )
     let bodyItem = try #require(scene.items.first { item in
         if case .body = item.kind {
             return true
@@ -1650,7 +1851,7 @@ private func viewportSceneSnapshotTestKey(
         segmentCount: 6
     ))
 
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let sketchItem = try #require(scene.items.first { item in
         if case .sketch = item.kind {
             return true
@@ -1689,7 +1890,7 @@ private func viewportSceneSnapshotTestKey(
         )
     )
 
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let sketchItem = try #require(scene.items.first { item in
         if case .sketch = item.kind {
             return true
@@ -1729,7 +1930,7 @@ private func viewportSceneSnapshotTestKey(
         )
     )
 
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let sketchItem = try #require(scene.items.first { item in
         if case .sketch = item.kind {
             return true
@@ -1770,7 +1971,7 @@ private func viewportSceneSnapshotTestKey(
             ])
         )
     )
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let size = CGSize(width: 800.0, height: 600.0)
     let layout = try #require(ViewportLayout(scene: scene, size: size))
     let sketchItem = try #require(scene.items.first { item in
@@ -1812,7 +2013,7 @@ private func viewportSceneSnapshotTestKey(
             ])
         )
     )
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(
         ViewportLayout(
             scene: scene,
@@ -1873,7 +2074,7 @@ private func viewportSceneSnapshotTestKey(
             )
         )
     )
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let size = CGSize(width: 800.0, height: 600.0)
     let layout = try #require(ViewportLayout(scene: scene, size: size))
     let sketchItem = try #require(scene.items.first { item in
@@ -2155,7 +2356,7 @@ private func viewportSceneSnapshotTestKey(
 @Test func viewportIdentityPickIndexIncludesProjectedBodyFallbackWhenTopologyIsMissing() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
 
     let index = ViewportIdentityPickIndexBuilder().build(scene: scene)
 
@@ -2170,7 +2371,7 @@ private func viewportSceneSnapshotTestKey(
 @Test func viewportIdentityPickRenderPlanBuildsProjectedBodyFallbackDrawItems() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(
         ViewportLayout(
             scene: scene,
@@ -2270,7 +2471,7 @@ private func viewportSceneSnapshotTestKey(
             ])
         )
     )
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
 
     let hiddenIndex = ViewportIdentityPickIndexBuilder(includesSketchControlPoints: false)
         .build(scene: scene)
@@ -2306,7 +2507,7 @@ private func viewportSceneSnapshotTestKey(
             ])
         )
     )
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(
         ViewportLayout(
             scene: scene,
@@ -2444,7 +2645,7 @@ private func viewportSceneSnapshotTestKey(
 @Test func viewportSelectionRectangleHitTesterReturnsProjectedBodySubobjectHitsWhenTopologyIsMissing() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(
         ViewportLayout(
             scene: scene,
@@ -2481,7 +2682,7 @@ private func viewportSceneSnapshotTestKey(
             )
         )
     )
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let sketchItem = try #require(scene.items.first { item in
         if case .sketch = item.kind {
             return true
@@ -2512,7 +2713,7 @@ private func viewportSceneSnapshotTestKey(
             )
         )
     )
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let size = CGSize(width: 800.0, height: 600.0)
     let layout = try #require(ViewportLayout(scene: scene, size: size))
     let sketchItem = try #require(scene.items.first { item in
@@ -2573,7 +2774,7 @@ private func viewportSceneSnapshotTestKey(
             direction: .normal
         )
     )
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let size = CGSize(width: 800.0, height: 600.0)
     let layout = try #require(ViewportLayout(scene: scene, size: size))
     let bodyItem = try #require(scene.items.first { item in
@@ -2625,7 +2826,7 @@ private func viewportSceneSnapshotTestKey(
 @Test func viewportHitTesterSelectsBodyVertexBeforeEdgesAndFaces() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let size = CGSize(width: 800.0, height: 600.0)
     let layout = try #require(ViewportLayout(scene: scene, size: size))
     let bodyItem = try #require(scene.items.first { item in
@@ -2653,7 +2854,7 @@ private func viewportSceneSnapshotTestKey(
 @Test func viewportHitTesterReturnsNilForBackground() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
 
     let hit = ViewportHitTester().hitTest(
         point: CGPoint(x: 8.0, y: 8.0),
@@ -2890,10 +3091,11 @@ private func viewportSceneSnapshotTestKey(
 }
 
 @Test func viewportModelCoordinateMapperProvidesEmptyDocumentDragPlane() {
-    var document = DesignDocument.empty()
-    document.setDisplayUnit(.micrometer)
+    let document = DesignDocument.empty()
+    let ruler = RulerConfiguration.standard(for: .micrometer)
     let mapper = ViewportModelCoordinateMapper(
         document: document,
+        ruler: ruler,
         size: CGSize(width: 800.0, height: 600.0)
     )
     let centerPoint = mapper.modelPoint(for: CGPoint(x: 400.0, y: 300.0))
@@ -2902,9 +3104,9 @@ private func viewportSceneSnapshotTestKey(
         to: CGPoint(x: 440.0, y: 280.0)
     )
     let expectedSpan = max(
-        document.ruler.visibleSpanMeters,
-        document.ruler.majorTickMeters * 20.0,
-        document.ruler.minorTickMeters * 40.0
+        ruler.visibleSpanMeters,
+        ruler.majorTickMeters * 20.0,
+        ruler.minorTickMeters * 40.0
     )
 
     #expect(abs(mapper.layout.modelBounds.width - expectedSpan) < 1.0e-18)
@@ -2950,7 +3152,7 @@ private func viewportSceneSnapshotTestKey(
 
 @Test func viewportModelCoordinateMapperFramesRemoteSceneWithoutOriginUnion() throws {
     var document = DesignDocument.empty()
-    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    let ruler = WorkspaceScalePreset.sitePlanning.rulerConfiguration.normalizedForWorkspaceScale()
     _ = try document.createLineSketch(
         name: "Remote Site Line",
         plane: .xy,
@@ -2963,14 +3165,13 @@ private func viewportSceneSnapshotTestKey(
             y: .length(2_000_000.0, .meter)
         )
     )
-    let scene = ViewportSceneBuilder().build(document: document)
+    let scene = ViewportSceneBuilder().build(document: document, ruler: ruler)
     let sceneBounds = try #require(scene.modelBounds)
     let mapper = ViewportModelCoordinateMapper(
-        document: document,
+        ruler: ruler,
         scene: scene,
         size: CGSize(width: 800.0, height: 600.0)
     )
-    let ruler = document.ruler.normalizedForWorkspaceScale()
     let projectedSceneCenter = mapper.layout.project(CGPoint(
         x: sceneBounds.midX,
         y: sceneBounds.midY
@@ -2986,8 +3187,8 @@ private func viewportSceneSnapshotTestKey(
     #expect(mapper.layout.modelBounds.minY > 0.0)
     #expect(Double(mapper.layout.modelBounds.width) >= ruler.majorTickMeters * 4.0)
     #expect(Double(mapper.layout.modelBounds.height) >= ruler.majorTickMeters * 4.0)
-    #expect(Double(mapper.layout.modelBounds.width) < document.ruler.visibleSpanMeters)
-    #expect(Double(mapper.layout.modelBounds.height) < document.ruler.visibleSpanMeters)
+    #expect(Double(mapper.layout.modelBounds.width) < ruler.visibleSpanMeters)
+    #expect(Double(mapper.layout.modelBounds.height) < ruler.visibleSpanMeters)
     #expect(abs(projectedSceneCenter.x - 400.0) < 1.0e-6)
     #expect(abs(projectedSceneCenter.y - 300.0) < 1.0e-6)
 }
@@ -3104,7 +3305,7 @@ private func viewportSceneSnapshotTestKey(
         sketchPlane: .zx
     )
 
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let item = try #require(scene.items.first)
 
     #expect(abs(item.modelBounds.midX - 0.03) < 1.0e-12)
@@ -3118,6 +3319,7 @@ private func viewportSceneSnapshotTestKey(
     let clickPoint = CGPoint(x: 520.0, y: 260.0)
     let initialMapper = ViewportModelCoordinateMapper(
         document: session.document,
+        ruler: session.workspaceState.ruler,
         size: size
     )
     let modelPoint = initialMapper.modelPoint(for: clickPoint)
@@ -3131,6 +3333,7 @@ private func viewportSceneSnapshotTestKey(
 
     let finalMapper = ViewportModelCoordinateMapper(
         document: session.document,
+        ruler: session.workspaceState.ruler,
         size: size
     )
     let finalPoint = finalMapper.layout.project(
@@ -3142,10 +3345,10 @@ private func viewportSceneSnapshotTestKey(
 }
 
 @Test func viewportCanvasDragPlaceholderUsesCoordinateAlignedFootprintOnEmptyDocument() throws {
-    var document = DesignDocument.empty()
-    document.setDisplayUnit(.millimeter)
+    let document = DesignDocument.empty()
     let mapper = ViewportModelCoordinateMapper(
         document: document,
+        ruler: .standard(for: .millimeter),
         size: CGSize(width: 800.0, height: 600.0)
     )
     let drag = mapper.modelDrag(
@@ -3462,6 +3665,7 @@ private func viewportSceneSnapshotTestKey(
     let resolved = ViewportCanvasDragSnapResolver().resolvedDrag(
         drag,
         document: .empty(),
+        ruler: .standard(for: .millimeter),
         snapOptions: options,
         axisConstraint: .x
     )
@@ -3488,6 +3692,7 @@ private func viewportSceneSnapshotTestKey(
     let resolved = ViewportCanvasDragSnapResolver().resolvedDrag(
         drag,
         document: .empty(),
+        ruler: .standard(for: .millimeter),
         snapOptions: options,
         axisConstraint: .x
     )
@@ -3523,6 +3728,7 @@ private func viewportSceneSnapshotTestKey(
     let resolved = ViewportCanvasDragSnapResolver().resolvedDrag(
         drag,
         document: .empty(),
+        ruler: .standard(for: .millimeter),
         snapOptions: options,
         axisConstraint: .x
     )
@@ -3549,6 +3755,7 @@ private func viewportSceneSnapshotTestKey(
     let resolution = ViewportCanvasDragSnapResolver().resolution(
         drag,
         document: .empty(),
+        ruler: .standard(for: .millimeter),
         snapOptions: options,
         axisConstraint: .x
     )
@@ -3564,13 +3771,11 @@ private func viewportSceneSnapshotTestKey(
 @Test func viewportSnapResolutionOptionsUsesSharedAvailabilityContract() {
     let disabled = SnapResolutionOptions(
         usesGrid: false,
-        usesObjects: false,
-        usesConstructionPlaneProjection: false
+        usesObjects: false
     )
     let constructionPlaneOnly = SnapResolutionOptions(
         usesGrid: false,
         usesObjects: false,
-        usesConstructionPlaneProjection: true,
         constructionPlane: .xy
     )
 
@@ -3675,23 +3880,25 @@ private func viewportSceneSnapshotTestKey(
 }
 
 @Test func viewportCameraZoomPolicyExpandsForSitePlanningScale() throws {
-    var document = DesignDocument.empty()
-    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    let document = DesignDocument.empty()
+    let ruler = WorkspaceScalePreset.sitePlanning.rulerConfiguration
     let size = CGSize(width: 800.0, height: 600.0)
     let identityLayout = ViewportModelCoordinateMapper(
         document: document,
+        ruler: ruler,
         size: size
     ).layout
     let maximumZoom = ViewportCameraZoomPolicy.maximumZoom(
-        for: document,
+        ruler: ruler,
         identityScale: identityLayout.scale
     )
     let zoomedLayout = ViewportModelCoordinateMapper(
         document: document,
+        ruler: ruler,
         size: size,
         camera: ViewportCamera(zoom: maximumZoom * 2.0)
     ).layout
-    let minorTickPixels = CGFloat(document.ruler.minorTickMeters) * zoomedLayout.scale
+    let minorTickPixels = CGFloat(ruler.minorTickMeters) * zoomedLayout.scale
     let meterPixels = zoomedLayout.scale
 
     #expect(maximumZoom > ViewportCamera.maximumZoom)
@@ -4124,6 +4331,7 @@ private func viewportSceneSnapshotTestKey(
             referencePoint: nil
         ),
         document: .empty(),
+        ruler: .standard(for: .millimeter),
         options: options,
         modifierFlags: ViewportInputModifierFlags()
     )
@@ -4143,6 +4351,7 @@ private func viewportSceneSnapshotTestKey(
     let resolution = ViewportSnapResolutionService().resolution(
         for: nil,
         document: .empty(),
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(),
         modifierFlags: ViewportInputModifierFlags()
     )
@@ -4160,6 +4369,7 @@ private func viewportSceneSnapshotTestKey(
             referencePoint: nil
         ),
         document: .empty(),
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(),
         modifierFlags: ViewportInputModifierFlags()
     )
@@ -4863,6 +5073,17 @@ private func viewportEditableDirectBSplineSurface() -> BSplineSurface3D {
         uKnots: [0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0],
         vKnots: [0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0],
         controlPoints: baseSurface.controlPoints
+    )
+}
+
+private func viewportSceneOverlayState(
+    from workspaceState: WorkspaceState
+) -> ViewportSceneOverlayState {
+    ViewportSceneOverlayState(
+        curveCurvatureDisplays: workspaceState.curveCurvatureDisplays,
+        pointDisplays: workspaceState.pointDisplays,
+        surfaceControlPointDisplays: workspaceState.surfaceControlPointDisplays,
+        surfaceFrameDisplays: workspaceState.surfaceFrameDisplays
     )
 }
 

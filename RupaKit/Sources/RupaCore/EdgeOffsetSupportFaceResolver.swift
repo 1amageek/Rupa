@@ -134,7 +134,7 @@ public struct EdgeOffsetSupportFaceResolver: Sendable {
             return .unavailable("Offset Edge requires a generated topology edge target.")
         }
 
-        let topology = try TopologySummaryService().summarize(
+        let topology = try TopologySnapshotService().snapshot(
             document: document,
             objectRegistry: objectRegistry
         )

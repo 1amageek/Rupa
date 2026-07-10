@@ -22,6 +22,7 @@ import Testing
             generatedEdgeTarget,
             fixture.lineTarget,
         ]),
+        displayUnit: .millimeter,
         objectRegistry: .builtIn
     )
 
@@ -40,6 +41,7 @@ import Testing
     let objectResolver = WorkspaceProjectionTargetResolver(
         document: DesignDocument.empty(),
         selection: SelectionModel(selectedTargets: [bodyTarget, sketchTarget]),
+        displayUnit: .millimeter,
         objectRegistry: .builtIn
     )
     let faceResolver = WorkspaceProjectionTargetResolver(
@@ -47,6 +49,7 @@ import Testing
         selection: SelectionModel(selectedTargets: [
             SelectionTarget(sceneNodeID: bodyNode.id, component: .face(.bodyFaceTop)),
         ]),
+        displayUnit: .millimeter,
         objectRegistry: .builtIn
     )
 
@@ -64,6 +67,7 @@ import Testing
     let resolver = WorkspaceProjectionTargetResolver(
         document: DesignDocument.empty(),
         selection: SelectionModel(),
+        displayUnit: .millimeter,
         objectRegistry: .builtIn
     )
 
@@ -105,7 +109,7 @@ private func workspaceProjectionSketchFixture() throws -> WorkspaceProjectionSke
             geometryRole: .curve
         )
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let lineEntry = try #require(summary.entries.first { $0.entityID == lineID.description })
     let lineTarget = try #require(lineEntry.selectionTarget())
     let lineStartTarget = try projectionPointHandleSelectionTarget(lineEntry, handle: .lineStart)

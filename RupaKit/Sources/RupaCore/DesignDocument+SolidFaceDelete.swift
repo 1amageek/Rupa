@@ -18,7 +18,7 @@ extension DesignDocument {
             )
         }
 
-        let topology = try TopologySummaryService().summarize(
+        let topology = try TopologySnapshotService().snapshot(
             document: self,
             objectRegistry: objectRegistry
         )
@@ -135,7 +135,6 @@ extension DesignDocument {
                 typeID: nil,
                 geometryRole: .surface,
                 properties: ObjectPropertySet(),
-                ruler: ruler,
                 objectRegistry: objectRegistry
             )
         )

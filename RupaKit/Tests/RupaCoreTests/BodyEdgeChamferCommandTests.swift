@@ -67,7 +67,7 @@ import Testing
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let edgeEntry = try #require(topology.entries.first(where: isVerticalGeneratedEdge))
     let target = try #require(edgeEntry.selectionTarget())
     let beforeBounds = try chamferProfileBounds(forBody: bodyFeatureID, in: session.document)
@@ -121,7 +121,7 @@ import Testing
     )
     #expect(try chamferProfileLines(forBody: bodyFeatureID, in: session.document).count == 5)
 
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let edgeEntry = try #require(topology.entries.first(where: isVerticalGeneratedEdge))
     let target = try #require(edgeEntry.selectionTarget())
 
@@ -178,7 +178,7 @@ import Testing
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let edgeEntry = try #require(topology.entries.first(where: isVerticalGeneratedEdge))
     let target = try #require(edgeEntry.selectionTarget())
 
@@ -216,7 +216,7 @@ import Testing
     )
     #expect(try chamferProfileLines(forBody: bodyFeatureID, in: session.document).count == 5)
 
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let edgeEntry = try #require(topology.entries.first(where: isVerticalGeneratedEdge))
     let target = try #require(edgeEntry.selectionTarget())
 
@@ -255,7 +255,7 @@ import Testing
     #expect(try chamferProfileLines(forBody: bodyFeatureID, in: session.document).count == 4)
     #expect(try chamferProfileArcs(forBody: bodyFeatureID, in: session.document).count == 1)
 
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let edgeEntry = try #require(topology.entries.first {
         isVerticalGeneratedEdge($0, x: -0.020, y: -0.010)
     })
@@ -282,7 +282,7 @@ import Testing
     let setup = try lineArcExtrudedSession()
     let session = setup.session
     let bodyFeatureID = setup.bodyFeatureID
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let edgeEntry = try #require(topology.entries.first {
         isVerticalGeneratedEdge($0, x: 2.0, y: 0.0)
     })
@@ -320,7 +320,7 @@ import Testing
     let setup = try arcArcExtrudedSession()
     let session = setup.session
     let bodyFeatureID = setup.bodyFeatureID
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let edgeEntry = try #require(topology.entries.first {
         isVerticalGeneratedEdge($0, x: 0.0, y: 0.0)
     })
@@ -377,7 +377,7 @@ import Testing
         )
     )
 
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let edgeEntry = try #require(topology.entries.first {
         isVerticalGeneratedEdge($0, x: -0.020, y: -0.010)
     })
@@ -415,7 +415,7 @@ import Testing
         )
     )
 
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let edgeEntry = try #require(topology.entries.first {
         isVerticalGeneratedEdge($0, x: 0.020, y: 0.009)
     })
@@ -457,7 +457,7 @@ import Testing
         )
     )
 
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let edgeEntry = try #require(topology.entries.first {
         isVerticalGeneratedEdge($0, x: 0.020, y: 0.009)
     })
@@ -498,7 +498,7 @@ import Testing
         )
     )
 
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let vertexEntry = try #require(topology.entries.first {
         isGeneratedVertex($0, x: -0.020, y: -0.010)
     })
@@ -665,7 +665,7 @@ import Testing
         forBody: bodyFeatureID,
         in: &document
     )
-    let topology = try TopologySummaryService().summarize(document: document)
+    let topology = try TopologySnapshotService().snapshot(document: document)
     let edgeEntry = try #require(topology.entries.first {
         isVerticalGeneratedEdge($0, x: -0.020, y: -0.010)
     })

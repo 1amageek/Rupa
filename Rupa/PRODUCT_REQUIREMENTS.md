@@ -10,8 +10,16 @@ This document defines product-level requirements for Rupa as a general-purpose C
 | Requirement level | Product requirements |
 | Relationship to `SPEC.md` | Defines what the application must do; `SPEC.md` defines how the implementation is organized. |
 | Universal CAD requirements | `UNIVERSAL_CAD_REQUIREMENTS.md` |
+| Domain extension architecture | `DOMAIN_EXTENSION_ARCHITECTURE.md` |
+| Domain foundation design | `DOMAIN_FOUNDATION_DESIGN.md` |
+| Complete implementation plan | `COMPLETE_IMPLEMENTATION_PLAN.md` |
+| Specification authority | `SPECIFICATION_AUTHORITY.md` |
+| Release conformance | `CONFORMANCE_PROFILES.md` |
+| Reference and artifact contract | `REFERENCE_ARTIFACT_CONTRACT.md` |
+| Validation contract | `VALIDATION_CONTRACT.md` |
+| Domain transaction contract | `DOMAIN_TRANSACTION_CONTRACT.md` |
 | Required acceptance use cases | Video 3D modeling, 3D printer object modeling, architecture |
-| Deferred capability | ApplicationProfile switching after the universal CAD implementation is complete |
+| Deferred convenience | Workspace preset switching after shared source and project contracts are stable |
 | CAD foundation | Swift-CAD |
 
 ## Product Position
@@ -44,13 +52,15 @@ Rupa should not be defined as a general clone of Fusion. Fusion is the benchmark
 
 ## Development Order
 
-Rupa must be built as a universal CAD application first. ApplicationProfile switching is a deferred capability that is introduced only after the universal model, commands, validation, export presets, templates, and UI shell work without profile-specific branches.
+Rupa is built from universal source/project contracts and then proven through
+vertical workflows. Workspace presets are deferred until commands, validation,
+export policies, templates, and UI discovery work without preset-specific branches.
 
 ```mermaid
 flowchart TD
     Universal["1. Universal CAD implementation"] --> Generic["2. Generic validation, export presets, templates, UI surfaces"]
     Generic --> Accept["3. Acceptance use cases pass on the same CAD model"]
-    Accept --> Profiles["4. Deferred ApplicationProfile switching"]
+    Accept --> Presets["4. Deferred workspace presets"]
 ```
 
 | Phase | Requirement |
@@ -58,7 +68,7 @@ flowchart TD
 | Universal-first | Implement one document model, one command pipeline, one UI model, and one automation model. |
 | Profile-ready | Keep validation rules, export presets, templates, UI surface defaults, and unit defaults composable. |
 | Acceptance | Prove video, 3D print, and architecture workflows using the same generic app behavior. |
-| ApplicationProfile | Add profile switching only as a non-destructive selection of presets and UI emphasis after the generic app is complete. |
+| Workspace preset | Add preset switching only as a non-destructive selection of defaults and UI emphasis after the generic app is stable. |
 
 ## Required Acceptance Use Cases
 
@@ -68,7 +78,21 @@ flowchart TD
 | 3D printer object modeling | Create dimensionally accurate printable parts, objects, jigs, cases, and assemblies. | Validate printability and export watertight manifold geometry with units and slicing-friendly metadata. |
 | Architecture | Create building-scale parametric models, rooms, openings, levels, components, and drawing/export outputs. | Model architectural elements with dimensions, levels, schedules, drawing views, and interoperable BIM/CAD exports. |
 
-These use cases are acceptance tests for generality. They do not introduce separate document types, package targets, command systems, or application modes.
+These use cases define the original product acceptance set. The release-scoped
+and extended expert workflow sets are defined as independently testable profiles
+in `CONFORMANCE_PROFILES.md`. Profiles do not introduce separate document types,
+command systems, or application modes.
+
+Specialized workflows must follow `DOMAIN_EXTENSION_ARCHITECTURE.md`: domain modules
+add semantic objects, generators, validators, simulation adapters, and Agent
+capabilities above the universal CAD layers. Swift-CAD, RupaCore, and the base
+automation pipeline must not import concrete domains.
+
+Implementation order and completion gates follow
+`COMPLETE_IMPLEMENTATION_PLAN.md`. A workflow is not accepted because a narrow
+demo works; it is accepted only when source ownership, command routing,
+evaluation, selection, UI, Automation, Agent, diagnostics, performance, and tests
+are all complete for the claimed scope.
 
 ## User Needs
 
@@ -101,7 +125,7 @@ The following capabilities are required in the universal CAD model and must be r
 | Validation | Validation rules must be generic, composable, typed, and available from GUI, CLI, and Agent workflows. |
 | Export presets | Export settings must be saved in the document and invokable from GUI, CLI, and automation. |
 | Templates | Templates may preconfigure units, UI surface defaults, materials, validation rules, and export presets, but they must create the same `.swcad` document type. |
-| Deferred ApplicationProfile | ApplicationProfile must eventually switch groups of templates, validation rules, export presets, UI emphasis, unit defaults, and ruler defaults without changing document type, command behavior, or geometry semantics. |
+| Deferred workspace preset | Workspace presets may eventually group templates, validation policies, export presets, UI emphasis, and unit/ruler defaults without changing document type, capability availability, command behavior, or geometry semantics. |
 
 ## Document Model Extensions
 
@@ -109,7 +133,10 @@ Rupa's product requirements need concepts above the Swift-CAD core, but these co
 
 ```mermaid
 flowchart TD
-    DesignDoc["DesignDocument"] --> CAD["Swift-CAD source"]
+    Project["ProjectController"] --> DesignDoc["DesignDocument source"]
+    Project --> Workspace["Workspace state"]
+    Project --> Artifacts["Artifacts and decisions"]
+    DesignDoc --> CAD["Swift-CAD source"]
     DesignDoc --> Product["Universal product metadata"]
     Product --> Scene["Scene hierarchy"]
     Product --> Materials["Materials"]
@@ -126,24 +153,26 @@ flowchart TD
 | `ComponentDefinition` | Reusable parametric component source. |
 | `ComponentInstance` | Transform, overrides, visibility, material bindings, and external reference. |
 | `MaterialLibrary` | Named visual, physical, and export material definitions. |
-| `ValidationRule` | Generic document or output readiness check. |
-| `ExportPreset` | Named export target, format, unit, tessellation, metadata, and validation policy. |
+| `ValidationRuleConfiguration` | Document-scoped typed configuration of a registered rule type. |
+| `ValidationPolicy` | Versioned per-rule acceptance, evidence, freshness, and authorization policy. |
+| `ExportPreset` | Named export target, format, unit, tessellation, metadata, and validation-policy reference. |
 | `DrawingView` | 2D projection, section, dimension, annotation, and output sheet metadata. |
 | `Schedule` | Tabular extraction of components, rooms, materials, quantities, or metadata. |
-| `TemplateDefaults` | New document defaults for units, grid, UI surfaces, materials, validation rules, and export presets. |
-| `ApplicationProfile` | Deferred selector that groups existing generic presets and defaults after the universal app is complete. |
+| `DocumentTemplateDefinition` | Versioned inputs used to create normal source and initial workspace state; it is not embedded as active template defaults in every document. |
+| `WorkspacePreset` | Deferred selector that groups defaults and UI emphasis without controlling capability existence. |
 
-## Deferred ApplicationProfile Requirement
+## Deferred Workspace Preset Requirement
 
-ApplicationProfile is a future convenience layer, not a core modeling layer.
+WorkspacePreset is a future convenience layer, not a core modeling, authorization,
+or conformance layer.
 
 ```mermaid
 flowchart LR
-    Profile["ApplicationProfile"] --> Units["Unit and ruler defaults"]
-    Profile --> UI["Component Browser, bottom canvas toolbar, panes, and inspector defaults"]
-    Profile --> Validation["Validation rule set"]
-    Profile --> Export["Export preset set"]
-    Profile --> Templates["Template defaults"]
+    Preset["WorkspacePreset"] --> Units["Unit and ruler defaults"]
+    Preset --> UI["Browser, canvas, panes, and Inspector emphasis"]
+    Preset --> Validation["Validation policy defaults"]
+    Preset --> Export["Export preset defaults"]
+    Preset --> Templates["Template selection"]
     Units --> Universal["Same universal CAD document"]
     UI --> Universal
     Validation --> Universal
@@ -153,12 +182,12 @@ flowchart LR
 
 | Rule | Requirement |
 |---|---|
-| Introduce late | Do not implement ApplicationProfile until the generic app and required acceptance use cases work. |
+| Introduce late | Do not implement WorkspacePreset until generic discovery and required acceptance use cases work. |
 | Non-destructive switching | Switching profiles must not rewrite geometry, feature history, component hierarchy, or command semantics. |
 | Same document type | Profiles must operate on `.swcad`; no profile-specific document extension or package layout. |
-| Same commands | GUI, CLI, and Agent commands remain universal and profile-independent. |
-| Preset grouping only | Profiles group existing units, rulers, templates, validation rules, export presets, and UI layout choices. |
-| Reversible | A document can switch between profiles without losing generic CAD data or metadata. |
+| Same commands | GUI, CLI, MCP, and Agent commands remain preset-independent. Registered domain capabilities remain explicit. |
+| Preset grouping only | Workspace presets group defaults and UI choices; they do not register, authorize, or remove capabilities. |
+| Reversible | Switching presets does not rewrite source or lose CAD/domain data. |
 
 ## Interoperability Requirements
 
@@ -201,7 +230,7 @@ flowchart TD
 | Evaluate | Evaluation must be cancellable and publish progress for large models. |
 | Inspect | The MacComponent Inspector Pane must show contextual Object type dimensions, source and generated 2D/3D/Text representation, materials, metadata, references, and diagnostics. |
 | Validate | Validation must be runnable without export. |
-| Export | Export must refuse unsafe output unless the user explicitly chooses a supported diagnostic override. |
+| Export | Export refuses unsafe output unless an authorized immutable decision record covers the exact policy, findings, source inputs, and prepared artifact. |
 
 ### Agent-Assisted Modeling
 
@@ -209,11 +238,11 @@ Agent-assisted workflows are product requirements, not developer-only tooling.
 
 | Requirement | Contract |
 |---|---|
-| Live edits | Agents can apply commands to an open document through `RupaAgent`. |
+| Live edits | Agents apply project use cases to an open document through the same `ProjectController` boundary as UI and CLI. |
 | Batch generation | Agents can generate variations by editing parameters or command batches. |
 | Validation loop | Agents can run validation rules and inspect typed diagnostics. |
 | Export loop | Agents can invoke named export presets. |
-| Safety | Expected generation and document locks protect live app state. |
+| Safety | Expected transaction revision protects source mutation; dependency/content identity protects artifacts and decisions. |
 
 ## Non-Goals for Initial Product Scope
 
@@ -231,7 +260,9 @@ These are not required for the first complete Rupa product milestone.
 
 ## Product Acceptance Criteria
 
-Rupa is not product-complete until these use-case-level scenarios work through the same universal CAD implementation.
+These scenarios are required by the profiles that name them. Release completion
+is determined by `CONFORMANCE_PROFILES.md`, not by treating every future domain
+as an implicit requirement of every release.
 
 | Scenario | Acceptance criteria |
 |---|---|
@@ -242,4 +273,4 @@ Rupa is not product-complete until these use-case-level scenarios work through t
 | Live automation | User changes a parameter from `rupa param set ... --live`; the open app updates viewport, dirty state, timeline, and diagnostics. |
 | Batch variants | User runs a batch to create model variants for visualization, fabrication, or building-scale outputs; each result includes structured validation output. |
 | Templates | User can create a new document from reusable templates without changing document type or command behavior. |
-| Deferred profile switching | After the universal app is complete, user can switch ApplicationProfile and only defaults, UI surface layout, validation rule sets, and export preset sets change. |
+| Deferred preset switching | After the shared app contracts are stable, users can switch WorkspacePreset and only defaults and UI emphasis change. |

@@ -24,6 +24,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXBuildFile section */
+		A7A6D66DA40B4A3CA7F536C4 /* RupaCore in Frameworks */ = {isa = PBXBuildFile; productRef = 4397082AC8FF4D0C816A6D80 /* RupaCore */; };
+		A7A6D66EA40B4A3CA7F536C4 /* RupaDomainFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 4397082BC8FF4D0C816A6D80 /* RupaDomainFoundation */; };
+		A7A6D66FA40B4A3CA7F536C4 /* RupaManufacturing in Frameworks */ = {isa = PBXBuildFile; productRef = 4397082CC8FF4D0C816A6D80 /* RupaManufacturing */; };
 		A7A6D66BA40B4A3CA7F536C4 /* RupaUI in Frameworks */ = {isa = PBXBuildFile; productRef = 43970828C8FF4D0C816A6D80 /* RupaUI */; };
 		A7A6D66CA40B4A3CA7F536C4 /* RupaAgentUI in Frameworks */ = {isa = PBXBuildFile; productRef = 43970829C8FF4D0C816A6D80 /* RupaAgentUI */; };
 /* End PBXBuildFile section */
@@ -57,6 +60,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A7A6D66DA40B4A3CA7F536C4 /* RupaCore in Frameworks */,
+				A7A6D66EA40B4A3CA7F536C4 /* RupaDomainFoundation in Frameworks */,
+				A7A6D66FA40B4A3CA7F536C4 /* RupaManufacturing in Frameworks */,
 				A7A6D66BA40B4A3CA7F536C4 /* RupaUI in Frameworks */,
 				A7A6D66CA40B4A3CA7F536C4 /* RupaAgentUI in Frameworks */,
 			);
@@ -119,6 +125,9 @@
 			);
 			name = Rupa;
 			packageProductDependencies = (
+				4397082AC8FF4D0C816A6D80 /* RupaCore */,
+				4397082BC8FF4D0C816A6D80 /* RupaDomainFoundation */,
+				4397082CC8FF4D0C816A6D80 /* RupaManufacturing */,
 				43970828C8FF4D0C816A6D80 /* RupaUI */,
 				43970829C8FF4D0C816A6D80 /* RupaAgentUI */,
 			);
@@ -605,6 +614,21 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 04A0884D275749F9B7818D23 /* XCLocalSwiftPackageReference "../../RupaKit" */;
 			productName = RupaAgentUI;
+		};
+		4397082AC8FF4D0C816A6D80 /* RupaCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 04A0884D275749F9B7818D23 /* XCLocalSwiftPackageReference "../../RupaKit" */;
+			productName = RupaCore;
+		};
+		4397082BC8FF4D0C816A6D80 /* RupaDomainFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 04A0884D275749F9B7818D23 /* XCLocalSwiftPackageReference "../../RupaKit" */;
+			productName = RupaDomainFoundation;
+		};
+		4397082CC8FF4D0C816A6D80 /* RupaManufacturing */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 04A0884D275749F9B7818D23 /* XCLocalSwiftPackageReference "../../RupaKit" */;
+			productName = RupaManufacturing;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

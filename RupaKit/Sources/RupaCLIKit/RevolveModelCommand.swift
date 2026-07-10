@@ -28,7 +28,7 @@ public struct RevolveModelCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Axis origin Z coordinate.")
     public var axisOriginZ: Double = 0.0
 
-    @Option(help: "Length unit for axis origin coordinates. Defaults to the document display unit.")
+    @Option(help: "Length unit for axis origin coordinates. Defaults to the workspace display unit.")
     public var axisUnit: String?
 
     @Option(parsing: .unconditional, help: "Axis direction X component.")

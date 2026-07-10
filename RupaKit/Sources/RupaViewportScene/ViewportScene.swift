@@ -1716,6 +1716,7 @@ public struct ViewportModelCoordinateMapper {
 
     public init(
         document: DesignDocument,
+        ruler: RulerConfiguration,
         size: CGSize,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
@@ -1727,12 +1728,13 @@ public struct ViewportModelCoordinateMapper {
     ) {
         let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(
             document: document,
+            ruler: ruler,
             currentEvaluation: currentEvaluation,
             documentGeneration: documentGeneration,
             evaluationCache: evaluationCache
         )
         self.init(
-            document: document,
+            ruler: ruler,
             scene: scene,
             size: size,
             camera: camera,
@@ -1742,14 +1744,14 @@ public struct ViewportModelCoordinateMapper {
     }
 
     public init(
-        document: DesignDocument,
+        ruler: RulerConfiguration,
         scene: ViewportScene,
         size: CGSize,
         camera: ViewportCamera = .identity,
         basis: ViewportProjectionBasis = .isometric,
         fittingInsets: ViewportLayout.FittingInsets = .zero
     ) {
-        let modelBounds = Self.modelBounds(for: document, scene: scene)
+        let modelBounds = Self.modelBounds(for: scene, ruler: ruler)
         let identityLayout = ViewportLayout(
             modelBounds: modelBounds,
             size: size,
@@ -1759,7 +1761,7 @@ public struct ViewportModelCoordinateMapper {
             fittingInsets: fittingInsets
         )
         let maximumZoom = ViewportCameraZoomPolicy.maximumZoom(
-            for: document,
+            ruler: ruler,
             identityScale: identityLayout.scale
         )
         self.layout = ViewportLayout(
@@ -1807,8 +1809,8 @@ public struct ViewportModelCoordinateMapper {
         )
     }
 
-    private static func emptyModelBounds(for document: DesignDocument) -> CGRect {
-        let ruler = document.ruler.normalizedForWorkspaceScale()
+    private static func emptyModelBounds(ruler: RulerConfiguration) -> CGRect {
+        let ruler = ruler.normalizedForWorkspaceScale()
         let span = max(
             ruler.visibleSpanMeters,
             ruler.majorTickMeters * 20.0,
@@ -1850,14 +1852,14 @@ public struct ViewportModelCoordinateMapper {
     }
 
     private static func modelBounds(
-        for document: DesignDocument,
-        scene: ViewportScene
+        for scene: ViewportScene,
+        ruler: RulerConfiguration
     ) -> CGRect {
-        let baseBounds = emptyModelBounds(for: document)
+        let baseBounds = emptyModelBounds(ruler: ruler)
         guard let sceneBounds = scene.modelBounds else {
             return baseBounds
         }
-        let framedBounds = framedSceneBounds(sceneBounds, ruler: document.ruler)
+        let framedBounds = framedSceneBounds(sceneBounds, ruler: ruler)
         if baseBounds.intersects(sceneBounds) {
             return baseBounds.union(framedBounds)
         }
@@ -1874,7 +1876,7 @@ public struct ViewportSceneContext {
     }
 
     public init(
-        document: DesignDocument,
+        ruler: RulerConfiguration,
         scene: ViewportScene,
         size: CGSize,
         camera: ViewportCamera = .identity,
@@ -1883,7 +1885,7 @@ public struct ViewportSceneContext {
     ) {
         self.scene = scene
         self.mapper = ViewportModelCoordinateMapper(
-            document: document,
+            ruler: ruler,
             scene: scene,
             size: size,
             camera: camera,
@@ -1894,6 +1896,7 @@ public struct ViewportSceneContext {
 
     public init(
         document: DesignDocument,
+        ruler: RulerConfiguration,
         documentGeneration: DocumentGeneration? = nil,
         size: CGSize,
         objectRegistry: ObjectTypeRegistry = .builtIn,
@@ -1905,13 +1908,14 @@ public struct ViewportSceneContext {
     ) {
         let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(
             document: document,
+            ruler: ruler,
             currentEvaluation: currentEvaluation,
             documentGeneration: documentGeneration,
             evaluationCache: evaluationCache
         )
         self.scene = scene
         self.mapper = ViewportModelCoordinateMapper(
-            document: document,
+            ruler: ruler,
             scene: scene,
             size: size,
             camera: camera,

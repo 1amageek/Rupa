@@ -4,7 +4,7 @@ import Testing
 @testable import RupaCore
 
 @MainActor
-@Test func curveCurvatureDisplayCommandPersistsScaleAndParticipatesInUndoRedo() async throws {
+@Test func curveCurvatureDisplayCommandPersistsScaleWithoutMutatingSourceHistory() async throws {
     let session = EditorSession()
     _ = try session.execute(
         .createCircleSketch(
@@ -17,10 +17,18 @@ import Testing
             radius: .length(5.0, .millimeter)
         )
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let circle = try #require(summary.entries.first { $0.entityKind == "circle" })
     let target = try #require(circle.selectionTarget())
     let componentID = try #require(sketchEntityComponentID(from: target))
+    let sourceMetadata = session.document.productMetadata
+    let sourceFingerprint = try session.document.cadDocument.sourceFingerprint(
+        tolerance: session.document.modelingSettings.tolerance
+    )
+    let sourceGeneration = session.generation
+    let sourceUndoCount = session.commandStack.undoEntries.count
+    let sourceDirtyState = session.isDirty
+    let expectedWorkspaceRevision = try session.workspaceState.revision.advanced()
 
     let result = try session.execute(
         .setCurveCurvatureDisplay(
@@ -31,17 +39,18 @@ import Testing
     )
 
     #expect(result.commandName == "setCurveCurvatureDisplay")
-    #expect(result.didMutate)
-    #expect(session.document.productMetadata.curveCurvatureDisplays[componentID] == CurveCurvatureDisplay(
+    #expect(result.revision == expectedWorkspaceRevision)
+    #expect(session.workspaceState.curveCurvatureDisplays[componentID] == CurveCurvatureDisplay(
         componentID: componentID,
         combScale: 0.25
     ))
-
-    _ = try session.undo()
-    #expect(session.document.productMetadata.curveCurvatureDisplays[componentID] == nil)
-
-    _ = try session.redo()
-    #expect(session.document.productMetadata.curveCurvatureDisplays[componentID]?.combScale == 0.25)
+    #expect(session.document.productMetadata == sourceMetadata)
+    #expect(try session.document.cadDocument.sourceFingerprint(
+        tolerance: session.document.modelingSettings.tolerance
+    ) == sourceFingerprint)
+    #expect(session.generation == sourceGeneration)
+    #expect(session.commandStack.undoEntries.count == sourceUndoCount)
+    #expect(session.isDirty == sourceDirtyState)
 
     _ = try session.execute(
         .setCurveCurvatureDisplay(
@@ -50,13 +59,16 @@ import Testing
             combScale: nil
         )
     )
-    #expect(session.document.productMetadata.curveCurvatureDisplays[componentID] == nil)
+    #expect(session.workspaceState.curveCurvatureDisplays[componentID] == nil)
+    #expect(session.generation == sourceGeneration)
+    #expect(session.commandStack.undoEntries.count == sourceUndoCount)
 }
 
 @MainActor
 @Test func curveCurvatureDisplayRejectsSourcePointTargets() async throws {
     let setup = try pointTargetDocument()
     let session = EditorSession(document: setup.document)
+    let workspaceRevision = session.workspaceState.revision
     let target = try pointSelectionTarget(
         featureID: setup.featureID,
         pointID: setup.pointID,
@@ -77,7 +89,8 @@ import Testing
     }
 
     #expect(caught?.code == .commandInvalid)
-    #expect(session.document.productMetadata.curveCurvatureDisplays.isEmpty)
+    #expect(session.workspaceState.curveCurvatureDisplays.isEmpty)
+    #expect(session.workspaceState.revision == workspaceRevision)
 }
 
 private func sketchEntityComponentID(from target: SelectionTarget) -> SelectionComponentID? {
@@ -125,7 +138,7 @@ private func pointSelectionTarget(
     pointID: SketchEntityID,
     document: DesignDocument
 ) throws -> SelectionTarget {
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let point = try #require(summary.entries.first { entry in
         entry.sourceFeatureID == featureID.description &&
             entry.entityID == pointID.description

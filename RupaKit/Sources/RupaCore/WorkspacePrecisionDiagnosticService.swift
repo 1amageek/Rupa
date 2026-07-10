@@ -18,7 +18,9 @@ public struct WorkspacePrecisionDiagnosticService: Sendable {
         }
 
         let normalizedRuler = ruler.normalizedForWorkspaceScale()
-        let modelingTolerance = tolerance ?? .workspaceScaleAware(for: normalizedRuler)
+        let modelingTolerance = tolerance ?? .recommended(
+            forVisibleSpanMeters: normalizedRuler.visibleSpanMeters
+        )
         let coordinateMagnitude = bounds.maximumAbsoluteCoordinate
         guard coordinateMagnitude.isFinite, coordinateMagnitude > 0.0 else {
             return nil

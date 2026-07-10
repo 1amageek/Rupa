@@ -1,11 +1,9 @@
 import Foundation
 import SwiftCAD
-import RupaCoreTypes
 
 public struct DesignDocument: Identifiable, Sendable {
     public var cadDocument: CADDocument
-    public var displayUnit: LengthDisplayUnit
-    public var ruler: RulerConfiguration
+    public var modelingSettings: DocumentModelingSettings
     public var productMetadata: ProductMetadata
 
     public var id: DocumentID {
@@ -14,37 +12,28 @@ public struct DesignDocument: Identifiable, Sendable {
 
     public init(
         cadDocument: CADDocument,
-        displayUnit: LengthDisplayUnit,
-        ruler: RulerConfiguration,
+        modelingSettings: DocumentModelingSettings = .standard,
         productMetadata: ProductMetadata = .empty()
     ) {
         self.cadDocument = cadDocument
-        self.displayUnit = displayUnit
-        self.ruler = ruler
+        self.modelingSettings = modelingSettings
         self.productMetadata = productMetadata
     }
 
     public static func empty(named name: String = "Untitled") -> DesignDocument {
-        let unit: LengthDisplayUnit = .millimeter
         return DesignDocument(
             cadDocument: CADDocument(
                 units: .meters,
                 metadata: DocumentMetadata(name: name)
             ),
-            displayUnit: unit,
-            ruler: .standard(for: unit),
+            modelingSettings: .standard,
             productMetadata: .empty()
         )
     }
 
     public func validate(objectRegistry: ObjectTypeRegistry = .builtIn) throws {
         try cadDocument.validate()
-        try ruler.validate()
-        guard ruler.displayUnit == displayUnit else {
-            throw DocumentValidationError.invalidProductMetadata(
-                "Document ruler display unit must match the document display unit."
-            )
-        }
+        try modelingSettings.validate()
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
     }
 }

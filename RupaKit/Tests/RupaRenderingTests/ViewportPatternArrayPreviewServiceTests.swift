@@ -30,7 +30,7 @@ import Testing
     let source = try #require(session.document.productMetadata.patternArrays.values.first {
         $0.name == "Preview Component Pattern"
     })
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let emptyPreviews = ViewportPatternArrayPreviewService().previews(
         document: session.document,
         scene: scene,
@@ -110,7 +110,7 @@ import Testing
     let source = try #require(session.document.productMetadata.patternArrays.values.first {
         $0.name == "Preview Independent Pattern"
     })
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let firstOutputDescendantID = try renderableDescendantSceneNodeID(
         rootedAt: source.outputSceneNodeIDs[0],
         scene: scene,

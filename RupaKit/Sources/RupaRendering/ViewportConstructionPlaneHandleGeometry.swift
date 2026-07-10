@@ -11,10 +11,11 @@ struct ViewportConstructionPlaneHandleGeometry: Sendable {
 
     func targets(
         document: DesignDocument,
+        ruler: RulerConfiguration,
         selection: SelectionModel,
         layout: ViewportLayout
     ) -> [ViewportConstructionPlaneHandleTarget] {
-        let ruler = document.ruler.normalizedForWorkspaceScale()
+        let ruler = ruler.normalizedForWorkspaceScale()
         let guideLength = normalGuideLength(ruler: ruler, layout: layout)
         var targets: [ViewportConstructionPlaneHandleTarget] = []
 
@@ -42,12 +43,14 @@ struct ViewportConstructionPlaneHandleGeometry: Sendable {
     func target(
         at point: CGPoint,
         document: DesignDocument,
+        ruler: RulerConfiguration,
         selection: SelectionModel,
         layout: ViewportLayout
     ) -> ViewportConstructionPlaneHandleTarget? {
         var nearest: (target: ViewportConstructionPlaneHandleTarget, distance: CGFloat)?
         for target in targets(
             document: document,
+            ruler: ruler,
             selection: selection,
             layout: layout
         ) {
@@ -55,7 +58,7 @@ struct ViewportConstructionPlaneHandleGeometry: Sendable {
                   distance <= hitTolerance(for: target.handle) else {
                 continue
             }
-            if nearest == nil || distance < nearest!.distance {
+            if nearest.map({ distance < $0.distance }) ?? true {
                 nearest = (target, distance)
             }
         }

@@ -7,6 +7,7 @@ struct WorkspaceSurfaceInspectorStateBuilder {
     var documentGeneration: DocumentGeneration
     var objectRegistry: ObjectTypeRegistry
     var surfaceAnalysisOptions: SurfaceAnalysisOptions
+    var workspaceState: WorkspaceState
 
     var surfaceControlPointReferences: [SelectionReference] {
         selection.selectedReferences.filter { reference in
@@ -42,11 +43,12 @@ struct WorkspaceSurfaceInspectorStateBuilder {
             return .success(nil)
         }
         do {
-            let summary = try SurfaceSourceSummaryService().summarize(document: document)
+            let summary = try surfaceSourceSummary()
             guard let state = SurfaceControlPointInspectorState(
                 selectedReferences: surfaceControlPointReferences,
                 summaryResult: summary,
-                surfaceFrameDisplays: document.productMetadata.surfaceFrameDisplays
+                surfaceControlPointDisplays: workspaceState.surfaceControlPointDisplays,
+                surfaceFrameDisplays: workspaceState.surfaceFrameDisplays
             ) else {
                 throw EditorError(
                     code: .referenceUnresolved,
@@ -64,11 +66,11 @@ struct WorkspaceSurfaceInspectorStateBuilder {
             return .success(nil)
         }
         do {
-            let summary = try SurfaceSourceSummaryService().summarize(document: document)
+            let summary = try surfaceSourceSummary()
             guard let state = SurfaceParameterInspectorState(
                 selectedReferences: surfaceParameterReferences,
                 summaryResult: summary,
-                surfaceFrameDisplays: document.productMetadata.surfaceFrameDisplays
+                surfaceFrameDisplays: workspaceState.surfaceFrameDisplays
             ) else {
                 throw EditorError(
                     code: .referenceUnresolved,
@@ -86,7 +88,7 @@ struct WorkspaceSurfaceInspectorStateBuilder {
             return .success(nil)
         }
         do {
-            let summary = try SurfaceSourceSummaryService().summarize(document: document)
+            let summary = try surfaceSourceSummary()
             var compatibility: SurfaceBoundaryContinuityCompatibilityResult?
             var compatibilityErrorMessage: String?
             if surfaceTrimReferences.count == 2 {
@@ -277,7 +279,7 @@ struct WorkspaceSurfaceInspectorStateBuilder {
             return nil
         }
 
-        let summary = try SurfaceSourceSummaryService().summarize(document: document)
+        let summary = try surfaceSourceSummary()
         return SurfaceBasisInspectorState(
             summaryResult: summary,
             selectedSceneNodeIDs: Set(nodes.map { $0.id.description }),
@@ -331,7 +333,7 @@ struct WorkspaceSurfaceInspectorStateBuilder {
         guard !referenceQueries.isEmpty else {
             return [:]
         }
-        let frameResult = try SurfaceFrameService().resolve(
+        let frames = try SurfaceFrameService().resolveFrames(
             document: document,
             queries: referenceQueries.map(\.1),
             objectRegistry: objectRegistry,
@@ -339,7 +341,7 @@ struct WorkspaceSurfaceInspectorStateBuilder {
             currentGeneration: documentGeneration
         )
         var framesByReference: [SelectionReference: SurfaceFrameResult.Frame] = [:]
-        for (index, frame) in frameResult.frames.enumerated() where referenceQueries.indices.contains(index) {
+        for (index, frame) in frames.enumerated() where referenceQueries.indices.contains(index) {
             framesByReference[referenceQueries[index].0] = frame
         }
         return framesByReference
@@ -356,6 +358,7 @@ struct WorkspaceSurfaceInspectorStateBuilder {
 
         let result = try SurfaceAnalysisService(options: surfaceAnalysisOptions).analyze(
             document: document,
+            displayUnit: workspaceState.displayUnit,
             objectRegistry: objectRegistry,
             currentEvaluation: currentEvaluation,
             currentGeneration: documentGeneration
@@ -443,6 +446,7 @@ struct WorkspaceSurfaceInspectorStateBuilder {
 
         let result = try SurfaceContinuityService().summarize(
             document: document,
+            displayUnit: workspaceState.displayUnit,
             objectRegistry: objectRegistry,
             currentEvaluation: currentEvaluation,
             currentGeneration: documentGeneration
@@ -451,6 +455,18 @@ struct WorkspaceSurfaceInspectorStateBuilder {
             return nil
         }
         return result
+    }
+
+    private func surfaceSourceSummary() throws -> SurfaceSourceSummaryResult {
+        try SurfaceSourceSummaryService().summarize(
+            document: document,
+            displayUnit: workspaceState.displayUnit,
+            surfaceControlPointDisplays: workspaceState.surfaceControlPointDisplays,
+            surfaceFrameDisplays: workspaceState.surfaceFrameDisplays,
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: documentGeneration
+        )
     }
 
     private func surfaceAdjacency(

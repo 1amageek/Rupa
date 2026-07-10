@@ -55,7 +55,8 @@ import SwiftCAD
         .execute(
             sessionID: sessionID,
             command: .setWorkspaceScalePreset(.regionalPlanning),
-            expectedGeneration: DocumentGeneration(0)
+            expectedGeneration: DocumentGeneration(0),
+            expectedWorkspaceRevision: WorkspaceRevision(0)
         )
     )
     guard case .command(let presetResult) = presetResponse else {
@@ -77,7 +78,7 @@ import SwiftCAD
                 depth: .length(2.0, .kilometer),
                 direction: .normal
             ),
-            expectedGeneration: DocumentGeneration(1)
+            expectedGeneration: DocumentGeneration(0)
         )
     )
 
@@ -161,7 +162,7 @@ import SwiftCAD
             expectedGeneration: DocumentGeneration(0)
         )
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let circle = try #require(summary.entries.first { $0.entityKind == "circle" })
     let target = try #require(circle.selectionTarget())
     let componentID = try #require(agentSketchEntityComponentID(from: target))
@@ -174,7 +175,8 @@ import SwiftCAD
                 isVisible: true,
                 combScale: 0.2
             ),
-            expectedGeneration: DocumentGeneration(1)
+            expectedGeneration: DocumentGeneration(1),
+            expectedWorkspaceRevision: WorkspaceRevision(0)
         )
     )
 
@@ -184,8 +186,8 @@ import SwiftCAD
     }
     #expect(result.commandName == "setCurveCurvatureDisplay")
     #expect(result.didMutate)
-    #expect(result.generation == DocumentGeneration(2))
-    #expect(session.document.productMetadata.curveCurvatureDisplays[componentID]?.combScale == 0.2)
+    #expect(result.generation == DocumentGeneration(1))
+    #expect(session.workspaceState.curveCurvatureDisplays[componentID]?.combScale == 0.2)
 }
 
 @Test func agentDispatchesPointDisplayCommandThroughAutomationAndCore() async throws {
@@ -209,7 +211,7 @@ import SwiftCAD
             expectedGeneration: DocumentGeneration(0)
         )
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(summary.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
     let componentID = try #require(agentSketchEntityComponentID(from: target))
@@ -221,7 +223,8 @@ import SwiftCAD
                 target: target,
                 isVisible: false
             ),
-            expectedGeneration: DocumentGeneration(1)
+            expectedGeneration: DocumentGeneration(1),
+            expectedWorkspaceRevision: WorkspaceRevision(0)
         )
     )
 
@@ -231,8 +234,8 @@ import SwiftCAD
     }
     #expect(result.commandName == "setPointDisplay")
     #expect(result.didMutate)
-    #expect(result.generation == DocumentGeneration(2))
-    #expect(session.document.productMetadata.pointDisplays[componentID]?.isVisible == false)
+    #expect(result.generation == DocumentGeneration(1))
+    #expect(session.workspaceState.pointDisplays[componentID]?.isVisible == false)
 }
 
 @Test func agentDispatchesPolygonSketchCommandThroughAutomationAndCore() async throws {
@@ -371,7 +374,7 @@ import SwiftCAD
         return
     }
     let sketch = try #require(agentSketchFeature(in: session.document, featureID: featureID))
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(summary.entries.first { $0.entityID == lineID.description })
     #expect(result.commandName == "addSketchConstraint")
     #expect(result.didMutate)
@@ -452,7 +455,7 @@ import SwiftCAD
             ])
         )
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(summary.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
     let featureID = try #require(UUID(uuidString: spline.sourceFeatureID)).featureID
@@ -518,7 +521,7 @@ import SwiftCAD
             ])
         )
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(summary.entries.first { $0.entityKind == "spline" })
     let target = try #require(spline.selectionTarget())
     server.register(session: session, id: sessionID)
@@ -540,7 +543,7 @@ import SwiftCAD
         #expect(Bool(false))
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedSpline = try #require(updatedSummary.entries.first { $0.entityID == spline.entityID })
     #expect(result.commandName == "slideSketchSplineControlPoints")
     #expect(result.didMutate)
@@ -618,7 +621,7 @@ import SwiftCAD
             ])
         )
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(summary.entries.first { $0.entityKind == "spline" })
     let featureID = try #require(UUID(uuidString: spline.sourceFeatureID)).featureID
     let entityID = try #require(UUID(uuidString: spline.entityID)).sketchEntityID
@@ -639,7 +642,7 @@ import SwiftCAD
         #expect(Bool(false))
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedSpline = try #require(updatedSummary.entries.first { $0.entityID == spline.entityID })
     let outgoingHandle = try #require(updatedSpline.controlPoints.dropFirst(4).first)
     let constraint = try #require(updatedSpline.constraints.first { $0.kind == "smoothSplineControlPoint" })
@@ -679,7 +682,7 @@ import SwiftCAD
         Issue.record("Agent must return a command result.")
         return
     }
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(summary.entries.first { $0.entityID == setup.splineID.description })
     let alignedHandle = try #require(spline.controlPoints.dropFirst(1).first)
     let constraint = try #require(spline.constraints.first { $0.kind == "splineEndpointTangent" })
@@ -721,7 +724,7 @@ import SwiftCAD
         Issue.record("Agent must return a command result.")
         return
     }
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let secondSpline = try #require(summary.entries.first { $0.entityID == setup.secondSplineID.description })
     let alignedHandle = try #require(secondSpline.controlPoints.dropFirst(1).first)
     let constraint = try #require(secondSpline.constraints.first { $0.kind == "tangentSplineEndpoints" })
@@ -763,7 +766,7 @@ import SwiftCAD
         Issue.record("Agent must return a command result.")
         return
     }
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let secondSpline = try #require(summary.entries.first { $0.entityID == setup.secondSplineID.description })
     let alignedEndpoint = try #require(secondSpline.controlPoints.first)
     let alignedHandle = try #require(secondSpline.controlPoints.dropFirst(1).first)
@@ -805,7 +808,7 @@ import SwiftCAD
         Issue.record("Agent must return a command result.")
         return
     }
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let first = try #require(summary.entries.first { $0.entityID == setup.firstLineID.description })
     let second = try #require(summary.entries.first { $0.entityID == setup.secondLineID.description })
     #expect(result.commandName == "addSketchConstraint")
@@ -838,7 +841,7 @@ import SwiftCAD
         Issue.record("Agent must return a command result.")
         return
     }
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let first = try #require(summary.entries.first { $0.entityID == setup.firstLineID.description })
     let second = try #require(summary.entries.first { $0.entityID == setup.secondLineID.description })
     #expect(result.commandName == "addSketchConstraint")
@@ -871,7 +874,7 @@ import SwiftCAD
         Issue.record("Agent must return a command result.")
         return
     }
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let circle = try #require(summary.entries.first { $0.entityID == setup.circleID.description })
     #expect(result.commandName == "addSketchConstraint")
     #expect(result.didMutate)
@@ -916,7 +919,7 @@ import SwiftCAD
         Issue.record("Agent must return command results.")
         return
     }
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let first = try #require(summary.entries.first { $0.entityID == setup.firstCircleID.description })
     let second = try #require(summary.entries.first { $0.entityID == setup.secondCircleID.description })
     #expect(concentricResult.commandName == "addSketchConstraint")

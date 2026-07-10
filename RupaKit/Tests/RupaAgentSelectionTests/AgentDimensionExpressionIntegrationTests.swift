@@ -7,9 +7,8 @@ import SwiftCAD
 @testable import RupaAgent
 
 @MainActor
-@Test func agentDimensionExpressionDefaultsFollowDocumentDisplayUnitWhenOmitted() async throws {
+@Test func agentDimensionExpressionDefaultsFollowWorkspaceDisplayUnitWhenOmitted() async throws {
     var document = DesignDocument.empty(named: "Agent Scale Expression Defaults")
-    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
     let lineFeatureID = try document.createLineSketch(
         name: "Agent Site Line",
         plane: .xy,
@@ -24,7 +23,12 @@ import SwiftCAD
     )
     let server = AgentCommandController()
     let sessionID = UUID()
-    let session = EditorSession(document: document)
+    let session = EditorSession(
+        document: document,
+        workspaceState: WorkspaceState(
+            ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+        )
+    )
     server.register(session: session, id: sessionID)
 
     let createBodyResponse = server.handle(

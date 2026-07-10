@@ -1133,7 +1133,7 @@ private func agentPersistentNameString(_ name: PersistentName) -> String {
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let movedSource = try #require(updatedSummary.entries.first { $0.entityID == setup.firstLineID.description })
     let movedFollower = try #require(updatedSummary.entries.first { $0.entityID == setup.secondLineID.description })
     let expectedFollowerEndOffset = 0.005 / sqrt(2.0)
@@ -1202,7 +1202,7 @@ private func agentPersistentNameString(_ name: PersistentName) -> String {
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let movedBottom = try #require(updatedSummary.entries.first { $0.entityID == bottomLine.entityID })
     let bodyNode = try #require(agentBodySceneNode(for: bodyFeatureID, in: session.document))
     #expect(result.commandName == "moveSketchEntityPoint")
@@ -1273,7 +1273,7 @@ private func agentPersistentNameString(_ name: PersistentName) -> String {
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedBottom = try #require(updatedSummary.entries.first { $0.entityID == bottomLine.entityID })
     let dimension = try #require(updatedBottom.dimensions.first { $0.kind == "distance" })
     let bodyNode = try #require(agentBodySceneNode(for: bodyFeatureID, in: session.document))

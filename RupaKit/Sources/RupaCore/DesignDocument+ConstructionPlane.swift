@@ -7,7 +7,6 @@ extension DesignDocument {
     public mutating func createConstructionPlane(
         name: String,
         plane: SketchPlane,
-        activates: Bool = true,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> ConstructionPlaneSourceID {
         let trimmedName = try normalizedMetadataName(
@@ -29,9 +28,6 @@ extension DesignDocument {
             plane: plane
         )
         productMetadata.constructionPlanes[source.id] = source
-        if activates {
-            productMetadata.activeConstructionPlaneID = source.id
-        }
         _ = try productMetadata.appendSceneNodeToFirstRoot(
             name: trimmedName,
             reference: .constructionPlane(source.id),
@@ -39,21 +35,6 @@ extension DesignDocument {
         )
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         return source.id
-    }
-
-    public mutating func setActiveConstructionPlane(
-        id: ConstructionPlaneSourceID?,
-        objectRegistry: ObjectTypeRegistry = .builtIn
-    ) throws {
-        if let id,
-           productMetadata.constructionPlanes[id] == nil {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "Active construction plane requires an existing construction plane source."
-            )
-        }
-        productMetadata.activeConstructionPlaneID = id
-        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
     }
 
     public mutating func renameConstructionPlane(
@@ -112,7 +93,6 @@ extension DesignDocument {
     public mutating func createConstructionPlaneFromTarget(
         name: String,
         target: SelectionTarget,
-        activates: Bool = true,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> ConstructionPlaneSourceID {
         let plane = try ConstructionPlaneTargetResolver().plane(
@@ -123,7 +103,6 @@ extension DesignDocument {
         return try createConstructionPlane(
             name: name,
             plane: plane,
-            activates: activates,
             objectRegistry: objectRegistry
         )
     }
@@ -133,7 +112,6 @@ extension DesignDocument {
         name: String,
         targets: [SelectionTarget],
         viewNormal: Vector3D? = nil,
-        activates: Bool = true,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> ConstructionPlaneSourceID {
         let plane = try ConstructionPlaneTargetResolver().plane(
@@ -145,7 +123,6 @@ extension DesignDocument {
         return try createConstructionPlane(
             name: name,
             plane: plane,
-            activates: activates,
             objectRegistry: objectRegistry
         )
     }
@@ -155,7 +132,6 @@ extension DesignDocument {
         name: String,
         origin: Point3D = .origin,
         viewNormal: Vector3D,
-        activates: Bool = true,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> ConstructionPlaneSourceID {
         let plane = try ConstructionPlaneViewResolver().plane(
@@ -165,15 +141,7 @@ extension DesignDocument {
         return try createConstructionPlane(
             name: name,
             plane: plane,
-            activates: activates,
             objectRegistry: objectRegistry
         )
-    }
-
-    public var activeConstructionPlane: ConstructionPlaneSource? {
-        guard let id = productMetadata.activeConstructionPlaneID else {
-            return nil
-        }
-        return productMetadata.constructionPlanes[id]
     }
 }

@@ -286,7 +286,7 @@ extension DesignDocument {
             )
         }
 
-        let topology = try TopologySummaryService().summarize(
+        let topology = try TopologySnapshotService().snapshot(
             document: self,
             objectRegistry: objectRegistry
         )
@@ -345,7 +345,6 @@ extension DesignDocument {
                 typeID: nil,
                 geometryRole: sceneNode.object?.geometryRole ?? .solid,
                 properties: ObjectPropertySet(),
-                ruler: ruler,
                 objectRegistry: objectRegistry
             )
         )
@@ -421,7 +420,7 @@ extension DesignDocument {
             )
         }
 
-        let topology = try TopologySummaryService().summarize(
+        let topology = try TopologySnapshotService().snapshot(
             document: self,
             objectRegistry: objectRegistry
         )
@@ -512,7 +511,6 @@ extension DesignDocument {
                 typeID: nil,
                 geometryRole: sceneNode.object?.geometryRole ?? .solid,
                 properties: ObjectPropertySet(),
-                ruler: ruler,
                 objectRegistry: objectRegistry
             )
         )
@@ -525,7 +523,7 @@ extension DesignDocument {
     private func validateEdgeOffsetSupportTopology(
         edgeEntry: TopologySummaryResult.Entry,
         supportFaceEntry: TopologySummaryResult.Entry,
-        topology: TopologySummaryResult,
+        topology: TopologySnapshot,
         evaluatedDocument: EvaluatedDocument,
         isSymmetric: Bool,
         operationName: String

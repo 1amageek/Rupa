@@ -3,43 +3,45 @@ import RupaCoreTypes
 
 public struct DesignDisplaySnapshotService: Sendable {
     private let sketchService: SketchDisplaySnapshotService
-    private let bodyService: BodyDisplaySnapshotService
+    private let pipelineOverride: CADPipeline?
 
     public init(
         sketchService: SketchDisplaySnapshotService = SketchDisplaySnapshotService(),
-        bodyService: BodyDisplaySnapshotService = BodyDisplaySnapshotService()
+        pipeline: CADPipeline? = nil
     ) {
         self.sketchService = sketchService
-        self.bodyService = bodyService
+        self.pipelineOverride = pipeline
     }
 
-    public func snapshot(document: DesignDocument) -> DesignDisplaySnapshot {
-        snapshot(document: document, bodies: [:])
+    public func snapshot(
+        document: DesignDocument,
+        ruler: RulerConfiguration
+    ) -> DesignDisplaySnapshot {
+        snapshot(document: document, ruler: ruler, bodies: [:])
     }
 
     public func evaluatedSnapshot(
         document: DesignDocument,
+        ruler: RulerConfiguration,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
     ) throws -> DesignDisplaySnapshot {
-        guard hasRenderableBodyOutput(in: document) else {
-            return snapshot(document: document, bodies: [:])
-        }
-        let bodies = try bodyService.snapshots(
+        try evaluatedState(
             document: document,
+            ruler: ruler,
             objectRegistry: objectRegistry,
             currentEvaluation: currentEvaluation,
             currentGeneration: currentGeneration
-        )
-        return snapshot(document: document, bodies: bodies)
+        ).snapshot
     }
 
     private func snapshot(
         document: DesignDocument,
+        ruler: RulerConfiguration,
         bodies: [FeatureID: BodyDisplaySnapshot]
     ) -> DesignDisplaySnapshot {
-        let sketches = sketchService.snapshots(document: document)
+        let sketches = sketchService.snapshots(document: document, ruler: ruler)
         var extrudes: [FeatureID: ExtrudeDisplaySnapshot] = [:]
         var straightPrismSweeps: [FeatureID: StraightPrismSweepDisplaySnapshot] = [:]
         let graph = document.cadDocument.designGraph
@@ -91,47 +93,46 @@ public struct DesignDisplaySnapshotService: Sendable {
 
     public func result(
         document: DesignDocument,
+        workspaceState: WorkspaceState,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
         generation: DocumentGeneration,
         dirty: Bool
     ) throws -> DesignDisplaySnapshotResult {
-        let snapshot = try evaluatedSnapshot(
+        let evaluatedState = try evaluatedState(
             document: document,
+            ruler: workspaceState.ruler,
             objectRegistry: objectRegistry,
             currentEvaluation: currentEvaluation,
             currentGeneration: generation
         )
+        let snapshot = evaluatedState.snapshot
         let order = document.cadDocument.designGraph.order
-        let evaluatedDocument = try currentWorkspaceEvaluation(
-            document: document,
-            currentEvaluation: currentEvaluation,
-            generation: generation
-        )
-        let workspaceBounds = evaluatedDocument.flatMap {
+        let workspaceBounds = evaluatedState.evaluatedDocument.flatMap {
             WorkspaceBoundsService().bounds(for: $0)
         }
         return DesignDisplaySnapshotResult(
             generation: generation,
             dirty: dirty,
-            workspaceScale: WorkspaceScaleSnapshot(ruler: document.ruler),
-            workspaceInteractionScale: WorkspaceInteractionScaleSnapshot(ruler: document.ruler),
-            viewportGridSettings: document.productMetadata.viewportGridSettings,
+            workspaceScale: WorkspaceScaleSnapshot(ruler: workspaceState.ruler),
+            workspaceInteractionScale: WorkspaceInteractionScaleSnapshot(ruler: workspaceState.ruler),
+            viewportGridSettings: workspaceState.viewportGridSettings,
             viewportGridScale: ViewportGridScaleSnapshot(
-                ruler: document.ruler,
-                settings: document.productMetadata.viewportGridSettings
+                ruler: workspaceState.ruler,
+                settings: workspaceState.viewportGridSettings
             ),
             workspaceBounds: workspaceBounds,
             workspacePrecision: workspaceBounds.flatMap {
                 WorkspacePrecisionDiagnosticService().report(
                     for: $0,
-                    ruler: document.ruler
+                    ruler: workspaceState.ruler,
+                    tolerance: document.modelingSettings.tolerance
                 )
             },
             workspaceScaleRecommendation: workspaceBounds.flatMap {
                 WorkspaceScaleRecommendationService().recommendation(
                     for: $0,
-                    currentRuler: document.ruler
+                    currentRuler: workspaceState.ruler
                 )
             },
             workspaceScalePresetOptions: WorkspaceScalePreset.profiles,
@@ -146,31 +147,35 @@ public struct DesignDisplaySnapshotService: Sendable {
         )
     }
 
-    private func currentWorkspaceEvaluation(
+    private func evaluatedState(
         document: DesignDocument,
+        ruler: RulerConfiguration,
+        objectRegistry: ObjectTypeRegistry,
         currentEvaluation: DocumentEvaluationContext?,
-        generation: DocumentGeneration
-    ) throws -> EvaluatedDocument? {
-        guard let currentEvaluation else {
-            return nil
+        currentGeneration: DocumentGeneration?
+    ) throws -> (
+        snapshot: DesignDisplaySnapshot,
+        evaluatedDocument: EvaluatedDocument?
+    ) {
+        guard !document.cadDocument.designGraph.order.isEmpty else {
+            return (snapshot(document: document, ruler: ruler, bodies: [:]), nil)
         }
-        guard try currentEvaluation.matches(
+        let evaluatedDocument = try DocumentEvaluationContextResolver(
+            pipeline: pipelineOverride
+        ).evaluatedDocument(
             document: document,
-            generation: generation
-        ) else {
-            return nil
-        }
-        return currentEvaluation.evaluatedDocument
-    }
-
-    private func hasRenderableBodyOutput(in document: DesignDocument) -> Bool {
-        document.cadDocument.designGraph.order.contains { featureID in
-            guard let feature = document.cadDocument.designGraph.nodes[featureID],
-                  !feature.isSuppressed else {
-                return false
-            }
-            return feature.outputs.contains { $0.role == .body }
-        }
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration,
+            failurePrefix: "Document must evaluate successfully before design display snapshots"
+        )
+        let bodies = BodyDisplaySnapshotService(
+            pipeline: pipelineOverride
+        ).snapshots(evaluatedDocument: evaluatedDocument)
+        return (
+            snapshot(document: document, ruler: ruler, bodies: bodies),
+            evaluatedDocument
+        )
     }
 
     private func componentDefinitionSnapshots(

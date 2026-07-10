@@ -3,9 +3,9 @@ import SwiftCAD
 import RupaCoreTypes
 
 public struct GeneratedTopologySelectionResolver: Sendable {
-    private let topologyService: TopologySummaryService
+    private let topologyService: TopologySnapshotService
 
-    public init(topologyService: TopologySummaryService = TopologySummaryService()) {
+    public init(topologyService: TopologySnapshotService = TopologySnapshotService()) {
         self.topologyService = topologyService
     }
 
@@ -21,7 +21,7 @@ public struct GeneratedTopologySelectionResolver: Sendable {
             in: document,
             operationName: "Generated topology selection"
         )
-        let topology = try topologyService.summarize(
+        let topology = try topologyService.snapshot(
             document: document,
             objectRegistry: objectRegistry
         )
@@ -75,7 +75,7 @@ public struct GeneratedTopologySelectionResolver: Sendable {
             in: document,
             operationName: "Generated topology selection"
         )
-        let topology = try topologyService.summarize(
+        let topology = try topologyService.snapshot(
             document: document,
             objectRegistry: objectRegistry
         )
@@ -117,7 +117,7 @@ public struct GeneratedTopologySelectionResolver: Sendable {
             in: document,
             operationName: "Generated topology selection"
         )
-        let topology = try topologyService.summarize(
+        let topology = try topologyService.snapshot(
             document: document,
             objectRegistry: objectRegistry
         )
@@ -148,7 +148,7 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         objectRegistry: ObjectTypeRegistry = .builtIn,
         operationName: String = "Generated topology face"
     ) throws -> BodyFace {
-        let topology = try topologyService.summarize(
+        let topology = try topologyService.snapshot(
             document: document,
             objectRegistry: objectRegistry
         )
@@ -163,7 +163,7 @@ public struct GeneratedTopologySelectionResolver: Sendable {
     public func bodyFace(
         for target: SelectionTarget,
         in document: DesignDocument,
-        topology: TopologySummaryResult,
+        topology: TopologySnapshot,
         operationName: String = "Generated topology face"
     ) throws -> BodyFace {
         guard case .face(let componentID) = target.component,
@@ -232,7 +232,7 @@ public struct GeneratedTopologySelectionResolver: Sendable {
             in: document,
             operationName: operationName
         )
-        let topology = try topologyService.summarize(
+        let topology = try topologyService.snapshot(
             document: document,
             objectRegistry: objectRegistry
         )
@@ -274,7 +274,7 @@ public struct GeneratedTopologySelectionResolver: Sendable {
             in: document,
             operationName: operationName
         )
-        let topology = try topologyService.summarize(
+        let topology = try topologyService.snapshot(
             document: document,
             objectRegistry: objectRegistry
         )

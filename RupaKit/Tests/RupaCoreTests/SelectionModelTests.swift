@@ -87,7 +87,10 @@ import Testing
         name: "Selectable Plane",
         plane: .yz
     )
-    let summary = ConstructionPlaneSummaryService().summarize(document: document)
+    let summary = ConstructionPlaneSummaryService().summarize(
+        document: document,
+        activePlaneID: nil
+    )
     let entry = try #require(summary.planes.first)
     let target = try #require(entry.selectionTarget())
     var selection = SelectionModel()
@@ -107,10 +110,12 @@ import Testing
     )
     let secondID = try document.createConstructionPlane(
         name: "Second Plane",
-        plane: .zx,
-        activates: false
+        plane: .zx
     )
-    let summary = ConstructionPlaneSummaryService().summarize(document: document)
+    let summary = ConstructionPlaneSummaryService().summarize(
+        document: document,
+        activePlaneID: nil
+    )
     let firstEntry = try #require(summary.planes.first { $0.name == "First Plane" })
     let firstSceneNodeID = try #require(firstEntry.sceneNodeID)
     let mismatchedTarget = SelectionTarget(
@@ -242,7 +247,7 @@ import Testing
         sourceMesh: selectionModelSurfaceQuadMesh(),
         options: PolySplineOptions()
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     let reference = controlPoint.selectionReference
@@ -267,7 +272,7 @@ import Testing
         name: "Selectable Surface Trim",
         surface: selectionModelDirectBSplineSurface()
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let reference = try #require(
         summary.sources.first?.patches.first?.trimLoops.first?.selectionReferences.first
     )
@@ -292,7 +297,7 @@ import Testing
         name: "Selectable Surface Basis",
         surface: selectionModelEditableDirectBSplineSurface()
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let parameterReference = try #require(patch.parameterAddresses.first { $0.id == "center" }?.selectionReference)
     let knotReference = try #require(patch.basis.uKnotVector.first { $0.index == 3 }?.selectionReference)
@@ -369,7 +374,7 @@ private func sketchTargetSetup(
     sceneNodeID: SceneNodeID,
     entityID: SketchEntityID
 ) {
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entry = try #require(summary.entries.first { entry in
         entry.sourceFeatureID == featureID.description && entry.entityKind == entityKind
     })

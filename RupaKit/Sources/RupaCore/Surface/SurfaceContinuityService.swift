@@ -30,6 +30,7 @@ public struct SurfaceContinuityService: Sendable {
 
     public func summarize(
         document: DesignDocument,
+        displayUnit: LengthDisplayUnit,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
@@ -45,7 +46,7 @@ public struct SurfaceContinuityService: Sendable {
 
         guard document.cadDocument.hasActiveRenderableTopologyFeatures else {
             return SurfaceContinuityResult(
-                displayUnit: document.displayUnit,
+                displayUnit: displayUnit,
                 diagnostics: [
                     EditorDiagnostic(
                         severity: .info,
@@ -97,7 +98,7 @@ public struct SurfaceContinuityService: Sendable {
         }
 
         return SurfaceContinuityResult(
-            displayUnit: document.displayUnit,
+            displayUnit: displayUnit,
             counts: counts(
                 bSplineFaceCount: bSplineFaceIDs.count,
                 adjacencies: adjacencies

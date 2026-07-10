@@ -44,7 +44,7 @@ import Testing
         ],
         normal: .unitY
     )
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(scene: scene, size: CGSize(width: 900.0, height: 700.0)))
 
     let preview = try #require(ViewportPatternArrayCurvePathReplacementPreviewService().preview(
@@ -101,7 +101,7 @@ import Testing
     let source = try #require(session.document.productMetadata.patternArrays.values.first {
         $0.name == "Rectangular Preview Pattern"
     })
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(scene: scene, size: CGSize(width: 900.0, height: 700.0)))
 
     let preview = ViewportPatternArrayCurvePathReplacementPreviewService().preview(

@@ -11,6 +11,7 @@ import Testing
     let builder = WorkspaceSketchEntityInspectorStateBuilder(
         document: fixture.document,
         selection: SelectionModel(selectedTargets: [referenceEnd, selectedStart]),
+        displayUnit: .millimeter,
         objectRegistry: .builtIn
     )
 
@@ -36,6 +37,7 @@ import Testing
     let builder = WorkspaceSketchEntityInspectorStateBuilder(
         document: fixture.document,
         selection: SelectionModel(selectedTargets: [referenceTarget, selectedTarget]),
+        displayUnit: .millimeter,
         objectRegistry: .builtIn
     )
 
@@ -56,16 +58,22 @@ import Testing
 
 @MainActor
 @Test func workspaceSketchEntityInspectorStateBuilderExposesBridgeCurvatureDisplayTarget() async throws {
-    var fixture = try workspaceBridgeCurveInspectorFixture()
-    try fixture.document.setCurveCurvatureDisplay(
-        target: fixture.bridgeTarget,
-        isVisible: true,
-        combScale: 0.35
+    let fixture = try workspaceBridgeCurveInspectorFixture()
+    var workspaceState = WorkspaceState()
+    _ = try workspaceState.apply(
+        .setCurveCurvatureDisplay(
+            target: fixture.bridgeTarget,
+            isVisible: true,
+            combScale: 0.35
+        ),
+        document: fixture.document
     )
     let builder = WorkspaceSketchEntityInspectorStateBuilder(
         document: fixture.document,
         selection: SelectionModel(selectedTargets: [fixture.bridgeTarget]),
-        objectRegistry: .builtIn
+        displayUnit: workspaceState.displayUnit,
+        objectRegistry: .builtIn,
+        curveCurvatureDisplays: workspaceState.curveCurvatureDisplays
     )
 
     let entity = try #require(try builder.selectedEntity())
@@ -123,7 +131,7 @@ private func workspaceSketchEntityInspectorFixture() throws -> WorkspaceSketchEn
             geometryRole: .curve
         )
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let referenceLine = try #require(summary.entries.first { $0.entityID == referenceLineID.description })
     let selectedLine = try #require(summary.entries.first { $0.entityID == selectedLineID.description })
     return WorkspaceSketchEntityInspectorFixture(
@@ -189,7 +197,7 @@ private func workspaceBridgeCurveInspectorFixture() throws -> WorkspaceBridgeCur
         secondEndpoint: BridgeCurveEndpoint(reference: .lineStart(secondLineID)),
         continuity: .g1
     )
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let bridgeEntry = try #require(summary.entries.first { $0.entityID == bridgeEntityID.description })
     let bridgeTarget = try #require(bridgeEntry.selectionTarget())
     let bridgeComponentID = try #require(sketchEntityComponentID(from: bridgeTarget))

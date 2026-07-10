@@ -18,12 +18,14 @@ public struct MeasurementService {
 
     public func measure(
         document: DesignDocument,
+        ruler: RulerConfiguration,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
     ) throws -> MeasurementResult {
         try measure(
             document: document,
+            ruler: ruler,
             selectedFeatureIDs: nil,
             scope: .document,
             objectRegistry: objectRegistry,
@@ -35,6 +37,7 @@ public struct MeasurementService {
     public func measure(
         document: DesignDocument,
         selection: SelectionModel,
+        ruler: RulerConfiguration,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
@@ -42,6 +45,7 @@ public struct MeasurementService {
         guard !selection.selectedSceneNodeIDs.isEmpty else {
             return try measure(
                 document: document,
+                ruler: ruler,
                 objectRegistry: objectRegistry,
                 currentEvaluation: currentEvaluation,
                 currentGeneration: currentGeneration
@@ -52,6 +56,7 @@ public struct MeasurementService {
         )
         return try measure(
             document: document,
+            ruler: ruler,
             selectedFeatureIDs: selectedFeatureIDs,
             scope: .selection,
             objectRegistry: objectRegistry,
@@ -62,6 +67,7 @@ public struct MeasurementService {
 
     private func measure(
         document: DesignDocument,
+        ruler: RulerConfiguration,
         selectedFeatureIDs: Set<FeatureID>?,
         scope: MeasurementResult.Scope,
         objectRegistry: ObjectTypeRegistry,
@@ -864,17 +870,17 @@ public struct MeasurementService {
         let workspacePrecisionService = WorkspacePrecisionDiagnosticService()
         let workspacePrecision = workspacePrecisionService.report(
             for: bounds.bounds,
-            ruler: document.ruler,
+            ruler: ruler,
             tolerance: tolerance
         )
         diagnostics += workspacePrecisionService.diagnostics(
             for: workspacePrecision,
-            displayUnit: document.displayUnit
+            displayUnit: ruler.displayUnit
         )
         let workspaceScaleRecommendationService = WorkspaceScaleRecommendationService()
         let workspaceScaleRecommendation = workspaceScaleRecommendationService.recommendation(
             for: bounds.bounds,
-            currentRuler: document.ruler
+            currentRuler: ruler
         )
         diagnostics += workspaceScaleRecommendationService.diagnostics(
             for: workspaceScaleRecommendation
@@ -882,7 +888,7 @@ public struct MeasurementService {
 
         return MeasurementResult(
             scope: scope,
-            displayUnit: document.displayUnit,
+            displayUnit: ruler.displayUnit,
             counts: counts,
             bounds: bounds.bounds,
             totals: totals,

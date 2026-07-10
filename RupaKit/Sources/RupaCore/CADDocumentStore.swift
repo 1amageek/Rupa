@@ -49,6 +49,25 @@ public final class CADDocumentStore {
         self.evaluationScheduler = evaluationScheduler
     }
 
+    public convenience init(
+        transactionSnapshot: CADDocumentStoreTransactionSnapshot,
+        objectRegistry: ObjectTypeRegistry
+    ) {
+        let snapshot = transactionSnapshot.document
+        self.init(
+            document: snapshot.document,
+            generation: snapshot.generation,
+            isDirty: snapshot.isDirty,
+            diagnostics: snapshot.diagnostics,
+            evaluationStatus: snapshot.evaluationStatus,
+            evaluatedGeneration: snapshot.evaluatedGeneration,
+            renderInvalidation: snapshot.renderInvalidation,
+            evaluatedBodyCount: snapshot.evaluatedBodyCount,
+            evaluationCache: transactionSnapshot.evaluationCache,
+            objectRegistry: objectRegistry
+        )
+    }
+
     public var currentEvaluationCache: EvaluatedDocumentCache? {
         guard evaluatedGeneration == generation else {
             return nil
@@ -154,22 +173,11 @@ public final class CADDocumentStore {
     public func apply(_ command: EditorCommand) throws -> CommandExecutionResult {
         var curveRebuildReport: CurveRebuildReport?
         var addedSelectionDimensionID: SelectionDimensionID?
+        var createdConstructionPlaneID: ConstructionPlaneSourceID?
         var primaryFeatureID: FeatureID?
         var didMutate = command.mutatesDocument
         let previousFeatureIDs = Set(document.cadDocument.designGraph.nodes.keys)
         switch command {
-        case .setDisplayUnit(let unit):
-            document.setDisplayUnit(unit)
-            try commitMutation()
-            evaluateCurrentDocument()
-        case .setRulerConfiguration(let configuration):
-            try document.setRulerConfiguration(configuration)
-            try commitMutation()
-            evaluateCurrentDocument()
-        case .setViewportGridSettings(let settings):
-            document.setViewportGridSettings(settings)
-            try commitMutation()
-            evaluateCurrentDocument()
         case .createSavedView(let savedView):
             try document.createSavedView(
                 savedView,
@@ -208,6 +216,13 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .replaceProductMetadata(let metadata):
             document.productMetadata = metadata
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .applySemanticExtensionMutations(let mutations):
+            try document.applySemanticExtensionMutations(
+                mutations,
+                objectRegistry: objectRegistry
+            )
             try commitMutation()
             evaluateCurrentDocument()
         case .upsertParameter(let name, let expression, let kind):
@@ -332,6 +347,17 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .setTopologyMaterialBinding(let target, let materialID, let process):
+            var updatedDocument = document
+            try updatedDocument.setTopologyMaterialBinding(
+                target: target,
+                materialID: materialID,
+                process: process,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .setSceneNodeObjectProperty(let id, let propertyID, let value):
             var updatedDocument = document
             try updatedDocument.setSceneNodeObjectProperty(
@@ -379,56 +405,43 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
-        case .createConstructionPlane(let name, let plane, let activates):
+        case .createConstructionPlane(let name, let plane):
             var updatedDocument = document
-            try updatedDocument.createConstructionPlane(
+            createdConstructionPlaneID = try updatedDocument.createConstructionPlane(
                 name: name,
                 plane: plane,
-                activates: activates,
                 objectRegistry: objectRegistry
             )
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
-        case .createConstructionPlaneFromTarget(let name, let target, let activates):
+        case .createConstructionPlaneFromTarget(let name, let target):
             var updatedDocument = document
-            try updatedDocument.createConstructionPlaneFromTarget(
+            createdConstructionPlaneID = try updatedDocument.createConstructionPlaneFromTarget(
                 name: name,
                 target: target,
-                activates: activates,
                 objectRegistry: objectRegistry
             )
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
-        case .createConstructionPlaneFromTargets(let name, let targets, let viewNormal, let activates):
+        case .createConstructionPlaneFromTargets(let name, let targets, let viewNormal):
             var updatedDocument = document
-            try updatedDocument.createConstructionPlaneFromTargets(
+            createdConstructionPlaneID = try updatedDocument.createConstructionPlaneFromTargets(
                 name: name,
                 targets: targets,
                 viewNormal: viewNormal,
-                activates: activates,
                 objectRegistry: objectRegistry
             )
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
-        case .createViewAlignedConstructionPlane(let name, let origin, let viewNormal, let activates):
+        case .createViewAlignedConstructionPlane(let name, let origin, let viewNormal):
             var updatedDocument = document
-            try updatedDocument.createViewAlignedConstructionPlane(
+            createdConstructionPlaneID = try updatedDocument.createViewAlignedConstructionPlane(
                 name: name,
                 origin: origin,
                 viewNormal: viewNormal,
-                activates: activates,
-                objectRegistry: objectRegistry
-            )
-            document = updatedDocument
-            try commitMutation()
-            evaluateCurrentDocument()
-        case .setActiveConstructionPlane(let id):
-            var updatedDocument = document
-            try updatedDocument.setActiveConstructionPlane(
-                id: id,
                 objectRegistry: objectRegistry
             )
             document = updatedDocument
@@ -454,27 +467,6 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
-        case .setCurveCurvatureDisplay(let target, let isVisible, let combScale):
-            var updatedDocument = document
-            try updatedDocument.setCurveCurvatureDisplay(
-                target: target,
-                isVisible: isVisible,
-                combScale: combScale,
-                objectRegistry: objectRegistry
-            )
-            document = updatedDocument
-            try commitMutation()
-            evaluateCurrentDocument()
-        case .setPointDisplay(let target, let isVisible):
-            var updatedDocument = document
-            try updatedDocument.setPointDisplay(
-                target: target,
-                isVisible: isVisible,
-                objectRegistry: objectRegistry
-            )
-            document = updatedDocument
-            try commitMutation()
-            evaluateCurrentDocument()
         case .createSketch(let name, let sketch, let geometryRole):
             var updatedDocument = document
             try updatedDocument.createSketch(
@@ -488,10 +480,9 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createLineSketch(let name, let plane, let start, let end):
             var updatedDocument = document
-            let resolvedPlane = try updatedDocument.resolveSketchPlane(plane)
             try updatedDocument.createLineSketch(
                 name: name,
-                plane: resolvedPlane,
+                plane: plane,
                 start: start,
                 end: end,
                 objectRegistry: objectRegistry
@@ -501,10 +492,9 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createCircleSketch(let name, let plane, let center, let radius):
             var updatedDocument = document
-            let resolvedPlane = try updatedDocument.resolveSketchPlane(plane)
             try updatedDocument.createCircleSketch(
                 name: name,
-                plane: resolvedPlane,
+                plane: plane,
                 center: center,
                 radius: radius,
                 objectRegistry: objectRegistry
@@ -514,10 +504,9 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createArcSketch(let name, let plane, let center, let radius, let startAngle, let endAngle):
             var updatedDocument = document
-            let resolvedPlane = try updatedDocument.resolveSketchPlane(plane)
             try updatedDocument.createArcSketch(
                 name: name,
-                plane: resolvedPlane,
+                plane: plane,
                 center: center,
                 radius: radius,
                 startAngle: startAngle,
@@ -529,10 +518,9 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createSplineSketch(let name, let plane, let spline):
             var updatedDocument = document
-            let resolvedPlane = try updatedDocument.resolveSketchPlane(plane)
             try updatedDocument.createSplineSketch(
                 name: name,
-                plane: resolvedPlane,
+                plane: plane,
                 spline: spline,
                 objectRegistry: objectRegistry
             )
@@ -541,10 +529,9 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createRectangleSketch(let name, let plane, let width, let height):
             var updatedDocument = document
-            let resolvedPlane = try updatedDocument.resolveSketchPlane(plane)
             try updatedDocument.createRectangleSketch(
                 name: name,
-                plane: resolvedPlane,
+                plane: plane,
                 width: width,
                 height: height,
                 objectRegistry: objectRegistry
@@ -563,10 +550,9 @@ public final class CADDocumentStore {
             let rotationAngle
         ):
             var updatedDocument = document
-            let resolvedPlane = try updatedDocument.resolveSketchPlane(plane)
             try updatedDocument.createPolygonSketch(
                 name: name,
-                plane: resolvedPlane,
+                plane: plane,
                 center: center,
                 radius: radius,
                 sides: sides,
@@ -591,10 +577,9 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .projectSketchCurvesToConstructionPlane(let targets, let plane, let name):
             var updatedDocument = document
-            let resolvedPlane = try updatedDocument.resolveSketchPlane(plane)
             try updatedDocument.projectSketchCurvesToConstructionPlane(
                 targets: targets,
-                plane: resolvedPlane,
+                plane: plane,
                 name: name,
                 objectRegistry: objectRegistry
             )
@@ -614,10 +599,9 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .projectBodyOutlinesToConstructionPlane(let targets, let plane, let name):
             var updatedDocument = document
-            let resolvedPlane = try updatedDocument.resolveSketchPlane(plane)
             try updatedDocument.projectBodyOutlinesToConstructionPlane(
                 targets: targets,
-                plane: resolvedPlane,
+                plane: plane,
                 name: name,
                 objectRegistry: objectRegistry
             )
@@ -672,10 +656,9 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createRectangleSketchFromCorners(let name, let plane, let firstCorner, let oppositeCorner):
             var updatedDocument = document
-            let resolvedPlane = try updatedDocument.resolveSketchPlane(plane)
             try updatedDocument.createRectangleSketchFromCorners(
                 name: name,
-                plane: resolvedPlane,
+                plane: plane,
                 firstCorner: firstCorner,
                 oppositeCorner: oppositeCorner,
                 objectRegistry: objectRegistry
@@ -1183,26 +1166,6 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
-        case .setSurfaceControlPointDisplay(let target, let isVisible):
-            var updatedDocument = document
-            try updatedDocument.setSurfaceControlPointDisplay(
-                target: target,
-                isVisible: isVisible,
-                objectRegistry: objectRegistry
-            )
-            document = updatedDocument
-            try commitMutation()
-            evaluateCurrentDocument()
-        case .setSurfaceFrameDisplay(let query, let isVisible):
-            var updatedDocument = document
-            try updatedDocument.setSurfaceFrameDisplay(
-                query: query,
-                isVisible: isVisible,
-                objectRegistry: objectRegistry
-            )
-            document = updatedDocument
-            try commitMutation()
-            evaluateCurrentDocument()
         case .movePolySplineSurfaceVertex(let target, let deltaX, let deltaY, let deltaZ):
             var updatedDocument = document
             try updatedDocument.movePolySplineSurfaceVertex(
@@ -1435,10 +1398,9 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createExtrudedRectangle(let name, let plane, let width, let height, let depth, let direction):
             var updatedDocument = document
-            let resolvedPlane = try updatedDocument.resolveSketchPlane(plane)
             primaryFeatureID = try updatedDocument.createExtrudedRectangle(
                 name: name,
-                plane: resolvedPlane,
+                plane: plane,
                 width: width,
                 height: height,
                 depth: depth,
@@ -1457,10 +1419,9 @@ public final class CADDocumentStore {
             let direction
         ):
             var updatedDocument = document
-            let resolvedPlane = try updatedDocument.resolveSketchPlane(plane)
             primaryFeatureID = try updatedDocument.createExtrudedRectangleFromCorners(
                 name: name,
-                plane: resolvedPlane,
+                plane: plane,
                 firstCorner: firstCorner,
                 oppositeCorner: oppositeCorner,
                 depth: depth,
@@ -1472,10 +1433,9 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createExtrudedCircle(let name, let plane, let center, let radius, let depth, let direction):
             var updatedDocument = document
-            let resolvedPlane = try updatedDocument.resolveSketchPlane(plane)
             primaryFeatureID = try updatedDocument.createExtrudedCircle(
                 name: name,
-                plane: resolvedPlane,
+                plane: plane,
                 center: center,
                 radius: radius,
                 depth: depth,
@@ -1500,7 +1460,8 @@ public final class CADDocumentStore {
             primaryFeatureID: primaryFeatureID,
             createdFeatureIDs: createdFeatureIDs,
             curveRebuildReport: curveRebuildReport,
-            addedSelectionDimensionID: addedSelectionDimensionID
+            addedSelectionDimensionID: addedSelectionDimensionID,
+            createdConstructionPlaneID: createdConstructionPlaneID
         )
     }
 

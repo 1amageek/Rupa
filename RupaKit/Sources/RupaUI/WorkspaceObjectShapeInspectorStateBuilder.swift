@@ -6,10 +6,12 @@ struct WorkspaceObjectShapeInspectorStateBuilder {
     var currentEvaluation: DocumentEvaluationContext?
     var documentGeneration: DocumentGeneration
     var objectRegistry: ObjectTypeRegistry
+    var ruler: RulerConfiguration
 
     func shapes(for nodes: [SceneNode]) -> [InspectorObjectShape]? {
         let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(
             document: document,
+            ruler: ruler,
             currentEvaluation: currentEvaluation,
             documentGeneration: documentGeneration
         )

@@ -6,11 +6,19 @@ import Testing
 func workspaceOriginRebaseMovesCADSourcesAndClearsFarOriginPrecisionWarnings() throws {
     let document = try farFromOriginRectangleDocument()
     let initialMeasurement = try MeasurementService(
-        tolerance: .workspaceScaleAware(for: document)
-    ).measure(document: document)
+        tolerance: document.modelingSettings.tolerance
+    ).measure(
+        document: document,
+        ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+    )
     #expect(initialMeasurement.diagnostics.contains { $0.code == .workspacePrecisionWarning })
 
-    let session = EditorSession(document: document)
+    let session = EditorSession(
+        document: document,
+        workspaceState: WorkspaceState(
+            ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+        )
+    )
     let result = try session.execute(.rebaseWorkspaceOrigin(
         translation: Vector3D(x: -1.0e12, y: -1.0e12, z: 0.0)
     ))
@@ -31,8 +39,8 @@ func workspaceOriginRebaseMovesCADSourcesAndClearsFarOriginPrecisionWarnings() t
     #expect(abs(translatedRange.maxY - 10.0) < 1.0e-6)
 
     let translatedMeasurement = try MeasurementService(
-        tolerance: .workspaceScaleAware(for: session.document)
-    ).measure(document: session.document)
+        tolerance: session.document.modelingSettings.tolerance
+    ).measure(document: session.document, ruler: session.workspaceState.ruler)
     #expect(translatedMeasurement.diagnostics.contains { $0.code == .workspacePrecisionWarning } == false)
 }
 
@@ -58,8 +66,11 @@ func workspaceOriginRebaseRejectsStandardPlaneNormalTranslationWithoutMutation()
 func farFromOriginExtrudeMeasuresWithoutUnsupportedProfile() throws {
     let document = try farFromOriginRectangleDocument()
     let measurement = try MeasurementService(
-        tolerance: .workspaceScaleAware(for: document)
-    ).measure(document: document)
+        tolerance: document.modelingSettings.tolerance
+    ).measure(
+        document: document,
+        ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+    )
 
     // The 10 m x 10 m profile sits at 1e12 coordinates. A raw shoelace area
     // collapses to zero there (catastrophic cancellation), which used to skip
@@ -72,7 +83,10 @@ func farFromOriginExtrudeMeasuresWithoutUnsupportedProfile() throws {
 @Test(.timeLimit(.minutes(1)))
 func farFromOriginLoopStitchingAcceptsCoordinateResolutionGap() throws {
     let document = try farFromOriginAlmostClosedRectangleDocument()
-    let measurement = try MeasurementService().measure(document: document)
+    let measurement = try MeasurementService().measure(
+        document: document,
+        ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+    )
 
     #expect(measurement.diagnostics.allSatisfy { !$0.message.contains("unsupported profile") })
     #expect(measurement.counts.solids == 1)
@@ -83,7 +97,6 @@ func farFromOriginLoopStitchingAcceptsCoordinateResolutionGap() throws {
 
 private func farFromOriginRectangleDocument() throws -> DesignDocument {
     var document = DesignDocument.empty(named: "Remote Site")
-    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
     let profileID = try document.createRectangleSketchFromCorners(
         name: "Remote Profile",
         plane: .xy,

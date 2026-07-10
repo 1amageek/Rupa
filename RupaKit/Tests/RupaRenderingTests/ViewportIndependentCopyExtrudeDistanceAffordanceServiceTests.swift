@@ -13,7 +13,7 @@ import Testing
         arrayName: "Extrude Distance Root Array"
     )
     let firstOutputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(
         scene: scene,
         size: CGSize(width: 900.0, height: 700.0)
@@ -46,7 +46,7 @@ import Testing
         arrayName: "Extrude Distance Descendant Array"
     )
     let firstOutputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let descendantSceneNodeID = try renderableDescendantSceneNodeID(
         rootedAt: firstOutputSceneNodeID,
         scene: scene,
@@ -93,7 +93,7 @@ import Testing
         )
     )
     let updatedSource = try #require(session.document.productMetadata.patternArrays[source.id])
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(
         scene: scene,
         size: CGSize(width: 900.0, height: 700.0)
@@ -138,7 +138,7 @@ import Testing
         ))
     )
     let firstOutputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(
         scene: scene,
         size: CGSize(width: 900.0, height: 700.0)
@@ -174,7 +174,7 @@ import Testing
         ))
     )
     let firstOutputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let outputBodyItem = try bodyItem(
         rootedAt: firstOutputSceneNodeID,
         source: source,
@@ -223,7 +223,7 @@ import Testing
     )
     let firstOutputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
     let outputTransform = try #require(session.document.productMetadata.sceneNodes[firstOutputSceneNodeID]?.localTransform)
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(
         scene: scene,
         size: CGSize(width: 900.0, height: 700.0)
@@ -250,17 +250,19 @@ import Testing
 @MainActor
 @Test func independentCopyExtrudeDistanceAffordanceUsesProfilePlaneNormal() async throws {
     let session = EditorSession()
-    _ = try #require(session.createConstructionPlane(
+    let planeResult = try #require(session.createConstructionPlane(
         name: "YZ Plane",
         plane: .yz
     ))
+    let planeID = try #require(planeResult.createdConstructionPlaneID)
+    _ = try #require(session.setActiveConstructionPlane(id: planeID))
     let source = try createIndependentCopyPatternArray(
         in: session,
         definitionName: "Extrude Distance YZ Source",
         arrayName: "Extrude Distance YZ Array"
     )
     let firstOutputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(
         scene: scene,
         size: CGSize(width: 900.0, height: 700.0)
@@ -291,7 +293,7 @@ import Testing
         sourceBodyCount: 2
     )
     let firstOutputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(
         scene: scene,
         size: CGSize(width: 900.0, height: 700.0)
@@ -318,7 +320,7 @@ import Testing
         definitionName: "Extrude Distance Source Root Source",
         arrayName: "Extrude Distance Source Root Array"
     )
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(
         scene: scene,
         size: CGSize(width: 900.0, height: 700.0)
@@ -364,7 +366,7 @@ import Testing
         $0.name == "Component Instance Extrude Array"
     })
     let outputSceneNodeID = try outputSceneNodeID(for: source, document: session.document)
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(
         scene: scene,
         size: CGSize(width: 900.0, height: 700.0)

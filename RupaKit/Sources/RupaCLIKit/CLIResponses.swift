@@ -1,14 +1,19 @@
 import Foundation
 import RupaAgentProtocol
+import RupaAutomation
 import RupaCore
+import RupaDomainFoundation
 
 public struct CLIResponse: Codable, Equatable, Sendable {
     public var message: String
+    public var effect: AutomationCommandEffect?
     public var generation: UInt64
     public var dirty: Bool
     public var saved: Bool
+    public var workspaceRevision: UInt64?
     public var primaryFeatureID: FeatureID?
     public var createdFeatureIDs: [FeatureID]?
+    public var createdConstructionPlaneID: ConstructionPlaneSourceID?
     public var diagnostics: [EditorDiagnostic]
     public var workspaceScale: WorkspaceScaleSnapshot?
     public var workspaceInteractionScale: WorkspaceInteractionScaleSnapshot?
@@ -30,11 +35,14 @@ public struct CLIResponse: Codable, Equatable, Sendable {
 
     public init(
         message: String,
+        effect: AutomationCommandEffect? = nil,
         generation: UInt64,
         dirty: Bool,
         saved: Bool = false,
+        workspaceRevision: UInt64? = nil,
         primaryFeatureID: FeatureID? = nil,
         createdFeatureIDs: [FeatureID]? = nil,
+        createdConstructionPlaneID: ConstructionPlaneSourceID? = nil,
         diagnostics: [EditorDiagnostic],
         workspaceScale: WorkspaceScaleSnapshot? = nil,
         workspaceInteractionScale: WorkspaceInteractionScaleSnapshot? = nil,
@@ -55,11 +63,14 @@ public struct CLIResponse: Codable, Equatable, Sendable {
         drawingProjectionPNGByteCount: UInt64? = nil
     ) {
         self.message = message
+        self.effect = effect
         self.generation = generation
         self.dirty = dirty
         self.saved = saved
+        self.workspaceRevision = workspaceRevision
         self.primaryFeatureID = primaryFeatureID
         self.createdFeatureIDs = createdFeatureIDs
+        self.createdConstructionPlaneID = createdConstructionPlaneID
         self.diagnostics = diagnostics
         self.workspaceScale = workspaceScale
         self.workspaceInteractionScale = workspaceInteractionScale
@@ -101,6 +112,50 @@ public struct CLISessionsResponse: Codable, Equatable, Sendable {
     }
 }
 
+public struct CLIDomainExecutionResponse: Codable, Equatable, Sendable {
+    public var message: String
+    public var baseGeneration: UInt64
+    public var generation: UInt64
+    public var proposedGeneration: UInt64
+    public var dirty: Bool
+    public var saved: Bool
+    public var capabilityID: DomainCapabilityID
+    public var namespace: SemanticNamespaceID
+    public var didMutate: Bool
+    public var wouldMutate: Bool
+    public var dryRun: Bool
+    public var diagnostics: [EditorDiagnostic]
+    public var validationFindings: [ValidationFinding]
+    public var validationRegions: [ValidationRegionReference]
+    public var automationResults: [AutomationResult]
+    public var commandName: String?
+    public var payload: SemanticJSONValue?
+
+    public init(
+        result: DomainExecutionResult,
+        dirty: Bool,
+        saved: Bool = false
+    ) {
+        self.message = result.message
+        self.baseGeneration = result.baseGeneration.value
+        self.generation = result.generation.value
+        self.proposedGeneration = result.proposedGeneration.value
+        self.dirty = dirty
+        self.saved = saved
+        self.capabilityID = result.capabilityID
+        self.namespace = result.namespace
+        self.didMutate = result.didMutate
+        self.wouldMutate = result.wouldMutate
+        self.dryRun = result.dryRun
+        self.diagnostics = result.diagnostics
+        self.validationFindings = result.validationFindings
+        self.validationRegions = result.validationRegions
+        self.automationResults = result.automationResults
+        self.commandName = result.commandName
+        self.payload = result.payload
+    }
+}
+
 public struct CLIAttachResponse: Codable, Equatable, Sendable {
     public var message: String
     public var sessionID: UUID
@@ -108,6 +163,7 @@ public struct CLIAttachResponse: Codable, Equatable, Sendable {
     public var displayName: String
     public var dirty: Bool
     public var generation: UInt64
+    public var workspaceRevision: UInt64
 
     public init(session: WorkspaceSessionSummary) {
         self.message = "Attached to Rupa session \(session.id.uuidString)."
@@ -116,6 +172,7 @@ public struct CLIAttachResponse: Codable, Equatable, Sendable {
         self.displayName = session.displayName
         self.dirty = session.dirty
         self.generation = session.generation.value
+        self.workspaceRevision = session.workspaceRevision.value
     }
 }
 

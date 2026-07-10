@@ -50,6 +50,7 @@ public struct CurveAnalysisService: Sendable {
 
     public func analyze(
         document: DesignDocument,
+        displayUnit: LengthDisplayUnit,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> CurveAnalysisResult {
         try validate(document: document, objectRegistry: objectRegistry)
@@ -100,7 +101,7 @@ public struct CurveAnalysisService: Sendable {
         }
 
         return result(
-            displayUnit: document.displayUnit,
+            displayUnit: displayUnit,
             curves: curves,
             continuityJoins: continuityJoins,
             message: "Curve analysis completed with \(curves.count) source curve references."
@@ -111,6 +112,7 @@ public struct CurveAnalysisService: Sendable {
         document: DesignDocument,
         featureID: FeatureID,
         entityID: SketchEntityID,
+        displayUnit: LengthDisplayUnit,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> CurveAnalysisResult {
         try validate(document: document, objectRegistry: objectRegistry)
@@ -162,7 +164,7 @@ public struct CurveAnalysisService: Sendable {
         )
 
         return result(
-            displayUnit: document.displayUnit,
+            displayUnit: displayUnit,
             curves: curves,
             continuityJoins: continuityJoins,
             message: "Curve analysis completed for source curve \(entityID.description)."

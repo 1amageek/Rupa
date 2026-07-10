@@ -67,6 +67,7 @@ import Testing
     let resolution = WorkspaceSnapInputResolver().resolve(
         point,
         in: .empty(),
+        ruler: .standard(for: .millimeter),
         options: options
     )
 
@@ -86,6 +87,7 @@ import Testing
     let resolution = WorkspaceSnapInputResolver().resolve(
         point,
         in: .empty(),
+        ruler: .standard(for: .millimeter),
         options: options
     )
 
@@ -100,13 +102,13 @@ import Testing
     let options = SnapResolutionOptions(
         usesGrid: false,
         usesObjects: false,
-        usesConstructionPlaneProjection: false,
         referenceLineAnchors: []
     )
 
     let resolution = WorkspaceSnapInputResolver().resolve(
         point,
         in: .empty(),
+        ruler: .standard(for: .millimeter),
         options: options
     )
 

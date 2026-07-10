@@ -64,7 +64,8 @@ public final class WorkspaceRegistry {
                     path: entry.path?.path,
                     displayName: entry.session.document.cadDocument.metadata.name ?? "Untitled",
                     dirty: entry.session.isDirty,
-                    generation: entry.session.generation
+                    generation: entry.session.generation,
+                    workspaceRevision: entry.session.workspaceState.revision
                 )
             }
             .sorted { $0.displayName < $1.displayName }

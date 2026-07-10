@@ -21,7 +21,7 @@ import Testing
 
     let savedView = builder.makeSavedView(
         name: "Current",
-        document: session.document,
+        workspaceState: session.workspaceState,
         projectionBasis: basis,
         cameraFrame: cameraFrame
     )
@@ -34,7 +34,7 @@ import Testing
     #expect(savedView.projection.mode == .orthographic)
     #expect(savedView.projection.orthographicHeightMeters == 250.0)
     #expect(savedView.displayScale.matchedPreset == .sitePlanning)
-    #expect(savedView.displayScale.scaleBarLengthMeters == session.document.ruler.majorTickMeters)
+    #expect(savedView.displayScale.scaleBarLengthMeters == session.workspaceState.ruler.majorTickMeters)
 }
 
 @Test func workspaceSavedViewBuilderRestoresProjectionBasisFromSavedCamera() {
@@ -82,12 +82,12 @@ import Testing
     let builder = WorkspaceSavedViewBuilder()
     let first = builder.makeSavedView(
         name: "B View",
-        document: session.document,
+        workspaceState: session.workspaceState,
         projectionBasis: .isometric
     )
     let second = builder.makeSavedView(
         name: "A View",
-        document: session.document,
+        workspaceState: session.workspaceState,
         projectionBasis: .isometric
     )
     _ = try session.execute(.createSavedView(first))

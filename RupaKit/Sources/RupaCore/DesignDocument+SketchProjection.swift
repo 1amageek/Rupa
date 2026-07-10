@@ -33,7 +33,7 @@ extension DesignDocument {
             )
         }
 
-        let topology = try TopologySummaryService().summarize(
+        let topology = try TopologySnapshotService().snapshot(
             document: self,
             objectRegistry: objectRegistry
         )
@@ -91,7 +91,6 @@ extension DesignDocument {
                 typeID: nil,
                 geometryRole: sceneNode.object?.geometryRole ?? .solid,
                 properties: ObjectPropertySet(),
-                ruler: ruler,
                 objectRegistry: objectRegistry
             )
         )
@@ -114,7 +113,7 @@ extension DesignDocument {
     @discardableResult
     public mutating func projectSketchCurvesToConstructionPlane(
         targets: [SelectionTarget],
-        plane explicitPlane: SketchPlane? = nil,
+        plane: SketchPlane,
         name: String? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> FeatureID {
@@ -126,11 +125,10 @@ extension DesignDocument {
             )
         }
 
-        let targetPlane = explicitPlane ?? activeConstructionPlane?.plane ?? .xy
-        var topology: TopologySummaryResult?
+        var topology: TopologySnapshot?
         return try appendProjectedCurveSketch(
             targets: targets,
-            targetPlane: targetPlane,
+            targetPlane: plane,
             operationName: operationName,
             name: name,
             defaultName: projectedSketchName(from:),
@@ -147,11 +145,11 @@ extension DesignDocument {
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> FeatureID {
         let operationName = "Project Curve Body"
-        let evaluatedTopology = try TopologySummaryService().summarize(
+        let evaluatedTopology = try TopologySnapshotService().snapshot(
             document: self,
             objectRegistry: objectRegistry
         )
-        var topology: TopologySummaryResult? = evaluatedTopology
+        var topology: TopologySnapshot? = evaluatedTopology
         let targetPlane = try ConstructionPlaneTargetResolver().planarGeneratedFacePlane(
             alignedTo: face,
             topology: evaluatedTopology,
@@ -175,7 +173,7 @@ extension DesignDocument {
         name: String?,
         defaultName: ([String]) -> String,
         objectRegistry: ObjectTypeRegistry,
-        topology: inout TopologySummaryResult?
+        topology: inout TopologySnapshot?
     ) throws -> FeatureID {
         guard targets.isEmpty == false else {
             throw EditorError(
@@ -244,7 +242,7 @@ extension DesignDocument {
     @discardableResult
     public mutating func projectBodyOutlinesToConstructionPlane(
         targets: [SelectionTarget],
-        plane explicitPlane: SketchPlane? = nil,
+        plane: SketchPlane,
         name: String? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> FeatureID {
@@ -256,9 +254,8 @@ extension DesignDocument {
             )
         }
 
-        let targetPlane = explicitPlane ?? activeConstructionPlane?.plane ?? .xy
-        let targetSystem = try SketchPlaneCoordinateSystem(plane: targetPlane)
-        let topology = try TopologySummaryService().summarize(
+        let targetSystem = try SketchPlaneCoordinateSystem(plane: plane)
+        let topology = try TopologySnapshotService().snapshot(
             document: self,
             objectRegistry: objectRegistry
         )
@@ -318,7 +315,7 @@ extension DesignDocument {
             )
         }
         let projectedSketch = Sketch(
-            plane: targetPlane,
+            plane: plane,
             entities: projectedEntities
         )
         try projectedSketch.validate()

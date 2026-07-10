@@ -12,7 +12,10 @@ import Testing
         ]
     )
     let entry = try #require(
-        ConstructionPlaneSummaryService().summarize(document: session.document).planes.first
+        ConstructionPlaneSummaryService().summarize(
+            document: session.document,
+            activePlaneID: session.workspaceState.activeConstructionPlaneID
+        ).planes.first
     )
     let sceneNodeID = try #require(entry.sceneNodeID)
     let targetOrigin = Point3D(x: 0.48, y: -0.10, z: 0.22)
@@ -52,7 +55,10 @@ import Testing
         ]
     )
     let entry = try #require(
-        ConstructionPlaneSummaryService().summarize(document: session.document).planes.first
+        ConstructionPlaneSummaryService().summarize(
+            document: session.document,
+            activePlaneID: session.workspaceState.activeConstructionPlaneID
+        ).planes.first
     )
     let sceneNodeID = try #require(entry.sceneNodeID)
     let targetNormal = Vector3D(x: -0.2, y: 0.8, z: 0.4)
@@ -95,7 +101,10 @@ import Testing
         ]
     )
     let entry = try #require(
-        ConstructionPlaneSummaryService().summarize(document: session.document).planes.first
+        ConstructionPlaneSummaryService().summarize(
+            document: session.document,
+            activePlaneID: session.workspaceState.activeConstructionPlaneID
+        ).planes.first
     )
     let dragTarget = ViewportConstructionPlaneDragTarget(
         constructionPlaneID: ConstructionPlaneSourceID(),

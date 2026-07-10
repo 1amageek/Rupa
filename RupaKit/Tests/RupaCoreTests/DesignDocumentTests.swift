@@ -65,17 +65,18 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     #expect(LengthDisplayUnit.inch.readableUnit(forMeters: 0.3048) == .foot)
 }
 
-@Test func displayUnitChangePreservesWorkspaceScaleDistances() async throws {
-    var document = DesignDocument.empty()
-    let originalRuler = document.ruler
+@Test func workspaceDisplayUnitChangePreservesScaleDistances() async throws {
+    let document = DesignDocument.empty()
+    var workspaceState = WorkspaceState()
+    let originalRuler = workspaceState.ruler
 
-    document.setDisplayUnit(.kilometer)
+    _ = try workspaceState.apply(.setDisplayUnit(.kilometer), document: document)
 
-    #expect(document.displayUnit == .kilometer)
-    #expect(document.ruler.displayUnit == .kilometer)
-    #expect(document.ruler.minorTickMeters == originalRuler.minorTickMeters)
-    #expect(document.ruler.majorTickMeters == originalRuler.majorTickMeters)
-    #expect(document.ruler.visibleSpanMeters == originalRuler.visibleSpanMeters)
+    #expect(workspaceState.displayUnit == .kilometer)
+    #expect(workspaceState.ruler.displayUnit == .kilometer)
+    #expect(workspaceState.ruler.minorTickMeters == originalRuler.minorTickMeters)
+    #expect(workspaceState.ruler.majorTickMeters == originalRuler.majorTickMeters)
+    #expect(workspaceState.ruler.visibleSpanMeters == originalRuler.visibleSpanMeters)
 }
 
 @Test func rulerDisplayUnitReplacementPreservesSitePlanningRange() async throws {
@@ -342,7 +343,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         name: "Editable Quad Surface",
         sourceMesh: designDocumentPolySplineQuadMesh()
     )
-    let topology = try TopologySummaryService().summarize(document: document)
+    let topology = try TopologySnapshotService().snapshot(document: document)
     let vertexEntry = try #require(topology.entries.first {
         $0.kind == .vertex
             && $0.subshapeRole == "patch:0:vertex:uMax:vMax"
@@ -364,7 +365,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     #expect(abs(polySpline.sourceMesh.positions[2].z - 0.005) <= 1.0e-12)
 
     let analysis = try SurfaceAnalysisService(options: SurfaceAnalysisOptions(sampleDensity: .low))
-        .analyze(document: document)
+        .analyze(document: document, displayUnit: .millimeter)
     let face = try #require(analysis.faces.first)
     let trimBoundary = try #require(face.trimBoundaries.first)
     #expect(trimBoundary.points.contains { point in
@@ -381,7 +382,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         name: "Surface Reference Quad Surface",
         sourceMesh: designDocumentPolySplineQuadMesh()
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let source = try #require(summary.sources.first)
     let patch = try #require(source.patches.first)
     let controlVertex = try #require(patch.controlVertices.first { $0.role == "uMax:vMax" })
@@ -403,13 +404,12 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
 
 @Test func surfaceControlPointReferenceMoveMutatesInteriorControlPointOverride() async throws {
     var document = DesignDocument.empty()
-    document.setDisplayUnit(.millimeter)
 
     let featureID = try document.createPolySplineSurface(
         name: "Interior Surface Reference Quad Surface",
         sourceMesh: designDocumentPolySplineQuadMesh()
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let source = try #require(summary.sources.first)
     let patch = try #require(source.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
@@ -437,7 +437,8 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
 
     let measurement = try SelectionMeasurementService().measure(
         query: CADAgentMeasurementQuery(kind: .point, first: controlPoint.selectionReference),
-        document: document
+        document: document,
+        displayUnit: .millimeter
     )
     guard case .point(let measuredPoint) = measurement else {
         Issue.record("Expected moved interior control point measurement.")
@@ -456,7 +457,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         name: "Weighted Interior Surface Reference Quad Surface",
         sourceMesh: designDocumentPolySplineQuadMesh()
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let controlPoint = try #require(
         summary.sources.first?.patches.first?.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 }
     )
@@ -481,7 +482,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     #expect(abs(override.point.y - controlPoint.point.y) <= 1.0e-12)
     #expect(abs(override.point.z - controlPoint.point.z) <= 1.0e-12)
 
-    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let updatedPatch = try #require(updatedSummary.sources.first?.patches.first)
     let updatedControlPoint = try #require(
         updatedPatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 }
@@ -513,7 +514,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         name: "Direct Editable Surface",
         surface: surface
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let controlPoint = try #require(
         summary.sources.first?.patches.first?.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 }
     )
@@ -567,7 +568,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     #expect(abs(slidPoint.z - (controlPoint.point.z + 0.001)) <= 1.0e-12)
     #expect(slidSurfaceFeature.surface.weights[1][1] == 2.5)
 
-    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let updatedPatch = try #require(updatedSummary.sources.first?.patches.first)
     let updatedControlPoint = try #require(
         updatedPatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 }
@@ -585,14 +586,18 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         name: "Frame Editable Surface",
         surface: designDocumentDirectBSplineSurface()
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let controlPoint = try #require(
         patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 }
     )
     let frameSample = try #require(patch.frameSamples.first)
     let frameQuery = SurfaceFrameQuery(selectionReference: frameSample.selectionReference)
-    let frameResult = try SurfaceFrameService().resolve(document: document, queries: [frameQuery])
+    let frameResult = try SurfaceFrameService().resolve(
+        document: document,
+        queries: [frameQuery],
+        displayUnit: .millimeter
+    )
     let frame = try #require(frameResult.frames.first)
     let uDistance = 0.001
     let vDistance = 0.002
@@ -636,7 +641,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         name: "Direct Editable Knot Surface",
         surface: designDocumentDirectBSplineSurfaceWithInteriorKnots()
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let editableKnot = try #require(patch.basis.uKnotVector.first { $0.index == 3 })
     #expect(editableKnot.value == 0.5)
@@ -656,7 +661,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     #expect(surfaceFeature.surface.uKnots[3] == 0.4)
     #expect(surfaceFeature.surface.vKnots[3] == 0.5)
 
-    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let updatedKnot = try #require(
         updatedSummary.sources.first?.patches.first?.basis.uKnotVector.first { $0.index == 3 }
     )
@@ -682,7 +687,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         name: "Direct Insertable Knot Surface",
         surface: surface
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let editableSpan = try #require(patch.basis.uSpans.first { $0.index == 0 })
     #expect(editableSpan.isEditable)
@@ -727,7 +732,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         name: "Direct Split Span Surface",
         surface: surface
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let editableSpan = try #require(patch.basis.vSpans.first { $0.index == 1 })
     #expect(editableSpan.lowerBound == 0.5)
@@ -780,7 +785,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         name: "Direct Trim Domain Surface",
         surface: surface
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let faceReference = try #require(patch.faceSelectionReference)
 
@@ -803,7 +808,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     #expect(trimDomain.vLowerBound == 0.2)
     #expect(trimDomain.vUpperBound == 0.8)
 
-    let trimmedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let trimmedSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let trimmedPatch = try #require(trimmedSummary.sources.first?.patches.first)
     #expect(trimmedPatch.uDomain.lowerBound == 0.25)
     #expect(trimmedPatch.uDomain.upperBound == 0.75)
@@ -859,7 +864,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         name: "Direct Trim Loop Surface",
         surface: surface
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
     let rectangularTrimReference = try #require(summary.sources.first?.patches.first?.trimLoops.first?.selectionReferences.first)
     #expect(throws: EditorError.self) {
@@ -902,7 +907,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     #expect(surfaceFeature.outerTrimDomain == nil)
     #expect(surfaceFeature.trimLoops == [trimLoop])
 
-    let trimmedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let trimmedSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let trimmedPatch = try #require(trimmedSummary.sources.first?.patches.first)
     #expect(trimmedPatch.uDomain.lowerBound == 0.0)
     #expect(trimmedPatch.uDomain.upperBound == 1.0)
@@ -955,7 +960,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         name: "Direct Trim Endpoint Surface",
         surface: surface
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
     let trimLoop = BSplineSurfaceTrimLoop(
         role: .outer,
@@ -978,7 +983,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         target: faceReference,
         trimLoops: [trimLoop]
     )
-    let trimmedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let trimmedSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let trimReference = try #require(
         trimmedSummary.sources.first?.patches.first?.trimLoops.first?.selectionReferences.first
     )
@@ -1009,7 +1014,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     ))
     try movedLoop.validate(on: surfaceFeature.surface)
 
-    let movedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let movedSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let movedEdge = try #require(movedSummary.sources.first?.patches.first?.trimLoops.first?.edges.first)
     #expect(abs(movedEdge.startParameter.u - 0.25) < 1.0e-12)
     #expect(abs(movedEdge.startParameter.v - 0.3) < 1.0e-12)
@@ -1023,7 +1028,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         name: "Direct Trim Control Point Surface",
         surface: surface
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
     let trimLoop = BSplineSurfaceTrimLoop(
         role: .outer,
@@ -1051,7 +1056,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         target: faceReference,
         trimLoops: [trimLoop]
     )
-    let trimmedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let trimmedSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let trimReference = try #require(
         trimmedSummary.sources.first?.patches.first?.trimLoops.first?.selectionReferences.first
     )
@@ -1104,7 +1109,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         name: "Direct Trim Control Point Weight Surface",
         surface: surface
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
     let trimLoop = BSplineSurfaceTrimLoop(
         role: .outer,
@@ -1133,7 +1138,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         target: faceReference,
         trimLoops: [trimLoop]
     )
-    let trimmedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let trimmedSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let trimEdge = try #require(trimmedSummary.sources.first?.patches.first?.trimLoops.first?.edges.first)
     let trimReference = try #require(trimEdge.selectionReference)
     let polylineTrimReference = try #require(
@@ -1178,7 +1183,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     #expect(movedCurve.weights == [1.0, 2.4, 1.0])
     try movedLoop.validate(on: surfaceFeature.surface)
 
-    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let updatedEdge = try #require(updatedSummary.sources.first?.patches.first?.trimLoops.first?.edges.first)
     let updatedControlPoint = try #require(
         updatedEdge.parameterCurveControlPoints.first { $0.index == 1 }
@@ -1195,7 +1200,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         name: "Direct Trim Knot Insertion Surface",
         surface: surface
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
     let originalCurve = BSplineCurve2D(
         degree: 2,
@@ -1225,7 +1230,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         target: faceReference,
         trimLoops: [trimLoop]
     )
-    let trimmedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let trimmedSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let trimEdge = try #require(trimmedSummary.sources.first?.patches.first?.trimLoops.first?.edges.first)
     let trimReference = try #require(trimEdge.selectionReference)
     let polylineTrimReference = try #require(
@@ -1272,7 +1277,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     }
     try updatedLoop.validate(on: surfaceFeature.surface)
 
-    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let updatedEdge = try #require(updatedSummary.sources.first?.patches.first?.trimLoops.first?.edges.first)
     #expect(updatedEdge.parameterCurve.knots == updatedCurve.knots)
     #expect(updatedEdge.parameterCurve.spans.count == 2)
@@ -1322,7 +1327,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         name: "Unsupported PolySpline Span Split Surface",
         sourceMesh: designDocumentPolySplineQuadMesh()
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let summarySpan = try #require(patch.basis.uSpans.first)
     #expect(summarySpan.isEditable == false)
@@ -1360,7 +1365,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         name: "Direct Multiplicity Knot Surface",
         surface: surface
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let editableKnot = try #require(patch.basis.uKnotVector.first { $0.index == 3 })
     #expect(editableKnot.value == 0.5)
@@ -1404,7 +1409,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         name: "Direct Explicit Multiplicity Surface",
         surface: surface
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let editableKnot = try #require(patch.basis.uKnotVector.first { $0.index == 3 })
     #expect(editableKnot.value == 0.5)
@@ -1436,7 +1441,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         }
     }
 
-    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let repeatedKnots = try #require(
         updatedSummary.sources.first?.patches.first?.basis.uKnotVector.filter { $0.value == 0.5 }
     )
@@ -1574,7 +1579,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         )
     }
 
-    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let updatedTargetSource = try #require(
         updatedSummary.sources.first { $0.featureID == targetFeatureID.description }
     )
@@ -1698,7 +1703,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         name: "Rejected Quad Surface",
         sourceMesh: designDocumentPolySplineQuadMesh()
     )
-    let topology = try TopologySummaryService().summarize(document: document)
+    let topology = try TopologySnapshotService().snapshot(document: document)
     let faceEntry = try #require(topology.entries.first {
         $0.kind == .face
             && $0.subshapeRole == "patch:0:face"
@@ -1785,7 +1790,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         name: "Surface Reference Slide V Quad Surface",
         sourceMesh: designDocumentPolySplineQuadMesh()
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let source = try #require(summary.sources.first)
     let patch = try #require(source.patches.first)
     let controlVertex = try #require(patch.controlVertices.first { $0.role == "uMax:vMin" })
@@ -1814,7 +1819,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         name: "Surface Reference Interior Slide U Quad Surface",
         sourceMesh: designDocumentPolySplineQuadMesh()
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let source = try #require(summary.sources.first)
     let patch = try #require(source.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
@@ -1851,7 +1856,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         name: "Surface Reference Interior Slide Control Hull Surface",
         sourceMesh: designDocumentPolySplineQuadMesh()
     )
-    let initialSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let initialSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let initialSource = try #require(initialSummary.sources.first)
     let initialPatch = try #require(initialSource.patches.first)
     let raisedControlPoint = try #require(initialPatch.controlPoints.first {
@@ -1865,7 +1870,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         deltaZ: .length(6.0, .millimeter)
     )
 
-    let raisedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let raisedSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let raisedSource = try #require(raisedSummary.sources.first)
     let raisedPatch = try #require(raisedSource.patches.first)
     let slideControlPoint = try #require(raisedPatch.controlPoints.first {
@@ -2256,7 +2261,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
 
 @Test func objectSizePropertyMutationUpdatesCubeSourceGeometry() async throws {
     var document = DesignDocument.empty()
-    try document.createExtrudedRectangle(
+    _ = try document.createExtrudedRectangle(
         name: "Block",
         plane: .xy,
         width: .length(1.0, .meter),
@@ -2295,7 +2300,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
 
 @Test func objectDimensionCommandUpdatesBoxSourceGeometryFromSelectionTarget() async throws {
     var document = DesignDocument.empty()
-    try document.createExtrudedRectangle(
+    _ = try document.createExtrudedRectangle(
         name: "Dimensioned Block",
         plane: .xy,
         width: .length(1.0, .meter),
@@ -2397,7 +2402,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
 
 @Test func objectDimensionSummaryListsBoxCandidatesFromObjectTarget() async throws {
     var document = DesignDocument.empty()
-    try document.createExtrudedRectangle(
+    _ = try document.createExtrudedRectangle(
         name: "Dimension Summary Box",
         plane: .xy,
         width: .length(1.0, .meter),
@@ -2409,7 +2414,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         $0.reference?.kind == .body
     })
 
-    let summary = try ObjectDimensionSummaryService().summarize(
+    let summary = try ObjectDimensionSnapshotService().snapshot(
         document: document,
         targets: [SelectionTarget(sceneNodeID: bodyNode.id)]
     )
@@ -2428,8 +2433,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
 
 @Test func objectDimensionSummaryExposesDocumentDisplayValues() async throws {
     var document = DesignDocument.empty()
-    document.setDisplayUnit(.centimeter)
-    try document.createExtrudedRectangle(
+    _ = try document.createExtrudedRectangle(
         name: "Dimension Summary Display Box",
         plane: .xy,
         width: .length(2.0, .meter),
@@ -2443,7 +2447,8 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
 
     let summary = try ObjectDimensionSummaryService().summarize(
         document: document,
-        targets: [SelectionTarget(sceneNodeID: bodyNode.id)]
+        targets: [SelectionTarget(sceneNodeID: bodyNode.id)],
+        displayUnit: .centimeter
     )
 
     let sizeX = try #require(summary.entries.first { $0.kind == .sizeX })
@@ -2457,7 +2462,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
 
 @Test func objectDimensionSummaryInfersPrimaryDimensionFromGeneratedBoxFace() async throws {
     var document = DesignDocument.empty()
-    try document.createExtrudedRectangle(
+    _ = try document.createExtrudedRectangle(
         name: "Dimension Summary Generated Face Box",
         plane: .xy,
         width: .length(1.0, .meter),
@@ -2485,7 +2490,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         )
         let target = SelectionTarget(sceneNodeID: bodyNode.id, component: .face(componentID))
 
-        let summary = try ObjectDimensionSummaryService().summarize(
+        let summary = try ObjectDimensionSnapshotService().snapshot(
             document: document,
             targets: [target]
         )
@@ -2536,7 +2541,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     })
     let outputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
 
-    let summary = try ObjectDimensionSummaryService().summarize(
+    let summary = try ObjectDimensionSnapshotService().snapshot(
         document: session.document,
         targets: [SelectionTarget(sceneNodeID: outputSceneNodeID)]
     )
@@ -2566,7 +2571,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         $0.reference?.kind == .body && $0.object?.typeID == .cylinder
     })
 
-    let summary = try ObjectDimensionSummaryService().summarize(
+    let summary = try ObjectDimensionSnapshotService().snapshot(
         document: document,
         targets: [
             SelectionTarget(
@@ -2622,7 +2627,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         )
         let target = SelectionTarget(sceneNodeID: bodyNode.id, component: .face(componentID))
 
-        let summary = try ObjectDimensionSummaryService().summarize(
+        let summary = try ObjectDimensionSnapshotService().snapshot(
             document: document,
             targets: [target]
         )
@@ -2637,7 +2642,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
 
 @Test func objectDimensionSummaryListsDepthCandidateFromGeneratedEdgeTarget() async throws {
     var document = DesignDocument.empty()
-    try document.createExtrudedRectangle(
+    _ = try document.createExtrudedRectangle(
         name: "Dimension Summary Edge Box",
         plane: .xy,
         width: .length(1.0, .meter),
@@ -2645,11 +2650,11 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         depth: .length(0.5, .meter),
         direction: .normal
     )
-    let topology = try TopologySummaryService().summarize(document: document)
+    let topology = try TopologySnapshotService().snapshot(document: document)
     let depthEdge = try #require(generatedDepthEdge(in: topology))
     let target = try #require(depthEdge.selectionTarget())
 
-    let summary = try ObjectDimensionSummaryService().summarize(
+    let summary = try ObjectDimensionSnapshotService().snapshot(
         document: document,
         targets: [target]
     )
@@ -2667,7 +2672,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
 
 @Test func objectDimensionSummaryListsFacePairDistanceCandidateFromGeneratedFaces() async throws {
     var document = DesignDocument.empty()
-    try document.createExtrudedRectangle(
+    _ = try document.createExtrudedRectangle(
         name: "Dimension Summary Face Pair Box",
         plane: .xy,
         width: .length(1.0, .meter),
@@ -2677,7 +2682,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     )
     let targets = try opposingGeneratedFaceTargets(in: document)
 
-    let summary = try ObjectDimensionSummaryService().summarize(
+    let summary = try ObjectDimensionSnapshotService().snapshot(
         document: document,
         targets: [targets.first, targets.second]
     )
@@ -2704,7 +2709,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
 
 @Test func objectDimensionCommandUpdatesDepthFromGeneratedEdgeTarget() async throws {
     var document = DesignDocument.empty()
-    try document.createExtrudedRectangle(
+    _ = try document.createExtrudedRectangle(
         name: "Dimensioned Edge Box",
         plane: .xy,
         width: .length(1.0, .meter),
@@ -2712,7 +2717,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         depth: .length(0.5, .meter),
         direction: .normal
     )
-    let topology = try TopologySummaryService().summarize(document: document)
+    let topology = try TopologySnapshotService().snapshot(document: document)
     let depthEdge = try #require(generatedDepthEdge(in: topology))
     let target = try #require(depthEdge.selectionTarget())
 
@@ -2819,16 +2824,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     )
     metadata.validationRules = [validationRule.id: validationRule]
     metadata.exportPresets = [exportPreset.id: exportPreset]
-    metadata.templateDefaults = TemplateDefaults(
-        displayUnit: .centimeter,
-        ruler: .standard(for: .centimeter),
-        validationRuleIDs: [validationRule.id],
-        exportPresetIDs: [exportPreset.id],
-        defaultMaterialID: material.id
-    )
-
     var document = DesignDocument.empty(named: "Product Metadata")
-    try document.setRulerConfiguration(.standard(for: .centimeter))
     document.productMetadata = metadata
 
     let url = temporaryDirectory.appendingPathComponent("product-metadata.swcad")
@@ -2836,8 +2832,6 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     try service.save(document, to: url)
     let loaded = try service.load(from: url)
 
-    #expect(loaded.displayUnit == .centimeter)
-    #expect(loaded.ruler == .standard(for: .centimeter))
     #expect(loaded.productMetadata == metadata)
 }
 
@@ -2863,8 +2857,6 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     let loaded = try DocumentFileService().load(from: url)
 
     #expect(loaded.cadDocument.metadata.name == "Legacy")
-    #expect(loaded.displayUnit == .millimeter)
-    #expect(loaded.ruler == .standard(for: .millimeter))
     #expect(!loaded.productMetadata.rootSceneNodeIDs.isEmpty)
 }
 
@@ -3009,7 +3001,6 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     var metadata = ProductMetadata.empty()
     metadata.exportPresets = [preset.id: preset]
     var document = DesignDocument.empty(named: "Site Export")
-    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
     document.productMetadata = metadata
     let session = EditorSession(document: document)
     _ = try session.execute(
@@ -3294,7 +3285,7 @@ private func approximatelyEqual(
 }
 
 private func generatedDepthEdge(
-    in topology: TopologySummaryResult
+    in topology: TopologySnapshot
 ) -> TopologySummaryResult.Entry? {
     topology.entries.first { entry in
         guard entry.kind == .edge,
@@ -3314,7 +3305,7 @@ private func generatedDepthEdge(
 private func opposingGeneratedFaceTargets(
     in document: DesignDocument
 ) throws -> (first: SelectionTarget, second: SelectionTarget) {
-    let topology = try TopologySummaryService().summarize(document: document)
+    let topology = try TopologySnapshotService().snapshot(document: document)
     let faces = try topology.entries.compactMap { entry -> (centerZ: Double, target: SelectionTarget)? in
         guard entry.kind == .face,
               let centerZ = entry.center?.z else {
@@ -3544,7 +3535,7 @@ private func designDocumentSurfaceTrimReference(
     edgeIndex: Int,
     in document: DesignDocument
 ) throws -> SelectionReference {
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let source = try #require(summary.sources.first { $0.featureID == featureID.description })
     let trimLoop = try #require(source.patches.first?.trimLoops.first)
     guard trimLoop.selectionReferences.indices.contains(edgeIndex) else {
@@ -3560,7 +3551,7 @@ private func polySplineVertexTarget(
     role: String,
     in document: DesignDocument
 ) throws -> SelectionTarget {
-    let topology = try TopologySummaryService().summarize(document: document)
+    let topology = try TopologySnapshotService().snapshot(document: document)
     let entry = try #require(topology.entries.first {
         $0.kind == .vertex
             && $0.subshapeRole == role

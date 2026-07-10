@@ -38,7 +38,10 @@ import SwiftCAD
     })
     let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
     let body = try #require(evaluated.brep.bodies.values.first)
-    let measurement = try MeasurementService().measure(document: document)
+    let measurement = try MeasurementService().measure(
+        document: document,
+        ruler: .standard(for: .millimeter)
+    )
     let solid = try #require(measurement.solids.first)
 
     guard case .loft(let loft) = feature.operation else {
@@ -107,7 +110,10 @@ import SwiftCAD
     })
     let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
     let body = try #require(evaluated.brep.bodies.values.first)
-    let measurement = try MeasurementService().measure(document: document)
+    let measurement = try MeasurementService().measure(
+        document: document,
+        ruler: .standard(for: .millimeter)
+    )
     let sheet = try #require(measurement.sheets.first)
 
     guard case .loft(let loft) = feature.operation else {
@@ -660,7 +666,10 @@ import SwiftCAD
     })
     let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
     let body = try #require(evaluated.brep.bodies.values.first)
-    let measurement = try MeasurementService().measure(document: document)
+    let measurement = try MeasurementService().measure(
+        document: document,
+        ruler: .standard(for: .millimeter)
+    )
     let sheet = try #require(measurement.sheets.first)
 
     guard case .loft(let loft) = feature.operation else {

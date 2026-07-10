@@ -35,7 +35,7 @@ extension DesignDocument {
               case .topology(let secondName) = dimension.second else {
             return nil
         }
-        let topology = try TopologySummaryService().summarize(
+        let topology = try TopologySnapshotService().snapshot(
             document: self,
             objectRegistry: objectRegistry
         )
@@ -74,7 +74,7 @@ extension DesignDocument {
 
     func generatedFaceTargetIfPresent(
         for name: PersistentName,
-        in topology: TopologySummaryResult,
+        in topology: TopologySnapshot,
         owner: String
     ) throws -> SelectionTarget? {
         let persistentName = persistentNameString(name)

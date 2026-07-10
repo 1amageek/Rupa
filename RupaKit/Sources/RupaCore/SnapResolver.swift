@@ -281,7 +281,6 @@ public struct SnapResolutionOptions: Codable, Equatable, Sendable {
     public var usesObjects: Bool
     public var objectTargetingOverride: SnapObjectTargetingOverride
     public var suppressedCandidateKinds: Set<SnapCandidateKind>
-    public var usesConstructionPlaneProjection: Bool
     public var constructionPlane: SketchPlane?
     public var gridIntervalMeters: Double?
     public var objectSearchRadiusMeters: Double?
@@ -294,7 +293,6 @@ public struct SnapResolutionOptions: Codable, Equatable, Sendable {
         usesObjects: Bool = true,
         objectTargetingOverride: SnapObjectTargetingOverride = .none,
         suppressedCandidateKinds: Set<SnapCandidateKind> = [],
-        usesConstructionPlaneProjection: Bool = false,
         constructionPlane: SketchPlane? = nil,
         gridIntervalMeters: Double? = nil,
         objectSearchRadiusMeters: Double? = nil,
@@ -306,7 +304,6 @@ public struct SnapResolutionOptions: Codable, Equatable, Sendable {
         self.usesObjects = usesObjects
         self.objectTargetingOverride = objectTargetingOverride
         self.suppressedCandidateKinds = suppressedCandidateKinds
-        self.usesConstructionPlaneProjection = usesConstructionPlaneProjection
         self.constructionPlane = constructionPlane
         self.gridIntervalMeters = gridIntervalMeters
         self.objectSearchRadiusMeters = objectSearchRadiusMeters
@@ -320,7 +317,6 @@ public struct SnapResolutionOptions: Codable, Equatable, Sendable {
         case usesObjects
         case objectTargetingOverride
         case suppressedCandidateKinds
-        case usesConstructionPlaneProjection
         case constructionPlane
         case gridIntervalMeters
         case objectSearchRadiusMeters
@@ -341,10 +337,6 @@ public struct SnapResolutionOptions: Codable, Equatable, Sendable {
             Set<SnapCandidateKind>.self,
             forKey: .suppressedCandidateKinds
         ) ?? []
-        usesConstructionPlaneProjection = try container.decodeIfPresent(
-            Bool.self,
-            forKey: .usesConstructionPlaneProjection
-        ) ?? false
         constructionPlane = try container.decodeIfPresent(SketchPlane.self, forKey: .constructionPlane)
         gridIntervalMeters = try container.decodeIfPresent(Double.self, forKey: .gridIntervalMeters)
         objectSearchRadiusMeters = try container.decodeIfPresent(Double.self, forKey: .objectSearchRadiusMeters)
@@ -362,7 +354,6 @@ public struct SnapResolutionOptions: Codable, Equatable, Sendable {
         try container.encode(usesObjects, forKey: .usesObjects)
         try container.encode(objectTargetingOverride, forKey: .objectTargetingOverride)
         try container.encode(suppressedCandidateKinds, forKey: .suppressedCandidateKinds)
-        try container.encode(usesConstructionPlaneProjection, forKey: .usesConstructionPlaneProjection)
         try container.encodeIfPresent(constructionPlane, forKey: .constructionPlane)
         try container.encodeIfPresent(gridIntervalMeters, forKey: .gridIntervalMeters)
         try container.encodeIfPresent(objectSearchRadiusMeters, forKey: .objectSearchRadiusMeters)
@@ -374,6 +365,10 @@ public struct SnapResolutionOptions: Codable, Equatable, Sendable {
     public var resolvesObjects: Bool {
         usesObjects || objectTargetingOverride == .forceEnabled
     }
+
+    public var usesConstructionPlaneProjection: Bool {
+        constructionPlane != nil
+    }
 }
 
 private struct ValidatedSnapResolutionOptions {
@@ -381,7 +376,6 @@ private struct ValidatedSnapResolutionOptions {
     var usesObjects: Bool
     var objectTargetingOverride: SnapObjectTargetingOverride
     var suppressedCandidateKinds: Set<SnapCandidateKind>
-    var usesConstructionPlaneProjection: Bool
     var constructionPlane: SketchPlane?
     var gridIntervalMeters: Double
     var objectSearchRadiusMeters: Double
@@ -391,6 +385,10 @@ private struct ValidatedSnapResolutionOptions {
 
     var resolvesObjects: Bool {
         usesObjects || objectTargetingOverride == .forceEnabled
+    }
+
+    var usesConstructionPlaneProjection: Bool {
+        constructionPlane != nil
     }
 }
 
@@ -527,10 +525,12 @@ public struct SnapResolver: Sendable {
     public func resolve(
         point: Point2D,
         in document: DesignDocument,
-        options: SnapResolutionOptions
+        ruler: RulerConfiguration,
+        options: SnapResolutionOptions,
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay] = [:]
     ) throws -> SnapResolutionResult {
         try validate(point: point)
-        let normalizedOptions = try validated(options, document: document)
+        let normalizedOptions = try validated(options, ruler: ruler)
         let constructionPlane = try constructionPlaneCoordinateSystem(
             from: normalizedOptions,
             document: document
@@ -543,7 +543,8 @@ public struct SnapResolver: Sendable {
                 in: document,
                 searchRadiusMeters: normalizedOptions.objectSearchRadiusMeters,
                 referencePoint: normalizedOptions.referencePoint,
-                constructionPlane: constructionPlane
+                constructionPlane: constructionPlane,
+                surfaceFrameDisplays: surfaceFrameDisplays
             )
         }
         candidates += referenceLineCandidates(
@@ -616,7 +617,8 @@ public struct SnapResolver: Sendable {
         in document: DesignDocument,
         searchRadiusMeters: Double,
         referencePoint: Point2D?,
-        constructionPlane: SketchPlaneCoordinateSystem?
+        constructionPlane: SketchPlaneCoordinateSystem?,
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]
     ) throws -> [PrioritizedSnapCandidate] {
         let sceneNodeIDsByFeatureID = sceneNodeIDsByFeatureID(in: document)
         var snapEntities: [SnapEntity] = []
@@ -675,7 +677,8 @@ public struct SnapResolver: Sendable {
         )
         candidates += try surfaceFrameCandidates(
             in: document,
-            constructionPlane: constructionPlane
+            constructionPlane: constructionPlane,
+            displays: surfaceFrameDisplays
         )
         candidates += try surfaceTrimCandidates(
             in: document,
@@ -756,9 +759,10 @@ public struct SnapResolver: Sendable {
 
     private func surfaceFrameCandidates(
         in document: DesignDocument,
-        constructionPlane: SketchPlaneCoordinateSystem?
+        constructionPlane: SketchPlaneCoordinateSystem?,
+        displays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]
     ) throws -> [PrioritizedSnapCandidate] {
-        let visibleDisplays = document.productMetadata.surfaceFrameDisplays.values
+        let visibleDisplays = displays.values
             .filter(\.isVisible)
             .sorted { first, second in
                 first.id.rawValue.localizedStandardCompare(second.id.rawValue) == .orderedAscending
@@ -767,11 +771,11 @@ public struct SnapResolver: Sendable {
             return []
         }
 
-        let result = try SurfaceFrameService().resolve(
+        let frames = try SurfaceFrameService().resolveFrames(
             document: document,
             queries: visibleDisplays.map(\.query)
         )
-        return zip(visibleDisplays, result.frames).compactMap { display, frame in
+        return zip(visibleDisplays, frames).compactMap { display, frame in
             surfaceFrameCandidate(
                 display: display,
                 frame: frame,
@@ -872,7 +876,7 @@ public struct SnapResolver: Sendable {
 
     private func measurementCandidates(
         in document: DesignDocument,
-        topology: TopologySummaryResult?,
+        topology: TopologySnapshot?,
         constructionPlane: SketchPlaneCoordinateSystem?
     ) throws -> [PrioritizedSnapCandidate] {
         let measurements = document.productMetadata.measurements.values
@@ -904,11 +908,11 @@ public struct SnapResolver: Sendable {
     private func snapTopologySummary(
         in document: DesignDocument,
         searchRadiusMeters: Double
-    ) throws -> TopologySummaryResult? {
+    ) throws -> TopologySnapshot? {
         guard searchRadiusMeters > 0.0 || measurementsRequireTopology(in: document) else {
             return nil
         }
-        return try TopologySummaryService().summarize(document: document)
+        return try TopologySnapshotService().snapshot(document: document)
     }
 
     private func measurementsRequireTopology(in document: DesignDocument) -> Bool {
@@ -925,7 +929,7 @@ public struct SnapResolver: Sendable {
     }
 
     private func topologyCandidates(
-        in topology: TopologySummaryResult?,
+        in topology: TopologySnapshot?,
         constructionPlane: SketchPlaneCoordinateSystem?
     ) -> [PrioritizedSnapCandidate] {
         guard let topology else {
@@ -1611,7 +1615,7 @@ public struct SnapResolver: Sendable {
         anchor: MeasurementAnchor,
         anchorIndex: Int,
         document: DesignDocument,
-        topology: TopologySummaryResult?,
+        topology: TopologySnapshot?,
         constructionPlane: SketchPlaneCoordinateSystem?
     ) throws -> PrioritizedSnapCandidate? {
         guard let resolvedAnchor = try resolvedMeasurementAnchor(
@@ -1660,7 +1664,7 @@ public struct SnapResolver: Sendable {
     private func resolvedMeasurementAnchor(
         _ anchor: MeasurementAnchor,
         in document: DesignDocument,
-        topology: TopologySummaryResult?,
+        topology: TopologySnapshot?,
         constructionPlane: SketchPlaneCoordinateSystem?
     ) throws -> (worldPoint: Point3D, point: Point2D)? {
         guard let worldPoint = try MeasurementAnchorWorldPointResolver(
@@ -2003,12 +2007,9 @@ public struct SnapResolver: Sendable {
 
     private func constructionPlaneCoordinateSystem(
         from options: ValidatedSnapResolutionOptions,
-        document: DesignDocument
+        document _: DesignDocument
     ) throws -> SketchPlaneCoordinateSystem? {
-        guard options.usesConstructionPlaneProjection else {
-            return nil
-        }
-        guard let plane = options.constructionPlane ?? document.activeConstructionPlane?.plane else {
+        guard let plane = options.constructionPlane else {
             return nil
         }
         return try SketchPlaneCoordinateSystem(plane: plane)
@@ -3014,9 +3015,9 @@ public struct SnapResolver: Sendable {
 
     private func validated(
         _ options: SnapResolutionOptions,
-        document: DesignDocument
+        ruler: RulerConfiguration
     ) throws -> ValidatedSnapResolutionOptions {
-        let ruler = document.ruler.normalizedForWorkspaceScale()
+        let ruler = ruler.normalizedForWorkspaceScale()
         let gridIntervalMeters = options.gridIntervalMeters ?? max(
             ruler.minorTickMeters,
             RulerConfiguration.minorTickMetersRange.lowerBound
@@ -3048,7 +3049,6 @@ public struct SnapResolver: Sendable {
             usesObjects: options.usesObjects,
             objectTargetingOverride: options.objectTargetingOverride,
             suppressedCandidateKinds: options.suppressedCandidateKinds,
-            usesConstructionPlaneProjection: options.usesConstructionPlaneProjection,
             constructionPlane: options.constructionPlane,
             gridIntervalMeters: gridIntervalMeters,
             objectSearchRadiusMeters: objectSearchRadiusMeters,

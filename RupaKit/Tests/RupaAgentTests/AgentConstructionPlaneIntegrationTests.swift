@@ -18,8 +18,7 @@ import SwiftCAD
             sessionID: sessionID,
             command: .createConstructionPlane(
                 name: "Agent CPlane",
-                plane: .yz,
-                activates: true
+                plane: .yz
             ),
             expectedGeneration: DocumentGeneration(0)
         )
@@ -30,6 +29,23 @@ import SwiftCAD
     }
     #expect(createResult.commandName == "createConstructionPlane")
     #expect(createResult.didMutate)
+    #expect(createResult.effect == .sourceMutation)
+    let createdPlaneID = try #require(createResult.createdConstructionPlaneID)
+
+    let activateResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setActiveConstructionPlane(id: createdPlaneID),
+            expectedGeneration: createResult.generation,
+            expectedWorkspaceRevision: WorkspaceRevision(0)
+        )
+    )
+    guard case .command(let activateResult) = activateResponse else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(activateResult.effect == .workspaceMutation)
+    #expect(activateResult.generation == createResult.generation)
 
     let summaryResponse = server.handle(
         .constructionPlaneSummary(
@@ -45,6 +61,7 @@ import SwiftCAD
     #expect(entry.name == "Agent CPlane")
     #expect(entry.plane == .yz)
     #expect(entry.isActive)
+    #expect(entry.id == createdPlaneID)
     #expect(summary.activePlaneID == entry.id)
     #expect(entry.sceneNodeID != nil)
 
@@ -123,7 +140,8 @@ import SwiftCAD
         .execute(
             sessionID: sessionID,
             command: .setActiveConstructionPlane(id: nil),
-            expectedGeneration: DocumentGeneration(3)
+            expectedGeneration: DocumentGeneration(3),
+            expectedWorkspaceRevision: WorkspaceRevision(1)
         )
     )
     guard case .command(let clearResult) = clearResponse else {
@@ -146,8 +164,7 @@ import SwiftCAD
             sessionID: sessionID,
             command: .createConstructionPlane(
                 name: "Agent Referenced Sketch Plane",
-                plane: .yz,
-                activates: false
+                plane: .yz
             ),
             expectedGeneration: DocumentGeneration(0)
         )
@@ -254,8 +271,7 @@ import SwiftCAD
             command: .createViewAlignedConstructionPlane(
                 name: "Agent View Plane",
                 origin: Point3D(x: 0.010, y: 0.020, z: 0.030),
-                viewNormal: Vector3D(x: 0.0, y: 3.0, z: 0.0),
-                activates: true
+                viewNormal: Vector3D(x: 0.0, y: 3.0, z: 0.0)
             ),
             expectedGeneration: DocumentGeneration(0)
         )
@@ -265,9 +281,11 @@ import SwiftCAD
         #expect(Bool(false))
         return
     }
-    let source = try #require(session.activeConstructionPlane)
+    let sourceID = try #require(result.createdConstructionPlaneID)
+    let source = try #require(session.document.productMetadata.constructionPlanes[sourceID])
     #expect(result.commandName == "createViewAlignedConstructionPlane")
     #expect(result.didMutate)
+    #expect(session.activeConstructionPlane == nil)
     #expect(source.name == "Agent View Plane")
     guard case .plane(let plane) = source.plane else {
         Issue.record("Agent view-aligned construction plane should create a custom plane.")
@@ -282,7 +300,7 @@ import SwiftCAD
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
     server.register(session: session, id: sessionID)
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let faceTarget = try #require(topology.entries.first {
         $0.kind == .face && $0.center != nil && $0.normal != nil
     }?.selectionTarget())
@@ -292,8 +310,7 @@ import SwiftCAD
             sessionID: sessionID,
             command: .createConstructionPlaneFromTarget(
                 name: "Agent Face CPlane",
-                target: faceTarget,
-                activates: true
+                target: faceTarget
             ),
             expectedGeneration: session.generation
         )
@@ -317,7 +334,8 @@ import SwiftCAD
         return
     }
     let entry = try #require(summary.planes.first { $0.name == "Agent Face CPlane" })
-    #expect(entry.isActive)
+    #expect(entry.id == result.createdConstructionPlaneID)
+    #expect(!entry.isActive)
     guard case .plane = entry.plane else {
         Issue.record("Generated face target should create a custom construction plane.")
         return
@@ -330,7 +348,7 @@ import SwiftCAD
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
     server.register(session: session, id: sessionID)
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let targets = try agentParallelFaceTargets(in: topology)
 
     let response = server.handle(
@@ -339,8 +357,7 @@ import SwiftCAD
             command: .createConstructionPlaneFromTargets(
                 name: "Agent Midplane",
                 targets: targets,
-                viewNormal: nil,
-                activates: true
+                viewNormal: nil
             ),
             expectedGeneration: session.generation
         )
@@ -364,7 +381,8 @@ import SwiftCAD
         return
     }
     let entry = try #require(summary.planes.first { $0.name == "Agent Midplane" })
-    #expect(entry.isActive)
+    #expect(entry.id == result.createdConstructionPlaneID)
+    #expect(!entry.isActive)
     guard case .plane = entry.plane else {
         Issue.record("Parallel generated face targets should create a custom midplane.")
         return
@@ -377,7 +395,7 @@ import SwiftCAD
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
     server.register(session: session, id: sessionID)
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let targets = try agentTwoPointVertexTargets(in: topology, viewNormal: .unitZ)
 
     let response = server.handle(
@@ -386,8 +404,7 @@ import SwiftCAD
             command: .createConstructionPlaneFromTargets(
                 name: "Agent Two Point Plane",
                 targets: targets,
-                viewNormal: .unitZ,
-                activates: true
+                viewNormal: .unitZ
             ),
             expectedGeneration: session.generation
         )
@@ -411,7 +428,8 @@ import SwiftCAD
         return
     }
     let entry = try #require(summary.planes.first { $0.name == "Agent Two Point Plane" })
-    #expect(entry.isActive)
+    #expect(entry.id == result.createdConstructionPlaneID)
+    #expect(!entry.isActive)
     guard case .plane = entry.plane else {
         Issue.record("Two generated vertex targets should create a custom construction plane.")
         return
@@ -431,8 +449,7 @@ import SwiftCAD
             command: .createConstructionPlaneFromTargets(
                 name: "Agent Source Point Plane",
                 targets: setup.targets,
-                viewNormal: .unitZ,
-                activates: true
+                viewNormal: .unitZ
             ),
             expectedGeneration: session.generation
         )
@@ -456,7 +473,8 @@ import SwiftCAD
         return
     }
     let entry = try #require(summary.planes.first { $0.name == "Agent Source Point Plane" })
-    #expect(entry.isActive)
+    #expect(entry.id == result.createdConstructionPlaneID)
+    #expect(!entry.isActive)
     guard case .plane = entry.plane else {
         Issue.record("Two source point targets should create a custom construction plane.")
         return

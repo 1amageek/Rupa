@@ -8,7 +8,7 @@ import SwiftCAD
     _ = try #require(session.createDefaultExtrudedRectangle())
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodyNodeID = try #require(faceDeleteSceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let faceEntry = try #require(topology.entries.first {
         $0.kind == .face &&
             $0.sceneNodeID == bodyNodeID.description &&
@@ -30,8 +30,8 @@ import SwiftCAD
     }
     let evaluation = try #require(session.currentEvaluationCache?.evaluatedDocument)
     let body = try #require(evaluation.brep.bodies.values.first)
-    let afterTopology = try TopologySummaryService().summarize(document: session.document)
-    let measurement = try MeasurementService().measure(document: session.document)
+    let afterTopology = try TopologySnapshotService().snapshot(document: session.document)
+    let measurement = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
     let carriedFaces = afterTopology.entries.filter {
         $0.kind == .face &&
             $0.sceneNodeID == deleteSceneNodeID.description &&

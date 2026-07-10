@@ -21,13 +21,13 @@ struct WorkspaceDocumentInspectorState: Equatable, Sendable {
     var validationRuleCount: Int
     var exportPresetCount: Int
     var ruler: RulerConfiguration
-    var scaleRecommendation: WorkspaceDocumentScaleRecommendationState?
-    var scalePresetOptions: [WorkspaceDocumentScalePresetOptionState]
+    var scaleRecommendation: WorkspaceScaleRecommendationState?
+    var scalePresetOptions: [WorkspaceScalePresetOptionState]
     var precisionRecommendation: WorkspaceDocumentPrecisionRecommendationState?
     var parameters: WorkspaceParameterInspectorState
 }
 
-struct WorkspaceDocumentScaleRecommendationState: Equatable, Sendable {
+struct WorkspaceScaleRecommendationState: Equatable, Sendable {
     var reasonTitle: String
     var presetTitle: String
     var useCaseTitle: String
@@ -39,7 +39,7 @@ struct WorkspaceDocumentScaleRecommendationState: Equatable, Sendable {
     var isActionable: Bool
 }
 
-struct WorkspaceDocumentScalePresetOptionState: Equatable, Identifiable, Sendable {
+struct WorkspaceScalePresetOptionState: Equatable, Identifiable, Sendable {
     var preset: WorkspaceScalePreset
     var title: String
     var menuTitle: String
@@ -66,7 +66,7 @@ struct WorkspaceDocumentPrecisionRecommendationState: Equatable, Sendable {
 }
 
 struct WorkspaceDocumentRecommendationStates: Equatable, Sendable {
-    var scale: WorkspaceDocumentScaleRecommendationState?
+    var scale: WorkspaceScaleRecommendationState?
     var precision: WorkspaceDocumentPrecisionRecommendationState?
 }
 
@@ -213,7 +213,7 @@ struct WorkspaceDocumentInspectorView: View {
     }
 
     private func scaleRecommendationControl(
-        _ recommendation: WorkspaceDocumentScaleRecommendationState
+        _ recommendation: WorkspaceScaleRecommendationState
     ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             inspectorControlRow("Recommended") {
@@ -342,14 +342,14 @@ struct WorkspaceDocumentInspectorView: View {
     }
 }
 
-func workspaceDocumentScaleRecommendationState(
+func workspaceScaleRecommendationState(
     recommendation: WorkspaceScaleRecommendation?
-) -> WorkspaceDocumentScaleRecommendationState? {
+) -> WorkspaceScaleRecommendationState? {
     guard let recommendation else {
         return nil
     }
     let recommendedProfile = recommendation.recommendedScaleProfile
-    return WorkspaceDocumentScaleRecommendationState(
+    return WorkspaceScaleRecommendationState(
         reasonTitle: workspaceScaleRecommendationReasonTitle(recommendation.reason),
         presetTitle: recommendedProfile.title,
         useCaseTitle: recommendedProfile.useCaseTitle,
@@ -365,14 +365,14 @@ func workspaceDocumentScaleRecommendationState(
     )
 }
 
-func workspaceDocumentScalePresetOptionStates(
+func workspaceScalePresetOptionStates(
     ruler: RulerConfiguration
-) -> [WorkspaceDocumentScalePresetOptionState] {
+) -> [WorkspaceScalePresetOptionState] {
     let normalized = ruler.normalizedForWorkspaceScale()
     let selectedPreset = WorkspaceScalePreset.matching(normalized)
     return WorkspaceScalePreset.profiles.map { profile in
         let preset = profile.preset
-        return WorkspaceDocumentScalePresetOptionState(
+        return WorkspaceScalePresetOptionState(
             preset: preset,
             title: profile.title,
             menuTitle: profile.menuTitle,
@@ -402,7 +402,7 @@ func workspaceDocumentRecommendationStates(
         ruler: ruler
     )
     return WorkspaceDocumentRecommendationStates(
-        scale: workspaceDocumentScaleRecommendationState(recommendation: scaleRecommendation),
+        scale: workspaceScaleRecommendationState(recommendation: scaleRecommendation),
         precision: workspaceDocumentPrecisionRecommendationState(
             report: precisionReport,
             displayUnit: displayUnit

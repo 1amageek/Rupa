@@ -56,7 +56,7 @@ import SwiftCAD
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let arc = try #require(updatedSummary.entries.first { $0.entityID == line.entityID })
     #expect(result.commandName == "convertSketchLineToArc")
     #expect(result.didMutate)
@@ -112,7 +112,7 @@ import SwiftCAD
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(updatedSummary.entries.first { $0.entityID == line.entityID })
     let firstHandle = try #require(spline.controlPoints.dropFirst(1).first)
     let secondHandle = try #require(spline.controlPoints.dropFirst(2).first)
@@ -172,7 +172,7 @@ import SwiftCAD
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let reversedLine = try #require(updatedSummary.entries.first { $0.entityID == line.entityID })
     #expect(result.commandName == "reverseSketchCurve")
     #expect(result.didMutate)
@@ -232,7 +232,7 @@ import SwiftCAD
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let extendedLine = try #require(updatedSummary.entries.first { $0.entityID == line.entityID })
     #expect(result.commandName == "extendSketchCurve")
     #expect(result.didMutate)
@@ -280,7 +280,7 @@ import SwiftCAD
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let joinedLine = try #require(updatedSummary.entries.first { $0.entityID == firstLineID.description })
     #expect(result.commandName == "joinSketchCurves")
     #expect(result.didMutate)
@@ -336,7 +336,7 @@ import SwiftCAD
         Issue.record("Agent G2 join feature must remain a sketch.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let solvedSecondSpline = try #require(updatedSummary.entries.first {
         $0.entityID == setup.secondSplineID.description
     })
@@ -379,7 +379,7 @@ import SwiftCAD
 }
 
 @MainActor
-@Test func agentAlignsSplineEndpointsWithCurvatureDisplayThroughAutomationAndCore() async throws {
+@Test func agentAlignsSplineEndpointsAndControlsCurvatureDisplayThroughAutomationAndCore() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()
     let setup = try agentTwoSplineTangentSketchDocument(name: "Agent Align Show Curvature")
@@ -407,10 +407,7 @@ import SwiftCAD
             command: .alignSketchVertex(
                 target: secondEndpoint,
                 reference: firstEndpoint,
-                options: SketchVertexAlignmentOptions(
-                    continuity: .g2,
-                    showsCurvature: true
-                )
+                options: SketchVertexAlignmentOptions(continuity: .g2)
             ),
             expectedGeneration: session.generation
         )
@@ -428,6 +425,30 @@ import SwiftCAD
         featureID: setup.featureID,
         entityID: setup.secondSplineID
     )
+    let firstCurveTarget = try #require(firstSpline.selectionTarget())
+    let secondCurveTarget = try #require(secondSpline.selectionTarget())
+    let generationAfterAlignment = session.generation
+    let workspaceRevisionBeforeDisplay = session.workspaceState.revision
+    for target in [firstCurveTarget, secondCurveTarget] {
+        let displayResponse = server.handle(
+            .execute(
+                sessionID: sessionID,
+                command: .setCurveCurvatureDisplay(
+                    target: target,
+                    isVisible: true,
+                    combScale: nil
+                ),
+                expectedGeneration: generationAfterAlignment,
+                expectedWorkspaceRevision: session.workspaceState.revision
+            )
+        )
+        guard case .command(let displayResult) = displayResponse else {
+            Issue.record("Agent must return a curve curvature display command result.")
+            return
+        }
+        #expect(displayResult.commandName == "setCurveCurvatureDisplay")
+        #expect(displayResult.generation == generationAfterAlignment)
+    }
     let analysisResponse = server.handle(
         .curveAnalysis(
             sessionID: sessionID,
@@ -447,8 +468,10 @@ import SwiftCAD
 
     #expect(result.commandName == "alignSketchVertex")
     #expect(result.didMutate)
-    #expect(session.document.productMetadata.curveCurvatureDisplays[firstComponentID] != nil)
-    #expect(session.document.productMetadata.curveCurvatureDisplays[secondComponentID] != nil)
+    #expect(session.generation == generationAfterAlignment)
+    #expect(session.workspaceState.revision.value == workspaceRevisionBeforeDisplay.value + 2)
+    #expect(session.workspaceState.curveCurvatureDisplays[firstComponentID] != nil)
+    #expect(session.workspaceState.curveCurvatureDisplays[secondComponentID] != nil)
     #expect(continuityJoin.requiredContinuity == .g2)
     #expect(continuityJoin.continuity == .g2)
     #expect(session.evaluationStatus == .valid)
@@ -491,7 +514,7 @@ import SwiftCAD
         Issue.record("Agent must return a join command result.")
         return
     }
-    let joinedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let joinedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let joinedLine = try #require(joinedSummary.entries.first { $0.entityID == firstLineID.description })
 
     let unjoinResponse = server.handle(
@@ -505,7 +528,7 @@ import SwiftCAD
         Issue.record("Agent must return an unjoin command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let retainedLine = try #require(updatedSummary.entries.first { $0.entityID == firstLineID.description })
     let restoredLine = try #require(updatedSummary.entries.first { $0.entityID == secondLineID.description })
     #expect(joinResult.commandName == "joinSketchCurves")
@@ -583,7 +606,7 @@ private func agentControlPointSelectionTarget(
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let arcs = updatedSummary.entries.filter {
         $0.sourceFeatureID == bottomLine.sourceFeatureID && $0.entityKind == "arc"
     }
@@ -636,7 +659,7 @@ private func agentControlPointSelectionTarget(
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceEntries = updatedSummary.entries.filter { $0.sourceFeatureID == setup.featureID.description }
     let lines = sourceEntries.filter { $0.entityKind == "line" }
     let arcs = sourceEntries.filter { $0.entityKind == "arc" }
@@ -693,7 +716,7 @@ private func agentControlPointSelectionTarget(
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let sourceEntries = updatedSummary.entries.filter { $0.sourceFeatureID == setup.featureID.description }
     let lines = sourceEntries.filter { $0.entityKind == "line" }
     let arcs = sourceEntries.filter { $0.entityKind == "arc" }
@@ -759,7 +782,7 @@ private func agentControlPointSelectionTarget(
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let lines = updatedSummary.entries.filter { $0.entityKind == "line" }
     #expect(result.commandName == "splitSketchCurve")
     #expect(result.didMutate)
@@ -824,7 +847,7 @@ private func agentControlPointSelectionTarget(
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let arcs = updatedSummary.entries.filter { $0.entityKind == "arc" }
     #expect(result.commandName == "splitSketchCurve")
     #expect(result.didMutate)
@@ -880,7 +903,7 @@ private func agentControlPointSelectionTarget(
         Issue.record("Agent must split the sketch curve before trimming.")
         return
     }
-    let splitSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let splitSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let trimmedLine = try #require(splitSummary.entries.first { entry in
         entry.entityKind == "line" && entry.entityID != line.entityID
     })
@@ -898,7 +921,7 @@ private func agentControlPointSelectionTarget(
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let lines = updatedSummary.entries.filter { $0.entityKind == "line" }
     #expect(result.commandName == "trimSketchCurveSegment")
     #expect(result.didMutate)
@@ -976,7 +999,7 @@ private func agentControlPointSelectionTarget(
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Agent Cut Target" }
     let cutterSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Agent Cut Cutter" }
     #expect(result.commandName == "cutSketchCurve")
@@ -1058,7 +1081,7 @@ private func agentControlPointSelectionTarget(
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Agent Circle Cut Target" }
     #expect(result.commandName == "cutSketchCurve")
     #expect(result.didMutate)
@@ -1143,7 +1166,7 @@ private func agentControlPointSelectionTarget(
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Agent Spline Cutter Target" }
     let cutterSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Agent Spline Cutter" }
     #expect(result.commandName == "cutSketchCurve")
@@ -1226,7 +1249,7 @@ private func agentControlPointSelectionTarget(
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Agent Spline Cut Target" }
     #expect(result.commandName == "cutSketchCurve")
     #expect(result.didMutate)
@@ -1319,7 +1342,7 @@ private func agentControlPointSelectionTarget(
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Agent Circle Target Cut Target" }
     let cutterSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Agent Circle Target Cut Cutter" }
     #expect(result.commandName == "cutSketchCurve")
@@ -1404,7 +1427,7 @@ private func agentControlPointSelectionTarget(
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Agent Arc Cut Target" }
     let cutterSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Agent Arc Cut Cutter" }
     #expect(result.commandName == "cutSketchCurve")

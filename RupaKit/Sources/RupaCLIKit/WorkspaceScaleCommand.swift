@@ -28,7 +28,7 @@ public struct DescribeDocumentCommand: ParsableCommand {
 public struct SetDisplayUnitCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "set-display-unit",
-        abstract: "Set the document display unit and its standard workspace ruler."
+        abstract: "Set the workspace display unit and its standard workspace ruler."
     )
 
     @OptionGroup
@@ -149,7 +149,7 @@ public struct SetViewportGridCommand: ParsableCommand {
 public struct SetRulerConfigurationCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "set-ruler",
-        abstract: "Set the document display unit, ruler tick spacing, and visible workspace span."
+        abstract: "Set the workspace display unit, ruler tick spacing, and visible workspace span."
     )
 
     @OptionGroup

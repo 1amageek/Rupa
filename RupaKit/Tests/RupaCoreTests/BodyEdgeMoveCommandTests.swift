@@ -15,7 +15,7 @@ import Testing
         sceneNodeID: bodyNodeID,
         in: session.document
     )
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let topEdge = try #require(topology.entries.first {
         edgeMoveIsGeneratedProfileLine($0) && edgeMoveLineIsAtY($0, beforeBounds.maxY)
     })
@@ -52,7 +52,7 @@ import Testing
     _ = try #require(session.createDefaultExtrudedCircle())
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let beforeCircle = try edgeMoveCircleProfile(forBody: bodyFeatureID, in: session.document)
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let circularEdge = try #require(topology.entries.first {
         $0.kind == .edge &&
             $0.generatedRole == "edge" &&
@@ -94,7 +94,7 @@ import Testing
         )
     )
     let beforeArc = try edgeMoveArcProfile(forBody: bodyFeatureID, in: session.document)
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let arcEdge = try #require(topology.entries.first {
         guard let radius = $0.curveRadius else {
             return false

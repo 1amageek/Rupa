@@ -6,12 +6,7 @@ import Testing
 @Test func canvasClickSketchToolsCreateSketchesOnActiveCustomConstructionPlane() async throws {
     let session = EditorSession()
     let plane = try customCanvasConstructionPlane()
-    _ = try #require(
-        session.createConstructionPlane(
-            name: "Canvas CPlane",
-            plane: plane
-        )
-    )
+    try activateCanvasConstructionPlane(name: "Canvas CPlane", plane: plane, in: session)
     let activePlane = try #require(session.activeConstructionPlane?.plane)
     let localPoint = Point2D(x: 0.015, y: -0.010)
     let worldPoint = try SketchPlaneCoordinateSystem(plane: activePlane).point(from: localPoint)
@@ -39,12 +34,7 @@ import Testing
 @Test func canvasDragSketchToolsCreateSketchesOnActiveCustomConstructionPlane() async throws {
     let session = EditorSession()
     let plane = try customCanvasConstructionPlane()
-    _ = try #require(
-        session.createConstructionPlane(
-            name: "Canvas Drag CPlane",
-            plane: plane
-        )
-    )
+    try activateCanvasConstructionPlane(name: "Canvas Drag CPlane", plane: plane, in: session)
     let activePlane = try #require(session.activeConstructionPlane?.plane)
     let coordinateSystem = try SketchPlaneCoordinateSystem(plane: activePlane)
     let startPoint = Point2D(x: 0.004, y: 0.006)
@@ -87,6 +77,17 @@ private func customCanvasConstructionPlane() throws -> SketchPlane {
             normal: try Vector3D(x: 0.0, y: 1.0, z: 1.0).normalized(tolerance: 1.0e-12)
         )
     )
+}
+
+@MainActor
+private func activateCanvasConstructionPlane(
+    name: String,
+    plane: SketchPlane,
+    in session: EditorSession
+) throws {
+    let result = try #require(session.createConstructionPlane(name: name, plane: plane))
+    let id = try #require(result.createdConstructionPlaneID)
+    _ = try #require(session.setActiveConstructionPlane(id: id))
 }
 
 private func latestSketch(in session: EditorSession) throws -> Sketch {

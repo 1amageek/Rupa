@@ -94,7 +94,7 @@ import Testing
             segmentCount: 8
         )
     )
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let vertexEntry = try #require(topology.entries.first {
         isGeneratedVertex($0, x: -0.020, y: -0.010)
     })
@@ -135,7 +135,7 @@ import Testing
             segmentCount: 8
         )
     )
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let vertexEntry = try #require(topology.entries.first {
         isGeneratedVertex($0, x: 0.020, y: -0.010)
     })

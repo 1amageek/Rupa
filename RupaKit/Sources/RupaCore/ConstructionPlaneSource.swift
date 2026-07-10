@@ -94,7 +94,10 @@ public struct ConstructionPlaneSummaryResult: Codable, Equatable, Sendable {
 public struct ConstructionPlaneSummaryService: Sendable {
     public init() {}
 
-    public func summarize(document: DesignDocument) -> ConstructionPlaneSummaryResult {
+    public func summarize(
+        document: DesignDocument,
+        activePlaneID: ConstructionPlaneSourceID?
+    ) -> ConstructionPlaneSummaryResult {
         var sceneNodeByPlaneID: [ConstructionPlaneSourceID: SceneNodeID] = [:]
         for node in document.productMetadata.sceneNodes.values {
             guard let constructionPlaneID = node.reference?.constructionPlaneID,
@@ -103,7 +106,6 @@ public struct ConstructionPlaneSummaryService: Sendable {
             }
             sceneNodeByPlaneID[constructionPlaneID] = node.id
         }
-        let activePlaneID = document.productMetadata.activeConstructionPlaneID
         let entries = document.productMetadata.constructionPlanes.values
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
             .map { source in

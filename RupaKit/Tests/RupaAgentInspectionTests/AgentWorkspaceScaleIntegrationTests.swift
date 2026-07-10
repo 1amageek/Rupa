@@ -10,13 +10,15 @@ import Testing
     let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
+    let sourceState = try AgentDocumentSourceState(document: session.document)
     server.register(session: session, id: sessionID)
 
     let response = server.handle(
         .execute(
             sessionID: sessionID,
             command: .setWorkspaceScalePreset(.regionalPlanning),
-            expectedGeneration: DocumentGeneration(0)
+            expectedGeneration: DocumentGeneration(0),
+            expectedWorkspaceRevision: WorkspaceRevision(0)
         )
     )
     let codec = AgentMessageCodec()
@@ -29,7 +31,8 @@ import Testing
 
     #expect(result.commandName == "setRulerConfiguration")
     #expect(result.didMutate)
-    #expect(result.generation == DocumentGeneration(1))
+    #expect(result.generation == DocumentGeneration(0))
+    #expect(result.workspaceRevision == WorkspaceRevision(1))
     #expect(result.workspaceScale?.matchedPreset == .regionalPlanning)
     #expect(result.workspaceScale?.displayUnit == .kilometer)
     #expect(result.workspaceScale?.visibleSpanMeters == 1_000_000.0)
@@ -49,9 +52,9 @@ import Testing
     } == true)
     #expect(result.message.contains("Regional Planning"))
     #expect(decodedResponse == response)
-    #expect(session.document.displayUnit == .kilometer)
+    #expect(try AgentDocumentSourceState(document: session.document) == sourceState)
     #expect(
-        session.document.ruler == WorkspaceScalePreset.regionalPlanning.rulerConfiguration
+        session.workspaceState.ruler == WorkspaceScalePreset.regionalPlanning.rulerConfiguration
             .normalizedForWorkspaceScale()
     )
 }
@@ -61,13 +64,15 @@ import Testing
     let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
+    let sourceState = try AgentDocumentSourceState(document: session.document)
     server.register(session: session, id: sessionID)
 
     let response = server.handle(
         .execute(
             sessionID: sessionID,
             command: .setWorkspaceScalePreset(.urbanPlanning),
-            expectedGeneration: DocumentGeneration(0)
+            expectedGeneration: DocumentGeneration(0),
+            expectedWorkspaceRevision: WorkspaceRevision(0)
         )
     )
     let codec = AgentMessageCodec()
@@ -80,7 +85,8 @@ import Testing
 
     #expect(result.commandName == "setRulerConfiguration")
     #expect(result.didMutate)
-    #expect(result.generation == DocumentGeneration(1))
+    #expect(result.generation == DocumentGeneration(0))
+    #expect(result.workspaceRevision == WorkspaceRevision(1))
     #expect(result.workspaceScale?.matchedPreset == .urbanPlanning)
     #expect(result.workspaceScale?.displayUnit == .kilometer)
     #expect(result.workspaceScale?.visibleSpanMeters == 25_000.0)
@@ -92,9 +98,9 @@ import Testing
     #expect(result.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
     #expect(result.message.contains("Urban Planning"))
     #expect(decodedResponse == response)
-    #expect(session.document.displayUnit == .kilometer)
+    #expect(try AgentDocumentSourceState(document: session.document) == sourceState)
     #expect(
-        session.document.ruler == WorkspaceScalePreset.urbanPlanning.rulerConfiguration
+        session.workspaceState.ruler == WorkspaceScalePreset.urbanPlanning.rulerConfiguration
             .normalizedForWorkspaceScale()
     )
 }
@@ -111,7 +117,8 @@ import Testing
         .execute(
             sessionID: sessionID,
             command: .setViewportGridSettings(settings),
-            expectedGeneration: DocumentGeneration(0)
+            expectedGeneration: DocumentGeneration(0),
+            expectedWorkspaceRevision: WorkspaceRevision(0)
         )
     )
 
@@ -122,12 +129,64 @@ import Testing
 
     #expect(result.commandName == "setViewportGridSettings")
     #expect(result.didMutate)
-    #expect(result.generation == DocumentGeneration(1))
+    #expect(result.generation == DocumentGeneration(0))
+    #expect(result.workspaceRevision == WorkspaceRevision(1))
     #expect(result.viewportGridSettings == settings)
     #expect(result.viewportGridScale?.visualSpacingMode == .fixed)
-    #expect(result.viewportGridScale?.snapStep.meters == session.document.ruler.minorTickMeters)
-    #expect(result.viewportGridScale?.workspaceSpan.meters == session.document.ruler.visibleSpanMeters)
-    #expect(session.document.productMetadata.viewportGridSettings == settings)
+    #expect(result.viewportGridScale?.snapStep.meters == session.workspaceState.ruler.minorTickMeters)
+    #expect(result.viewportGridScale?.workspaceSpan.meters == session.workspaceState.ruler.visibleSpanMeters)
+    #expect(session.workspaceState.viewportGridSettings == settings)
+}
+
+@MainActor
+@Test func agentWorkspaceMutationRequiresCurrentWorkspaceRevision() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let missingRevisionResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setDisplayUnit(.meter),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .failure(let missingRevisionError) = missingRevisionResponse else {
+        Issue.record("Workspace mutation without a revision must fail.")
+        return
+    }
+    #expect(missingRevisionError.code == .commandInvalid)
+    #expect(session.workspaceState.revision == WorkspaceRevision(0))
+
+    let acceptedResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setDisplayUnit(.meter),
+            expectedGeneration: DocumentGeneration(0),
+            expectedWorkspaceRevision: WorkspaceRevision(0)
+        )
+    )
+    guard case .command = acceptedResponse else {
+        Issue.record("Workspace mutation with the current revision must succeed.")
+        return
+    }
+    #expect(session.workspaceState.revision == WorkspaceRevision(1))
+
+    let staleRevisionResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setViewportGridSettings(.standard),
+            expectedGeneration: DocumentGeneration(0),
+            expectedWorkspaceRevision: WorkspaceRevision(0)
+        )
+    )
+    guard case .failure(let staleRevisionError) = staleRevisionResponse else {
+        Issue.record("Workspace mutation with a stale revision must fail.")
+        return
+    }
+    #expect(staleRevisionError.code == .workspaceRevisionMismatch)
+    #expect(session.workspaceState.revision == WorkspaceRevision(1))
 }
 
 @MainActor
@@ -184,13 +243,15 @@ import Testing
     let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession(document: try agentSiteDocument())
+    let sourceState = try AgentDocumentSourceState(document: session.document)
     server.register(session: session, id: sessionID)
 
     let response = server.handle(
         .execute(
             sessionID: sessionID,
             command: .fitWorkspaceScaleToModel,
-            expectedGeneration: session.generation
+            expectedGeneration: session.generation,
+            expectedWorkspaceRevision: session.workspaceState.revision
         )
     )
     let codec = AgentMessageCodec()
@@ -213,9 +274,11 @@ import Testing
     #expect(result.workspaceScaleRecommendation == nil)
     #expect(result.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
     #expect(result.message.contains("Workspace scale fitted to Site Planning"))
-    #expect(session.document.displayUnit == .kilometer)
+    #expect(result.generation == DocumentGeneration(0))
+    #expect(result.workspaceRevision == WorkspaceRevision(1))
+    #expect(try AgentDocumentSourceState(document: session.document) == sourceState)
     #expect(
-        session.document.ruler == WorkspaceScalePreset.sitePlanning.rulerConfiguration
+        session.workspaceState.ruler == WorkspaceScalePreset.sitePlanning.rulerConfiguration
             .normalizedForWorkspaceScale()
     )
     #expect(decodedResponse == response)
@@ -226,13 +289,15 @@ import Testing
     let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession(document: try agentUrbanDocument())
+    let sourceState = try AgentDocumentSourceState(document: session.document)
     server.register(session: session, id: sessionID)
 
     let response = server.handle(
         .execute(
             sessionID: sessionID,
             command: .fitWorkspaceScaleToModel,
-            expectedGeneration: session.generation
+            expectedGeneration: session.generation,
+            expectedWorkspaceRevision: session.workspaceState.revision
         )
     )
     let codec = AgentMessageCodec()
@@ -254,9 +319,11 @@ import Testing
     #expect(result.workspaceScaleRecommendation == nil)
     #expect(result.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
     #expect(result.message.contains("Workspace scale fitted to Urban Planning"))
-    #expect(session.document.displayUnit == .kilometer)
+    #expect(result.generation == DocumentGeneration(0))
+    #expect(result.workspaceRevision == WorkspaceRevision(1))
+    #expect(try AgentDocumentSourceState(document: session.document) == sourceState)
     #expect(
-        session.document.ruler == WorkspaceScalePreset.urbanPlanning.rulerConfiguration
+        session.workspaceState.ruler == WorkspaceScalePreset.urbanPlanning.rulerConfiguration
             .normalizedForWorkspaceScale()
     )
     #expect(decodedResponse == response)
@@ -303,6 +370,20 @@ import Testing
     #expect(snapshot.workspaceInteractionScale.operationStep.displayValue == 1.0)
     #expect(snapshot.workspaceInteractionScale.operationStep.displayUnitSymbol == "mm")
     #expect(decodedResponse == response)
+}
+
+private struct AgentDocumentSourceState: Equatable {
+    var fingerprint: CADDocumentSourceFingerprint
+    var modelingSettings: DocumentModelingSettings
+    var productMetadata: ProductMetadata
+
+    init(document: DesignDocument) throws {
+        fingerprint = try document.cadDocument.sourceFingerprint(
+            tolerance: document.modelingSettings.tolerance
+        )
+        modelingSettings = document.modelingSettings
+        productMetadata = document.productMetadata
+    }
 }
 
 private func agentSiteDocument() throws -> DesignDocument {

@@ -63,7 +63,7 @@ private func contractSavedView() -> SavedView {
             .execute(
                 sessionID: sessionID,
                 command: .createSavedView(contractSavedView()),
-                expectedGeneration: nil
+                expectedGeneration: DocumentGeneration(0)
             )
         )
         let createEncoded = try codec.encode(createResponse, id: "r1", method: "command.apply")
@@ -75,7 +75,11 @@ private func contractSavedView() -> SavedView {
         #expect(createDecoded == createResponse)
 
         let listResponse = server.handle(
-            .execute(sessionID: sessionID, command: .describeSavedViews, expectedGeneration: nil)
+            .execute(
+                sessionID: sessionID,
+                command: .describeSavedViews,
+                expectedGeneration: DocumentGeneration(1)
+            )
         )
         let listEncoded = try codec.encode(listResponse, id: "r2", method: "command.apply")
         let listDecoded = try codec.decodeResponse(

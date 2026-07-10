@@ -11,7 +11,8 @@ import Testing
         currentEvaluation: nil,
         documentGeneration: DocumentGeneration(),
         objectRegistry: .builtIn,
-        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard)
+        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard),
+        workspaceState: WorkspaceState()
     )
 
     let analysis = try #require(try builder.analysisResult(for: [fixture.sceneNode]).get())
@@ -34,7 +35,8 @@ import Testing
         currentEvaluation: nil,
         documentGeneration: DocumentGeneration(),
         objectRegistry: .builtIn,
-        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard)
+        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard),
+        workspaceState: WorkspaceState()
     )
     let fullAnalysis = try #require(try objectBuilder.analysisResult(for: [fixture.sceneNode]).get())
     let faceName = try #require(fullAnalysis.faces.first?.facePersistentNames.first)
@@ -48,7 +50,8 @@ import Testing
         currentEvaluation: nil,
         documentGeneration: DocumentGeneration(),
         objectRegistry: .builtIn,
-        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard)
+        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard),
+        workspaceState: WorkspaceState()
     )
 
     let filteredAnalysis = try #require(try faceBuilder.analysisResult(for: [fixture.sceneNode]).get())
@@ -61,7 +64,7 @@ import Testing
 
 @Test func workspaceSurfaceInspectorStateBuilderResolvesControlPointSelection() throws {
     let fixture = try workspaceSurfaceInspectorFixture()
-    let summary = try SurfaceSourceSummaryService().summarize(document: fixture.document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: fixture.document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     let builder = WorkspaceSurfaceInspectorStateBuilder(
@@ -70,7 +73,8 @@ import Testing
         currentEvaluation: nil,
         documentGeneration: DocumentGeneration(),
         objectRegistry: .builtIn,
-        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard)
+        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard),
+        workspaceState: WorkspaceState()
     )
 
     let state = try #require(try builder.surfaceControlPointStateResult().get())
@@ -98,7 +102,8 @@ import Testing
         currentEvaluation: nil,
         documentGeneration: DocumentGeneration(),
         objectRegistry: .builtIn,
-        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard)
+        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard),
+        workspaceState: WorkspaceState()
     )
 
     let state = try #require(try builder.surfaceBasisStateResult(for: [sceneNode]).get())
@@ -137,7 +142,8 @@ import Testing
         currentEvaluation: nil,
         documentGeneration: DocumentGeneration(),
         objectRegistry: .builtIn,
-        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard)
+        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard),
+        workspaceState: WorkspaceState()
     )
     let objectState = try #require(try objectBuilder.surfaceBasisStateResult(for: nodes).get())
     let firstFeatureEntry = try #require(objectState.entries.first { entry in
@@ -154,7 +160,8 @@ import Testing
         currentEvaluation: nil,
         documentGeneration: DocumentGeneration(),
         objectRegistry: .builtIn,
-        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard)
+        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard),
+        workspaceState: WorkspaceState()
     )
 
     let faceState = try #require(try faceBuilder.surfaceBasisStateResult(for: nodes).get())
@@ -194,7 +201,8 @@ import Testing
         currentEvaluation: nil,
         documentGeneration: DocumentGeneration(),
         objectRegistry: .builtIn,
-        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard)
+        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard),
+        workspaceState: WorkspaceState()
     )
 
     let state = try #require(try builder.surfaceBoundaryContinuityStateResult().get())
@@ -212,7 +220,7 @@ import Testing
     #expect(state.diagnosticMessages.contains("Boundary pair supports G0/G1/G2 continuity matching."))
     #expect(state.statusTitle == "Compatible")
 
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let unavailableState = SurfaceBoundaryContinuityInspectorState(
         selectedReferences: [secondReference, firstReference],
         summaryResult: summary,
@@ -272,7 +280,7 @@ import Testing
         name: "Trim Domain Surface",
         surface: workspaceSurfaceInspectorDirectBSplineSurface()
     )
-    let initialSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let initialSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(initialSummary.sources.first?.patches.first?.faceSelectionReference)
     try document.setSurfaceTrimDomain(
         target: faceReference,
@@ -292,7 +300,8 @@ import Testing
         currentEvaluation: nil,
         documentGeneration: DocumentGeneration(),
         objectRegistry: .builtIn,
-        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard)
+        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard),
+        workspaceState: WorkspaceState()
     )
 
     let state = try #require(try builder.surfaceBoundaryContinuityStateResult().get())
@@ -314,7 +323,7 @@ import Testing
 
 @Test func workspaceSurfaceInspectorStateBuilderRejectsPolySplineBoundaryContinuitySelection() throws {
     let fixture = try workspaceSurfaceInspectorFixture()
-    let summary = try SurfaceSourceSummaryService().summarize(document: fixture.document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: fixture.document, displayUnit: .millimeter)
     let firstReference = try #require(summary.sources.first?.patches.first?.trimLoops.first?.selectionReferences.first)
     let secondReference = try #require(summary.sources.first?.patches.last?.trimLoops.first?.selectionReferences.first)
     let builder = WorkspaceSurfaceInspectorStateBuilder(
@@ -323,7 +332,8 @@ import Testing
         currentEvaluation: nil,
         documentGeneration: DocumentGeneration(),
         objectRegistry: .builtIn,
-        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard)
+        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard),
+        workspaceState: WorkspaceState()
     )
 
     let state = try #require(try builder.surfaceBoundaryContinuityStateResult().get())
@@ -390,7 +400,7 @@ private func workspaceSurfaceInspectorTrimReference(
     edgeIndex: Int,
     in document: DesignDocument
 ) throws -> SelectionReference {
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let source = try #require(summary.sources.first { $0.featureID == featureID.description })
     let trimLoop = try #require(source.patches.first?.trimLoops.first)
     guard trimLoop.selectionReferences.indices.contains(edgeIndex) else {

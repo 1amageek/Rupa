@@ -101,7 +101,8 @@ struct SurfaceControlPointInspectorState: Equatable, Sendable {
     init?(
         selectedReferences: [SelectionReference],
         summaryResult: SurfaceSourceSummaryResult,
-        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay] = [:]
+        surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay]? = nil,
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]? = nil
     ) {
         guard !selectedReferences.isEmpty else {
             return nil
@@ -109,6 +110,7 @@ struct SurfaceControlPointInspectorState: Equatable, Sendable {
 
         let entriesByReference = Self.entriesByReference(
             from: summaryResult,
+            surfaceControlPointDisplays: surfaceControlPointDisplays,
             surfaceFrameDisplays: surfaceFrameDisplays
         )
         var selectedEntries: [Entry] = []
@@ -287,7 +289,8 @@ struct SurfaceControlPointInspectorState: Equatable, Sendable {
 
     private static func entriesByReference(
         from summary: SurfaceSourceSummaryResult,
-        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]
+        surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay]?,
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]?
     ) -> [SelectionReference: Entry] {
         var entries: [SelectionReference: Entry] = [:]
 
@@ -319,7 +322,11 @@ struct SurfaceControlPointInspectorState: Equatable, Sendable {
                             controlPoint: controlPoint
                         ),
                         selectionReference: controlPoint.selectionReference,
-                        isPointDisplayVisible: controlPoint.isPointDisplayVisible,
+                        isPointDisplayVisible: pointDisplayVisible(
+                            for: controlPoint.selectionReference,
+                            surfaceControlPointDisplays: surfaceControlPointDisplays,
+                            summaryVisibility: controlPoint.isPointDisplayVisible
+                        ),
                         isFrameDisplayVisible: frameDisplayVisible(
                             for: controlPoint.selectionReference,
                             surfaceFrameDisplays: surfaceFrameDisplays
@@ -347,13 +354,32 @@ struct SurfaceControlPointInspectorState: Equatable, Sendable {
 
     private static func frameDisplayVisible(
         for selectionReference: SelectionReference,
-        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]?
     ) -> Bool {
+        guard let surfaceFrameDisplays else {
+            return false
+        }
         do {
             let displayID = try SurfaceFrameDisplayID(
                 query: SurfaceFrameQuery(selectionReference: selectionReference)
             )
             return surfaceFrameDisplays[displayID]?.isVisible == true
+        } catch {
+            return false
+        }
+    }
+
+    private static func pointDisplayVisible(
+        for selectionReference: SelectionReference,
+        surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay]?,
+        summaryVisibility: Bool
+    ) -> Bool {
+        guard let surfaceControlPointDisplays else {
+            return summaryVisibility
+        }
+        do {
+            let displayID = try SurfaceControlPointDisplayID(selectionReference: selectionReference)
+            return surfaceControlPointDisplays[displayID]?.isVisible == true
         } catch {
             return false
         }

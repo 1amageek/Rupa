@@ -2,7 +2,7 @@ import Foundation
 import SwiftCAD
 import RupaCoreTypes
 
-public struct CommandExecutionResult: Equatable, Sendable {
+public struct CommandExecutionResult: Codable, Equatable, Sendable {
     public var commandName: String
     public var generation: DocumentGeneration
     public var didMutate: Bool
@@ -11,6 +11,7 @@ public struct CommandExecutionResult: Equatable, Sendable {
     public var createdFeatureIDs: [FeatureID]
     public var curveRebuildReport: CurveRebuildReport?
     public var addedSelectionDimensionID: SelectionDimensionID?
+    public var createdConstructionPlaneID: ConstructionPlaneSourceID?
 
     public init(
         commandName: String,
@@ -20,7 +21,8 @@ public struct CommandExecutionResult: Equatable, Sendable {
         primaryFeatureID: FeatureID? = nil,
         createdFeatureIDs: [FeatureID] = [],
         curveRebuildReport: CurveRebuildReport? = nil,
-        addedSelectionDimensionID: SelectionDimensionID? = nil
+        addedSelectionDimensionID: SelectionDimensionID? = nil,
+        createdConstructionPlaneID: ConstructionPlaneSourceID? = nil
     ) {
         self.commandName = commandName
         self.generation = generation
@@ -30,5 +32,6 @@ public struct CommandExecutionResult: Equatable, Sendable {
         self.createdFeatureIDs = createdFeatureIDs
         self.curveRebuildReport = curveRebuildReport
         self.addedSelectionDimensionID = addedSelectionDimensionID
+        self.createdConstructionPlaneID = createdConstructionPlaneID
     }
 }

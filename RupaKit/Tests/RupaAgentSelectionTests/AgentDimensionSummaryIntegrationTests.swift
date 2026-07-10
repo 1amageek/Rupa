@@ -686,8 +686,8 @@ import SwiftCAD
         #expect(Bool(false))
         return
     }
-    let baseSummary = try SketchEntitySummaryService().summarize(document: session.document)
-    let bounds = try #require(agentSketchSummaryBounds(baseSummary))
+    let baseSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
+    let bounds = try #require(agentSketchBounds(baseSummary))
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodyNodeID = try #require(agentSceneNodeID(for: bodyFeatureID, in: session.document))
     let filletResponse = server.handle(
@@ -758,10 +758,10 @@ import SwiftCAD
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedArc = try #require(updatedSummary.entries.first { $0.entityID == editableRadius.entityID })
     let updatedDimension = try #require(updatedArc.dimensions.first { $0.kind == "radius" })
-    let updatedTopology = try TopologySummaryService().summarize(document: session.document)
+    let updatedTopology = try TopologySnapshotService().snapshot(document: session.document)
     let updatedGeneratedArc = try #require(updatedTopology.entries.first {
         guard let radius = $0.curveRadius else {
             return false
@@ -811,8 +811,8 @@ import SwiftCAD
         #expect(Bool(false))
         return
     }
-    let baseSummary = try SketchEntitySummaryService().summarize(document: session.document)
-    let bounds = try #require(agentSketchSummaryBounds(baseSummary))
+    let baseSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
+    let bounds = try #require(agentSketchBounds(baseSummary))
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodyNodeID = try #require(agentSceneNodeID(for: bodyFeatureID, in: session.document))
     let filletResponse = server.handle(
@@ -869,12 +869,12 @@ import SwiftCAD
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedArc = try #require(updatedSummary.entries.first {
         $0.entityKind == "arc" &&
             abs(($0.radius ?? -1.0) - 0.002) < 1.0e-12
     })
-    let updatedTopology = try TopologySummaryService().summarize(document: session.document)
+    let updatedTopology = try TopologySnapshotService().snapshot(document: session.document)
     let updatedGeneratedArc = try #require(updatedTopology.entries.first {
         guard let radius = $0.curveRadius else {
             return false

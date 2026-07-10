@@ -10,7 +10,6 @@ import SwiftCAD
 @MainActor
 @Test func agentAddsAndEvaluatesPersistentSelectionDimension() async throws {
     var document = DesignDocument.empty()
-    document.setDisplayUnit(.millimeter)
     let featureID = try document.createLineSketch(
         name: "Agent Line",
         plane: .xy,

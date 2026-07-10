@@ -114,7 +114,7 @@ extension DesignDocument {
                 message: "\(operationName) requires generated topology targets for non-rectangle profile loops."
             )
         }
-        let topology = try TopologySummaryService().summarize(
+        let topology = try TopologySnapshotService().snapshot(
             document: self,
             objectRegistry: objectRegistry
         )

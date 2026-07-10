@@ -3,6 +3,7 @@ import Darwin
 import Foundation
 import RupaAutomation
 import RupaCore
+import RupaDomainFoundation
 import SwiftCAD
 @testable import RupaAgent
 
@@ -165,6 +166,129 @@ import SwiftCAD
     #expect(Set(descriptorNames).count == descriptorNames.count)
 }
 
+@Test func agentCapabilityDescriptorsIncludeInjectedDomainCapabilities() async throws {
+    let namespace: SemanticNamespaceID = "architecture"
+    let capabilityID: DomainCapabilityID = "architecture.createWall"
+    let registry = try DomainRegistry(
+        namespaces: [
+            DomainNamespaceRegistration(
+                namespace: namespace,
+                supportedSchemaVersions: [SemanticSchemaVersion(major: 0, minor: 1, patch: 0)]
+            ),
+        ],
+        capabilityDescriptors: [
+            DomainCapabilityDescriptor(
+                id: capabilityID,
+                namespace: namespace,
+                name: "Create Wall",
+                summary: "Create a semantic wall projection.",
+                effect: .documentMutation,
+                resultKind: .documentTransaction,
+                supportsDryRun: true,
+                targetKinds: ["document", "level", "room"],
+                parameters: [
+                    DomainCommandParameterDescriptor(
+                        id: "height",
+                        payloadPath: ["heightMeters"],
+                        label: "Height",
+                        summary: "Wall height in meters.",
+                        kind: .length,
+                        unit: .meter,
+                        isRequired: true,
+                        minimumValue: 0.000_001
+                    ),
+                ],
+                failureMode: "Rejects invalid wall baselines before mutation."
+            ),
+        ],
+        commandLowerings: [
+            AgentCapabilityFixtureDomainLowering(capabilityID: capabilityID),
+        ]
+    )
+    let controller = AgentCommandController(domainRegistry: registry)
+    let descriptor = try #require(
+        controller.capabilityDescriptors().first { $0.name == capabilityID.rawValue }
+    )
+
+    #expect(controller.capabilities().contains(capabilityID.rawValue))
+    #expect(descriptor.category == .domain)
+    #expect(descriptor.access == .domainCapability)
+    #expect(descriptor.stateEffect == .sourceMutation)
+    #expect(descriptor.requiresExpectedSourceGeneration)
+    #expect(!descriptor.requiresExpectedWorkspaceRevision)
+    #expect(descriptor.supportsDryRun)
+    #expect(descriptor.domainContract?.effect == .documentMutation)
+    #expect(descriptor.domainContract?.resultKind == .documentTransaction)
+    #expect(descriptor.domainContract?.determinism == .deterministic)
+    #expect(descriptor.domainContract?.knownErrorCodes == ["commandInvalid"])
+    #expect(descriptor.targets == [.document])
+    #expect(descriptor.optionMatrix.contains { axis in
+        axis.name == "domain" && axis.supportedValues == [namespace.rawValue]
+    })
+    #expect(descriptor.optionMatrix.contains { axis in
+        axis.name == "domainTargetKinds" && axis.supportedValues == ["document", "level", "room"]
+    })
+    #expect(descriptor.inputParameters.map(\.id) == ["height"])
+    #expect(descriptor.inputParameters.first?.kind == .length)
+    #expect(descriptor.inputParameters.first?.unit == .meter)
+    #expect(descriptor.inputParameters.first?.payloadPath == ["heightMeters"])
+}
+
+@Test func agentReadOnlyDomainCapabilitiesRequireGenerationAndExposeDryRunSupport() async throws {
+    let capabilityID: DomainCapabilityID = "manufacturing.validate"
+    let registry = try DomainRegistry(
+        namespaces: [
+            DomainNamespaceRegistration(
+                namespace: "manufacturing",
+                supportedSchemaVersions: [SemanticSchemaVersion(major: 0, minor: 1, patch: 0)]
+            ),
+        ],
+        capabilityDescriptors: [
+            DomainCapabilityDescriptor(
+                id: capabilityID,
+                namespace: "manufacturing",
+                name: "Validate",
+                summary: "Validates manufacturing state.",
+                effect: .query,
+                resultKind: .validationReport,
+                supportsDryRun: true,
+                resultFidelity: .sampledApproximation,
+                targetKinds: ["document"],
+                failureMode: "Rejects stale generations."
+            ),
+        ],
+        commandLowerings: [
+            AgentCapabilityFixtureDomainLowering(capabilityID: capabilityID),
+        ]
+    )
+    let descriptor = try #require(
+        AgentCommandController(domainRegistry: registry)
+            .capabilityDescriptors()
+            .first { $0.name == capabilityID.rawValue }
+    )
+
+    #expect(descriptor.stateEffect == .readOnly)
+    #expect(descriptor.requiresExpectedSourceGeneration)
+    #expect(!descriptor.requiresExpectedWorkspaceRevision)
+    #expect(descriptor.supportsDryRun)
+    #expect(descriptor.domainContract?.effect == .query)
+    #expect(descriptor.domainContract?.resultKind == .validationReport)
+    #expect(descriptor.domainContract?.resultFidelity == .sampledApproximation)
+}
+
+private struct AgentCapabilityFixtureDomainLowering: DomainCommandLowering {
+    var capabilityID: DomainCapabilityID
+
+    func lower(_ request: DomainCommandRequest) throws -> DomainCommandPlan {
+        .automationBatch(
+            AutomationBatch(
+                commands: [.renameDocument(name: "Agent Capability Fixture")],
+                expectedGeneration: request.expectedGeneration
+            )
+        )
+    }
+}
+
 @Test func agentCapabilityDescriptorsExposeDiscoveryAndMutationContracts() async throws {
     let descriptors = AgentCommandController().capabilityDescriptors()
     let displayUnit = try #require(descriptors.first { $0.name == "setDisplayUnit" })
@@ -295,17 +419,20 @@ import SwiftCAD
     )
 
     #expect(displayUnit.category == .document)
-    #expect(displayUnit.mutatesDocument)
+    #expect(displayUnit.stateEffect == .workspaceMutation)
+    #expect(displayUnit.requiresExpectedWorkspaceRevision)
     #expect(displayUnit.summary.contains("without changing the physical ruler distances"))
     #expect(displayUnit.failureMode.contains("preserves the current minor tick"))
     #expect(rulerConfiguration.category == .document)
-    #expect(rulerConfiguration.mutatesDocument)
-    #expect(rulerConfiguration.summary.contains("visible workspace span"))
+    #expect(rulerConfiguration.stateEffect == .workspaceMutation)
+    #expect(rulerConfiguration.requiresExpectedWorkspaceRevision)
+    #expect(rulerConfiguration.summary.contains("visible span"))
     #expect(rulerConfiguration.failureMode.contains("workspace scale range"))
     #expect(rulerConfiguration.optionMatrix.contains { $0.name == "rulerDistanceMeters" })
     #expect(viewportGridSettings.category == .document)
     #expect(viewportGridSettings.access == .automationCommand)
-    #expect(viewportGridSettings.mutatesDocument)
+    #expect(viewportGridSettings.stateEffect == .workspaceMutation)
+    #expect(viewportGridSettings.requiresExpectedWorkspaceRevision)
     #expect(viewportGridSettings.targets == [.document])
     #expect(viewportGridSettings.summary.contains("visual spacing"))
     #expect(viewportGridSettings.summary.contains("snap distances"))
@@ -318,7 +445,8 @@ import SwiftCAD
             && axis.notes.contains { $0.contains("only changes viewport grid display density") }
     })
     #expect(workspaceScalePreset.category == .document)
-    #expect(workspaceScalePreset.mutatesDocument)
+    #expect(workspaceScalePreset.stateEffect == .workspaceMutation)
+    #expect(workspaceScalePreset.requiresExpectedWorkspaceRevision)
     #expect(workspaceScalePreset.summary.contains("regional planning"))
     #expect(workspaceScalePreset.optionMatrix.contains { axis in
         axis.name == "preset" && axis.supportedValues.contains(WorkspaceScalePreset.regionalPlanning.rawValue)
@@ -340,7 +468,8 @@ import SwiftCAD
     })
     #expect(workspaceScaleFit.category == .document)
     #expect(workspaceScaleFit.access == .automationCommand)
-    #expect(workspaceScaleFit.mutatesDocument)
+    #expect(workspaceScaleFit.stateEffect == .workspaceMutation)
+    #expect(workspaceScaleFit.requiresExpectedWorkspaceRevision)
     #expect(workspaceScaleFit.targets == [.document])
     #expect(workspaceScaleFit.summary.contains("current model size"))
     #expect(workspaceScaleFit.failureMode.contains("leaves the document unchanged"))
@@ -355,7 +484,7 @@ import SwiftCAD
     })
     #expect(workspaceOriginRebase.category == .document)
     #expect(workspaceOriginRebase.access == .automationCommand)
-    #expect(workspaceOriginRebase.mutatesDocument)
+    #expect(workspaceOriginRebase.stateEffect == .sourceMutation)
     #expect(workspaceOriginRebase.targets == [.document])
     #expect(workspaceOriginRebase.summary.contains("local precision-safe workspace"))
     #expect(workspaceOriginRebase.failureMode.contains("standard-plane"))
@@ -405,14 +534,14 @@ import SwiftCAD
     #expect(objectDimensionExpression.access == .agentRequest)
     #expect(objectDimensionExpression.discovery.contains(.objectDimensionSummary))
     #expect(objectDimensionExpression.targets == [.body, .face, .edge])
-    #expect(objectDimensionExpression.mutatesDocument)
+    #expect(objectDimensionExpression.stateEffect == .sourceMutation)
     #expect(sketchEntityDimensionExpression.access == .agentRequest)
     #expect(sketchEntityDimensionExpression.discovery.contains(.sketchDimensionSummary))
     #expect(sketchEntityDimensionExpression.targets == [.sketchEntity])
-    #expect(sketchEntityDimensionExpression.mutatesDocument)
+    #expect(sketchEntityDimensionExpression.stateEffect == .sourceMutation)
     #expect(selectionDimensionTargetExpression.access == .agentRequest)
     #expect(selectionDimensionTargetExpression.discovery.contains(.selectionDimensionEvaluation))
-    #expect(selectionDimensionTargetExpression.mutatesDocument)
+    #expect(selectionDimensionTargetExpression.stateEffect == .sourceMutation)
     let constructionPlaneSetActive = try #require(descriptors.first { $0.name == "setActiveConstructionPlane" })
     let constructionPlaneRename = try #require(descriptors.first { $0.name == "renameConstructionPlane" })
     let constructionPlaneEdit = try #require(descriptors.first { $0.name == "setConstructionPlane" })
@@ -448,7 +577,7 @@ import SwiftCAD
     let createSketch = try #require(descriptors.first { $0.name == "createSketch" })
 
     #expect(fillet.category == .directEditing)
-    #expect(fillet.mutatesDocument)
+    #expect(fillet.stateEffect == .sourceMutation)
     #expect(fillet.access == .automationCommand)
     #expect(fillet.discovery.contains(.topologySummary))
     #expect(fillet.targets == [.edge])
@@ -459,7 +588,7 @@ import SwiftCAD
     #expect(faceOffset.targets == [.face])
 
     #expect(faceDraft.category == .directEditing)
-    #expect(faceDraft.mutatesDocument)
+    #expect(faceDraft.stateEffect == .sourceMutation)
     #expect(faceDraft.access == .automationCommand)
     #expect(faceDraft.discovery.contains(.topologySummary))
     #expect(faceDraft.targets == [.face])
@@ -471,14 +600,14 @@ import SwiftCAD
 
     #expect(selection.category == .selection)
     #expect(selection.access == .agentRequest)
-    #expect(selection.mutatesDocument == false)
+    #expect(selection.stateEffect == .readOnly)
     #expect(selection.discovery.contains(.topologySummary))
     #expect(selection.discovery.contains(.sketchEntitySummary))
     #expect(selection.targets.contains(.face))
 
     #expect(referenceSelection.category == .selection)
     #expect(referenceSelection.access == .agentRequest)
-    #expect(referenceSelection.mutatesDocument == false)
+    #expect(referenceSelection.stateEffect == .readOnly)
     #expect(referenceSelection.discovery.contains(.surfaceSourceSummary))
     #expect(referenceSelection.discovery.contains(.selectionMeasurement))
     #expect(referenceSelection.targets == [
@@ -492,7 +621,7 @@ import SwiftCAD
     #expect(referenceSelection.failureMode.contains("references incompatible"))
 
     #expect(faceKnife.category == .directEditing)
-    #expect(faceKnife.mutatesDocument)
+    #expect(faceKnife.stateEffect == .sourceMutation)
     #expect(faceKnife.access == .automationCommand)
     #expect(faceKnife.discovery.contains(.topologySummary))
     #expect(faceKnife.discovery.contains(.snapResolution))
@@ -500,7 +629,7 @@ import SwiftCAD
     #expect(faceKnife.failureMode.contains("off-plane"))
 
     #expect(projectCurves.category == .sketch)
-    #expect(projectCurves.mutatesDocument)
+    #expect(projectCurves.stateEffect == .sourceMutation)
     #expect(projectCurves.access == .automationCommand)
     #expect(projectCurves.discovery.contains(.sketchEntitySummary))
     #expect(projectCurves.discovery.contains(.topologySummary))
@@ -513,7 +642,7 @@ import SwiftCAD
     #expect(projectCurves.failureMode.contains("nonparallel source or generated circular"))
 
     #expect(projectCurvesToFace.category == .sketch)
-    #expect(projectCurvesToFace.mutatesDocument)
+    #expect(projectCurvesToFace.stateEffect == .sourceMutation)
     #expect(projectCurvesToFace.access == .automationCommand)
     #expect(projectCurvesToFace.discovery.contains(.sketchEntitySummary))
     #expect(projectCurvesToFace.discovery.contains(.topologySummary))
@@ -523,7 +652,7 @@ import SwiftCAD
     #expect(projectCurvesToFace.failureMode.contains("non-planar generated faces"))
 
     #expect(projectOutlines.category == .sketch)
-    #expect(projectOutlines.mutatesDocument)
+    #expect(projectOutlines.stateEffect == .sourceMutation)
     #expect(projectOutlines.access == .automationCommand)
     #expect(projectOutlines.discovery.contains(.topologySummary))
     #expect(projectOutlines.discovery.contains(.constructionPlaneSummary))
@@ -542,14 +671,14 @@ import SwiftCAD
     #expect(sketchConstraint.summary.contains("smooth spline endpoints"))
 
     #expect(sketchConstraintRemoval.category == .sourceCurveEditing)
-    #expect(sketchConstraintRemoval.mutatesDocument)
+    #expect(sketchConstraintRemoval.stateEffect == .sourceMutation)
     #expect(sketchConstraintRemoval.discovery.contains(.sketchEntitySummary))
     #expect(sketchConstraintRemoval.targets == [.sketchEntity])
     #expect(sketchConstraintRemoval.summary.contains("Remove one existing sketch constraint"))
     #expect(sketchConstraintRemoval.failureMode.contains("nonexistent constraints"))
 
     #expect(bridgeCurve.category == .sourceCurveEditing)
-    #expect(bridgeCurve.mutatesDocument)
+    #expect(bridgeCurve.stateEffect == .sourceMutation)
     #expect(bridgeCurve.discovery.contains(.sketchEntitySummary))
     #expect(bridgeCurve.discovery.contains(.curveAnalysis))
     #expect(bridgeCurve.targets == [.sketchEntity])
@@ -558,7 +687,7 @@ import SwiftCAD
     #expect(bridgeCurve.summary.contains("G3"))
 
     #expect(bridgeCurveUpdate.category == .sourceCurveEditing)
-    #expect(bridgeCurveUpdate.mutatesDocument)
+    #expect(bridgeCurveUpdate.stateEffect == .sourceMutation)
     #expect(bridgeCurveUpdate.discovery.contains(.sketchEntitySummary))
     #expect(bridgeCurveUpdate.discovery.contains(.curveAnalysis))
     #expect(bridgeCurveUpdate.targets == [.sketchEntity])
@@ -566,7 +695,7 @@ import SwiftCAD
     #expect(bridgeCurveUpdate.summary.contains("endpoint-specific G0/G1/G2"))
 
     #expect(curveOffset.category == .sourceCurveEditing)
-    #expect(curveOffset.mutatesDocument)
+    #expect(curveOffset.stateEffect == .sourceMutation)
     #expect(curveOffset.access == .automationCommand)
     #expect(curveOffset.discovery.contains(.sketchEntitySummary))
     #expect(curveOffset.discovery.contains(.topologySummary))
@@ -589,7 +718,7 @@ import SwiftCAD
     #expect(curveOffset.failureMode.contains("branched"))
 
     #expect(regionOffset.category == .sourceCurveEditing)
-    #expect(regionOffset.mutatesDocument)
+    #expect(regionOffset.stateEffect == .sourceMutation)
     #expect(regionOffset.access == .automationCommand)
     #expect(regionOffset.discovery.contains(.sketchEntitySummary))
     #expect(regionOffset.targets == [.region])
@@ -597,14 +726,14 @@ import SwiftCAD
     #expect(regionOffset.failureMode.contains("polygon union"))
 
     #expect(sketchVertexOffset.category == .sourceCurveEditing)
-    #expect(sketchVertexOffset.mutatesDocument)
+    #expect(sketchVertexOffset.stateEffect == .sourceMutation)
     #expect(sketchVertexOffset.discovery.contains(.sketchEntitySummary))
     #expect(sketchVertexOffset.targets == [.sketchEntity])
     #expect(sketchVertexOffset.summary.contains("line/arc sketch corner"))
     #expect(sketchVertexOffset.failureMode.contains("horizontal/vertical"))
 
     #expect(sketchCornerTreatment.category == .sourceCurveEditing)
-    #expect(sketchCornerTreatment.mutatesDocument)
+    #expect(sketchCornerTreatment.stateEffect == .sourceMutation)
     #expect(sketchCornerTreatment.access == .automationCommand)
     #expect(sketchCornerTreatment.discovery.contains(.sketchEntitySummary))
     #expect(sketchCornerTreatment.discovery.contains(.snapResolution))
@@ -614,7 +743,7 @@ import SwiftCAD
     #expect(sketchCornerTreatment.failureMode.contains("non-line/arc corners"))
 
     #expect(slotSketch.category == .sourceCurveEditing)
-    #expect(slotSketch.mutatesDocument)
+    #expect(slotSketch.stateEffect == .sourceMutation)
     #expect(slotSketch.discovery.contains(.sketchEntitySummary))
     #expect(slotSketch.discovery.contains(.curveAnalysis))
     #expect(slotSketch.targets == [.sketchEntity])
@@ -629,14 +758,14 @@ import SwiftCAD
     #expect(slotSketch.failureMode.contains("inner radius"))
 
     #expect(createSketch.category == .sketch)
-    #expect(createSketch.mutatesDocument)
+    #expect(createSketch.stateEffect == .sourceMutation)
     #expect(createSketch.targets == [.document])
     #expect(createSketch.summary.contains("multi-entity curve chains"))
     #expect(createSketch.failureMode.contains("disconnected"))
     #expect(createSketch.failureMode.contains("branched"))
 
     #expect(revolve.category == .solid)
-    #expect(revolve.mutatesDocument)
+    #expect(revolve.stateEffect == .sourceMutation)
     #expect(revolve.access == .automationCommand)
     #expect(revolve.discovery.contains(.sketchEntitySummary))
     #expect(revolve.discovery.contains(.topologySummary))
@@ -654,7 +783,7 @@ import SwiftCAD
     #expect(revolveAngleAxis.notes.contains { $0.contains("partial angles") })
 
     #expect(sweep.category == .solid)
-    #expect(sweep.mutatesDocument)
+    #expect(sweep.stateEffect == .sourceMutation)
     #expect(sweep.access == .automationCommand)
     #expect(sweep.discovery.contains(.sketchEntitySummary))
     #expect(sweep.targets.contains(.profile))
@@ -710,7 +839,7 @@ import SwiftCAD
     #expect(sweepSimplifyAxis.supportedValues == ["false"])
 
     #expect(loft.category == .solid)
-    #expect(loft.mutatesDocument)
+    #expect(loft.stateEffect == .sourceMutation)
     #expect(loft.access == .automationCommand)
     #expect(loft.discovery.contains(.sketchEntitySummary))
     #expect(loft.targets == [.profile, .sketchEntity])
@@ -780,7 +909,7 @@ import SwiftCAD
     #expect(loftLoopAxis.notes.contains { $0.contains("requires sheet resultKind") })
 
     #expect(boolean.category == .solid)
-    #expect(boolean.mutatesDocument)
+    #expect(boolean.stateEffect == .sourceMutation)
     #expect(boolean.access == .automationCommand)
     #expect(boolean.discovery.contains(.topologySummary))
     #expect(boolean.discovery.contains(.booleanEvaluationPlan))
@@ -803,7 +932,7 @@ import SwiftCAD
     #expect(booleanKeepToolsAxis.notes.contains { $0.contains("adds the Boolean result body") })
 
     #expect(booleanEvaluationPlan.category == .read)
-    #expect(booleanEvaluationPlan.mutatesDocument == false)
+    #expect(booleanEvaluationPlan.stateEffect == .readOnly)
     #expect(booleanEvaluationPlan.access == .agentRequest)
     #expect(booleanEvaluationPlan.discovery.contains(.topologySummary))
     #expect(booleanEvaluationPlan.discovery.contains(.booleanEvaluationPlan))
@@ -838,7 +967,7 @@ import SwiftCAD
     #expect(booleanPlanKeepToolsAxis.supportedValues == ["false", "true"])
 
     #expect(sweepEvaluationPlan.category == .read)
-    #expect(sweepEvaluationPlan.mutatesDocument == false)
+    #expect(sweepEvaluationPlan.stateEffect == .readOnly)
     #expect(sweepEvaluationPlan.access == .agentRequest)
     #expect(sweepEvaluationPlan.discovery.contains(.sketchEntitySummary))
     #expect(sweepEvaluationPlan.discovery.contains(.topologySummary))
@@ -868,7 +997,7 @@ import SwiftCAD
     #expect(sweepPlanGuideAxis.supportedValues.contains("curveContact"))
 
     #expect(bSplineSurface.category == .solid)
-    #expect(bSplineSurface.mutatesDocument)
+    #expect(bSplineSurface.stateEffect == .sourceMutation)
     #expect(bSplineSurface.access == .automationCommand)
     #expect(bSplineSurface.discovery.contains(.surfaceSourceSummary))
     #expect(bSplineSurface.discovery.contains(.surfaceFrames))
@@ -881,7 +1010,7 @@ import SwiftCAD
     #expect(bSplineSurface.failureMode.contains("control-net dimensions"))
 
     #expect(polySpline.category == .solid)
-    #expect(polySpline.mutatesDocument)
+    #expect(polySpline.stateEffect == .sourceMutation)
     #expect(polySpline.access == .automationCommand)
     #expect(polySpline.discovery.contains(.meshSummary))
     #expect(polySpline.discovery.contains(.topologySummary))
@@ -894,7 +1023,7 @@ import SwiftCAD
     #expect(polySpline.discovery.contains(.polySplineMeshAnalysis))
 
     #expect(polySplineVertexMove.category == .solid)
-    #expect(polySplineVertexMove.mutatesDocument)
+    #expect(polySplineVertexMove.stateEffect == .sourceMutation)
     #expect(polySplineVertexMove.access == .automationCommand)
     #expect(polySplineVertexMove.discovery.contains(.topologySummary))
     #expect(polySplineVertexMove.discovery.contains(.surfaceAnalysis))
@@ -904,7 +1033,7 @@ import SwiftCAD
     #expect(polySplineVertexMove.failureMode.contains("selected boundary role"))
 
     #expect(surfaceControlPointMove.category == .solid)
-    #expect(surfaceControlPointMove.mutatesDocument)
+    #expect(surfaceControlPointMove.stateEffect == .sourceMutation)
     #expect(surfaceControlPointMove.access == .automationCommand)
     #expect(surfaceControlPointMove.discovery.contains(.surfaceSourceSummary))
     #expect(surfaceControlPointMove.discovery.contains(.selectionMeasurement))
@@ -917,7 +1046,7 @@ import SwiftCAD
     #expect(surfaceControlPointMove.failureMode.contains("strict interior PolySpline B-spline control point"))
 
     #expect(surfaceControlPointFrameMove.category == .solid)
-    #expect(surfaceControlPointFrameMove.mutatesDocument)
+    #expect(surfaceControlPointFrameMove.stateEffect == .sourceMutation)
     #expect(surfaceControlPointFrameMove.access == .automationCommand)
     #expect(surfaceControlPointFrameMove.discovery.contains(.surfaceSourceSummary))
     #expect(surfaceControlPointFrameMove.discovery.contains(.surfaceFrames))
@@ -930,7 +1059,7 @@ import SwiftCAD
     #expect(surfaceControlPointFrameMove.failureMode.contains("unresolved frames"))
 
     #expect(surfaceControlPointWeight.category == .solid)
-    #expect(surfaceControlPointWeight.mutatesDocument)
+    #expect(surfaceControlPointWeight.stateEffect == .sourceMutation)
     #expect(surfaceControlPointWeight.access == .automationCommand)
     #expect(surfaceControlPointWeight.discovery.contains(.surfaceSourceSummary))
     #expect(surfaceControlPointWeight.discovery.contains(.surfaceAnalysis))
@@ -942,7 +1071,7 @@ import SwiftCAD
     #expect(surfaceControlPointWeight.failureMode.contains("non-positive weights"))
 
     #expect(surfaceKnotValue.category == .solid)
-    #expect(surfaceKnotValue.mutatesDocument)
+    #expect(surfaceKnotValue.stateEffect == .sourceMutation)
     #expect(surfaceKnotValue.access == .automationCommand)
     #expect(surfaceKnotValue.discovery.contains(.surfaceSourceSummary))
     #expect(surfaceKnotValue.discovery.contains(.surfaceFrames))
@@ -954,7 +1083,7 @@ import SwiftCAD
     #expect(surfaceKnotValue.failureMode.contains("strict neighboring knot bounds"))
 
     #expect(surfaceKnotInsertion.category == .solid)
-    #expect(surfaceKnotInsertion.mutatesDocument)
+    #expect(surfaceKnotInsertion.stateEffect == .sourceMutation)
     #expect(surfaceKnotInsertion.access == .automationCommand)
     #expect(surfaceKnotInsertion.discovery.contains(.surfaceSourceSummary))
     #expect(surfaceKnotInsertion.discovery.contains(.surfaceFrames))
@@ -967,7 +1096,7 @@ import SwiftCAD
     #expect(surfaceKnotInsertion.failureMode.contains("saturated knot multiplicity"))
 
     #expect(surfaceSpanSplit.category == .solid)
-    #expect(surfaceSpanSplit.mutatesDocument)
+    #expect(surfaceSpanSplit.stateEffect == .sourceMutation)
     #expect(surfaceSpanSplit.access == .automationCommand)
     #expect(surfaceSpanSplit.discovery.contains(.surfaceSourceSummary))
     #expect(surfaceSpanSplit.discovery.contains(.surfaceFrames))
@@ -978,7 +1107,7 @@ import SwiftCAD
     #expect(surfaceSpanSplit.failureMode.contains("strictly between 0 and 1"))
 
     #expect(surfaceKnotMultiplicity.category == .solid)
-    #expect(surfaceKnotMultiplicity.mutatesDocument)
+    #expect(surfaceKnotMultiplicity.stateEffect == .sourceMutation)
     #expect(surfaceKnotMultiplicity.access == .automationCommand)
     #expect(surfaceKnotMultiplicity.discovery.contains(.surfaceSourceSummary))
     #expect(surfaceKnotMultiplicity.discovery.contains(.surfaceFrames))
@@ -991,7 +1120,7 @@ import SwiftCAD
     #expect(surfaceKnotMultiplicity.failureMode.contains("surface degree"))
 
     #expect(surfaceTrimDomain.category == .solid)
-    #expect(surfaceTrimDomain.mutatesDocument)
+    #expect(surfaceTrimDomain.stateEffect == .sourceMutation)
     #expect(surfaceTrimDomain.access == .automationCommand)
     #expect(surfaceTrimDomain.discovery.contains(.surfaceSourceSummary))
     #expect(surfaceTrimDomain.discovery.contains(.surfaceFrames))
@@ -1003,7 +1132,7 @@ import SwiftCAD
     #expect(surfaceTrimDomain.failureMode.contains("invalid rebuilt trimmed sheet topology"))
 
     #expect(surfaceTrimLoops.category == .solid)
-    #expect(surfaceTrimLoops.mutatesDocument)
+    #expect(surfaceTrimLoops.stateEffect == .sourceMutation)
     #expect(surfaceTrimLoops.access == .automationCommand)
     #expect(surfaceTrimLoops.discovery.contains(.surfaceSourceSummary))
     #expect(surfaceTrimLoops.discovery.contains(.surfaceFrames))
@@ -1017,7 +1146,7 @@ import SwiftCAD
     #expect(surfaceTrimLoops.failureMode.contains("continuity matching on authored trim loops"))
 
     #expect(surfaceTrimEndpoint.category == .solid)
-    #expect(surfaceTrimEndpoint.mutatesDocument)
+    #expect(surfaceTrimEndpoint.stateEffect == .sourceMutation)
     #expect(surfaceTrimEndpoint.access == .automationCommand)
     #expect(surfaceTrimEndpoint.discovery.contains(.surfaceSourceSummary))
     #expect(surfaceTrimEndpoint.discovery.contains(.surfaceFrames))
@@ -1030,7 +1159,7 @@ import SwiftCAD
     #expect(surfaceTrimEndpoint.failureMode.contains("invalid closed-loop rebuilds"))
 
     #expect(surfaceTrimControlPoint.category == .solid)
-    #expect(surfaceTrimControlPoint.mutatesDocument)
+    #expect(surfaceTrimControlPoint.stateEffect == .sourceMutation)
     #expect(surfaceTrimControlPoint.access == .automationCommand)
     #expect(surfaceTrimControlPoint.discovery.contains(.surfaceSourceSummary))
     #expect(surfaceTrimControlPoint.discovery.contains(.surfaceFrames))
@@ -1043,7 +1172,7 @@ import SwiftCAD
     #expect(surfaceTrimControlPoint.failureMode.contains("moveSurfaceTrimEndpoint"))
 
     #expect(surfaceTrimControlPointWeight.category == .solid)
-    #expect(surfaceTrimControlPointWeight.mutatesDocument)
+    #expect(surfaceTrimControlPointWeight.stateEffect == .sourceMutation)
     #expect(surfaceTrimControlPointWeight.access == .automationCommand)
     #expect(surfaceTrimControlPointWeight.discovery.contains(.surfaceSourceSummary))
     #expect(surfaceTrimControlPointWeight.discovery.contains(.surfaceFrames))
@@ -1056,7 +1185,7 @@ import SwiftCAD
     #expect(surfaceTrimControlPointWeight.failureMode.contains("constant and polyline trim curves"))
 
     #expect(surfaceTrimKnotInsertion.category == .solid)
-    #expect(surfaceTrimKnotInsertion.mutatesDocument)
+    #expect(surfaceTrimKnotInsertion.stateEffect == .sourceMutation)
     #expect(surfaceTrimKnotInsertion.access == .automationCommand)
     #expect(surfaceTrimKnotInsertion.discovery.contains(.surfaceSourceSummary))
     #expect(surfaceTrimKnotInsertion.discovery.contains(.surfaceFrames))
@@ -1069,7 +1198,7 @@ import SwiftCAD
     #expect(surfaceTrimKnotInsertion.failureMode.contains("constant and polyline trim curves"))
 
     #expect(surfaceTrimKnotValue.category == .solid)
-    #expect(surfaceTrimKnotValue.mutatesDocument)
+    #expect(surfaceTrimKnotValue.stateEffect == .sourceMutation)
     #expect(surfaceTrimKnotValue.access == .automationCommand)
     #expect(surfaceTrimKnotValue.discovery.contains(.surfaceSourceSummary))
     #expect(surfaceTrimKnotValue.discovery.contains(.surfaceFrames))
@@ -1081,7 +1210,7 @@ import SwiftCAD
     #expect(surfaceTrimKnotValue.failureMode.contains("strictly between neighboring knot values"))
 
     #expect(surfaceTrimKnotMultiplicity.category == .solid)
-    #expect(surfaceTrimKnotMultiplicity.mutatesDocument)
+    #expect(surfaceTrimKnotMultiplicity.stateEffect == .sourceMutation)
     #expect(surfaceTrimKnotMultiplicity.access == .automationCommand)
     #expect(surfaceTrimKnotMultiplicity.discovery.contains(.surfaceSourceSummary))
     #expect(surfaceTrimKnotMultiplicity.discovery.contains(.surfaceFrames))
@@ -1093,7 +1222,7 @@ import SwiftCAD
     #expect(surfaceTrimKnotMultiplicity.failureMode.contains("no greater than the p-curve degree"))
 
     #expect(surfaceBoundaryContinuity.category == .solid)
-    #expect(surfaceBoundaryContinuity.mutatesDocument)
+    #expect(surfaceBoundaryContinuity.stateEffect == .sourceMutation)
     #expect(surfaceBoundaryContinuity.access == .automationCommand)
     #expect(surfaceBoundaryContinuity.discovery.contains(.surfaceSourceSummary))
     #expect(surfaceBoundaryContinuity.discovery.contains(.surfaceFrames))
@@ -1110,7 +1239,8 @@ import SwiftCAD
     #expect(surfaceBoundaryContinuity.failureMode.contains("insufficient cross-boundary control rows"))
 
     #expect(surfaceControlPointDisplay.category == .solid)
-    #expect(surfaceControlPointDisplay.mutatesDocument)
+    #expect(surfaceControlPointDisplay.stateEffect == .workspaceMutation)
+    #expect(surfaceControlPointDisplay.requiresExpectedWorkspaceRevision)
     #expect(surfaceControlPointDisplay.access == .automationCommand)
     #expect(surfaceControlPointDisplay.discovery.contains(.surfaceSourceSummary))
     #expect(surfaceControlPointDisplay.discovery.contains(.selectionMeasurement))
@@ -1121,7 +1251,8 @@ import SwiftCAD
     #expect(surfaceControlPointDisplay.failureMode.contains("out-of-range indexes"))
 
     #expect(surfaceFrameDisplay.category == .solid)
-    #expect(surfaceFrameDisplay.mutatesDocument)
+    #expect(surfaceFrameDisplay.stateEffect == .workspaceMutation)
+    #expect(surfaceFrameDisplay.requiresExpectedWorkspaceRevision)
     #expect(surfaceFrameDisplay.access == .automationCommand)
     #expect(surfaceFrameDisplay.discovery.contains(.surfaceSourceSummary))
     #expect(surfaceFrameDisplay.discovery.contains(.surfaceFrames))
@@ -1131,7 +1262,7 @@ import SwiftCAD
     #expect(surfaceFrameDisplay.failureMode.contains("ambiguous UV input"))
 
     #expect(polySplineVertexSlide.category == .solid)
-    #expect(polySplineVertexSlide.mutatesDocument)
+    #expect(polySplineVertexSlide.stateEffect == .sourceMutation)
     #expect(polySplineVertexSlide.access == .automationCommand)
     #expect(polySplineVertexSlide.discovery.contains(.topologySummary))
     #expect(polySplineVertexSlide.discovery.contains(.surfaceAnalysis))
@@ -1141,7 +1272,7 @@ import SwiftCAD
     #expect(polySplineVertexSlide.failureMode.contains("duplicate source-vertex targets"))
 
     #expect(surfaceControlPointSlide.category == .solid)
-    #expect(surfaceControlPointSlide.mutatesDocument)
+    #expect(surfaceControlPointSlide.stateEffect == .sourceMutation)
     #expect(surfaceControlPointSlide.access == .automationCommand)
     #expect(surfaceControlPointSlide.discovery.contains(.surfaceSourceSummary))
     #expect(surfaceControlPointSlide.discovery.contains(.selectionMeasurement))
@@ -1153,7 +1284,7 @@ import SwiftCAD
     #expect(surfaceControlPointSlide.failureMode.contains("duplicate targets"))
 
     #expect(polySplineAnalysis.category == .read)
-    #expect(!polySplineAnalysis.mutatesDocument)
+    #expect(polySplineAnalysis.stateEffect == .readOnly)
     #expect(polySplineAnalysis.access == .agentRequest)
     #expect(polySplineAnalysis.discovery.contains(.polySplineMeshAnalysis))
     #expect(polySplineAnalysis.targets == [.document])
@@ -1165,7 +1296,7 @@ import SwiftCAD
     #expect(splineMove.failureMode.contains("out-of-range"))
 
     #expect(vertexAlign.category == .sourceCurveEditing)
-    #expect(vertexAlign.mutatesDocument)
+    #expect(vertexAlign.stateEffect == .sourceMutation)
     #expect(vertexAlign.access == .automationCommand)
     #expect(vertexAlign.discovery.contains(.sketchEntitySummary))
     #expect(vertexAlign.discovery.contains(.curveAnalysis))
@@ -1183,7 +1314,7 @@ import SwiftCAD
     #expect(vertexAlign.failureMode.contains("different sketch"))
 
     #expect(splineSlide.category == .sourceCurveEditing)
-    #expect(splineSlide.mutatesDocument)
+    #expect(splineSlide.stateEffect == .sourceMutation)
     #expect(splineSlide.discovery.contains(.sketchEntitySummary))
     #expect(splineSlide.targets == [.sketchEntity])
     #expect(splineSlide.summary.contains("Slide Curve CV"))
@@ -1191,7 +1322,7 @@ import SwiftCAD
     #expect(splineSlide.failureMode.contains("collapsed control-cage"))
 
     #expect(splineInsert.category == .sourceCurveEditing)
-    #expect(splineInsert.mutatesDocument)
+    #expect(splineInsert.stateEffect == .sourceMutation)
     #expect(splineInsert.discovery.contains(.sketchEntitySummary))
     #expect(splineInsert.targets == [.sketchEntity])
     #expect(splineInsert.summary.contains("Insert CV"))
@@ -1199,7 +1330,7 @@ import SwiftCAD
     #expect(splineInsert.failureMode.contains("replaced-handle"))
 
     #expect(splineConvert.category == .sourceCurveEditing)
-    #expect(splineConvert.mutatesDocument)
+    #expect(splineConvert.stateEffect == .sourceMutation)
     #expect(splineConvert.discovery.contains(.sketchEntitySummary))
     #expect(splineConvert.targets == [.sketchEntity])
     #expect(splineConvert.failureMode.contains("endpoint fixed"))
@@ -1207,7 +1338,7 @@ import SwiftCAD
     #expect(splineConvert.failureMode.contains("spline endpoint tangent"))
 
     #expect(curveReverse.category == .sourceCurveEditing)
-    #expect(curveReverse.mutatesDocument)
+    #expect(curveReverse.stateEffect == .sourceMutation)
     #expect(curveReverse.access == .automationCommand)
     #expect(curveReverse.discovery.contains(.sketchEntitySummary))
     #expect(curveReverse.targets == [.sketchEntity])
@@ -1216,7 +1347,7 @@ import SwiftCAD
     #expect(curveReverse.failureMode.contains("arc"))
 
     #expect(curveRebuild.category == .sourceCurveEditing)
-    #expect(curveRebuild.mutatesDocument)
+    #expect(curveRebuild.stateEffect == .sourceMutation)
     #expect(curveRebuild.access == .automationCommand)
     #expect(curveRebuild.discovery.contains(.sketchEntitySummary))
     #expect(curveRebuild.discovery.contains(.curveAnalysis))
@@ -1233,7 +1364,7 @@ import SwiftCAD
     #expect(curveRebuild.failureMode.contains("tolerance"))
 
     #expect(curveExtend.category == .sourceCurveEditing)
-    #expect(curveExtend.mutatesDocument)
+    #expect(curveExtend.stateEffect == .sourceMutation)
     #expect(curveExtend.access == .automationCommand)
     #expect(curveExtend.discovery.contains(.sketchEntitySummary))
     #expect(curveExtend.targets == [.sketchEntity])
@@ -1243,7 +1374,7 @@ import SwiftCAD
     #expect(curveExtend.failureMode.contains("target-dependent"))
 
     #expect(curveJoin.category == .sourceCurveEditing)
-    #expect(curveJoin.mutatesDocument)
+    #expect(curveJoin.stateEffect == .sourceMutation)
     #expect(curveJoin.access == .automationCommand)
     #expect(curveJoin.discovery.contains(.sketchEntitySummary))
     #expect(curveJoin.targets == [.sketchEntity])
@@ -1261,7 +1392,7 @@ import SwiftCAD
     #expect(curveJoin.failureMode.contains("Bridge Curve"))
 
     #expect(curveUnjoin.category == .sourceCurveEditing)
-    #expect(curveUnjoin.mutatesDocument)
+    #expect(curveUnjoin.stateEffect == .sourceMutation)
     #expect(curveUnjoin.access == .automationCommand)
     #expect(curveUnjoin.discovery.contains(.sketchEntitySummary))
     #expect(curveUnjoin.targets == [.sketchEntity])
@@ -1272,7 +1403,7 @@ import SwiftCAD
     #expect(curveUnjoin.failureMode.contains("Bridge Curve"))
 
     #expect(curveSplit.category == .sourceCurveEditing)
-    #expect(curveSplit.mutatesDocument)
+    #expect(curveSplit.stateEffect == .sourceMutation)
     #expect(curveSplit.access == .automationCommand)
     #expect(curveSplit.discovery.contains(.sketchEntitySummary))
     #expect(curveSplit.targets == [.sketchEntity])
@@ -1283,7 +1414,7 @@ import SwiftCAD
     #expect(curveSplit.failureMode.contains("internal control-point"))
 
     #expect(curveTrim.category == .sourceCurveEditing)
-    #expect(curveTrim.mutatesDocument)
+    #expect(curveTrim.stateEffect == .sourceMutation)
     #expect(curveTrim.access == .automationCommand)
     #expect(curveTrim.discovery.contains(.sketchEntitySummary))
     #expect(curveTrim.targets == [.sketchEntity])
@@ -1292,7 +1423,7 @@ import SwiftCAD
     #expect(curveTrim.failureMode.contains("Cut Curve"))
 
     #expect(curveCut.category == .sourceCurveEditing)
-    #expect(curveCut.mutatesDocument)
+    #expect(curveCut.stateEffect == .sourceMutation)
     #expect(curveCut.access == .automationCommand)
     #expect(curveCut.discovery.contains(.sketchEntitySummary))
     #expect(curveCut.targets == [.sketchEntity])
@@ -1314,7 +1445,8 @@ import SwiftCAD
     #expect(curveCut.failureMode.contains("screen-space"))
 
     #expect(curveCurvatureDisplay.category == .sourceCurveEditing)
-    #expect(curveCurvatureDisplay.mutatesDocument)
+    #expect(curveCurvatureDisplay.stateEffect == .workspaceMutation)
+    #expect(curveCurvatureDisplay.requiresExpectedWorkspaceRevision)
     #expect(curveCurvatureDisplay.access == .automationCommand)
     #expect(curveCurvatureDisplay.discovery.contains(.sketchEntitySummary))
     #expect(curveCurvatureDisplay.discovery.contains(.curveAnalysis))
@@ -1325,7 +1457,8 @@ import SwiftCAD
     #expect(curveCurvatureDisplay.failureMode.contains("non-positive comb scales"))
 
     #expect(pointDisplay.category == .sourceCurveEditing)
-    #expect(pointDisplay.mutatesDocument)
+    #expect(pointDisplay.stateEffect == .workspaceMutation)
+    #expect(pointDisplay.requiresExpectedWorkspaceRevision)
     #expect(pointDisplay.access == .automationCommand)
     #expect(pointDisplay.discovery.contains(.sketchEntitySummary))
     #expect(pointDisplay.targets == [.sketchEntity])
@@ -1333,20 +1466,20 @@ import SwiftCAD
     #expect(pointDisplay.failureMode.contains("standalone point"))
 
     #expect(sketchEntityDimension.category == .sourceCurveEditing)
-    #expect(sketchEntityDimension.mutatesDocument)
+    #expect(sketchEntityDimension.stateEffect == .sourceMutation)
     #expect(sketchEntityDimension.discovery.contains(.sketchEntitySummary))
     #expect(sketchEntityDimension.discovery.contains(.sketchDimensionSummary))
     #expect(sketchEntityDimension.targets == [.sketchEntity])
 
     #expect(objectDimension.category == .solid)
-    #expect(objectDimension.mutatesDocument)
+    #expect(objectDimension.stateEffect == .sourceMutation)
     #expect(objectDimension.access == .automationCommand)
     #expect(objectDimension.discovery.contains(.topologySummary))
     #expect(objectDimension.discovery.contains(.objectDimensionSummary))
     #expect(objectDimension.targets == [.body, .face, .edge])
 
     #expect(extrudeDistance.category == .solid)
-    #expect(extrudeDistance.mutatesDocument)
+    #expect(extrudeDistance.stateEffect == .sourceMutation)
     #expect(extrudeDistance.access == .automationCommand)
     #expect(extrudeDistance.discovery.contains(.patternArraySummary))
     #expect(extrudeDistance.discovery.contains(.designDisplaySnapshot))
@@ -1358,7 +1491,7 @@ import SwiftCAD
     #expect(extrudeFeatureIDAxis.supportedValues.contains("designDisplaySnapshot.extrudes.featureID"))
 
     #expect(cubeDimensions.category == .solid)
-    #expect(cubeDimensions.mutatesDocument)
+    #expect(cubeDimensions.stateEffect == .sourceMutation)
     #expect(cubeDimensions.access == .automationCommand)
     #expect(cubeDimensions.discovery.contains(.patternArraySummary))
     #expect(cubeDimensions.discovery.contains(.designDisplaySnapshot))
@@ -1371,7 +1504,7 @@ import SwiftCAD
     #expect(cubeFeatureIDAxis.supportedValues.contains("designDisplaySnapshot.extrudes.featureID"))
 
     #expect(cylinderDimensions.category == .solid)
-    #expect(cylinderDimensions.mutatesDocument)
+    #expect(cylinderDimensions.stateEffect == .sourceMutation)
     #expect(cylinderDimensions.access == .automationCommand)
     #expect(cylinderDimensions.discovery.contains(.patternArraySummary))
     #expect(cylinderDimensions.discovery.contains(.designDisplaySnapshot))
@@ -1384,7 +1517,7 @@ import SwiftCAD
     #expect(cylinderFeatureIDAxis.supportedValues.contains("designDisplaySnapshot.extrudes.featureID"))
 
     #expect(selectionDimension.category == .solid)
-    #expect(selectionDimension.mutatesDocument)
+    #expect(selectionDimension.stateEffect == .sourceMutation)
     #expect(selectionDimension.access == .automationCommand)
     #expect(selectionDimension.discovery.contains(.selectionDimensionEvaluation))
     #expect(selectionDimension.discovery.contains(.topologySummary))
@@ -1393,7 +1526,7 @@ import SwiftCAD
     #expect(selectionDimension.summary.contains("SwiftCAD document source") || selectionDimension.summary.contains("CAD selection dimension"))
 
     #expect(selectionDimensionTarget.category == .solid)
-    #expect(selectionDimensionTarget.mutatesDocument)
+    #expect(selectionDimensionTarget.stateEffect == .sourceMutation)
     #expect(selectionDimensionTarget.access == .automationCommand)
     #expect(selectionDimensionTarget.discovery.contains(.selectionDimensionEvaluation))
     #expect(selectionDimensionTarget.targets == [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle, .sketchControlPoint])
@@ -1401,7 +1534,7 @@ import SwiftCAD
     #expect(selectionDimensionTarget.failureMode.contains("target quantity kinds"))
 
     #expect(selectionDimensionApply.category == .sourceCurveEditing)
-    #expect(selectionDimensionApply.mutatesDocument)
+    #expect(selectionDimensionApply.stateEffect == .sourceMutation)
     #expect(selectionDimensionApply.access == .automationCommand)
     #expect(selectionDimensionApply.discovery.contains(.selectionDimensionEvaluation))
     #expect(selectionDimensionApply.discovery.contains(.sketchEntitySummary))
@@ -1412,7 +1545,7 @@ import SwiftCAD
     #expect(selectionDimensionApply.failureMode.contains("line angle"))
 
     #expect(selectionDimensionRemoval.category == .solid)
-    #expect(selectionDimensionRemoval.mutatesDocument)
+    #expect(selectionDimensionRemoval.stateEffect == .sourceMutation)
     #expect(selectionDimensionRemoval.access == .automationCommand)
     #expect(selectionDimensionRemoval.discovery.contains(.selectionDimensionEvaluation))
     #expect(selectionDimensionRemoval.targets == [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle, .sketchControlPoint])
@@ -1420,7 +1553,7 @@ import SwiftCAD
     #expect(selectionDimensionRemoval.failureMode.contains("missing selection dimension IDs"))
 
     #expect(selectionMeasurement.category == .read)
-    #expect(!selectionMeasurement.mutatesDocument)
+    #expect(selectionMeasurement.stateEffect == .readOnly)
     #expect(selectionMeasurement.access == .agentRequest)
     #expect(selectionMeasurement.discovery.contains(.selectionMeasurement))
     #expect(selectionMeasurement.discovery.contains(.surfaceSourceSummary))
@@ -1430,7 +1563,7 @@ import SwiftCAD
     #expect(selectionMeasurement.summary.contains("SelectionReference"))
 
     #expect(objectDimensionSummary.category == .read)
-    #expect(!objectDimensionSummary.mutatesDocument)
+    #expect(objectDimensionSummary.stateEffect == .readOnly)
     #expect(objectDimensionSummary.access == .agentRequest)
     #expect(objectDimensionSummary.discovery.contains(.objectDimensionSummary))
     #expect(objectDimensionSummary.discovery.contains(.topologySummary))
@@ -1438,7 +1571,7 @@ import SwiftCAD
     #expect(objectDimensionSummary.summary.contains("Dimension command candidates"))
 
     #expect(sketchDimensionSummary.category == .read)
-    #expect(!sketchDimensionSummary.mutatesDocument)
+    #expect(sketchDimensionSummary.stateEffect == .readOnly)
     #expect(sketchDimensionSummary.access == .agentRequest)
     #expect(sketchDimensionSummary.discovery.contains(.sketchDimensionSummary))
     #expect(sketchDimensionSummary.discovery.contains(.sketchEntitySummary))
@@ -1447,18 +1580,18 @@ import SwiftCAD
     #expect(sketchDimensionSummary.summary.contains("Dimension command candidates"))
 
     #expect(selectionDimensionEvaluation.category == .read)
-    #expect(!selectionDimensionEvaluation.mutatesDocument)
+    #expect(selectionDimensionEvaluation.stateEffect == .readOnly)
     #expect(selectionDimensionEvaluation.access == .agentRequest)
     #expect(selectionDimensionEvaluation.discovery.contains(.selectionDimensionEvaluation))
     #expect(selectionDimensionEvaluation.targets == [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle, .sketchControlPoint])
 
     #expect(topology.category == .read)
-    #expect(!topology.mutatesDocument)
+    #expect(topology.stateEffect == .readOnly)
     #expect(topology.access == .agentRequest)
     #expect(topology.targets == [.face, .edge, .vertex])
 
     #expect(surfaceSourceSummary.category == .read)
-    #expect(!surfaceSourceSummary.mutatesDocument)
+    #expect(surfaceSourceSummary.stateEffect == .readOnly)
     #expect(surfaceSourceSummary.access == .agentRequest)
     #expect(surfaceSourceSummary.discovery.contains(.surfaceSourceSummary))
     #expect(surfaceSourceSummary.discovery.contains(.polySplineMeshAnalysis))
@@ -1475,7 +1608,7 @@ import SwiftCAD
     #expect(surfaceSourceSummary.summary.contains("UVN frame samples"))
 
     #expect(surfaceAnalysis.category == .read)
-    #expect(!surfaceAnalysis.mutatesDocument)
+    #expect(surfaceAnalysis.stateEffect == .readOnly)
     #expect(surfaceAnalysis.access == .agentRequest)
     #expect(surfaceAnalysis.discovery.contains(.topologySummary))
     #expect(surfaceAnalysis.discovery.contains(.surfaceAnalysis))
@@ -1486,7 +1619,7 @@ import SwiftCAD
     #expect(surfaceAnalysis.failureMode.contains("unbounded B-spline"))
 
     #expect(surfaceFrames.category == .read)
-    #expect(!surfaceFrames.mutatesDocument)
+    #expect(surfaceFrames.stateEffect == .readOnly)
     #expect(surfaceFrames.access == .agentRequest)
     #expect(surfaceFrames.discovery.contains(.topologySummary))
     #expect(surfaceFrames.discovery.contains(.surfaceSourceSummary))
@@ -1496,7 +1629,7 @@ import SwiftCAD
     #expect(surfaceFrames.failureMode.contains("surface selection references"))
 
     #expect(surfaceContinuity.category == .read)
-    #expect(!surfaceContinuity.mutatesDocument)
+    #expect(surfaceContinuity.stateEffect == .readOnly)
     #expect(surfaceContinuity.access == .agentRequest)
     #expect(surfaceContinuity.discovery.contains(.topologySummary))
     #expect(surfaceContinuity.discovery.contains(.surfaceContinuitySummary))
@@ -1505,7 +1638,7 @@ import SwiftCAD
     #expect(surfaceContinuity.failureMode.contains("unresolved curvature continuity"))
 
     #expect(surfaceBoundaryCompatibility.category == .read)
-    #expect(!surfaceBoundaryCompatibility.mutatesDocument)
+    #expect(surfaceBoundaryCompatibility.stateEffect == .readOnly)
     #expect(surfaceBoundaryCompatibility.access == .agentRequest)
     #expect(surfaceBoundaryCompatibility.discovery.contains(.surfaceSourceSummary))
     #expect(surfaceBoundaryCompatibility.discovery.contains(.surfaceBoundaryContinuityCompatibility))
@@ -1518,7 +1651,7 @@ import SwiftCAD
     #expect(surfaceBoundaryCompatibility.failureMode.contains("insufficient cross-boundary control rows"))
 
     #expect(snapResolution.category == .read)
-    #expect(!snapResolution.mutatesDocument)
+    #expect(snapResolution.stateEffect == .readOnly)
     #expect(snapResolution.access == .agentRequest)
     #expect(snapResolution.discovery.contains(.snapResolution))
     #expect(snapResolution.discovery.contains(.sketchEntitySummary))
@@ -1535,14 +1668,14 @@ import SwiftCAD
     #expect(snapResolution.summary.contains("curve-coordinate-plane"))
 
     #expect(constructionPlaneCreate.category == .sketch)
-    #expect(constructionPlaneCreate.mutatesDocument)
+    #expect(constructionPlaneCreate.stateEffect == .sourceMutation)
     #expect(constructionPlaneCreate.access == .automationCommand)
     #expect(constructionPlaneCreate.discovery.contains(.constructionPlaneSummary))
     #expect(constructionPlaneCreate.targets == [.document])
     #expect(constructionPlaneCreate.failureMode.contains("invalid plane"))
 
     #expect(constructionPlaneCreateFromTarget.category == .sketch)
-    #expect(constructionPlaneCreateFromTarget.mutatesDocument)
+    #expect(constructionPlaneCreateFromTarget.stateEffect == .sourceMutation)
     #expect(constructionPlaneCreateFromTarget.access == .automationCommand)
     #expect(constructionPlaneCreateFromTarget.discovery.contains(.topologySummary))
     #expect(constructionPlaneCreateFromTarget.discovery.contains(.sketchEntitySummary))
@@ -1552,7 +1685,7 @@ import SwiftCAD
     #expect(constructionPlaneCreateFromTarget.failureMode.contains("non-face/non-region"))
 
     #expect(constructionPlaneCreateFromTargets.category == .sketch)
-    #expect(constructionPlaneCreateFromTargets.mutatesDocument)
+    #expect(constructionPlaneCreateFromTargets.stateEffect == .sourceMutation)
     #expect(constructionPlaneCreateFromTargets.access == .automationCommand)
     #expect(constructionPlaneCreateFromTargets.discovery.contains(.topologySummary))
     #expect(constructionPlaneCreateFromTargets.discovery.contains(.sketchEntitySummary))
@@ -1575,7 +1708,7 @@ import SwiftCAD
     #expect(constructionPlaneCreateFromTargets.summary.contains("spline control points"))
 
     #expect(constructionPlaneCreateFromView.category == .sketch)
-    #expect(constructionPlaneCreateFromView.mutatesDocument)
+    #expect(constructionPlaneCreateFromView.stateEffect == .sourceMutation)
     #expect(constructionPlaneCreateFromView.access == .automationCommand)
     #expect(constructionPlaneCreateFromView.discovery.contains(.constructionPlaneSummary))
     #expect(constructionPlaneCreateFromView.targets == [.document])
@@ -1583,19 +1716,20 @@ import SwiftCAD
     #expect(constructionPlaneCreateFromView.failureMode.contains("non-finite view normals"))
 
     #expect(constructionPlaneSetActive.category == .sketch)
-    #expect(constructionPlaneSetActive.mutatesDocument)
+    #expect(constructionPlaneSetActive.stateEffect == .workspaceMutation)
+    #expect(constructionPlaneSetActive.requiresExpectedWorkspaceRevision)
     #expect(constructionPlaneSetActive.discovery.contains(.constructionPlaneSummary))
     #expect(constructionPlaneSetActive.targets == [.constructionPlane])
 
     #expect(constructionPlaneRename.category == .sketch)
-    #expect(constructionPlaneRename.mutatesDocument)
+    #expect(constructionPlaneRename.stateEffect == .sourceMutation)
     #expect(constructionPlaneRename.access == .automationCommand)
     #expect(constructionPlaneRename.discovery.contains(.constructionPlaneSummary))
     #expect(constructionPlaneRename.targets == [.constructionPlane])
     #expect(constructionPlaneRename.failureMode.contains("duplicate names"))
 
     #expect(constructionPlaneEdit.category == .sketch)
-    #expect(constructionPlaneEdit.mutatesDocument)
+    #expect(constructionPlaneEdit.stateEffect == .sourceMutation)
     #expect(constructionPlaneEdit.access == .automationCommand)
     #expect(constructionPlaneEdit.discovery.contains(.constructionPlaneSummary))
     #expect(constructionPlaneEdit.targets == [.constructionPlane])
@@ -1606,13 +1740,13 @@ import SwiftCAD
     })
 
     #expect(constructionPlaneSummary.category == .read)
-    #expect(!constructionPlaneSummary.mutatesDocument)
+    #expect(constructionPlaneSummary.stateEffect == .readOnly)
     #expect(constructionPlaneSummary.access == .agentRequest)
     #expect(constructionPlaneSummary.discovery.contains(.constructionPlaneSummary))
     #expect(constructionPlaneSummary.targets == [.constructionPlane])
 
     #expect(analyzeSection.category == .read)
-    #expect(!analyzeSection.mutatesDocument)
+    #expect(analyzeSection.stateEffect == .readOnly)
     #expect(analyzeSection.access == .automationCommand)
     #expect(analyzeSection.discovery.contains(.sectionAnalysis))
     #expect(analyzeSection.discovery.contains(.meshSummary))
@@ -1641,7 +1775,7 @@ import SwiftCAD
     })
 
     #expect(componentInstance.category == .component)
-    #expect(componentInstance.mutatesDocument)
+    #expect(componentInstance.stateEffect == .sourceMutation)
     #expect(componentInstance.access == .automationCommand)
     #expect(componentInstance.discovery.contains(.designDisplaySnapshot))
     #expect(componentInstance.targets == [.sceneNode])
@@ -1657,7 +1791,7 @@ import SwiftCAD
 
     for descriptor in [componentInstanceVisibility, componentInstanceLock, componentInstanceTransform] {
         #expect(descriptor.category == .component)
-        #expect(descriptor.mutatesDocument)
+        #expect(descriptor.stateEffect == .sourceMutation)
         #expect(descriptor.access == .automationCommand)
         #expect(descriptor.discovery.contains(.designDisplaySnapshot))
         #expect(descriptor.targets == [.componentInstance])
@@ -1676,7 +1810,7 @@ import SwiftCAD
     }
 
     #expect(patternArray.category == .pattern)
-    #expect(patternArray.mutatesDocument)
+    #expect(patternArray.stateEffect == .sourceMutation)
     #expect(patternArray.access == .automationCommand)
     #expect(patternArray.discovery.contains(.designDisplaySnapshot))
     #expect(patternArray.targets == [.sceneNode])
@@ -1712,7 +1846,7 @@ import SwiftCAD
     })
 
     #expect(patternArrayUpdate.category == .pattern)
-    #expect(patternArrayUpdate.mutatesDocument)
+    #expect(patternArrayUpdate.stateEffect == .sourceMutation)
     #expect(patternArrayUpdate.discovery.contains(.designDisplaySnapshot))
     #expect(patternArrayUpdate.targets == [.sceneNode])
     #expect(patternArrayUpdate.optionMatrix.map(\.name) == [
@@ -1733,13 +1867,13 @@ import SwiftCAD
     #expect(updateCurveAlignment.supportedValues == ["normal", "parallel", "transport"])
 
     #expect(patternArrayExplode.category == .pattern)
-    #expect(patternArrayExplode.mutatesDocument)
+    #expect(patternArrayExplode.stateEffect == .sourceMutation)
     #expect(patternArrayExplode.discovery.contains(.designDisplaySnapshot))
     #expect(patternArrayExplode.targets == [.sceneNode])
     #expect(patternArrayExplode.summary.contains("materialized"))
 
     #expect(patternArraySummary.category == .read)
-    #expect(!patternArraySummary.mutatesDocument)
+    #expect(patternArraySummary.stateEffect == .readOnly)
     #expect(patternArraySummary.access == .agentRequest)
     #expect(patternArraySummary.discovery.contains(.patternArraySummary))
     #expect(patternArraySummary.discovery.contains(.designDisplaySnapshot))
@@ -1748,7 +1882,7 @@ import SwiftCAD
     #expect(patternArraySummary.failureMode.contains("source-owned component-instance"))
 
     #expect(designDisplaySnapshot.category == .read)
-    #expect(!designDisplaySnapshot.mutatesDocument)
+    #expect(designDisplaySnapshot.stateEffect == .readOnly)
     #expect(designDisplaySnapshot.access == .agentRequest)
     #expect(designDisplaySnapshot.discovery.contains(.designDisplaySnapshot))
     #expect(designDisplaySnapshot.discovery.contains(.sketchEntitySummary))
@@ -1780,14 +1914,14 @@ import SwiftCAD
     #expect(designDisplaySnapshot.failureMode.contains("placed component instances"))
 
     #expect(describeSavedViews.category == .read)
-    #expect(!describeSavedViews.mutatesDocument)
+    #expect(describeSavedViews.stateEffect == .readOnly)
     #expect(describeSavedViews.access == .automationCommand)
     #expect(describeSavedViews.discovery.contains(.savedViews))
     #expect(describeSavedViews.targets == [.savedView])
     #expect(describeSavedViews.summary.contains("display-scale metadata"))
 
     #expect(generateDrawingProjection.category == .read)
-    #expect(!generateDrawingProjection.mutatesDocument)
+    #expect(generateDrawingProjection.stateEffect == .readOnly)
     #expect(generateDrawingProjection.access == .automationCommand)
     #expect(generateDrawingProjection.discovery.contains(.savedViews))
     #expect(generateDrawingProjection.discovery.contains(.drawingProjection))
@@ -1796,7 +1930,7 @@ import SwiftCAD
     #expect(generateDrawingProjection.failureMode.contains("visibility segments"))
 
     #expect(generateDrawingProjectionFromView.category == .read)
-    #expect(!generateDrawingProjectionFromView.mutatesDocument)
+    #expect(generateDrawingProjectionFromView.stateEffect == .readOnly)
     #expect(generateDrawingProjectionFromView.access == .automationCommand)
     #expect(!generateDrawingProjectionFromView.discovery.contains(.savedViews))
     #expect(generateDrawingProjectionFromView.discovery.contains(.drawingProjection))
@@ -1806,39 +1940,39 @@ import SwiftCAD
     #expect(generateDrawingProjectionFromView.failureMode.contains("without requiring a saved view ID"))
 
     #expect(createSavedView.category == .document)
-    #expect(createSavedView.mutatesDocument)
+    #expect(createSavedView.stateEffect == .sourceMutation)
     #expect(createSavedView.access == .automationCommand)
     #expect(createSavedView.discovery.contains(.savedViews))
     #expect(createSavedView.targets == [.document, .savedView])
     #expect(createSavedView.failureMode.contains("duplicate IDs"))
 
     #expect(updateSavedView.category == .document)
-    #expect(updateSavedView.mutatesDocument)
+    #expect(updateSavedView.stateEffect == .sourceMutation)
     #expect(updateSavedView.targets == [.savedView])
     #expect(updateSavedView.failureMode.contains("missing saved view IDs"))
 
     #expect(removeSavedView.category == .document)
-    #expect(removeSavedView.mutatesDocument)
+    #expect(removeSavedView.stateEffect == .sourceMutation)
     #expect(removeSavedView.targets == [.savedView])
     #expect(removeSavedView.failureMode.contains("missing saved view IDs"))
 
     #expect(qualityAssessment.category == .read)
-    #expect(!qualityAssessment.mutatesDocument)
+    #expect(qualityAssessment.stateEffect == .readOnly)
     #expect(!qualityAssessment.requiresSession)
-    #expect(!qualityAssessment.requiresExpectedGeneration)
+    #expect(!qualityAssessment.requiresExpectedSourceGeneration)
     #expect(qualityAssessment.access == .agentRequest)
     #expect(qualityAssessment.discovery.contains(.cadInteractionQualityAssessment))
     #expect(qualityAssessment.targets == [.document])
     #expect(qualityAssessment.summary.contains("objective CAD interaction quality assessment"))
 
     #expect(sketchSummary.category == .read)
-    #expect(!sketchSummary.mutatesDocument)
+    #expect(sketchSummary.stateEffect == .readOnly)
     #expect(sketchSummary.access == .agentRequest)
     #expect(sketchSummary.discovery.contains(.sketchEntitySummary))
     #expect(sketchSummary.targets == [.sketchEntity, .region])
 
     #expect(curveAnalysis.category == .read)
-    #expect(!curveAnalysis.mutatesDocument)
+    #expect(curveAnalysis.stateEffect == .readOnly)
     #expect(curveAnalysis.access == .agentRequest)
     #expect(curveAnalysis.discovery.contains(.sketchEntitySummary))
     #expect(curveAnalysis.discovery.contains(.curveAnalysis))
@@ -1846,7 +1980,7 @@ import SwiftCAD
     #expect(curveAnalysis.summary.contains("continuity"))
 
     #expect(selection.category == .selection)
-    #expect(!selection.mutatesDocument)
+    #expect(selection.stateEffect == .readOnly)
     #expect(selection.discovery.contains(.topologySummary))
     #expect(selection.discovery.contains(.sketchEntitySummary))
     #expect(selection.targets == [.sceneNode, .face, .edge, .vertex, .region, .sketchEntity])

@@ -3,7 +3,7 @@ import SwiftCAD
 import Testing
 @testable import RupaCore
 
-@Test func workspaceScaleDefaultsMatchMillimeterDocumentScale() async throws {
+@Test func workspaceScaleDefaultsMatchMillimeterWorkspaceScale() async throws {
     let defaults = WorkspaceScaleDefaults(ruler: .standard(for: .millimeter))
 
     #expect(approximatelyEqual(defaults.baseFeatureMeters, 0.04))
@@ -15,7 +15,7 @@ import Testing
     #expect(approximatelyEqual(defaults.maximumSplineBowMeters, 0.024))
 }
 
-@Test func workspaceScaleDefaultsTrackMeterDocumentScale() async throws {
+@Test func workspaceScaleDefaultsTrackMeterWorkspaceScale() async throws {
     let defaults = WorkspaceScaleDefaults(ruler: .standard(for: .meter))
 
     #expect(approximatelyEqual(defaults.baseFeatureMeters, 40.0))
@@ -25,7 +25,7 @@ import Testing
     #expect(approximatelyEqual(defaults.curveRadiusMeters, 12.0))
 }
 
-@Test func workspaceScaleDefaultsFollowVisibleSpanWhenDocumentStaysInMillimeters() async throws {
+@Test func workspaceScaleDefaultsFollowVisibleSpanWithMillimeterDisplayUnit() async throws {
     let ruler = RulerConfiguration(
         displayUnit: .millimeter,
         minorTickMeters: 0.1,
@@ -40,25 +40,42 @@ import Testing
     #expect(approximatelyEqual(defaults.curveRadiusMeters, 1.2))
 }
 
-@Test func objectTypeRegistryDefaultPropertiesUseWorkspaceScaleDefinitions() async throws {
+@Test func workspaceObjectPropertyDefaultsUseRegistryScaleDefinitions() async throws {
     let registry = ObjectTypeRegistry.builtIn
+    let service = WorkspaceObjectPropertyDefaultsService()
     let siteRuler = WorkspaceScalePreset.sitePlanning.rulerConfiguration
 
-    let rectangle = registry.defaultProperties(for: .rectangle, ruler: siteRuler)
+    let rectangle = service.defaults(
+        for: .rectangle,
+        ruler: siteRuler,
+        objectRegistry: registry
+    )
     #expect(approximatelyEqual(rectangle["size.x"]?.lengthValue, 4_000.0))
     #expect(approximatelyEqual(rectangle["size.y"]?.lengthValue, 2_000.0))
     #expect(approximatelyEqual(rectangle["extrusion"]?.lengthValue, 0.0))
 
     let regionalRuler = WorkspaceScalePreset.regionalPlanning.rulerConfiguration
-    let circle = registry.defaultProperties(for: .circle, ruler: regionalRuler)
+    let circle = service.defaults(
+        for: .circle,
+        ruler: regionalRuler,
+        objectRegistry: registry
+    )
     #expect(approximatelyEqual(circle["radius"]?.lengthValue, 12_000.0))
 
-    let cube = registry.defaultProperties(for: .cube, ruler: regionalRuler)
+    let cube = service.defaults(
+        for: .cube,
+        ruler: regionalRuler,
+        objectRegistry: registry
+    )
     #expect(approximatelyEqual(cube["size.x"]?.lengthValue, 40_000.0))
     #expect(approximatelyEqual(cube["size.y"]?.lengthValue, 40_000.0))
     #expect(approximatelyEqual(cube["size.z"]?.lengthValue, 40_000.0))
 
-    let cylinder = registry.defaultProperties(for: .cylinder, ruler: regionalRuler)
+    let cylinder = service.defaults(
+        for: .cylinder,
+        ruler: regionalRuler,
+        objectRegistry: registry
+    )
     #expect(approximatelyEqual(cylinder["size.x"]?.lengthValue, 24_000.0))
     #expect(approximatelyEqual(cylinder["size.y"]?.lengthValue, 20_000.0))
     #expect(approximatelyEqual(cylinder["size.z"]?.lengthValue, 24_000.0))
@@ -102,17 +119,17 @@ import Testing
         ]
     )
 
-    let properties = registry.defaultProperties(
+    let properties = WorkspaceObjectPropertyDefaultsService().defaults(
         for: typeID,
-        ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+        ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration,
+        objectRegistry: registry
     )
     #expect(approximatelyEqual(properties["panel.width"]?.lengthValue, 4_000.0))
     #expect(approximatelyEqual(properties["panel.depth"]?.lengthValue, 1_000.0))
 }
 
-@Test func sketchObjectTypeDefaultsFollowDocumentWorkspaceScale() async throws {
+@Test func sketchObjectTypeMutationUsesCanonicalRegistryDefaults() async throws {
     var document = DesignDocument.empty()
-    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
     let featureID = try document.createLineSketch(
         name: "Typed Source",
         plane: .xy,
@@ -129,8 +146,8 @@ import Testing
     let sceneNode = try #require(document.productMetadata.sceneNodes.values.first {
         $0.object?.sourceFeatureID == featureID
     })
-    #expect(approximatelyEqual(sceneNode.object?.properties["size.x"]?.lengthValue, 4_000.0))
-    #expect(approximatelyEqual(sceneNode.object?.properties["size.y"]?.lengthValue, 2_000.0))
+    #expect(approximatelyEqual(sceneNode.object?.properties["size.x"]?.lengthValue, 1.0))
+    #expect(approximatelyEqual(sceneNode.object?.properties["size.y"]?.lengthValue, 1.0))
     #expect(approximatelyEqual(sceneNode.object?.properties["extrusion"]?.lengthValue, 0.0))
 }
 

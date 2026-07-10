@@ -38,7 +38,7 @@ import Testing
     let source = try #require(session.document.productMetadata.patternArrays.values.first {
         $0.name == "Axis Handle Pattern"
     })
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(
         scene: scene,
         size: CGSize(width: 900.0, height: 700.0)
@@ -86,7 +86,7 @@ import Testing
         $0.name == "Output Axis Handle Pattern"
     })
     let outputSceneNodeID = try firstOutputSceneNodeID(source: source, document: session.document)
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(
         scene: scene,
         size: CGSize(width: 900.0, height: 700.0)
@@ -156,7 +156,7 @@ import Testing
     let source = try #require(session.document.productMetadata.patternArrays.values.first {
         $0.name == "Referenced Axis Handle Pattern"
     })
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(
         scene: scene,
         size: CGSize(width: 900.0, height: 700.0)
@@ -211,7 +211,7 @@ import Testing
     let source = try #require(session.document.productMetadata.patternArrays.values.first {
         $0.name == "Radial Linear Axis Pattern"
     })
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(
         scene: scene,
         size: CGSize(width: 900.0, height: 700.0)

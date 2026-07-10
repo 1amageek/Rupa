@@ -11,7 +11,8 @@ public extension DocumentEvaluator {
         objectRegistry _: ObjectTypeRegistry = .builtIn
     ) -> DocumentEvaluator {
         DocumentEvaluator(
-            tolerance: .workspaceScaleAware(for: document)
+            tolerance: document.modelingSettings.tolerance,
+            tessellationOptions: document.modelingSettings.tessellationOptions
         )
     }
 }
@@ -25,9 +26,12 @@ public extension CADPipeline {
         for document: DesignDocument,
         objectRegistry _: ObjectTypeRegistry = .builtIn
     ) -> CADPipeline {
-        let tolerance = ModelingTolerance.workspaceScaleAware(for: document)
+        let tolerance = document.modelingSettings.tolerance
         return CADPipeline(
-            evaluator: DocumentEvaluator(tolerance: tolerance),
+            evaluator: DocumentEvaluator(
+                tolerance: tolerance,
+                tessellationOptions: document.modelingSettings.tessellationOptions
+            ),
             snapQueryEvaluator: SnapQueryEvaluator(tolerance: tolerance),
             selectionMeasurementEvaluator: SelectionMeasurementEvaluator(tolerance: tolerance),
             selectionDimensionEvaluator: SelectionDimensionEvaluator(tolerance: tolerance)

@@ -135,10 +135,7 @@ extension DesignDocument {
         }
 
         let definition = try objectRegistry.requireDefinition(for: typeID)
-        var nextProperties = objectRegistry.defaultProperties(
-            for: typeID,
-            ruler: ruler
-        )
+        var nextProperties = objectRegistry.defaultProperties(for: typeID)
         if let strokeWidth = object.properties[ObjectPropertyID(rawValue: "stroke.width")] {
             nextProperties[ObjectPropertyID(rawValue: "stroke.width")] = strokeWidth
         }

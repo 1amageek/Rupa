@@ -50,6 +50,10 @@ public extension MeshSummaryResult {
         public var triangleCount: Int
         public var indexedElementCount: Int
         public var materialID: String?
+        public var materialCoverage: MeshMaterialCoverage?
+        public var generatedFaceCount: Int?
+        public var unassignedFaceMaterialCount: Int?
+        public var faceMaterialBindings: [FaceMaterialBinding]?
         public var bounds: MeasurementResult.Bounds
 
         public init(
@@ -59,6 +63,10 @@ public extension MeshSummaryResult {
             triangleCount: Int,
             indexedElementCount: Int,
             materialID: String?,
+            materialCoverage: MeshMaterialCoverage? = nil,
+            generatedFaceCount: Int? = nil,
+            unassignedFaceMaterialCount: Int? = nil,
+            faceMaterialBindings: [FaceMaterialBinding]? = nil,
             bounds: MeasurementResult.Bounds
         ) {
             self.bodyID = bodyID
@@ -67,7 +75,33 @@ public extension MeshSummaryResult {
             self.triangleCount = triangleCount
             self.indexedElementCount = indexedElementCount
             self.materialID = materialID
+            self.materialCoverage = materialCoverage
+            self.generatedFaceCount = generatedFaceCount
+            self.unassignedFaceMaterialCount = unassignedFaceMaterialCount
+            self.faceMaterialBindings = faceMaterialBindings
             self.bounds = bounds
+        }
+    }
+
+    struct FaceMaterialBinding: Codable, Equatable, Sendable {
+        public var persistentName: String
+        public var faceID: String
+        public var materialID: String?
+        public var processNamespace: String?
+        public var processID: String?
+
+        public init(
+            persistentName: String,
+            faceID: String,
+            materialID: String?,
+            processNamespace: String? = nil,
+            processID: String? = nil
+        ) {
+            self.persistentName = persistentName
+            self.faceID = faceID
+            self.materialID = materialID
+            self.processNamespace = processNamespace
+            self.processID = processID
         }
     }
 }

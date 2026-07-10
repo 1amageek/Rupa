@@ -10,7 +10,9 @@ import Testing
         query: SectionAnalysisQuery(
             source: .sketchPlane(.yz),
             toleranceMeters: 1.0e-8
-        )
+        ),
+        activeConstructionPlaneID: nil,
+        displayUnit: .millimeter
     )
 
     let body = try #require(result.bodies.first)
@@ -42,8 +44,7 @@ import Testing
     var document = try sectionAnalysisTestDocument()
     let planeID = try document.createConstructionPlane(
         name: "Active Section",
-        plane: .yz,
-        activates: true
+        plane: .yz
     )
 
     let result = try SectionAnalysisService().analyze(
@@ -51,7 +52,9 @@ import Testing
         query: SectionAnalysisQuery(
             source: .activeConstructionPlane,
             toleranceMeters: 1.0e-8
-        )
+        ),
+        activeConstructionPlaneID: planeID,
+        displayUnit: .millimeter
     )
 
     #expect(result.plane.sourceKind == .activeConstructionPlane)
@@ -81,7 +84,9 @@ import Testing
         query: SectionAnalysisQuery(
             source: .sceneNode(nodeID),
             toleranceMeters: 1.0e-8
-        )
+        ),
+        activeConstructionPlaneID: nil,
+        displayUnit: .millimeter
     )
 
     #expect(result.plane.sourceKind == .sceneNode)
@@ -104,7 +109,9 @@ import Testing
             source: .sketchPlane(.xy),
             offsetMeters: 1.0,
             toleranceMeters: 1.0e-8
-        )
+        ),
+        activeConstructionPlaneID: nil,
+        displayUnit: .millimeter
     )
     let flippedResult = try SectionAnalysisService().analyze(
         document: document,
@@ -113,7 +120,9 @@ import Testing
             offsetMeters: 1.0,
             flipsNormal: true,
             toleranceMeters: 1.0e-8
-        )
+        ),
+        activeConstructionPlaneID: nil,
+        displayUnit: .millimeter
     )
     let baseBody = try #require(baseResult.bodies.first)
     let flippedBody = try #require(flippedResult.bodies.first)
@@ -145,7 +154,9 @@ import Testing
             query: SectionAnalysisQuery(
                 source: .sketchPlane(.xy),
                 offsetMeters: .infinity
-            )
+            ),
+            activeConstructionPlaneID: nil,
+            displayUnit: .millimeter
         )
     }
 }
@@ -159,7 +170,9 @@ import Testing
             toleranceMeters: 1.0e-8,
             includesIntersectionSegments: true,
             maximumIntersectionSegments: 1
-        )
+        ),
+        activeConstructionPlaneID: nil,
+        displayUnit: .millimeter
     )
 
     #expect(result.truncatedIntersectionSegments)
@@ -179,7 +192,9 @@ import Testing
             source: .sketchPlane(.yz),
             toleranceMeters: 1.0e-8,
             includesIntersectionSegments: false
-        )
+        ),
+        activeConstructionPlaneID: nil,
+        displayUnit: .millimeter
     )
 
     #expect(result.intersectingBodyCount == 1)

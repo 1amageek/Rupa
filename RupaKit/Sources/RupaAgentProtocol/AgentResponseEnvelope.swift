@@ -1,6 +1,7 @@
 import Foundation
 import RupaAutomation
 import RupaCore
+import RupaDomainFoundation
 
 public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
     public static let protocolVersion = "2.0"
@@ -166,6 +167,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             try container.encode(value, forKey: .result)
         case .batch(let value):
             try container.encode(value, forKey: .result)
+        case .domainExecution(let value):
+            try container.encode(value, forKey: .result)
         case .parameters(let value):
             try container.encode(value, forKey: .result)
         case .evaluation(let value):
@@ -252,6 +255,10 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             return .command(try container.decode(AutomationResult.self, forKey: .result))
         case "command.applyBatch":
             return .batch(try container.decode(AgentBatchResult.self, forKey: .result))
+        case "domain.execute":
+            return .domainExecution(
+                try container.decode(DomainExecutionResult.self, forKey: .result)
+            )
         case "document.parameters":
             return .parameters(try container.decode(ParameterListResult.self, forKey: .result))
         case "document.evaluate":
@@ -355,6 +362,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             "command.apply"
         case .batch:
             "command.applyBatch"
+        case .domainExecution:
+            "domain.execute"
         case .parameters:
             "document.parameters"
         case .evaluation:
@@ -420,6 +429,7 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
              ("agent.cadInteractionQualityAssessment", .cadInteractionQualityAssessment),
              ("command.apply", .command),
              ("command.applyBatch", .batch),
+             ("domain.execute", .domainExecution),
              ("parameter.setExpression", .command),
              ("document.setSurfaceFrameDisplay", .command),
              ("document.movePolySplineSurfaceVertex", .command),

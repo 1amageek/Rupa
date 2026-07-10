@@ -311,7 +311,7 @@ import SwiftCAD
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedArc = try #require(updatedSummary.entries.first { $0.entityKind == "arc" })
     #expect(result.commandName == "setSketchArcParameters")
     #expect(result.didMutate)
@@ -371,7 +371,7 @@ import SwiftCAD
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedLine = try #require(updatedSummary.entries.first { $0.entityID == line.entityID })
     let dimension = try #require(updatedLine.dimensions.first { $0.kind == "distance" })
     #expect(result.commandName == "setSketchEntityDimension")
@@ -431,7 +431,7 @@ import SwiftCAD
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedArc = try #require(updatedSummary.entries.first { $0.entityID == arc.entityID })
     let dimension = try #require(updatedArc.dimensions.first { $0.kind == "angle" })
     #expect(result.commandName == "setSketchEntityDimension")
@@ -461,7 +461,7 @@ import SwiftCAD
             endAngle: .angle(80.0, .degree)
         )
     )
-    let createdSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let createdSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let createdArc = try #require(createdSummary.entries.first { $0.entityKind == "arc" })
     let featureID = try #require(UUID(uuidString: createdArc.sourceFeatureID)).featureID
     let entityID = try #require(UUID(uuidString: createdArc.entityID)).sketchEntityID
@@ -502,7 +502,7 @@ import SwiftCAD
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedArc = try #require(updatedSummary.entries.first { $0.entityID == arc.entityID })
     let dimension = try #require(updatedArc.dimensions.first { $0.kind == "angle" })
     #expect(result.commandName == "setSketchEntityDimension")
@@ -564,7 +564,7 @@ import SwiftCAD
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedLine = try #require(updatedSummary.entries.first { $0.entityID == line.entityID })
     let dimension = try #require(updatedLine.dimensions.first { $0.kind == "angle" })
     #expect(result.commandName == "setSketchEntityDimension")
@@ -595,7 +595,7 @@ import SwiftCAD
             )
         )
     )
-    let createdSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let createdSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(createdSummary.entries.first { $0.entityKind == "line" })
     let featureID = try #require(UUID(uuidString: line.sourceFeatureID)).featureID
     let entityID = try #require(UUID(uuidString: line.entityID)).sketchEntityID
@@ -636,7 +636,7 @@ import SwiftCAD
         Issue.record("Agent must return a command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedLine = try #require(updatedSummary.entries.first { $0.entityID == line.entityID })
     let dimension = try #require(updatedLine.dimensions.first { $0.kind == "distance" })
     #expect(result.commandName == "setSketchEntityDimension")
@@ -708,7 +708,7 @@ import SwiftCAD
         Issue.record("Agent must return a spline edit command result.")
         return
     }
-    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let updatedSpline = try #require(updatedSummary.entries.first { $0.entityKind == "spline" })
 
     #expect(moveResult.commandName == "moveSketchSplineControlPoint")
@@ -731,7 +731,7 @@ import SwiftCAD
         Issue.record("Agent must return a spline control-point insertion command result.")
         return
     }
-    let insertedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let insertedSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let insertedSpline = try #require(insertedSummary.entries.first { $0.entityKind == "spline" })
     #expect(insertResult.commandName == "insertSketchSplineControlPoint")
     #expect(insertResult.didMutate)
@@ -752,7 +752,7 @@ import SwiftCAD
         Issue.record("Agent must return a sketch curve rebuild command result.")
         return
     }
-    let rebuiltSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let rebuiltSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let rebuiltSpline = try #require(rebuiltSummary.entries.first { $0.entityKind == "spline" })
     #expect(rebuildResult.commandName == "rebuildSketchCurve")
     #expect(rebuildResult.didMutate)
@@ -826,7 +826,7 @@ import SwiftCAD
         return
     }
 
-    let rebuiltSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let rebuiltSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let rebuiltSpline = try #require(rebuiltSummary.entries.first { $0.entityID == spline.entityID })
     #expect(rebuildResult.commandName == "rebuildSketchCurve")
     #expect(rebuildResult.didMutate)
@@ -914,7 +914,7 @@ import SwiftCAD
         return
     }
 
-    let rebuiltSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let rebuiltSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let rebuiltSpline = try #require(rebuiltSummary.entries.first { $0.entityID == spline.entityID })
     #expect(rebuildResult.commandName == "rebuildSketchCurve")
     #expect(rebuildResult.didMutate)

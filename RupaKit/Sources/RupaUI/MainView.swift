@@ -1,6 +1,7 @@
 import Foundation
 import MacComponent
 import RupaCore
+import RupaDomainFoundation
 import RupaPreview
 import RupaRendering
 import SwiftUI
@@ -83,6 +84,8 @@ public struct MainView: View {
     @FocusState private var isWorkspaceFocused: Bool
 
     private let objectRegistry: ObjectTypeRegistry
+    private let commandCatalog: WorkspaceCommandCatalog
+    private let domainCommandExecutor: DomainCommandExecutor
     private let agentSessionPublisher: (any WorkspaceAgentSessionPublishing)?
     private let documentURL: URL?
 
@@ -93,11 +96,12 @@ public struct MainView: View {
         isInspectorPresented: Bool = false,
         isUtilityRailExpanded: Bool = false,
         objectRegistry: ObjectTypeRegistry = .builtIn,
+        domainRegistry: DomainRegistry = DomainRegistry(),
         agentSessionPublisher: (any WorkspaceAgentSessionPublishing)? = nil,
         documentURL: URL? = nil
     ) {
-        let editingDefaults = WorkspaceInteractionScaleDefaults(ruler: session.document.ruler)
-        let ruler = session.document.ruler.normalizedForWorkspaceScale()
+        let editingDefaults = WorkspaceInteractionScaleDefaults(ruler: session.workspaceState.ruler)
+        let ruler = session.workspaceState.ruler.normalizedForWorkspaceScale()
         self._session = State(initialValue: session)
         self._isPreviewExpanded = State(initialValue: isPreviewExpanded)
         self._columnVisibility = State(initialValue: columnVisibility)
@@ -175,6 +179,8 @@ public struct MainView: View {
         self._constructionPlaneRenameText = State(initialValue: "")
         self._viewportHoverClearSignal = State(initialValue: 0)
         self.objectRegistry = objectRegistry
+        self.commandCatalog = WorkspaceCommandCatalog(domainRegistry: domainRegistry)
+        self.domainCommandExecutor = DomainCommandExecutor(registry: domainRegistry)
         self.agentSessionPublisher = agentSessionPublisher
         self.documentURL = documentURL
     }
@@ -310,7 +316,10 @@ public struct MainView: View {
     }
 
     private var savedConstructionPlaneSummary: ConstructionPlaneSummaryResult {
-        ConstructionPlaneSummaryService().summarize(document: session.document)
+        ConstructionPlaneSummaryService().summarize(
+            document: session.document,
+            activePlaneID: session.workspaceState.activeConstructionPlaneID
+        )
     }
 
     private var savedViewBuilder: WorkspaceSavedViewBuilder {
@@ -518,6 +527,7 @@ public struct MainView: View {
         } content: {
             PreviewSurface(
                 document: session.document,
+                ruler: session.workspaceState.ruler,
                 evaluationStatus: session.evaluationStatus,
                 evaluatedGeneration: session.evaluatedGeneration,
                 evaluatedBodyCount: session.evaluatedBodyCount,
@@ -565,6 +575,16 @@ public struct MainView: View {
         let scaleFitPromptState = workspaceScaleFitPromptState
         return Viewport(
             document: session.document,
+            workspaceRenderState: ViewportWorkspaceRenderState(
+                revision: session.workspaceState.revision,
+                ruler: session.workspaceState.ruler,
+                sceneOverlayState: ViewportSceneOverlayState(
+                    curveCurvatureDisplays: session.workspaceState.curveCurvatureDisplays,
+                    pointDisplays: session.workspaceState.pointDisplays,
+                    surfaceControlPointDisplays: session.workspaceState.surfaceControlPointDisplays,
+                    surfaceFrameDisplays: session.workspaceState.surfaceFrameDisplays
+                )
+            ),
             currentEvaluation: session.currentEvaluation,
             documentGeneration: session.generation,
             objectRegistry: objectRegistry,
@@ -577,8 +597,6 @@ public struct MainView: View {
             surfaceContinuity: selectedSurfaceContinuitySummary,
             sectionAnalysis: sectionAnalysis,
             sectionClippingPlan: selectedSectionClippingPlan(for: sectionAnalysis),
-            curveCurvatureDisplays: session.document.productMetadata.curveCurvatureDisplays,
-            pointDisplays: session.document.productMetadata.pointDisplays,
             snapResolutionOptions: activeSnapResolutionOptions(),
             canvasDragPreviewKind: canvasDragPreviewKind,
             canvasPlacementPreviewKind: canvasPlacementPreviewKind,
@@ -589,7 +607,7 @@ public struct MainView: View {
             selectionHitPolicy: selectionScope.viewportSelectionHitPolicy,
             bottomChromeReservedHeight: viewportBottomChromeReservedHeight,
             canvasOverlayExclusions: viewportOverlayExclusions,
-            gridVisualSpacingMode: session.document.productMetadata.viewportGridSettings.visualSpacingMode,
+            gridVisualSpacingMode: session.workspaceState.viewportGridSettings.visualSpacingMode,
             workspaceScalePresetTitle: scaleSummary.presetTitle,
             workspaceScalePresetOptions: WorkspaceScalePreset.profiles,
             canFitWorkspaceScaleToModel: scaleFitPromptState?.isActionable == true,
@@ -1195,7 +1213,7 @@ public struct MainView: View {
             }
             let length = WorkspaceInspectorNumberText.lengthString(
                 fromMeters: lengthMeters,
-                unit: session.document.displayUnit
+                unit: session.workspaceState.displayUnit
             )
             return "\(focus.statusTitle) \(length)"
         case .angle:
@@ -1211,7 +1229,7 @@ public struct MainView: View {
             }
             let width = WorkspaceInspectorNumberText.lengthString(
                 fromMeters: widthMeters,
-                unit: session.document.displayUnit
+                unit: session.workspaceState.displayUnit
             )
             return "\(focus.statusTitle) \(width)"
         case .height:
@@ -1220,7 +1238,7 @@ public struct MainView: View {
             }
             let height = WorkspaceInspectorNumberText.lengthString(
                 fromMeters: heightMeters,
-                unit: session.document.displayUnit
+                unit: session.workspaceState.displayUnit
             )
             return "\(focus.statusTitle) \(height)"
         }
@@ -1397,7 +1415,7 @@ public struct MainView: View {
     }
 
     private var workspaceScaleSummary: WorkspaceScaleStatusSummary {
-        WorkspaceScaleStatusSummary(ruler: session.document.ruler)
+        WorkspaceScaleStatusSummary(ruler: session.workspaceState.ruler)
     }
 
     private var currentWorkspaceScaleRecommendation: WorkspaceScaleRecommendation? {
@@ -1406,7 +1424,7 @@ public struct MainView: View {
         }
         return WorkspaceScaleRecommendationService().recommendation(
             for: workspaceBounds,
-            currentRuler: session.document.ruler
+            currentRuler: session.workspaceState.ruler
         )
     }
 
@@ -1417,7 +1435,7 @@ public struct MainView: View {
     private var fixedGridVisualSpacingBinding: Binding<Bool> {
         Binding(
             get: {
-                session.document.productMetadata.viewportGridSettings.visualSpacingMode == .fixed
+                session.workspaceState.viewportGridSettings.visualSpacingMode == .fixed
             },
             set: { isFixed in
                 applyViewportGridVisualSpacingMode(isFixed ? .fixed : .adaptive)
@@ -1527,7 +1545,7 @@ public struct MainView: View {
                     }
                     let scaleSummary = workspaceScaleSummary
                     workspaceValueRow("Scale", "\(scaleSummary.presetTitle) · \(scaleSummary.displayUnitTitle)")
-                    workspaceValueRow("Grid", session.document.productMetadata.viewportGridSettings.visualSpacingMode.title)
+                    workspaceValueRow("Grid", session.workspaceState.viewportGridSettings.visualSpacingMode.title)
                     workspaceValueRow("Step", scaleSummary.minorStepTitle)
                     workspaceValueRow("Major", scaleSummary.majorStepTitle)
                     workspaceValueRow("Visible", scaleSummary.visibleSpanTitle)
@@ -1599,6 +1617,23 @@ public struct MainView: View {
                     WorkspaceSurfaceAnalysisControl(options: $surfaceAnalysisOptions)
                     workspaceValueRow("Overlay", surfaceAnalysisOverlaySummary)
                     workspaceValueRow("Samples", surfaceAnalysisDensitySummary)
+                }
+
+                if commandCatalog.hasDomainCommands {
+                    workspaceRailSection("Domain") {
+                        VStack(spacing: 5) {
+                            ForEach(commandCatalog.domainCommands) { command in
+                                WorkspaceDomainCommandRow(
+                                    command: command,
+                                    displayUnit: session.workspaceState.displayUnit,
+                                    generation: session.generation
+                                ) { request in
+                                    try domainCommandExecutor.execute(request, in: session)
+                                }
+                            }
+                        }
+                        .accessibilityIdentifier("WorkspaceDomainCommandList")
+                    }
                 }
 
                 workspaceRailSection("Scene") {
@@ -2496,7 +2531,7 @@ public struct MainView: View {
     private func sketchDimensionLengthInputText(_ meters: Double?) -> String {
         workspaceLengthFieldPresentation(
             fromMeters: meters ?? 0.0,
-            preferredUnit: session.document.displayUnit
+            preferredUnit: session.workspaceState.displayUnit
         ).text
     }
 
@@ -2506,11 +2541,11 @@ public struct MainView: View {
 
     private func sketchDimensionLengthDefaultUnit(_ meters: Double?) -> LengthDisplayUnit {
         guard let meters else {
-            return session.document.displayUnit
+            return session.workspaceState.displayUnit
         }
         return workspaceLengthFieldPresentation(
             fromMeters: meters,
-            preferredUnit: session.document.displayUnit
+            preferredUnit: session.workspaceState.displayUnit
         ).unit
     }
 
@@ -2904,6 +2939,7 @@ public struct MainView: View {
             let summary = try ObjectDimensionSummaryService().summarize(
                 document: session.document,
                 targets: objectTargets,
+                displayUnit: session.workspaceState.displayUnit,
                 objectRegistry: objectRegistry
             )
             entries += summary.entries.map(DimensionCommandEntry.init(object:))
@@ -2925,6 +2961,7 @@ public struct MainView: View {
                 let summary = try SketchDimensionSummaryService().summarize(
                     document: session.document,
                     targets: sketchEntityTargets,
+                    displayUnit: session.workspaceState.displayUnit,
                     objectRegistry: objectRegistry
                 )
                 entries += summary.entries.map(DimensionCommandEntry.init(sketch:))
@@ -2943,6 +2980,7 @@ public struct MainView: View {
             let summary = try SketchDimensionSummaryService().summarize(
                 document: session.document,
                 targets: [target],
+                displayUnit: session.workspaceState.displayUnit,
                 objectRegistry: objectRegistry
             )
             return summary.entries.map(DimensionCommandEntry.init(sketch:))
@@ -2951,6 +2989,7 @@ public struct MainView: View {
                 let summary = try ObjectDimensionSummaryService().summarize(
                     document: session.document,
                     targets: [target],
+                    displayUnit: session.workspaceState.displayUnit,
                     objectRegistry: objectRegistry
                 )
                 return summary.entries.map(DimensionCommandEntry.init(object:))
@@ -3029,8 +3068,11 @@ public struct MainView: View {
             targets,
             viewNormal: viewportProjectionBasis.viewNormal
         )
+        let activationResult = result?.createdConstructionPlaneID.flatMap { id in
+            session.setActiveConstructionPlane(id: id)
+        }
         workspacePlaneMode = .adaptive
-        if result?.diagnostics.isEmpty == false || result == nil {
+        if result?.diagnostics.isEmpty == false || result == nil || activationResult == nil {
             isPreviewExpanded = true
         } else if alignsView {
             if let activeConstructionPlane = session.activeConstructionPlane {
@@ -3107,7 +3149,7 @@ public struct MainView: View {
 
     @discardableResult
     private func activateConstructionPlane(_ id: ConstructionPlaneSourceID) -> Bool {
-        if session.document.productMetadata.activeConstructionPlaneID == id {
+        if session.workspaceState.activeConstructionPlaneID == id {
             return true
         }
         let result = session.setActiveConstructionPlane(id: id)
@@ -3311,7 +3353,7 @@ public struct MainView: View {
     private func createSavedViewFromCurrentViewport() {
         let savedView = savedViewBuilder.makeSavedView(
             name: savedViewBuilder.nextSavedViewName(in: session.document),
-            document: session.document,
+            workspaceState: session.workspaceState,
             projectionBasis: viewportProjectionBasis,
             cameraFrame: viewportCameraFrame
         )
@@ -3334,7 +3376,7 @@ public struct MainView: View {
     private func updateSavedViewFromCurrentViewport(_ savedView: SavedView) {
         var updatedView = savedViewBuilder.makeSavedView(
             name: savedView.name,
-            document: session.document,
+            workspaceState: session.workspaceState,
             projectionBasis: viewportProjectionBasis,
             cameraFrame: viewportCameraFrame
         )
@@ -3481,8 +3523,11 @@ public struct MainView: View {
             origin: origin,
             viewNormal: viewNormal
         )
+        let activationResult = result?.createdConstructionPlaneID.flatMap { id in
+            session.setActiveConstructionPlane(id: id)
+        }
         workspacePlaneMode = .adaptive
-        if result?.diagnostics.isEmpty == false || result == nil {
+        if result?.diagnostics.isEmpty == false || result == nil || activationResult == nil {
             isPreviewExpanded = true
         } else {
             session.reportToolStatus("View-aligned construction plane created.")
@@ -3927,6 +3972,7 @@ public struct MainView: View {
             summary = try ObjectDimensionSummaryService().summarize(
                 document: session.document,
                 targets: [SelectionTarget(sceneNodeID: bodySceneNodeID)],
+                displayUnit: session.workspaceState.displayUnit,
                 objectRegistry: objectRegistry
             )
         } catch {
@@ -4177,6 +4223,7 @@ public struct MainView: View {
                 endWorldPoint: endCanvasInput.worldPoint
             ),
             document: session.document,
+            ruler: session.workspaceState.ruler,
             snapOptions: snapResolutionOptions(modifierFlags: drag.modifierFlags),
             axisConstraint: activeCanvasDragAxisConstraint
         )
@@ -4286,6 +4333,7 @@ public struct MainView: View {
         let resolution = WorkspaceSnapInputResolver().resolve(
             point,
             in: session.document,
+            ruler: session.workspaceState.ruler,
             options: snapResolutionOptions(
                 referencePoint: referencePoint,
                 modifierFlags: modifierFlags
@@ -4725,7 +4773,9 @@ public struct MainView: View {
         WorkspaceSketchEntityInspectorStateBuilder(
             document: session.document,
             selection: session.selection,
-            objectRegistry: objectRegistry
+            displayUnit: session.workspaceState.displayUnit,
+            objectRegistry: objectRegistry,
+            curveCurvatureDisplays: session.workspaceState.curveCurvatureDisplays
         )
     }
 
@@ -4736,7 +4786,8 @@ public struct MainView: View {
             currentEvaluation: session.currentEvaluation,
             documentGeneration: session.generation,
             objectRegistry: objectRegistry,
-            surfaceAnalysisOptions: surfaceAnalysisOptions.analysisOptions
+            surfaceAnalysisOptions: surfaceAnalysisOptions.analysisOptions,
+            workspaceState: session.workspaceState
         )
     }
 
@@ -4745,6 +4796,7 @@ public struct MainView: View {
             document: session.document,
             currentEvaluation: session.currentEvaluation,
             documentGeneration: session.generation,
+            displayUnit: session.workspaceState.displayUnit,
             objectRegistry: objectRegistry
         )
     }
@@ -4786,6 +4838,7 @@ public struct MainView: View {
         WorkspaceProjectionTargetResolver(
             document: session.document,
             selection: session.selection,
+            displayUnit: session.workspaceState.displayUnit,
             objectRegistry: objectRegistry
         )
     }
@@ -5015,7 +5068,7 @@ public struct MainView: View {
     }
 
     private var workspaceInteractionScaleDefaults: WorkspaceInteractionScaleDefaults {
-        WorkspaceInteractionScaleDefaults(ruler: session.document.ruler)
+        WorkspaceInteractionScaleDefaults(ruler: session.workspaceState.ruler)
     }
 
     private func sketchCurveOperationControls(
@@ -5026,7 +5079,7 @@ public struct MainView: View {
             entity: entity,
             controls: controls,
             state: sketchCurveOperationControlsState(for: entity),
-            displayUnit: session.document.displayUnit,
+            displayUnit: session.workspaceState.displayUnit,
             extendDistanceMeters: $sketchExtendDistanceMeters,
             extendShape: $sketchExtendShape,
             vertexOffsetDistanceMeters: $sketchVertexOffsetDistanceMeters,
@@ -5206,14 +5259,14 @@ public struct MainView: View {
         }
         let recommendationStates = workspaceDocumentRecommendationStates(
             bounds: workspaceBounds,
-            ruler: session.document.ruler,
-            displayUnit: session.document.displayUnit
+            ruler: session.workspaceState.ruler,
+            displayUnit: session.workspaceState.displayUnit
         )
         return WorkspaceDocumentInspectorState(
             documentName: documentTitle,
             documentID: shortID(session.document.id),
             sourceUnitTitle: "m",
-            displayUnit: session.document.displayUnit,
+            displayUnit: session.workspaceState.displayUnit,
             sourceFeatureCount: session.document.cadDocument.designGraph.order.count,
             sceneNodeCount: session.document.productMetadata.sceneNodes.count,
             selectedCount: session.selection.selectedSceneNodeIDs.count,
@@ -5228,10 +5281,10 @@ public struct MainView: View {
             defaultMaterialTitle: defaultMaterialTitle,
             validationRuleCount: session.document.productMetadata.validationRules.count,
             exportPresetCount: session.document.productMetadata.exportPresets.count,
-            ruler: session.document.ruler,
+            ruler: session.workspaceState.ruler,
             scaleRecommendation: recommendationStates.scale,
-            scalePresetOptions: workspaceDocumentScalePresetOptionStates(
-                ruler: session.document.ruler
+            scalePresetOptions: workspaceScalePresetOptionStates(
+                ruler: session.workspaceState.ruler
             ),
             precisionRecommendation: recommendationStates.precision,
             parameters: workspaceParameterInspectorState
@@ -5246,7 +5299,7 @@ public struct MainView: View {
                 dirty: session.isDirty,
                 diagnostics: session.diagnostics
             ),
-            displayUnit: session.document.displayUnit
+            displayUnit: session.workspaceState.displayUnit
         )
     }
 
@@ -5255,6 +5308,7 @@ public struct MainView: View {
     ) -> WorkspaceObjectOverviewInspectorState {
         WorkspaceObjectOverviewInspectorStateBuilder(
             document: session.document,
+            displayUnit: session.workspaceState.displayUnit,
             objectRegistry: objectRegistry,
             selectedTargetSummary: selectedTargetSummary,
             selectedTargetCount: selectedTargetCount
@@ -5268,7 +5322,7 @@ public struct MainView: View {
         WorkspaceInspectorTextSectionView(section: overviewState.selectionSection)
         WorkspaceConstructionPlaneInspectorView(
             state: selectedConstructionPlaneInspectorState,
-            displayUnit: session.document.displayUnit,
+            displayUnit: session.workspaceState.displayUnit,
             originSliderMetersRange: transformPositionSliderMetersRange,
             onSetOriginComponent: setSelectedConstructionPlaneOriginComponent,
             onSetNormalComponent: setSelectedConstructionPlaneNormalComponent,
@@ -5290,7 +5344,7 @@ public struct MainView: View {
             continuityResult: selectedSurfaceContinuityResult(for: nodes),
             boundaryContinuityStateResult: selectedSurfaceBoundaryContinuityStateResult,
             showsUnavailableSections: shouldShowSurfaceContinuitySection(for: nodes),
-            displayUnit: session.document.displayUnit,
+            displayUnit: session.workspaceState.displayUnit,
             boundaryContinuityLevel: $surfaceBoundaryContinuityLevel,
             boundaryMatchSide: $surfaceBoundaryMatchSide,
             boundaryReferenceDirection: $surfaceBoundaryReferenceDirection,
@@ -5307,7 +5361,7 @@ public struct MainView: View {
         projectOutlineSection(nodes)
         WorkspaceTopologyEditInspectorView(
             state: topologyEditInspectorState(for: nodes),
-            displayUnit: session.document.displayUnit,
+            displayUnit: session.workspaceState.displayUnit,
             faceDraftAngleDegrees: $faceDraftAngleDegrees,
             edgeOffsetDistanceMeters: $edgeOffsetDistanceMeters,
             edgeOffsetGapFill: $edgeOffsetGapFill,
@@ -5353,7 +5407,7 @@ public struct MainView: View {
 
         WorkspaceObjectTransformInspectorView(
             nodes: nodes,
-            displayUnit: session.document.displayUnit,
+            displayUnit: session.workspaceState.displayUnit,
             positionSliderMetersRange: transformPositionSliderMetersRange,
             materialOptions: sortedMaterialOptions,
             onSetVisibility: { id, isVisible in
@@ -5644,7 +5698,7 @@ public struct MainView: View {
         WorkspaceSketchCurveInspectorView(
             entity: entity,
             targetSummary: selectedTargetSummary,
-            displayUnit: session.document.displayUnit,
+            displayUnit: session.workspaceState.displayUnit,
             curvatureDisplay: curveCurvatureDisplay(for: entity),
             pointDisplay: pointDisplay(for: entity),
             showsCurveDisplayControls: entity.bridgeCurve == nil,
@@ -6025,7 +6079,7 @@ public struct MainView: View {
             } else {
                 WorkspaceSplineControlPointControlsView(
                     entity: entity,
-                    displayUnit: session.document.displayUnit,
+                    displayUnit: session.workspaceState.displayUnit,
                     selectedControlPointIndexes: selectedSplineControlPointIndexes(for: entity),
                     selectedControlPointIndex: $selectedSplineControlPointIndex,
                     slideDistanceMeters: $sketchSplineControlPointSlideDistanceMeters,
@@ -6046,7 +6100,7 @@ public struct MainView: View {
                 )
                 WorkspaceSplineEndpointConstraintControlsView(
                     entity: entity,
-                    displayUnit: session.document.displayUnit,
+                    displayUnit: session.workspaceState.displayUnit,
                     onAddLineTangency: { entity, endpoint, lineID in
                         addSplineEndpointTangentConstraint(
                             entity,
@@ -6104,12 +6158,13 @@ public struct MainView: View {
             document: session.document,
             currentEvaluation: session.currentEvaluation,
             documentGeneration: session.generation,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            ruler: session.workspaceState.ruler
         )
         .shapes(for: nodes)
         WorkspaceObjectShapeInspectorView(
             shapes: shapes,
-            displayUnit: session.document.displayUnit,
+            displayUnit: session.workspaceState.displayUnit,
             positionSliderMetersRange: transformPositionSliderMetersRange,
             sizeSliderMetersRange: sizeSliderMetersRange,
             fallbackLengthSliderMetersRange: lengthSliderMetersRange(for: 0.0),
@@ -6635,7 +6690,7 @@ public struct MainView: View {
     private func curveCurvatureDisplay(
         for entity: InspectorSketchEntity
     ) -> CurveCurvatureDisplay? {
-        session.document.productMetadata.curveCurvatureDisplays[
+        session.workspaceState.curveCurvatureDisplays[
             .sketchEntity(
                 featureID: entity.sourceFeatureID,
                 entityID: entity.entityID
@@ -6646,7 +6701,7 @@ public struct MainView: View {
     private func pointDisplay(
         for entity: InspectorSketchEntity
     ) -> PointDisplay? {
-        session.document.productMetadata.pointDisplays[
+        session.workspaceState.pointDisplays[
             .sketchEntity(
                 featureID: entity.sourceFeatureID,
                 entityID: entity.entityID
@@ -7418,12 +7473,12 @@ public struct MainView: View {
     }
 
     private var transformPositionSliderMetersRange: ClosedRange<Double> {
-        let span = session.document.ruler.normalizedForWorkspaceScale().visibleSpanMeters
+        let span = session.workspaceState.ruler.normalizedForWorkspaceScale().visibleSpanMeters
         return -span ... span
     }
 
     private var sizeSliderMetersRange: ClosedRange<Double> {
-        let visibleSpan = session.document.ruler.normalizedForWorkspaceScale().visibleSpanMeters
+        let visibleSpan = session.workspaceState.ruler.normalizedForWorkspaceScale().visibleSpanMeters
         return 0.0 ... visibleSpan
     }
 
@@ -7502,7 +7557,7 @@ public struct MainView: View {
     private func lengthSliderMetersRange(for meters: Double) -> ClosedRange<Double> {
         workspaceLengthSliderMetersRange(
             for: meters,
-            ruler: session.document.ruler
+            ruler: session.workspaceState.ruler
         )
     }
 
@@ -7569,7 +7624,7 @@ public struct MainView: View {
         guard let length = sketchLineLength(for: entity) else {
             return defaultSketchEntityMoveStepMeters
         }
-        let ruler = session.document.ruler.normalizedForWorkspaceScale()
+        let ruler = session.workspaceState.ruler.normalizedForWorkspaceScale()
         let bounded = min(
             length / 4.0,
             max(ruler.visibleSpanMeters / 20.0, ruler.minorTickMeters)
@@ -7658,7 +7713,7 @@ public struct MainView: View {
         workspaceLengthControl(
             title,
             values: [meters],
-            displayUnit: session.document.displayUnit,
+            displayUnit: session.workspaceState.displayUnit,
             sliderMetersRange: sliderMetersRange
         ) { nextMeters in
             onChange(max(nextMeters, 0.0))
@@ -7678,7 +7733,7 @@ public struct MainView: View {
         majorTickMeters: Double? = nil,
         visibleSpanMeters: Double? = nil
     ) {
-        var ruler = session.document.ruler
+        var ruler = session.workspaceState.ruler
         if let minorTickMeters {
             ruler.minorTickMeters = minorTickMeters
         }
@@ -7737,6 +7792,7 @@ public struct MainView: View {
         do {
             let plan = try WorkspaceScaleFitService().plan(
                 document: session.document,
+                ruler: session.workspaceState.ruler,
                 objectRegistry: session.objectRegistry,
                 currentEvaluation: session.currentEvaluation,
                 currentGeneration: session.generation
@@ -7750,7 +7806,9 @@ public struct MainView: View {
                     severity: .warning
                 )
             case .applyPreset(let preset):
-                session.perform(.setRulerConfiguration(preset.rulerConfiguration.normalizedForWorkspaceScale()))
+                session.setRulerConfiguration(
+                    preset.rulerConfiguration.normalizedForWorkspaceScale()
+                )
                 resetWorkspaceInteractionScaleDefaults()
                 requestViewportCameraReset()
             }
@@ -7775,7 +7833,7 @@ public struct MainView: View {
                 parameters: session.document.cadDocument.parameters,
                 targetKind: kind,
                 defaults: ParameterExpressionDefaults(
-                    lengthUnit: session.document.displayUnit,
+                    lengthUnit: session.workspaceState.displayUnit,
                     angleUnit: .degree
                 )
             )
@@ -7883,7 +7941,7 @@ public struct MainView: View {
     private func formatted(_ meters: Double) -> String {
         WorkspaceInspectorNumberText.readableLengthString(
             fromMeters: meters,
-            preferredUnit: session.document.displayUnit
+            preferredUnit: session.workspaceState.displayUnit
         )
     }
 
@@ -7911,7 +7969,7 @@ public struct MainView: View {
         case .length:
             return workspaceLengthFieldPresentation(
                 fromMeters: value,
-                preferredUnit: session.document.displayUnit
+                preferredUnit: session.workspaceState.displayUnit
             ).text
         case .angle:
             return WorkspaceInspectorNumberText.string(from: degrees(fromRadians: value))
@@ -7938,10 +7996,10 @@ public struct MainView: View {
         case .length:
             return workspaceLengthFieldPresentation(
                 fromMeters: value,
-                preferredUnit: session.document.displayUnit
+                preferredUnit: session.workspaceState.displayUnit
             ).unit
         case .angle:
-            return session.document.displayUnit
+            return session.workspaceState.displayUnit
         }
     }
 

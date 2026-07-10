@@ -42,28 +42,6 @@ public struct ObjectTypeRegistry: Sendable {
         definition(for: id)?.defaultProperties ?? ObjectPropertySet()
     }
 
-    public func defaultProperties(
-        for id: ObjectTypeID?,
-        ruler: RulerConfiguration
-    ) -> ObjectPropertySet {
-        guard let id,
-              let definition = definition(for: id) else {
-            return ObjectPropertySet()
-        }
-        let defaults = WorkspaceScaleDefaults(ruler: ruler)
-        var properties = definition.defaultProperties
-
-        for property in definition.properties {
-            guard property.valueKind == .length,
-                  let workspaceScaleDefault = property.workspaceScaleDefault else {
-                continue
-            }
-            properties[property.id] = .length(workspaceScaleDefault.meters(from: defaults))
-        }
-
-        return definition.resolvedProperties(properties)
-    }
-
     public func geometryRole(for id: ObjectTypeID?) -> ObjectDescriptor.GeometryRole? {
         definition(for: id)?.geometryRole
     }

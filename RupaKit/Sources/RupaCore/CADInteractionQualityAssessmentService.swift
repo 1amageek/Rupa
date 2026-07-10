@@ -58,7 +58,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "Generated extrusion-depth edges resolve to object depth dimensions.",
                         "Generated fillet arc edges resolve back to editable source arc radius, diameter, and angle dimensions with radius as the primary target.",
                         "Generated solid face pairs resolve to SwiftCAD selection dimensions and evaluate through the shared CAD kernel.",
-                        "Agent expression requests can omit defaults and then resolve unitless length literals through the current document display unit, so site and regional scale edits are not millimeter-locked.",
+                        "Agent expression requests can omit defaults and then resolve unitless length literals through the current workspace display unit, so site and regional scale edits are not millimeter-locked.",
                     ]
                 ),
             ],

@@ -37,9 +37,6 @@ public struct PlaneCreateCommand: ParsableCommand {
     @Option(help: "Sketch plane: xy, yz, or zx.")
     public var plane: CLISketchPlane = .xy
 
-    @Flag(name: .customLong("no-activate"), help: "Create the plane without making it active.")
-    public var noActivate: Bool = false
-
     public init() {}
 
     public func run() throws {
@@ -50,7 +47,6 @@ public struct PlaneCreateCommand: ParsableCommand {
                 target: try document.target(sessionID: id),
                 name: name,
                 plane: plane.sketchPlane,
-                activates: !noActivate,
                 mode: document.mode,
                 expectedGeneration: document.generation(),
                 dryRun: document.dryRun,
@@ -96,9 +92,6 @@ public struct PlaneCreateViewCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "View normal Z component.")
     public var normalZ: Double = 1.0
 
-    @Flag(name: .customLong("no-activate"), help: "Create the plane without making it active.")
-    public var noActivate: Bool = false
-
     public init() {}
 
     public func run() throws {
@@ -120,7 +113,6 @@ public struct PlaneCreateViewCommand: ParsableCommand {
                 name: name,
                 origin: origin,
                 viewNormal: viewNormal,
-                activates: !noActivate,
                 mode: document.mode,
                 expectedGeneration: document.generation(),
                 dryRun: document.dryRun,
@@ -148,9 +140,6 @@ public struct PlaneCreateTargetCommand: ParsableCommand {
     @OptionGroup
     public var selection: CLISelectionTargetOptions
 
-    @Flag(name: .customLong("no-activate"), help: "Create the plane without making it active.")
-    public var noActivate: Bool = false
-
     public init() {}
 
     public func run() throws {
@@ -158,8 +147,7 @@ public struct PlaneCreateTargetCommand: ParsableCommand {
             document: document,
             command: .createConstructionPlaneFromTarget(
                 name: name,
-                target: selection.decodedTarget(),
-                activates: !noActivate
+                target: selection.decodedTarget()
             )
         )
     }
@@ -189,9 +177,6 @@ public struct PlaneCreateTargetsCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "View normal Z component for target combinations that need camera context.")
     public var viewNormalZ: Double?
 
-    @Flag(name: .customLong("no-activate"), help: "Create the plane without making it active.")
-    public var noActivate: Bool = false
-
     public init() {}
 
     public func run() throws {
@@ -200,8 +185,7 @@ public struct PlaneCreateTargetsCommand: ParsableCommand {
             command: .createConstructionPlaneFromTargets(
                 name: name,
                 targets: selection.decodedTargets(),
-                viewNormal: try viewNormal(),
-                activates: !noActivate
+                viewNormal: try viewNormal()
             )
         )
     }

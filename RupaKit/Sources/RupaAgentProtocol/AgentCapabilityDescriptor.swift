@@ -1,3 +1,7 @@
+import RupaCore
+import RupaAutomation
+import RupaDomainFoundation
+
 public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
     public enum Category: String, Codable, Equatable, Sendable {
         case document
@@ -8,6 +12,7 @@ public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
         case solid
         case directEditing
         case sourceCurveEditing
+        case domain
         case read
         case selection
         case persistence
@@ -16,6 +21,7 @@ public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
     public enum Access: String, Codable, Equatable, Sendable {
         case agentRequest
         case automationCommand
+        case domainCapability
     }
 
     public enum Discovery: String, Codable, Equatable, Sendable {
@@ -89,41 +95,84 @@ public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
         }
     }
 
+    public struct DomainContract: Codable, Equatable, Sendable {
+        public let effect: DomainCapabilityEffect
+        public let resultKind: DomainCapabilityResultKind
+        public let targetKinds: [DomainCapabilityTargetKind]
+        public let knownErrorCodes: [DomainCapabilityErrorCode]
+        public let supportsCancellation: Bool
+        public let reportsProgress: Bool
+        public let determinism: DomainCapabilityDeterminism
+        public let resultFidelity: ValidationFidelity?
+
+        public init(
+            effect: DomainCapabilityEffect,
+            resultKind: DomainCapabilityResultKind,
+            targetKinds: [DomainCapabilityTargetKind],
+            knownErrorCodes: [DomainCapabilityErrorCode],
+            supportsCancellation: Bool,
+            reportsProgress: Bool,
+            determinism: DomainCapabilityDeterminism,
+            resultFidelity: ValidationFidelity?
+        ) {
+            self.effect = effect
+            self.resultKind = resultKind
+            self.targetKinds = targetKinds
+            self.knownErrorCodes = knownErrorCodes
+            self.supportsCancellation = supportsCancellation
+            self.reportsProgress = reportsProgress
+            self.determinism = determinism
+            self.resultFidelity = resultFidelity
+        }
+    }
+
     public let name: String
     public let category: Category
     public let summary: String
     public let access: Access
-    public let mutatesDocument: Bool
+    public let stateEffect: AutomationCommandEffect
     public let requiresSession: Bool
-    public let requiresExpectedGeneration: Bool
+    public let requiresExpectedSourceGeneration: Bool
+    public let requiresExpectedWorkspaceRevision: Bool
+    public let supportsDryRun: Bool
     public let discovery: [Discovery]
     public let targets: [Target]
     public let failureMode: String
     public let optionMatrix: [OptionAxis]
+    public let inputParameters: [DomainCommandParameterDescriptor]
+    public let domainContract: DomainContract?
 
     public init(
         name: String,
         category: Category,
         summary: String,
         access: Access,
-        mutatesDocument: Bool,
+        stateEffect: AutomationCommandEffect,
         requiresSession: Bool = true,
-        requiresExpectedGeneration: Bool = true,
+        requiresExpectedSourceGeneration: Bool = true,
+        requiresExpectedWorkspaceRevision: Bool = false,
+        supportsDryRun: Bool = false,
         discovery: [Discovery] = [],
         targets: [Target] = [],
         failureMode: String,
-        optionMatrix: [OptionAxis] = []
+        optionMatrix: [OptionAxis] = [],
+        inputParameters: [DomainCommandParameterDescriptor] = [],
+        domainContract: DomainContract? = nil
     ) {
         self.name = name
         self.category = category
         self.summary = summary
         self.access = access
-        self.mutatesDocument = mutatesDocument
+        self.stateEffect = stateEffect
         self.requiresSession = requiresSession
-        self.requiresExpectedGeneration = requiresExpectedGeneration
+        self.requiresExpectedSourceGeneration = requiresExpectedSourceGeneration
+        self.requiresExpectedWorkspaceRevision = requiresExpectedWorkspaceRevision
+        self.supportsDryRun = supportsDryRun
         self.discovery = discovery
         self.targets = targets
         self.failureMode = failureMode
         self.optionMatrix = optionMatrix
+        self.inputParameters = inputParameters
+        self.domainContract = domainContract
     }
 }

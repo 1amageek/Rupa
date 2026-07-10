@@ -4,13 +4,17 @@ import RupaCore
 public struct AutomationResult: Codable, Equatable, Sendable {
     public var message: String
     public var commandName: String?
+    public var effect: AutomationCommandEffect
     public var generation: DocumentGeneration
+    public var sourceDirty: Bool
+    public var workspaceRevision: WorkspaceRevision
     public var didMutate: Bool
     public var diagnostics: [EditorDiagnostic]
     public var primaryFeatureID: FeatureID?
     public var createdFeatureIDs: [FeatureID]
     public var curveRebuildReport: CurveRebuildReport?
     public var addedSelectionDimensionID: SelectionDimensionID?
+    public var createdConstructionPlaneID: ConstructionPlaneSourceID?
     public var workspaceScale: WorkspaceScaleSnapshot?
     public var workspaceInteractionScale: WorkspaceInteractionScaleSnapshot?
     public var workspaceBounds: MeasurementResult.Bounds?
@@ -28,13 +32,17 @@ public struct AutomationResult: Codable, Equatable, Sendable {
     public init(
         message: String,
         commandName: String? = nil,
+        effect: AutomationCommandEffect = .readOnly,
         generation: DocumentGeneration = DocumentGeneration(),
+        sourceDirty: Bool = false,
+        workspaceRevision: WorkspaceRevision = WorkspaceRevision(),
         didMutate: Bool = false,
         diagnostics: [EditorDiagnostic] = [],
         primaryFeatureID: FeatureID? = nil,
         createdFeatureIDs: [FeatureID] = [],
         curveRebuildReport: CurveRebuildReport? = nil,
         addedSelectionDimensionID: SelectionDimensionID? = nil,
+        createdConstructionPlaneID: ConstructionPlaneSourceID? = nil,
         workspaceScale: WorkspaceScaleSnapshot? = nil,
         workspaceInteractionScale: WorkspaceInteractionScaleSnapshot? = nil,
         workspaceBounds: MeasurementResult.Bounds? = nil,
@@ -51,13 +59,17 @@ public struct AutomationResult: Codable, Equatable, Sendable {
     ) {
         self.message = message
         self.commandName = commandName
+        self.effect = effect
         self.generation = generation
+        self.sourceDirty = sourceDirty
+        self.workspaceRevision = workspaceRevision
         self.didMutate = didMutate
         self.diagnostics = diagnostics
         self.primaryFeatureID = primaryFeatureID ?? createdFeatureIDs.first
         self.createdFeatureIDs = createdFeatureIDs
         self.curveRebuildReport = curveRebuildReport
         self.addedSelectionDimensionID = addedSelectionDimensionID
+        self.createdConstructionPlaneID = createdConstructionPlaneID
         self.workspaceScale = workspaceScale
         self.workspaceInteractionScale = workspaceInteractionScale
         self.workspaceBounds = workspaceBounds
@@ -78,13 +90,17 @@ extension AutomationResult {
     private enum CodingKeys: String, CodingKey {
         case message
         case commandName
+        case effect
         case generation
+        case sourceDirty
+        case workspaceRevision
         case didMutate
         case diagnostics
         case primaryFeatureID
         case createdFeatureIDs
         case curveRebuildReport
         case addedSelectionDimensionID
+        case createdConstructionPlaneID
         case workspaceScale
         case workspaceInteractionScale
         case workspaceBounds
@@ -114,10 +130,19 @@ extension AutomationResult {
         self.init(
             message: try container.decode(String.self, forKey: .message),
             commandName: try container.decodeIfPresent(String.self, forKey: .commandName),
+            effect: try container.decodeIfPresent(
+                AutomationCommandEffect.self,
+                forKey: .effect
+            ) ?? .readOnly,
             generation: try container.decodeIfPresent(
                 DocumentGeneration.self,
                 forKey: .generation
             ) ?? DocumentGeneration(),
+            sourceDirty: try container.decodeIfPresent(Bool.self, forKey: .sourceDirty) ?? false,
+            workspaceRevision: try container.decodeIfPresent(
+                WorkspaceRevision.self,
+                forKey: .workspaceRevision
+            ) ?? WorkspaceRevision(),
             didMutate: try container.decodeIfPresent(Bool.self, forKey: .didMutate) ?? false,
             diagnostics: try container.decodeIfPresent(
                 [EditorDiagnostic].self,
@@ -132,6 +157,10 @@ extension AutomationResult {
             addedSelectionDimensionID: try container.decodeIfPresent(
                 SelectionDimensionID.self,
                 forKey: .addedSelectionDimensionID
+            ),
+            createdConstructionPlaneID: try container.decodeIfPresent(
+                ConstructionPlaneSourceID.self,
+                forKey: .createdConstructionPlaneID
             ),
             workspaceScale: try container.decodeIfPresent(
                 WorkspaceScaleSnapshot.self,
@@ -186,7 +215,10 @@ extension AutomationResult {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(message, forKey: .message)
         try container.encodeIfPresent(commandName, forKey: .commandName)
+        try container.encode(effect, forKey: .effect)
         try container.encode(generation, forKey: .generation)
+        try container.encode(sourceDirty, forKey: .sourceDirty)
+        try container.encode(workspaceRevision, forKey: .workspaceRevision)
         try container.encode(didMutate, forKey: .didMutate)
         try container.encode(diagnostics, forKey: .diagnostics)
         try container.encodeIfPresent(primaryFeatureID, forKey: .primaryFeatureID)
@@ -195,6 +227,10 @@ extension AutomationResult {
         try container.encodeIfPresent(
             addedSelectionDimensionID,
             forKey: .addedSelectionDimensionID
+        )
+        try container.encodeIfPresent(
+            createdConstructionPlaneID,
+            forKey: .createdConstructionPlaneID
         )
         try container.encodeIfPresent(workspaceScale, forKey: .workspaceScale)
         try container.encodeIfPresent(

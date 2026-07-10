@@ -3,6 +3,7 @@ import Darwin
 import Foundation
 import RupaAutomation
 import RupaCore
+import RupaDomainFoundation
 import SwiftCAD
 @testable import RupaAgent
 
@@ -45,7 +46,8 @@ import SwiftCAD
     let request = AgentRequest.execute(
         sessionID: sessionID,
         command: .renameDocument(name: "Flat Params"),
-        expectedGeneration: DocumentGeneration(7)
+        expectedGeneration: DocumentGeneration(7),
+        expectedWorkspaceRevision: WorkspaceRevision(3)
     )
 
     let encoded = try codec.encode(request, id: "request-params")
@@ -59,6 +61,7 @@ import SwiftCAD
     #expect(params["sessionID"] as? String == sessionID.uuidString)
     #expect(params["command"] != nil)
     #expect(params["expectedGeneration"] != nil)
+    #expect(params["expectedWorkspaceRevision"] != nil)
 }
 
 @Test func agentMessageCodecUsesMethodSpecificBatchRequestParams() async throws {
@@ -69,7 +72,8 @@ import SwiftCAD
             .renameDocument(name: "Batch Params"),
             .validateDocument,
         ],
-        expectedGeneration: DocumentGeneration(7)
+        expectedGeneration: DocumentGeneration(7),
+        expectedWorkspaceRevision: WorkspaceRevision(3)
     )
     let request = AgentRequest.executeBatch(
         sessionID: sessionID,
@@ -88,6 +92,158 @@ import SwiftCAD
     #expect(params["sessionID"] as? String == sessionID.uuidString)
     #expect(batchJSON["commands"] != nil)
     #expect(batchJSON["expectedGeneration"] != nil)
+    #expect(batchJSON["expectedWorkspaceRevision"] != nil)
+}
+
+@Test func agentMessageCodecRoundTripsDomainExecuteRequestAndResponse() async throws {
+    let codec = AgentMessageCodec()
+    let sessionID = UUID()
+    let capabilityID: DomainCapabilityID = "architecture.createWall"
+    let namespace: SemanticNamespaceID = "architecture"
+    let request = AgentRequest.executeDomain(
+        sessionID: sessionID,
+        request: DomainCommandRequest(
+            capabilityID: capabilityID,
+            namespace: namespace,
+            payload: .object([
+                "kind": .string("wall"),
+                "height": .number(3.0),
+            ]),
+            expectedGeneration: DocumentGeneration(9),
+            dryRun: true
+        )
+    )
+    let response = AgentResponse.domainExecution(
+        DomainExecutionResult(
+            capabilityID: capabilityID,
+            namespace: namespace,
+            message: "Domain dry-run completed.",
+            baseGeneration: DocumentGeneration(9),
+            generation: DocumentGeneration(9),
+            proposedGeneration: DocumentGeneration(10),
+            didMutate: false,
+            wouldMutate: true,
+            dryRun: true,
+            diagnostics: [
+                EditorDiagnostic(
+                    severity: .info,
+                    message: "Domain request reached codec."
+                ),
+            ]
+        )
+    )
+
+    let encodedRequest = try codec.encode(request, id: "domain-request")
+    let decodedRequest = try codec.decodeRequest(from: encodedRequest)
+    let requestJSON = try #require(JSONSerialization.jsonObject(with: encodedRequest) as? [String: Any])
+    let requestParams = try #require(requestJSON["params"] as? [String: Any])
+    let encodedResponse = try codec.encode(
+        response,
+        id: "domain-request",
+        method: "domain.execute"
+    )
+    let decodedResponse = try codec.decodeResponse(
+        from: encodedResponse,
+        expectedID: "domain-request",
+        expectedMethod: "domain.execute"
+    )
+
+    #expect(decodedRequest == request)
+    #expect(decodedResponse == response)
+    guard case .domainExecution(let decodedDomainResult) = decodedResponse else {
+        Issue.record("Expected a domain execution response.")
+        return
+    }
+    #expect(!decodedDomainResult.didMutate)
+    #expect(decodedDomainResult.wouldMutate)
+    #expect(decodedDomainResult.baseGeneration == DocumentGeneration(9))
+    #expect(decodedDomainResult.proposedGeneration == DocumentGeneration(10))
+    #expect(requestJSON["method"] as? String == "domain.execute")
+    #expect(requestParams["sessionID"] as? String == sessionID.uuidString)
+    #expect(requestParams["capabilityID"] as? String == capabilityID.rawValue)
+    #expect(requestParams["namespace"] as? String == namespace.rawValue)
+    #expect(requestParams["payload"] != nil)
+    #expect(requestParams["expectedGeneration"] != nil)
+    #expect(requestParams["dryRun"] as? Bool == true)
+}
+
+@Test func agentExecutesInjectedDomainCapability() async throws {
+    let namespace: SemanticNamespaceID = "architecture"
+    let capabilityID: DomainCapabilityID = "architecture.rename"
+    let registry = try agentDomainExecutionRegistry(
+        namespace: namespace,
+        capabilityID: capabilityID,
+        supportsDryRun: true,
+        lowering: AgentDomainRenameLowering(
+            capabilityID: capabilityID,
+            name: "Agent Domain"
+        )
+    )
+    let server = AgentCommandController(domainRegistry: registry)
+    let session = EditorSession(document: .empty(named: "Before"))
+    let sessionID = UUID()
+    server.register(session: session, id: sessionID)
+
+    let response = server.handle(
+        .executeDomain(
+            sessionID: sessionID,
+            request: DomainCommandRequest(
+                capabilityID: capabilityID,
+                namespace: namespace,
+                payload: .object([:]),
+                expectedGeneration: session.generation
+            )
+        )
+    )
+
+    guard case .domainExecution(let result) = response else {
+        Issue.record("Expected domain execution response.")
+        return
+    }
+    #expect(result.didMutate)
+    #expect(!result.dryRun)
+    #expect(session.document.cadDocument.metadata.name == "Agent Domain")
+    #expect(session.commandStack.canUndo)
+}
+
+@Test func agentDomainDryRunRestoresSessionState() async throws {
+    let namespace: SemanticNamespaceID = "architecture"
+    let capabilityID: DomainCapabilityID = "architecture.rename"
+    let registry = try agentDomainExecutionRegistry(
+        namespace: namespace,
+        capabilityID: capabilityID,
+        supportsDryRun: true,
+        lowering: AgentDomainRenameLowering(
+            capabilityID: capabilityID,
+            name: "Dry Agent Domain"
+        )
+    )
+    let server = AgentCommandController(domainRegistry: registry)
+    let session = EditorSession(document: .empty(named: "Before"))
+    let sessionID = UUID()
+    server.register(session: session, id: sessionID)
+
+    let response = server.handle(
+        .executeDomain(
+            sessionID: sessionID,
+            request: DomainCommandRequest(
+                capabilityID: capabilityID,
+                namespace: namespace,
+                payload: .object([:]),
+                expectedGeneration: session.generation,
+                dryRun: true
+            )
+        )
+    )
+
+    guard case .domainExecution(let result) = response else {
+        Issue.record("Expected domain execution response.")
+        return
+    }
+    #expect(!result.didMutate)
+    #expect(result.dryRun)
+    #expect(session.document.cadDocument.metadata.name == "Before")
+    #expect(!session.commandStack.canUndo)
 }
 
 @Test func agentMessageCodecAllowsOmittedExpressionDefaults() async throws {
@@ -173,6 +329,7 @@ import SwiftCAD
                 ),
             ],
             generation: DocumentGeneration(1),
+            workspaceRevision: WorkspaceRevision(4),
             dirty: true
         )
     )
@@ -193,6 +350,7 @@ import SwiftCAD
     #expect(result["batch"] == nil)
     #expect(result["results"] != nil)
     #expect(result["generation"] != nil)
+    #expect(result["workspaceRevision"] != nil)
     #expect(result["dirty"] as? Bool == true)
 }
 
@@ -472,7 +630,12 @@ import SwiftCAD
             }
             """,
             { envelope in
-                guard case .execute(let decodedSessionID, let command, let expectedGeneration) = envelope.params else {
+                guard case .execute(
+                    let decodedSessionID,
+                    let command,
+                    let expectedGeneration,
+                    let expectedWorkspaceRevision
+                ) = envelope.params else {
                     #expect(Bool(false))
                     return
                 }
@@ -493,6 +656,7 @@ import SwiftCAD
                 #expect(decodedSessionID == sessionID)
                 #expect(command == .splitSurfaceSpan(target: expectedTarget, fraction: .constant(.scalar(0.5))))
                 #expect(expectedGeneration == DocumentGeneration(3))
+                #expect(expectedWorkspaceRevision == nil)
             }
         ),
         (
@@ -912,7 +1076,7 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
             category: .read,
             summary: "Discover generated topology.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.topologySummary],
             targets: [.face, .edge, .vertex],
             failureMode: "Rejects stale generations before reading."
@@ -1080,4 +1244,48 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
     #expect(try codec.decodeResponse(from: try codec.encode(sketchDimensionResponse)) == sketchDimensionResponse)
     #expect(try codec.decodeResponse(from: try codec.encode(selectionDimensionResponse)) == selectionDimensionResponse)
     #expect(try codec.decodeResponse(from: try codec.encode(qualityAssessmentResponse)) == qualityAssessmentResponse)
+}
+
+private struct AgentDomainRenameLowering: DomainCommandLowering {
+    var capabilityID: DomainCapabilityID
+    var name: String
+
+    func lower(_ request: DomainCommandRequest) throws -> DomainCommandPlan {
+        .automationBatch(
+            AutomationBatch(
+                commands: [.renameDocument(name: name)],
+                expectedGeneration: request.expectedGeneration
+            )
+        )
+    }
+}
+
+private func agentDomainExecutionRegistry(
+    namespace: SemanticNamespaceID,
+    capabilityID: DomainCapabilityID,
+    supportsDryRun: Bool,
+    lowering: any DomainCommandLowering
+) throws -> DomainRegistry {
+    try DomainRegistry(
+        namespaces: [
+            DomainNamespaceRegistration(
+                namespace: namespace,
+                supportedSchemaVersions: [SemanticSchemaVersion(major: 0, minor: 1, patch: 0)]
+            ),
+        ],
+        capabilityDescriptors: [
+            DomainCapabilityDescriptor(
+                id: capabilityID,
+                namespace: namespace,
+                name: capabilityID.rawValue,
+                summary: "Execute an injected Agent domain capability.",
+                effect: .documentMutation,
+                resultKind: .documentTransaction,
+                supportsDryRun: supportsDryRun,
+                targetKinds: ["document"],
+                failureMode: "Rejects invalid injected Agent domain requests."
+            ),
+        ],
+        commandLowerings: [lowering]
+    )
 }

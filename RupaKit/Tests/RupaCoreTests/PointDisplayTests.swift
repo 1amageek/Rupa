@@ -4,7 +4,7 @@ import Testing
 @testable import RupaCore
 
 @MainActor
-@Test func pointDisplayCommandNormalizesControlPointTargetsAndParticipatesInUndoRedo() async throws {
+@Test func pointDisplayCommandNormalizesControlPointTargetsWithoutMutatingSourceHistory() async throws {
     let session = EditorSession()
     _ = try session.execute(
         .createSplineSketch(
@@ -18,7 +18,7 @@ import Testing
             ])
         )
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let spline = try #require(summary.entries.first { $0.entityKind == "spline" })
     let curveTarget = try #require(spline.selectionTarget())
     let componentID = try #require(sketchEntityComponentID(from: curveTarget))
@@ -27,34 +27,51 @@ import Testing
         entry: spline,
         componentID: controlPoint.selectionComponentID
     )
+    let sourceMetadata = session.document.productMetadata
+    let sourceFingerprint = try session.document.cadDocument.sourceFingerprint(
+        tolerance: session.document.modelingSettings.tolerance
+    )
+    let sourceGeneration = session.generation
+    let sourceUndoCount = session.commandStack.undoEntries.count
+    let sourceDirtyState = session.isDirty
+    let workspaceRevision = session.workspaceState.revision
+    let expectedWorkspaceRevision = try workspaceRevision.advanced()
 
     let hideResult = try session.execute(
         .setPointDisplay(target: controlPointTarget, isVisible: nil)
     )
 
     #expect(hideResult.commandName == "setPointDisplay")
-    #expect(hideResult.didMutate)
-    #expect(session.document.productMetadata.pointDisplays[componentID] == PointDisplay(
+    #expect(hideResult.revision == expectedWorkspaceRevision)
+    #expect(session.workspaceState.pointDisplays[componentID] == PointDisplay(
         componentID: componentID,
         isVisible: false
     ))
-
-    _ = try session.undo()
-    #expect(session.document.productMetadata.pointDisplays[componentID] == nil)
-
-    _ = try session.redo()
-    #expect(session.document.productMetadata.pointDisplays[componentID]?.isVisible == false)
+    #expect(session.document.productMetadata == sourceMetadata)
+    #expect(try session.document.cadDocument.sourceFingerprint(
+        tolerance: session.document.modelingSettings.tolerance
+    ) == sourceFingerprint)
+    #expect(session.generation == sourceGeneration)
+    #expect(session.commandStack.undoEntries.count == sourceUndoCount)
+    #expect(session.isDirty == sourceDirtyState)
 
     _ = try session.execute(
         .setPointDisplay(target: curveTarget, isVisible: nil)
     )
-    #expect(session.document.productMetadata.pointDisplays[componentID]?.isVisible == true)
+    #expect(session.workspaceState.pointDisplays[componentID]?.isVisible == true)
+    #expect(session.document.productMetadata == sourceMetadata)
+    #expect(try session.document.cadDocument.sourceFingerprint(
+        tolerance: session.document.modelingSettings.tolerance
+    ) == sourceFingerprint)
+    #expect(session.generation == sourceGeneration)
+    #expect(session.commandStack.undoEntries.count == sourceUndoCount)
 }
 
 @MainActor
 @Test func pointDisplayRejectsSourcePointTargets() async throws {
     let setup = try pointDisplayPointTargetDocument()
     let session = EditorSession(document: setup.document)
+    let workspaceRevision = session.workspaceState.revision
     let target = try pointDisplayPointSelectionTarget(
         featureID: setup.featureID,
         pointID: setup.pointID,
@@ -71,7 +88,8 @@ import Testing
     }
 
     #expect(caught?.code == .commandInvalid)
-    #expect(session.document.productMetadata.pointDisplays.isEmpty)
+    #expect(session.workspaceState.pointDisplays.isEmpty)
+    #expect(session.workspaceState.revision == workspaceRevision)
 }
 
 private func sketchEntityComponentID(from target: SelectionTarget) -> SelectionComponentID? {
@@ -136,7 +154,7 @@ private func pointDisplayPointSelectionTarget(
     pointID: SketchEntityID,
     document: DesignDocument
 ) throws -> SelectionTarget {
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let point = try #require(summary.entries.first { entry in
         entry.sourceFeatureID == featureID.description &&
             entry.entityID == pointID.description

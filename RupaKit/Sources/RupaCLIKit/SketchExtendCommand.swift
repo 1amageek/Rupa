@@ -40,7 +40,7 @@ public struct SketchExtendCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Extension distance numeric literal.")
     public var distance: Double
 
-    @Option(help: "Length unit for the extension distance. Defaults to the document display unit.")
+    @Option(help: "Length unit for the extension distance. Defaults to the workspace display unit.")
     public var unit: String?
 
     @Option(help: "Extension shape: natural, linear, soft, reflective, or arc.")

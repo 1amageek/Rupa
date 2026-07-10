@@ -17,7 +17,7 @@ public struct SketchConvertLineToArcCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Sagitta numeric literal.")
     public var sagitta: Double
 
-    @Option(help: "Length unit for the sagitta. Defaults to the document display unit.")
+    @Option(help: "Length unit for the sagitta. Defaults to the workspace display unit.")
     public var unit: String?
 
     public init() {}

@@ -56,7 +56,7 @@ import SwiftCAD
         )
     )
 
-    let result = try SketchEntitySummaryService().summarize(document: session.document)
+    let result = try SketchEntitySnapshotService().snapshot(document: session.document)
 
     #expect(result.counts.sketchCount == 4)
     #expect(result.counts.entityCount == 4)
@@ -128,7 +128,7 @@ import SwiftCAD
     )
     let session = EditorSession(document: document)
 
-    let result = try SketchEntitySummaryService().summarize(document: session.document)
+    let result = try SketchEntitySnapshotService().snapshot(document: session.document)
 
     #expect(result.counts.regionCount == 1)
     let region = try #require(result.regions.first)
@@ -172,7 +172,7 @@ import SwiftCAD
             radius: .length(5.0, .millimeter)
         )
     )
-    let result = try SketchEntitySummaryService().summarize(document: session.document)
+    let result = try SketchEntitySnapshotService().snapshot(document: session.document)
     let entry = try #require(result.entries.first)
     let target = try #require(entry.selectionTarget())
     let invalidTarget = SelectionTarget(

@@ -20,11 +20,11 @@ import Testing
             )
         )
     )
-    let sketchSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let sketchSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let line = try #require(sketchSummary.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
 
-    let summary = try SketchDimensionSummaryService().summarize(
+    let summary = try SketchDimensionSnapshotService().snapshot(
         document: session.document,
         targets: [target]
     )
@@ -40,7 +40,6 @@ import Testing
 
 @Test func sketchDimensionSummaryExposesDocumentDisplayValues() async throws {
     var document = DesignDocument.empty()
-    document.setDisplayUnit(.centimeter)
     _ = try document.createLineSketch(
         name: "Dimension Summary Display Line",
         plane: .xy,
@@ -53,13 +52,14 @@ import Testing
             y: .length(0.04, .meter)
         )
     )
-    let sketchSummary = try SketchEntitySummaryService().summarize(document: document)
+    let sketchSummary = try SketchEntitySnapshotService().snapshot(document: document)
     let line = try #require(sketchSummary.entries.first { $0.entityKind == "line" })
     let target = try #require(line.selectionTarget())
 
     let summary = try SketchDimensionSummaryService().summarize(
         document: document,
-        targets: [target]
+        targets: [target],
+        displayUnit: .centimeter
     )
 
     let length = try #require(summary.entries.first { $0.kind == .length })
@@ -90,11 +90,11 @@ import Testing
             radius: .length(5.0, .millimeter)
         )
     )
-    let sketchSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let sketchSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let circle = try #require(sketchSummary.entries.first { $0.entityKind == "circle" })
     let target = try #require(circle.selectionTarget())
 
-    let summary = try SketchDimensionSummaryService().summarize(
+    let summary = try SketchDimensionSnapshotService().snapshot(
         document: session.document,
         targets: [target]
     )
@@ -124,11 +124,11 @@ import Testing
             endAngle: .angle(90.0, .degree)
         )
     )
-    let sketchSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let sketchSummary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let arc = try #require(sketchSummary.entries.first { $0.entityKind == "arc" })
     let target = try #require(arc.selectionTarget())
 
-    let summary = try SketchDimensionSummaryService().summarize(
+    let summary = try SketchDimensionSnapshotService().snapshot(
         document: session.document,
         targets: [target]
     )
@@ -147,7 +147,7 @@ import Testing
 @Test func sketchDimensionSummaryMapsGeneratedRectangleCapEdgeToSourceLine() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let capEdge = try #require(topology.entries.first {
         $0.kind == .edge &&
             $0.generatedRole == "edge" &&
@@ -156,7 +156,7 @@ import Testing
     })
     let target = try #require(capEdge.selectionTarget())
 
-    let summary = try SketchDimensionSummaryService().summarize(
+    let summary = try SketchDimensionSnapshotService().snapshot(
         document: session.document,
         targets: [target]
     )
@@ -177,7 +177,7 @@ import Testing
 @Test func sketchDimensionSummaryMapsGeneratedCylinderCapEdgeToSourceCircle() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedCircle())
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let capEdge = try #require(topology.entries.first {
         $0.kind == .edge &&
             $0.generatedRole == "edge" &&
@@ -186,7 +186,7 @@ import Testing
     })
     let target = try #require(capEdge.selectionTarget())
 
-    let summary = try SketchDimensionSummaryService().summarize(
+    let summary = try SketchDimensionSnapshotService().snapshot(
         document: session.document,
         targets: [target]
     )
@@ -218,7 +218,7 @@ import Testing
             segmentCount: 8
         )
     )
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let filletArcEdge = try #require(topology.entries.first {
         guard let radius = $0.curveRadius else {
             return false
@@ -230,7 +230,7 @@ import Testing
     })
     let target = try #require(filletArcEdge.selectionTarget())
 
-    let summary = try SketchDimensionSummaryService().summarize(
+    let summary = try SketchDimensionSnapshotService().snapshot(
         document: session.document,
         targets: [target]
     )

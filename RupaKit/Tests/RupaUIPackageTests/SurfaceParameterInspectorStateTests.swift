@@ -10,7 +10,10 @@ import Testing
         surface: surfaceParameterInspectorDirectBSplineSurface()
     )
 
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(
+        document: document,
+        displayUnit: .millimeter
+    )
     let patch = try #require(summary.sources.first?.patches.first)
     let knot = try #require(patch.basis.uKnotVector.first { $0.index == 3 })
     let reference = try #require(knot.selectionReference)
@@ -49,7 +52,7 @@ import Testing
         surface: surfaceParameterInspectorDirectBSplineSurface()
     )
 
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let address = try #require(patch.parameterAddresses.first { $0.id == "center" })
     let reference = try #require(address.selectionReference)
@@ -81,7 +84,7 @@ import Testing
         surface: surfaceParameterInspectorDirectBSplineSurface()
     )
 
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let span = try #require(patch.basis.uSpans.first { $0.index == 0 })
     let reference = try #require(span.selectionReference)
@@ -118,7 +121,7 @@ import Testing
         surface: surfaceParameterInspectorDirectBSplineSurface()
     ))
 
-    let initialSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let initialSummary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let patch = try #require(initialSummary.sources.first?.patches.first)
     let frameSample = try #require(patch.frameSamples.first)
     let query = SurfaceFrameQuery(selectionReference: frameSample.selectionReference)
@@ -127,11 +130,11 @@ import Testing
         isVisible: true
     ))
 
-    let visibleSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let visibleSummary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let state = try #require(SurfaceParameterInspectorState(
         selectedReferences: [frameSample.selectionReference],
         summaryResult: visibleSummary,
-        surfaceFrameDisplays: session.document.productMetadata.surfaceFrameDisplays
+        surfaceFrameDisplays: session.workspaceState.surfaceFrameDisplays
     ))
 
     #expect(state.kindTitle == "Address")
@@ -149,7 +152,7 @@ import Testing
         surface: surfaceParameterInspectorDirectBSplineSurface()
     )
 
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let knot = try #require(patch.basis.uKnotVector.first { $0.index == 0 })
     let reference = try #require(knot.selectionReference)
@@ -173,7 +176,7 @@ import Testing
         surface: surfaceParameterInspectorDirectBSplineSurface()
     )
 
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let knot = try #require(patch.basis.uKnotVector.first { $0.index == 3 })
     let reference = try #require(knot.selectionReference)
@@ -182,7 +185,7 @@ import Testing
         multiplicity: 2
     )
 
-    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let updatedPatch = try #require(updatedSummary.sources.first?.patches.first)
     let saturatedKnot = try #require(updatedPatch.basis.uKnotVector.first { $0.index == 3 })
     let saturatedReference = try #require(saturatedKnot.selectionReference)
@@ -204,7 +207,7 @@ import Testing
         surface: surfaceParameterInspectorDirectBSplineSurface()
     )
 
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let controlPoint = try #require(patch.controlPoints.first)
 
@@ -221,7 +224,7 @@ import Testing
         surface: surfaceParameterInspectorDirectBSplineSurface()
     )
 
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let span = try #require(patch.basis.vSpans.first { $0.index == 1 })
     let reference = try #require(span.selectionReference)
@@ -231,7 +234,8 @@ import Testing
         currentEvaluation: nil,
         documentGeneration: DocumentGeneration(),
         objectRegistry: .builtIn,
-        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard)
+        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard),
+        workspaceState: WorkspaceState()
     )
 
     let state = try #require(try builder.surfaceParameterStateResult().get())
@@ -253,7 +257,7 @@ import Testing
         surface: surfaceParameterInspectorDirectBSplineSurface()
     ))
 
-    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let address = try #require(patch.parameterAddresses.first { $0.id == "center" })
     let reference = try #require(address.selectionReference)
@@ -269,7 +273,8 @@ import Testing
         currentEvaluation: nil,
         documentGeneration: DocumentGeneration(),
         objectRegistry: .builtIn,
-        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard)
+        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard),
+        workspaceState: session.workspaceState
     )
 
     let state = try #require(try builder.surfaceParameterStateResult().get())

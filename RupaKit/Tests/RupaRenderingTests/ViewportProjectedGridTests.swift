@@ -5,11 +5,12 @@ import RupaViewportScene
 @testable import RupaRendering
 
 @Test func viewportProjectedGridCreatesCoordinateParallelLines() {
-    var document = DesignDocument.empty()
-    document.setDisplayUnit(.millimeter)
+    let document = DesignDocument.empty()
+    let ruler = RulerConfiguration.standard(for: .millimeter)
 
     let grid = ViewportProjectedGrid(
         document: document,
+        ruler: ruler,
         size: CGSize(width: 800.0, height: 600.0)
     )
     let xLines = grid.lines(for: .x)
@@ -35,17 +36,17 @@ import RupaViewportScene
     #expect(grid.scaleLabels.allSatisfy { abs($0.valueMeters) >= grid.majorStepMeters - 1.0e-12 })
     #expect(grid.scaleReadout.minorStep.meters == grid.minorStepMeters)
     #expect(grid.scaleReadout.majorStep.meters == grid.majorStepMeters)
-    #expect(grid.scaleReadout.snapStep.meters == document.ruler.minorTickMeters)
+    #expect(grid.scaleReadout.snapStep.meters == ruler.minorTickMeters)
     #expect(grid.scaleReadout.minorStepPixels == grid.minorStepPixels)
     #expect(grid.scaleReadout.visualSpacingMode == .adaptive)
     #expect(grid.scaleReadout.accessibilityText.contains("mode adaptive"))
     #expect(grid.scaleReadout.accessibilityText.contains(grid.scaleReadout.snapStep.text))
     #expect(grid.scaleReadout.accessibilityText.contains(grid.scaleReadout.visibleSpan.text))
-    #expect(grid.scaleReadout.workspaceSpan.meters == document.ruler.visibleSpanMeters)
+    #expect(grid.scaleReadout.workspaceSpan.meters == ruler.visibleSpanMeters)
     #expect(grid.scaleReadout.accessibilityText.contains("workspace span"))
     #expect(grid.scaleReadout.accessibilityText.contains(grid.scaleReadout.workspaceSpan.text))
-    #expect(grid.majorStepMeters >= document.ruler.majorTickMeters)
-    #expect(grid.minorStepMeters >= document.ruler.minorTickMeters)
+    #expect(grid.majorStepMeters >= ruler.majorTickMeters)
+    #expect(grid.minorStepMeters >= ruler.minorTickMeters)
     #expect(grid.layout.viewportSize == CGSize(width: 800.0, height: 600.0))
     #expect(grid.layout.basis == grid.basis)
     #expect(abs(firstXVector.dx) > 0.0)
@@ -58,52 +59,68 @@ import RupaViewportScene
     #expect(zLines.prefix(12).allSatisfy { isParallel(vector(for: $0), firstZVector) })
 }
 
+@Test func viewportProjectedGridUsesExplicitWorkspaceRuler() {
+    let document = DesignDocument.empty()
+    let ruler = WorkspaceScalePreset.sitePlanning.rulerConfiguration
+
+    let grid = ViewportProjectedGrid(
+        document: document,
+        ruler: ruler,
+        size: CGSize(width: 800.0, height: 600.0)
+    )
+
+    #expect(ruler != RulerConfiguration.standard(for: .millimeter))
+    #expect(grid.scaleReadout.workspaceSpan.meters == ruler.visibleSpanMeters)
+    #expect(grid.scaleReadout.workspaceSpan.displayUnit == ruler.displayUnit)
+    #expect(grid.scaleLabels.allSatisfy { $0.displayUnit == ruler.displayUnit })
+}
+
 @Test func viewportProjectedGridSupportsArchitectureScaleRuler() throws {
-    var document = DesignDocument.empty()
-    try document.setRulerConfiguration(
-        RulerConfiguration(
-            displayUnit: .meter,
-            minorTickMeters: 1.0,
-            majorTickMeters: 10.0,
-            visibleSpanMeters: RulerConfiguration.visibleSpanMetersRange.upperBound
-        )
+    let document = DesignDocument.empty()
+    let ruler = RulerConfiguration(
+        displayUnit: .meter,
+        minorTickMeters: 1.0,
+        majorTickMeters: 10.0,
+        visibleSpanMeters: RulerConfiguration.visibleSpanMetersRange.upperBound
     )
 
     let grid = ViewportProjectedGrid(
         document: document,
+        ruler: ruler,
         size: CGSize(width: 800.0, height: 600.0)
     )
 
     #expect(!grid.lines.isEmpty)
     #expect(grid.lines.count < 400)
-    #expect(grid.minorStepMeters >= document.ruler.minorTickMeters)
-    #expect(grid.majorStepMeters >= document.ruler.majorTickMeters)
+    #expect(grid.minorStepMeters >= ruler.minorTickMeters)
+    #expect(grid.majorStepMeters >= ruler.majorTickMeters)
     #expect(grid.scaleLabels.allSatisfy { $0.displayUnit.isMetric })
     #expect(grid.scaleLabels.allSatisfy { abs($0.displayValue) <= 1_000.0 })
     #expect(grid.scaleReadout.majorStep.displayUnit.isMetric)
     #expect(grid.scaleReadout.visibleSpan.displayUnit == .kilometer)
     #expect(grid.scaleReadout.workspaceSpan.displayUnit == .kilometer)
-    #expect(grid.scaleReadout.workspaceSpan.meters == document.ruler.visibleSpanMeters)
+    #expect(grid.scaleReadout.workspaceSpan.meters == ruler.visibleSpanMeters)
 }
 
 @Test func viewportProjectedGridReportsSitePlanningScaleReadout() throws {
-    var document = DesignDocument.empty()
-    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    let document = DesignDocument.empty()
+    let ruler = WorkspaceScalePreset.sitePlanning.rulerConfiguration
 
     let grid = ViewportProjectedGrid(
         document: document,
+        ruler: ruler,
         size: CGSize(width: 800.0, height: 600.0)
     )
 
     #expect(grid.scaleReadout.minorStep.meters == grid.minorStepMeters)
     #expect(grid.scaleReadout.majorStep.meters == grid.majorStepMeters)
-    #expect(grid.scaleReadout.snapStep.meters == document.ruler.minorTickMeters)
+    #expect(grid.scaleReadout.snapStep.meters == ruler.minorTickMeters)
     #expect(grid.scaleReadout.minorStep.displayUnit == .kilometer)
     #expect(grid.scaleReadout.majorStep.displayUnit == .kilometer)
     #expect(grid.scaleReadout.snapStep.displayUnit == .kilometer)
     #expect(grid.scaleReadout.visibleSpan.displayUnit == .kilometer)
     #expect(grid.scaleReadout.workspaceSpan.displayUnit == .kilometer)
-    #expect(grid.scaleReadout.workspaceSpan.meters == document.ruler.visibleSpanMeters)
+    #expect(grid.scaleReadout.workspaceSpan.meters == ruler.visibleSpanMeters)
     #expect(grid.scaleReadout.workspaceSpan.text == "100km")
     #expect(grid.scaleReadout.compactText.contains("Grid"))
     #expect(grid.scaleReadout.compactText.contains("Snap"))
@@ -116,11 +133,12 @@ import RupaViewportScene
 }
 
 @Test func viewportCanvasScaleMenuStateReportsReadoutAndAvailableActions() throws {
-    var document = DesignDocument.empty()
-    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    let document = DesignDocument.empty()
+    let ruler = WorkspaceScalePreset.sitePlanning.rulerConfiguration
 
     let grid = ViewportProjectedGrid(
         document: document,
+        ruler: ruler,
         size: CGSize(width: 1_200.0, height: 800.0),
         camera: ViewportCamera(zoom: ViewportCamera.minimumZoom),
         visualSpacingMode: .fixed
@@ -171,10 +189,11 @@ import RupaViewportScene
 }
 
 @Test func viewportCanvasScaleHUDEstimatedWidthStaysWithinChromeBounds() throws {
-    var document = DesignDocument.empty()
-    try document.setRulerConfiguration(WorkspaceScalePreset.regionalPlanning.rulerConfiguration)
+    let document = DesignDocument.empty()
+    let ruler = WorkspaceScalePreset.regionalPlanning.rulerConfiguration
     let grid = ViewportProjectedGrid(
         document: document,
+        ruler: ruler,
         size: CGSize(width: 1_200.0, height: 800.0),
         camera: ViewportCamera(zoom: ViewportCamera.maximumZoom),
         visualSpacingMode: .adaptive
@@ -196,22 +215,23 @@ import RupaViewportScene
 }
 
 @Test func viewportProjectedGridReportsUrbanPlanningScaleReadout() throws {
-    var document = DesignDocument.empty()
-    try document.setRulerConfiguration(WorkspaceScalePreset.urbanPlanning.rulerConfiguration)
+    let document = DesignDocument.empty()
+    let ruler = WorkspaceScalePreset.urbanPlanning.rulerConfiguration
 
     let grid = ViewportProjectedGrid(
         document: document,
+        ruler: ruler,
         size: CGSize(width: 1_000.0, height: 720.0)
     )
 
     #expect(!grid.lines.isEmpty)
     #expect(grid.lines.count <= 380)
-    #expect(grid.scaleReadout.snapStep.meters == document.ruler.minorTickMeters)
+    #expect(grid.scaleReadout.snapStep.meters == ruler.minorTickMeters)
     #expect(grid.scaleReadout.snapStep.text == "10m")
     #expect(grid.scaleReadout.majorStep.displayUnit.isMetric)
     #expect(grid.scaleReadout.visibleSpan.displayUnit == .kilometer)
     #expect(grid.scaleReadout.workspaceSpan.displayUnit == .kilometer)
-    #expect(grid.scaleReadout.workspaceSpan.meters == document.ruler.visibleSpanMeters)
+    #expect(grid.scaleReadout.workspaceSpan.meters == ruler.visibleSpanMeters)
     #expect(grid.scaleReadout.workspaceSpan.text == "25km")
     #expect(grid.scaleReadout.compactText.contains("Grid"))
     if grid.scaleReadout.showsSeparateSnapStep {
@@ -223,11 +243,12 @@ import RupaViewportScene
 }
 
 @Test func viewportProjectedGridReportsRegionalPlanningScaleReadout() throws {
-    var document = DesignDocument.empty(named: "Regional Grid")
-    try document.setRulerConfiguration(WorkspaceScalePreset.regionalPlanning.rulerConfiguration)
+    let document = DesignDocument.empty(named: "Regional Grid")
+    let ruler = WorkspaceScalePreset.regionalPlanning.rulerConfiguration
 
     let grid = ViewportProjectedGrid(
         document: document,
+        ruler: ruler,
         size: CGSize(width: 1_200.0, height: 800.0),
         camera: .identity,
         basis: .isometric,
@@ -239,10 +260,10 @@ import RupaViewportScene
     #expect(grid.scaleReadout.minorStep.displayUnit == .kilometer)
     #expect(grid.scaleReadout.majorStep.displayUnit == .kilometer)
     #expect(grid.scaleReadout.snapStep.displayUnit == .kilometer)
-    #expect(grid.scaleReadout.snapStep.meters == document.ruler.minorTickMeters)
+    #expect(grid.scaleReadout.snapStep.meters == ruler.minorTickMeters)
     #expect(grid.scaleReadout.visibleSpan.displayUnit == .kilometer)
     #expect(grid.scaleReadout.workspaceSpan.displayUnit == .kilometer)
-    #expect(grid.scaleReadout.workspaceSpan.meters == document.ruler.visibleSpanMeters)
+    #expect(grid.scaleReadout.workspaceSpan.meters == ruler.visibleSpanMeters)
     #expect(grid.scaleReadout.workspaceSpan.text == "1,000km")
     #expect(grid.scaleReadout.compactText.contains("Grid"))
     #expect(grid.scaleReadout.compactText.contains("km"))
@@ -257,20 +278,22 @@ import RupaViewportScene
 }
 
 @Test func viewportProjectedGridPreservesFixedVisualSpacingWhenWithinLineBudget() throws {
-    var document = DesignDocument.empty()
-    try document.setRulerConfiguration(WorkspaceScalePreset.architectureImperial.rulerConfiguration)
+    let document = DesignDocument.empty()
+    let ruler = WorkspaceScalePreset.architectureImperial.rulerConfiguration
     let size = CGSize(width: 800.0, height: 600.0)
     let identityLayout = ViewportModelCoordinateMapper(
         document: document,
+        ruler: ruler,
         size: size
     ).layout
     let maximumZoom = ViewportCameraZoomPolicy.maximumZoom(
-        for: document,
+        ruler: ruler,
         identityScale: identityLayout.scale
     )
 
     let grid = ViewportProjectedGrid(
         document: document,
+        ruler: ruler,
         size: size,
         camera: ViewportCamera(zoom: maximumZoom * 2.0),
         visualSpacingMode: .fixed
@@ -280,9 +303,9 @@ import RupaViewportScene
     #expect(grid.lines.count < 400)
     #expect(grid.scaleReadout.visualSpacingMode == .fixed)
     #expect(!grid.scaleReadout.isVisualStepCapped)
-    #expect(grid.minorStepMeters == document.ruler.minorTickMeters)
-    #expect(grid.scaleReadout.minorStep.meters == document.ruler.minorTickMeters)
-    #expect(grid.scaleReadout.snapStep.meters == document.ruler.minorTickMeters)
+    #expect(grid.minorStepMeters == ruler.minorTickMeters)
+    #expect(grid.scaleReadout.minorStep.meters == ruler.minorTickMeters)
+    #expect(grid.scaleReadout.snapStep.meters == ruler.minorTickMeters)
     #expect(grid.scaleReadout.minorStep.displayUnit == .foot)
     #expect(grid.scaleReadout.snapStep.displayUnit == .foot)
     #expect(!grid.scaleReadout.showsSeparateSnapStep)
@@ -292,11 +315,12 @@ import RupaViewportScene
 }
 
 @Test func viewportProjectedGridCapsVisualLinesWithoutChangingSnapStep() throws {
-    var document = DesignDocument.empty(named: "Site Grid")
-    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    let document = DesignDocument.empty(named: "Site Grid")
+    let ruler = WorkspaceScalePreset.sitePlanning.rulerConfiguration
 
     let grid = ViewportProjectedGrid(
         document: document,
+        ruler: ruler,
         size: CGSize(width: 1_200.0, height: 800.0),
         camera: ViewportCamera(zoom: ViewportCamera.minimumZoom),
         basis: .isometric,
@@ -318,11 +342,12 @@ import RupaViewportScene
 }
 
 @Test func viewportProjectedGridCapsFixedVisualSpacingForDenseRegionalViews() throws {
-    var document = DesignDocument.empty()
-    try document.setRulerConfiguration(WorkspaceScalePreset.regionalPlanning.rulerConfiguration)
+    let document = DesignDocument.empty()
+    let ruler = WorkspaceScalePreset.regionalPlanning.rulerConfiguration
 
     let grid = ViewportProjectedGrid(
         document: document,
+        ruler: ruler,
         size: CGSize(width: 800.0, height: 600.0),
         visualSpacingMode: .fixed
     )
@@ -331,9 +356,9 @@ import RupaViewportScene
     #expect(grid.lines.count < 400)
     #expect(grid.scaleReadout.visualSpacingMode == .fixed)
     #expect(grid.scaleReadout.isVisualStepCapped)
-    #expect(grid.minorStepMeters > document.ruler.minorTickMeters)
+    #expect(grid.minorStepMeters > ruler.minorTickMeters)
     #expect(grid.scaleReadout.minorStep.meters == grid.minorStepMeters)
-    #expect(grid.scaleReadout.snapStep.meters == document.ruler.minorTickMeters)
+    #expect(grid.scaleReadout.snapStep.meters == ruler.minorTickMeters)
     #expect(grid.scaleReadout.showsSeparateSnapStep)
     #expect(grid.scaleReadout.canvasHUDText == "\(grid.scaleReadout.minorStep.text)/\(grid.scaleReadout.snapStep.text)")
     #expect(grid.scaleReadout.compactText.contains("capped"))
@@ -404,11 +429,12 @@ import RupaViewportScene
 }
 
 @Test func viewportProjectedGridPreservesSignedCoordinateScaleLabels() throws {
-    var document = DesignDocument.empty(named: "Signed Grid")
-    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    let document = DesignDocument.empty(named: "Signed Grid")
+    let ruler = WorkspaceScalePreset.sitePlanning.rulerConfiguration
 
     let grid = ViewportProjectedGrid(
         document: document,
+        ruler: ruler,
         size: CGSize(width: 1_200.0, height: 800.0),
         camera: .identity,
         basis: .isometric,
@@ -425,11 +451,12 @@ import RupaViewportScene
 }
 
 @Test func viewportProjectedGridKeepsReadableMeterLabelsForArchitectureScale() throws {
-    var document = DesignDocument.empty(named: "Architecture Grid")
-    try document.setRulerConfiguration(WorkspaceScalePreset.architecture.rulerConfiguration)
+    let document = DesignDocument.empty(named: "Architecture Grid")
+    let ruler = WorkspaceScalePreset.architecture.rulerConfiguration
 
     let grid = ViewportProjectedGrid(
         document: document,
+        ruler: ruler,
         size: CGSize(width: 1_000.0, height: 720.0),
         camera: .identity,
         basis: .axisFront(.y),
@@ -445,11 +472,12 @@ import RupaViewportScene
 }
 
 @Test func viewportProjectedGridKeepsScaleLabelsVisuallySeparated() throws {
-    var document = DesignDocument.empty(named: "Dense Label Grid")
-    try document.setRulerConfiguration(WorkspaceScalePreset.architecture.rulerConfiguration)
+    let document = DesignDocument.empty(named: "Dense Label Grid")
+    let ruler = WorkspaceScalePreset.architecture.rulerConfiguration
 
     let grid = ViewportProjectedGrid(
         document: document,
+        ruler: ruler,
         size: CGSize(width: 360.0, height: 240.0),
         camera: .identity,
         basis: .isometric,

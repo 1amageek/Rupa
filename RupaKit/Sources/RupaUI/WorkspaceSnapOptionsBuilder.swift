@@ -18,7 +18,6 @@ struct WorkspaceSnapOptionsBuilder {
             usesObjects: isObjectTargetingEnabled,
             objectTargetingOverride: overrideState.objectTargetingOverride(for: modifierFlags),
             suppressedCandidateKinds: overrideState.suppressedCandidateKinds,
-            usesConstructionPlaneProjection: isConstructionPlaneSnapEnabled,
             constructionPlane: isConstructionPlaneSnapEnabled ? constructionPlane : nil,
             maximumCandidateCount: 16,
             referencePoint: referencePoint,

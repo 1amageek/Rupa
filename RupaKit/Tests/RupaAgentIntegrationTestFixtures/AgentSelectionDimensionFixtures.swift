@@ -34,7 +34,7 @@ public func agentSourcePointSession() throws -> (
     document.cadDocument.designGraph.nodes[featureID] = feature
     document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
 
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entries = summary.entries.filter { $0.entityKind == "point" }
     #expect(entries.count == 2)
     let targets = try entries.map { entry in
@@ -113,7 +113,7 @@ public func agentLineEndpointTargets(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> (start: SelectionTarget, end: SelectionTarget) {
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entry = try #require(summary.entries.first {
         $0.sourceFeatureID == featureID.description && $0.entityKind == "line"
     })
@@ -138,7 +138,7 @@ public func agentLineCurveTarget(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> SelectionTarget {
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entry = try #require(summary.entries.first {
         $0.sourceFeatureID == featureID.description && $0.entityKind == "line"
     })
@@ -182,7 +182,7 @@ public func agentStandalonePointTarget(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> SelectionTarget {
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entry = try #require(summary.entries.first {
         $0.sourceFeatureID == featureID.description && $0.entityKind == "point"
     })
@@ -217,7 +217,7 @@ public func agentArcEndpointTargets(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> (start: SelectionTarget, end: SelectionTarget) {
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entry = try #require(summary.entries.first {
         $0.sourceFeatureID == featureID.description && $0.entityKind == "arc"
     })
@@ -242,7 +242,7 @@ public func agentSplineControlPointTargets(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> [SelectionTarget] {
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entry = try #require(summary.entries.first {
         $0.sourceFeatureID == featureID.description && $0.entityKind == "spline"
     })
@@ -263,7 +263,7 @@ public func agentCircleCenterAndCurveTargets(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> (center: SelectionTarget, curve: SelectionTarget) {
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entry = try #require(summary.entries.first {
         $0.sourceFeatureID == featureID.description && $0.entityKind == "circle"
     })

@@ -8,6 +8,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: 0.0014, y: 0.0026),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: true,
             usesObjects: true,
@@ -22,13 +23,13 @@ import Testing
     #expect(result.candidates.map(\.kind) == [.grid])
 }
 
-@Test func snapResolverUsesDocumentRulerForDefaultGridInterval() async throws {
-    var document = DesignDocument.empty()
-    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+@Test func snapResolverUsesWorkspaceRulerForDefaultGridInterval() async throws {
+    let document = DesignDocument.empty()
 
     let result = try SnapResolver().resolve(
         point: Point2D(x: 149.0, y: 251.0),
         in: document,
+        ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration,
         options: SnapResolutionOptions(
             usesGrid: true,
             usesObjects: false,
@@ -42,7 +43,6 @@ import Testing
 
 @Test func snapResolverUsesGridScaledDefaultObjectRadiusForSitePlanningRuler() async throws {
     var document = DesignDocument.empty()
-    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
     _ = try document.createLineSketch(
         name: "Site Boundary",
         plane: .xy,
@@ -59,6 +59,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: 100.0, y: 0.0),
         in: document,
+        ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration,
         options: SnapResolutionOptions(
             usesGrid: true,
             usesObjects: true,
@@ -73,12 +74,12 @@ import Testing
 }
 
 @Test func snapResolverKeepsExplicitGridIntervalAsFixedSnapSpacing() async throws {
-    var document = DesignDocument.empty()
-    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    let document = DesignDocument.empty()
 
     let result = try SnapResolver().resolve(
         point: Point2D(x: 149.004, y: 251.006),
         in: document,
+        ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration,
         options: SnapResolutionOptions(
             usesGrid: true,
             usesObjects: false,
@@ -109,6 +110,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: 0.01031, y: 0.00002),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: true,
             usesObjects: true,
@@ -143,6 +145,7 @@ import Testing
     let disabled = try SnapResolver().resolve(
         point: Point2D(x: 0.01002, y: 0.00001),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: true,
             usesObjects: false,
@@ -156,6 +159,7 @@ import Testing
     let forced = try SnapResolver().resolve(
         point: Point2D(x: 0.01002, y: 0.00001),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: true,
             usesObjects: false,
@@ -189,6 +193,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: 0.01002, y: 0.00001),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: true,
             usesObjects: true,
@@ -219,6 +224,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: 0.00505, y: 0.00203),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -252,6 +258,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: 0.0071, y: 0.00004),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -280,18 +287,29 @@ import Testing
             y: .length(10.0, .millimeter)
         )
     )
-    _ = try document.createConstructionPlane(
+    let planeID = try document.createConstructionPlane(
         name: "Right CPlane",
         plane: .yz
+    )
+    var workspaceState = WorkspaceState()
+    _ = try workspaceState.apply(
+        .setActiveConstructionPlane(planeID),
+        document: document
+    )
+    let constructionPlane = try #require(
+        workspaceState.activeConstructionPlaneID.flatMap {
+            document.productMetadata.constructionPlanes[$0]?.plane
+        }
     )
 
     let result = try SnapResolver().resolve(
         point: Point2D(x: 0.006, y: 0.00005),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
-            usesConstructionPlaneProjection: true,
+            constructionPlane: constructionPlane,
             gridIntervalMeters: 0.001,
             objectSearchRadiusMeters: 0.0002,
             maximumCandidateCount: 8
@@ -324,6 +342,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: query,
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -368,6 +387,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: 0.00604, y: 0.00403),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -402,6 +422,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: 0.00702, y: 0.00003),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -436,6 +457,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: 0.00502, y: 0.00401),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -472,6 +494,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: 0.00502, y: 0.00401),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -507,6 +530,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: 0.00502, y: 0.00401),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -543,6 +567,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: 0.00502, y: 0.00401),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -581,11 +606,11 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: 0.00502, y: 0.00401),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
             suppressedCandidateKinds: [.curveAxis, .curvePerpendicular],
-            usesConstructionPlaneProjection: true,
             constructionPlane: .yz,
             gridIntervalMeters: 0.001,
             objectSearchRadiusMeters: 0.0002,
@@ -618,6 +643,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: expected + 0.00002, y: expected + 0.00001),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -652,6 +678,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: expected.x + 0.00002, y: expected.y + 0.00001),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -672,6 +699,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: 0.0069, y: 0.00204),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: true,
             usesObjects: false,
@@ -703,6 +731,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: 0.00002, y: -0.00001),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -737,6 +766,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: 0.00201, y: 0.00301),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -779,10 +809,10 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: 0.00601, y: 0.00401),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
-            usesConstructionPlaneProjection: true,
             constructionPlane: .yz,
             gridIntervalMeters: 0.001,
             objectSearchRadiusMeters: 0.0002,
@@ -831,6 +861,7 @@ import Testing
     let initial = try SnapResolver().resolve(
         point: Point2D(x: 0.01001, y: 0.00001),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -864,6 +895,7 @@ import Testing
     let updated = try SnapResolver().resolve(
         point: Point2D(x: 0.01201, y: 0.00001),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -911,6 +943,7 @@ import Testing
     let initial = try SnapResolver().resolve(
         point: Point2D(x: 0.00251, y: 0.00001),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -947,6 +980,7 @@ import Testing
     let updated = try SnapResolver().resolve(
         point: Point2D(x: 0.00501, y: 0.00001),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -983,7 +1017,7 @@ import Testing
 @Test func snapResolverReportsGeneratedTopologyEdgeMiddleCandidate() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let edge = try #require(topology.entries.first { entry in
         entry.kind == .edge && entry.start != nil && entry.end != nil && entry.selectionTarget() != nil
     })
@@ -998,6 +1032,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: midpoint.x + 0.00001, y: midpoint.y + 0.00001),
         in: session.document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -1028,7 +1063,7 @@ import Testing
 @Test func snapResolverProjectsGeneratedTopologyCandidatesOntoConstructionPlane() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let edge = try #require(topology.entries.first { entry in
         entry.kind == .edge && entry.start != nil && entry.end != nil && entry.selectionTarget() != nil
     })
@@ -1042,10 +1077,10 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: expected.x + 0.00001, y: expected.y + 0.00001),
         in: session.document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
-            usesConstructionPlaneProjection: true,
             constructionPlane: .yz,
             gridIntervalMeters: 0.001,
             objectSearchRadiusMeters: 0.02,
@@ -1069,7 +1104,7 @@ import Testing
 @Test func snapResolverReportsGeneratedTopologyFaceCenterCandidate() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let topology = try TopologySummaryService().summarize(document: session.document)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
     let face = try #require(topology.entries.first { entry in
         entry.kind == .face && entry.center != nil && entry.selectionTarget() != nil
     })
@@ -1079,6 +1114,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: center.x + 0.00001, y: center.y + 0.00001),
         in: session.document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -1104,7 +1140,7 @@ import Testing
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
     var document = session.document
-    let topology = try TopologySummaryService().summarize(document: document)
+    let topology = try TopologySnapshotService().snapshot(document: document)
     let edge = try #require(topology.entries.first { entry in
         entry.kind == .edge && entry.start != nil && entry.end != nil && entry.selectionTarget() != nil
     })
@@ -1136,6 +1172,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: midpoint.x + 0.00001, y: midpoint.y + 0.00001),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -1166,7 +1203,7 @@ import Testing
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
     var document = session.document
-    let topology = try TopologySummaryService().summarize(document: document)
+    let topology = try TopologySnapshotService().snapshot(document: document)
     let edge = try #require(topology.entries.first { entry in
         entry.kind == .edge &&
             entry.curveKind == "line" &&
@@ -1207,6 +1244,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: expectedWorldPoint.x + 0.00001, y: expectedWorldPoint.y + 0.00001),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -1238,7 +1276,7 @@ import Testing
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedCircle())
     var document = session.document
-    let topology = try TopologySummaryService().summarize(document: document)
+    let topology = try TopologySnapshotService().snapshot(document: document)
     let edge = try #require(topology.entries.first { entry in
         entry.kind == .edge &&
             entry.curveKind == "circle" &&
@@ -1283,6 +1321,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: expectedWorldPoint.x + 0.00001, y: expectedWorldPoint.y + 0.00001),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -1315,7 +1354,7 @@ import Testing
         name: "Snap PolySpline",
         sourceMesh: snapResolverPolySplineQuadMesh()
     )
-    let topology = try TopologySummaryService().summarize(document: document)
+    let topology = try TopologySnapshotService().snapshot(document: document)
     let surfaceVertex = try #require(topology.entries.first { entry in
         entry.kind == .vertex
             && PolySplineSurfaceVertexTarget.canParsePersistentName(entry.persistentName)
@@ -1328,6 +1367,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: point.x + 0.00001, y: point.y + 0.00001),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -1359,35 +1399,46 @@ import Testing
         name: "Snap Trim Frame Surface",
         surface: snapResolverDirectBSplineSurface()
     )
-    let initialSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let initialSummary = try SurfaceSourceSummaryService().summarize(
+        document: document,
+        displayUnit: .millimeter
+    )
     let faceReference = try #require(initialSummary.sources.first?.patches.first?.faceSelectionReference)
     try document.setSurfaceTrimLoops(
         target: faceReference,
         trimLoops: [snapResolverAuthoredTrimLoop()]
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(
+        document: document,
+        displayUnit: .millimeter
+    )
     let trimEdge = try #require(summary.sources.first?.patches.first?.trimLoops.first?.edges.first)
     let spanSelection = try #require(trimEdge.parameterCurve.spans.first?.selectionReference)
     let query = SurfaceFrameQuery(selectionReference: spanSelection)
-    try document.setSurfaceFrameDisplay(query: query, isVisible: true)
+    var workspaceState = WorkspaceState()
+    _ = try workspaceState.apply(
+        .setSurfaceFrameDisplay(query: query, isVisible: true),
+        document: document
+    )
     let displayID = try SurfaceFrameDisplayID(query: query)
     let frame = try #require(
         SurfaceFrameService()
-            .resolve(document: document, queries: [query])
-            .frames
+            .resolveFrames(document: document, queries: [query])
             .first
     )
 
     let result = try SnapResolver().resolve(
         point: Point2D(x: frame.position.x + 0.00001, y: frame.position.y + 0.00001),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
             gridIntervalMeters: 0.001,
             objectSearchRadiusMeters: 0.0002,
             maximumCandidateCount: 32
-        )
+        ),
+        surfaceFrameDisplays: workspaceState.surfaceFrameDisplays
     )
 
     let candidate = try #require(result.candidates.first { candidate in
@@ -1421,34 +1472,41 @@ import Testing
         name: "Snap Projected Frame Surface",
         surface: snapResolverDirectBSplineSurface(topRightZ: 0.004)
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(
+        document: document,
+        displayUnit: .millimeter
+    )
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
     let query = SurfaceFrameQuery(
         selectionReference: faceReference,
         u: 0.5,
         v: 0.5
     )
-    try document.setSurfaceFrameDisplay(query: query, isVisible: true)
+    var workspaceState = WorkspaceState()
+    _ = try workspaceState.apply(
+        .setSurfaceFrameDisplay(query: query, isVisible: true),
+        document: document
+    )
     let displayID = try SurfaceFrameDisplayID(query: query)
     let frame = try #require(
         SurfaceFrameService()
-            .resolve(document: document, queries: [query])
-            .frames
+            .resolveFrames(document: document, queries: [query])
             .first
     )
 
     let result = try SnapResolver().resolve(
         point: Point2D(x: frame.position.y + 0.00001, y: frame.position.z + 0.00001),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
-            usesConstructionPlaneProjection: true,
             constructionPlane: .yz,
             gridIntervalMeters: 0.001,
             objectSearchRadiusMeters: 0.0002,
             maximumCandidateCount: 32
-        )
+        ),
+        surfaceFrameDisplays: workspaceState.surfaceFrameDisplays
     )
 
     let candidate = try #require(result.candidates.first { candidate in
@@ -1472,13 +1530,13 @@ import Testing
         name: "Snap Trim Endpoint Surface",
         surface: surface
     )
-    let initialSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let initialSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(initialSummary.sources.first?.patches.first?.faceSelectionReference)
     try document.setSurfaceTrimLoops(
         target: faceReference,
         trimLoops: [snapResolverAuthoredTrimLoop()]
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let trimEdge = try #require(summary.sources.first?.patches.first?.trimLoops.first?.edges.first)
     let selectionReference = try #require(trimEdge.selectionReference)
     let expected = try surface.differentialGeometry(atU: 0.2, v: 0.2).position
@@ -1486,6 +1544,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: expected.x + 0.00001, y: expected.y + 0.00001),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -1523,13 +1582,13 @@ import Testing
         name: "Snap Trim Control Point Surface",
         surface: surface
     )
-    let initialSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let initialSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(initialSummary.sources.first?.patches.first?.faceSelectionReference)
     try document.setSurfaceTrimLoops(
         target: faceReference,
         trimLoops: [snapResolverAuthoredTrimLoop()]
     )
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let trimEdge = try #require(summary.sources.first?.patches.first?.trimLoops.first?.edges.first)
     let selectionReference = try #require(trimEdge.selectionReference)
     let expected = try surface.differentialGeometry(atU: 0.52, v: 0.42).position
@@ -1537,6 +1596,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: expected.x + 0.00001, y: expected.y + 0.00001),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
@@ -1580,7 +1640,7 @@ import Testing
         name: "Snap Projected Trim Surface",
         surface: surface
     )
-    let initialSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let initialSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(initialSummary.sources.first?.patches.first?.faceSelectionReference)
     try document.setSurfaceTrimLoops(
         target: faceReference,
@@ -1591,10 +1651,10 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: expected.y + 0.00001, y: expected.z + 0.00001),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,
-            usesConstructionPlaneProjection: true,
             constructionPlane: .yz,
             gridIntervalMeters: 0.001,
             objectSearchRadiusMeters: 0.0002,
@@ -1631,6 +1691,7 @@ import Testing
     let result = try SnapResolver().resolve(
         point: Point2D(x: 0.00202, y: 0.00301),
         in: document,
+        ruler: .standard(for: .millimeter),
         options: SnapResolutionOptions(
             usesGrid: false,
             usesObjects: true,

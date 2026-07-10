@@ -67,7 +67,7 @@ public struct ConstructionPlaneTargetResolver: Sendable {
             )
         }
 
-        let topology = try TopologySummaryService().summarize(
+        let topology = try TopologySnapshotService().snapshot(
             document: document,
             objectRegistry: objectRegistry
         )
@@ -130,7 +130,7 @@ public struct ConstructionPlaneTargetResolver: Sendable {
         in document: DesignDocument,
         objectRegistry: ObjectTypeRegistry
     ) throws -> SketchPlane {
-        let topology = try TopologySummaryService().summarize(
+        let topology = try TopologySnapshotService().snapshot(
             document: document,
             objectRegistry: objectRegistry
         )
@@ -144,7 +144,7 @@ public struct ConstructionPlaneTargetResolver: Sendable {
 
     func planarGeneratedFacePlane(
         alignedTo target: SelectionTarget,
-        topology: TopologySummaryResult,
+        topology: TopologySnapshot,
         operationName: String
     ) throws -> SketchPlane {
         let reference = try faceReference(
@@ -162,7 +162,7 @@ public struct ConstructionPlaneTargetResolver: Sendable {
 
     private func faceReference(
         alignedTo target: SelectionTarget,
-        topology: TopologySummaryResult,
+        topology: TopologySnapshot,
         operationName: String = "Construction plane",
         requiresPlanarFace: Bool = false
     ) throws -> PlaneReference {
@@ -215,7 +215,7 @@ public struct ConstructionPlaneTargetResolver: Sendable {
 
     private func edgeReference(
         for target: SelectionTarget,
-        topology: TopologySummaryResult
+        topology: TopologySnapshot
     ) throws -> EdgeReference {
         guard case .edge = target.component else {
             throw EditorError(
@@ -253,7 +253,7 @@ public struct ConstructionPlaneTargetResolver: Sendable {
     private func perpendicularPlane(
         faceTarget: SelectionTarget,
         edgeTarget: SelectionTarget,
-        topology: TopologySummaryResult
+        topology: TopologySnapshot
     ) throws -> SketchPlane {
         let face = try faceReference(alignedTo: faceTarget, topology: topology)
         let edge = try edgeReference(for: edgeTarget, topology: topology)
@@ -268,7 +268,7 @@ public struct ConstructionPlaneTargetResolver: Sendable {
     private func point(
         for target: SelectionTarget,
         in document: DesignDocument,
-        topology: TopologySummaryResult
+        topology: TopologySnapshot
     ) throws -> Point3D {
         switch target.component {
         case .vertex:
@@ -289,7 +289,7 @@ public struct ConstructionPlaneTargetResolver: Sendable {
 
     private func generatedVertexPoint(
         for target: SelectionTarget,
-        topology: TopologySummaryResult
+        topology: TopologySnapshot
     ) throws -> Point3D {
         guard case .vertex = target.component else {
             throw EditorError(
@@ -668,7 +668,7 @@ public struct ConstructionPlaneTargetResolver: Sendable {
     private func planeReference(
         alignedTo target: SelectionTarget,
         in document: DesignDocument,
-        topology: TopologySummaryResult
+        topology: TopologySnapshot
     ) throws -> PlaneReference {
         switch target.component {
         case .constructionPlane:

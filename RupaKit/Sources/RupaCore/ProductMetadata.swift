@@ -14,15 +14,10 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
     public var joinedCurveSources: [JoinedCurveSourceID: JoinedCurveSource]
     public var joinedCurveGroupSources: [JoinedCurveGroupSourceID: JoinedCurveGroupSource]
     public var constructionPlanes: [ConstructionPlaneSourceID: ConstructionPlaneSource]
-    public var activeConstructionPlaneID: ConstructionPlaneSourceID?
-    public var curveCurvatureDisplays: [SelectionComponentID: CurveCurvatureDisplay]
-    public var pointDisplays: [SelectionComponentID: PointDisplay]
-    public var surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay]
-    public var surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]
     public var measurements: [MeasurementAnnotationID: MeasurementAnnotation]
     public var savedViews: [SavedViewID: SavedView]
-    public var viewportGridSettings: ViewportGridSettings
-    public var templateDefaults: TemplateDefaults
+    public var topologyMaterialBindings: [TopologyMaterialBinding.ID: TopologyMaterialBinding]
+    public var semanticExtensions: [SemanticExtensionID: SemanticExtensionEnvelope]
 
     public init(
         sceneNodes: [SceneNodeID: SceneNode],
@@ -37,15 +32,10 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         joinedCurveSources: [JoinedCurveSourceID: JoinedCurveSource] = [:],
         joinedCurveGroupSources: [JoinedCurveGroupSourceID: JoinedCurveGroupSource] = [:],
         constructionPlanes: [ConstructionPlaneSourceID: ConstructionPlaneSource] = [:],
-        activeConstructionPlaneID: ConstructionPlaneSourceID? = nil,
-        curveCurvatureDisplays: [SelectionComponentID: CurveCurvatureDisplay] = [:],
-        pointDisplays: [SelectionComponentID: PointDisplay] = [:],
-        surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay] = [:],
-        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay] = [:],
         measurements: [MeasurementAnnotationID: MeasurementAnnotation] = [:],
         savedViews: [SavedViewID: SavedView] = [:],
-        viewportGridSettings: ViewportGridSettings = .standard,
-        templateDefaults: TemplateDefaults = TemplateDefaults()
+        topologyMaterialBindings: [TopologyMaterialBinding.ID: TopologyMaterialBinding] = [:],
+        semanticExtensions: [SemanticExtensionID: SemanticExtensionEnvelope] = [:]
     ) {
         self.sceneNodes = sceneNodes
         self.rootSceneNodeIDs = rootSceneNodeIDs
@@ -59,15 +49,10 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         self.joinedCurveSources = joinedCurveSources
         self.joinedCurveGroupSources = joinedCurveGroupSources
         self.constructionPlanes = constructionPlanes
-        self.activeConstructionPlaneID = activeConstructionPlaneID
-        self.curveCurvatureDisplays = curveCurvatureDisplays
-        self.pointDisplays = pointDisplays
-        self.surfaceControlPointDisplays = surfaceControlPointDisplays
-        self.surfaceFrameDisplays = surfaceFrameDisplays
         self.measurements = measurements
         self.savedViews = savedViews
-        self.viewportGridSettings = viewportGridSettings
-        self.templateDefaults = templateDefaults
+        self.topologyMaterialBindings = topologyMaterialBindings
+        self.semanticExtensions = semanticExtensions
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -83,15 +68,10 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         case joinedCurveSources
         case joinedCurveGroupSources
         case constructionPlanes
-        case activeConstructionPlaneID
-        case curveCurvatureDisplays
-        case pointDisplays
-        case surfaceControlPointDisplays
-        case surfaceFrameDisplays
         case measurements
         case savedViews
-        case viewportGridSettings
-        case templateDefaults
+        case topologyMaterialBindings
+        case semanticExtensions
     }
 
     public init(from decoder: Decoder) throws {
@@ -139,26 +119,6 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 [ConstructionPlaneSourceID: ConstructionPlaneSource].self,
                 forKey: .constructionPlanes
             ) ?? [:],
-            activeConstructionPlaneID: try container.decodeIfPresent(
-                ConstructionPlaneSourceID.self,
-                forKey: .activeConstructionPlaneID
-            ),
-            curveCurvatureDisplays: try container.decodeIfPresent(
-                [SelectionComponentID: CurveCurvatureDisplay].self,
-                forKey: .curveCurvatureDisplays
-            ) ?? [:],
-            pointDisplays: try container.decodeIfPresent(
-                [SelectionComponentID: PointDisplay].self,
-                forKey: .pointDisplays
-            ) ?? [:],
-            surfaceControlPointDisplays: try container.decodeIfPresent(
-                [SurfaceControlPointDisplayID: SurfaceControlPointDisplay].self,
-                forKey: .surfaceControlPointDisplays
-            ) ?? [:],
-            surfaceFrameDisplays: try container.decodeIfPresent(
-                [SurfaceFrameDisplayID: SurfaceFrameDisplay].self,
-                forKey: .surfaceFrameDisplays
-            ) ?? [:],
             measurements: try container.decodeIfPresent(
                 [MeasurementAnnotationID: MeasurementAnnotation].self,
                 forKey: .measurements
@@ -167,14 +127,8 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 [SavedViewID: SavedView].self,
                 forKey: .savedViews
             ) ?? [:],
-            viewportGridSettings: try container.decodeIfPresent(
-                ViewportGridSettings.self,
-                forKey: .viewportGridSettings
-            ) ?? .standard,
-            templateDefaults: try container.decodeIfPresent(
-                TemplateDefaults.self,
-                forKey: .templateDefaults
-            ) ?? TemplateDefaults()
+            topologyMaterialBindings: try Self.decodeTopologyMaterialBindings(from: container),
+            semanticExtensions: try Self.decodeSemanticExtensions(from: container)
         )
     }
 
@@ -192,15 +146,10 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         try container.encode(joinedCurveSources, forKey: .joinedCurveSources)
         try container.encode(joinedCurveGroupSources, forKey: .joinedCurveGroupSources)
         try container.encode(constructionPlanes, forKey: .constructionPlanes)
-        try container.encodeIfPresent(activeConstructionPlaneID, forKey: .activeConstructionPlaneID)
-        try container.encode(curveCurvatureDisplays, forKey: .curveCurvatureDisplays)
-        try container.encode(pointDisplays, forKey: .pointDisplays)
-        try container.encode(surfaceControlPointDisplays, forKey: .surfaceControlPointDisplays)
-        try container.encode(surfaceFrameDisplays, forKey: .surfaceFrameDisplays)
         try container.encode(measurements, forKey: .measurements)
         try container.encode(savedViews, forKey: .savedViews)
-        try container.encode(viewportGridSettings, forKey: .viewportGridSettings)
-        try container.encode(templateDefaults, forKey: .templateDefaults)
+        try encodeTopologyMaterialBindings(into: &container)
+        try encodeSemanticExtensions(into: &container)
     }
 
     public static func empty() -> ProductMetadata {
@@ -209,6 +158,98 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
             sceneNodes: [root.id: root],
             rootSceneNodeIDs: [root.id]
         )
+    }
+
+    private static func decodeSemanticExtensions(
+        from container: KeyedDecodingContainer<CodingKeys>
+    ) throws -> [SemanticExtensionID: SemanticExtensionEnvelope] {
+        guard container.contains(.semanticExtensions) else {
+            return [:]
+        }
+        let nestedContainer = try container.nestedContainer(
+            keyedBy: SemanticExtensionCodingKey.self,
+            forKey: .semanticExtensions
+        )
+        var result: [SemanticExtensionID: SemanticExtensionEnvelope] = [:]
+        for key in nestedContainer.allKeys {
+            guard let uuid = UUID(uuidString: key.stringValue) else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: key,
+                    in: nestedContainer,
+                    debugDescription: "Semantic extension dictionary keys must be UUID strings."
+                )
+            }
+            let id = SemanticExtensionID(uuid)
+            result[id] = try nestedContainer.decode(
+                SemanticExtensionEnvelope.self,
+                forKey: key
+            )
+        }
+        return result
+    }
+
+    private static func decodeTopologyMaterialBindings(
+        from container: KeyedDecodingContainer<CodingKeys>
+    ) throws -> [TopologyMaterialBinding.ID: TopologyMaterialBinding] {
+        guard container.contains(.topologyMaterialBindings) else {
+            return [:]
+        }
+        let nestedContainer = try container.nestedContainer(
+            keyedBy: TopologyMaterialBindingCodingKey.self,
+            forKey: .topologyMaterialBindings
+        )
+        var result: [TopologyMaterialBinding.ID: TopologyMaterialBinding] = [:]
+        for key in nestedContainer.allKeys {
+            guard let uuid = UUID(uuidString: key.stringValue) else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: key,
+                    in: nestedContainer,
+                    debugDescription: "Topology material binding dictionary keys must be UUID strings."
+                )
+            }
+            let id = TopologyMaterialBinding.ID(uuid)
+            result[id] = try nestedContainer.decode(
+                TopologyMaterialBinding.self,
+                forKey: key
+            )
+        }
+        return result
+    }
+
+    private func encodeTopologyMaterialBindings(
+        into container: inout KeyedEncodingContainer<CodingKeys>
+    ) throws {
+        var nestedContainer = container.nestedContainer(
+            keyedBy: TopologyMaterialBindingCodingKey.self,
+            forKey: .topologyMaterialBindings
+        )
+        for id in topologyMaterialBindings.keys.sorted(by: { lhs, rhs in
+            lhs.rawValue.uuidString < rhs.rawValue.uuidString
+        }) {
+            guard let key = TopologyMaterialBindingCodingKey(stringValue: id.rawValue.uuidString),
+                  let binding = topologyMaterialBindings[id] else {
+                continue
+            }
+            try nestedContainer.encode(binding, forKey: key)
+        }
+    }
+
+    private func encodeSemanticExtensions(
+        into container: inout KeyedEncodingContainer<CodingKeys>
+    ) throws {
+        var nestedContainer = container.nestedContainer(
+            keyedBy: SemanticExtensionCodingKey.self,
+            forKey: .semanticExtensions
+        )
+        for id in semanticExtensions.keys.sorted(by: { lhs, rhs in
+            lhs.rawValue.uuidString < rhs.rawValue.uuidString
+        }) {
+            guard let key = SemanticExtensionCodingKey(stringValue: id.rawValue.uuidString),
+                  let envelope = semanticExtensions[id] else {
+                continue
+            }
+            try nestedContainer.encode(envelope, forKey: key)
+        }
     }
 
     public func validate(
@@ -227,13 +268,32 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         try validateJoinedCurveSources(against: cadDocument)
         try validateJoinedCurveGroupSources(against: cadDocument)
         try validateConstructionPlanes()
-        try validateCurveCurvatureDisplays(against: cadDocument)
-        try validatePointDisplays(against: cadDocument)
-        try validateSurfaceControlPointDisplays(against: cadDocument)
-        try validateSurfaceFrameDisplays()
         try validateMeasurements()
         try validateSavedViews()
-        try validateTemplateDefaults()
+        try validateTopologyMaterialBindings()
+        try validateSemanticExtensions(against: cadDocument)
+    }
+
+    private func validateTopologyMaterialBindings() throws {
+        for (id, binding) in topologyMaterialBindings {
+            guard binding.id == id else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Topology material binding keys must match topology material binding IDs."
+                )
+            }
+            try binding.validate(metadata: self)
+        }
+    }
+
+    private func validateSemanticExtensions(against cadDocument: CADDocument) throws {
+        for (id, envelope) in semanticExtensions {
+            guard envelope.id == id else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Semantic extension keys must match semantic extension IDs."
+                )
+            }
+            try envelope.validate(against: cadDocument, metadata: self)
+        }
     }
 
     public mutating func appendSceneNodeToFirstRoot(
@@ -968,56 +1028,6 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 )
             }
         }
-        if let activeConstructionPlaneID,
-           constructionPlanes[activeConstructionPlaneID] == nil {
-            throw DocumentValidationError.invalidProductMetadata(
-                "The active construction plane must reference an existing construction plane source."
-            )
-        }
-    }
-
-    private func validateCurveCurvatureDisplays(against cadDocument: CADDocument) throws {
-        for (componentID, display) in curveCurvatureDisplays {
-            guard componentID == display.componentID else {
-                throw DocumentValidationError.invalidProductMetadata(
-                    "Curve curvature display keys must match display component IDs."
-                )
-            }
-            try display.validate(against: cadDocument)
-        }
-    }
-
-    private func validatePointDisplays(against cadDocument: CADDocument) throws {
-        for (componentID, display) in pointDisplays {
-            guard componentID == display.componentID else {
-                throw DocumentValidationError.invalidProductMetadata(
-                    "Point display keys must match display component IDs."
-                )
-            }
-            try display.validate(against: cadDocument)
-        }
-    }
-
-    private func validateSurfaceControlPointDisplays(against cadDocument: CADDocument) throws {
-        for (id, display) in surfaceControlPointDisplays {
-            guard id == display.id else {
-                throw DocumentValidationError.invalidProductMetadata(
-                    "Surface control point display keys must match display IDs."
-                )
-            }
-            try display.validate(against: cadDocument)
-        }
-    }
-
-    private func validateSurfaceFrameDisplays() throws {
-        for (id, display) in surfaceFrameDisplays {
-            guard id == display.id else {
-                throw DocumentValidationError.invalidProductMetadata(
-                    "Surface frame display keys must match display IDs."
-                )
-            }
-            try display.validate()
-        }
     }
 
     private func validateMeasurements() throws {
@@ -1654,29 +1664,35 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         }
     }
 
-    private func validateTemplateDefaults() throws {
-        try templateDefaults.validate()
-        if let defaultMaterialID = templateDefaults.defaultMaterialID {
-            guard materialLibrary.materials[defaultMaterialID] != nil else {
-                throw DocumentValidationError.invalidProductMetadata(
-                    "Template default material must exist in the material library."
-                )
-            }
-        }
-        for ruleID in templateDefaults.validationRuleIDs {
-            guard validationRules[ruleID] != nil else {
-                throw DocumentValidationError.invalidProductMetadata(
-                    "Template defaults must reference existing validation rules."
-                )
-            }
-        }
-        for presetID in templateDefaults.exportPresetIDs {
-            guard exportPresets[presetID] != nil else {
-                throw DocumentValidationError.invalidProductMetadata(
-                    "Template defaults must reference existing export presets."
-                )
-            }
-        }
+}
+
+private struct SemanticExtensionCodingKey: CodingKey {
+    var stringValue: String
+    var intValue: Int?
+
+    init?(stringValue: String) {
+        self.stringValue = stringValue
+        self.intValue = nil
+    }
+
+    init?(intValue: Int) {
+        self.stringValue = "\(intValue)"
+        self.intValue = intValue
+    }
+}
+
+private struct TopologyMaterialBindingCodingKey: CodingKey {
+    var stringValue: String
+    var intValue: Int?
+
+    init?(stringValue: String) {
+        self.stringValue = stringValue
+        self.intValue = nil
+    }
+
+    init?(intValue: Int) {
+        self.stringValue = "\(intValue)"
+        self.intValue = intValue
     }
 }
 

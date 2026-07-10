@@ -2,20 +2,6 @@ import Foundation
 import RupaCore
 import RupaViewportScene
 
-struct ViewportSceneSnapshotKey: Equatable {
-    enum Source: Equatable {
-        case document(DocumentGeneration)
-        case dragPreview(UInt64)
-    }
-
-    var source: Source
-    var currentEvaluationGeneration: DocumentGeneration?
-    var evaluationCacheGeneration: DocumentGeneration?
-    var renderInvalidation: RenderInvalidation
-    var sectionClippingPlan: SectionAnalysisClippingPlan?
-    var objectDefinitions: [ObjectTypeDefinition]
-}
-
 final class ViewportSceneSnapshotCache {
     private struct Entry {
         var key: ViewportSceneSnapshotKey

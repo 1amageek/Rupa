@@ -442,7 +442,6 @@ import Testing
 @Test func drawingProjectionGeneratesDrawingAnnotationsFromMeasurementMetadataWithoutBodies() throws {
     let session = EditorSession()
     var document = session.document
-    try document.setRulerConfiguration(.standard(for: .meter))
     let measurementID = try document.addMeasurementAnnotation(
         MeasurementAnnotation(
             name: "Overall Width",
@@ -666,8 +665,7 @@ import Testing
         )
     )
     var document = session.document
-    try document.setRulerConfiguration(.standard(for: .meter))
-    let topology = try TopologySummaryService().summarize(document: document)
+    let topology = try TopologySnapshotService().snapshot(document: document)
     let faceEntry = try #require(topology.entries.first { entry in
         entry.kind == .face
             && abs((entry.areaSquareMeters ?? -1.0) - 6.0) <= 1.0e-9
@@ -750,8 +748,7 @@ import Testing
 @MainActor
 @Test func drawingProjectionGeneratesBSplineEdgeLengthAnnotationFromGeneratedTopology() throws {
     var document = try drawingProjectionSmoothLoftDocument()
-    try document.setRulerConfiguration(.standard(for: .meter))
-    let topology = try TopologySummaryService().summarize(document: document)
+    let topology = try TopologySnapshotService().snapshot(document: document)
     let edgeEntry = try #require(topology.entries.first {
         $0.kind == .edge
             && $0.curveKind == "bSpline"
@@ -885,7 +882,6 @@ private func drawingProjectionResultWithMeasurements(
 ) throws -> DrawingProjectionResult {
     let session = EditorSession()
     var document = session.document
-    try document.setRulerConfiguration(.standard(for: .meter))
     for annotation in annotations {
         _ = try document.addMeasurementAnnotation(
             annotation,

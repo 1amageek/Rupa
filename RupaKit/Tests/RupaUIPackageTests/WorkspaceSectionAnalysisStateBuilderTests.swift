@@ -22,6 +22,7 @@ import Testing
         document: document,
         currentEvaluation: nil,
         documentGeneration: DocumentGeneration(),
+        displayUnit: .millimeter,
         objectRegistry: .builtIn
     )
 
@@ -42,6 +43,7 @@ import Testing
         document: document,
         currentEvaluation: nil,
         documentGeneration: DocumentGeneration(),
+        displayUnit: .millimeter,
         objectRegistry: .builtIn
     )
 

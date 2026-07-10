@@ -5,13 +5,16 @@ import RupaCoreTypes
 public struct DocumentExportService: Sendable {
     private let pipelineOverride: CADPipeline?
     private let exchange: OfficialFormatExchange
+    private let preflightValidators: [any DocumentExportPreflightValidator]
 
     public init(
         pipeline: CADPipeline? = nil,
-        exchange: OfficialFormatExchange = OfficialFormatExchange()
+        exchange: OfficialFormatExchange = OfficialFormatExchange(),
+        preflightValidators: [any DocumentExportPreflightValidator] = []
     ) {
         self.pipelineOverride = pipeline
         self.exchange = exchange
+        self.preflightValidators = preflightValidators
     }
 
     public func export(
@@ -37,7 +40,11 @@ public struct DocumentExportService: Sendable {
             )
             var exportSourceDocument = document.cadDocument
             exportSourceDocument.units = plan.unitSystem
-            evaluatedDocument = try pipeline.evaluate(exportSourceDocument)
+            let rawEvaluatedDocument = try pipeline.evaluate(exportSourceDocument)
+            evaluatedDocument = SceneMaterialAssignmentResolver().applyingSceneMaterials(
+                to: rawEvaluatedDocument,
+                metadata: document.productMetadata
+            )
         } catch {
             throw EditorError(
                 code: .evaluationFailed,
@@ -47,6 +54,14 @@ public struct DocumentExportService: Sendable {
         let destinationURL = try resolvedDestinationURL(
             for: outputURL,
             policy: plan.destinationPolicy
+        )
+        let preflight = try exportPreflightResult(
+            document: document,
+            evaluatedDocument: evaluatedDocument,
+            generation: generation,
+            destinationURL: destinationURL,
+            plan: plan,
+            dryRun: dryRun
         )
 
         if !dryRun {
@@ -80,8 +95,51 @@ public struct DocumentExportService: Sendable {
             destinationPolicy: plan.destinationPolicy,
             diagnostics: exportDiagnostics(
                 plan: plan,
-                meshCount: evaluatedDocument.meshes.count
+                meshCount: evaluatedDocument.meshes.count,
+                preflightDiagnostics: preflight.diagnostics
+            ),
+            validationFindings: preflight.findings
+        )
+    }
+
+    private func exportPreflightResult(
+        document: DesignDocument,
+        evaluatedDocument: EvaluatedDocument,
+        generation: DocumentGeneration,
+        destinationURL: URL,
+        plan: ResolvedExportPlan,
+        dryRun: Bool
+    ) throws -> (diagnostics: [EditorDiagnostic], findings: [ValidationFinding]) {
+        let context = DocumentExportPreflightContext(
+            document: document,
+            evaluatedDocument: evaluatedDocument,
+            generation: generation,
+            outputURL: destinationURL,
+            format: plan.format,
+            outputUnit: plan.outputUnit,
+            destinationPolicy: plan.destinationPolicy,
+            presetName: plan.presetName,
+            dryRun: dryRun
+        )
+        let results = try preflightValidators.map { validator in
+            try validator.validateExport(context: context)
+        }
+        let blockedResults = results.filter { !$0.isAllowed }
+        guard blockedResults.isEmpty else {
+            let reasons = blockedResults.flatMap { result in
+                if !result.blockingReasons.isEmpty {
+                    return result.blockingReasons
+                }
+                return ["Validation policy \(result.policyEvaluation.policyID) blocked export."]
+            }
+            throw EditorError(
+                code: .exportFailed,
+                message: "Export preflight failed: \(reasons.joined(separator: " "))"
             )
+        }
+        return (
+            diagnostics: results.flatMap(\.diagnostics),
+            findings: results.flatMap(\.findings)
         )
     }
 
@@ -374,7 +432,8 @@ public struct DocumentExportService: Sendable {
 
     private func exportDiagnostics(
         plan: ResolvedExportPlan,
-        meshCount: Int
+        meshCount: Int,
+        preflightDiagnostics: [EditorDiagnostic]
     ) -> [EditorDiagnostic] {
         [
             EditorDiagnostic(
@@ -385,7 +444,7 @@ public struct DocumentExportService: Sendable {
                 severity: .info,
                 message: "Export unit \(plan.outputUnit.rawValue), destination policy \(plan.destinationPolicy.rawValue)."
             ),
-        ] + plan.diagnostics
+        ] + plan.diagnostics + preflightDiagnostics
     }
 }
 

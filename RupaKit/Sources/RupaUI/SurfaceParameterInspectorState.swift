@@ -304,7 +304,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
     init?(
         selectedReferences: [SelectionReference],
         summaryResult: SurfaceSourceSummaryResult,
-        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay] = [:]
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]? = nil
     ) {
         guard !selectedReferences.isEmpty else {
             return nil
@@ -531,7 +531,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
 
     private static func entriesByReference(
         from summary: SurfaceSourceSummaryResult,
-        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]?
     ) -> [SelectionReference: Entry] {
         var entries: [SelectionReference: Entry] = [:]
 
@@ -548,6 +548,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                     patch.frameSamples,
                     source: source,
                     patch: patch,
+                    surfaceFrameDisplays: surfaceFrameDisplays,
                     to: &entries
                 )
                 addKnots(
@@ -723,7 +724,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
         _ addresses: [SurfaceSourceSummaryResult.ParameterAddress],
         source: SurfaceSourceSummaryResult.Source,
         patch: SurfaceSourceSummaryResult.Patch,
-        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay],
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]?,
         to entries: inout [SelectionReference: Entry]
     ) {
         for address in addresses {
@@ -768,6 +769,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
         _ samples: [SurfaceSourceSummaryResult.FrameSample],
         source: SurfaceSourceSummaryResult.Source,
         patch: SurfaceSourceSummaryResult.Patch,
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]?,
         to entries: inout [SelectionReference: Entry]
     ) {
         for sample in samples {
@@ -796,7 +798,11 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                 isEditable: false,
                 selectionReference: sample.selectionReference,
                 frameQuery: frameQuery,
-                isFrameDisplayVisible: sample.isFrameDisplayVisible,
+                isFrameDisplayVisible: frameDisplayVisible(
+                    for: frameQuery,
+                    surfaceFrameDisplays: surfaceFrameDisplays,
+                    summaryVisibility: sample.isFrameDisplayVisible
+                ),
                 frameDetail: nil
             )
         }
@@ -916,8 +922,12 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
 
     private static func frameDisplayVisible(
         for query: SurfaceFrameQuery,
-        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]?,
+        summaryVisibility: Bool = false
     ) -> Bool {
+        guard let surfaceFrameDisplays else {
+            return summaryVisibility
+        }
         do {
             let displayID = try SurfaceFrameDisplayID(query: query)
             return surfaceFrameDisplays[displayID]?.isVisible == true

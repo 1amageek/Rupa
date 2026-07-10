@@ -53,7 +53,8 @@ import SwiftCAD
     let analysis = try CurveAnalysisService(samplesPerSegment: 8).analyze(
         document: document,
         featureID: setup.featureID,
-        entityID: bridgeID
+        entityID: bridgeID,
+        displayUnit: .millimeter
     )
     #expect(analysis.counts.curveCount == 1)
     #expect(analysis.counts.continuityJoinCount == 3)
@@ -64,7 +65,7 @@ import SwiftCAD
 
 @Test func bridgeCurveEndpointSelectionResolverResolvesSelectedLineEndpoint() throws {
     let setup = try bridgeCurveTwoLineDocument()
-    let summary = try SketchEntitySummaryService().summarize(document: setup.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: setup.document)
     let firstLine = try #require(summary.entries.first { $0.entityID == setup.firstLineID.description })
     let lineEnd = try #require(firstLine.pointHandles.first { $0.handle == .lineEnd })
     let sceneNodeID = try #require(firstLine.sceneNodeID.flatMap(UUID.init(uuidString:)))
@@ -92,7 +93,7 @@ import SwiftCAD
         continuity: .g1
     )
     let source = try #require(document.productMetadata.bridgeCurveSources.values.first)
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let bridgeEntry = try #require(summary.entries.first { $0.entityID == bridgeID.description })
     let selectedTarget = try #require(bridgeEntry.selectionTarget())
 
@@ -525,7 +526,8 @@ import SwiftCAD
     let analysis = try CurveAnalysisService(samplesPerSegment: 8).analyze(
         document: document,
         featureID: setup.featureID,
-        entityID: bridgeID
+        entityID: bridgeID,
+        displayUnit: .millimeter
     )
     #expect(analysis.counts.curveCount == 1)
     #expect(analysis.counts.continuityJoinCount == 3)

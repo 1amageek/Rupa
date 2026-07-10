@@ -118,13 +118,6 @@ public enum ObjectTypeCatalog {
         definition(for: id)?.defaultProperties ?? ObjectPropertySet()
     }
 
-    public static func defaultProperties(
-        for id: ObjectTypeID?,
-        ruler: RulerConfiguration
-    ) -> ObjectPropertySet {
-        ObjectTypeRegistry.builtIn.defaultProperties(for: id, ruler: ruler)
-    }
-
     public static func geometryRole(for id: ObjectTypeID?) -> ObjectDescriptor.GeometryRole? {
         definition(for: id)?.geometryRole
     }

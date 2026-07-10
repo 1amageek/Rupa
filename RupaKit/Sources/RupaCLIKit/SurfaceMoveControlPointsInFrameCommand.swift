@@ -39,7 +39,7 @@ public struct SurfaceMoveControlPointsInFrameCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Distance along the frame normal axis.")
     public var normalDistance: Double = 0.0
 
-    @Option(help: "Length unit for frame distances. Defaults to the document display unit.")
+    @Option(help: "Length unit for frame distances. Defaults to the workspace display unit.")
     public var unit: String?
 
     @Option(help: "Edit mode: auto, file, or live.")

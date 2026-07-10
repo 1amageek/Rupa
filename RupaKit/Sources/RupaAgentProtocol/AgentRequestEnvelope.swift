@@ -1,6 +1,7 @@
 import Foundation
 import RupaAutomation
 import RupaCore
+import RupaDomainFoundation
 
 public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
     public static let protocolVersion = "2.0"
@@ -69,12 +70,13 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
              .sessions,
              .cadInteractionQualityAssessment:
             try container.encode(EmptyParams(), forKey: .params)
-        case let .execute(sessionID, command, expectedGeneration):
+        case let .execute(sessionID, command, expectedGeneration, expectedWorkspaceRevision):
             try container.encode(
                 ExecuteParams(
                     sessionID: sessionID,
                     command: command,
-                    expectedGeneration: expectedGeneration
+                    expectedGeneration: expectedGeneration,
+                    expectedWorkspaceRevision: expectedWorkspaceRevision
                 ),
                 forKey: .params
             )
@@ -83,6 +85,18 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                 ExecuteBatchParams(
                     sessionID: sessionID,
                     batch: batch
+                ),
+                forKey: .params
+            )
+        case let .executeDomain(sessionID, request):
+            try container.encode(
+                DomainExecuteParams(
+                    sessionID: sessionID,
+                    capabilityID: request.capabilityID,
+                    namespace: request.namespace,
+                    payload: request.payload,
+                    expectedGeneration: request.expectedGeneration,
+                    dryRun: request.dryRun
                 ),
                 forKey: .params
             )
@@ -329,13 +343,26 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
             return .execute(
                 sessionID: payload.sessionID,
                 command: payload.command,
-                expectedGeneration: payload.expectedGeneration
+                expectedGeneration: payload.expectedGeneration,
+                expectedWorkspaceRevision: payload.expectedWorkspaceRevision
             )
         case "command.applyBatch":
             let payload = try decodeParams(ExecuteBatchParams.self, from: container, method: method)
             return .executeBatch(
                 sessionID: payload.sessionID,
                 batch: payload.batch
+            )
+        case "domain.execute":
+            let payload = try decodeParams(DomainExecuteParams.self, from: container, method: method)
+            return .executeDomain(
+                sessionID: payload.sessionID,
+                request: DomainCommandRequest(
+                    capabilityID: payload.capabilityID,
+                    namespace: payload.namespace,
+                    payload: payload.payload,
+                    expectedGeneration: payload.expectedGeneration,
+                    dryRun: payload.dryRun
+                )
             )
         case "document.parameters":
             let payload = try decodeParams(SessionGenerationParams.self, from: container, method: method)
@@ -643,11 +670,17 @@ private struct SessionGenerationParams: AgentRequestParameterPayload, Equatable 
 }
 
 private struct ExecuteParams: AgentRequestParameterPayload, Equatable {
-    static let allowedKeys: Set<String> = ["sessionID", "command", "expectedGeneration"]
+    static let allowedKeys: Set<String> = [
+        "sessionID",
+        "command",
+        "expectedGeneration",
+        "expectedWorkspaceRevision",
+    ]
 
     var sessionID: UUID
     var command: AutomationCommand
     var expectedGeneration: DocumentGeneration?
+    var expectedWorkspaceRevision: WorkspaceRevision?
 }
 
 private struct ExecuteBatchParams: AgentRequestParameterPayload, Equatable {
@@ -655,6 +688,24 @@ private struct ExecuteBatchParams: AgentRequestParameterPayload, Equatable {
 
     var sessionID: UUID
     var batch: AutomationBatch
+}
+
+private struct DomainExecuteParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = [
+        "sessionID",
+        "capabilityID",
+        "namespace",
+        "payload",
+        "expectedGeneration",
+        "dryRun",
+    ]
+
+    var sessionID: UUID
+    var capabilityID: DomainCapabilityID
+    var namespace: SemanticNamespaceID
+    var payload: SemanticJSONValue
+    var expectedGeneration: DocumentGeneration?
+    var dryRun: Bool
 }
 
 private struct SetParameterExpressionParams: AgentRequestParameterPayload, Equatable {

@@ -101,7 +101,7 @@ private func slotWidthSourceTargetResolverFixture(
             geometryRole: .curve
         )
     )
-    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: session.document)
     let entry = try #require(summary.entries.first { $0.entityID == entityID.description })
     let sourceTarget = try #require(entry.selectionTarget())
     guard let featureUUID = UUID(uuidString: entry.sourceFeatureID) else {

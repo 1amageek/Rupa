@@ -183,11 +183,11 @@ public func agentIsHorizontalLine(
 }
 
 public func agentContainsSketchPoint(
-    _ summary: SketchEntitySummaryResult,
+    _ snapshot: SketchEntitySnapshot,
     x: Double,
     y: Double
 ) -> Bool {
-    summary.entries.contains { entry in
+    snapshot.entries.contains { entry in
         guard entry.entityKind == "line" else {
             return false
         }
@@ -196,11 +196,11 @@ public func agentContainsSketchPoint(
     }
 }
 
-public func agentSketchSummaryBounds(
-    _ summary: SketchEntitySummaryResult
+public func agentSketchBounds(
+    _ snapshot: SketchEntitySnapshot
 ) -> (minX: Double, minY: Double, maxX: Double, maxY: Double)? {
     var points: [SketchEntitySummaryResult.Point] = []
-    for entry in summary.entries where entry.entityKind == "line" {
+    for entry in snapshot.entries where entry.entityKind == "line" {
         if let start = entry.start {
             points.append(start)
         }

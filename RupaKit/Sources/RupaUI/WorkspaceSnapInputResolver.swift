@@ -12,6 +12,7 @@ struct WorkspaceSnapInputResolver {
     func resolve(
         _ point: Point2D,
         in document: DesignDocument,
+        ruler: RulerConfiguration,
         options: SnapResolutionOptions,
         referencePoint: Point2D? = nil,
         modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags()
@@ -19,6 +20,7 @@ struct WorkspaceSnapInputResolver {
         let resolution = ViewportSnapResolutionService().resolution(
             for: ViewportSnapQuery(point: point, referencePoint: referencePoint),
             document: document,
+            ruler: ruler,
             options: options,
             modifierFlags: modifierFlags
         )

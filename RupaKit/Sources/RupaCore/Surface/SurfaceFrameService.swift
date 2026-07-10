@@ -35,10 +35,40 @@ public struct SurfaceFrameService: Sendable {
     public func resolve(
         document: DesignDocument,
         queries: [SurfaceFrameQuery],
+        displayUnit: LengthDisplayUnit,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
     ) throws -> SurfaceFrameResult {
+        let frames = try resolveFrames(
+            document: document,
+            queries: queries,
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
+        )
+        let message = frames.isEmpty
+            ? "Surface frame resolution completed with no requested UV frames."
+            : "Surface frame resolution completed with \(frames.count) UV frame(s)."
+        return SurfaceFrameResult(
+            displayUnit: displayUnit,
+            frames: frames,
+            diagnostics: [
+                EditorDiagnostic(
+                    severity: .info,
+                    message: message
+                ),
+            ]
+        )
+    }
+
+    public func resolveFrames(
+        document: DesignDocument,
+        queries: [SurfaceFrameQuery],
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> [SurfaceFrameResult.Frame] {
         do {
             try document.validate(objectRegistry: objectRegistry)
         } catch {
@@ -49,15 +79,7 @@ public struct SurfaceFrameService: Sendable {
         }
 
         guard queries.isEmpty == false else {
-            return SurfaceFrameResult(
-                displayUnit: document.displayUnit,
-                diagnostics: [
-                    EditorDiagnostic(
-                        severity: .info,
-                        message: "Surface frame resolution completed with no requested UV frames."
-                    ),
-                ]
-            )
+            return []
         }
 
         let evaluatedDocument = try DocumentEvaluationContextResolver(
@@ -72,7 +94,7 @@ public struct SurfaceFrameService: Sendable {
 
         let persistentNames = persistentTopologyNames(in: evaluatedDocument)
         let sceneNodeIDsByFeatureID = sceneNodeIDsByFeatureID(in: document)
-        let frames = try queries.map { query in
+        return try queries.map { query in
             try frame(
                 for: query,
                 evaluatedDocument: evaluatedDocument,
@@ -81,16 +103,6 @@ public struct SurfaceFrameService: Sendable {
             )
         }
 
-        return SurfaceFrameResult(
-            displayUnit: document.displayUnit,
-            frames: frames,
-            diagnostics: [
-                EditorDiagnostic(
-                    severity: .info,
-                    message: "Surface frame resolution completed with \(frames.count) UV frame(s)."
-                ),
-            ]
-        )
     }
 
     private func frame(

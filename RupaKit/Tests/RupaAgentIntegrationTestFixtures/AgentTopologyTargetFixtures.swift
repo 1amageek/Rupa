@@ -292,7 +292,7 @@ public func isAgentGeneratedVertex(
 }
 
 public func agentParallelFaceTargets(
-    in topology: TopologySummaryResult
+    in topology: TopologySnapshot
 ) throws -> [SelectionTarget] {
     let faces = topology.entries.filter { $0.kind == .face }
     for firstIndex in faces.indices {
@@ -363,7 +363,7 @@ public func agentParallelFaceDimensionTargets(
 }
 
 public func agentTwoPointVertexTargets(
-    in topology: TopologySummaryResult,
+    in topology: TopologySnapshot,
     viewNormal: Vector3D
 ) throws -> [SelectionTarget] {
     let vertices = topology.entries.compactMap { entry -> (target: SelectionTarget, point: Point3D)? in

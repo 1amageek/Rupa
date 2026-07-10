@@ -1518,7 +1518,6 @@ import SwiftCAD
             usesObjects: true,
             objectTargetingOverride: .forceEnabled,
             suppressedCandidateKinds: [.lineClosest],
-            usesConstructionPlaneProjection: true,
             constructionPlane: .yz,
             gridIntervalMeters: 0.001,
             objectSearchRadiusMeters: 0.0002,

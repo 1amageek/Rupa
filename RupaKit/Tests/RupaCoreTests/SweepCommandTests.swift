@@ -163,7 +163,7 @@ import SwiftCAD
         path: SweepPathReference(featureID: pathID),
         options: SweepOptions(cornerStyle: .mitre)
     )
-    let result = try MeasurementService().measure(document: document)
+    let result = try MeasurementService().measure(document: document, ruler: RulerConfiguration.standard(for: .millimeter))
     let solid = try #require(result.solids.first)
     let pathLength = try #require(solid.linearDimensions.first { $0.kind == .sweepPathLength })
     let expectedPathLength = 0.010 + 0.060 * Double.pi / 2.0
@@ -765,7 +765,7 @@ private func sweepBooleanMeasureDocument(
         options: SweepOptions(booleanOperation: .difference)
     )
 
-    let result = try MeasurementService().measure(document: document)
+    let result = try MeasurementService().measure(document: document, ruler: RulerConfiguration.standard(for: .millimeter))
     let solid = try #require(result.solids.first)
 
     // 100x100x10 mm plate minus the 20x20x5 mm pocket = 98000 mm^3.
@@ -777,7 +777,7 @@ private func sweepBooleanMeasureDocument(
 @Test func measureExcludesSweepBooleanDifferenceTargetBody() throws {
     let fixture = try sweepBooleanMeasureDocument(pathEndYMillimeters: 10.0)
 
-    let result = try MeasurementService().measure(document: fixture.document)
+    let result = try MeasurementService().measure(document: fixture.document, ruler: RulerConfiguration.standard(for: .millimeter))
     let solid = try #require(result.solids.first)
 
     // 60x30x10 mm target minus the 40x20 z-through tool = 10000 mm^3 frame.
@@ -794,7 +794,7 @@ private func sweepBooleanMeasureDocument(
     // not remove any material (tool swept to z in [-10, 0], target in [0, 10]).
     let fixture = try sweepBooleanMeasureDocument(pathEndYMillimeters: -10.0)
 
-    let result = try MeasurementService().measure(document: fixture.document)
+    let result = try MeasurementService().measure(document: fixture.document, ruler: RulerConfiguration.standard(for: .millimeter))
     let solid = try #require(result.solids.first)
 
     #expect(result.counts.solids == 1)
@@ -844,7 +844,7 @@ private func sweepBooleanMeasureDocument(
         options: SweepOptions(booleanOperation: .union, keepTools: true)
     )
 
-    let result = try MeasurementService().measure(document: document)
+    let result = try MeasurementService().measure(document: document, ruler: RulerConfiguration.standard(for: .millimeter))
 
     let sweepSolids = result.solids.filter { $0.featureID == sweepID.description }
 
@@ -985,7 +985,7 @@ private func sweepBooleanMeasureDocument(
         options: SweepOptions(resultKind: .sheet)
     )
 
-    let result = try MeasurementService().measure(document: document)
+    let result = try MeasurementService().measure(document: document, ruler: RulerConfiguration.standard(for: .millimeter))
     let sheet = try #require(result.sheets.first)
     let pathLength = try #require(sheet.linearDimensions.first {
         $0.kind == .sweepPathLength
@@ -1051,7 +1051,7 @@ private func sweepBooleanMeasureDocument(
     let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
     let body = try #require(evaluated.brep.bodies.values.first)
     let generatedCurves = try #require(evaluated.curves[generatedSectionID])
-    let result = try MeasurementService().measure(document: document)
+    let result = try MeasurementService().measure(document: document, ruler: RulerConfiguration.standard(for: .millimeter))
     let sheet = try #require(result.sheets.first)
 
     guard case .sweep(let sweep) = feature.operation else {
@@ -1111,7 +1111,7 @@ private func sweepBooleanMeasureDocument(
     )
     let feature = try #require(document.cadDocument.designGraph.nodes[sweepID])
     let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
-    let result = try MeasurementService().measure(document: document)
+    let result = try MeasurementService().measure(document: document, ruler: RulerConfiguration.standard(for: .millimeter))
     let solid = try #require(result.solids.first)
     let pathLength = try #require(solid.linearDimensions.first { $0.kind == .sweepPathLength })
 
@@ -1171,7 +1171,7 @@ private func sweepBooleanMeasureDocument(
         sections: [.profile(ProfileReference(featureID: profileID))],
         path: SweepPathReference(featureID: generatedPathID)
     )
-    let result = try MeasurementService().measure(document: document)
+    let result = try MeasurementService().measure(document: document, ruler: RulerConfiguration.standard(for: .millimeter))
     let solid = try #require(result.solids.first)
     let pathLength = try #require(solid.linearDimensions.first { $0.kind == .sweepPathLength })
     let generatedCurve = try #require(

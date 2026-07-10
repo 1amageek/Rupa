@@ -17,7 +17,7 @@ public struct ModelEdgeFilletCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Fillet radius numeric literal.")
     public var radius: Double
 
-    @Option(help: "Length unit for the fillet radius. Defaults to the document display unit.")
+    @Option(help: "Length unit for the fillet radius. Defaults to the workspace display unit.")
     public var unit: String?
 
     @Option(parsing: .unconditional, help: "Profile arc segment count.")

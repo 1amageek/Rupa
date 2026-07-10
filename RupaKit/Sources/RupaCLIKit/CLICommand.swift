@@ -721,7 +721,7 @@ public struct DimensionSetSketchCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Dimension value numeric literal.")
     public var value: Double
 
-    @Option(help: "Unit for the value. Length dimensions default to the document display unit; angle dimensions default to degree.")
+    @Option(help: "Unit for the value. Length dimensions default to the workspace display unit; angle dimensions default to degree.")
     public var unit: String?
 
     @Option(help: "Edit mode: auto, file, or live.")
@@ -818,7 +818,7 @@ public struct DimensionSetObjectCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Dimension value numeric literal.")
     public var value: Double
 
-    @Option(help: "Length unit for the value. Defaults to the document display unit.")
+    @Option(help: "Length unit for the value. Defaults to the workspace display unit.")
     public var unit: String?
 
     @Option(help: "Edit mode: auto, file, or live.")
@@ -1050,7 +1050,7 @@ public struct SurfaceMoveControlPointCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Delta Z numeric literal.")
     public var deltaZ: Double = 0.0
 
-    @Option(help: "Length unit for delta values. Defaults to the document display unit.")
+    @Option(help: "Length unit for delta values. Defaults to the workspace display unit.")
     public var unit: String?
 
     @Option(help: "Edit mode: auto, file, or live.")
@@ -1164,7 +1164,7 @@ public struct SurfaceSlideControlPointsCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Slide distance numeric literal.")
     public var distance: Double
 
-    @Option(help: "Length unit for slide distance. Defaults to the document display unit.")
+    @Option(help: "Length unit for slide distance. Defaults to the workspace display unit.")
     public var unit: String?
 
     @Option(help: "Edit mode: auto, file, or live.")
@@ -1289,7 +1289,7 @@ public struct LineSketchCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Line end Y numeric literal.")
     public var endY: Double
 
-    @Option(help: "Length unit for point coordinates. Defaults to the document display unit.")
+    @Option(help: "Length unit for point coordinates. Defaults to the workspace display unit.")
     public var unit: String?
 
     @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")
@@ -1440,7 +1440,7 @@ public struct CircleSketchCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Circle radius numeric literal.")
     public var radius: Double
 
-    @Option(help: "Length unit for center coordinates and radius. Defaults to the document display unit.")
+    @Option(help: "Length unit for center coordinates and radius. Defaults to the workspace display unit.")
     public var unit: String?
 
     @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")
@@ -1585,7 +1585,7 @@ public struct RectangleSketchCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Rectangle height numeric literal.")
     public var height: Double
 
-    @Option(help: "Length unit for width and height. Defaults to the document display unit.")
+    @Option(help: "Length unit for width and height. Defaults to the workspace display unit.")
     public var unit: String?
 
     @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")
@@ -1730,7 +1730,7 @@ public struct BoxModelCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Extrude depth numeric literal.")
     public var depth: Double
 
-    @Option(help: "Length unit for width, height, and depth. Defaults to the document display unit.")
+    @Option(help: "Length unit for width, height, and depth. Defaults to the workspace display unit.")
     public var unit: String?
 
     @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")
@@ -1884,7 +1884,7 @@ public struct BoxCornersModelCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Extrude depth numeric literal.")
     public var depth: Double
 
-    @Option(help: "Length unit for coordinates and depth. Defaults to the document display unit.")
+    @Option(help: "Length unit for coordinates and depth. Defaults to the workspace display unit.")
     public var unit: String?
 
     @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")
@@ -2045,7 +2045,7 @@ public struct CylinderModelCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Extrude depth numeric literal.")
     public var depth: Double
 
-    @Option(help: "Length unit for center, radius, and depth. Defaults to the document display unit.")
+    @Option(help: "Length unit for center, radius, and depth. Defaults to the workspace display unit.")
     public var unit: String?
 
     @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")
@@ -2192,7 +2192,7 @@ public struct ExtrudeModelCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Extrude distance numeric literal.")
     public var distance: Double
 
-    @Option(help: "Length unit for the distance. Defaults to the document display unit.")
+    @Option(help: "Length unit for the distance. Defaults to the workspace display unit.")
     public var unit: String?
 
     @Option(help: "Extrude direction: normal or symmetric.")
@@ -3490,6 +3490,14 @@ public enum CLIOutput {
     }
 
     public static func write(response: CLIBatchResponse, asJSON: Bool) throws {
+        try write(
+            response,
+            fallback: response.message,
+            asJSON: asJSON
+        )
+    }
+
+    public static func write(response: CLIDomainExecutionResponse, asJSON: Bool) throws {
         try write(
             response,
             fallback: response.message,

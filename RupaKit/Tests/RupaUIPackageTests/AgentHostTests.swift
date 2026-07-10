@@ -1,7 +1,9 @@
 import Foundation
 import RupaAgentProtocol
 import RupaAgentTransport
+import RupaAutomation
 import RupaCore
+import RupaDomainFoundation
 import RupaUI
 import Testing
 @testable import RupaAgentUI
@@ -57,6 +59,77 @@ import Testing
     } catch {
         await host.stop()
         throw error
+    }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1))) func agentHostPublishesInjectedDomainCapabilitiesThroughSocket() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+
+    let socketPath = AgentSocketPath(
+        temporaryDirectory
+            .appendingPathComponent("rupa-domain.sock")
+            .path
+    )
+    let capabilityID: DomainCapabilityID = "manufacturing.validatePrintability"
+    let domainRegistry = try DomainRegistry(
+        namespaces: [
+            DomainNamespaceRegistration(
+                namespace: "manufacturing",
+                supportedSchemaVersions: [SemanticSchemaVersion(major: 0, minor: 1, patch: 0)]
+            ),
+        ],
+        capabilityDescriptors: [
+            DomainCapabilityDescriptor(
+                id: capabilityID,
+                namespace: "manufacturing",
+                name: "Validate Printability",
+                summary: "Checks manufacturing constraints.",
+                effect: .query,
+                resultKind: .semanticPayload,
+                supportsDryRun: true,
+                targetKinds: ["document"],
+                failureMode: "Reports manufacturing diagnostics without mutation."
+            ),
+        ],
+        commandLowerings: [
+            AgentHostFixtureDomainLowering(capabilityID: capabilityID),
+        ]
+    )
+    let host = AgentHost(
+        socketPath: socketPath,
+        domainRegistry: domainRegistry
+    )
+
+    await host.start()
+    do {
+        let response = try await sendThroughDetachedClient(.capabilities, socketPath: socketPath)
+        guard case .capabilities(let descriptors) = response else {
+            #expect(Bool(false))
+            await host.stop()
+            return
+        }
+        #expect(descriptors.contains { $0.name == capabilityID.rawValue })
+        await host.stop()
+    } catch {
+        await host.stop()
+        throw error
+    }
+}
+
+private struct AgentHostFixtureDomainLowering: DomainCommandLowering {
+    var capabilityID: DomainCapabilityID
+
+    func lower(_ request: DomainCommandRequest) throws -> DomainCommandPlan {
+        .automationBatch(
+            AutomationBatch(
+                commands: [.renameDocument(name: "Agent Host Fixture")],
+                expectedGeneration: request.expectedGeneration
+            )
+        )
     }
 }
 

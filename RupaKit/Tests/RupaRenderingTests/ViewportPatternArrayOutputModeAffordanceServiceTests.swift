@@ -31,7 +31,7 @@ import Testing
     let source = try #require(session.document.productMetadata.patternArrays.values.first {
         $0.name == "Output Mode Pattern"
     })
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(scene: scene, size: CGSize(width: 900.0, height: 700.0)))
 
     let candidates = ViewportPatternArrayOutputModeAffordanceService().candidates(
@@ -85,7 +85,7 @@ import Testing
         $0.name == "Independent Output Mode Pattern"
     })
     let outputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
-    let scene = ViewportSceneBuilder().build(document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(scene: scene, size: CGSize(width: 900.0, height: 700.0)))
 
     let candidates = ViewportPatternArrayOutputModeAffordanceService().candidates(

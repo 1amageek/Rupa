@@ -34,7 +34,7 @@ import Testing
     #expect(dimension.name == "Line Length")
     #expect(dimension.kind == .distance)
 
-    let evaluation = try SelectionDimensionService().evaluate(document: document)
+    let evaluation = try SelectionDimensionService().evaluate(document: document, displayUnit: .millimeter)
     let measurement = try #require(evaluation.measurements.first)
     #expect(evaluation.measurements.count == 1)
     #expect(measurement.dimension.id == dimensionID)
@@ -45,7 +45,6 @@ import Testing
 
 @Test func selectionDimensionEvaluationExposesDisplayUnitValues() async throws {
     var document = DesignDocument.empty()
-    document.setDisplayUnit(.millimeter)
     let featureID = try document.createLineSketch(
         name: "Measured Display Line",
         plane: .xy,
@@ -69,6 +68,7 @@ import Testing
 
     let evaluation = try SelectionDimensionService().evaluate(
         document: document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let measurement = try #require(evaluation.measurements.first)
@@ -87,7 +87,6 @@ import Testing
 
 @Test func selectionDimensionEvaluationUsesReadableLengthDisplayUnit() async throws {
     var document = DesignDocument.empty()
-    document.setDisplayUnit(.millimeter)
     let featureID = try document.createLineSketch(
         name: "Measured Site Line",
         plane: .xy,
@@ -111,6 +110,7 @@ import Testing
 
     let evaluation = try SelectionDimensionService().evaluate(
         document: document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let measurement = try #require(evaluation.measurements.first)
@@ -125,7 +125,6 @@ import Testing
 
 @Test func selectionDimensionEvaluationDecodesMissingDisplayValues() async throws {
     var document = DesignDocument.empty()
-    document.setDisplayUnit(.millimeter)
     let featureID = try document.createLineSketch(
         name: "Measured Legacy Display Line",
         plane: .xy,
@@ -148,6 +147,7 @@ import Testing
     )
     let evaluation = try SelectionDimensionService().evaluate(
         document: document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let json = try JSONSerialization.jsonObject(
@@ -215,6 +215,7 @@ import Testing
     )
     let setEvaluation = try SelectionDimensionService().evaluate(
         document: session.document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let setMeasurement = try #require(setEvaluation.measurements.first)
@@ -231,6 +232,7 @@ import Testing
     let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
     let appliedEvaluation = try SelectionDimensionService().evaluate(
         document: session.document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
@@ -317,6 +319,7 @@ import Testing
     let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
     let appliedEvaluation = try SelectionDimensionService().evaluate(
         document: session.document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
@@ -394,6 +397,7 @@ import Testing
     let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
     let appliedEvaluation = try SelectionDimensionService().evaluate(
         document: session.document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
@@ -461,6 +465,7 @@ import Testing
     let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
     let appliedEvaluation = try SelectionDimensionService().evaluate(
         document: session.document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
@@ -530,6 +535,7 @@ import Testing
     let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
     let appliedEvaluation = try SelectionDimensionService().evaluate(
         document: session.document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
@@ -596,6 +602,7 @@ import Testing
     let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
     let appliedEvaluation = try SelectionDimensionService().evaluate(
         document: session.document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
@@ -671,6 +678,7 @@ import Testing
     let movedLine = try lineEndpoints(in: session.document, featureID: lineFeatureID)
     let appliedEvaluation = try SelectionDimensionService().evaluate(
         document: session.document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
@@ -756,6 +764,7 @@ import Testing
     let fixedLine = try lineEndpoints(in: session.document, featureID: lineFeatureID)
     let unappliedEvaluation = try SelectionDimensionService().evaluate(
         document: session.document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let unappliedMeasurement = try #require(unappliedEvaluation.measurements.first)
@@ -821,6 +830,7 @@ import Testing
     let movedPoint = try standalonePoint(in: session.document, featureID: movingFeatureID)
     let appliedEvaluation = try SelectionDimensionService().evaluate(
         document: session.document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
@@ -886,6 +896,7 @@ import Testing
     let secondPoint = try standalonePoint(in: session.document, featureID: secondFeatureID)
     let appliedEvaluation = try SelectionDimensionService().evaluate(
         document: session.document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
@@ -977,6 +988,7 @@ import Testing
 
     let initialEvaluation = try SelectionDimensionService().evaluate(
         document: session.document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let initialMeasurement = try #require(initialEvaluation.measurements.first)
@@ -996,6 +1008,7 @@ import Testing
     )
     let setEvaluation = try SelectionDimensionService().evaluate(
         document: session.document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let setMeasurement = try #require(setEvaluation.measurements.first)
@@ -1006,6 +1019,7 @@ import Testing
     let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
     let appliedEvaluation = try SelectionDimensionService().evaluate(
         document: session.document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
@@ -1058,6 +1072,7 @@ import Testing
     let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
     let appliedEvaluation = try SelectionDimensionService().evaluate(
         document: session.document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
@@ -1124,6 +1139,7 @@ import Testing
     let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
     let appliedEvaluation = try SelectionDimensionService().evaluate(
         document: session.document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
@@ -1176,6 +1192,7 @@ import Testing
     let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
     let appliedEvaluation = try SelectionDimensionService().evaluate(
         document: session.document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
@@ -1232,6 +1249,7 @@ import Testing
     let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
     let appliedEvaluation = try SelectionDimensionService().evaluate(
         document: session.document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
@@ -1255,7 +1273,7 @@ import Testing
 
 @Test func selectionDimensionCommandMeasuresGeneratedFacePairDistance() async throws {
     var document = DesignDocument.empty()
-    try document.createExtrudedRectangle(
+    _ = try document.createExtrudedRectangle(
         name: "Measured Box",
         plane: .xy,
         width: .length(20.0, .millimeter),
@@ -1279,7 +1297,7 @@ import Testing
     #expect(dimension.id == dimensionID)
     #expect(dimension.kind == .distance)
 
-    let evaluation = try SelectionDimensionService().evaluate(document: document)
+    let evaluation = try SelectionDimensionService().evaluate(document: document, displayUnit: .millimeter)
     let measurement = try #require(evaluation.measurements.first)
     #expect(evaluation.measurements.count == 1)
     #expect(measurement.dimension.id == dimensionID)
@@ -1290,7 +1308,7 @@ import Testing
 
 @Test func selectionDimensionApplyUpdatesGeneratedFacePairObjectDistance() async throws {
     var document = DesignDocument.empty()
-    try document.createExtrudedRectangle(
+    _ = try document.createExtrudedRectangle(
         name: "Editable Box",
         plane: .xy,
         width: .length(20.0, .millimeter),
@@ -1320,10 +1338,11 @@ import Testing
     let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
     let appliedEvaluation = try SelectionDimensionService().evaluate(
         document: session.document,
+        displayUnit: .millimeter,
         dimensionID: dimensionID
     )
     let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
-    let objectSummary = try ObjectDimensionSummaryService().summarize(
+    let objectSummary = try ObjectDimensionSnapshotService().snapshot(
         document: session.document,
         targets: [targets.first]
     )
@@ -1340,7 +1359,7 @@ import Testing
 
 @Test func selectionDimensionApplyLeavesNonFaceTopologyPairsUnsupported() async throws {
     var document = DesignDocument.empty()
-    try document.createExtrudedRectangle(
+    _ = try document.createExtrudedRectangle(
         name: "Editable Box",
         plane: .xy,
         width: .length(20.0, .millimeter),
@@ -1405,7 +1424,7 @@ private func lineEndpointTargets(
     start: SelectionTarget,
     end: SelectionTarget
 ) {
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entry = try #require(summary.entries.first {
         $0.sourceFeatureID == featureID.description && $0.entityKind == "line"
     })
@@ -1431,7 +1450,7 @@ private func lineCurveTarget(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> SelectionTarget {
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entry = try #require(summary.entries.first {
         $0.sourceFeatureID == featureID.description && $0.entityKind == "line"
     })
@@ -1470,7 +1489,7 @@ private func circleCenterAndCurveTargets(
     center: SelectionTarget,
     curve: SelectionTarget
 ) {
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entry = try #require(summary.entries.first {
         $0.sourceFeatureID == featureID.description && $0.entityKind == "circle"
     })
@@ -1500,7 +1519,7 @@ private func arcCenterAndCurveTargets(
     center: SelectionTarget,
     curve: SelectionTarget
 ) {
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entry = try #require(summary.entries.first {
         $0.sourceFeatureID == featureID.description && $0.entityKind == "arc"
     })
@@ -1530,7 +1549,7 @@ private func arcEndpointTargets(
     start: SelectionTarget,
     end: SelectionTarget
 ) {
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entry = try #require(summary.entries.first {
         $0.sourceFeatureID == featureID.description && $0.entityKind == "arc"
     })
@@ -1556,7 +1575,7 @@ private func splineControlPointTargets(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> [SelectionTarget] {
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entry = try #require(summary.entries.first {
         $0.sourceFeatureID == featureID.description && $0.entityKind == "spline"
     })
@@ -1604,7 +1623,7 @@ private func standalonePointTarget(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> SelectionTarget {
-    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let summary = try SketchEntitySnapshotService().snapshot(document: document)
     let entry = try #require(summary.entries.first {
         $0.sourceFeatureID == featureID.description && $0.entityKind == "point"
     })
@@ -1620,7 +1639,7 @@ private func standalonePointTarget(
 private func opposingFaceTargets(
     in document: DesignDocument
 ) throws -> (first: SelectionTarget, second: SelectionTarget) {
-    let topology = try TopologySummaryService().summarize(document: document)
+    let topology = try TopologySnapshotService().snapshot(document: document)
     let faceEntries = try topology.entries.compactMap { entry -> (centerZ: Double, target: SelectionTarget)? in
         guard entry.kind == .face,
               let centerZ = entry.center?.z else {
@@ -1637,12 +1656,12 @@ private func opposingFaceTargets(
 private func generatedEdgeTargets(
     in document: DesignDocument
 ) throws -> (first: SelectionTarget, second: SelectionTarget) {
-    let topology = try TopologySummaryService().summarize(document: document)
-    let edgeTargets = try topology.entries.compactMap { entry -> SelectionTarget? in
+    let topology = try TopologySnapshotService().snapshot(document: document)
+    let edgeTargets = topology.entries.compactMap { entry -> SelectionTarget? in
         guard entry.kind == .edge else {
             return nil
         }
-        return try #require(entry.selectionTarget())
+        return entry.selectionTarget()
     }
     let first = try #require(edgeTargets.first)
     let second = try #require(edgeTargets.dropFirst().first)

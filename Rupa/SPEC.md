@@ -15,8 +15,17 @@ This document defines the initial official implementation specification for Rupa
 | CAD foundation | Swift-CAD |
 | Product requirements | `PRODUCT_REQUIREMENTS.md` |
 | Universal CAD requirements | `UNIVERSAL_CAD_REQUIREMENTS.md` |
+| Domain extension architecture | `DOMAIN_EXTENSION_ARCHITECTURE.md` |
+| Domain foundation design | `DOMAIN_FOUNDATION_DESIGN.md` |
 | Goal statement | `GOAL_STATEMENT.md` |
+| Complete implementation plan | `COMPLETE_IMPLEMENTATION_PLAN.md` |
 | CAD quality milestones | `CAD_QUALITY_MILESTONES.md` |
+| Acceptance workflow contracts | `ACCEPTANCE_WORKFLOW_CONTRACTS.md` |
+| Specification authority | `SPECIFICATION_AUTHORITY.md` |
+| Conformance profiles | `CONFORMANCE_PROFILES.md` |
+| Reference and artifact contract | `REFERENCE_ARTIFACT_CONTRACT.md` |
+| Domain transaction contract | `DOMAIN_TRANSACTION_CONTRACT.md` |
+| Validation contract | `VALIDATION_CONTRACT.md` |
 | Implementation status | `IMPLEMENTATION_STATUS.md` |
 | Deferred profile layer | ApplicationProfile switching after the universal CAD implementation is complete |
 | Initial app platforms | macOS |
@@ -85,6 +94,10 @@ The required product capabilities are defined separately from the implementation
 |---|---|
 | `PRODUCT_REQUIREMENTS.md` | Product position, acceptance use cases, shared product requirements, workflows, and acceptance criteria. |
 | `UNIVERSAL_CAD_REQUIREMENTS.md` | Units, scale, rulers, precision, geometry, components, validation, interoperability, automation, and performance requirements for the single universal CAD model. |
+| `DOMAIN_EXTENSION_ARCHITECTURE.md` | Dependency direction, ownership, projection, validation, simulation, UI, CLI, and Agent contracts for specialized domains built on top of the universal model. |
+| `DOMAIN_FOUNDATION_DESIGN.md` | Implementation design for neutral semantic storage, registry contracts, command lowering, Agent/CLI/UI discovery, ownership resolution, and tests. |
+| `COMPLETE_IMPLEMENTATION_PLAN.md` | No-compromise execution plan, workstreams, phase gates, acceptance matrix, parallelization policy, and milestone reporting requirements. |
+| `ACCEPTANCE_WORKFLOW_CONTRACTS.md` | Workflow-level completion authority for precision mechanical part, single-story house, turbomachinery component, character or game asset, and Agent-generated variant workflows. |
 
 ## Canvas Overlay Chrome Contract
 
@@ -154,6 +167,8 @@ ApplicationProfile switching is deliberately excluded from the initial package g
       RupaRendering/
       RupaPreview/
       RupaAutomation/
+      RupaDomainFoundation/
+      RupaManufacturing/
       RupaAgentProtocol/
       RupaAgentRuntime/
       RupaAgentTransport/
@@ -164,6 +179,8 @@ ApplicationProfile switching is deliberately excluded from the initial package g
       RupaKitTests/
       RupaCoreTests/
       RupaAutomationTests/
+      RupaDomainFoundationTests/
+      RupaManufacturingTests/
       RupaAgentTests/
       RupaAgentContractTests/
       RupaAgentSurfaceTests/
@@ -192,7 +209,7 @@ ApplicationProfile switching is deliberately excluded from the initial package g
 | Platform integration | WindowGroup, DocumentGroup when introduced, menu commands, app activation. |
 | Security | Entitlements, sandbox, security-scoped file access where required. |
 | Distribution | Assets, signing, provisioning, bundle metadata. |
-| Composition | Import `RupaUI` and `RupaAgentUI`, own app-level services such as `AgentHost`, and pass only UI-facing session publication dependencies into editor views. |
+| Composition | Import `RupaUI`, `RupaAgentUI`, `RupaDomainFoundation`, and selected concrete domain modules such as `RupaManufacturing`; own app-level services such as `AgentHost`; compose one domain registry and inject it into both editor views and AgentHost. |
 
 The app host delegates editor behavior to RupaKit.
 
@@ -221,22 +238,35 @@ struct ApplicationRoot: App {
 }
 ```
 
-When live CLI support is enabled, the app host imports `RupaAgentUI`, owns an `AgentHost`, and starts or stops the Agent command service across scene-phase transitions. `RupaUI` publishes the UI-owned session through `WorkspaceAgentSessionPublisher` and the `WorkspaceAgentSessionPublishing` protocol but does not control the socket listener lifecycle.
+When live CLI support is enabled, the app host imports `RupaAgentUI`, owns an `AgentHost`, and starts or stops the Agent command service across scene-phase transitions. The app host composes the standard domain registry once through `ApplicationDomainRegistry`, passes the same registry to `MainView` and `AgentHost`, and keeps concrete domain imports out of `RupaUI` and `RupaAgentRuntime`. `RupaUI` publishes the UI-owned session through `WorkspaceAgentSessionPublisher` and the `WorkspaceAgentSessionPublishing` protocol but does not control the socket listener lifecycle.
 
 ```swift
 import SwiftUI
 import RupaAgentUI
+import RupaCore
 import RupaUI
 
 @main
 struct ApplicationRoot: App {
     @Environment(\.scenePhase) private var scenePhase
-    @State private var agentHost = AgentHost()
-    @State private var editorSession = WorkspaceLaunchSessionFactory.makeSession()
+    @State private var agentHost: AgentHost
+    @State private var editorSession: EditorSession
+    private let domainConfiguration: ApplicationDomainRegistryConfiguration
+
+    init() {
+        let domainConfiguration = ApplicationDomainRegistry.makeConfiguration()
+        self.domainConfiguration = domainConfiguration
+        self._agentHost = State(initialValue: AgentHost(domainRegistry: domainConfiguration.registry))
+        self._editorSession = State(initialValue: WorkspaceLaunchSessionFactory.makeSession())
+    }
 
     var body: some Scene {
         WindowGroup {
-            MainView(session: editorSession, agentSessionPublisher: agentHost)
+            MainView(
+                session: editorSession,
+                domainRegistry: domainConfiguration.registry,
+                agentSessionPublisher: agentHost
+            )
         }
         .windowResizability(.contentMinSize)
         .onChange(of: scenePhase) { _, phase in
@@ -270,6 +300,8 @@ struct ApplicationRoot: App {
 | `RupaRendering` | Library | `RupaRendering` |
 | `RupaPreview` | Library | `RupaPreview` |
 | `RupaAutomation` | Library | `RupaAutomation` |
+| `RupaDomainFoundation` | Library | `RupaDomainFoundation` |
+| `RupaManufacturing` | Library | `RupaManufacturing` |
 | `RupaAgentProtocol` | Library | `RupaAgentProtocol` |
 | `RupaAgentRuntime` | Library | `RupaAgentRuntime` |
 | `RupaAgentTransport` | Library | `RupaAgentTransport` |
@@ -283,13 +315,16 @@ struct ApplicationRoot: App {
 flowchart TD
     RupaKit["RupaKit"] --> RupaCore["RupaCore"]
     RupaKit --> RupaAutomation["RupaAutomation"]
+    RupaKit --> RupaDomainFoundation["RupaDomainFoundation"]
 
     RupaUI["RupaUI"] --> RupaCore
+    RupaUI --> RupaDomainFoundation
     RupaUI --> RupaRendering["RupaRendering"]
     RupaUI --> RupaPreview["RupaPreview"]
 
     RupaAgentUI["RupaAgentUI"] --> RupaUI
     RupaAgentUI --> RupaCore
+    RupaAgentUI --> RupaDomainFoundation
     RupaAgentUI --> RupaAgentRuntime
     RupaAgentUI --> RupaAgentTransport
 
@@ -299,6 +334,11 @@ flowchart TD
     RupaViewportScene --> SwiftCAD["Swift-CAD"]
     RupaPreview --> RupaCore
     RupaAutomation --> RupaCore
+    RupaDomainFoundation --> RupaCore
+    RupaDomainFoundation --> RupaAutomation
+    RupaManufacturing["RupaManufacturing"] --> RupaDomainFoundation
+    RupaManufacturing --> RupaAutomation
+    RupaManufacturing --> RupaCore
 
     RupaAgent["RupaAgent<br/>(umbrella)"] --> RupaAgentProtocol["RupaAgentProtocol"]
     RupaAgent --> RupaAgentRuntime["RupaAgentRuntime"]
@@ -306,8 +346,10 @@ flowchart TD
 
     RupaAgentProtocol --> RupaCore
     RupaAgentProtocol --> RupaAutomation
+    RupaAgentProtocol --> RupaDomainFoundation
     RupaAgentRuntime --> RupaCore
     RupaAgentRuntime --> RupaAutomation
+    RupaAgentRuntime --> RupaDomainFoundation
     RupaAgentRuntime --> RupaAgentProtocol
     RupaAgentTransport --> RupaCore
     RupaAgentTransport --> RupaAgentProtocol
@@ -316,6 +358,7 @@ flowchart TD
     RupaCLI["RupaCLI"] --> RupaCLIKit["RupaCLIKit"]
     RupaCLIKit --> RupaCore
     RupaCLIKit --> RupaAutomation
+    RupaCLIKit --> RupaDomainFoundation
     RupaCLIKit --> RupaAgentProtocol
     RupaCLIKit --> RupaAgentRuntime
     RupaCLIKit --> RupaAgentTransport
@@ -326,11 +369,11 @@ flowchart TD
 
 | Target | Dependencies | Responsibility |
 |---|---|---|
-| `RupaKit` | `RupaCore`, `RupaAutomation` | Umbrella module. |
+| `RupaKit` | `RupaCore`, `RupaAutomation`, `RupaDomainFoundation` | Umbrella module. |
 | `RupaCore` | `RupaCoreTypes`, Swift-CAD, Collections | Editor sessions, document state, commands, evaluation, services, diagnostics. |
 | `RupaCoreTypes` | none | Swift-CAD-free leaf value types (`SaveResult`, `DocumentGeneration`, `EditorDiagnostic`, `EditorError`, `LengthDisplayUnit`, `LengthDisplayText`). Currently depended on only by `RupaCore`, which re-exports it. |
-| `RupaUI` | `RupaCore`, `RupaRendering`, `RupaPreview`, MacComponent | SwiftUI editor interface. Agent-in-UI wiring is extracted into `RupaAgentUI`. |
-| `RupaAgentUI` | `RupaUI`, `RupaCore`, `RupaAgentRuntime`, `RupaAgentTransport` | App-facing agent-host lifecycle (`AgentHost`) and MainActor-safe session publication bridge for editor-owned sessions. |
+| `RupaUI` | `RupaCore`, `RupaDomainFoundation`, `RupaRendering`, `RupaPreview`, MacComponent | SwiftUI editor interface and generic domain command catalog. Agent-in-UI wiring is extracted into `RupaAgentUI`. |
+| `RupaAgentUI` | `RupaUI`, `RupaCore`, `RupaDomainFoundation`, `RupaAgentRuntime`, `RupaAgentTransport` | App-facing agent-host lifecycle (`AgentHost`), injected domain registry handoff, and MainActor-safe session publication bridge for editor-owned sessions. |
 | `RupaRendering` | `RupaCore`, `RupaViewportScene` | Editor viewport and render-scene extraction from CAD source/evaluated state. |
 | `RupaViewportScene` | `RupaCore`, Swift-CAD | CAD-backed viewport scene, camera, and projection basis shared by rendering. |
 | `RupaPreview` | `RupaCore` | RealityKit, Quick Look, USDZ preview. |
@@ -1037,11 +1080,11 @@ RupaAgent transports automation requests. It does not implement CAD commands.
 
 ### RupaAgentUI
 
-RupaAgentUI is the app-facing composition target that binds the agent stack to the editor UI. It depends on `RupaUI`, `RupaCore`, `RupaAgentRuntime`, and `RupaAgentTransport`, and lets the app host own agent lifecycle without `RupaUI` depending on the agent stack.
+RupaAgentUI is the app-facing composition target that binds the agent stack to the editor UI. It depends on `RupaUI`, `RupaCore`, `RupaDomainFoundation`, `RupaAgentRuntime`, and `RupaAgentTransport`, and lets the app host own agent lifecycle and inject one domain registry without `RupaUI` depending on the agent stack.
 
 | Type | Responsibility |
 |---|---|
-| `AgentHost` | Starts and stops the socket-backed Agent command service under app-host lifecycle control and publishes registered UI-owned sessions to the `WorkspaceRegistry` on MainActor. |
+| `AgentHost` | Starts and stops the socket-backed Agent command service under app-host lifecycle control, receives the app-composed `DomainRegistry`, and publishes registered UI-owned sessions to the `WorkspaceRegistry` on MainActor. |
 
 ### RupaCLIKit
 
@@ -1608,6 +1651,8 @@ let package = Package(
         .library(name: "RupaRendering", targets: ["RupaRendering"]),
         .library(name: "RupaPreview", targets: ["RupaPreview"]),
         .library(name: "RupaAutomation", targets: ["RupaAutomation"]),
+        .library(name: "RupaDomainFoundation", targets: ["RupaDomainFoundation"]),
+        .library(name: "RupaManufacturing", targets: ["RupaManufacturing"]),
         .library(name: "RupaAgentProtocol", targets: ["RupaAgentProtocol"]),
         .library(name: "RupaAgentRuntime", targets: ["RupaAgentRuntime"]),
         .library(name: "RupaAgentTransport", targets: ["RupaAgentTransport"]),
@@ -1622,7 +1667,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-collections", from: "1.1.0")
     ],
     targets: [
-        .target(name: "RupaKit", dependencies: ["RupaCore", "RupaAutomation"]),
+        .target(name: "RupaKit", dependencies: ["RupaCore", "RupaAutomation", "RupaDomainFoundation"]),
         .target(
             name: "RupaCore",
             dependencies: [
@@ -1636,6 +1681,7 @@ let package = Package(
             name: "RupaUI",
             dependencies: [
                 "RupaCore",
+                "RupaDomainFoundation",
                 "RupaRendering",
                 "RupaPreview",
                 .product(name: "MacComponent", package: "mac-component")
@@ -1643,7 +1689,13 @@ let package = Package(
         ),
         .target(
             name: "RupaAgentUI",
-            dependencies: ["RupaAgentRuntime", "RupaAgentTransport", "RupaCore", "RupaUI"]
+            dependencies: [
+                "RupaAgentRuntime",
+                "RupaAgentTransport",
+                "RupaCore",
+                "RupaDomainFoundation",
+                "RupaUI"
+            ]
         ),
         .target(name: "RupaRendering", dependencies: ["RupaCore", "RupaViewportScene"]),
         .target(
@@ -1653,13 +1705,24 @@ let package = Package(
         .target(name: "RupaPreview", dependencies: ["RupaCore"]),
         .target(name: "RupaAutomation", dependencies: ["RupaCore"]),
         .target(
+            name: "RupaDomainFoundation",
+            dependencies: ["RupaCore", "RupaAutomation"]
+        ),
+        .target(
+            name: "RupaManufacturing",
+            dependencies: ["RupaDomainFoundation", "RupaAutomation", "RupaCore"]
+        ),
+        .target(
             name: "RupaAgent",
             dependencies: ["RupaAgentProtocol", "RupaAgentRuntime", "RupaAgentTransport"]
         ),
-        .target(name: "RupaAgentProtocol", dependencies: ["RupaCore", "RupaAutomation"]),
+        .target(
+            name: "RupaAgentProtocol",
+            dependencies: ["RupaCore", "RupaAutomation", "RupaDomainFoundation"]
+        ),
         .target(
             name: "RupaAgentRuntime",
-            dependencies: ["RupaCore", "RupaAutomation", "RupaAgentProtocol"]
+            dependencies: ["RupaCore", "RupaAutomation", "RupaDomainFoundation", "RupaAgentProtocol"]
         ),
         .target(
             name: "RupaAgentTransport",
@@ -1670,6 +1733,7 @@ let package = Package(
             dependencies: [
                 "RupaCore",
                 "RupaAutomation",
+                "RupaDomainFoundation",
                 "RupaAgentProtocol",
                 "RupaAgentRuntime",
                 "RupaAgentTransport",
@@ -1678,7 +1742,8 @@ let package = Package(
         ),
         .executableTarget(name: "RupaCLI", dependencies: ["RupaCLIKit"]),
         // Test targets (see the manifest for full dependency lists):
-        //   RupaKitTests, RupaCoreTests, RupaAutomationTests, RupaAgentTests,
+        //   RupaKitTests, RupaCoreTests, RupaAutomationTests,
+        //   RupaDomainFoundationTests, RupaManufacturingTests, RupaAgentTests,
         //   RupaAgentContractTests, RupaAgentSurfaceTests, RupaAgentSketchTests,
         //   RupaAgentModelingTests, RupaAgentSelectionTests, RupaAgentInspectionTests,
         //   RupaAgentTopologyPersistenceTests, RupaAgentTransportTests,
@@ -1698,6 +1763,9 @@ RupaKit tests are split by module boundary.
 |---|---|
 | `RupaCoreTests` | Command pipeline, generation, undo/redo, parameters, formula parsing/listing, product metadata, package round trip, evaluation snapshots, render invalidation, file service contracts, and Core-owned canvas click/drag tool activation. |
 | `RupaAutomationTests` | Codable schema, batch ordering, parameter mutation, reference resolution, result encoding. |
+| `RupaDomainFoundationTests` | Domain registry, ownership, command lowering, generic execution, dry-run restoration, and simulation adapter contracts. |
+| `RupaManufacturingTests` | Manufacturing domain registration and printability preflight command lowering. |
+| `RupaUIPackageTests` | Generic domain command catalog mapping, `MainView` domain registry injection, and `AgentHost` socket capability publication from an injected registry. |
 | `RupaAgentTests` | Message encoding, session resolution, generation mismatch, lock behavior, client/server lifecycle. |
 | `RupaUIPackageTests` | App-level agent host lifecycle and MainActor-safe session publication. |
 | `RupaRenderingTests` | Viewport scene extraction, projection/unprojection layout, model coordinate mapping, empty-document drag plane behavior, and source-derived hit testing. |
@@ -1743,13 +1811,13 @@ Initial implementation is accepted when these behavior contracts pass.
 
 | Topic | Decision needed |
 |---|---|
-| Document format boundary | Confirm whether `.swcad` is a Rupa document package wrapping Swift-CAD source or a direct Swift-CAD native package extension. |
+| Document format boundary | Resolved: `.swcad` is the Rupa product package containing `manifest.json`, Swift-CAD `document.json`, and Rupa `rupa.json`, as implemented by `DocumentPackageStore`. |
 | App sandbox socket path | Resolved: the socket lives in the shared app-group container (`WWCKBW8CKN.team.stamp.rupa`) so the sandboxed app and external clients resolve the same path; distribution-signing validation remains before release. |
 | iPadOS and visionOS CLI exclusion | Decide whether `RupaCLI` is macOS-only in a separate package configuration or guarded in the shared package. |
 | XPC migration | Decide the threshold for replacing Unix domain sockets with XPC. |
-| Command schema versioning | Define compatibility policy before exposing automation as a public agent surface. |
+| Command schema versioning | During development, replace incorrect schemas without deprecated aliases. Freeze Agent/CLI compatibility independently when a conformance profile is released, following `SPECIFICATION_AUTHORITY.md`. |
 | Force file mutation | Define the exact supported behavior for `--file --force` when the app has unsaved changes. |
-| Batch undo grouping | Decide whether live batches default to one undo unit or per-command undo units. |
-| Expected generation policy | Decide which commands require `expectedGeneration` and whether dry-run requires it. |
-| Stable reference precedence | Define precedence when multiple reference forms match the same user input. |
+| Batch undo grouping | Resolved by `DOMAIN_TRANSACTION_CONTRACT.md`: atomic and domain projection batches commit as one undo unit. A future explicitly non-atomic script sequence must use a different contract. |
+| Expected generation policy | Mutating transactions require expected generation at remote/live boundaries. Queries bind results to the generation and artifact identity they actually read. Dry run uses the same base-generation precondition. |
+| Stable reference precedence | Resolved by `REFERENCE_ARTIFACT_CONTRACT.md`: public operations use explicit tagged reference cases; ambiguous untyped input is rejected rather than resolved by precedence. |
 | ApplicationProfile schema | Define the future schema only after generic validation rules, export presets, templates, unit defaults, and UI layout settings are stable. |

@@ -33,6 +33,7 @@ public struct SurfaceAnalysisService: Sendable {
 
     public func analyze(
         document: DesignDocument,
+        displayUnit: LengthDisplayUnit,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
@@ -48,7 +49,7 @@ public struct SurfaceAnalysisService: Sendable {
 
         guard document.cadDocument.hasActiveRenderableTopologyFeatures else {
             return SurfaceAnalysisResult(
-                displayUnit: document.displayUnit,
+                displayUnit: displayUnit,
                 diagnostics: [
                     EditorDiagnostic(
                         severity: .info,
@@ -94,7 +95,7 @@ public struct SurfaceAnalysisService: Sendable {
         }
 
         return SurfaceAnalysisResult(
-            displayUnit: document.displayUnit,
+            displayUnit: displayUnit,
             counts: counts(for: faces),
             faces: faces.sorted { lhs, rhs in
                 let lhsName = lhs.facePersistentNames.first ?? lhs.faceID

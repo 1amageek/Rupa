@@ -28,7 +28,7 @@ public struct PolygonSketchCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Polygon side count.")
     public var sides: Int = PolygonToolState.defaultSideCount
 
-    @Option(help: "Length unit for center coordinates and radius. Defaults to the document display unit.")
+    @Option(help: "Length unit for center coordinates and radius. Defaults to the workspace display unit.")
     public var unit: LengthDisplayUnit?
 
     @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")

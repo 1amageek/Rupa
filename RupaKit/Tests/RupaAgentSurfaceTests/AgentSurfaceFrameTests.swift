@@ -50,7 +50,8 @@ import SwiftCAD
                 target: controlPoint.selectionReference,
                 isVisible: true
             ),
-            expectedGeneration: DocumentGeneration(1)
+            expectedGeneration: DocumentGeneration(1),
+            expectedWorkspaceRevision: WorkspaceRevision(0)
         )
     )
 
@@ -60,12 +61,12 @@ import SwiftCAD
     }
     #expect(displayResult.commandName == "setSurfaceControlPointDisplay")
     #expect(displayResult.didMutate)
-    #expect(displayResult.generation == DocumentGeneration(2))
+    #expect(displayResult.generation == DocumentGeneration(1))
 
     let visibleSummaryResponse = server.handle(
         .surfaceSourceSummary(
             sessionID: sessionID,
-            expectedGeneration: DocumentGeneration(2)
+            expectedGeneration: DocumentGeneration(1)
         )
     )
     guard case .surfaceSourceSummary(let visibleSummary) = visibleSummaryResponse else {
@@ -122,7 +123,8 @@ import SwiftCAD
                 query: query,
                 isVisible: true
             ),
-            expectedGeneration: DocumentGeneration(1)
+            expectedGeneration: DocumentGeneration(1),
+            expectedWorkspaceRevision: WorkspaceRevision(0)
         )
     )
 
@@ -132,16 +134,16 @@ import SwiftCAD
     }
     #expect(displayResult.commandName == "setSurfaceFrameDisplay")
     #expect(displayResult.didMutate)
-    #expect(displayResult.generation == DocumentGeneration(2))
+    #expect(displayResult.generation == DocumentGeneration(1))
 
     let displayID = try SurfaceFrameDisplayID(query: query)
-    #expect(session.document.productMetadata.surfaceFrameDisplays[displayID]?.isVisible == true)
+    #expect(session.workspaceState.surfaceFrameDisplays[displayID]?.isVisible == true)
 
     let frameResponse = server.handle(
         .surfaceFrames(
             sessionID: sessionID,
             queries: [query],
-            expectedGeneration: DocumentGeneration(2)
+            expectedGeneration: DocumentGeneration(1)
         )
     )
     guard case .surfaceFrames(let frames) = frameResponse else {
@@ -247,7 +249,8 @@ import SwiftCAD
         .execute(
             sessionID: sessionID,
             command: .setSurfaceFrameDisplay(query: spanQuery, isVisible: true),
-            expectedGeneration: generation
+            expectedGeneration: generation,
+            expectedWorkspaceRevision: WorkspaceRevision(0)
         )
     )
     guard case .command(let displayResult) = displayResponse else {
@@ -257,7 +260,7 @@ import SwiftCAD
     #expect(displayResult.commandName == "setSurfaceFrameDisplay")
     #expect(displayResult.didMutate)
     let displayID = try SurfaceFrameDisplayID(query: spanQuery)
-    #expect(session.document.productMetadata.surfaceFrameDisplays[displayID]?.isVisible == true)
+    #expect(session.workspaceState.surfaceFrameDisplays[displayID]?.isVisible == true)
 }
 
 @MainActor

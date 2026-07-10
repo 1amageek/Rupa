@@ -120,7 +120,7 @@ struct ObjectDimensionSourceResolver: Sendable {
                 message: "Object dimension requires a generated extrusion depth edge target."
             )
         }
-        let topology = try TopologySummaryService().summarize(document: document)
+        let topology = try TopologySnapshotService().snapshot(document: document)
         guard let entry = topology.entries.first(where: {
             $0.kind == .edge &&
                 $0.sceneNodeID == target.sceneNodeID.description &&

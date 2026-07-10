@@ -1,5 +1,7 @@
 import RupaAgentProtocol
+import RupaAutomation
 import RupaCore
+import RupaDomainFoundation
 
 enum AgentCapabilityCatalog {
     private static let workspaceFeedbackOptionAxis = AgentCapabilityDescriptor.OptionAxis(
@@ -45,7 +47,7 @@ enum AgentCapabilityCatalog {
             category: .document,
             summary: "Read the current document identity, generation, dirty state, and diagnostics.",
             access: .automationCommand,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             targets: [.document],
             failureMode: "Fails only when the active session cannot be resolved."
         ),
@@ -54,16 +56,16 @@ enum AgentCapabilityCatalog {
             category: .document,
             summary: "Change the display unit used by UI, summaries, measurements, and command feedback without changing the physical ruler distances.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .workspaceMutation,
             targets: [.document],
             failureMode: "Rejects stale generations before mutation; preserves the current minor tick, major tick, and visible span distances."
         ),
         capability(
             "setRulerConfiguration",
             category: .document,
-            summary: "Set the document ruler unit, tick spacing, and visible workspace span for precision or architectural scale.",
+            summary: "Set the session workspace ruler unit, tick spacing, and visible span for precision or architectural scale without changing authored CAD source.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .workspaceMutation,
             targets: [.document],
             failureMode: "Rejects stale generations before mutation and clamps ruler distances to the supported workspace scale range.",
             optionMatrix: [
@@ -80,9 +82,9 @@ enum AgentCapabilityCatalog {
         capability(
             "setViewportGridSettings",
             category: .document,
-            summary: "Set viewport grid visual spacing behavior without changing document units, ruler distances, or snap distances.",
+            summary: "Set session viewport grid visual spacing behavior without changing authored source, ruler distances, or snap distances.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .workspaceMutation,
             targets: [.document],
             failureMode: "Rejects stale generations before storing viewport grid settings.",
             optionMatrix: [
@@ -102,7 +104,7 @@ enum AgentCapabilityCatalog {
             category: .document,
             summary: "Apply a named workspace scale preset from micro fabrication through regional planning.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .workspaceMutation,
             targets: [.document],
             failureMode: "Rejects stale generations before applying the preset ruler configuration.",
             optionMatrix: [
@@ -121,7 +123,7 @@ enum AgentCapabilityCatalog {
             category: .document,
             summary: "Apply the actionable workspace scale recommendation for the current model size.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .workspaceMutation,
             targets: [.document],
             failureMode: "Measures the current model, leaves the document unchanged when no recommendation exists or the model exceeds the supported preset range.",
             optionMatrix: [
@@ -148,7 +150,7 @@ enum AgentCapabilityCatalog {
             category: .document,
             summary: "Translate CAD source geometry by a meter-space vector so far-from-origin models can return to a local precision-safe workspace.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             targets: [.document],
             failureMode: "Rejects stale generations, non-finite translations, and standard-plane translations that would move a sketch along its unsupported normal axis before mutation.",
             optionMatrix: [
@@ -167,7 +169,7 @@ enum AgentCapabilityCatalog {
             category: .document,
             summary: "Rename the document through the undoable command pipeline.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             targets: [.document],
             failureMode: "Rejects stale generations before mutation."
         ),
@@ -176,7 +178,7 @@ enum AgentCapabilityCatalog {
             category: .parameter,
             summary: "Create or update a typed document parameter from a structured expression.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.parameters],
             targets: [.document],
             failureMode: "Rejects invalid expressions, kind mismatches, and stale generations before mutation."
@@ -186,7 +188,7 @@ enum AgentCapabilityCatalog {
             category: .parameter,
             summary: "Rename a document parameter while preserving its stable ParameterID references.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.parameters],
             targets: [.document],
             failureMode: "Rejects missing parameters, duplicate names, invalid names, unchanged names, and stale generations before mutation."
@@ -196,7 +198,7 @@ enum AgentCapabilityCatalog {
             category: .parameter,
             summary: "Delete a parameter that is not referenced by current source expressions.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.parameters],
             targets: [.document],
             failureMode: "Rejects referenced, missing, or stale parameters before mutation."
@@ -204,9 +206,9 @@ enum AgentCapabilityCatalog {
         capability(
             "setParameterExpression",
             category: .parameter,
-            summary: "Parse a user-facing expression string and upsert the resulting typed parameter using document-scale defaults when units are omitted.",
+            summary: "Parse a user-facing expression string and upsert the resulting typed parameter using workspace-scale defaults when units are omitted.",
             access: .agentRequest,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.parameters],
             targets: [.document],
             failureMode: "Rejects parse errors, dependency errors, kind mismatches, and stale generations before mutation.",
@@ -214,7 +216,7 @@ enum AgentCapabilityCatalog {
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "defaults",
                     supportedValues: [
-                        "omitted uses current document display unit",
+                        "omitted uses current workspace display unit",
                         "explicit lengthUnit and angleUnit override document defaults",
                     ]
                 )
@@ -225,7 +227,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Parse a user-facing length expression string and apply it to a supported selected object dimension.",
             access: .agentRequest,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.topologySummary, .objectDimensionSummary],
             targets: [.body, .face, .edge],
             failureMode: "Rejects parse errors, non-length expressions, unsupported object dimensions, invalid values, and stale generations before mutation.",
@@ -240,7 +242,7 @@ enum AgentCapabilityCatalog {
                     notes: [
                         "Expressions resolve through the current document parameter table.",
                         "Length units include micrometers through kilometers plus inches and feet.",
-                        "Omit defaults to use the current document display unit for unitless length literals.",
+                        "Omit defaults to use the current workspace display unit for unitless length literals.",
                     ]
                 )
             ]
@@ -250,7 +252,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Parse a user-facing length or angle expression string and apply it to a supported source sketch entity dimension.",
             access: .agentRequest,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary, .sketchDimensionSummary],
             targets: [.sketchEntity],
             failureMode: "Rejects parse errors, quantity-kind mismatches, unsupported sketch dimensions, fixed conflicts, invalid values, and stale generations before mutation.",
@@ -265,7 +267,7 @@ enum AgentCapabilityCatalog {
                     notes: [
                         "Line, radius, and diameter dimensions resolve as lengths.",
                         "Line angle and arc span dimensions resolve as angles.",
-                        "Omit defaults to use the current document display unit for unitless length literals.",
+                        "Omit defaults to use the current workspace display unit for unitless length literals.",
                     ]
                 )
             ]
@@ -275,7 +277,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Parse a user-facing expression string and set the target of an existing persistent selection dimension.",
             access: .agentRequest,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.selectionDimensionEvaluation],
             targets: [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle, .sketchControlPoint],
             failureMode: "Rejects missing selection dimension IDs, parse errors, quantity-kind mismatches, invalid values, and stale generations before mutation.",
@@ -286,7 +288,7 @@ enum AgentCapabilityCatalog {
                     notes: [
                         "The existing selection dimension determines whether the expression must resolve to length or angle.",
                         "Length targets share the same explicit-unit and architectural input support as object dimensions.",
-                        "Omit defaults to use the current document display unit for unitless length literals.",
+                        "Omit defaults to use the current workspace display unit for unitless length literals.",
                     ]
                 )
             ]
@@ -296,7 +298,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Read all document parameters without mutating source or undo history.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.parameters],
             targets: [.document],
             failureMode: "Rejects stale generations before reading."
@@ -306,9 +308,9 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Read the objective CAD interaction quality assessment across reference contract, source ownership, command contract, selection topology, viewport affordance, Inspector affordance, Agent parity, diagnostics, verification, and performance gates.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             requiresSession: false,
-            requiresExpectedGeneration: false,
+            requiresExpectedSourceGeneration: false,
             discovery: [.cadInteractionQualityAssessment],
             targets: [.document],
             failureMode: "Does not inspect or mutate a session; reports the current static product-quality assessment model."
@@ -318,7 +320,7 @@ enum AgentCapabilityCatalog {
             category: .component,
             summary: "Create a reusable component definition from existing root scene nodes.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             targets: [.sceneNode],
             failureMode: "Rejects missing roots, invalid hierarchy references, and stale generations before mutation."
         ),
@@ -327,7 +329,7 @@ enum AgentCapabilityCatalog {
             category: .component,
             summary: "Place a component definition instance with a local transform.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.designDisplaySnapshot],
             targets: [.sceneNode],
             failureMode: "Rejects missing definitions, invalid transforms, duplicate names, and stale generations before mutation.",
@@ -347,7 +349,7 @@ enum AgentCapabilityCatalog {
             category: .pattern,
             summary: "Create a source-owned pattern array from a component definition with rectangular, radial, or curve distribution, emitting lightweight component instances or cloned independent CAD feature copies.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.designDisplaySnapshot],
             targets: [.sceneNode],
             failureMode: "Rejects missing component definitions, invalid linear or angular axis directions, invalid curve paths, non-positive copy counts, non-length distances, non-angle rotations, non-scalar ratio or scale values, zero spacing, zero angles, duplicate array names, stale output transforms, and stale generations before mutation.",
@@ -405,7 +407,7 @@ enum AgentCapabilityCatalog {
             category: .pattern,
             summary: "Edit an existing source-owned pattern array by replacing its name, component definition, distribution, or output mode, then regenerate owned outputs.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.designDisplaySnapshot],
             targets: [.sceneNode],
             failureMode: "Rejects missing pattern sources, duplicate names, missing component definitions, invalid distributions, stale output groups, and stale generations before mutation.",
@@ -467,7 +469,7 @@ enum AgentCapabilityCatalog {
             category: .pattern,
             summary: "Detach generated pattern outputs from a pattern array source; component-instance arrays are materialized as cloned CAD feature scene outputs before detaching.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.designDisplaySnapshot],
             targets: [.sceneNode],
             failureMode: "Rejects missing pattern sources, stale output groups, and stale generations before mutation.",
@@ -486,7 +488,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "List source-owned Pattern Array edit candidates, output ownership, lifecycle actions, and diagnostics without mutating the document.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.patternArraySummary, .designDisplaySnapshot],
             targets: [.sceneNode, .componentInstance],
             failureMode: "Rejects stale generations before reading; reports source-owned component-instance and independent-copy output policies so Agents do not direct-edit generated outputs."
@@ -496,7 +498,7 @@ enum AgentCapabilityCatalog {
             category: .component,
             summary: "Set visibility on a scene node without changing CAD feature source.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             targets: [.sceneNode],
             failureMode: "Rejects missing scene nodes and stale generations before mutation."
         ),
@@ -505,7 +507,7 @@ enum AgentCapabilityCatalog {
             category: .component,
             summary: "Set lock state on a scene node without changing CAD feature source.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             targets: [.sceneNode],
             failureMode: "Rejects missing scene nodes and stale generations before mutation."
         ),
@@ -514,7 +516,7 @@ enum AgentCapabilityCatalog {
             category: .component,
             summary: "Replace a scene node local transform.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             targets: [.sceneNode],
             failureMode: "Rejects missing scene nodes, invalid transforms, and stale generations before mutation."
         ),
@@ -523,7 +525,7 @@ enum AgentCapabilityCatalog {
             category: .component,
             summary: "Set visibility on a directly editable document-owned component instance.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.designDisplaySnapshot],
             targets: [.componentInstance],
             failureMode: "Rejects missing instances, pattern-owned output instances, and stale generations before mutation.",
@@ -543,7 +545,7 @@ enum AgentCapabilityCatalog {
             category: .component,
             summary: "Set lock state on a directly editable document-owned component instance.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.designDisplaySnapshot],
             targets: [.componentInstance],
             failureMode: "Rejects missing instances, pattern-owned output instances, and stale generations before mutation.",
@@ -563,7 +565,7 @@ enum AgentCapabilityCatalog {
             category: .component,
             summary: "Replace a directly editable document-owned component instance local transform.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.designDisplaySnapshot],
             targets: [.componentInstance],
             failureMode: "Rejects missing instances, pattern-owned output instances, invalid transforms, and stale generations before mutation.",
@@ -583,7 +585,7 @@ enum AgentCapabilityCatalog {
             category: .sketch,
             summary: "Create a construction section plane scene node.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             targets: [.document],
             failureMode: "Rejects stale generations before mutation."
         ),
@@ -592,7 +594,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Evaluate generated body meshes against a sketch, construction, active construction, or section scene-node plane without mutating the document.",
             access: .automationCommand,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.sectionAnalysis, .meshSummary, .constructionPlaneSummary],
             targets: [.body, .constructionPlane, .sceneNode],
             failureMode: "Rejects stale generations, missing plane sources, invalid tolerances, and non-construction scene-node plane sources before reading.",
@@ -643,7 +645,7 @@ enum AgentCapabilityCatalog {
             category: .sketch,
             summary: "Read saved construction planes, their scene-node linkage, and the active construction plane without mutating source.",
             access: .automationCommand,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.constructionPlaneSummary],
             targets: [.constructionPlane],
             failureMode: "Rejects stale generations before reading."
@@ -653,7 +655,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Return structured saved construction-plane IDs, names, sketch planes, scene-node IDs, and active state for Agent planning.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.constructionPlaneSummary],
             targets: [.constructionPlane],
             failureMode: "Rejects stale generations before reading."
@@ -663,7 +665,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Return workspace scale, viewport grid scale, interaction scale defaults, ordered UI-visible sketch primitives, profile regions, component definitions, component instances, pattern arrays, saved views, extrude and straight-prism sweep display bodies, evaluated body meshes, and generated topology for Agent viewport planning.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.designDisplaySnapshot, .sketchEntitySummary, .topologySummary, .savedViews],
             targets: [.document, .componentInstance, .sketchEntity, .region, .body, .face, .edge, .vertex, .savedView],
             failureMode: "Rejects stale generations before reading; reports normalized workspace scale, Core-owned viewport grid and interaction scale defaults, display-ready source snapshots, reusable component definitions, placed component instances, and generated pattern sources, not raw CAD kernel internals."
@@ -673,7 +675,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Read saved view camera, projection, clipping, visibility, section, and display-scale metadata without mutating source.",
             access: .automationCommand,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.designDisplaySnapshot, .savedViews],
             targets: [.savedView],
             failureMode: "Rejects stale generations before reading."
@@ -683,7 +685,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Generate structured orthographic drawing strokes from a saved view and evaluated mesh geometry without using viewport screenshots.",
             access: .automationCommand,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.designDisplaySnapshot, .savedViews, .drawingProjection, .meshSummary, .topologySummary],
             targets: [.document, .savedView, .body, .edge],
             failureMode: "Rejects missing saved view IDs, invalid tolerances, invalid stroke limits, perspective views, evaluation failures, and stale generations before reading; reports projected-triangle hidden-line visibility as stroke summaries plus visible and hidden visibility segments."
@@ -693,7 +695,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Generate a one-shot orthographic drawing projection from an explicit transient saved-view definition without mutating the document.",
             access: .automationCommand,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.designDisplaySnapshot, .drawingProjection, .meshSummary, .topologySummary],
             targets: [.document, .body, .edge],
             failureMode: "Rejects invalid transient view metadata, invalid tolerances, invalid stroke limits, perspective views, evaluation failures, and stale generations before reading; returns the same hidden-line projection structure as saved-view projection without requiring a saved view ID."
@@ -703,7 +705,7 @@ enum AgentCapabilityCatalog {
             category: .document,
             summary: "Create a source-owned saved view with camera, projection, clipping, visibility, section state, and scale-bar metadata.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.designDisplaySnapshot, .savedViews],
             targets: [.document, .savedView],
             failureMode: "Rejects duplicate IDs, empty names, invalid camera/projection/scale metadata, missing visibility references, missing section references, and stale generations before mutation."
@@ -713,7 +715,7 @@ enum AgentCapabilityCatalog {
             category: .document,
             summary: "Replace a saved view's source metadata through the shared undoable command path.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.designDisplaySnapshot, .savedViews],
             targets: [.savedView],
             failureMode: "Rejects missing saved view IDs, empty names, invalid camera/projection/scale metadata, missing visibility references, missing section references, and stale generations before mutation."
@@ -723,7 +725,7 @@ enum AgentCapabilityCatalog {
             category: .document,
             summary: "Remove a saved view from product metadata through the shared undoable command path.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.designDisplaySnapshot, .savedViews],
             targets: [.savedView],
             failureMode: "Rejects missing saved view IDs and stale generations before mutation."
@@ -733,7 +735,7 @@ enum AgentCapabilityCatalog {
             category: .sketch,
             summary: "Create a saved construction plane from a named SketchPlane source, add it to the construction scene, and optionally make it active for subsequent sketch creation.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.constructionPlaneSummary],
             targets: [.document],
             failureMode: "Rejects empty or duplicate names, invalid plane origin or normal, and stale generations before mutation."
@@ -743,7 +745,7 @@ enum AgentCapabilityCatalog {
             category: .sketch,
             summary: "Create a saved construction plane aligned to a selected generated face or source sketch region target, add it to the construction scene, and optionally make it active.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.topologySummary, .sketchEntitySummary, .selectionState, .constructionPlaneSummary],
             targets: [.face, .region, .constructionPlane],
             failureMode: "Rejects non-face/non-region targets, unresolved topology or source regions, invalid resolved planes, duplicate names, and stale generations before mutation."
@@ -753,7 +755,7 @@ enum AgentCapabilityCatalog {
             category: .sketch,
             summary: "Create a saved construction plane from selected targets: single face/region alignment, face plus edge perpendicular plane, multi-face/region midplane, or generated/source point targets including sketch point handles and spline control points with explicit view-normal support for two-point planes.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.topologySummary, .sketchEntitySummary, .selectionState, .constructionPlaneSummary],
             targets: [.face, .edge, .vertex, .region, .sketchEntity, .sketchPointHandle, .sketchControlPoint, .constructionPlane],
             failureMode: "Rejects empty selections, unsupported target mixes, unresolved topology, source regions, source point handles, or source control points, nonparallel or non-opposing midplane targets, two-point planes without a valid view normal, collinear three-plus point targets, invalid face-edge perpendicular planes, duplicate names, and stale generations before mutation."
@@ -763,7 +765,7 @@ enum AgentCapabilityCatalog {
             category: .sketch,
             summary: "Create a saved construction plane parallel to an explicit view normal through a supplied origin, matching the current-view construction-plane workflow.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.constructionPlaneSummary],
             targets: [.document],
             failureMode: "Rejects invalid origins, zero or non-finite view normals, duplicate names, and stale generations before mutation."
@@ -773,7 +775,7 @@ enum AgentCapabilityCatalog {
             category: .sketch,
             summary: "Set or clear the active saved construction plane used by construction-plane-aware sketch creation.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .workspaceMutation,
             discovery: [.constructionPlaneSummary],
             targets: [.constructionPlane],
             failureMode: "Rejects missing construction plane IDs and stale generations before mutation."
@@ -783,7 +785,7 @@ enum AgentCapabilityCatalog {
             category: .sketch,
             summary: "Rename a saved construction plane and its linked construction scene node through one undoable document mutation.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.constructionPlaneSummary],
             targets: [.constructionPlane],
             failureMode: "Rejects missing construction plane IDs, empty names, duplicate names, and stale generations before mutation."
@@ -793,7 +795,7 @@ enum AgentCapabilityCatalog {
             category: .sketch,
             summary: "Edit a saved construction plane's SketchPlane source so its origin and normal can be moved while keeping the same construction plane ID and linked scene node.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.constructionPlaneSummary],
             targets: [.constructionPlane],
             failureMode: "Rejects missing construction plane IDs, invalid plane origins or normals, and stale generations before mutation.",
@@ -810,7 +812,7 @@ enum AgentCapabilityCatalog {
             category: .sketch,
             summary: "Create a source sketch containing one or more typed sketch entities, including connected open multi-entity curve chains for Sweep paths.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             targets: [.document],
             failureMode: "Rejects empty sketches, invalid sketch expressions, non-sketch geometry roles, and stale generations before mutation; downstream feature evaluation rejects disconnected, branched, or unsupported curve-chain topology."
         ),
@@ -819,7 +821,7 @@ enum AgentCapabilityCatalog {
             category: .sketch,
             summary: "Create a source sketch containing one line entity.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             targets: [.document],
             failureMode: "Rejects invalid points, zero-length geometry, and stale generations before mutation.",
             optionMatrix: [sketchPlaneReferenceOptionAxis]
@@ -829,7 +831,7 @@ enum AgentCapabilityCatalog {
             category: .sketch,
             summary: "Create a source sketch containing one positive-radius circle entity.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             targets: [.document],
             failureMode: "Rejects invalid centers, non-positive radius, and stale generations before mutation.",
             optionMatrix: [sketchPlaneReferenceOptionAxis]
@@ -839,7 +841,7 @@ enum AgentCapabilityCatalog {
             category: .sketch,
             summary: "Create a source sketch containing one positive-radius partial circular arc entity.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             targets: [.document],
             failureMode: "Rejects full circles, invalid angles, non-positive radius, and stale generations before mutation.",
             optionMatrix: [sketchPlaneReferenceOptionAxis]
@@ -849,7 +851,7 @@ enum AgentCapabilityCatalog {
             category: .sketch,
             summary: "Create a source sketch containing one cubic Bezier spline entity.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             targets: [.document],
             failureMode: "Rejects invalid cubic control-point counts, non-finite points, and stale generations before mutation.",
             optionMatrix: [sketchPlaneReferenceOptionAxis]
@@ -859,7 +861,7 @@ enum AgentCapabilityCatalog {
             category: .sketch,
             summary: "Create a source rectangle sketch profile from positive width and height.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             targets: [.document],
             failureMode: "Rejects invalid dimensions and stale generations before mutation.",
             optionMatrix: [sketchPlaneReferenceOptionAxis]
@@ -869,7 +871,7 @@ enum AgentCapabilityCatalog {
             category: .sketch,
             summary: "Create a regular polygon source sketch profile from a center, positive sizing radius, sizing mode, construction-plane-relative inclination mode, side count, and rotation angle.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             targets: [.document],
             failureMode: "Rejects invalid centers, non-positive sizing radius, side counts outside 3...256, invalid angles, and stale generations before mutation.",
             optionMatrix: [sketchPlaneReferenceOptionAxis]
@@ -879,7 +881,7 @@ enum AgentCapabilityCatalog {
             category: .directEditing,
             summary: "Apply the Polygon Knife subset by cutting a selected generated planar face with a closed world-space polygon loop.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.topologySummary, .snapResolution],
             targets: [.face],
             failureMode: "Rejects non-face targets, unresolved generated topology, loop counts below three, non-finite points, off-plane loops, outside or boundary-touching loops, non-convex loops, non-planar target faces, target faces with inner loops, non-line target face loops, unsupported target topology, and stale generations before mutation."
@@ -889,7 +891,7 @@ enum AgentCapabilityCatalog {
             category: .sketch,
             summary: "Alternative Duplicate and Duplicate Curve and Project subset: project selected source sketch curves or generated line/circular edges onto the active or supplied construction plane along that plane normal, creating a new source curve sketch for downstream editing.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary, .topologySummary, .constructionPlaneSummary],
             targets: [.sketchEntity, .edge, .constructionPlane],
             failureMode: "Rejects empty target lists, duplicate targets, non-curve sketch entities, unresolved source sketches, unresolved generated edges, generated edge targets outside the selected body, generated edge kinds other than line or circle, collapsed projected lines, invalid target planes, nonparallel source or generated circular projections until exact conic projection sources exist, invalid output sketches, and stale generations before mutation.",
@@ -900,7 +902,7 @@ enum AgentCapabilityCatalog {
             category: .sketch,
             summary: "Project Curve Body planar-face subset: project selected source sketch curves or generated line/circular edges onto a selected generated planar face along that face normal, creating a new source curve sketch on the face plane for downstream editing.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary, .topologySummary],
             targets: [.sketchEntity, .edge, .face],
             failureMode: "Rejects empty target lists, duplicate source targets, non-curve sketch entities, unresolved source sketches, unresolved generated edges or faces, non-planar generated faces, generated edge targets outside the selected body, generated edge kinds other than line or circle, collapsed projected lines, nonparallel source or generated circular projections until exact conic projection sources exist, invalid output sketches, and stale generations before mutation."
@@ -910,7 +912,7 @@ enum AgentCapabilityCatalog {
             category: .sketch,
             summary: "Project Outline subset: project selected generated body outlines onto the active or supplied construction plane along that plane normal, creating a new source curve sketch for downstream editing.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.topologySummary, .constructionPlaneSummary],
             targets: [.body, .constructionPlane],
             failureMode: "Rejects empty target lists, duplicate body targets, subobject targets, non-body scene nodes, bodies without generated edge topology, generated outline edge kinds other than line or circle, invalid target planes, nonparallel circular outline projections until exact conic projection sources exist, empty non-collapsed projected outlines, invalid output sketches, and stale generations before mutation.",
@@ -921,7 +923,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Attach and immediately solve supported line, circular, and spline sketch constraints, including smooth spline knots, spline endpoint tangency to lines, tangent spline endpoints, and smooth spline endpoints, on an existing sketch feature.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary],
             targets: [.sketchEntity],
             failureMode: "Rejects duplicate, unsupported, over-constrained, missing-reference, invalid spline control-point, unsmoothable fixed handles, unsatisfied fixed spline tangent handles or endpoints, and stale constraint mutations before commit."
@@ -931,7 +933,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Remove one existing sketch constraint from a sketch feature without changing the current solved geometry.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary],
             targets: [.sketchEntity],
             failureMode: "Rejects missing sketch features, non-sketch features, nonexistent constraints, invalid post-removal sketch state, and stale constraint mutations before commit."
@@ -941,7 +943,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Create a multi-span cubic Bezier bridge source curve between two sketch curve positions, with optional endpoint parameter, sense, explicit Trim side, optional source-curve Trim, endpoint-specific Tension 1/2/3 values, and endpoint-specific G0/G1/G2 continuity constraints where persistent endpoint constraints are available; G3 is reported as unsupported before mutation.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary, .curveAnalysis],
             targets: [.sketchEntity],
             failureMode: "Rejects missing sketch features, unsupported curve references, invalid endpoint parameters, collapsed bridge spans, non-positive tension values, duplicate endpoint positions, same-source Trim requests, Trim requests against constrained or dimensioned source curves, invalid persistent continuity requests, and stale generations before mutation."
@@ -951,7 +953,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Edit an existing bridge source curve by regenerating its multi-span cubic Bezier control points from stored or updated curve references, endpoint parameters, sense flags, explicit Trim side, optional source-curve Trim, endpoint-specific Tension 1/2/3 values, and endpoint-specific G0/G1/G2 continuity intent while preserving the generated spline entity ID.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary, .curveAnalysis],
             targets: [.sketchEntity],
             failureMode: "Rejects missing bridge source IDs, unsupported curve references, invalid endpoint parameters, bridge self-references, non-positive tension values, invalid persistent continuity requests, collapsed spans, same-source Trim requests, Trim requests against constrained or dimensioned source curves, disabling already-applied Trim, invalid generated spline ownership, and stale generations before mutation."
@@ -961,7 +963,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Dispatch Offset Curve targets. Supported source line, circle, and arc targets create new planar source curves without modifying the original curve, including one-sided or symmetric offsets plus gap-fill intent for future joined curves; Slot mode on a selected source line, connected open source line-chain, open source arc, or connected open line/arc chain creates the tangent-capped Slot profile through the same Offset Curve command path; supported source profile region targets create one-sided or symmetric closed line-loop source regions with Round, Linear, or Natural gap fill for convex regions, Natural gap fill for simple concave regions, and Linear gap fill that miter-connects concave corners while adding straight extra-vertex connections only at convex corners; supported generated face targets route to the Offset Face Loop feature for the current single rectangular planar face subset and create a direct-edit body with persistent offset edges; supported generated edge targets route to Offset Edge when options include a generated support face on the same body scene node, when the session selection contains the edge target plus exactly one same-body generated support face, or when the selected edge lies on exactly one generated start/end cap face that can be inferred as the support face, producing a direct-edit body with a persistent offset edge; symmetric generated edge offsets split the selected support face and the single opposite adjacent rectangular support face sharing the selected edge; supported source line or arc endpoint targets with a vertex handle route to Offset Vertex and edit the owning sketch; supported generated body vertex targets on normal extrudes resolve back to source line or arc endpoints and route to the same Offset Vertex branch.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary, .topologySummary, .snapResolution],
             targets: [.sketchEntity, .region, .face, .edge, .vertex],
             failureMode: "Rejects zero or collapsing distances, including either side of symmetric circular offsets and collapsing, inverted, or self-intersecting one-sided or symmetric-side region offsets, source point entities without adjacent curve-side identity, unsupported planar spline offset targets outside Slot mode, non-line source regions, Round gap fill for concave source regions, Slot mode combined with vertex handles, planar symmetric or gap-fill options in Slot mode, Slot support targets, closed/branched/point Slot targets, closed spline Slot targets, Slot arc widths that collapse the inner radius, disconnected line/arc Slot joins, face-loop symmetric offsets, non-positive face-loop distances, non-rectangular or non-planar face loops outside the current kernel subset, edge support targets on non-edge dispatch, edge vertex handles, missing or ambiguous edge support-face context, symmetric edge offsets without exactly one opposite adjacent support face sharing the selected edge, edge/support-face scene-node mismatches, non-positive edge distances, generated edge/support-face topology outside the current kernel rectangular planar support subset, generated vertex targets that cannot resolve to a normal-extrude source line or arc endpoint, planar offset options on vertex dispatch, object-only selections, and stale generations before mutation."
@@ -971,7 +973,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Offset multiple selected source profile regions in one undoable command. Individual mode creates separate source-owned offset regions; combined mode creates one source sketch containing independent disjoint offset loops or a Natural/Linear polygon-union loop when same-plane line-loop offsets overlap or touch, including simple concave outer boundaries.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary, .snapResolution],
             targets: [.region],
             failureMode: "Rejects empty selections, mixed-plane combined regions, Round gap-fill unions that require curved polygon union, Round gap fill for concave source regions, nested, touching, or intersecting same-sketch loops without region-union extraction, polygon unions with holes or multiple outer boundaries, non-line source regions, collapsing, inverted, or self-intersecting one-sided or symmetric-side offsets, object-only selections, and stale generations before mutation."
@@ -981,7 +983,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Insert two new source vertices on both sides of a selected source line/arc sketch corner while preserving the source sketch loop.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary],
             targets: [.sketchEntity],
             failureMode: "Rejects non-line/arc handles, corners without exactly one adjacent line or arc endpoint, distances that collapse either adjacent curve side, disconnected arc-span dimension migrations, unsupported affected constraints beyond coincident plus horizontal/vertical on line sides, unsupported spline vertices, and stale generations before mutation."
@@ -991,7 +993,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Apply the source-sketch Fillet command subset to a selected connected line/arc endpoint or to a line/arc curve pair supplied as target plus adjacentTarget. Fillet trims both source curves and inserts an exact circular arc; Chamfer trims both source curves by path distance and inserts a straight chamfer segment.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary, .snapResolution],
             targets: [.sketchEntity],
             failureMode: "Rejects stale generations, unsupported non-endpoint single targets, non-line/arc corners, curve pairs without exactly one shared connected endpoint, missing or ambiguous adjacent endpoints, generated Bridge Curve sources, non-positive distances, tangent or unsolvable fillet corners, distances that collapse either adjacent curve, and unsupported affected constraints beyond moved-endpoint coincidence, unaffected endpoint references, horizontal/vertical line constraints, and parallel/perpendicular line relationships."
@@ -1001,7 +1003,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Create a closed Slot sketch profile from a selected open source line, connected open source line-chain, open source arc, connected open line/arc chain, or open cubic Bezier spline by offsetting both sides symmetrically and closing each end with tangent semicircular arcs. The same supported subset is also reachable through offsetCurve with Slot mode.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary, .curveAnalysis],
             targets: [.sketchEntity],
             failureMode: "Rejects non-positive widths, closed or branched line/arc chain targets, closed spline targets, closed circle targets, point targets, arc widths that collapse the inner radius, disconnected line/arc joins, full-circle arc targets, sampled spline/profile self-intersection, and stale generations before mutation."
@@ -1011,7 +1013,7 @@ enum AgentCapabilityCatalog {
             category: .directEditing,
             summary: "Push or pull supported generated or fixed body face targets through source-owned edits.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.topologySummary],
             targets: [.face],
             failureMode: "Rejects unsupported body types, unsupported face roles, invalid distances, and stale generations before mutation."
@@ -1021,7 +1023,7 @@ enum AgentCapabilityCatalog {
             category: .directEditing,
             summary: "Delete one or more generated body face targets as a source-owned direct edit, producing a sheet body for the supported non-healing subset.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.topologySummary],
             targets: [.face],
             failureMode: "Rejects non-generated face targets, duplicate targets, mixed bodies, missing evaluated topology, deletion of an entire shell, invalid sheet topology, and stale generations before mutation."
@@ -1031,7 +1033,7 @@ enum AgentCapabilityCatalog {
             category: .directEditing,
             summary: "Draft one or more generated planar side faces relative to a generated neutral face on the same body, producing a source-owned direct-edit solid body for the supported line-only planar topology subset.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.topologySummary],
             targets: [.face],
             failureMode: "Rejects non-generated face targets, duplicate target faces, neutral faces on another body or scene node, zero or near-right angles, non-planar faces, curved topology, target faces that do not share an edge with the neutral face, invalid draft topology, and stale generations before mutation."
@@ -1041,7 +1043,7 @@ enum AgentCapabilityCatalog {
             category: .directEditing,
             summary: "Chamfer supported generated or fixed body edge targets by rewriting source profile loops.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.topologySummary],
             targets: [.edge],
             failureMode: "Rejects unsupported topology, constrained or parameterized profile loops, collapsing distances, and stale generations before mutation."
@@ -1051,7 +1053,7 @@ enum AgentCapabilityCatalog {
             category: .directEditing,
             summary: "Fillet supported generated or fixed body edge targets with exact circular source arcs.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.topologySummary],
             targets: [.edge],
             failureMode: "Rejects unsupported topology, constrained or parameterized profile loops, tangent-continuous targets, invalid radii, and stale generations before mutation."
@@ -1061,7 +1063,7 @@ enum AgentCapabilityCatalog {
             category: .directEditing,
             summary: "Move supported generated body line, circular, and line-arc-line arc profile edge targets through source-owned analytic sketch edits, preserving source identity and tangent trim continuity.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.topologySummary, .sketchEntitySummary],
             targets: [.edge],
             failureMode: "Rejects unsupported edge mappings, zero deltas, arc moves outside the tangent-preserving line-arc-line trim-healing subset, invalid profile rewrites, and stale generations before mutation."
@@ -1071,7 +1073,7 @@ enum AgentCapabilityCatalog {
             category: .directEditing,
             summary: "Move supported body vertex targets through source profile edits.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.topologySummary],
             targets: [.vertex],
             failureMode: "Rejects unsupported vertex mappings, invalid deltas, fixed conflicts, and stale generations before mutation."
@@ -1081,7 +1083,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Move a supported point handle on a point, line, circle, or arc sketch entity.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary],
             targets: [.sketchEntity],
             failureMode: "Rejects non-movable handles, fixed conflicts, invalid deltas, unsupported propagated constraints, and stale generations before mutation."
@@ -1091,7 +1093,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Move one control point of a selected cubic Bezier spline source entity.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary],
             targets: [.sketchEntity],
             failureMode: "Rejects non-spline targets, out-of-range indexes, invalid deltas, invalid spline geometry, and stale generations before mutation."
@@ -1101,7 +1103,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Align Vertex for source sketch vertices: use ordered point-handle or spline-CV target/reference selections to add persistent G0 coincidence, supported G1 line/arc/spline endpoint continuity, G2 spline-endpoint smooth continuity, and optional persistent Show Curvature overlays for the edited source curves.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary, .curveAnalysis],
             targets: [.sketchEntity, .sketchPointHandle, .sketchControlPoint],
             failureMode: "Rejects stale generations, non-point-backed selections, different sketch features, identical target/reference vertices, reference parameter requests, G0 continuity distance requests, non-spline continuity distance targets, mismatched G2 continuity distances, Show Curvature requests for standalone points, unsupported G1/G2 endpoint combinations, fixed conflicts, and over-constrained continuity before mutation."
@@ -1111,7 +1113,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Slide selected spline CVs using the official Slide Curve CV contract: Positive U, Negative U, or Normal control-cage direction with an explicit distance.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary],
             targets: [.sketchEntity],
             failureMode: "Rejects non-spline targets, empty, duplicate, negative, or out-of-range indexes, zero distances, collapsed control-cage directions, invalid spline geometry, fixed conflicts, and stale generations before mutation."
@@ -1121,7 +1123,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Insert CV into an open cubic Bezier spline at a scalar fraction by preserving the curve shape and expanding the source control-point chain.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary],
             targets: [.sketchEntity],
             failureMode: "Rejects non-spline targets, closed splines, generated Bridge Curve sources, endpoint or existing-knot fractions, replaced-handle references, unsupported smooth-boundary constraints, and stale generations before mutation."
@@ -1131,7 +1133,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Set supported circle center and radius parameters on a selected source circle.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary],
             targets: [.sketchEntity],
             failureMode: "Rejects non-circle targets, invalid radius, fixed conflicts, unsupported propagated constraints, and stale generations before mutation."
@@ -1141,7 +1143,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Set supported arc center, radius, start angle, and end angle parameters on a selected source arc.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary],
             targets: [.sketchEntity],
             failureMode: "Rejects non-arc targets, full-circle arcs, invalid radius or angles, fixed conflicts, and stale generations before mutation."
@@ -1151,7 +1153,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Set supported persistent source dimensions for selected line, circle, arc, or rectangle-derived sketch entities.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary, .sketchDimensionSummary],
             targets: [.sketchEntity],
             failureMode: "Rejects unsupported dimension kinds, fixed conflicts, invalid values, unsupported propagation, and stale generations before mutation."
@@ -1161,7 +1163,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Set supported selected object dimensions for rectangle-extrude bodies, circle-extrude cylinder bodies, generated face-normal candidates, generated extrusion depth edges, and object-dimension candidates discovered from opposing generated face pairs.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.topologySummary, .objectDimensionSummary],
             targets: [.body, .face, .edge],
             failureMode: "Rejects non-body targets, unsupported edge or face-pair topology, unsupported dimension kinds, invalid values, non-extruded sources, and stale generations before mutation."
@@ -1171,7 +1173,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Set the target expression of an existing persistent CAD selection dimension by SelectionDimensionID after evaluating current selection dimensions.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.selectionDimensionEvaluation],
             targets: [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle, .sketchControlPoint],
             failureMode: "Rejects missing selection dimension IDs, target quantity kinds that do not match the stored selection dimension kind, invalid values, and stale generations before mutation."
@@ -1181,7 +1183,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Apply the stored target of an existing persistent CAD selection dimension to supported source line length, source sketch point-to-point distance including solved arc endpoint and spline control-point distances, source circle/arc radius, source line relative angle, source arc span angle, or generated opposing editable body face-pair distance dimensions by SelectionDimensionID.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.selectionDimensionEvaluation, .sketchEntitySummary, .topologySummary, .objectDimensionSummary],
             targets: [.document, .face, .sketchEntity, .sketchPointHandle, .sketchControlPoint],
             failureMode: "Rejects missing selection dimension IDs, unsupported source line length, point-distance, circular radius, line angle, arc span, or face-pair references, impossible arc endpoint distance targets, mismatched or stale endpoint/control-point parameters, invalid target values, fixed conflicts, unsupported propagated constraints, unsupported generated face pairs, and stale generations before mutation."
@@ -1191,7 +1193,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Set an existing extrude feature distance directly by FeatureID, including independent-copy Pattern Array cloned body features discovered from summaries.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.designDisplaySnapshot, .patternArraySummary],
             targets: [.body, .sceneNode],
             failureMode: "Rejects missing feature IDs, non-extrude features, invalid length expressions, and stale generations before mutation.",
@@ -1214,7 +1216,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Set an editable rectangular extrude body's X, Y, and Z dimensions directly by FeatureID, including independent-copy Pattern Array cloned box features.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.designDisplaySnapshot, .patternArraySummary, .objectDimensionSummary],
             targets: [.body, .sceneNode],
             failureMode: "Rejects missing feature IDs, non-extrude features, non-rectangle profiles, invalid length expressions, and stale generations before mutation.",
@@ -1237,7 +1239,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Set an editable circular extrude body's radius and Y dimension directly by FeatureID, including independent-copy Pattern Array cloned cylinder features.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.designDisplaySnapshot, .patternArraySummary, .objectDimensionSummary],
             targets: [.body, .sceneNode],
             failureMode: "Rejects missing feature IDs, non-extrude features, non-circle profiles, invalid length expressions, and stale generations before mutation.",
@@ -1260,7 +1262,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Add a persistent CAD selection dimension between measurable topology or sketch curve targets without storing it as Rupa product metadata.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.topologySummary, .sketchEntitySummary, .selectionDimensionEvaluation],
             targets: [.face, .edge, .vertex, .sketchEntity, .sketchPointHandle, .sketchControlPoint],
             failureMode: "Rejects object-wide targets, profile regions, unresolved generated topology, unsupported sketch point handles or control points, invalid target quantities, and stale generations before mutation."
@@ -1270,7 +1272,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Remove one persistent CAD selection dimension by SelectionDimensionID after discovering or evaluating existing dimensions.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.selectionDimensionEvaluation],
             targets: [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle, .sketchControlPoint],
             failureMode: "Rejects missing selection dimension IDs and stale generations before mutation."
@@ -1280,7 +1282,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Convert a selected source line into a circular arc with a signed sagitta.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary],
             targets: [.sketchEntity],
             failureMode: "Rejects non-line targets, invalid sagitta, unsupported constraints, open reference failures, and stale generations before mutation."
@@ -1290,7 +1292,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Convert a selected source line into a cubic Bezier spline with editable control points while preserving endpoint point references and migratable spline endpoint tangencies.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary],
             targets: [.sketchEntity],
             failureMode: "Rejects non-line, line-specific constrained, zero-length, and stale targets before mutation; migrates supported endpoint fixed, coincident, distance, angle, and spline endpoint tangent references."
@@ -1300,7 +1302,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Reverse the direction of a selected source line or cubic Bezier spline curve while preserving physical endpoint references.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary],
             targets: [.sketchEntity],
             failureMode: "Rejects point, circle, arc, invalid, and stale targets before mutation; rewrites fixed, coincident, dimension, spline endpoint, and bridge curve metadata references."
@@ -1310,7 +1312,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Rebuild Curve for the current source subset: rebuild an open cubic Bezier spline with Points, Refit tolerance, or degree-3 Explicit Control methods, including Keep Corners for sharp internal knots, weighted explicit spans, and an analytic cubic Bezier deviation report.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary, .curveAnalysis],
             targets: [.sketchEntity],
             failureMode: "Rejects non-spline targets, closed splines, generated Bridge Curve sources, unsupported non-cubic Explicit Control degrees, invalid Explicit Control spans or weights, non-positive Refit tolerance, invalid point counts, internal control-point references that cannot be mapped to preserved knots, whole-spline relationship constraints, and stale generations before mutation."
@@ -1320,7 +1322,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Extend Curve for the current source subset: extend a selected line endpoint, arc endpoint, or spline endpoint by a distance using a typed extension shape.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary],
             targets: [.sketchEntity],
             failureMode: "Rejects stale generations, non-endpoint targets, generated Bridge Curve sources, non-positive distances, constrained or dimensioned source curves, unsupported shape/entity combinations, closed splines, and target-dependent curve or solid matching until that interaction phase is implemented."
@@ -1330,7 +1332,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Join Curves for source-owned sketch curves: merge two same-sketch collinear source lines with exactly one aligned endpoint pair into one retained source line, or group same-sketch line/arc/spline endpoints non-destructively with G0, G1, or spline-endpoint G2 continuity intent for exact Unjoin and curve-analysis readback.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary],
             targets: [.sketchEntity],
             failureMode: "Rejects different sketches, same-curve pairs, ambiguous endpoint pairs, unsupported curve kinds, non-collinear source-line merge pairs, G2 pairs that are not two spline endpoints, line-arc G1 pairs that are not already tangent, dimensions or constraints attached to destructive line-join interior endpoints, removed-line whole-curve relationships, generated Bridge Curve source metadata, existing joined ownership, and stale generations before mutation."
@@ -1340,7 +1342,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Unjoin Curve for source-owned Join Curves: restore a retained destructive line join from its stored ownership snapshot into the original two source lines or restore a non-destructive joined line/arc/spline group back to its pre-join constraints and dimensions.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary],
             targets: [.sketchEntity],
             failureMode: "Rejects targets without joined-curve ownership, changed joined-line geometry, changed constraints or dimensions, entity ID collisions, missing joined group members, generated Bridge Curve source metadata, and stale generations before mutation."
@@ -1350,7 +1352,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Split Segment for a selected source line, source arc, or cubic Bezier spline at a scalar fraction, preserving physical start/end references and inserting a coincident split vertex.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary],
             targets: [.sketchEntity],
             failureMode: "Rejects point, circle, generated Bridge Curve sources, endpoint fractions, unsupported whole-curve constraints, unsupported arc center/radius references, unsupported circular constraints or dimensions, unsupported spline internal control-point references, and stale targets before mutation."
@@ -1360,7 +1362,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Trim an already bounded source curve segment by removing the selected line, arc, or open spline entity and its attached segment-local constraints.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary],
             targets: [.sketchEntity],
             failureMode: "Rejects point and circle targets, closed spline targets, generated Bridge Curve sources, segments used by Bridge Curve metadata, missing targets, and stale generations before mutation. Intersection-defined temporary segment boundaries remain a Cut Curve responsibility."
@@ -1370,7 +1372,7 @@ enum AgentCapabilityCatalog {
             category: .sourceCurveEditing,
             summary: "Cut Curve for the current source curve subset: cut a target source line, source arc, sampled open cubic Bezier spline, or unconstrained source circle at its intersections with a distinct source line, circle, arc, or sampled open cubic Bezier spline cutter, optionally extending a line cutter or using an arc cutter's base circle.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary],
             targets: [.sketchEntity],
             failureMode: "Rejects non-line/non-arc/non-spline/non-circle targets, closed spline targets, constrained or dimensioned circle targets, non-line/circle/arc/spline cutters, closed spline cutters, same-curve target/cutter pairs, different sketch planes, parallel or endpoint-only intersections, tangent circle-target cuts with fewer than two distinct intersections, line cutter misses without extendsCutter, coincident circular curve intersections, unsupported spline-cutter extension, screen-space direction requests, unsupported constraints inherited from Split Segment, and stale generations before mutation."
@@ -1380,7 +1382,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Extrude an existing supported closed profile reference into a solid body.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary],
             targets: [.profile],
             failureMode: "Rejects open, unsupported, missing, or invalid profiles and stale generations before mutation."
@@ -1390,7 +1392,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Create a Revolve source feature from an existing supported closed profile, an explicit 3D axis, and a finite angle into a solid body.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary, .topologySummary],
             targets: [.profile],
             failureMode: "Rejects missing or unsupported closed profiles, axes that do not lie in the profile plane, profiles crossing the rotation axis, zero or over-full-turn angles, collapsed axes, unsupported conical or curved profile boundaries until analytic surface-of-revolution support exists, invalid generated topology, and stale generations before mutation.",
@@ -1418,7 +1420,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Create a Sweep source feature from closed-profile or curve sections, a path, optional guide references, and explicit twist, scale, alignment, distance, corner, guide, boolean, keep-tools, simplify, and result-kind options.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary],
             targets: [.profile, .sketchEntity, .body],
             failureMode: "Rejects missing section, path, guide, or target body features, solid output from curve sections, duplicate references, invalid option quantities, disconnected or branched open path chains, closed path chains, round corner style on multi-curve paths until corner-transition blend topology exists, profile-plane degenerate parallel alignment, simplify output, boolean target operations with sheet output, stale generations, targetless boolean operations, new-body target references, collapsed section scale, non-contacting point/chord guide starts, curve-guide path/section contact failures, conflicting signed-axis rail guides, flipped or self-intersecting bilinear quadrilateral or mean-value cage rail guides, overconstrained guide sets, and degenerate swept topology before committing invalid geometry through the shared typed sweep evaluation contract; evaluates mitre corner style for connected open single- or multi-curve path chains; evaluates round corner style for single-curve paths where no corner-transition topology is required; evaluates straight-path normal alignment as a path-normal section sweep, straight-path parallel identity sections as profile-plane-preserving exact extrusion when the path has a profile-normal component, straight-path parallel transformed or guided sections as profile-plane parallel section sweeps when the path has a profile-normal component, curve sections as new-body sheet sweeps, curved-path parallel alignment as a profile-plane parallel section sweep with twist, scale, and profile-plane guide projection, straight-path exact swept-sheet side surfaces for identity section transforms without guides, polygonal swept-solid new-body subsets for connected open curved or multi-curve paths, twisted, scaled, compatible multiple point/chord guide constraints, non-uniform affine, signed-axis, convex quadrilateral bilinear, convex mean-value cage, radial point-guide rail deformation, and curve-guide contact constraints, and polygonal swept-sheet subsets for curved, transformed, or guided sheet inputs; evaluates exact box-prism union, difference, intersection, and slice boolean sweeps with target replacement, separated-fragment difference output, z-through rectangular-frame difference output, orthogonal cell-union connected box difference output, separated solid-body union by copied B-rep topology, or keep-tools generated-name coverage; reports unsupported evaluation for intersecting non-box boolean operands, connected boolean topology outside the axis-aligned box cell-union subset, exact swept surfaces outside the straight identity analytic-boundary subset, corner-transition blend topology outside the current single-curve round subset, and guide constraints outside the affine, signed-axis, convex quadrilateral bilinear, convex mean-value cage, radial point rail, chord, or curve-contact subsets.",
@@ -1479,7 +1481,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Create a standalone source-owned Boolean feature from target body references, one tool body reference, an operation, and keep-tools policy, returning primaryFeatureID plus createdFeatureIDs for follow-on topologySummary targeting.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.topologySummary, .booleanEvaluationPlan, .designDisplaySnapshot],
             targets: [.body],
             failureMode: "Rejects missing targets, duplicate targets, a tool that is also a target, non-body references, stale generations, unsupported sheet operands, collapsed empty results, intersecting curved or non-orthogonal topology outside the current exact axis-aligned box, orthogonal cell-union, and separated solid-body union subsets before committing invalid geometry.",
@@ -1507,7 +1509,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Preflight a proposed standalone Boolean without mutating the document, returning the exact operand subset, output topology kind, topology name scheme, topology slots that resolve to post-create persistent names, B-rep topology counts, primitive counts, unsupported code, and stage-specific ordered checks used by the shared Boolean evaluation contract.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.topologySummary, .booleanEvaluationPlan],
             targets: [.body],
             failureMode: "Rejects stale generations before evaluation; returns structured unsupported results at requestContract, sourceBodies, operandTopology, or capabilityDecision gates for duplicate targets, a tool that is also a target, missing references, sheet operands, empty results, or intersecting curved and non-orthogonal result topology outside the supported subsets before createBoolean mutates the document.",
@@ -1546,7 +1548,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Create a Loft source feature from two or more supported closed profile sections with optional guide curves and explicit solid, open sheet, or closed section-loop sheet result-kind options.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.sketchEntitySummary],
             targets: [.profile, .sketchEntity],
             failureMode: "Rejects missing, duplicate, open, unsupported profile sections, missing or duplicate guide curves, guide curves whose endpoints do not touch first and last section boundary samples, invalid-start-index sections, non-positive or non-finite global or section smooth tangent scale, unsupported section smooth tangent modes, closed section loops with solid output, closed section loops with fewer than three sections, duplicate guide endpoint samples, guide endpoint pairs that do not resolve to matching section sample indexes after section matching, invalid generated topology, and stale generations before mutation; current evaluation creates boundary-progress matched degree-1 ruled B-spline side faces or smooth cubic section-direction B-spline side faces between profile sections, resamples unequal boundary sample counts, lets the first guide endpoints lock first and last section seam samples when explicit section starts are absent, inserts rail-following intermediate section rings for the multi-section multi-guide subset, interpolates section smooth tangent scales for rail-inserted rings, honors zero section smooth tangent mode by clamping that authored section's cubic section-direction handle, creates planar start/end caps for solid output, or a last-to-first ruled or smooth cubic B-spline sheet loop for closed sheet output.",
@@ -1637,7 +1639,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Preflight a proposed Sweep without mutating the document, returning the resolved path shape, section state, evaluation kind, output topology, boolean support, guide strategy candidates, resolved guide strategy, per-candidate guide resolution statuses, unsupported code, and ordered checks used by the shared sweep evaluation contract.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.sketchEntitySummary, .topologySummary, .sweepEvaluationPlan],
             targets: [.profile, .sketchEntity, .body],
             failureMode: "Rejects stale generations, missing references, invalid option quantities, disconnected or branched path chains, and unresolved target bodies; returns structured unsupported results for current kernel capability gaps and geometry contracts such as simplify output, sheet target booleans, profile-plane degenerate parallel alignment, round multi-curve corner-transition topology, and guide constraints that do not solve against the section and path frames before mutation, including failed guide strategy candidates.",
@@ -1677,7 +1679,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Create a direct source-owned B-spline or NURBS sheet surface from stored degree, knot vectors, control net, and weights.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .topologySummary],
             targets: [.document],
             failureMode: "Accepts finite validated B-spline surface source data with positive weights and matching U/V degree, knot-vector, and control-net dimensions; rejects invalid knots, non-positive weights, degenerate domains, stale generations, and invalid evaluated sheet topology before mutation."
@@ -1687,7 +1689,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Create a PolySpline source surface from a supported source mesh and emit a B-spline sheet body.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.meshSummary, .polySplineMeshAnalysis, .topologySummary, .surfaceAnalysis, .surfaceContinuitySummary],
             targets: [.document],
             failureMode: "Accepts a single quad mesh or a planar unmerged quad patch network and creates cubic B-spline sheet topology with exact boundary interpolation; rejects rounded-corner requests, non-planar unresolved G2 patch networks, merge-patch reconstruction, triangle/ngon patch networks, invalid meshes, and stale generations before mutation."
@@ -1697,7 +1699,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Move a generated PolySpline patch boundary vertex by mutating its source mesh vertex through the undoable command pipeline.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.topologySummary, .surfaceAnalysis, .surfaceContinuitySummary],
             targets: [.vertex],
             failureMode: "Rejects non-PolySpline generated vertices, stale generations, zero or invalid deltas, unsupported source meshes, moves that remove the selected patch, moves that change the selected boundary role, and moves that leave the current evaluator unable to rebuild supported B-spline sheet topology."
@@ -1707,7 +1709,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Move a source-owned surface control point from a Swift-CAD SelectionReference without requiring UI scene-node targeting; direct B-spline surfaces mutate their stored control net.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.surfaceSourceSummary, .selectionMeasurement, .surfaceAnalysis, .surfaceContinuitySummary],
             targets: [.surfaceControlPoint],
             failureMode: "Accepts direct B-spline surface control-net references, PolySpline patch corner control point references, and strict interior PolySpline B-spline control point references discovered from surfaceSourceSummary; rejects non-control-point references, non-editable surface sources, boundary edge-only CV indexes, stale generations, zero or invalid deltas, unsupported source meshes, moves that change selected PolySpline corner boundary roles, and invalid rebuilt B-spline sheet topology."
@@ -1717,7 +1719,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Move source-owned surface control points by distances along a resolved surface UVN frame from surfaceSourceSummary frame samples or surfaceFrames queries.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .surfaceContinuitySummary],
             targets: [.surfaceControlPoint, .face],
             failureMode: "Accepts editable surface control-point references discovered from surfaceSourceSummary and a resolvable face, surface parameter, or control-point frame query discovered from surfaceSourceSummary frameSamples or surfaceFrames; rejects empty or duplicate targets, unresolved frames, stale generations, non-control-point references, zero UVN offsets, non-editable surface sources, invalid unit axes, and invalid rebuilt B-spline sheet topology."
@@ -1727,7 +1729,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Set a source-owned B-spline surface control-point weight from a Swift-CAD SelectionReference, preserving the control point position while making the evaluated surface rational; direct B-spline surfaces mutate their stored weight net.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.surfaceSourceSummary, .surfaceAnalysis, .surfaceContinuitySummary],
             targets: [.surfaceControlPoint],
             failureMode: "Accepts direct B-spline surface control-net references and strict interior PolySpline B-spline control point references discovered from surfaceSourceSummary; rejects PolySpline boundary CV weights, non-control-point references, non-scalar or non-positive weights, non-editable surface sources, stale generations, unsupported source meshes, and invalid rebuilt rational B-spline sheet topology."
@@ -1737,7 +1739,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Set an existing direct B-spline surface internal knot value from a Swift-CAD SelectionReference discovered in surfaceSourceSummary.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .surfaceContinuitySummary],
             targets: [.surfaceKnot],
             failureMode: "Accepts editable direct B-spline surface internal knot references discovered from surfaceSourceSummary; rejects boundary knots, PolySpline generated knots, non-knot references, non-scalar values, values outside strict neighboring knot bounds, stale generations, non-editable surface sources, and invalid rebuilt B-spline sheet topology."
@@ -1747,7 +1749,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Insert a direct B-spline surface knot inside a selected editable surface span, or duplicate a selected editable internal knot to increase multiplicity, while preserving the represented surface shape and increasing the control net in that parameter direction.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .surfaceContinuitySummary],
             targets: [.surfaceSpan, .surfaceKnot],
             failureMode: "Accepts editable direct B-spline surface span references and editable internal knot references discovered from surfaceSourceSummary; rejects boundary-only or missing spans, boundary knots, PolySpline generated spans or knots, non-span and non-knot references, non-scalar values, values outside the selected span, values that do not match a selected existing knot, saturated knot multiplicity, stale generations, non-editable surface sources, and invalid rebuilt B-spline sheet topology."
@@ -1757,7 +1759,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Split a selected editable direct B-spline surface span at a normalized fraction by inserting a shape-preserving knot inside that span.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .surfaceContinuitySummary],
             targets: [.surfaceSpan],
             failureMode: "Accepts editable direct B-spline surface span references discovered from surfaceSourceSummary and a scalar fraction strictly between 0 and 1; rejects knot, trim, control-point, PolySpline generated span, missing span, stale generation, non-editable surface sources, and invalid rebuilt B-spline sheet topology."
@@ -1767,7 +1769,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Set an editable direct B-spline surface internal knot to an explicit higher multiplicity by shape-preserving knot insertion, allowing agents to control local continuity without changing the represented surface shape.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .surfaceContinuitySummary],
             targets: [.surfaceKnot],
             failureMode: "Accepts editable direct B-spline surface internal knot references discovered from surfaceSourceSummary and a requested multiplicity greater than the current multiplicity and no greater than the surface degree in that direction; rejects boundary knots, PolySpline generated knots, non-knot references, lower or equal multiplicities, saturated knot multiplicity, stale generations, non-editable surface sources, and invalid rebuilt B-spline sheet topology."
@@ -1777,7 +1779,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Set the source-owned rectangular outer trim domain of a direct B-spline surface using U/V parameter bounds discovered from surfaceSourceSummary.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .topologySummary],
             targets: [.surface, .face, .surfaceTrim],
             failureMode: "Accepts direct B-spline surface whole, parameter, span, knot, control-point, or trim references discovered from surfaceSourceSummary; rejects PolySpline surfaces, non-surface references, non-scalar or non-finite bounds, degenerate U/V ranges, bounds outside the stored surface domain, stale generations, and invalid rebuilt trimmed sheet topology."
@@ -1787,7 +1789,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Set source-owned UV p-curve trim loops on a direct B-spline surface, allowing non-rectangular outer and inner loops while preserving the original surface basis.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .topologySummary],
             targets: [.surface, .face, .surfaceTrim],
             failureMode: "Accepts direct B-spline surface whole, parameter, span, knot, control-point, or trim references discovered from surfaceSourceSummary plus closed UV trim loops with exactly one outer loop; rejects PolySpline surfaces, non-surface references, unclosed loops, p-curves outside the stored surface domain, stale generations, invalid rebuilt trimmed sheet topology, and continuity matching on authored trim loops."
@@ -1797,7 +1799,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Move a source-owned authored UV trim endpoint on a direct B-spline surface while preserving loop closure by updating the adjacent p-curve endpoint in the same mutation.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .topologySummary],
             targets: [.surfaceTrim],
             failureMode: "Accepts authored direct B-spline surface trim edge references discovered from surfaceSourceSummary plus a start or end endpoint and finite scalar UV parameters; rejects rectangular trim domains, PolySpline trims, non-trim references, missing loop or edge indices, UV parameters outside the stored surface domain, invalid closed-loop rebuilds, stale generations, and invalid rebuilt trimmed sheet topology."
@@ -1807,7 +1809,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Move a strict interior control point discovered from surfaceSourceSummary on a source-owned authored UV polyline or B-spline trim p-curve for a direct B-spline surface.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .topologySummary],
             targets: [.surfaceTrim],
             failureMode: "Accepts authored direct B-spline surface trim edge references discovered from surfaceSourceSummary plus a strict interior p-curve control point index and finite scalar UV parameters; rejects rectangular trim domains, PolySpline trims, non-trim references, constant trim curves, trim endpoints that must use moveSurfaceTrimEndpoint, missing indices, invalid UV trim-loop validation, stale generations, and invalid rebuilt trimmed sheet topology."
@@ -1817,7 +1819,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Set a positive NURBS weight on a B-spline trim p-curve control point discovered from surfaceSourceSummary for a direct B-spline surface.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .topologySummary],
             targets: [.surfaceTrim],
             failureMode: "Accepts authored direct B-spline surface trim edge references discovered from surfaceSourceSummary plus a B-spline p-curve control point index with isWeightEditable true and a positive scalar weight; rejects rectangular trim domains, PolySpline trims, non-trim references, constant and polyline trim curves, missing weight indices, non-positive weights, invalid UV trim-loop validation, stale generations, and invalid rebuilt trimmed sheet topology."
@@ -1827,7 +1829,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Insert a shape-preserving knot into a source-owned B-spline trim p-curve discovered from surfaceSourceSummary, increasing local edit freedom without changing the represented UV trim curve.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .topologySummary],
             targets: [.surfaceTrim, .surfaceTrimSpan, .surfaceTrimKnot],
             failureMode: "Accepts authored direct B-spline surface trim edge references discovered from surfaceSourceSummary plus a scalar value inside parameterCurve.spans or an unsaturated interior parameterCurve.knot value; rejects rectangular trim domains, PolySpline trims, non-trim references, constant and polyline trim curves, boundary or saturated knot values, values outside the p-curve domain, invalid UV trim-loop validation, stale generations, and invalid rebuilt trimmed sheet topology."
@@ -1837,7 +1839,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Set an existing editable B-spline trim p-curve knot value discovered from surfaceSourceSummary for a direct B-spline surface.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .topologySummary],
             targets: [.surfaceTrim, .surfaceTrimKnot],
             failureMode: "Accepts authored direct B-spline surface trim edge references discovered from surfaceSourceSummary plus a parameterCurve.knotVector index and scalar value strictly between neighboring knot values; rejects rectangular trim domains, PolySpline trims, non-trim references, constant and polyline trim curves, boundary knots, missing knot indices, invalid UV trim-loop validation, stale generations, and invalid rebuilt trimmed sheet topology."
@@ -1847,7 +1849,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Increase an existing editable B-spline trim p-curve knot multiplicity discovered from surfaceSourceSummary by shape-preserving insertion to control local continuity.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .topologySummary],
             targets: [.surfaceTrim, .surfaceTrimKnot],
             failureMode: "Accepts authored direct B-spline surface trim edge references discovered from surfaceSourceSummary plus a parameterCurve.knotVector index and requested multiplicity greater than the current multiplicity and no greater than the p-curve degree; rejects rectangular trim domains, PolySpline trims, non-trim references, constant and polyline trim curves, boundary knots, lower or equal multiplicities, saturated knots, invalid UV trim-loop validation, stale generations, and invalid rebuilt trimmed sheet topology."
@@ -1857,7 +1859,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Match a source-owned direct B-spline surface trim boundary to another direct B-spline trim boundary at G0, G1, or G2 by editing the target boundary control rows.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .surfaceContinuitySummary],
             targets: [.surfaceTrim],
             failureMode: "Accepts two direct B-spline full-domain rectangular outer trim references discovered from surfaceSourceSummary with compatible boundary control counts, boundary degree, and knot vectors; solves G1/G2 from each side's inward degree and knot spacing; rejects PolySpline trims, inner trims, authored interior trim domains, stale generations, identical boundaries, incompatible boundary bases, non-clamped outer boundaries, insufficient cross-boundary control rows for G1/G2, and invalid rebuilt B-spline sheet topology."
@@ -1867,7 +1869,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Slide generated PolySpline patch boundary CVs along local surface hull U, V, or normal directions with an explicit distance.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.topologySummary, .surfaceAnalysis, .surfaceContinuitySummary],
             targets: [.vertex],
             failureMode: "Rejects non-PolySpline generated vertices, stale generations, empty or duplicate source-vertex targets, zero or invalid distances, collapsed local U/V/normal directions, unsupported source meshes, slides that remove the selected patch, slides that change the selected boundary role, and slides that leave the current evaluator unable to rebuild supported B-spline sheet topology."
@@ -1877,7 +1879,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Slide source-owned surface control points from Swift-CAD SelectionReference values along local U, V, or normal directions; direct B-spline CVs use their stored control net and strict interior PolySpline CVs use the override-aware B-spline control-hull frame.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             discovery: [.surfaceSourceSummary, .selectionMeasurement, .surfaceAnalysis, .surfaceContinuitySummary],
             targets: [.surfaceControlPoint],
             failureMode: "Accepts direct B-spline surface control-net references, PolySpline patch corner control point references, and strict interior PolySpline B-spline control point references discovered from surfaceSourceSummary; boundary corner slides route through generated source-mesh patch hull directions, direct B-spline CVs and strict interior PolySpline CVs resolve local control-hull U/V/N directions; rejects non-control-point references, non-editable surface sources, boundary edge-only CV indexes, stale generations, empty or duplicate targets, zero or invalid distances, collapsed local U/V/normal directions, slides that change selected PolySpline corner boundary roles, and invalid rebuilt B-spline sheet topology."
@@ -1887,7 +1889,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Create a rectangle sketch source and normal or symmetric extruded body; large results may include structured workspace scale and precision guidance.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             targets: [.document],
             failureMode: "Rejects invalid dimensions and stale generations before mutation.",
             optionMatrix: [sketchPlaneReferenceOptionAxis, workspaceFeedbackOptionAxis]
@@ -1897,7 +1899,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Create a rectangle sketch source from two corners and extrude it into a body; large results may include structured workspace scale and precision guidance.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             targets: [.document],
             failureMode: "Rejects coincident corners, invalid depth, and stale generations before mutation.",
             optionMatrix: [sketchPlaneReferenceOptionAxis, workspaceFeedbackOptionAxis]
@@ -1907,7 +1909,7 @@ enum AgentCapabilityCatalog {
             category: .solid,
             summary: "Create a circular sketch source and extrude it into a cylinder-like body; large results may include structured workspace scale and precision guidance.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .sourceMutation,
             targets: [.document],
             failureMode: "Rejects invalid radius, invalid depth, and stale generations before mutation.",
             optionMatrix: [sketchPlaneReferenceOptionAxis, workspaceFeedbackOptionAxis]
@@ -1917,7 +1919,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Validate and evaluate the document, updating evaluation diagnostics without adding undo history.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             targets: [.document],
             failureMode: "Rejects stale generations before evaluation."
         ),
@@ -1926,7 +1928,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Measure selected or whole-document source-derived geometry and report workspace precision/rebase and scale-preset guidance without mutation.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.measurement, .selectionState],
             targets: [.document, .sceneNode, .sketchEntity],
             failureMode: "Rejects stale generations before measuring."
@@ -1936,7 +1938,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Measure a typed Swift-CAD SelectionReference as a point, distance, or angle without mutation, including topology, edge parameters, curve CVs, surface parameters, surface CVs, and surface trims.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.selectionMeasurement, .surfaceSourceSummary, .topologySummary, .sketchEntitySummary],
             targets: [.face, .edge, .vertex, .sketchEntity, .surface, .surfaceControlPoint, .surfaceTrim],
             failureMode: "Rejects stale generations, invalid selection references, unresolved generated topology, unsupported ambiguous body or surface-knot measurements, and evaluation failures before returning measured geometry."
@@ -1946,7 +1948,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "List editable Dimension command candidates for selected object, face, generated face-normal, generated extrusion depth edge, or generated opposing face-pair targets without mutation, including box size axes, cylinder diameter, radius, depth, and supported face-distance candidates.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.objectDimensionSummary, .topologySummary],
             targets: [.body, .face, .edge],
             failureMode: "Rejects stale generations, non-body targets, unsupported edge or face-pair topology, unsupported source profiles, and invalid source expressions before returning candidates."
@@ -1956,7 +1958,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "List editable Dimension command candidates for selected sketch line, circle, arc, generated extrude cap edge, or supported generated arc edge targets without mutation, including fillet-radius readback for generated fillet arc edges.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.sketchDimensionSummary, .sketchEntitySummary, .topologySummary],
             targets: [.sketchEntity, .edge],
             failureMode: "Rejects stale generations, unsupported topology targets, unresolved source sketch curves, and invalid source expressions before returning candidates."
@@ -1966,7 +1968,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Evaluate persistent CAD selection dimensions stored in the SwiftCAD document source.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.selectionDimensionEvaluation, .topologySummary, .sketchEntitySummary],
             targets: [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle, .sketchControlPoint],
             failureMode: "Rejects stale generations, invalid CAD source, unresolved selection references, or missing dimension IDs before returning measured residuals."
@@ -1976,7 +1978,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Resolve a model-space sketch input point against grid, measurement annotations, source sketch special points, source profile region centers, generated topology points, visible UVN surface frame handles, authored surface trim endpoints and p-curve control points, source spline CVs, closest curve points, supported curve intersections, reference-point curve-axis candidates, reference-point curve-coordinate-plane candidates, and reference-point tangent/perpendicular curve candidates without mutating the document.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.snapResolution, .sketchEntitySummary, .topologySummary, .surfaceSourceSummary, .surfaceFrames],
             targets: [.document, .sceneNode, .profile, .region, .sketchEntity, .face, .surfaceTrim],
             failureMode: "Rejects stale generations, invalid points, invalid snap options, or source expressions that cannot be resolved before returning candidates; object-targeting force enable, candidate-kind suppression, source-curve X/Y/Z axis candidates, and source-curve XY/YZ/ZX coordinate-plane candidates are supported through snap options."
@@ -1986,7 +1988,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Read evaluated mesh counts, bounds, and per-body mesh metadata without mutation.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.meshSummary],
             targets: [.document],
             failureMode: "Rejects stale generations or evaluation failures before returning mesh data."
@@ -1996,7 +1998,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Preflight a source mesh for PolySpline reconstruction and return structured support diagnostics plus quad patch graph candidates and partition data without mutating the document.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.meshSummary, .polySplineMeshAnalysis],
             targets: [.document],
             failureMode: "Rejects stale generations before analysis; reports invalid meshes, unsupported rounded-corner requests, non-manifold adjacency, inconsistent boundary winding, patch graph candidates, exact selected/rejected partitions, and unsupported G2 multi-patch reconstruction as structured diagnostics."
@@ -2006,7 +2008,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Discover editable source sketch entities, source profile regions, expressions, dimensions, constraints, and selection targets without mutation.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.sketchEntitySummary],
             targets: [.sketchEntity, .region],
             failureMode: "Rejects stale generations before reading."
@@ -2016,7 +2018,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Evaluate source curves for samples, curvature, approximate length, and internal spline continuity without mutation.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.sketchEntitySummary, .curveAnalysis],
             targets: [.sketchEntity],
             failureMode: "Rejects stale generations or invalid documents before curve analysis."
@@ -2024,9 +2026,9 @@ enum AgentCapabilityCatalog {
         capability(
             "setCurveCurvatureDisplay",
             category: .sourceCurveEditing,
-            summary: "Toggle persistent viewport curvature-comb display for a source curve target, including the generated spline target used by Bridge Curve Show Curvature, and set the comb scale used by the curve-quality overlay.",
+            summary: "Toggle session viewport curvature-comb display for a source curve target, including the generated spline target used by Bridge Curve Show Curvature, and set the comb scale used by the curve-quality overlay.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .workspaceMutation,
             discovery: [.sketchEntitySummary, .curveAnalysis],
             targets: [.sketchEntity],
             failureMode: "Rejects stale generations, non-sketch-entity targets, source points, missing source curves, or non-positive comb scales before mutation."
@@ -2034,9 +2036,9 @@ enum AgentCapabilityCatalog {
         capability(
             "setPointDisplay",
             category: .sourceCurveEditing,
-            summary: "Toggle persistent source-curve point display for curve vertices and spline CV layouts.",
+            summary: "Toggle session source-curve point display for curve vertices and spline CV layouts.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .workspaceMutation,
             discovery: [.sketchEntitySummary],
             targets: [.sketchEntity],
             failureMode: "Rejects stale generations, non-sketch-entity targets, standalone point entities, or missing source curves before mutation."
@@ -2044,9 +2046,9 @@ enum AgentCapabilityCatalog {
         capability(
             "setSurfaceControlPointDisplay",
             category: .solid,
-            summary: "Toggle persistent Agent-visible Surface CV point display state for PolySpline and direct B-spline surface control points discovered from surfaceSourceSummary.",
+            summary: "Toggle session Surface CV point display state for PolySpline and direct B-spline surface control points discovered from surfaceSourceSummary.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .workspaceMutation,
             discovery: [.surfaceSourceSummary, .selectionMeasurement, .surfaceAnalysis],
             targets: [.surfaceControlPoint],
             failureMode: "Accepts PolySpline and direct B-spline surface control point selection references discovered from surfaceSourceSummary; rejects non-control-point references, unsupported PolySpline source meshes, missing patches, out-of-range indexes, stale generations, invalid direct B-spline control-net indexes, or missing source features before mutation."
@@ -2054,9 +2056,9 @@ enum AgentCapabilityCatalog {
         capability(
             "setSurfaceFrameDisplay",
             category: .solid,
-            summary: "Toggle persistent Agent-visible UVN surface frame display state for generated face UV queries, surface parameter references, Surface CV references, or trim p-curve parameter references.",
+            summary: "Toggle session UVN surface frame display state for generated face UV queries, surface parameter references, Surface CV references, or trim p-curve parameter references.",
             access: .automationCommand,
-            mutatesDocument: true,
+            stateEffect: .workspaceMutation,
             discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis],
             targets: [.face, .surfaceControlPoint, .surfaceTrim],
             failureMode: "Accepts generated B-spline face UV queries, surface parameter references, Surface CV references, or B-spline trim p-curve span/knot references resolvable by surfaceFrames; rejects unresolved references, ambiguous UV input, non-B-spline faces, stale generations, whole trim edges, unsupported surface span/knot, edge, curve, or sketch point references before mutation."
@@ -2066,7 +2068,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Discover generated faces, edges, vertices, persistent topology names, and selection targets without mutation.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.topologySummary],
             targets: [.face, .edge, .vertex],
             failureMode: "Rejects stale generations or evaluation failures before returning topology data."
@@ -2076,7 +2078,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Discover source-owned surface contracts for editable PolySpline and direct B-spline surfaces, including patch IDs, degree and knot-vector basis, knot and span addresses, weighted CV targets, boundary CV targets, trim edge editability, authored p-curve control-point indices and weights, G0/G1/G2 continuity levels, span-center UVN frame samples, trim loops, support diagnostics, and generated topology links.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.surfaceSourceSummary, .polySplineMeshAnalysis, .topologySummary],
             targets: [.document, .body, .face, .edge, .vertex],
             failureMode: "Rejects stale generations or invalid documents before returning source-owned surface contracts; reports unsupported PolySpline reconstruction options and invalid direct B-spline source data as structured diagnostics instead of exposing silent surface edit targets."
@@ -2086,7 +2088,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Sample generated B-spline faces for UV points, normals, principal directions, ordered trim-boundary point loops, and finite-difference surface curvature comb diagnostics without mutation; supports low, standard, and high sample density.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.topologySummary, .surfaceAnalysis],
             targets: [.face, .edge],
             failureMode: "Rejects stale generations, invalid documents, or unsupported unbounded B-spline domains before returning surface analysis data."
@@ -2096,7 +2098,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Resolve generated B-spline face UV addresses, surface selection references, or B-spline trim p-curve parameter references into oriented UVN local frames, derivative tangents, principal directions, and curvature values without mutation.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.topologySummary, .surfaceSourceSummary, .surfaceFrames],
             targets: [.face, .surfaceControlPoint, .surfaceTrim],
             failureMode: "Rejects stale generations, unresolved face persistent names, face IDs, or surface selection references, non-B-spline faces, unbounded domains, ambiguous UV input, whole trim edges, non-B-spline trim p-curves, and UV parameters outside the face surface domain."
@@ -2106,7 +2108,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Discover B-spline face adjacencies, shared edges, and observed G0/G1/G2 continuity status without mutation.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.topologySummary, .surfaceContinuitySummary],
             targets: [.face, .edge],
             failureMode: "Rejects stale generations or evaluation failures before returning surface continuity data; reports sampled curvature gaps for G2-capable UV trim curves and flags unresolved curvature continuity when a sampled boundary contract is unavailable."
@@ -2116,7 +2118,7 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Preflight whether two source-owned direct B-spline trim boundaries can be matched at G0, G1, or G2 before mutating the target boundary control rows.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.surfaceSourceSummary, .surfaceBoundaryContinuityCompatibility],
             targets: [.surfaceTrim],
             failureMode: "Rejects stale generations, invalid selection references, non-direct B-spline trims, inner trims, and missing source features; returns structured diagnostics for identical boundaries, incompatible boundary bases, non-clamped boundaries, control-count mismatches, and insufficient cross-boundary control rows."
@@ -2126,7 +2128,7 @@ enum AgentCapabilityCatalog {
             category: .selection,
             summary: "Select Agent-discovered object, face, edge, vertex, region, or sketch-entity targets without mutating CAD source.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.topologySummary, .sketchEntitySummary],
             targets: [.sceneNode, .face, .edge, .vertex, .region, .sketchEntity],
             failureMode: "Rejects stale generations and targets incompatible with the current document."
@@ -2136,7 +2138,7 @@ enum AgentCapabilityCatalog {
             category: .selection,
             summary: "Select Agent-discovered Swift-CAD SelectionReference values, including Surface CV references, without mutating CAD source.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             discovery: [.surfaceSourceSummary, .topologySummary, .selectionMeasurement],
             targets: [.surface, .surfaceControlPoint, .surfaceTrim, .surfaceTrimSpan, .surfaceTrimKnot],
             failureMode: "Rejects stale generations and references incompatible with the current document."
@@ -2146,7 +2148,7 @@ enum AgentCapabilityCatalog {
             category: .persistence,
             summary: "Persist the open document back to its registered path and mark the session clean.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             targets: [.document],
             failureMode: "Rejects pathless sessions, stale generations, and save errors before reporting success."
         ),
@@ -2155,7 +2157,7 @@ enum AgentCapabilityCatalog {
             category: .persistence,
             summary: "Evaluate and export the document with a named preset or explicit export options.",
             access: .agentRequest,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             targets: [.document],
             failureMode: "Rejects stale generations, unsupported formats, evaluation failures, and destination policy errors."
         ),
@@ -2164,20 +2166,24 @@ enum AgentCapabilityCatalog {
             category: .read,
             summary: "Run the validation command and publish the resulting diagnostics.",
             access: .automationCommand,
-            mutatesDocument: false,
+            stateEffect: .readOnly,
             targets: [.document],
             failureMode: "Rejects stale generations before validation."
         ),
     ]
+
+    static func descriptors(domainRegistry: DomainRegistry) -> [AgentCapabilityDescriptor] {
+        descriptors + domainRegistry.sortedCapabilityDescriptors().map(domainCapability)
+    }
 
     private static func capability(
         _ name: String,
         category: AgentCapabilityDescriptor.Category,
         summary: String,
         access: AgentCapabilityDescriptor.Access,
-        mutatesDocument: Bool,
+        stateEffect: AutomationCommandEffect,
         requiresSession: Bool = true,
-        requiresExpectedGeneration: Bool = true,
+        requiresExpectedSourceGeneration: Bool = true,
         discovery: [AgentCapabilityDescriptor.Discovery] = [],
         targets: [AgentCapabilityDescriptor.Target] = [],
         failureMode: String,
@@ -2188,14 +2194,76 @@ enum AgentCapabilityCatalog {
             category: category,
             summary: summary,
             access: access,
-            mutatesDocument: mutatesDocument,
+            stateEffect: stateEffect,
             requiresSession: requiresSession,
-            requiresExpectedGeneration: requiresExpectedGeneration,
+            requiresExpectedSourceGeneration: requiresExpectedSourceGeneration,
+            requiresExpectedWorkspaceRevision: stateEffect == .workspaceMutation,
             discovery: discovery,
             targets: targets,
             failureMode: failureMode,
             optionMatrix: optionMatrix
         )
+    }
+
+    private static func domainCapability(
+        _ descriptor: DomainCapabilityDescriptor
+    ) -> AgentCapabilityDescriptor {
+        AgentCapabilityDescriptor(
+            name: descriptor.id.rawValue,
+            category: .domain,
+            summary: descriptor.summary,
+            access: .domainCapability,
+            stateEffect: stateEffect(for: descriptor.effect),
+            requiresSession: true,
+            requiresExpectedSourceGeneration: true,
+            supportsDryRun: descriptor.supportsDryRun,
+            targets: descriptor.targetKinds.compactMap {
+                AgentCapabilityDescriptor.Target(rawValue: $0.rawValue)
+            },
+            failureMode: descriptor.failureMode,
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "domain",
+                    supportedValues: [descriptor.namespace.rawValue],
+                    notes: ["Registered semantic domain namespace."]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "domainCapabilityID",
+                    supportedValues: [descriptor.id.rawValue],
+                    notes: ["Dispatch through the domain command lowering registry."]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "domainTargetKinds",
+                    supportedValues: descriptor.targetKinds.map(\.rawValue),
+                    notes: ["Domain-provided target kind names are preserved even when no generic Agent target enum exists."]
+                ),
+            ],
+            inputParameters: descriptor.parameters,
+            domainContract: AgentCapabilityDescriptor.DomainContract(
+                effect: descriptor.effect,
+                resultKind: descriptor.resultKind,
+                targetKinds: descriptor.targetKinds,
+                knownErrorCodes: descriptor.knownErrorCodes,
+                supportsCancellation: descriptor.supportsCancellation,
+                reportsProgress: descriptor.reportsProgress,
+                determinism: descriptor.determinism,
+                resultFidelity: descriptor.resultFidelity
+            )
+        )
+    }
+
+    private static func stateEffect(
+        for domainEffect: DomainCapabilityEffect
+    ) -> AutomationCommandEffect {
+        switch domainEffect {
+        case .documentMutation:
+            .sourceMutation
+        case .query,
+             .artifactGeneration,
+             .export,
+             .externalJob:
+            .readOnly
+        }
     }
 
 }

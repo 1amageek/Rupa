@@ -163,7 +163,7 @@ import Testing
 @Test func workspaceCanvasPlaneInputMapperFeedsEditorSessionClickOnCustomPlane() throws {
     let session = EditorSession()
     let plane = try workspaceCanvasCustomPlane()
-    _ = try #require(session.createConstructionPlane(name: "Click CPlane", plane: plane))
+    try activateWorkspaceCanvasConstructionPlane(name: "Click CPlane", plane: plane, in: session)
     let activePlane = try #require(session.activeConstructionPlane?.plane)
     let coordinateSystem = try SketchPlaneCoordinateSystem(plane: activePlane)
     let mapper = WorkspaceCanvasPlaneInputMapper(projectionBasis: .axisFront(.z))
@@ -199,7 +199,7 @@ import Testing
 @Test func workspaceCanvasPlaneInputMapperFeedsEditorSessionDragOnCustomPlane() throws {
     let session = EditorSession()
     let plane = try workspaceCanvasCustomPlane()
-    _ = try #require(session.createConstructionPlane(name: "Drag CPlane", plane: plane))
+    try activateWorkspaceCanvasConstructionPlane(name: "Drag CPlane", plane: plane, in: session)
     let activePlane = try #require(session.activeConstructionPlane?.plane)
     let coordinateSystem = try SketchPlaneCoordinateSystem(plane: activePlane)
     let mapper = WorkspaceCanvasPlaneInputMapper(projectionBasis: .axisFront(.z))
@@ -277,7 +277,7 @@ import Testing
 @Test func workspaceCanvasPlaneInputMapperFeedsEditorSessionSolidClickOnCustomPlane() throws {
     let session = EditorSession()
     let plane = try workspaceCanvasCustomPlane()
-    _ = try #require(session.createConstructionPlane(name: "Solid Click CPlane", plane: plane))
+    try activateWorkspaceCanvasConstructionPlane(name: "Solid Click CPlane", plane: plane, in: session)
     let activePlane = try #require(session.activeConstructionPlane?.plane)
     let mapper = WorkspaceCanvasPlaneInputMapper(projectionBasis: .axisFront(.z))
     let canvasInput = try mapper.map(
@@ -315,7 +315,7 @@ import Testing
 @Test func workspaceCanvasPlaneInputMapperFeedsEditorSessionSolidDragOnCustomPlane() throws {
     let session = EditorSession()
     let plane = try workspaceCanvasCustomPlane()
-    _ = try #require(session.createConstructionPlane(name: "Solid Drag CPlane", plane: plane))
+    try activateWorkspaceCanvasConstructionPlane(name: "Solid Drag CPlane", plane: plane, in: session)
     let activePlane = try #require(session.activeConstructionPlane?.plane)
     let coordinateSystem = try SketchPlaneCoordinateSystem(plane: activePlane)
     let mapper = WorkspaceCanvasPlaneInputMapper(projectionBasis: .axisFront(.z))
@@ -399,7 +399,11 @@ private func assertCustomPlaneCanvasClickCreatesSketch(
 ) throws {
     let session = EditorSession()
     let plane = try workspaceCanvasCustomPlane()
-    _ = try #require(session.createConstructionPlane(name: "\(toolCase.tool.title) Click CPlane", plane: plane))
+    try activateWorkspaceCanvasConstructionPlane(
+        name: "\(toolCase.tool.title) Click CPlane",
+        plane: plane,
+        in: session
+    )
     let activePlane = try #require(session.activeConstructionPlane?.plane)
     let coordinateSystem = try SketchPlaneCoordinateSystem(plane: activePlane)
     let mapper = WorkspaceCanvasPlaneInputMapper(projectionBasis: .axisFront(.z))
@@ -438,7 +442,11 @@ private func assertCustomPlaneCanvasDragCreatesSketch(
 ) throws {
     let session = EditorSession()
     let plane = try workspaceCanvasCustomPlane()
-    _ = try #require(session.createConstructionPlane(name: "\(toolCase.tool.title) Drag CPlane", plane: plane))
+    try activateWorkspaceCanvasConstructionPlane(
+        name: "\(toolCase.tool.title) Drag CPlane",
+        plane: plane,
+        in: session
+    )
     let activePlane = try #require(session.activeConstructionPlane?.plane)
     let coordinateSystem = try SketchPlaneCoordinateSystem(plane: activePlane)
     let mapper = WorkspaceCanvasPlaneInputMapper(projectionBasis: .axisFront(.z))
@@ -485,6 +493,17 @@ private func assertCustomPlaneCanvasDragCreatesSketch(
     #expect(try latestSketch(in: session).plane == activePlane)
     #expect(pointIsApproximatelyEqual(coordinateSystem.project(startWorldPoint).point, startCanvasInput.point))
     #expect(pointIsApproximatelyEqual(coordinateSystem.project(endWorldPoint).point, endCanvasInput.point))
+}
+
+@MainActor
+private func activateWorkspaceCanvasConstructionPlane(
+    name: String,
+    plane: SketchPlane,
+    in session: EditorSession
+) throws {
+    let result = try #require(session.createConstructionPlane(name: name, plane: plane))
+    let id = try #require(result.createdConstructionPlaneID)
+    _ = try #require(session.setActiveConstructionPlane(id: id))
 }
 
 private func workspaceCanvasCustomPlane() throws -> SketchPlane {

@@ -1,14 +1,17 @@
 # Rupa Automation Protocol
 
-This document defines the external JSON contract used by CLI, MCP, and agent clients to control an open Rupa project.
+This document defines the external JSON contract used by CLI, MCP, and Agent
+clients to invoke ProjectController use cases. Public wire DTOs are versioned
+independently from internal Swift types.
 
 ## Responsibility Boundary
 
 ```mermaid
 flowchart LR
     Client["External client"] --> Transport["AutomationGateway transport"]
-    Transport --> Controller["ProjectAutomationController"]
-    Controller --> Domain["Rupa document domain"]
+    Transport --> Controller["ProjectController"]
+    Controller --> Domain["Document and domain use cases"]
+    Controller --> Artifacts["Artifact / decision / job stores"]
     Domain --> Kernel["SwiftCAD geometry kernel"]
 ```
 
@@ -16,8 +19,9 @@ flowchart LR
 |---|---|
 | External client | Chooses commands, supplies typed targets, and correlates request IDs. |
 | AutomationGateway transport | Moves JSON envelopes over the local transport and preserves request/response correlation. |
-| ProjectAutomationController | Validates method payloads, routes requests to open sessions, and returns typed results. |
-| Rupa document domain | Owns undoable mutation, evaluation, selection, measurement, import/export state, and diagnostics. |
+| ProjectController | Resolves caller/session, orders use cases, coordinates source, workspace, artifact, decision, export, and job effects, and returns typed results. |
+| Rupa document/domain use cases | Own source mutation, evaluation, selection, measurement, and domain semantics. |
+| Artifact/decision/job stores | Own immutable derived results, authorized decisions, and managed external effects. |
 | SwiftCAD geometry kernel | Owns geometry, topology, curves, surfaces, units, and generated analysis data. |
 
 The transport layer is intentionally not the owner of project semantics. It only carries the automation protocol.
@@ -98,10 +102,13 @@ The transport layer is intentionally not the owner of project semantics. It only
 | Protocol version | Any value other than `"2.0"` is rejected. |
 | Params object | Canonical requests include `params`. Empty-param methods use `{}`. |
 | Strict top-level params | Unknown top-level keys inside `params` are rejected. |
-| Generation | `DocumentGeneration` is encoded as an object with a `value` integer. |
-| Optional generation guard | `expectedGeneration` may be omitted when the client intentionally accepts the current document generation. |
+| Transaction revision | Source-mutation requests encode `expectedTransactionRevision` as an object with a `value` integer. |
+| Dependency identity | Artifact, validation, export, and job requests carry or resolve source-dependency/content identity and do not use revision as freshness. |
+| Optional revision guard | `expectedTransactionRevision` may be omitted only when the client intentionally accepts the current source state; mutation results return the committed revision. |
 
-Nested domain payloads use the Codable JSON shape of the public RupaCore, RupaAutomation, and SwiftCAD types named below.
+Wire schemas are declared in `RupaAgentProtocol` DTOs and fixtures. They do not
+inherit an internal Codable shape implicitly. Reusing a value type requires an
+explicit wire-schema/version decision and compatibility test.
 
 ## Common Params
 

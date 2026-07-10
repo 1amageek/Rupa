@@ -519,8 +519,8 @@ import Testing
     #expect(imperialSite.largerPreset == nil)
 }
 
-@Test func workspaceDocumentScalePresetOptionStatesExposeFullCADRange() throws {
-    let options = workspaceDocumentScalePresetOptionStates(
+@Test func workspaceScalePresetOptionStatesExposeFullCADRange() throws {
+    let options = workspaceScalePresetOptionStates(
         ruler: WorkspaceScalePreset.regionalPlanning.rulerConfiguration
     )
     let micro = try #require(options.first { $0.preset == .microFabrication })
@@ -547,8 +547,8 @@ import Testing
     #expect(selected.preset == .regionalPlanning)
 }
 
-@Test func workspaceDocumentScalePresetOptionStatesKeepRangeAvailableForCustomRulers() throws {
-    let options = workspaceDocumentScalePresetOptionStates(
+@Test func workspaceScalePresetOptionStatesKeepRangeAvailableForCustomRulers() throws {
+    let options = workspaceScalePresetOptionStates(
         ruler: RulerConfiguration(
             displayUnit: .millimeter,
             minorTickMeters: 0.000_001,
@@ -564,7 +564,7 @@ import Testing
     #expect(regional.accessibilityValue.contains("comfortable model span 10 km to 800 km"))
 }
 
-@Test func workspaceDocumentScaleRecommendationStateReportsUseCaseAndComfortRanges() throws {
+@Test func workspaceScaleRecommendationStateReportsUseCaseAndComfortRanges() throws {
     let recommendation = try #require(WorkspaceScaleRecommendationService().recommendation(
         for: MeasurementResult.Bounds(
             minX: 0.0,
@@ -577,7 +577,7 @@ import Testing
         currentRuler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
     ))
 
-    let state = try #require(workspaceDocumentScaleRecommendationState(
+    let state = try #require(workspaceScaleRecommendationState(
         recommendation: recommendation
     ))
 
@@ -592,7 +592,7 @@ import Testing
     #expect(state.isActionable)
 }
 
-@Test func workspaceDocumentScaleRecommendationStateReportsActionlessScaleLimit() throws {
+@Test func workspaceScaleRecommendationStateReportsActionlessScaleLimit() throws {
     let recommendation = try #require(WorkspaceScaleRecommendationService().recommendation(
         for: MeasurementResult.Bounds(
             minX: 0.0,
@@ -605,7 +605,7 @@ import Testing
         currentRuler: WorkspaceScalePreset.regionalPlanning.rulerConfiguration
     ))
 
-    let state = try #require(workspaceDocumentScaleRecommendationState(
+    let state = try #require(workspaceScaleRecommendationState(
         recommendation: recommendation
     ))
 

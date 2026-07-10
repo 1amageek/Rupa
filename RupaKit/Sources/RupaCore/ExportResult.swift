@@ -13,6 +13,7 @@ public struct ExportResult: Codable, Equatable, Sendable {
     public var outputUnit: LengthDisplayUnit
     public var destinationPolicy: ExportPreset.DestinationPolicy
     public var diagnostics: [EditorDiagnostic]
+    public var validationFindings: [ValidationFinding]
 
     public init(
         message: String,
@@ -24,7 +25,8 @@ public struct ExportResult: Codable, Equatable, Sendable {
         presetName: String? = nil,
         outputUnit: LengthDisplayUnit = .meter,
         destinationPolicy: ExportPreset.DestinationPolicy = .overwrite,
-        diagnostics: [EditorDiagnostic]
+        diagnostics: [EditorDiagnostic],
+        validationFindings: [ValidationFinding] = []
     ) {
         self.message = message
         self.format = format
@@ -36,5 +38,6 @@ public struct ExportResult: Codable, Equatable, Sendable {
         self.outputUnit = outputUnit
         self.destinationPolicy = destinationPolicy
         self.diagnostics = diagnostics
+        self.validationFindings = validationFindings
     }
 }

@@ -13,7 +13,7 @@ import RupaCore
 
     #expect(activePlane.name == WorkspaceLaunchSessionFactory.activeCustomConstructionPlaneFixtureName)
     #expect(session.document.productMetadata.constructionPlanes.count == 1)
-    #expect(session.document.productMetadata.activeConstructionPlaneID == activePlane.id)
+    #expect(session.workspaceState.activeConstructionPlaneID == activePlane.id)
 
     guard case .plane(let plane) = activePlane.plane else {
         Issue.record("Fixture must install a custom arbitrary plane.")

@@ -21,6 +21,7 @@ public struct ViewportCanvasDragSnapResolver: Sendable {
     public func resolution(
         _ drag: ViewportModelDrag,
         document: DesignDocument,
+        ruler: RulerConfiguration,
         snapOptions: SnapResolutionOptions?,
         axisConstraint: SketchAxisConstraint?
     ) -> ViewportCanvasDragSnapResolution {
@@ -28,6 +29,7 @@ public struct ViewportCanvasDragSnapResolver: Sendable {
         let startResolution = resolver.resolution(
             for: ViewportSnapQuery(point: drag.start, referencePoint: nil),
             document: document,
+            ruler: ruler,
             options: snapOptions,
             modifierFlags: drag.modifierFlags
         )
@@ -40,6 +42,7 @@ public struct ViewportCanvasDragSnapResolver: Sendable {
         let endResolution = resolver.resolution(
             for: ViewportSnapQuery(point: constrainedEndPoint, referencePoint: startPoint),
             document: document,
+            ruler: ruler,
             options: snapOptions,
             modifierFlags: drag.modifierFlags
         )
@@ -93,12 +96,14 @@ public struct ViewportCanvasDragSnapResolver: Sendable {
     public func resolvedDrag(
         _ drag: ViewportModelDrag,
         document: DesignDocument,
+        ruler: RulerConfiguration,
         snapOptions: SnapResolutionOptions?,
         axisConstraint: SketchAxisConstraint?
     ) -> ViewportModelDrag {
         resolution(
             drag,
             document: document,
+            ruler: ruler,
             snapOptions: snapOptions,
             axisConstraint: axisConstraint
         ).drag

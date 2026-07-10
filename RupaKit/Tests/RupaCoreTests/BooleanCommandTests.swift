@@ -219,7 +219,10 @@ import SwiftCAD
         operation: .difference
     )
 
-    let result = try MeasurementService().measure(document: document)
+    let result = try MeasurementService().measure(
+        document: document,
+        ruler: .standard(for: .millimeter)
+    )
     let solid = try #require(result.solids.first)
 
     // 40x20x10 mm target minus the overlapping 20x20x10 mm tool half leaves

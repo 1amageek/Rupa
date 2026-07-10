@@ -1,6 +1,7 @@
 import Foundation
 import RupaAutomation
 import RupaCore
+import RupaDomainFoundation
 
 public enum AgentRequest: Codable, Equatable, Sendable {
     case capabilities
@@ -10,11 +11,16 @@ public enum AgentRequest: Codable, Equatable, Sendable {
     case execute(
         sessionID: UUID,
         command: AutomationCommand,
-        expectedGeneration: DocumentGeneration?
+        expectedGeneration: DocumentGeneration?,
+        expectedWorkspaceRevision: WorkspaceRevision? = nil
     )
     case executeBatch(
         sessionID: UUID,
         batch: AutomationBatch
+    )
+    case executeDomain(
+        sessionID: UUID,
+        request: DomainCommandRequest
     )
     case parameters(
         sessionID: UUID,
@@ -204,6 +210,7 @@ public enum AgentResponse: Codable, Equatable, Sendable {
     case cadInteractionQualityAssessment(CADInteractionQualityAssessmentResult)
     case command(AutomationResult)
     case batch(AgentBatchResult)
+    case domainExecution(DomainExecutionResult)
     case parameters(ParameterListResult)
     case evaluation(EvaluationSnapshot)
     case measurement(MeasurementResult)
@@ -248,6 +255,8 @@ public extension AgentRequest {
             "command.apply"
         case .executeBatch:
             "command.applyBatch"
+        case .executeDomain:
+            "domain.execute"
         case .parameters:
             "document.parameters"
         case .setParameterExpression:

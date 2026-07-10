@@ -55,7 +55,9 @@ public struct BatchCommand: ParsableCommand {
         // value when provided; otherwise the file's value is used as-is.
         return AutomationBatch(
             commands: decoded.commands,
-            expectedGeneration: document.generation() ?? decoded.expectedGeneration
+            expectedGeneration: document.generation() ?? decoded.expectedGeneration,
+            expectedWorkspaceRevision: document.workspaceRevision()
+                ?? decoded.expectedWorkspaceRevision
         )
     }
 

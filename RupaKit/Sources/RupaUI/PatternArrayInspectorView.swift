@@ -639,7 +639,7 @@ struct PatternArrayInspectorView: View {
         workspaceLengthControl(
             title,
             values: values,
-            displayUnit: session.document.displayUnit,
+            displayUnit: session.workspaceState.displayUnit,
             sliderMetersRange: positionSliderMetersRange
         ) { meters in
             onChange(meters)
@@ -706,7 +706,7 @@ struct PatternArrayInspectorView: View {
         workspaceLengthControl(
             title,
             values: [meters],
-            displayUnit: session.document.displayUnit,
+            displayUnit: session.workspaceState.displayUnit,
             sliderMetersRange: sliderMetersRange
         ) { nextMeters in
             onChange(max(nextMeters, 0.0))
@@ -716,7 +716,7 @@ struct PatternArrayInspectorView: View {
     private func distanceSliderMetersRange(for meters: Double) -> ClosedRange<Double> {
         workspaceLengthSliderMetersRange(
             for: meters,
-            ruler: session.document.ruler,
+            ruler: session.workspaceState.ruler,
             expansionMultiplier: 2.0
         )
     }

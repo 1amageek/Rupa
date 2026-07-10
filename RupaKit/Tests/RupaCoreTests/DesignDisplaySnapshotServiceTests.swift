@@ -34,6 +34,7 @@ import Testing
 
     let result = try DesignDisplaySnapshotService().result(
         document: session.document,
+        workspaceState: session.workspaceState,
         currentEvaluation: session.currentEvaluation,
         generation: session.generation,
         dirty: session.isDirty
@@ -67,9 +68,10 @@ import Testing
     )
 
     let result = try DesignDisplaySnapshotService(
-        bodyService: BodyDisplaySnapshotService(pipeline: failingPipeline)
+        pipeline: failingPipeline
     ).result(
         document: session.document,
+        workspaceState: session.workspaceState,
         currentEvaluation: session.currentEvaluation,
         generation: session.generation,
         dirty: session.isDirty
@@ -118,6 +120,7 @@ import Testing
 
     let result = try DesignDisplaySnapshotService().result(
         document: session.document,
+        workspaceState: session.workspaceState,
         currentEvaluation: session.currentEvaluation,
         generation: session.generation,
         dirty: session.isDirty
@@ -212,6 +215,7 @@ import Testing
 
     let result = try DesignDisplaySnapshotService().result(
         document: document,
+        workspaceState: WorkspaceState(),
         currentEvaluation: currentEvaluation,
         generation: generation,
         dirty: false
@@ -231,7 +235,9 @@ import Testing
 @MainActor
 @Test func designDisplaySnapshotReportsWorkspacePrecisionForAgentPlanning() throws {
     var document = DesignDocument.empty(named: "Display Remote Site")
-    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    let workspaceState = WorkspaceState(
+        ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+    )
     let profileID = try document.createRectangleSketchFromCorners(
         name: "Display Remote Footprint",
         plane: .xy,
@@ -258,6 +264,7 @@ import Testing
 
     let result = try DesignDisplaySnapshotService().result(
         document: document,
+        workspaceState: workspaceState,
         currentEvaluation: currentEvaluation,
         generation: generation,
         dirty: false
@@ -322,6 +329,7 @@ import Testing
 
     let result = try DesignDisplaySnapshotService().result(
         document: session.document,
+        workspaceState: session.workspaceState,
         currentEvaluation: session.currentEvaluation,
         generation: session.generation,
         dirty: session.isDirty
@@ -423,6 +431,7 @@ import Testing
 
     let result = try DesignDisplaySnapshotService().result(
         document: session.document,
+        workspaceState: session.workspaceState,
         currentEvaluation: session.currentEvaluation,
         generation: session.generation,
         dirty: session.isDirty
@@ -484,6 +493,7 @@ import Testing
 
     let result = try DesignDisplaySnapshotService().result(
         document: document,
+        workspaceState: session.workspaceState,
         currentEvaluation: session.currentEvaluation,
         generation: session.generation,
         dirty: session.isDirty
@@ -540,11 +550,12 @@ private func designDisplayEvaluationContext(
     let evaluatedDocument = try DocumentEvaluator.modelingDefault(for: document)
         .evaluate(document.cadDocument)
     let sourceFingerprint = try document.cadDocument.sourceFingerprint(
-        tolerance: .workspaceScaleAware(for: document)
+        tolerance: document.modelingSettings.tolerance
     )
     return DocumentEvaluationContext(
         generation: generation,
         sourceFingerprint: sourceFingerprint,
+        modelingSettings: document.modelingSettings,
         evaluatedDocument: evaluatedDocument
     )
 }

@@ -4,6 +4,7 @@ import RupaCore
 public struct CLIBatchResponse: Codable, Equatable, Sendable {
     public var message: String
     public var generation: UInt64
+    public var workspaceRevision: UInt64
     public var dirty: Bool
     public var saved: Bool
     public var commandCount: Int
@@ -14,11 +15,13 @@ public struct CLIBatchResponse: Codable, Equatable, Sendable {
     public init(
         results: [AutomationResult],
         generation: DocumentGeneration,
+        workspaceRevision: WorkspaceRevision,
         dirty: Bool,
         saved: Bool
     ) {
         self.results = results
         self.generation = generation.value
+        self.workspaceRevision = workspaceRevision.value
         self.dirty = dirty
         self.saved = saved
         self.commandCount = results.count

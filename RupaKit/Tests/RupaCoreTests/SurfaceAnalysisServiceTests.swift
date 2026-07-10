@@ -12,7 +12,7 @@ import SwiftCAD
     )
 
     let result = try SurfaceAnalysisService(options: SurfaceAnalysisOptions(sampleDensity: .standard))
-        .analyze(document: document)
+        .analyze(document: document, displayUnit: .millimeter)
 
     #expect(result.counts.bSplineFaceCount == 2)
     #expect(result.counts.sampleCount == 50)
@@ -70,9 +70,9 @@ import SwiftCAD
     )
 
     let low = try SurfaceAnalysisService(options: SurfaceAnalysisOptions(sampleDensity: .low))
-        .analyze(document: document)
+        .analyze(document: document, displayUnit: .millimeter)
     let high = try SurfaceAnalysisService(options: SurfaceAnalysisOptions(sampleDensity: .high))
-        .analyze(document: document)
+        .analyze(document: document, displayUnit: .millimeter)
 
     #expect(low.counts.bSplineFaceCount == 2)
     #expect(low.counts.sampleCount == 18)
@@ -102,7 +102,7 @@ import SwiftCAD
         sourceMesh: surfaceAnalysisPolySplinePatchNetworkMesh(centerZ: 0.0),
         options: PolySplineOptions(mergePatches: false)
     )
-    let topology = try TopologySummaryService().summarize(document: document)
+    let topology = try TopologySnapshotService().snapshot(document: document)
     let faceEntry = try #require(topology.entries.first { $0.kind == .face })
 
     let result = try SurfaceFrameService().resolve(
@@ -113,7 +113,8 @@ import SwiftCAD
                 u: 0.5,
                 v: 0.5
             ),
-        ]
+        ],
+        displayUnit: .millimeter
     )
 
     #expect(result.frames.count == 1)
@@ -142,7 +143,7 @@ import SwiftCAD
         sourceMesh: surfaceAnalysisPolySplinePatchNetworkMesh(centerZ: 0.0),
         options: PolySplineOptions(mergePatches: false)
     )
-    let surfaceSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let surfaceSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let source = try #require(surfaceSummary.sources.first)
     let patch = try #require(source.patches.first)
     let faceSelectionReference = try #require(patch.faceSelectionReference)
@@ -156,7 +157,8 @@ import SwiftCAD
                 u: 0.25,
                 v: 0.75
             ),
-        ]
+        ],
+        displayUnit: .millimeter
     )
 
     let frame = try #require(result.frames.first)
@@ -175,7 +177,7 @@ import SwiftCAD
         sourceMesh: surfaceAnalysisPolySplinePatchNetworkMesh(centerZ: 0.0),
         options: PolySplineOptions(mergePatches: false)
     )
-    let surfaceSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let surfaceSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let source = try #require(surfaceSummary.sources.first)
     let patch = try #require(source.patches.first)
     let facePersistentName = try #require(patch.facePersistentName)
@@ -195,7 +197,8 @@ import SwiftCAD
                     v: 0.75
                 )))
             ),
-        ]
+        ],
+        displayUnit: .millimeter
     )
 
     let frame = try #require(result.frames.first)
@@ -212,7 +215,7 @@ import SwiftCAD
         sourceMesh: surfaceAnalysisPolySplinePatchNetworkMesh(centerZ: 0.0),
         options: PolySplineOptions(mergePatches: false)
     )
-    let surfaceSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let surfaceSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let source = try #require(surfaceSummary.sources.first)
     let patch = try #require(source.patches.first)
     let facePersistentName = try #require(patch.facePersistentName)
@@ -222,7 +225,8 @@ import SwiftCAD
         document: document,
         queries: [
             SurfaceFrameQuery(selectionReference: controlPoint.selectionReference),
-        ]
+        ],
+        displayUnit: .millimeter
     )
 
     let frame = try #require(result.frames.first)
@@ -240,14 +244,14 @@ import SwiftCAD
         name: "Frame Trim Parameter Surface",
         surface: surfaceAnalysisDirectBSplineSurface()
     )
-    let initialSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let initialSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(initialSummary.sources.first?.patches.first?.faceSelectionReference)
     try document.setSurfaceTrimLoops(
         target: faceReference,
         trimLoops: [surfaceAnalysisAuthoredTrimLoop()]
     )
 
-    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let trimEdge = try #require(summary.sources.first?.patches.first?.trimLoops.first?.edges.first)
     let spanSelection = try #require(trimEdge.parameterCurve.spans.first?.selectionReference)
     let knotSelection = try #require(trimEdge.parameterCurve.knotVector.first?.selectionReference)
@@ -256,7 +260,8 @@ import SwiftCAD
         queries: [
             SurfaceFrameQuery(selectionReference: spanSelection),
             SurfaceFrameQuery(selectionReference: knotSelection),
-        ]
+        ],
+        displayUnit: .millimeter
     )
 
     #expect(result.frames.count == 2)
@@ -280,7 +285,7 @@ import SwiftCAD
         sourceMesh: surfaceAnalysisPolySplinePatchNetworkMesh(centerZ: 0.0),
         options: PolySplineOptions(mergePatches: false)
     )
-    let surfaceSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let surfaceSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let source = try #require(surfaceSummary.sources.first)
     let patch = try #require(source.patches.first)
     let surfaceReference = try #require(patch.faceSelectionReference)
@@ -302,7 +307,8 @@ import SwiftCAD
                     u: 0.5,
                     v: 0.5
                 ),
-            ]
+            ],
+            displayUnit: .millimeter
         )
     }
 }
@@ -314,7 +320,7 @@ import SwiftCAD
         sourceMesh: surfaceAnalysisPolySplinePatchNetworkMesh(centerZ: 0.0),
         options: PolySplineOptions(mergePatches: false)
     )
-    let surfaceSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let surfaceSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let source = try #require(surfaceSummary.sources.first)
     let patch = try #require(source.patches.first)
     let trimLoop = try #require(patch.trimLoops.first)
@@ -325,7 +331,8 @@ import SwiftCAD
             document: document,
             queries: [
                 SurfaceFrameQuery(selectionReference: trimReference),
-            ]
+            ],
+            displayUnit: .millimeter
         )
     }
 }

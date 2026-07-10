@@ -249,7 +249,7 @@ extension DesignDocument {
                 message: "Sketch entity dimension update requires a sketch entity or editable generated edge target."
             )
         }
-        let summary = try SketchDimensionSummaryService().summarize(
+        let summary = try SketchDimensionSnapshotService().snapshot(
             document: self,
             targets: [target],
             objectRegistry: objectRegistry

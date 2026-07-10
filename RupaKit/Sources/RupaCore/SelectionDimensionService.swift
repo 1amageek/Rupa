@@ -11,6 +11,7 @@ public struct SelectionDimensionService: Sendable {
 
     public func evaluate(
         document: DesignDocument,
+        displayUnit: LengthDisplayUnit,
         dimensionID: SelectionDimensionID? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
@@ -49,7 +50,7 @@ public struct SelectionDimensionService: Sendable {
         }
         return SelectionDimensionEvaluationResult(
             evaluation: rawEvaluation,
-            displayUnit: document.displayUnit
+            displayUnit: displayUnit
         )
     }
 }

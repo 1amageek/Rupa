@@ -242,11 +242,11 @@ public struct BridgeCurveEndpointParameterProjectionService: Sendable {
                     upper: currentT,
                     near: point
                 )
-                if best == nil || localBest.distanceSquared < best!.distanceSquared {
+                if best.map({ localBest.distanceSquared < $0.distanceSquared }) ?? true {
                     best = (segment, localBest.t, localBest.distanceSquared)
                 }
                 if previousDistance < currentDistance,
-                   (best == nil || previousDistance < best!.distanceSquared) {
+                   (best.map({ previousDistance < $0.distanceSquared }) ?? true) {
                     best = (segment, previousT, previousDistance)
                 }
                 previousT = currentT

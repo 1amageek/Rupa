@@ -105,6 +105,12 @@ flowchart TD
 
 The umbrella module exists for convenient composition. Feature ownership remains in the specific modules.
 
+Specialized domains are product extensions, not lower-level dependencies.
+Architecture, turbomachinery, character design, manufacturing, and simulation
+workflows must follow `DOMAIN_EXTENSION_ARCHITECTURE.md`: concrete domain modules
+depend on the universal CAD foundation, while Swift-CAD, RupaCore, base
+automation, rendering, and agent transport remain domain-neutral.
+
 ### 3. Treat GUI, CLI, and Agent as Peers
 
 The app should not receive special mutation privileges that the CLI cannot use, and the CLI should not bypass app state when a document is open.
@@ -332,6 +338,13 @@ flowchart TD
 | `RupaCLI` imports RupaCLIKit. | The executable remains a thin shell that can be built and tested around a library boundary. |
 
 Lower-level modules do not import higher-level product shells.
+
+Concrete domain modules follow the same direction. They may be registered by the
+app, CLI, or a future plugin loader, but lower-level universal targets must not
+import them. When a domain semantic object generates CAD source, the ownership
+and projection contract in `DOMAIN_EXTENSION_ARCHITECTURE.md` decides whether a
+later edit is routed to the domain command, explicitly converted to universal CAD,
+or rejected with diagnostics.
 
 ### 12. Prefer Protocol-Oriented Services
 

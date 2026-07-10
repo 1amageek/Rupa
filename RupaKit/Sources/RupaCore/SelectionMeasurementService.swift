@@ -12,6 +12,7 @@ public struct SelectionMeasurementService: Sendable {
     public func measure(
         query: CADAgentMeasurementQuery,
         document: DesignDocument,
+        displayUnit: LengthDisplayUnit,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
@@ -53,7 +54,7 @@ public struct SelectionMeasurementService: Sendable {
             return .point(
                 SelectionMeasurementResult.Point(
                     measurement: try pipeline.measurementPoint(for: query.first, in: evaluatedDocument),
-                    displayUnit: document.displayUnit
+                    displayUnit: displayUnit
                 )
             )
         case .distance:
@@ -66,7 +67,7 @@ public struct SelectionMeasurementService: Sendable {
             return .distance(
                 SelectionMeasurementResult.Distance(
                     measurement: try pipeline.distance(from: query.first, to: second, in: evaluatedDocument),
-                    displayUnit: document.displayUnit
+                    displayUnit: displayUnit
                 )
             )
         case .angle:

@@ -3,6 +3,7 @@ import RupaCore
 struct WorkspaceProjectionTargetResolver {
     var document: DesignDocument
     var selection: SelectionModel
+    var displayUnit: LengthDisplayUnit
     var objectRegistry: ObjectTypeRegistry
 
     func sketchCurveProjectionTargets(for entity: InspectorSketchEntity) -> [SelectionTarget] {
@@ -56,6 +57,7 @@ struct WorkspaceProjectionTargetResolver {
         WorkspaceSketchEntityInspectorStateBuilder(
             document: document,
             selection: selection,
+            displayUnit: displayUnit,
             objectRegistry: objectRegistry
         )
     }

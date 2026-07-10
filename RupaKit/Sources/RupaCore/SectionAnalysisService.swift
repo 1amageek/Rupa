@@ -29,6 +29,8 @@ public struct SectionAnalysisService: Sendable {
     public func analyze(
         document: DesignDocument,
         query: SectionAnalysisQuery,
+        activeConstructionPlaneID: ConstructionPlaneSourceID?,
+        displayUnit: LengthDisplayUnit,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
@@ -49,12 +51,13 @@ public struct SectionAnalysisService: Sendable {
             source: query.source,
             offsetMeters: offsetMeters,
             flipsNormal: query.flipsNormal,
-            document: document
+            document: document,
+            activeConstructionPlaneID: activeConstructionPlaneID
         )
 
         guard document.cadDocument.hasActiveRenderableTopologyFeatures else {
             return SectionAnalysisResult(
-                displayUnit: document.displayUnit,
+                displayUnit: displayUnit,
                 plane: plane.resultPlane,
                 toleranceMeters: tolerance,
                 bodies: [],
@@ -112,7 +115,7 @@ public struct SectionAnalysisService: Sendable {
             segments: segments
         )
         return SectionAnalysisResult(
-            displayUnit: document.displayUnit,
+            displayUnit: displayUnit,
             plane: plane.resultPlane,
             toleranceMeters: tolerance,
             bodies: bodies,
@@ -127,7 +130,7 @@ public struct SectionAnalysisService: Sendable {
         _ tolerance: Double?,
         document: DesignDocument
     ) throws -> Double {
-        let resolved = tolerance ?? ModelingTolerance.workspaceScaleAware(for: document).distance
+        let resolved = tolerance ?? document.modelingSettings.tolerance.distance
         guard resolved.isFinite, resolved > 0.0 else {
             throw EditorError(
                 code: .commandInvalid,
@@ -161,9 +164,14 @@ public struct SectionAnalysisService: Sendable {
         source: SectionAnalysisQuery.Source,
         offsetMeters: Double,
         flipsNormal: Bool,
-        document: DesignDocument
+        document: DesignDocument,
+        activeConstructionPlaneID: ConstructionPlaneSourceID?
     ) throws -> ResolvedPlane {
-        let basePlane = try resolvePlane(source, document: document)
+        let basePlane = try resolvePlane(
+            source,
+            document: document,
+            activeConstructionPlaneID: activeConstructionPlaneID
+        )
         guard offsetMeters != 0.0 || flipsNormal else {
             return basePlane
         }
@@ -176,7 +184,8 @@ public struct SectionAnalysisService: Sendable {
 
     private func resolvePlane(
         _ source: SectionAnalysisQuery.Source,
-        document: DesignDocument
+        document: DesignDocument,
+        activeConstructionPlaneID: ConstructionPlaneSourceID?
     ) throws -> ResolvedPlane {
         switch source {
         case .sketchPlane(let plane):
@@ -200,10 +209,18 @@ public struct SectionAnalysisService: Sendable {
                 sourceName: constructionPlane.name
             )
         case .activeConstructionPlane:
-            guard let constructionPlane = document.activeConstructionPlane else {
+            guard let activeConstructionPlaneID else {
                 throw EditorError(
                     code: .referenceUnresolved,
                     message: "Section analysis requires an active construction plane."
+                )
+            }
+            guard let constructionPlane = document.productMetadata.constructionPlanes[
+                activeConstructionPlaneID
+            ] else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "The active construction plane no longer exists in the document source."
                 )
             }
             return try resolvedSketchPlane(
