@@ -1,0 +1,24 @@
+{
+  "manualBreadth": {
+    "type": "bar",
+    "unit": "documented descendants",
+    "data": [
+      ["Modeling", 721],
+      ["Rendering", 294],
+      ["Editors", 197],
+      ["Sculpting & Painting", 175],
+      ["Compositing", 157],
+      ["Animation & Rigging", 122],
+      ["Physics", 118],
+      ["Grease Pencil", 117]
+    ]
+  },
+  "gapState": {
+    "type": "count",
+    "data": [
+      ["Partial", 8],
+      ["Missing", 6],
+      ["Internal only", 1]
+    ]
+  }
+}

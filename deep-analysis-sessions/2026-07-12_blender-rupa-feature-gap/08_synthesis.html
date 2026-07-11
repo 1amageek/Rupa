@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blender 5.1 to Rupa Capability Gap</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --ink: #17191c;
+      --muted: #5d636b;
+      --paper: #f4f2ed;
+      --band: #e8e5dd;
+      --line: #b9b5ab;
+      --partial: #b66b13;
+      --missing: #b73b32;
+      --internal: #347a74;
+      --accent: #186aa5;
+      --code: #25282d;
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, sans-serif; }
+    body { margin: 0; min-width: 320px; }
+    header, section, footer { width: 100%; border-bottom: 1px solid var(--line); }
+    .inner { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
+    header .inner { padding: 64px 0 48px; display: grid; grid-template-columns: 1.4fr 0.6fr; gap: 48px; align-items: end; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { font-family: "Iowan Old Style", Georgia, serif; font-size: clamp(2.6rem, 6vw, 5.8rem); line-height: 0.94; font-weight: 600; letter-spacing: 0; margin-bottom: 28px; }
+    h2 { font-size: 1.7rem; letter-spacing: 0; margin-bottom: 22px; }
+    h3 { font-size: 1rem; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
+    p { line-height: 1.65; }
+    .kicker { color: var(--accent); font: 700 0.78rem ui-monospace, SFMono-Regular, monospace; text-transform: uppercase; letter-spacing: 0.09em; }
+    .lede { max-width: 760px; font-size: 1.13rem; color: var(--muted); }
+    .stamp { border-left: 4px solid var(--accent); padding-left: 18px; font-family: ui-monospace, SFMono-Regular, monospace; color: var(--muted); line-height: 1.8; }
+    section .inner { padding: 48px 0; }
+    .summary { background: var(--band); }
+    .summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+    .metric { padding: 24px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); min-height: 148px; }
+    .metric strong { display: block; font-family: "Iowan Old Style", Georgia, serif; font-size: 3rem; font-weight: 600; }
+    .metric span { color: var(--muted); }
+    .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; }
+    .bars { display: grid; gap: 13px; }
+    .bar-row { display: grid; grid-template-columns: 155px 1fr 44px; gap: 12px; align-items: center; font-size: 0.87rem; }
+    .bar-track { height: 12px; background: #d6d1c6; overflow: hidden; }
+    .bar { height: 100%; width: var(--v); background: var(--accent); }
+    .legend { display: flex; flex-wrap: wrap; gap: 16px; margin: 0 0 20px; font: 600 0.82rem ui-monospace, SFMono-Regular, monospace; }
+    .legend i { display: inline-block; width: 12px; height: 12px; margin-right: 7px; vertical-align: -1px; }
+    .partial { background: color-mix(in srgb, var(--partial) 16%, var(--paper)); }
+    .missing { background: color-mix(in srgb, var(--missing) 15%, var(--paper)); }
+    .internal { background: color-mix(in srgb, var(--internal) 16%, var(--paper)); }
+    .legend .partial { background: var(--partial); }
+    .legend .missing { background: var(--missing); }
+    .legend .internal { background: var(--internal); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+    th, td { padding: 13px 14px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { background: var(--code); color: #f7f7f4; font: 600 0.78rem ui-monospace, SFMono-Regular, monospace; text-transform: uppercase; letter-spacing: 0.06em; }
+    td:first-child { font-weight: 650; }
+    .state { font: 700 0.75rem ui-monospace, SFMono-Regular, monospace; text-transform: uppercase; }
+    .state.partial-text { color: var(--partial); }
+    .state.missing-text { color: var(--missing); }
+    .state.internal-text { color: var(--internal); }
+    .finding { display: grid; grid-template-columns: 56px 1fr; gap: 20px; padding: 24px 0; border-top: 1px solid var(--line); }
+    .finding b { font: 700 0.8rem ui-monospace, SFMono-Regular, monospace; color: var(--accent); }
+    .finding p { margin: 0; }
+    .flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border: 1px solid var(--line); }
+    .step { padding: 24px; min-height: 170px; border-right: 1px solid var(--line); }
+    .step:last-child { border-right: 0; }
+    .step code { color: var(--accent); font-weight: 700; }
+    .step p { margin: 12px 0 0; color: var(--muted); }
+    .source-list { columns: 2; column-gap: 48px; padding: 0; list-style: none; }
+    .source-list li { break-inside: avoid; border-top: 1px solid var(--line); padding: 10px 0; }
+    a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    footer .inner { padding: 28px 0 46px; color: var(--muted); font-size: 0.86rem; }
+    @media (max-width: 820px) {
+      header .inner, .chart-grid { grid-template-columns: 1fr; }
+      .summary-grid { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: 1fr; }
+      .step { border-right: 0; border-bottom: 1px solid var(--line); }
+      .step:last-child { border-bottom: 0; }
+      .bar-row { grid-template-columns: 120px 1fr 40px; }
+      table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .source-list { columns: 1; }
+    }
+    @media print {
+      :root { --paper: #fff; --ink: #000; --muted: #333; --band: #eee; }
+      section { break-inside: avoid; }
+      a { color: #000; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="inner">
+      <div>
+        <p class="kicker">Capability audit / Blender 5.1 / Rupa main</p>
+        <h1>Blender breadth is a systems gap, not a command-count gap.</h1>
+        <p class="lede">Rupa has a serious parametric CAD and typed Agent foundation. It does not yet have Blender's shared mesh, procedural, DCC, simulation, rendering, and production pipeline foundations.</p>
+      </div>
+      <div class="stamp">SNAPSHOT 2026-07-12<br>UNIT operation-family<br>SOURCE official manual + production code<br>RESULT 15 capability areas</div>
+    </div>
+  </header>
+
+  <section class="summary">
+    <div class="inner">
+      <h2>Audit frame</h2>
+      <div class="summary-grid">
+        <div class="metric"><strong>2,000+</strong><span>documented descendants in the Blender 5.1 manual taxonomy</span></div>
+        <div class="metric"><strong>158</strong><span>current universal Rupa Agent capability descriptors</span></div>
+        <div class="metric"><strong>17</strong><span>Swift-CAD feature operation cases in the exact kernel IR</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="inner chart-grid">
+      <div>
+        <h2>Blender documented breadth</h2>
+        <div class="bars" aria-label="Blender manual documented descendants by area">
+          <div class="bar-row"><span>Modeling</span><div class="bar-track"><div class="bar" style="--v:100%"></div></div><b>721</b></div>
+          <div class="bar-row"><span>Rendering</span><div class="bar-track"><div class="bar" style="--v:41%"></div></div><b>294</b></div>
+          <div class="bar-row"><span>Editors</span><div class="bar-track"><div class="bar" style="--v:27%"></div></div><b>197</b></div>
+          <div class="bar-row"><span>Sculpt / Paint</span><div class="bar-track"><div class="bar" style="--v:24%"></div></div><b>175</b></div>
+          <div class="bar-row"><span>Compositing</span><div class="bar-track"><div class="bar" style="--v:22%"></div></div><b>157</b></div>
+          <div class="bar-row"><span>Animation</span><div class="bar-track"><div class="bar" style="--v:17%"></div></div><b>122</b></div>
+          <div class="bar-row"><span>Physics</span><div class="bar-track"><div class="bar" style="--v:16%"></div></div><b>118</b></div>
+          <div class="bar-row"><span>Grease Pencil</span><div class="bar-track"><div class="bar" style="--v:16%"></div></div><b>117</b></div>
+        </div>
+      </div>
+      <div>
+        <h2>What the comparison establishes</h2>
+        <div class="finding"><b>01</b><p>General editable mesh and attributes are the immediate modeling foundation missing beneath Blender-style direct editing, UVs, sculpt, weights, and procedural geometry.</p></div>
+        <div class="finding"><b>02</b><p>A generic non-destructive operation graph is required before adding dozens of modifier-shaped one-off commands.</p></div>
+        <div class="finding"><b>03</b><p>Agent speed does not create missing semantics. A typed capability must exist before UI, CLI, Agent, or MCP can expose it.</p></div>
+        <div class="finding"><b>04</b><p>DCC, media, and simulation systems belong in higher modules; placing them in Swift-CAD would collapse the current responsibility boundary.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="inner">
+      <h2>Capability heat map</h2>
+      <div class="legend"><span><i class="partial"></i>Partial</span><span><i class="internal"></i>Internal only</span><span><i class="missing"></i>Missing</span></div>
+      <table>
+        <thead><tr><th>Capability area</th><th>State</th><th>Largest gap</th><th>Owner</th></tr></thead>
+        <tbody>
+          <tr class="partial"><td>UI and editor framework</td><td class="state partial-text">Partial</td><td>Configurable workspaces, editor areas, modes, operator redo/search, keymaps</td><td>RupaUI / RupaProject</td></tr>
+          <tr class="partial"><td>Scenes and objects</td><td class="state partial-text">Partial</td><td>Scenes, view layers, collections, object types, constraints</td><td>RupaCore</td></tr>
+          <tr class="partial"><td>Polygon mesh modeling</td><td class="state partial-text">Partial</td><td>Mutable source mesh, attributes, complete vertex/edge/face operations</td><td>RupaMeshFoundation</td></tr>
+          <tr class="partial"><td>Curves and NURBS surfaces</td><td class="state partial-text">Partial</td><td>General 3D curve/surface object model and topology editing</td><td>Swift-CAD + RupaCore</td></tr>
+          <tr class="partial"><td>Modifier stack</td><td class="state partial-text">Partial</td><td>Generic ordered modifiers and most modifier families</td><td>RupaCore + backends</td></tr>
+          <tr class="missing"><td>Geometry Nodes</td><td class="state missing-text">Missing</td><td>Fields, attributes, instances, zones, tools, baking</td><td>RupaProceduralGeometry</td></tr>
+          <tr class="missing"><td>Sculpting and painting</td><td class="state missing-text">Missing</td><td>Sculpt, texture/vertex/weight paint, grooming</td><td>RupaSculpt</td></tr>
+          <tr class="missing"><td>Grease Pencil</td><td class="state missing-text">Missing</td><td>Layered 2D drawing, modifiers, effects, animation</td><td>Optional RupaDrawing</td></tr>
+          <tr class="missing"><td>Animation and rigging</td><td class="state missing-text">Missing</td><td>Keyframes, F-curves, rigs, constraints, shape keys, NLA</td><td>RupaAnimation</td></tr>
+          <tr class="missing"><td>Physics and simulation</td><td class="state missing-text">Missing</td><td>Dynamics, fluids, particles, caches, solver artifacts</td><td>RupaSimulation</td></tr>
+          <tr class="internal"><td>Rendering and shading</td><td class="state internal-text">Internal</td><td>Render engines, scene cameras/lights, shaders, textures, color management</td><td>RupaRendering</td></tr>
+          <tr class="missing"><td>Compositing, tracking, video</td><td class="state missing-text">Missing</td><td>Compositor, tracking/masks, sequencer, audio</td><td>Optional RupaMedia</td></tr>
+          <tr class="partial"><td>Assets, files, pipeline</td><td class="state partial-text">Partial</td><td>Libraries, linking, overrides, catalogs, DCC exchange semantics</td><td>RupaProject</td></tr>
+          <tr class="partial"><td>Scripting and extensions</td><td class="state partial-text">Partial</td><td>Embedded scripting, runtime plugins, custom operators/nodes/editors</td><td>Plugin host</td></tr>
+          <tr class="partial"><td>Agent integration</td><td class="state partial-text">Partial</td><td>MCP adapter and compact procedural modeling programs</td><td>RupaAgent adapters</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="summary">
+    <div class="inner">
+      <h2>Dependency-ordered delivery</h2>
+      <div class="flow">
+        <div class="step"><code>P0</code><h3>Foundations</h3><p>Editable mesh and attributes, generic operation graph, assets/references/plugins, generated UI/CLI/Agent/MCP routes.</p></div>
+        <div class="step"><code>P1</code><h3>Creation systems</h3><p>Procedural geometry, UV and shading, sculpt, retopology, rigging and animation.</p></div>
+        <div class="step"><code>P2</code><h3>Computation</h3><p>Physics and engineering solver artifacts, render engines, passes, baking and compositor.</p></div>
+        <div class="step"><code>P3</code><h3>Media breadth</h3><p>Grease Pencil, motion tracking, masking, video editing and audio.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="inner">
+      <h2>Primary sources</h2>
+      <ul class="source-list">
+        <li><a href="https://docs.blender.org/manual/en/latest/">Blender 5.1 Manual</a></li>
+        <li><a href="https://docs.blender.org/manual/en/latest/modeling/index.html">Modeling</a></li>
+        <li><a href="https://docs.blender.org/manual/en/latest/modeling/geometry_nodes/index.html">Geometry Nodes</a></li>
+        <li><a href="https://docs.blender.org/manual/en/latest/sculpt_paint/index.html">Sculpting and Painting</a></li>
+        <li><a href="https://docs.blender.org/manual/en/latest/animation/index.html">Animation and Rigging</a></li>
+        <li><a href="https://docs.blender.org/manual/en/latest/physics/index.html">Physics</a></li>
+        <li><a href="https://docs.blender.org/manual/en/latest/render/index.html">Rendering</a></li>
+        <li><a href="https://docs.blender.org/manual/en/latest/files/index.html">Assets, Files, and Data</a></li>
+        <li><a href="../../Rupa/BLENDER_RUPA_CAPABILITY_GAP.md">Complete operation-family ledger</a></li>
+      </ul>
+    </div>
+  </section>
+
+  <footer><div class="inner">The comparison is complete at operation-family level. Completion of a gap requires source, evaluation, references, UI/Automation/Agent routes, persistence, diagnostics, performance, and executable evidence.</div></footer>
+</body>
+</html>

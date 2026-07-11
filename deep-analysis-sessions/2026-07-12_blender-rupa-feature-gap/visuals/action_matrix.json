@@ -1,0 +1,12 @@
+{
+  "actions": [
+    { "priority": "P0", "action": "Editable mesh and attribute foundation", "owner": "RupaMeshFoundation" },
+    { "priority": "P0", "action": "Generic operation and modifier graph", "owner": "RupaCore" },
+    { "priority": "P0", "action": "Asset, reference, and plugin system", "owner": "RupaProject" },
+    { "priority": "P0", "action": "Generated UI, CLI, Agent, and MCP routes", "owner": "Rupa adapters" },
+    { "priority": "P1", "action": "Procedural geometry graph", "owner": "RupaProceduralGeometry" },
+    { "priority": "P1", "action": "UV, shading, sculpt, rigging, animation", "owner": "Optional DCC modules" },
+    { "priority": "P2", "action": "Simulation and solver artifacts", "owner": "RupaSimulation" },
+    { "priority": "P3", "action": "Grease Pencil and media pipeline", "owner": "Optional RupaMedia modules" }
+  ]
+}

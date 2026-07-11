@@ -1,0 +1,13 @@
+{
+  "nodes": [
+    { "id": "blender-manual", "label": "Blender 5.1 manual", "kind": "evidence" },
+    { "id": "rupa-source", "label": "Rupa and Swift-CAD source", "kind": "evidence" },
+    { "id": "gap-ledger", "label": "Operation-family gap ledger", "kind": "insight" },
+    { "id": "delivery-order", "label": "Dependency-ordered delivery", "kind": "outcome" }
+  ],
+  "edges": [
+    ["blender-manual", "gap-ledger"],
+    ["rupa-source", "gap-ledger"],
+    ["gap-ledger", "delivery-order"]
+  ]
+}

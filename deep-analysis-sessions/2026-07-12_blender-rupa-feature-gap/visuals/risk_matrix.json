@@ -1,0 +1,8 @@
+{
+  "risks": [
+    { "risk": "One-off command accumulation", "impact": "high", "likelihood": "high", "mitigation": "Build mesh and modifier foundations before leaf tools" },
+    { "risk": "Responsibility leakage into Swift-CAD", "impact": "high", "likelihood": "medium", "mitigation": "Keep DCC and domain systems in higher modules" },
+    { "risk": "UI and Agent route drift", "impact": "high", "likelihood": "high", "mitigation": "Generate adapters from one capability contract" },
+    { "risk": "False Blender parity claims", "impact": "high", "likelihood": "medium", "mitigation": "Use case-set and evidence completion gates" }
+  ]
+}

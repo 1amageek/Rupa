@@ -1,0 +1,9 @@
+{
+  "checks": [
+    { "claim": "Blender taxonomy is current", "source": "Official Blender 5.1 manual", "status": "verified" },
+    { "claim": "Rupa CAD operations are present", "source": "FeatureOperation and EditorCommand", "status": "verified" },
+    { "claim": "Agent exposes 158 universal descriptors", "source": "AgentCapabilityCatalog extraction", "status": "verified" },
+    { "claim": "DCC runtimes are absent", "source": "Production-source symbol scan", "status": "verified" },
+    { "claim": "Every individual node or preset was independently tested", "source": "Not applicable because owning runtimes are absent", "status": "bounded" }
+  ]
+}

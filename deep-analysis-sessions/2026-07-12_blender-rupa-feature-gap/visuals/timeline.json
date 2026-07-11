@@ -1,0 +1,8 @@
+{
+  "sequence": [
+    { "order": 1, "phase": "Foundations", "priorities": ["P0"] },
+    { "order": 2, "phase": "Procedural and visual asset creation", "priorities": ["P1"] },
+    { "order": 3, "phase": "Simulation and production rendering", "priorities": ["P2"] },
+    { "order": 4, "phase": "Optional media breadth", "priorities": ["P3"] }
+  ]
+}

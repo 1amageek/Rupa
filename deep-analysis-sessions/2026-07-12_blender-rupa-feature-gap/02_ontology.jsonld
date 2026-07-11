@@ -1,0 +1,925 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "ea": "https://deep-analysis.dev/vocab#",
+    "layer": "https://deep-analysis.dev/layers#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "rel": "https://deep-analysis.dev/relations#",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "causes": {
+      "@id": "rel:causes",
+      "@type": "@id"
+    },
+    "causedBy": {
+      "@id": "rel:causedBy",
+      "@type": "@id",
+      "@reverse": "rel:causes"
+    },
+    "enables": {
+      "@id": "rel:enables",
+      "@type": "@id"
+    },
+    "prevents": {
+      "@id": "rel:prevents",
+      "@type": "@id"
+    },
+    "correlatesWith": {
+      "@id": "rel:correlatesWith",
+      "@type": "@id"
+    },
+    "implies": {
+      "@id": "rel:implies",
+      "@type": "@id"
+    },
+    "contradicts": {
+      "@id": "rel:contradicts",
+      "@type": "@id"
+    },
+    "supports": {
+      "@id": "rel:supports",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "refutes": {
+      "@id": "rel:refutes",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "asksAbout": {
+      "@id": "rel:asksAbout",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "resolvedBy": {
+      "@id": "rel:resolvedBy",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "partOf": {
+      "@id": "rel:partOf",
+      "@type": "@id"
+    },
+    "hasComponent": {
+      "@id": "rel:hasComponent",
+      "@type": "@id",
+      "@reverse": "rel:partOf"
+    },
+    "generalizes": {
+      "@id": "rel:generalizes",
+      "@type": "@id"
+    },
+    "specializes": {
+      "@id": "rel:specializes",
+      "@type": "@id",
+      "@reverse": "rel:generalizes"
+    },
+    "analogousTo": {
+      "@id": "rel:analogousTo",
+      "@type": "@id"
+    },
+    "precedes": {
+      "@id": "rel:precedes",
+      "@type": "@id"
+    },
+    "triggers": {
+      "@id": "rel:triggers",
+      "@type": "@id"
+    },
+    "coOccursWith": {
+      "@id": "rel:coOccursWith",
+      "@type": "@id"
+    },
+    "manifestsAs": {
+      "@id": "rel:manifestsAs",
+      "@type": "@id"
+    },
+    "addresses": {
+      "@id": "rel:addresses",
+      "@type": "@id"
+    },
+    "addressedBy": {
+      "@id": "rel:addressedBy",
+      "@type": "@id",
+      "@reverse": "rel:addresses"
+    },
+    "operatesIn": {
+      "@id": "rel:operatesIn",
+      "@type": "@id"
+    },
+    "produces": {
+      "@id": "rel:produces",
+      "@type": "@id"
+    },
+    "strength": {
+      "@id": "rel:strength",
+      "@type": "xsd:decimal"
+    },
+    "polarity": {
+      "@id": "rel:polarity"
+    },
+    "epi": "https://deep-analysis.dev/epistemic#",
+    "evidenceCount": {
+      "@id": "epi:evidenceCount",
+      "@type": "xsd:integer"
+    },
+    "counterEvidenceCount": {
+      "@id": "epi:counterEvidenceCount",
+      "@type": "xsd:integer"
+    },
+    "investigationCount": {
+      "@id": "epi:investigationCount",
+      "@type": "xsd:integer"
+    },
+    "lastUpdated": {
+      "@id": "epi:lastUpdated",
+      "@type": "xsd:dateTime"
+    },
+    "confidenceUpdate": "epi:confidenceUpdate",
+    "fromConfidence": {
+      "@id": "epi:fromConfidence",
+      "@type": "xsd:decimal"
+    },
+    "toConfidence": {
+      "@id": "epi:toConfidence",
+      "@type": "xsd:decimal"
+    },
+    "updateReason": "epi:updateReason",
+    "updateEvidence": "epi:updateEvidence",
+    "schema": "https://schema.org/",
+    "prov": "http://www.w3.org/ns/prov#",
+    "dc": "http://purl.org/dc/terms/",
+    "Topic": "ea:Topic",
+    "Evidence": "ea:Evidence",
+    "Insight": "ea:Insight",
+    "Question": "ea:Question",
+    "title": "rdfs:label",
+    "content": "schema:description",
+    "session": {
+      "@id": "ea:sessionMetadata",
+      "@type": "@json"
+    },
+    "view": {
+      "@id": "ea:view",
+      "@type": "@json"
+    },
+    "tags": {
+      "@id": "ea:tag",
+      "@container": "@set"
+    },
+    "epistemicStatus": {
+      "@id": "ea:epistemicStatus"
+    },
+    "confidence": {
+      "@id": "ea:confidence",
+      "@type": "xsd:decimal"
+    },
+    "priorConfidence": {
+      "@id": "ea:priorConfidence",
+      "@type": "xsd:decimal"
+    },
+    "posteriorConfidence": {
+      "@id": "ea:posteriorConfidence",
+      "@type": "xsd:decimal"
+    },
+    "parent": {
+      "@id": "ea:parent",
+      "@type": "@id"
+    },
+    "children": {
+      "@id": "ea:children",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "decompositionStrategy": {
+      "@id": "ea:decompositionStrategy"
+    },
+    "derivedFrom": {
+      "@id": "ea:derivedFrom",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "rationale": "ea:rationale",
+    "summary": "ea:summary",
+    "inferenceType": {
+      "@id": "ea:inferenceType"
+    },
+    "inferenceRationale": "ea:inferenceRationale",
+    "inferenceStrength": {
+      "@id": "ea:inferenceStrength",
+      "@type": "xsd:decimal"
+    },
+    "synthesis": {
+      "@id": "ea:synthesis",
+      "@type": "@json"
+    },
+    "claimRole": {
+      "@id": "ea:claimRole"
+    },
+    "primaryEvidence": {
+      "@id": "ea:primaryEvidence",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "counterEvidence": {
+      "@id": "ea:counterEvidence",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "sourceTopics": {
+      "@id": "ea:sourceTopics",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "reasoningPattern": {
+      "@id": "ea:reasoningPattern"
+    },
+    "synthesisStrength": {
+      "@id": "ea:synthesisStrength",
+      "@type": "xsd:decimal"
+    },
+    "limitations": {
+      "@id": "ea:limitations"
+    },
+    "visualEvidenceRequirement": {
+      "@id": "ea:visualEvidenceRequirement",
+      "@type": "@json"
+    },
+    "evidencePattern": {
+      "@id": "ea:evidencePattern"
+    },
+    "requiredChartType": "ea:requiredChartType",
+    "evidence": {
+      "@id": "ea:evidence",
+      "@type": "@json"
+    },
+    "investigations": {
+      "@id": "ea:investigations",
+      "@type": "@json"
+    },
+    "insights": {
+      "@id": "ea:insights",
+      "@type": "@json"
+    },
+    "chartableData": {
+      "@id": "ea:chartableData",
+      "@type": "@json"
+    },
+    "questionStatus": {
+      "@id": "ea:questionStatus"
+    },
+    "seriesLabel": "ea:seriesLabel",
+    "subject": "ea:subject",
+    "value": "schema:value",
+    "unit": "schema:unitText",
+    "period": "schema:temporalCoverage",
+    "status": "ea:status",
+    "supportsClaim": {
+      "@id": "ea:supportsClaim",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "visualRole": {
+      "@id": "ea:visualRole"
+    },
+    "appliedFrameworks": {
+      "@id": "ea:appliedFrameworks",
+      "@container": "@set"
+    },
+    "frameworkApplication": "ea:frameworkApplication",
+    "createdAt": {
+      "@id": "prov:generatedAtTime",
+      "@type": "xsd:dateTime"
+    },
+    "updatedAt": {
+      "@id": "ea:updatedAt",
+      "@type": "xsd:dateTime"
+    },
+    "wasGeneratedBy": {
+      "@id": "prov:wasGeneratedBy"
+    },
+    "wasRevisionOf": {
+      "@id": "prov:wasRevisionOf"
+    },
+    "source": "ea:source",
+    "sourceUrl": {
+      "@id": "schema:url"
+    },
+    "reliability": {
+      "@id": "ea:reliability",
+      "@type": "xsd:decimal"
+    }
+  },
+  "session": {
+    "id": "session:blender-rupa-feature-gap",
+    "title": "Blender 5.1 to Rupa Capability Gap",
+    "createdAt": "2026-07-12T00:00:00+09:00",
+    "updatedAt": "2026-07-12T00:00:00+09:00"
+  },
+  "view": {
+    "groups": [
+      {
+        "id": "group:layer/context",
+        "kind": "layer",
+        "title": "Context",
+        "layer": "Context",
+        "children": [
+          {
+            "id": "group:category/context/reference",
+            "kind": "category",
+            "title": "Reference and method",
+            "layer": "Context",
+            "category": "Reference and method",
+            "members": [
+              "ea:session/blender-rupa-feature-gap/topic/T001",
+              "ea:session/blender-rupa-feature-gap/evidence/E001"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/situation",
+        "kind": "layer",
+        "title": "Situation",
+        "layer": "Situation",
+        "children": [
+          {
+            "id": "group:category/situation/current-capability",
+            "kind": "category",
+            "title": "Current capability",
+            "layer": "Situation",
+            "category": "Current capability",
+            "members": [
+              "ea:session/blender-rupa-feature-gap/topic/T002",
+              "ea:session/blender-rupa-feature-gap/evidence/E004",
+              "ea:session/blender-rupa-feature-gap/evidence/E005",
+              "ea:session/blender-rupa-feature-gap/evidence/E006",
+              "ea:session/blender-rupa-feature-gap/evidence/E007"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/problem",
+        "kind": "layer",
+        "title": "Problem",
+        "layer": "Problem",
+        "children": [
+          {
+            "id": "group:category/problem/gap-families",
+            "kind": "category",
+            "title": "Gap families",
+            "layer": "Problem",
+            "category": "Gap families",
+            "members": [
+              "ea:session/blender-rupa-feature-gap/topic/T003",
+              "ea:session/blender-rupa-feature-gap/topic/T004",
+              "ea:session/blender-rupa-feature-gap/topic/T005",
+              "ea:session/blender-rupa-feature-gap/topic/T006",
+              "ea:session/blender-rupa-feature-gap/topic/T007",
+              "ea:session/blender-rupa-feature-gap/topic/T008",
+              "ea:session/blender-rupa-feature-gap/topic/T009",
+              "ea:session/blender-rupa-feature-gap/topic/T010",
+              "ea:session/blender-rupa-feature-gap/topic/T011",
+              "ea:session/blender-rupa-feature-gap/topic/T012",
+              "ea:session/blender-rupa-feature-gap/topic/T013",
+              "ea:session/blender-rupa-feature-gap/evidence/E002",
+              "ea:session/blender-rupa-feature-gap/evidence/E003",
+              "ea:session/blender-rupa-feature-gap/evidence/E008"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/issue",
+        "kind": "layer",
+        "title": "Issue",
+        "layer": "Issue",
+        "children": [
+          {
+            "id": "group:category/issue/architecture",
+            "kind": "category",
+            "title": "Architecture",
+            "layer": "Issue",
+            "category": "Architecture",
+            "members": [
+              "ea:session/blender-rupa-feature-gap/topic/T014"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/solution",
+        "kind": "layer",
+        "title": "Solution",
+        "layer": "Solution",
+        "children": [
+          {
+            "id": "group:category/solution/foundations",
+            "kind": "category",
+            "title": "Foundations",
+            "layer": "Solution",
+            "category": "Foundations",
+            "members": [
+              "ea:session/blender-rupa-feature-gap/insight/I001",
+              "ea:session/blender-rupa-feature-gap/insight/I002",
+              "ea:session/blender-rupa-feature-gap/insight/I003",
+              "ea:session/blender-rupa-feature-gap/topic/T015"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/outcome",
+        "kind": "layer",
+        "title": "Outcome",
+        "layer": "Outcome",
+        "children": [
+          {
+            "id": "group:category/outcome/roadmap",
+            "kind": "category",
+            "title": "Roadmap",
+            "layer": "Outcome",
+            "category": "Roadmap",
+            "members": [
+              "ea:session/blender-rupa-feature-gap/insight/I004",
+              "ea:session/blender-rupa-feature-gap/question/Q001"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "@graph": [
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/topic/T001",
+      "@type": "Topic",
+      "title": "Comparison scope",
+      "content": "Blender 5.1 operation families are compared with end-to-end Rupa production capabilities, excluding documentation-only aliases and individual parameter pages.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "visualEvidenceRequirement": {
+        "evidencePattern": "coverage matrix",
+        "requiredChartType": "matrix"
+      }
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/topic/T002",
+      "@type": "Topic",
+      "title": "Rupa CAD and Agent baseline",
+      "content": "Rupa has a substantial exact CAD, selection, drawing, scene, transaction, CLI, and Agent baseline that must not be confused with Blender-wide DCC parity.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/topic/T003",
+      "@type": "Topic",
+      "title": "Interface and editor gap",
+      "content": "Rupa lacks Blender configurable workspaces, editor-area system, broad mode framework, and most specialized editors.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.97
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/topic/T004",
+      "@type": "Topic",
+      "title": "Scene and object gap",
+      "content": "Rupa scene hierarchy and components do not cover multiple scenes, view layers, collections, constraints, or Blender object types.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.97
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/topic/T005",
+      "@type": "Topic",
+      "title": "Polygon mesh foundation gap",
+      "content": "Rupa lacks a complete source-owned mutable polygon mesh, attribute domains, and general element operations.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/topic/T006",
+      "@type": "Topic",
+      "title": "Curve and surface breadth gap",
+      "content": "Rupa has strong CAD subsets but not Blender general curve, hair curve, surface, metaball, text, point cloud, and volume systems.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.96
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/topic/T007",
+      "@type": "Topic",
+      "title": "Modifier and procedural graph gap",
+      "content": "Rupa lacks a generic modifier stack and Geometry Nodes runtime, including fields, attributes, zones, baking, and node-authored tools.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/topic/T008",
+      "@type": "Topic",
+      "title": "Sculpt, paint, and Grease Pencil gap",
+      "content": "Sculpting, texture/vertex/weight paint, grooming, and Grease Pencil are absent.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/topic/T009",
+      "@type": "Topic",
+      "title": "Animation and rigging gap",
+      "content": "Keyframes, F-curves, actions, NLA, drivers, armatures, constraints, shape keys, and motion paths are absent.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/topic/T010",
+      "@type": "Topic",
+      "title": "Physics and simulation gap",
+      "content": "Rigid body, cloth, soft body, fluids, particles, dynamic paint, force fields, and baking are absent.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/topic/T011",
+      "@type": "Topic",
+      "title": "Rendering and media gap",
+      "content": "Rupa has CAD display and material metadata but no production renderer, shader graph, compositor, tracking, video, or audio pipeline.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/topic/T012",
+      "@type": "Topic",
+      "title": "Asset, file, and production pipeline gap",
+      "content": "Rupa lacks data-block libraries, append/link, overrides, asset catalogs, broad DCC exchange semantics, autosave, and recovery.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.97
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/topic/T013",
+      "@type": "Topic",
+      "title": "Scripting and Agent integration gap",
+      "content": "Typed Automation is substantial, while embedded scripting, runtime extensions, MCP, and compact procedural Agent programs are absent.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/topic/T014",
+      "@type": "Topic",
+      "title": "Responsibility boundary",
+      "content": "Exact CAD remains in Swift-CAD; mesh/procedural foundations, DCC systems, domain semantics, and adapters require separate higher modules.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.95
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/topic/T015",
+      "@type": "Topic",
+      "title": "Dependency-ordered delivery",
+      "content": "Foundational mesh, modifier, asset, plugin, and adapter contracts must precede leaf Blender feature imitation.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.95,
+      "visualEvidenceRequirement": {
+        "evidencePattern": "dependency sequence",
+        "requiredChartType": "roadmap"
+      }
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/evidence/E001",
+      "@type": "Evidence",
+      "title": "Blender 5.1 official taxonomy",
+      "content": "The official manual defines editors, scenes, modeling, sculpting, Grease Pencil, animation, physics, rendering, compositing, tracking, video, files, add-ons, and scripting as integrated product areas.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98,
+      "source": "Blender 5.1 Manual",
+      "sourceUrl": "https://docs.blender.org/manual/en/latest/",
+      "reliability": 0.98,
+      "supports": [
+        "ea:session/blender-rupa-feature-gap/topic/T001",
+        "ea:session/blender-rupa-feature-gap/topic/T003",
+        "ea:session/blender-rupa-feature-gap/topic/T004",
+        "ea:session/blender-rupa-feature-gap/topic/T008",
+        "ea:session/blender-rupa-feature-gap/topic/T009",
+        "ea:session/blender-rupa-feature-gap/topic/T010",
+        "ea:session/blender-rupa-feature-gap/topic/T011",
+        "ea:session/blender-rupa-feature-gap/topic/T012",
+        "ea:session/blender-rupa-feature-gap/topic/T013"
+      ],
+      "chartableData": [
+        {
+          "metric": "documentedDescendants",
+          "values": {
+            "Modeling": 721,
+            "Rendering": 294,
+            "Editors": 197,
+            "SculptingPainting": 175,
+            "Compositing": 157,
+            "AnimationRigging": 122,
+            "Physics": 118,
+            "GreasePencil": 117
+          }
+        }
+      ]
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/evidence/E002",
+      "@type": "Evidence",
+      "title": "Blender modeling taxonomy",
+      "content": "The modeling manual enumerates complete mesh edit operations, curves, surfaces, modifiers, Geometry Nodes, point clouds, volumes, text, and metaballs.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98,
+      "source": "Blender 5.1 Modeling Manual",
+      "sourceUrl": "https://docs.blender.org/manual/en/latest/modeling/index.html",
+      "reliability": 0.98,
+      "supports": [
+        "ea:session/blender-rupa-feature-gap/topic/T005",
+        "ea:session/blender-rupa-feature-gap/topic/T006",
+        "ea:session/blender-rupa-feature-gap/topic/T007"
+      ],
+      "chartableData": [
+        {
+          "metric": "modelingDescendants",
+          "value": 721
+        }
+      ]
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/evidence/E003",
+      "@type": "Evidence",
+      "title": "Blender DCC pipeline taxonomy",
+      "content": "Official manuals enumerate sculpt/paint, rigging, animation, simulation, rendering, compositing, tracking, and video systems.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98,
+      "source": "Blender 5.1 Manual",
+      "sourceUrl": "https://docs.blender.org/manual/en/latest/sculpt_paint/index.html",
+      "reliability": 0.98,
+      "supports": [
+        "ea:session/blender-rupa-feature-gap/topic/T008",
+        "ea:session/blender-rupa-feature-gap/topic/T009",
+        "ea:session/blender-rupa-feature-gap/topic/T010",
+        "ea:session/blender-rupa-feature-gap/topic/T011"
+      ],
+      "chartableData": [
+        {
+          "metric": "dccSubsystems",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/evidence/E004",
+      "@type": "Evidence",
+      "title": "Swift-CAD operation cases",
+      "content": "FeatureOperation contains 17 exact CAD operation cases rather than a general mesh, animation, render, or simulation runtime.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98,
+      "source": "Swift-CAD FeatureOperation",
+      "sourceUrl": "https://github.com/1amageek/swift-CAD/blob/main/Sources/CADIR/FeatureOperation.swift",
+      "reliability": 0.98,
+      "supports": [
+        "ea:session/blender-rupa-feature-gap/topic/T002",
+        "ea:session/blender-rupa-feature-gap/topic/T005",
+        "ea:session/blender-rupa-feature-gap/topic/T006",
+        "ea:session/blender-rupa-feature-gap/topic/T007"
+      ],
+      "chartableData": [
+        {
+          "metric": "featureOperationCases",
+          "value": 17
+        }
+      ]
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/evidence/E005",
+      "@type": "Evidence",
+      "title": "Rupa editor command surface",
+      "content": "EditorCommand confirms broad source-owned CAD, scene, drawing, component, surface, selection, and dimension mutation paths.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98,
+      "source": "Rupa EditorCommand",
+      "sourceUrl": "https://github.com/1amageek/Rupa/blob/main/RupaKit/Sources/RupaCore/EditorCommand.swift",
+      "reliability": 0.98,
+      "supports": [
+        "ea:session/blender-rupa-feature-gap/topic/T002",
+        "ea:session/blender-rupa-feature-gap/topic/T003",
+        "ea:session/blender-rupa-feature-gap/topic/T004",
+        "ea:session/blender-rupa-feature-gap/topic/T006"
+      ],
+      "chartableData": [
+        {
+          "metric": "evidenceType",
+          "value": "production source"
+        }
+      ]
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/evidence/E006",
+      "@type": "Evidence",
+      "title": "Rupa Agent capability catalog",
+      "content": "The current catalog exposes 158 universal descriptors before injected domain capabilities, but no DCC runtimes exist to describe.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98,
+      "source": "Rupa AgentCapabilityCatalog",
+      "sourceUrl": "https://github.com/1amageek/Rupa/blob/main/RupaKit/Sources/RupaAgentRuntime/AgentCapabilityCatalog.swift",
+      "reliability": 0.98,
+      "supports": [
+        "ea:session/blender-rupa-feature-gap/topic/T002",
+        "ea:session/blender-rupa-feature-gap/topic/T013"
+      ],
+      "chartableData": [
+        {
+          "metric": "universalAgentDescriptors",
+          "value": 158
+        }
+      ]
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/evidence/E007",
+      "@type": "Evidence",
+      "title": "Rupa exchange format contract",
+      "content": "Fourteen declared formats cover CAD/mesh exchange; GLB and PDF imports are absent and USD-family support is mesh exchange rather than broad scene reconstruction.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98,
+      "source": "Swift-CAD ExchangeFileFormat",
+      "sourceUrl": "https://github.com/1amageek/swift-CAD/blob/main/Sources/CADExchange/ExchangeFileFormat.swift",
+      "reliability": 0.98,
+      "supports": [
+        "ea:session/blender-rupa-feature-gap/topic/T002",
+        "ea:session/blender-rupa-feature-gap/topic/T012"
+      ],
+      "chartableData": [
+        {
+          "metric": "declaredExchangeFormats",
+          "value": 14
+        }
+      ]
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/evidence/E008",
+      "@type": "Evidence",
+      "title": "Production source absence scan",
+      "content": "No production types were found for Armature, Keyframe, ShapeKey, RigidBody, GeometryNode, Sculpt, GreasePencil, Compositor, VideoSequence, MotionTracking, UVMap, TexturePaint, or AssetLibrary.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98,
+      "source": "Rupa and Swift-CAD production source scan",
+      "sourceUrl": "https://github.com/1amageek/Rupa/tree/main/RupaKit/Sources",
+      "reliability": 0.98,
+      "supports": [
+        "ea:session/blender-rupa-feature-gap/topic/T007",
+        "ea:session/blender-rupa-feature-gap/topic/T008",
+        "ea:session/blender-rupa-feature-gap/topic/T009",
+        "ea:session/blender-rupa-feature-gap/topic/T010",
+        "ea:session/blender-rupa-feature-gap/topic/T011",
+        "ea:session/blender-rupa-feature-gap/topic/T012"
+      ],
+      "chartableData": [
+        {
+          "metric": "searchedAbsentSystemTokens",
+          "value": 13
+        }
+      ]
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/insight/I001",
+      "@type": "Insight",
+      "title": "Shared foundations dominate the gap",
+      "content": "The highest-leverage missing work is editable mesh/attributes, modifier/procedural evaluation, assets/references, plugins, and GPU scene display rather than isolated leaf commands.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.93,
+      "derivedFrom": [
+        "ea:session/blender-rupa-feature-gap/topic/T005",
+        "ea:session/blender-rupa-feature-gap/topic/T007",
+        "ea:session/blender-rupa-feature-gap/topic/T012",
+        "ea:session/blender-rupa-feature-gap/evidence/E001",
+        "ea:session/blender-rupa-feature-gap/evidence/E002",
+        "ea:session/blender-rupa-feature-gap/evidence/E008"
+      ],
+      "rationale": "These foundations are common prerequisites for most Blender modeling and DCC families.",
+      "supportsClaim": [
+        "ea:session/blender-rupa-feature-gap/topic/T015"
+      ],
+      "primaryEvidence": [
+        "ea:session/blender-rupa-feature-gap/evidence/E001",
+        "ea:session/blender-rupa-feature-gap/evidence/E002",
+        "ea:session/blender-rupa-feature-gap/evidence/E008"
+      ],
+      "sourceTopics": [
+        "ea:session/blender-rupa-feature-gap/topic/T005",
+        "ea:session/blender-rupa-feature-gap/topic/T007",
+        "ea:session/blender-rupa-feature-gap/topic/T012"
+      ],
+      "synthesis": {
+        "claimRole": "primary",
+        "reasoningPattern": "dependency decomposition",
+        "synthesisStrength": 0.93,
+        "limitations": "Operation-family granularity; individual settings and presets inherit the status of their absent runtime."
+      }
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/insight/I002",
+      "@type": "Insight",
+      "title": "Agent strength cannot compensate for absent source models",
+      "content": "Rupa typed Agent execution is fast and deterministic for supported commands, but an Agent cannot sculpt, rig, shade, simulate, or animate without corresponding source and evaluator contracts.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.93,
+      "derivedFrom": [
+        "ea:session/blender-rupa-feature-gap/topic/T002",
+        "ea:session/blender-rupa-feature-gap/topic/T013",
+        "ea:session/blender-rupa-feature-gap/evidence/E005",
+        "ea:session/blender-rupa-feature-gap/evidence/E006",
+        "ea:session/blender-rupa-feature-gap/evidence/E008"
+      ],
+      "rationale": "Transport and orchestration expose capabilities; they do not create missing product semantics.",
+      "supportsClaim": [
+        "ea:session/blender-rupa-feature-gap/topic/T015"
+      ],
+      "primaryEvidence": [
+        "ea:session/blender-rupa-feature-gap/evidence/E005",
+        "ea:session/blender-rupa-feature-gap/evidence/E006",
+        "ea:session/blender-rupa-feature-gap/evidence/E008"
+      ],
+      "sourceTopics": [
+        "ea:session/blender-rupa-feature-gap/topic/T002",
+        "ea:session/blender-rupa-feature-gap/topic/T013"
+      ],
+      "synthesis": {
+        "claimRole": "primary",
+        "reasoningPattern": "dependency decomposition",
+        "synthesisStrength": 0.93,
+        "limitations": "Operation-family granularity; individual settings and presets inherit the status of their absent runtime."
+      }
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/insight/I003",
+      "@type": "Insight",
+      "title": "Modular DCC expansion preserves CAD integrity",
+      "content": "Sculpt, animation, shading, media, and solver behavior should be higher modules over universal scene and artifact contracts, not additions to Swift-CAD.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.93,
+      "derivedFrom": [
+        "ea:session/blender-rupa-feature-gap/topic/T010",
+        "ea:session/blender-rupa-feature-gap/topic/T011",
+        "ea:session/blender-rupa-feature-gap/topic/T014",
+        "ea:session/blender-rupa-feature-gap/evidence/E004",
+        "ea:session/blender-rupa-feature-gap/evidence/E005"
+      ],
+      "rationale": "The current dependency direction already reserves exact geometry for Swift-CAD and domain behavior for higher modules.",
+      "supportsClaim": [
+        "ea:session/blender-rupa-feature-gap/topic/T014",
+        "ea:session/blender-rupa-feature-gap/topic/T015"
+      ],
+      "primaryEvidence": [
+        "ea:session/blender-rupa-feature-gap/evidence/E004",
+        "ea:session/blender-rupa-feature-gap/evidence/E005"
+      ],
+      "sourceTopics": [
+        "ea:session/blender-rupa-feature-gap/topic/T010",
+        "ea:session/blender-rupa-feature-gap/topic/T011",
+        "ea:session/blender-rupa-feature-gap/topic/T014"
+      ],
+      "synthesis": {
+        "claimRole": "primary",
+        "reasoningPattern": "dependency decomposition",
+        "synthesisStrength": 0.93,
+        "limitations": "Operation-family granularity; individual settings and presets inherit the status of their absent runtime."
+      }
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/insight/I004",
+      "@type": "Insight",
+      "title": "Delivery begins with P0 foundations",
+      "content": "The implementation order should start with editable mesh, generic operations/modifiers, assets/references/plugins, and generated adapters, followed by procedural geometry and DCC systems.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.93,
+      "derivedFrom": [
+        "ea:session/blender-rupa-feature-gap/topic/T015",
+        "ea:session/blender-rupa-feature-gap/insight/I001",
+        "ea:session/blender-rupa-feature-gap/insight/I002",
+        "ea:session/blender-rupa-feature-gap/insight/I003"
+      ],
+      "rationale": "This order minimizes duplicate command paths and makes each later capability available to UI and Agents from one contract.",
+      "supportsClaim": [
+        "ea:session/blender-rupa-feature-gap/topic/T015"
+      ],
+      "primaryEvidence": [],
+      "sourceTopics": [
+        "ea:session/blender-rupa-feature-gap/topic/T015"
+      ],
+      "synthesis": {
+        "claimRole": "primary",
+        "reasoningPattern": "dependency decomposition",
+        "synthesisStrength": 0.93,
+        "limitations": "Operation-family granularity; individual settings and presets inherit the status of their absent runtime."
+      }
+    },
+    {
+      "@id": "ea:session/blender-rupa-feature-gap/question/Q001",
+      "@type": "Question",
+      "title": "Media scope decision",
+      "content": "Should Grease Pencil, compositing, motion tracking, and video editing become product requirements or remain documented comparison-only gaps?",
+      "epistemicStatus": "Investigating",
+      "confidence": 0.7,
+      "questionStatus": "Open",
+      "asksAbout": [
+        "ea:session/blender-rupa-feature-gap/topic/T008",
+        "ea:session/blender-rupa-feature-gap/topic/T011",
+        "ea:session/blender-rupa-feature-gap/topic/T015"
+      ]
+    }
+  ]
+}

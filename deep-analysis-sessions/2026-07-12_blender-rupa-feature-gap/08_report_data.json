@@ -1,0 +1,41 @@
+{
+  "title": "Blender 5.1 to Rupa Capability Gap",
+  "snapshotDate": "2026-07-12",
+  "comparisonUnit": "operation-family",
+  "manualDescendants": [
+    { "area": "Modeling", "count": 721 },
+    { "area": "Rendering", "count": 294 },
+    { "area": "Editors", "count": 197 },
+    { "area": "Sculpting & Painting", "count": 175 },
+    { "area": "Compositing", "count": 157 },
+    { "area": "Animation & Rigging", "count": 122 },
+    { "area": "Physics", "count": 118 },
+    { "area": "Grease Pencil", "count": 117 },
+    { "area": "Scenes & Objects", "count": 66 },
+    { "area": "Video Editing", "count": 43 },
+    { "area": "Motion Tracking & Masking", "count": 34 },
+    { "area": "Assets, Files, & Data", "count": 28 }
+  ],
+  "rupaBaseline": {
+    "swiftCADFeatureOperations": 17,
+    "universalAgentCapabilityDescriptors": 158,
+    "declaredExchangeFormats": 14
+  },
+  "gapAreas": [
+    { "area": "UI and editor framework", "state": "partial", "priority": "P0" },
+    { "area": "Scenes and objects", "state": "partial", "priority": "P0" },
+    { "area": "Polygon mesh modeling", "state": "partial", "priority": "P0" },
+    { "area": "Curves and NURBS surfaces", "state": "partial", "priority": "P0" },
+    { "area": "Modifier stack", "state": "partial", "priority": "P0" },
+    { "area": "Geometry Nodes", "state": "missing", "priority": "P1" },
+    { "area": "Sculpting and painting", "state": "missing", "priority": "P1" },
+    { "area": "Grease Pencil", "state": "missing", "priority": "P3" },
+    { "area": "Animation and rigging", "state": "missing", "priority": "P1" },
+    { "area": "Physics and simulation", "state": "missing", "priority": "P2" },
+    { "area": "Rendering and shading", "state": "internal", "priority": "P1" },
+    { "area": "Compositing, tracking, video", "state": "missing", "priority": "P3" },
+    { "area": "Assets, files, and pipeline", "state": "partial", "priority": "P0" },
+    { "area": "Scripting and extensions", "state": "partial", "priority": "P0" },
+    { "area": "Agent integration", "state": "partial", "priority": "P0" }
+  ]
+}
