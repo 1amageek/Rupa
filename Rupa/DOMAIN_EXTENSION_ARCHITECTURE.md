@@ -19,7 +19,7 @@ manufacturing preparation, and simulation.
 | Validation authority | `VALIDATION_CONTRACT.md` |
 | State/project authority | `STATE_AND_PROJECT_CONTRACT.md` |
 | Package authority | `DOCUMENT_PACKAGE_CONTRACT.md` |
-| Related documents | `PHILOSOPHY.md`, `SPEC.md`, `PRODUCT_REQUIREMENTS.md`, `UNIVERSAL_CAD_REQUIREMENTS.md`, `DESIGN_PROCESS.md` |
+| Related documents | `PHILOSOPHY.md`, `SPEC.md`, `PRODUCT_REQUIREMENTS.md`, `UNIVERSAL_CAD_REQUIREMENTS.md`, `UNIVERSAL_3D_ARCHITECTURE.md`, `DESIGN_PROCESS.md` |
 
 ## Design Goal
 
@@ -63,6 +63,8 @@ flowchart TD
     CLI["Rupa CLI composition"] --> Project
     Agent["Agent / MCP composition"] --> Project
     Project --> DomainFoundation
+    Project --> Automation
+    Project --> Core
 
     DomainA --> DomainFoundation["RupaDomainFoundation"]
     DomainB --> DomainFoundation
@@ -73,19 +75,24 @@ flowchart TD
     DomainFoundation --> Automation["RupaAutomation"]
     DomainFoundation --> Core["RupaCore"]
     Automation --> Core
-    Core --> CoreTypes["RupaCoreTypes"]
-    Core --> SwiftCAD["Swift-CAD"]
+    Automation --> Capabilities["RupaCapabilities"]
+    Core --> ProjectModel["RupaProjectModel"]
+    Core --> Evaluation["RupaEvaluation"]
+    Core --> Capabilities
+    ProjectModel --> CoreTypes["RupaCoreTypes"]
+    ProjectModel --> SwiftCAD["Swift-CAD"]
 ```
 
 | Layer | May import | Must not import |
 |---|---|---|
 | Swift-CAD | Foundation-level dependencies only | Rupa, domains, UI, CLI, Agent, simulation services |
 | `RupaCoreTypes` | Foundation | RupaCore, domains, UI, CLI, Agent |
-| `RupaCore` | `RupaCoreTypes`, Swift-CAD, generic infrastructure | Architecture, turbomachinery, character, manufacturing, simulation, UI, CLI, Agent |
-| `RupaAutomation` | `RupaCore` | CLI, Agent runtime, UI, concrete domains |
+| `RupaProjectModel` | `RupaCoreTypes`, Swift-CAD, universal source-value modules | Evaluation caches, domains, UI, CLI, Agent |
+| `RupaCore` | `RupaProjectModel`, `RupaEvaluation`, `RupaCapabilities`, generic transaction infrastructure | Architecture, turbomachinery, character, manufacturing, simulation, UI, CLI, Agent |
+| `RupaAutomation` | `RupaCore`, `RupaCapabilities` | `RupaProject`, CLI, Agent runtime, UI, concrete domains |
 | `RupaDomainFoundation` | `RupaCore`, `RupaAutomation` | Concrete domains, UI, CLI, Agent transport |
 | Concrete domain modules | `RupaDomainFoundation`, `RupaCore`, `RupaAutomation` | Other concrete domains unless the dependency is moved to a shared lower module |
-| `RupaProject` | `RupaCore`, `RupaAutomation`, `RupaDomainFoundation`, artifact/decision infrastructure | Concrete domains, UI, CLI, Agent transport |
+| `RupaProject` | `RupaCore`, `RupaAutomation`, `RupaDomainFoundation`, `RupaCapabilities`, artifact/decision infrastructure | Concrete domains, UI, CLI, Agent transport |
 | `RupaUI` | `RupaProject`, `RupaCore`, rendering, preview, injected registries | Concrete domains by default |
 | Optional domain UI adapter | Corresponding domain module plus public Rupa UI/overlay contracts | Domain rule duplication or lower-layer mutation |
 | `RupaAgentRuntime` | `RupaProject`, protocol | Concrete domains and transport implementations |
@@ -129,9 +136,10 @@ operation payload, semantic validation, source projection, and domain diagnostic
 | Concern | Owner | Contract |
 |---|---|---|
 | Exact geometry primitives, feature graph, B-rep evaluation | Swift-CAD | Domain-neutral source and evaluation primitives. |
-| Session state, command stack, undo/redo, document validation, generic metadata | `RupaCore` | One mutation path and one document model. |
-| Stable operation schema shared by UI, CLI, Agent, and batches | `RupaAutomation` | Typed commands, typed results, generation checks, dry run where supported. |
-| Neutral semantic storage | `RupaCore` | Stored semantic extension envelopes, projection manifests, and unknown namespace preservation. |
+| Persisted universal source aggregate and neutral semantic envelopes | `RupaProjectModel` | One document model independent from session, UI, and transport. |
+| Session state, source transaction engine, undo/redo, structural validation | `RupaCore` | One mutation path over the project model. |
+| Stable operation schema shared by UI, CLI, Agent, and batches | `RupaAutomation` | Typed commands, typed results, transaction-revision/dependency checks, dry run where supported. |
+| Neutral semantic storage | `RupaProjectModel` | Stored semantic extension envelopes, projection manifests, and unknown namespace preservation. |
 | Domain extension contracts | `RupaDomainFoundation` | Namespace registration, typed payload decoding, generator protocols, validator protocols, capability descriptors. |
 | Session, artifact, decision, export, and external-job orchestration | `RupaProject` | One use-case boundary shared by UI, CLI, MCP, and Agent adapters. |
 | Building concepts | `RupaArchitecture` | Site, level, room, wall, opening, roof, building drawings, architecture validation rules. |
@@ -154,7 +162,7 @@ Model.swcad
 |-- manifest.json
 |-- source/cad.json
 |-- source/rupa.json
-    |-- universal product metadata
+    |-- universal project source
     `-- semantic extension envelopes
         |-- namespace
         |-- schemaVersion
@@ -167,9 +175,9 @@ Model.swcad
 | Document region | Meaning | Owner |
 |---|---|---|
 | `source/cad.json` | Swift-CAD source: sketches, features, parameters, dependencies, generated-source references. | Swift-CAD and RupaCore source commands |
-| Universal `source/rupa.json` metadata | Scene nodes, object descriptors, materials, saved views, rule configurations, validation policies, and export presets. | RupaCore source storage |
-| Semantic extension envelope | Domain intent data and source ownership for a namespace, stored as neutral product metadata. | RupaCore storage, domain module mutation through command boundary |
-| Projection manifest | Mapping from domain semantic entities to CAD source features, persistent topology roles, scene nodes, and boundary tags. | RupaCore storage, domain generator updates |
+| Universal `source/rupa.json` source | Scenes, object definitions, geometry/material/animation/simulation libraries, saved view/documentation definitions, validation policies, and export presets. | `RupaProjectModel` storage and RupaCore source transactions |
+| Semantic extension envelope | Domain intent data and source ownership for a namespace, stored as neutral project source. | `RupaProjectModel` storage, domain module mutation through RupaCore transaction boundary |
+| Projection manifest | Mapping from domain semantic entities to CAD source features, persistent topology roles, scene nodes, and boundary tags. | `RupaProjectModel` storage, domain generator updates through RupaCore transactions |
 | Analysis artifacts | Derived results keyed by dependency, producer, configuration, and output-content identity. | Artifact producer and `RupaProject` store |
 
 Unknown semantic namespaces must be preserved during load/save when the payload is
@@ -206,16 +214,16 @@ from the sketches, lofts, booleans, surfaces, and topology that represent it.
 ## Extension Contracts
 
 `RupaDomainFoundation` should define small protocols and registry contracts
-instead of concrete domain behavior. Persisted neutral DTOs that must live inside
-`ProductMetadata` belong to `RupaCore`, because `RupaCore` must not import
-`RupaDomainFoundation`.
+instead of concrete domain behavior. Persisted neutral DTOs that live inside the
+project source aggregate belong to `RupaProjectModel`, because lower source and
+Core transaction layers must not import `RupaDomainFoundation`.
 
 | Contract | Purpose |
 |---|---|
 | `DomainNamespace` | Stable namespace, schema version, compatibility policy, and payload decoder registration. |
 | `SemanticObjectDescriptor` | Type ID, display name, property schema, selectable references, source ownership policy. |
-| `SemanticExtensionEnvelope` | RupaCore-owned Codable storage boundary for domain payloads in product metadata. |
-| `ProjectionManifest` | RupaCore-owned mapping between semantic entity IDs, Swift-CAD feature IDs, scene node IDs, persistent topology names, drawing references, and solver boundary tags. |
+| `SemanticExtensionEnvelope` | RupaProjectModel-owned Codable storage boundary for domain payloads in project source. |
+| `ProjectionManifest` | RupaProjectModel-owned mapping between semantic entity IDs, Swift-CAD feature IDs, scene node IDs, persistent topology names, drawing references, and solver boundary tags. |
 | `SourceProjectionGenerator` | Converts one semantic operation into validated RupaCore or RupaAutomation commands. |
 | `DomainCommandAdapter` | Parses domain-specific operation payloads and returns universal command batches or typed failures. |
 | `DomainValidator` | Emits typed validation findings for semantic consistency, projection consistency, manufacturability, documentation readiness, or simulation readiness. |
@@ -377,7 +385,7 @@ types, dry-run support, mutation behavior, expected outputs, and failure modes.
 Domain capabilities may appear as high-level commands, but source mutation lowers
 to a neutral transaction. Artifact, export, job, and decision effects lower to
 their registered project execution plans. Concrete domain commands never become
-`EditorCommand` cases.
+cases in a central command enum.
 
 ## UI and Inspector Boundary
 

@@ -17,7 +17,7 @@ completed capability.
 |---:|---|---|
 | 1 | Versioned conformance manifests governed by `CONFORMANCE_MANIFEST_CONTRACT.md`; `CONFORMANCE_PROFILES.md` is their human catalog | Define the exact capability, case-set, workflow, fixture, compatibility, and evidence set required by each releasable claim. This is the only release-completion authority. |
 | 2 | `GOAL_STATEMENT.md`, `PRODUCT_REQUIREMENTS.md`, and `UNIVERSAL_CAD_REQUIREMENTS.md` | Define product outcomes and universal CAD behavior. They do not decide whether every future domain is required by one release. |
-| 3 | `STATE_AND_PROJECT_CONTRACT.md`, `DOCUMENT_PACKAGE_CONTRACT.md`, `DOMAIN_EXTENSION_ARCHITECTURE.md`, `REFERENCE_ARTIFACT_CONTRACT.md`, `DOMAIN_TRANSACTION_CONTRACT.md`, `VALIDATION_CONTRACT.md`, and `AUTOMATION_PROTOCOL.md` | Define state lifetime, dependency, ownership, package, identity, transaction, validation, protocol, and derived-artifact invariants. |
+| 3 | `STATE_AND_PROJECT_CONTRACT.md`, `DOCUMENT_PACKAGE_CONTRACT.md`, `DOMAIN_EXTENSION_ARCHITECTURE.md`, `UNIVERSAL_3D_ARCHITECTURE.md`, `REFERENCE_ARTIFACT_CONTRACT.md`, `DOMAIN_TRANSACTION_CONTRACT.md`, `VALIDATION_CONTRACT.md`, and `AUTOMATION_PROTOCOL.md` | Define state lifetime, dependency, ownership, package, identity, transaction, validation, protocol, universal 3D evaluation, and derived-artifact invariants. |
 | 4 | Capability design packets required by `DESIGN_PROCESS.md` and implementation designs such as `DOMAIN_FOUNDATION_DESIGN.md` | Define one capability's supported case set, mappings, rejected cases, diagnostics, performance budget, selected implementation route, and module-level realization. |
 | 5 | `ACCEPTANCE_WORKFLOW_CONTRACTS.md` plus executable fixtures | Prove profile conformance through user workflows and machine-verifiable evidence. |
 
@@ -27,6 +27,7 @@ requirement and never prove completion by themselves.
 | Document | Role |
 |---|---|
 | `COMPLETE_IMPLEMENTATION_PLAN.md` | Dependency-ordered roadmap and work scheduling. It cannot add completion gates. |
+| `UNIVERSAL_3D_IMPLEMENTATION_PLAN.md` | Detailed work packages and integration scheduling for the universal 3D architecture. It cannot prove capability or release completion. |
 | `CAPABILITY_LEDGER.md` | Projection of current evidence and missing gates. |
 | `IMPLEMENTATION_STATUS.md` | Historical implementation observations. |
 | `CAD_QUALITY_MILESTONES.md` | Quality planning and evidence index. |

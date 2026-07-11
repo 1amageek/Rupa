@@ -4,6 +4,15 @@ RupaKit is organized by execution boundary. Keep new code close to the layer tha
 
 UI layout, canvas overlay, and affordance rules live in [DESIGN_GUIDE.md](DESIGN_GUIDE.md). Keep architectural ownership rules here and visual interaction rules in the design guide.
 
+This file describes the currently implemented package graph. The breaking target
+architecture for general 3D authoring is defined in
+[`UNIVERSAL_3D_ARCHITECTURE.md`](../Rupa/UNIVERSAL_3D_ARCHITECTURE.md), with
+dependency-ordered work packages in
+[`UNIVERSAL_3D_IMPLEMENTATION_PLAN.md`](../Rupa/UNIVERSAL_3D_IMPLEMENTATION_PLAN.md).
+When the current graph conflicts with that target during a scheduled migration,
+the target document governs the replacement and its deletion gate; a permanent
+compatibility layer must not be introduced.
+
 ```mermaid
 flowchart LR
     Core[RupaCore] --> CoreTypes[RupaCoreTypes]

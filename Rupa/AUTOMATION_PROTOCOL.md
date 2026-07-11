@@ -112,6 +112,29 @@ Wire schemas are declared in `RupaAgentProtocol` DTOs and fixtures. They do not
 inherit an internal Codable shape implicitly. Reusing a value type requires an
 explicit wire-schema/version decision and compatibility test.
 
+## Universal 3D Protocol Migration
+
+The method table below documents the current development protocol. The universal
+3D architecture introduces a breaking, independently versioned protocol rather
+than wrapping the current internal command enum:
+
+| vNext method family | Contract |
+|---|---|
+| `capabilities.list` | Returns descriptors from the composed `CapabilityRegistry`; no static Agent catalog exists. |
+| `capability.invoke` | Invokes one capability ID/version with canonical typed payload and effect-specific project context. |
+| `program.execute` | Executes a validated `ModelingProgram` DAG with typed result bindings, checkpoints, progress, and cancellation. |
+| `operations.progress` / `operations.cancel` | Observes or cancels long evaluation, import/export, render, or job effects. |
+| `artifacts.read` | Reads bounded artifact metadata or a negotiated binary resource stream. |
+
+`expectedGeneration` in the current development schema is replaced for source
+mutation by `expectedTransactionRevision`. Evaluated results separately report
+their source dependency identity and evaluation snapshot identity. Method-specific
+ergonomic endpoints may remain only as adapters to registered capability IDs; they
+must not own separate handlers. T02 and AG01 in
+`UNIVERSAL_3D_IMPLEMENTATION_PLAN.md` own this migration and delete
+`command.apply`/`command.applyBatch` after equivalent capability/program routes and
+fixtures pass.
+
 ## Common Params
 
 | Params type | JSON keys |

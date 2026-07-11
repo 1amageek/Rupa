@@ -29,9 +29,9 @@ flowchart TD
 
 | Partition | Examples | Mutation owner | Undo/history | Freshness role |
 |---|---|---|---|---|
-| Editable document source | CAD features, parameters, semantic intent, materials, document annotations, saved views, validation configurations, export presets | `EditorSession` through source commands | Source command history | Fingerprinted as declared artifact dependencies |
+| Editable document source | CAD features, editable meshes/curves, object definitions, operation/procedural graphs, materials, animation/simulation intent, semantic intent, document annotations, saved views, validation configurations, export presets | `EditorSession` through source commands | Source command history | Fingerprinted as declared artifact dependencies |
 | Workspace state | Selection, active tool, hover, active construction plane, viewport camera, visual grid mode, transient analysis displays, panel layout | Open document session | Separate workspace history when needed; never source undo | Never changes source-content identity |
-| Derived artifacts | Evaluated B-rep, mesh, drawing, validation result, exchange output, solver input/result | Artifact producer through `ProjectController` | Immutable records, cache retention policy | Identified by input dependencies, producer/configuration, and output content |
+| Derived artifacts | Evaluated B-rep/geometry snapshots, triangulation, BVH, GPU resources, drawing, validation result, exchange output, render pass, solver input/result | Artifact producer through `ProjectController` | Immutable records, cache retention policy | Identified by input dependencies, producer/configuration, and output content |
 | Validation decisions | Allow/block/override records for a policy evaluation and prepared output | Decision recorder through `ProjectController` | Immutable append/revoke audit log | Bound to exact policy, findings, inputs, and prepared artifact |
 | External jobs | Solver/export/import job state, logs, progress, cancellation, temporary files | Effect-specific project service | Job event history | Bound to exact input and produced artifacts |
 | User/application preferences | Default panels, default workspace preset, recent files, accessibility preferences | Application preference service | No document history | Not part of `.swcad` source |

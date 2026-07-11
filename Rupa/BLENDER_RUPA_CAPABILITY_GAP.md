@@ -9,6 +9,8 @@
 | Rupa evidence boundary | `RupaKit/Sources`, the macOS app target, Swift-CAD sources, tests, and current capability documents |
 | Comparison unit | User-visible capability or operation family, not individual properties, manual introduction pages, or aliases |
 | Included states | Partial and missing Blender capabilities; implemented Rupa-only CAD capabilities are not treated as gaps |
+| Target architecture | `UNIVERSAL_3D_ARCHITECTURE.md` |
+| Detailed implementation plan | `UNIVERSAL_3D_IMPLEMENTATION_PLAN.md` |
 
 This inventory answers one precise question: what Blender can do that Rupa cannot
 currently do end to end. A capability is not considered present merely because a
@@ -16,6 +18,11 @@ similarly named type exists. It must have source ownership, evaluation, selectio
 UI or a documented non-UI route, Automation/Agent access where mutation is
 appropriate, persistence, undo/redo, diagnostics, and verification for its claimed
 case set.
+
+This document is the inventory, not the implementation design. The target module
+boundaries, source model, editable mesh, evaluation graph, rendering, Agent
+contract, and dependency-ordered work packages are defined by the linked universal
+3D architecture and implementation plan.
 
 The Blender manual currently contains more than 2,000 documented descendants and
 more than 700 under Modeling alone. This document groups individual nodes and
@@ -38,7 +45,7 @@ than copied into hundreds of redundant rows.
 |---|---|---|---|
 | UI and editor framework | Partial | Configurable workspaces, editor areas, mode system, operator redo/search, custom keymaps | RupaUI / RupaProject |
 | Scenes and objects | Partial | Multiple scenes, view layers, collections, object-type ecosystem, constraints | RupaCore / domain modules |
-| Polygon mesh modeling | Partial | General mutable mesh edit mode and complete topology operations | RupaMeshFoundation above Swift-CAD |
+| Polygon mesh modeling | Partial | General mutable mesh edit mode and complete topology operations | RupaGeometry + RupaGeometryOperations |
 | Curves and NURBS surfaces | Partial | General curve/surface object model, broad topology editing, hair curves | Swift-CAD + RupaCore |
 | Modifier stack | Partial | Generic ordered non-destructive modifier stack and most modifiers | RupaCore + geometry backends |
 | Geometry Nodes | Missing | Procedural node graph, fields, attributes, zones, tools, baking | RupaProceduralGeometry |
@@ -48,9 +55,9 @@ than copied into hundreds of redundant rows.
 | Physics and simulation | Missing | Rigid body, cloth, soft body, fluids, particles, force fields, bake/cache | RupaSimulation adapters |
 | Rendering and shading | Internal | Render engines, cameras/lights, shader graph, textures, color management | RupaRendering / optional engines |
 | Compositing, tracking, video | Missing | Image compositor, camera tracking, masks, sequencer and audio | Optional RupaMedia modules |
-| Assets, files, and pipeline | Partial | Asset libraries, linking, overrides, broad DCC exchange semantics | RupaProject / RupaExchange |
-| Scripting, extensions, and Agent access | Partial | Embedded scripting, runtime extension loader, custom operators/nodes/editors, MCP, compact procedural programs | RupaProject / plugin host / Agent adapters |
-| Production and platform | Partial | Cross-platform app, GPU shaded scene, broad dependency graph, recovery, distributed jobs | App / RupaProject / RupaRendering |
+| Assets, files, and pipeline | Partial | Asset libraries, linking, overrides, broad DCC exchange semantics | RupaAssets / exchange modules |
+| Scripting, extensions, and Agent access | Partial | Embedded scripting, runtime extension loader, custom operators/nodes/editors, MCP, compact procedural programs | RupaCapabilities / module host / Agent adapters |
+| Production and platform | Partial | Cross-platform app, GPU shaded scene, broad dependency graph, recovery, distributed jobs | App / RupaEvaluation / RupaRenderGraph |
 
 ## Current Rupa Baseline
 
@@ -330,28 +337,30 @@ conditions, solver provenance, convergence evidence, and artifact identity.
 
 ```mermaid
 flowchart TD
-    App["Rupa app composition"] --> UI["RupaUI and RupaProject"]
-    UI --> Universal["Universal modeling contracts"]
+    App["Rupa app composition"] --> UI["RupaUI"]
+    UI --> Project["RupaProject"]
+    Project --> Universal["Universal modeling contracts"]
     Universal --> CAD["Swift-CAD exact CAD kernel"]
-    Universal --> Mesh["RupaMeshFoundation"]
+    Universal --> Mesh["RupaGeometry and RupaGeometryOperations"]
     Universal --> Procedural["RupaProceduralGeometry"]
-    UI --> DCC["Optional DCC modules"]
+    Project --> DCC["Optional DCC modules"]
     DCC --> Sculpt["RupaSculpt"]
     DCC --> Animation["RupaAnimation"]
     DCC --> Shading["RupaShading and render engines"]
     DCC --> Media["RupaMedia"]
-    UI --> Domains["Domain modules"]
+    Project --> Domains["Domain modules"]
     Domains --> Character["RupaCharacterDesign"]
     Domains --> Simulation["RupaSimulation adapters"]
-    Agent["CLI / Agent / MCP adapters"] --> UI
+    Agent["CLI / Agent / MCP adapters"] --> Project
 ```
 
 | Responsibility | Must own | Must not leak into |
 |---|---|---|
 | Swift-CAD | Exact curves, surfaces, B-rep, feature evaluation, topology identity, tessellation | Animation, render engines, UI modes, media, domain semantics |
-| RupaMeshFoundation | Editable polygon mesh, attributes, topology operations, remesh/retopology, zero-copy snapshots | Exact CAD feature semantics or UI state |
+| RupaGeometry / RupaGeometryOperations | Editable polygon mesh, attributes, topology operations, remesh/retopology, shared snapshots | Exact CAD feature semantics or UI state |
 | RupaProceduralGeometry | Typed node graph, fields, attributes, instances, zones, baking, deterministic evaluation | Concrete UI layout or Agent transport |
-| RupaCore/RupaProject | Scene/object ownership, transactions, artifacts, assets, references, capability registry | Concrete domain rules or renderer internals |
+| RupaProjectModel / RupaCore | Scene/object source ownership, source transactions, history, and coherent editor-session state | Concrete domain rules or renderer internals |
+| RupaProject | Open-session ordering, package/effect coordination, artifacts, decisions, and jobs | Geometry or domain semantics, transport encoding |
 | RupaSculpt/RupaAnimation/RupaShading/RupaMedia | DCC source models and evaluators | Swift-CAD kernel or universal command transport |
 | Domain modules | Character, architecture, turbomachinery, manufacturing, and simulation meaning | Generic geometry ownership and transaction rules |
 | Adapters | UI, CLI, Agent, MCP encoding and interaction | Geometry or domain truth |

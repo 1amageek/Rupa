@@ -10,6 +10,8 @@ as a universal, agent-ready CAD system with specialized domain extensions.
 | Product | Rupa |
 | Scope | Complete implementation planning |
 | Related architecture | `DOMAIN_EXTENSION_ARCHITECTURE.md` |
+| Universal 3D architecture | `UNIVERSAL_3D_ARCHITECTURE.md` |
+| Universal 3D detailed work packages | `UNIVERSAL_3D_IMPLEMENTATION_PLAN.md` |
 | Related foundation design | `DOMAIN_FOUNDATION_DESIGN.md` |
 | Capability ledger | `CAPABILITY_LEDGER.md` |
 | Process authority | `DESIGN_PROCESS.md` |

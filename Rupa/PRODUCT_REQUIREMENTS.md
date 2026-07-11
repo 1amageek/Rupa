@@ -247,6 +247,10 @@ Agent-assisted workflows are product requirements, not developer-only tooling.
 ## Non-Goals for Initial Product Scope
 
 These are not required for the first complete Rupa product milestone.
+They are release-scope exclusions, not permanent architecture exclusions.
+`UNIVERSAL_3D_ARCHITECTURE.md` defines the later source, evaluation, rendering,
+animation, sculpt, simulation, asset, and automation boundaries so adding those
+capabilities does not fork the document or bypass Swift-CAD.
 
 | Area | Non-goal |
 |---|---|
