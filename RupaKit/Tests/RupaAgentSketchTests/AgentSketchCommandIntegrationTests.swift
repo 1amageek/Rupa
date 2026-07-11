@@ -89,12 +89,24 @@ import SwiftCAD
     let evaluated = try CADPipeline
         .modelingDefault(for: session.document)
         .evaluate(session.document.cadDocument)
+    let describeResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .describeDocument,
+            expectedGeneration: result.generation
+        )
+    )
+    guard case .command(let describeResult) = describeResponse else {
+        #expect(Bool(false))
+        return
+    }
 
     #expect(presetResult.commandName == "setRulerConfiguration")
-    #expect(presetResult.workspaceScale?.matchedPreset == .regionalPlanning)
+    #expect(presetResult.workspaceScale == nil)
     #expect(result.commandName == "createExtrudedCircle")
     #expect(result.didMutate)
-    #expect(result.workspaceScale?.matchedPreset == .regionalPlanning)
+    #expect(result.workspaceScale == nil)
+    #expect(describeResult.workspaceScale?.matchedPreset == .regionalPlanning)
     #expect(session.evaluationStatus == .valid)
     #expect(session.evaluatedBodyCount == 1)
     #expect(evaluated.brep.geometry.surfaces.values.filter {

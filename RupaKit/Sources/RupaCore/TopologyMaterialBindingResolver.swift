@@ -73,7 +73,7 @@ struct TopologyMaterialBindingResolver: Sendable {
     }
 
     private func faceIDMap(
-        in generatedNames: [PersistentName: TopologyReference]
+        in generatedNames: PersistentMap<PersistentName, TopologyReference>
     ) -> [String: FaceID] {
         var result: [String: FaceID] = [:]
         for (name, reference) in generatedNames {

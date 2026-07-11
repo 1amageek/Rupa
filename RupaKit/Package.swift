@@ -76,6 +76,10 @@ let package = Package(
             name: "rupa",
             targets: ["RupaCLI"]
         ),
+        .executable(
+            name: "rupa-performance-benchmark",
+            targets: ["RupaPerformanceBenchmark"]
+        ),
     ],
     dependencies: [
         .package(name: "swift-CAD", path: "../swift-CAD"),
@@ -163,6 +167,7 @@ let package = Package(
                 "RupaDomainFoundation",
                 "RupaAutomation",
                 "RupaCore",
+                .product(name: "SwiftCAD", package: "swift-CAD"),
             ]
         ),
         .target(
@@ -214,6 +219,16 @@ let package = Package(
             name: "RupaCLI",
             dependencies: [
                 "RupaCLIKit",
+            ]
+        ),
+        .executableTarget(
+            name: "RupaPerformanceBenchmark",
+            dependencies: [
+                "RupaAgentProtocol",
+                "RupaAgentRuntime",
+                "RupaAutomation",
+                "RupaCore",
+                .product(name: "SwiftCAD", package: "swift-CAD"),
             ]
         ),
         .target(

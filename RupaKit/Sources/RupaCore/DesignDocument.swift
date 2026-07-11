@@ -31,9 +31,10 @@ public struct DesignDocument: Identifiable, Sendable {
         )
     }
 
-    public func validate(objectRegistry: ObjectTypeRegistry = .builtIn) throws {
-        try cadDocument.validate()
-        try modelingSettings.validate()
-        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+    @discardableResult
+    public func validate(
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> ValidatedDesignDocument {
+        try ValidatedDesignDocument(self, objectRegistry: objectRegistry)
     }
 }

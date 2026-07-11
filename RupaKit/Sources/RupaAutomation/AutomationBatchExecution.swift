@@ -9,6 +9,7 @@ public struct AutomationBatchExecution: Sendable {
     public var baseWorkspaceRevision: WorkspaceRevision
     public var proposedWorkspaceRevision: WorkspaceRevision
     public var didCommit: Bool
+    public var metrics: AutomationBatchMetrics
 
     public init(
         results: [AutomationResult],
@@ -17,7 +18,8 @@ public struct AutomationBatchExecution: Sendable {
         proposedGeneration: DocumentGeneration,
         baseWorkspaceRevision: WorkspaceRevision,
         proposedWorkspaceRevision: WorkspaceRevision,
-        didCommit: Bool
+        didCommit: Bool,
+        metrics: AutomationBatchMetrics
     ) {
         self.results = results
         self.effect = effect
@@ -26,5 +28,6 @@ public struct AutomationBatchExecution: Sendable {
         self.baseWorkspaceRevision = baseWorkspaceRevision
         self.proposedWorkspaceRevision = proposedWorkspaceRevision
         self.didCommit = didCommit
+        self.metrics = metrics
     }
 }

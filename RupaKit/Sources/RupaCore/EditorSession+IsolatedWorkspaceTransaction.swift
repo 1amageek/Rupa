@@ -3,7 +3,7 @@ public extension EditorSession {
         commits: Bool,
         _ operation: (EditorSession) throws -> Value
     ) throws -> IsolatedWorkspaceTransactionExecution<Value> {
-        let initialSnapshot = transactionSnapshot()
+        let initialSnapshot = isolatedTransactionSnapshot()
         let baseRevision = initialSnapshot.workspaceState.revision
         let stagedSession = makeIsolatedTransactionSession(from: initialSnapshot)
 

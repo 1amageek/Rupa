@@ -8,7 +8,7 @@ struct GeneratedBodyIdentityResolver: Sendable {
     }
 
     func bodyFeatureIDs(
-        in generatedNames: [PersistentName: TopologyReference]
+        in generatedNames: PersistentMap<PersistentName, TopologyReference>
     ) -> [FeatureID] {
         var seen: Set<FeatureID> = []
         return bodyIdentities(in: generatedNames).compactMap { identity in
@@ -21,7 +21,7 @@ struct GeneratedBodyIdentityResolver: Sendable {
 
     func firstBodyIdentity(
         for featureID: FeatureID,
-        in generatedNames: [PersistentName: TopologyReference]
+        in generatedNames: PersistentMap<PersistentName, TopologyReference>
     ) -> Identity? {
         bodyIdentities(in: generatedNames).first {
             $0.sourceFeatureID == featureID
@@ -29,7 +29,7 @@ struct GeneratedBodyIdentityResolver: Sendable {
     }
 
     func bodyIdentityByBodyID(
-        in generatedNames: [PersistentName: TopologyReference]
+        in generatedNames: PersistentMap<PersistentName, TopologyReference>
     ) -> [BodyID: Identity] {
         var identitiesByBodyID: [BodyID: Identity] = [:]
         for identity in bodyIdentities(in: generatedNames) {
@@ -41,7 +41,7 @@ struct GeneratedBodyIdentityResolver: Sendable {
     }
 
     func bodyIdentities(
-        in generatedNames: [PersistentName: TopologyReference]
+        in generatedNames: PersistentMap<PersistentName, TopologyReference>
     ) -> [Identity] {
         generatedNames
             .sorted { persistentNameString($0.key) < persistentNameString($1.key) }

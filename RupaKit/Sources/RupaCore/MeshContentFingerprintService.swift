@@ -4,9 +4,10 @@ import RupaCoreTypes
 public struct MeshContentFingerprintService: Sendable {
     public init() {}
 
-    public func fingerprint(
-        for meshes: [BodyID: Mesh]
-    ) throws -> ContentFingerprint {
+    public func fingerprint<Meshes: Collection>(
+        for meshes: Meshes
+    ) throws -> ContentFingerprint
+    where Meshes.Element == (key: BodyID, value: Mesh) {
         guard !meshes.isEmpty else {
             throw ReferenceValidationError(
                 code: .invalidShape,
@@ -14,17 +15,13 @@ public struct MeshContentFingerprintService: Sendable {
             )
         }
 
-        let bodyIDs = meshes.keys.sorted { $0.description < $1.description }
+        let orderedMeshes = meshes.sorted {
+            $0.key.description < $1.key.description
+        }
         var hasher = CanonicalIdentityHasher(domain: "mesh-content.v1")
         hasher.appendField("bodies")
-        hasher.appendCount(bodyIDs.count)
-        for bodyID in bodyIDs {
-            guard let mesh = meshes[bodyID] else {
-                throw ReferenceValidationError(
-                    code: .invalidIdentity,
-                    message: "Mesh artifact content changed during fingerprint construction."
-                )
-            }
+        hasher.appendCount(orderedMeshes.count)
+        for (bodyID, mesh) in orderedMeshes {
             hasher.appendField("body")
             hasher.appendString(bodyID.description)
             append(mesh: mesh, to: &hasher)

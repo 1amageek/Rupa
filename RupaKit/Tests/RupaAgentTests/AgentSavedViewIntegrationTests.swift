@@ -27,8 +27,7 @@ import Testing
     #expect(createResult.commandName == "createSavedView")
     #expect(createResult.didMutate)
     #expect(createResult.savedViewID == viewID)
-    #expect(createResult.savedViews?.first?.name == "Agent Site View")
-    #expect(createResult.savedViews?.first?.displayScale.matchedPreset == .sitePlanning)
+    #expect(createResult.savedViews == nil)
 
     let snapshotResponse = server.handle(
         .designDisplaySnapshot(
@@ -63,9 +62,7 @@ import Testing
         return
     }
     #expect(updateResult.commandName == "updateSavedView")
-    #expect(updateResult.savedViews?.first?.name == "Agent Regional View")
-    #expect(updateResult.savedViews?.first?.projection.mode == .perspective)
-    #expect(updateResult.savedViews?.first?.displayScale.matchedPreset == .regionalPlanning)
+    #expect(updateResult.savedViews == nil)
 
     let describeResponse = server.handle(
         .execute(
@@ -80,7 +77,10 @@ import Testing
     }
     #expect(describeResult.commandName == nil)
     #expect(!describeResult.didMutate)
-    #expect(describeResult.savedViews?.map(\.id) == [viewID])
+    #expect(describeResult.savedViews?.map { $0.id } == [viewID])
+    #expect(describeResult.savedViews?.first?.name == "Agent Regional View")
+    #expect(describeResult.savedViews?.first?.projection.mode == .perspective)
+    #expect(describeResult.savedViews?.first?.displayScale.matchedPreset == .regionalPlanning)
 
     let removeResponse = server.handle(
         .execute(
@@ -96,7 +96,20 @@ import Testing
     #expect(removeResult.commandName == "removeSavedView")
     #expect(removeResult.didMutate)
     #expect(removeResult.savedViewID == viewID)
-    #expect(removeResult.savedViews?.isEmpty == true)
+    #expect(removeResult.savedViews == nil)
+
+    let finalResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .describeSavedViews,
+            expectedGeneration: removeResult.generation
+        )
+    )
+    guard case .command(let finalResult) = finalResponse else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(finalResult.savedViews?.isEmpty == true)
 }
 
 private func agentSavedView(

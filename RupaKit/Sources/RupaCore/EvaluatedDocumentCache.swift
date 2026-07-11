@@ -3,47 +3,32 @@ import RupaCoreTypes
 
 public struct EvaluatedDocumentCache: Sendable {
     public var generation: DocumentGeneration
-    public var sourceFingerprint: CADDocumentSourceFingerprint
     public var modelingSettings: DocumentModelingSettings
     public var evaluatedDocument: EvaluatedDocument
-
-    public init?(
-        generation: DocumentGeneration,
-        modelingSettings: DocumentModelingSettings,
-        evaluatedDocument: EvaluatedDocument
-    ) {
-        guard let sourceFingerprint = evaluatedDocument.caches.brep?.sourceFingerprint else {
-            return nil
-        }
-        self.generation = generation
-        self.sourceFingerprint = sourceFingerprint
-        self.modelingSettings = modelingSettings
-        self.evaluatedDocument = evaluatedDocument
-    }
+    public var validatedDocument: ValidatedDesignDocument
+    let sourceIdentity: LiveDocumentEvaluationIdentity
 
     public init(
         generation: DocumentGeneration,
-        sourceFingerprint: CADDocumentSourceFingerprint,
         modelingSettings: DocumentModelingSettings,
-        evaluatedDocument: EvaluatedDocument
+        evaluatedDocument: EvaluatedDocument,
+        validatedDocument: ValidatedDesignDocument
     ) {
         self.generation = generation
-        self.sourceFingerprint = sourceFingerprint
         self.modelingSettings = modelingSettings
         self.evaluatedDocument = evaluatedDocument
+        self.validatedDocument = validatedDocument
+        sourceIdentity = LiveDocumentEvaluationIdentity(document: evaluatedDocument.document)
     }
 
     public func matches(
         document: DesignDocument,
         generation: DocumentGeneration
-    ) throws -> Bool {
+    ) -> Bool {
         guard self.generation == generation,
               modelingSettings == document.modelingSettings else {
             return false
         }
-        let currentFingerprint = try document.cadDocument.sourceFingerprint(
-            tolerance: document.modelingSettings.tolerance
-        )
-        return currentFingerprint == sourceFingerprint
+        return sourceIdentity.matches(document.cadDocument)
     }
 }

@@ -16,6 +16,10 @@ public final class CADDocumentStore {
     public private(set) var evaluationCache: EvaluatedDocumentCache?
     public let objectRegistry: ObjectTypeRegistry
     private let evaluationScheduler: EvaluationScheduler
+    @ObservationIgnored private var validatedSource: ValidatedDesignDocument?
+    private var evaluationDeferralDepth = 0
+    private var hasDeferredEvaluation = false
+    package private(set) var completedEvaluationPassCount: UInt64 = 0
 
     public init(
         document: DesignDocument = .empty(),
@@ -27,6 +31,7 @@ public final class CADDocumentStore {
         renderInvalidation: RenderInvalidation = RenderInvalidation(),
         evaluatedBodyCount: Int = 0,
         evaluationCache: EvaluatedDocumentCache? = nil,
+        completedEvaluationPassCount: UInt64 = 0,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         evaluationScheduler: EvaluationScheduler = EvaluationScheduler()
     ) {
@@ -38,13 +43,16 @@ public final class CADDocumentStore {
         self.evaluatedGeneration = evaluatedGeneration
         self.renderInvalidation = renderInvalidation
         self.evaluatedBodyCount = evaluatedBodyCount
-        self.evaluationCache = Self.currentValidatedEvaluationCache(
+        let currentEvaluationCache = Self.currentValidatedEvaluationCache(
             cache: evaluationCache,
             document: document,
             generation: generation,
             evaluationStatus: evaluationStatus,
             evaluatedGeneration: evaluatedGeneration
         )
+        self.evaluationCache = currentEvaluationCache
+        self.validatedSource = currentEvaluationCache?.validatedDocument
+        self.completedEvaluationPassCount = completedEvaluationPassCount
         self.objectRegistry = objectRegistry
         self.evaluationScheduler = evaluationScheduler
     }
@@ -63,9 +71,18 @@ public final class CADDocumentStore {
             evaluatedGeneration: snapshot.evaluatedGeneration,
             renderInvalidation: snapshot.renderInvalidation,
             evaluatedBodyCount: snapshot.evaluatedBodyCount,
-            evaluationCache: transactionSnapshot.evaluationCache,
+            evaluationCache: nil,
+            completedEvaluationPassCount: transactionSnapshot.completedEvaluationPassCount,
             objectRegistry: objectRegistry
         )
+        evaluationCache = Self.currentTrustedEvaluationCache(
+            cache: transactionSnapshot.evaluationCache,
+            document: snapshot.document,
+            generation: snapshot.generation,
+            evaluationStatus: snapshot.evaluationStatus,
+            evaluatedGeneration: snapshot.evaluatedGeneration
+        )
+        validatedSource = evaluationCache?.validatedDocument
     }
 
     public var currentEvaluationCache: EvaluatedDocumentCache? {
@@ -83,6 +100,12 @@ public final class CADDocumentStore {
 
     public var currentEvaluation: DocumentEvaluationContext? {
         currentEvaluationCache.map(DocumentEvaluationContext.init(cache:))
+    }
+
+    public var currentModelingEvaluationMetrics: ModelingEvaluationMetrics? {
+        currentEvaluationCache.map {
+            ModelingEvaluationMetrics($0.evaluatedDocument.evaluationMetrics)
+        }
     }
 
     public var evaluationSnapshot: EvaluationSnapshot {
@@ -125,24 +148,35 @@ public final class CADDocumentStore {
             evaluationStatus: snapshot.evaluationStatus,
             evaluatedGeneration: snapshot.evaluatedGeneration
         )
+        validatedSource = evaluationCache?.validatedDocument
     }
 
     public func transactionSnapshot() -> CADDocumentStoreTransactionSnapshot {
         CADDocumentStoreTransactionSnapshot(
             document: snapshot(),
-            evaluationCache: currentEvaluationCache
+            evaluationCache: currentEvaluationCache,
+            completedEvaluationPassCount: completedEvaluationPassCount
         )
     }
 
     public func restoreTransactionSnapshot(_ snapshot: CADDocumentStoreTransactionSnapshot) {
-        restore(snapshot.document)
-        evaluationCache = Self.currentValidatedEvaluationCache(
+        let documentSnapshot = snapshot.document
+        document = documentSnapshot.document
+        generation = documentSnapshot.generation
+        isDirty = documentSnapshot.isDirty
+        diagnostics = documentSnapshot.diagnostics
+        evaluationStatus = documentSnapshot.evaluationStatus
+        evaluatedGeneration = documentSnapshot.evaluatedGeneration
+        renderInvalidation = documentSnapshot.renderInvalidation
+        evaluatedBodyCount = documentSnapshot.evaluatedBodyCount
+        evaluationCache = Self.currentTrustedEvaluationCache(
             cache: snapshot.evaluationCache,
-            document: snapshot.document.document,
-            generation: snapshot.document.generation,
-            evaluationStatus: snapshot.document.evaluationStatus,
-            evaluatedGeneration: snapshot.document.evaluatedGeneration
+            document: documentSnapshot.document,
+            generation: documentSnapshot.generation,
+            evaluationStatus: documentSnapshot.evaluationStatus,
+            evaluatedGeneration: documentSnapshot.evaluatedGeneration
         )
+        validatedSource = evaluationCache?.validatedDocument
     }
 
     public func restoreAsMutation(_ snapshot: DocumentSnapshot) throws {
@@ -156,6 +190,7 @@ public final class CADDocumentStore {
         renderInvalidation = snapshot.renderInvalidation
         evaluatedBodyCount = snapshot.evaluatedBodyCount
         evaluationCache = nil
+        validatedSource = nil
     }
 
     public func requireGeneration(_ expectedGeneration: DocumentGeneration?) throws {
@@ -171,12 +206,29 @@ public final class CADDocumentStore {
     }
 
     public func apply(_ command: EditorCommand) throws -> CommandExecutionResult {
+        let transactionSnapshot = transactionSnapshot()
+        let ownsEvaluationBoundary = evaluationDeferralDepth == 0
+        do {
+            let result = try withDeferredEvaluation {
+                try applyCommand(command)
+            }
+            if ownsEvaluationBoundary, result.didMutate {
+                try requireValidCommittedEvaluation()
+            }
+            return result
+        } catch {
+            restoreTransactionSnapshot(transactionSnapshot)
+            throw error
+        }
+    }
+
+    private func applyCommand(_ command: EditorCommand) throws -> CommandExecutionResult {
         var curveRebuildReport: CurveRebuildReport?
         var addedSelectionDimensionID: SelectionDimensionID?
         var createdConstructionPlaneID: ConstructionPlaneSourceID?
         var primaryFeatureID: FeatureID?
         var didMutate = command.mutatesDocument
-        let previousFeatureIDs = Set(document.cadDocument.designGraph.nodes.keys)
+        let previousFeatureCount = document.cadDocument.designGraph.order.count
         switch command {
         case .createSavedView(let savedView):
             try document.createSavedView(
@@ -264,6 +316,20 @@ public final class CADDocumentStore {
                 try commitMutation()
                 evaluateCurrentDocument()
             }
+        case .appendFeatureGraph(let transaction):
+            var updatedDocument = document
+            let sourceValidation = try validatedSource
+                ?? document.validate(objectRegistry: objectRegistry)
+            let updatedValidation = try updatedDocument.appendFeatureGraph(
+                transaction,
+                validatedDocument: sourceValidation,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            primaryFeatureID = transaction.primaryFeatureID ?? transaction.features.last?.id
+            try commitMutation()
+            validatedSource = updatedValidation
+            evaluateCurrentDocument()
         case .createComponentDefinition(let name, let rootSceneNodeIDs):
             var updatedDocument = document
             try updatedDocument.createComponentDefinition(
@@ -668,13 +734,16 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .setExtrudeDistance(let featureID, let distance):
             var updatedDocument = document
-            try updatedDocument.setExtrudeDistance(
+            let sourceValidation = try validatedSource
+                ?? document.validate(objectRegistry: objectRegistry)
+            let updatedValidation = try updatedDocument.setExtrudeDistance(
                 featureID: featureID,
                 distance: distance,
-                objectRegistry: objectRegistry
+                validatedDocument: sourceValidation
             )
             document = updatedDocument
             try commitMutation()
+            validatedSource = updatedValidation
             evaluateCurrentDocument()
         case .setCubeDimensions(let featureID, let sizeX, let sizeY, let sizeZ):
             var updatedDocument = document
@@ -868,6 +937,8 @@ public final class CADDocumentStore {
                 objectRegistry: objectRegistry
             )
             document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .moveBodyEdge(let target, let deltaX, let deltaY):
             var updatedDocument = document
             try updatedDocument.moveBodyEdge(
@@ -1449,9 +1520,9 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         }
 
-        let createdFeatureIDs = document.cadDocument.designGraph.order.filter {
-            previousFeatureIDs.contains($0) == false
-        }
+        let createdFeatureIDs = Array(
+            document.cadDocument.designGraph.order.dropFirst(previousFeatureCount)
+        )
         return CommandExecutionResult(
             commandName: command.name,
             generation: generation,
@@ -1470,18 +1541,80 @@ public final class CADDocumentStore {
     }
 
     public func evaluateCurrentDocument() {
-        applyEvaluation(
-            evaluationScheduler.evaluateResult(
+        guard evaluationDeferralDepth == 0 else {
+            hasDeferredEvaluation = true
+            return
+        }
+        performCurrentDocumentEvaluation()
+    }
+
+    package func withDeferredEvaluation<Value>(
+        _ operation: () throws -> Value
+    ) throws -> Value {
+        evaluationDeferralDepth += 1
+        do {
+            let value = try operation()
+            evaluationDeferralDepth -= 1
+            if evaluationDeferralDepth == 0, hasDeferredEvaluation {
+                hasDeferredEvaluation = false
+                performCurrentDocumentEvaluation()
+            }
+            return value
+        } catch {
+            evaluationDeferralDepth -= 1
+            if evaluationDeferralDepth == 0 {
+                hasDeferredEvaluation = false
+            }
+            throw error
+        }
+    }
+
+    private func performCurrentDocumentEvaluation() {
+        completedEvaluationPassCount += 1
+        let previousEvaluation = evaluationCache?.evaluatedDocument
+        let result: DocumentEvaluationResult
+        if let validatedSource {
+            result = evaluationScheduler.evaluateResult(
+                validatedDocument: validatedSource,
+                generation: generation,
+                objectRegistry: objectRegistry,
+                reusing: previousEvaluation
+            )
+        } else {
+            result = evaluationScheduler.evaluateResult(
                 document: document,
                 generation: generation,
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                reusing: previousEvaluation
             )
-        )
+        }
+        applyEvaluation(result)
+    }
+
+    private func requireValidCommittedEvaluation() throws {
+        guard evaluatedGeneration == generation else {
+            throw EditorError(
+                code: .evaluationFailed,
+                message: "Document evaluation did not reach the proposed generation."
+            )
+        }
+        switch evaluationStatus {
+        case .valid:
+            return
+        case .failed(let message):
+            throw EditorError(code: .evaluationFailed, message: message)
+        case .notEvaluated:
+            throw EditorError(
+                code: .evaluationFailed,
+                message: "Document mutation did not produce an evaluated document."
+            )
+        }
     }
 
     private func commitMutation() throws {
         generation = try generation.advanced()
         isDirty = true
+        validatedSource = nil
     }
 
     private func applyEvaluation(_ result: DocumentEvaluationResult) {
@@ -1494,8 +1627,10 @@ public final class CADDocumentStore {
         if case .valid = snapshot.status,
            snapshot.evaluatedGeneration == generation {
             evaluationCache = result.evaluationCache
+            validatedSource = result.evaluationCache?.validatedDocument
         } else {
             evaluationCache = nil
+            validatedSource = nil
         }
     }
 
@@ -1516,16 +1651,38 @@ public final class CADDocumentStore {
               cache.generation == generation else {
             return nil
         }
-        do {
-            guard try cache.matches(
-                document: document,
-                generation: generation
-            ) else {
-                return nil
-            }
-            return cache
-        } catch {
+        guard cache.matches(
+            document: document,
+            generation: generation
+        ) else {
             return nil
         }
+        return cache
+    }
+
+    private static func currentTrustedEvaluationCache(
+        cache: EvaluatedDocumentCache?,
+        document: DesignDocument,
+        generation: DocumentGeneration,
+        evaluationStatus: EvaluationStatus,
+        evaluatedGeneration: DocumentGeneration?
+    ) -> EvaluatedDocumentCache? {
+        guard evaluatedGeneration == generation,
+              case .valid = evaluationStatus,
+              let cache,
+              cache.generation == generation,
+              cache.modelingSettings == document.modelingSettings else {
+            return nil
+        }
+        let cachedSource = cache.evaluatedDocument.document
+        let source = document.cadDocument
+        guard cachedSource.id == source.id,
+              cachedSource.schemaVersion == source.schemaVersion,
+              cachedSource.units == source.units,
+              cachedSource.designGraph.revision == source.designGraph.revision,
+              cachedSource.parameters.revision == source.parameters.revision else {
+            return nil
+        }
+        return cache
     }
 }

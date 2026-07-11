@@ -9990,10 +9990,16 @@ private func cliDefaultBoxFixture() throws -> (
             generation: DocumentGeneration(2),
             workspaceRevision: WorkspaceRevision(3),
             dirty: false,
-            saved: true
+            saved: true,
+            metrics: AutomationBatchMetrics(
+                commandCount: 2,
+                evaluationPassCount: 1,
+                historyEntryCount: 1,
+                richResultCount: 1
+            )
         )
 
-        // Per-command diagnostics stay authoritative and un-deduped.
+        // Command-specific diagnostics stay attached to their original result.
         #expect(response.results[0].diagnostics.count == 2)
         #expect(response.results[1].diagnostics.count == 1)
         // Top-level aggregate deduplicates the equivalent warning to one entry.
@@ -10003,6 +10009,10 @@ private func cliDefaultBoxFixture() throws -> (
         #expect(response.commandCount == 2)
         #expect(response.didMutate)
         #expect(response.workspaceRevision == 3)
+        #expect(response.metrics.commandCount == 2)
+        #expect(response.metrics.evaluationPassCount == 1)
+        #expect(response.metrics.historyEntryCount == 1)
+        #expect(response.metrics.richResultCount == 1)
     }
 }
 

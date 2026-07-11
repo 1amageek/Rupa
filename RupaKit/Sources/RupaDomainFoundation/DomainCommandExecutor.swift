@@ -185,32 +185,31 @@ public struct DomainCommandExecutor {
             commandName: transaction.name,
             commits: !request.dryRun
         ) { stagedSession in
-            var sourceCommandResults: [CommandExecutionResult] = []
-            for command in transaction.sourceCommands {
-                sourceCommandResults.append(try stagedSession.execute(command))
-            }
-            let semanticMutations = try transaction.semanticMutations.map { mutation in
-                try canonicalSemanticMutation(
-                    mutation,
-                    namespace: request.namespace,
-                    generation: expectedProposedGeneration,
-                    in: stagedSession
+            let sourceCommandResults = try stagedSession.withSourceCommandGroup(
+                named: transaction.name
+            ) { groupedSession in
+                var sourceCommandResults: [CommandExecutionResult] = []
+                for command in transaction.sourceCommands {
+                    sourceCommandResults.append(try groupedSession.execute(command))
+                }
+                let semanticMutations = try transaction.semanticMutations.map { mutation in
+                    try canonicalSemanticMutation(
+                        mutation,
+                        namespace: request.namespace,
+                        generation: expectedProposedGeneration,
+                        in: groupedSession
+                    )
+                }
+                _ = try groupedSession.execute(
+                    .applySemanticExtensionMutations(semanticMutations)
                 )
-            }
-            _ = try stagedSession.execute(
-                .applySemanticExtensionMutations(semanticMutations)
-            )
-            guard stagedSession.generation == expectedProposedGeneration else {
-                throw EditorError(
-                    code: .commandFailed,
-                    message: "Domain transaction generation did not match its validated mutation plan."
-                )
-            }
-            guard case .valid = stagedSession.evaluationStatus else {
-                throw EditorError(
-                    code: .commandFailed,
-                    message: "Domain transaction did not produce a valid evaluated document."
-                )
+                guard groupedSession.generation == expectedProposedGeneration else {
+                    throw EditorError(
+                        code: .commandFailed,
+                        message: "Domain transaction generation did not match its validated mutation plan."
+                    )
+                }
+                return sourceCommandResults
             }
             return StagedDocumentTransactionResult(
                 sourceCommandResults: sourceCommandResults,

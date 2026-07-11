@@ -37,7 +37,7 @@ public struct MeshSnapshotService: Sendable {
             currentGeneration: currentGeneration,
             failurePrefix: "Document must evaluate successfully before mesh snapshot"
         )
-        let evaluatedDocument = SceneMaterialAssignmentResolver().applyingSceneMaterials(
+        let evaluatedDocument = try SceneMaterialAssignmentResolver().applyingSceneMaterials(
             to: rawEvaluatedDocument,
             metadata: document.productMetadata
         )

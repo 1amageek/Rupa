@@ -140,16 +140,6 @@ extension DesignDocument {
         )
         try cadDocument.validate()
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
-        do {
-            _ = try CADPipeline
-                .modelingDefault(for: self, objectRegistry: objectRegistry)
-                .evaluate(cadDocument)
-        } catch {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(operationName) produced unsupported or invalid geometry: \(error)."
-            )
-        }
         didCommit = true
         return featureID
     }

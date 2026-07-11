@@ -28,6 +28,7 @@ public struct AutomationResult: Codable, Equatable, Sendable {
     public var drawingProjection: DrawingProjectionResult?
     public var sectionAnalysis: SectionAnalysisResult?
     public var sectionClippingPlan: SectionAnalysisClippingPlan?
+    public var executionMetrics: AutomationBatchMetrics?
 
     public init(
         message: String,
@@ -55,7 +56,8 @@ public struct AutomationResult: Codable, Equatable, Sendable {
         savedViewID: SavedViewID? = nil,
         drawingProjection: DrawingProjectionResult? = nil,
         sectionAnalysis: SectionAnalysisResult? = nil,
-        sectionClippingPlan: SectionAnalysisClippingPlan? = nil
+        sectionClippingPlan: SectionAnalysisClippingPlan? = nil,
+        executionMetrics: AutomationBatchMetrics? = nil
     ) {
         self.message = message
         self.commandName = commandName
@@ -83,6 +85,7 @@ public struct AutomationResult: Codable, Equatable, Sendable {
         self.drawingProjection = drawingProjection
         self.sectionAnalysis = sectionAnalysis
         self.sectionClippingPlan = sectionClippingPlan
+        self.executionMetrics = executionMetrics
     }
 }
 
@@ -114,6 +117,7 @@ extension AutomationResult {
         case drawingProjection
         case sectionAnalysis
         case sectionClippingPlan
+        case executionMetrics
     }
 
     public init(from decoder: Decoder) throws {
@@ -207,6 +211,10 @@ extension AutomationResult {
             sectionClippingPlan: try container.decodeIfPresent(
                 SectionAnalysisClippingPlan.self,
                 forKey: .sectionClippingPlan
+            ),
+            executionMetrics: try container.decodeIfPresent(
+                AutomationBatchMetrics.self,
+                forKey: .executionMetrics
             )
         )
     }
@@ -254,5 +262,6 @@ extension AutomationResult {
         try container.encodeIfPresent(drawingProjection, forKey: .drawingProjection)
         try container.encodeIfPresent(sectionAnalysis, forKey: .sectionAnalysis)
         try container.encodeIfPresent(sectionClippingPlan, forKey: .sectionClippingPlan)
+        try container.encodeIfPresent(executionMetrics, forKey: .executionMetrics)
     }
 }

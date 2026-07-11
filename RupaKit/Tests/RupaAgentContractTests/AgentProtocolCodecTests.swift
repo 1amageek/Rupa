@@ -95,6 +95,38 @@ import SwiftCAD
     #expect(batchJSON["expectedWorkspaceRevision"] != nil)
 }
 
+@Test func agentMessageCodecRoundTripsCallerOwnedFeatureGraphTransaction() async throws {
+    let codec = AgentMessageCodec()
+    let sessionID = UUID()
+    let featureID = FeatureID()
+    var builder = SketchBuilder(on: .xy)
+    builder.rectangle(
+        width: .length(20.0, .millimeter),
+        height: .length(10.0, .millimeter)
+    )
+    let transaction = FeatureGraphTransaction(
+        features: [
+            FeatureNode(
+                id: featureID,
+                name: "Caller Profile",
+                operation: .sketch(builder.build()),
+                outputs: [FeatureOutput(role: .profile)]
+            ),
+        ],
+        primaryFeatureID: featureID
+    )
+    let request = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .appendFeatureGraph(transaction),
+        expectedGeneration: DocumentGeneration(4)
+    )
+
+    let encoded = try codec.encode(request, id: "feature-graph")
+    let decoded = try codec.decodeRequest(from: encoded)
+
+    #expect(decoded == request)
+}
+
 @Test func agentMessageCodecRoundTripsDomainExecuteRequestAndResponse() async throws {
     let codec = AgentMessageCodec()
     let sessionID = UUID()
@@ -330,7 +362,13 @@ import SwiftCAD
             ],
             generation: DocumentGeneration(1),
             workspaceRevision: WorkspaceRevision(4),
-            dirty: true
+            dirty: true,
+            metrics: AutomationBatchMetrics(
+                commandCount: 1,
+                evaluationPassCount: 1,
+                historyEntryCount: 1,
+                richResultCount: 1
+            )
         )
     )
 
@@ -352,6 +390,11 @@ import SwiftCAD
     #expect(result["generation"] != nil)
     #expect(result["workspaceRevision"] != nil)
     #expect(result["dirty"] as? Bool == true)
+    let metrics = try #require(result["metrics"] as? [String: Any])
+    #expect(metrics["commandCount"] as? Int == 1)
+    #expect(metrics["evaluationPassCount"] as? Int == 1)
+    #expect(metrics["historyEntryCount"] as? Int == 1)
+    #expect(metrics["richResultCount"] as? Int == 1)
 }
 
 @Test func agentMessageCodecWrapsFailuresAsResponseErrors() async throws {

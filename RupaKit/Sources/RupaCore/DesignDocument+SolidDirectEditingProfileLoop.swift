@@ -12,9 +12,7 @@ extension DesignDocument {
             try updatedCADDocument.validate()
             var candidate = self
             candidate.cadDocument = updatedCADDocument
-            _ = try CADPipeline
-                .modelingDefault(for: candidate, objectRegistry: objectRegistry)
-                .evaluate(updatedCADDocument)
+            try candidate.validate(objectRegistry: objectRegistry)
         } catch {
             throw EditorError(
                 code: .referenceUnresolved,

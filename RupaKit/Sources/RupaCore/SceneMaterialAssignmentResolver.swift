@@ -4,7 +4,7 @@ struct SceneMaterialAssignmentResolver: Sendable {
     func applyingSceneMaterials(
         to evaluatedDocument: EvaluatedDocument,
         metadata: ProductMetadata
-    ) -> EvaluatedDocument {
+    ) throws -> EvaluatedDocument {
         let assignments = materialAssignmentsByBodyID(
             evaluatedDocument: evaluatedDocument,
             metadata: metadata
@@ -13,16 +13,31 @@ struct SceneMaterialAssignmentResolver: Sendable {
             return evaluatedDocument
         }
 
-        var result = evaluatedDocument
+        var meshes = evaluatedDocument.meshes
+        var brep = evaluatedDocument.brep
         for (bodyID, materialID) in assignments {
-            if result.meshes[bodyID]?.material == nil {
-                result.meshes[bodyID]?.material = materialID
+            if meshes[bodyID]?.material == nil {
+                meshes[bodyID]?.material = materialID
             }
-            if result.brep.bodies[bodyID]?.material == nil {
-                result.brep.bodies[bodyID]?.material = materialID
+            if brep.bodies[bodyID]?.material == nil {
+                brep.bodies[bodyID]?.material = materialID
             }
         }
-        return result
+        let result = EvaluatedDocument(
+            document: evaluatedDocument.document,
+            parameters: evaluatedDocument.parameters,
+            brep: brep,
+            meshes: meshes,
+            curves: evaluatedDocument.curves,
+            caches: DocumentCaches(),
+            generatedNames: evaluatedDocument.generatedNames,
+            configuration: evaluatedDocument.configuration,
+            evaluationMetrics: evaluatedDocument.evaluationMetrics
+        )
+        guard evaluatedDocument.caches.brep != nil else {
+            return result
+        }
+        return try DocumentCacheMaterializer().materializedDocument(from: result)
     }
 
     func materialID(

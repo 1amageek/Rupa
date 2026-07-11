@@ -197,6 +197,13 @@ func automationSourceBatchDryRunDoesNotPublishSource() async throws {
     #expect(execution.proposedGeneration == DocumentGeneration(1))
     #expect(!execution.didCommit)
     #expect(execution.results.map(\.effect) == [.sourceMutation, .readOnly])
+    #expect(execution.metrics.commandCount == 2)
+    #expect(execution.metrics.evaluationPassCount == 1)
+    #expect(execution.metrics.historyEntryCount == 1)
+    #expect(execution.metrics.richResultCount == 0)
+    #expect(execution.metrics.modelingEvaluation == nil)
+    #expect(execution.results.first?.workspaceScale == nil)
+    #expect(execution.results.last?.workspaceScale == nil)
     #expect(session.document.cadDocument.metadata.name == "Before")
     #expect(session.generation == DocumentGeneration(0))
     #expect(session.commandStack.undoEntries.isEmpty)
@@ -208,7 +215,7 @@ func automationReadOnlyBatchDoesNotPublishEvaluationState() async throws {
     let session = EditorSession()
     let originalStore = session.store
     let execution = try AutomationRunner().executeBatchTransaction(
-        AutomationBatch(commands: [.describeDocument, .validateDocument]),
+        AutomationBatch(commands: [.validateDocument, .describeDocument]),
         in: session,
         commits: true
     )
@@ -218,7 +225,84 @@ func automationReadOnlyBatchDoesNotPublishEvaluationState() async throws {
     #expect(execution.baseGeneration == execution.proposedGeneration)
     #expect(execution.baseWorkspaceRevision == execution.proposedWorkspaceRevision)
     #expect(execution.results.allSatisfy { $0.effect == .readOnly })
+    #expect(execution.metrics.commandCount == 2)
+    #expect(execution.metrics.evaluationPassCount == 1)
+    #expect(execution.metrics.historyEntryCount == 0)
+    #expect(execution.metrics.richResultCount == 1)
     #expect(session.store === originalStore)
     #expect(session.generation == DocumentGeneration(0))
     #expect(session.workspaceState.revision == WorkspaceRevision(0))
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func automationSourceBatchBuildsMultipleBodiesWithOneEvaluation() async throws {
+    let session = EditorSession()
+    let commands = (0..<8).map { index in
+        AutomationCommand.createExtrudedRectangle(
+            name: "Body \(index)",
+            plane: .xy,
+            width: .length(Double(index + 1) * 0.01, .meter),
+            height: .length(0.02, .meter),
+            depth: .length(0.03, .meter),
+            direction: .normal
+        )
+    }
+
+    let execution = try AutomationRunner().executeBatchTransaction(
+        AutomationBatch(
+            commands: commands,
+            expectedGeneration: DocumentGeneration()
+        ),
+        in: session,
+        commits: true
+    )
+
+    #expect(execution.results.count == 8)
+    #expect(execution.metrics.commandCount == 8)
+    #expect(execution.metrics.evaluationPassCount == 1)
+    #expect(execution.metrics.historyEntryCount == 1)
+    #expect(execution.metrics.richResultCount == 0)
+    let modelingEvaluation = try #require(execution.metrics.modelingEvaluation)
+    #expect(modelingEvaluation.totalFeatureCount == 16)
+    #expect(modelingEvaluation.rebuiltFeatureCount == 16)
+    #expect(modelingEvaluation.reusedFeatureCount == 0)
+    #expect(modelingEvaluation.tessellatedBodyCount == 8)
+    #expect(modelingEvaluation.reusedMeshCount == 0)
+    #expect(execution.results.allSatisfy { !$0.createdFeatureIDs.isEmpty })
+    #expect(execution.results.allSatisfy { $0.workspaceScale == nil })
+    #expect(session.evaluatedBodyCount == 8)
+    #expect(session.commandStack.undoEntries.count == 1)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func automationBatchRequiresWorkspaceContextQueryToBeFinal() {
+    #expect(throws: EditorError.self) {
+        try AutomationBatch(
+            commands: [.describeDocument, .validateDocument]
+        ).validatedEffect()
+    }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func automationSourceBatchAddsWorkspaceContextOnlyWhenExplicitlyRequested() throws {
+    let session = EditorSession(document: .empty(named: "Before"))
+
+    let execution = try AutomationRunner().executeBatchTransaction(
+        AutomationBatch(
+            commands: [
+                .renameDocument(name: "After"),
+                .describeDocument,
+            ]
+        ),
+        in: session,
+        commits: true
+    )
+
+    #expect(execution.effect == .sourceMutation)
+    #expect(execution.metrics.richResultCount == 1)
+    #expect(execution.results.first?.workspaceScale == nil)
+    #expect(execution.results.last?.workspaceScale != nil)
+    #expect(session.document.cadDocument.metadata.name == "After")
 }

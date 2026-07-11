@@ -147,6 +147,15 @@ public final class EditorSession {
         )
     }
 
+    func isolatedTransactionSnapshot() -> EditorSessionTransactionSnapshot {
+        EditorSessionTransactionSnapshot(
+            store: store.transactionSnapshot(),
+            commandStack: CommandStackSnapshot(undoEntries: [], redoEntries: []),
+            selection: selection,
+            workspaceState: workspaceState
+        )
+    }
+
     public func restoreTransactionSnapshot(_ snapshot: EditorSessionTransactionSnapshot) {
         let restoredStore = CADDocumentStore(
             transactionSnapshot: snapshot.store,
@@ -184,6 +193,32 @@ public final class EditorSession {
         return stagedSession
     }
 
+    func publishIsolatedSourceTransaction(
+        _ snapshot: EditorSessionTransactionSnapshot,
+        commandName: String,
+        before: DocumentSnapshot
+    ) {
+        let retainedCommandStack = commandStack
+        let restoredStore = CADDocumentStore(
+            transactionSnapshot: snapshot.store,
+            objectRegistry: objectRegistry
+        )
+        var restoredSelection = snapshot.selection
+        restoredSelection.pruneMissingReferences(in: restoredStore.document)
+        documentState = DocumentState(
+            store: restoredStore,
+            commandStack: retainedCommandStack,
+            selection: restoredSelection
+        )
+        workspaceState = snapshot.workspaceState
+        workspaceState.pruneMissingReferences(in: restoredStore.document)
+        retainedCommandStack.appendCommittedEntry(
+            commandName: commandName,
+            before: before,
+            after: snapshot.store.document
+        )
+    }
+
     func publishWorkspaceState(_ state: WorkspaceState) throws {
         try state.validate(against: document)
         workspaceState = state
@@ -195,9 +230,7 @@ public final class EditorSession {
         transactionName: String
     ) throws {
         guard stagedSession.generation == snapshot.store.document.generation,
-              stagedSession.isDirty == snapshot.store.document.isDirty,
-              stagedSession.commandStack.undoEntries.count == snapshot.commandStack.undoEntries.count,
-              stagedSession.commandStack.redoEntries.count == snapshot.commandStack.redoEntries.count else {
+              stagedSession.isDirty == snapshot.store.document.isDirty else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(transactionName) cannot execute source mutations."
@@ -827,6 +860,43 @@ public final class EditorSession {
         _ command: WorkspaceCommand
     ) throws -> WorkspaceCommandResult {
         try workspaceState.apply(command, document: document)
+    }
+
+    public func withSourceCommandGroup<Value>(
+        named commandName: String,
+        _ operation: (EditorSession) throws -> Value
+    ) throws -> Value {
+        let initialDocumentState = documentState
+        let initialWorkspaceState = workspaceState
+        do {
+            let value = try commandStack.withGroupedExecution(
+                commandName: commandName,
+                in: store
+            ) {
+                let value = try operation(self)
+                guard store === initialDocumentState.store,
+                      commandStack === initialDocumentState.commandStack else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "Source command groups cannot replace session document state."
+                    )
+                }
+                guard workspaceState.revision == initialWorkspaceState.revision else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "Source command groups cannot execute workspace mutations."
+                    )
+                }
+                return value
+            }
+            selection.pruneMissingReferences(in: document)
+            workspaceState.pruneMissingReferences(in: document)
+            return value
+        } catch {
+            documentState = initialDocumentState
+            workspaceState = initialWorkspaceState
+            throw error
+        }
     }
 
     private func commandResolvingSelectionContext(_ command: EditorCommand) throws -> EditorCommand {

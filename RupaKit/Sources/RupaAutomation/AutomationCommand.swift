@@ -1,7 +1,7 @@
 import Foundation
 import RupaCore
 
-public enum AutomationCommand: Codable, Equatable, Sendable {
+public indirect enum AutomationCommand: Codable, Equatable, Sendable {
     case describeDocument
     case setDisplayUnit(LengthDisplayUnit)
     case setRulerConfiguration(RulerConfiguration)
@@ -68,6 +68,7 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
     case setActiveConstructionPlane(id: ConstructionPlaneSourceID?)
     case renameConstructionPlane(id: ConstructionPlaneSourceID, name: String)
     case setConstructionPlane(id: ConstructionPlaneSourceID, plane: SketchPlane)
+    case appendFeatureGraph(FeatureGraphTransaction)
     case setCurveCurvatureDisplay(target: SelectionTarget, isVisible: Bool?, combScale: Double?)
     case setPointDisplay(target: SelectionTarget, isVisible: Bool?)
     case createSketch(name: String, sketch: Sketch, geometryRole: ObjectDescriptor.GeometryRole)

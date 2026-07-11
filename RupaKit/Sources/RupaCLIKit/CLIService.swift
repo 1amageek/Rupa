@@ -5042,13 +5042,12 @@ public struct CLIService {
         )
 
         let session = EditorSession(document: try fileService.load(from: url))
-        var results = try AutomationRunner().executeBatch(batch, in: session)
-        for index in results.indices {
-            ensureWorkspaceScaleContext(
-                in: &results[index],
-                workspaceState: session.workspaceState
-            )
-        }
+        let execution = try AutomationRunner().executeBatchTransaction(
+            batch,
+            in: session,
+            commits: true
+        )
+        let results = execution.results
         let didMutate = results.contains { $0.didMutate }
         let shouldSave = !dryRun && (didMutate || writePolicy.outputURL != nil)
 
@@ -5062,7 +5061,8 @@ public struct CLIService {
             generation: session.generation,
             workspaceRevision: session.workspaceState.revision,
             dirty: session.isDirty,
-            saved: shouldSave
+            saved: shouldSave,
+            metrics: execution.metrics
         )
     }
 
@@ -5083,20 +5083,13 @@ public struct CLIService {
             )
         )
         let batchResult = try batchResult(from: response)
-        var results = batchResult.results
-        for index in results.indices {
-            try ensureWorkspaceScaleContext(
-                in: &results[index],
-                sessionID: sessionID,
-                client: client
-            )
-        }
         return CLIBatchResponse(
-            results: results,
+            results: batchResult.results,
             generation: batchResult.generation,
             workspaceRevision: batchResult.workspaceRevision,
             dirty: batchResult.dirty,
-            saved: false
+            saved: false,
+            metrics: batchResult.metrics
         )
     }
 

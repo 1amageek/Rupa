@@ -2,7 +2,7 @@ import Foundation
 import SwiftCAD
 import RupaCoreTypes
 
-public enum EditorCommand: Codable, Equatable, Sendable {
+public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case createSavedView(SavedView)
     case updateSavedView(SavedView)
     case removeSavedView(id: SavedViewID)
@@ -63,6 +63,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     )
     case renameConstructionPlane(id: ConstructionPlaneSourceID, name: String)
     case setConstructionPlane(id: ConstructionPlaneSourceID, plane: SketchPlane)
+    case appendFeatureGraph(FeatureGraphTransaction)
     case createSketch(name: String, sketch: Sketch, geometryRole: ObjectDescriptor.GeometryRole)
     case createLineSketch(name: String, plane: SketchPlane, start: SketchPoint, end: SketchPoint)
     case createCircleSketch(name: String, plane: SketchPlane, center: SketchPoint, radius: CADExpression)
@@ -464,6 +465,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "renameConstructionPlane"
         case .setConstructionPlane:
             "setConstructionPlane"
+        case .appendFeatureGraph:
+            "appendFeatureGraph"
         case .createSketch:
             "createSketch"
         case .createLineSketch:
@@ -672,6 +675,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .createViewAlignedConstructionPlane,
              .renameConstructionPlane,
              .setConstructionPlane,
+             .appendFeatureGraph,
              .createSketch,
              .createLineSketch,
              .createCircleSketch,

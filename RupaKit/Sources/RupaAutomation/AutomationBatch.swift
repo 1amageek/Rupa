@@ -17,6 +17,13 @@ public struct AutomationBatch: Codable, Equatable, Sendable {
     }
 
     public func validatedEffect() throws -> AutomationCommandEffect {
+        if let contextIndex = commands.firstIndex(where: \.requestsWorkspaceContext),
+           contextIndex != commands.indices.last {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "describeDocument must be the final command when requesting workspace context in a batch."
+            )
+        }
         var mutationEffect: AutomationCommandEffect?
         var mutationIndex: Int?
         for (index, command) in commands.enumerated() {

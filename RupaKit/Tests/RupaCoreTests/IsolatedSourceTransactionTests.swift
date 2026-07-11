@@ -25,10 +25,10 @@ func isolatedTransactionCommitsMultipleMutationsAsOneUndoEntry() throws {
     #expect(session.commandStack.undoEntries.first?.commandName == "fixture.atomic")
     #expect(session.document.cadDocument.metadata.name == "After")
     #expect(session.store !== originalStore)
-    #expect(session.commandStack !== originalCommandStack)
+    #expect(session.commandStack === originalCommandStack)
     #expect(originalStore.document.cadDocument.metadata.name == "Before")
     #expect(originalStore.generation == DocumentGeneration(0))
-    #expect(originalCommandStack.undoEntries.isEmpty)
+    #expect(originalCommandStack.undoEntries.count == 1)
 
     _ = try session.undo()
 

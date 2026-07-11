@@ -41,9 +41,12 @@ public struct DocumentExportService: Sendable {
             var exportSourceDocument = document.cadDocument
             exportSourceDocument.units = plan.unitSystem
             let rawEvaluatedDocument = try pipeline.evaluate(exportSourceDocument)
-            evaluatedDocument = SceneMaterialAssignmentResolver().applyingSceneMaterials(
+            let projectedDocument = try SceneMaterialAssignmentResolver().applyingSceneMaterials(
                 to: rawEvaluatedDocument,
                 metadata: document.productMetadata
+            )
+            evaluatedDocument = try DocumentCacheMaterializer().materializedDocument(
+                from: projectedDocument
             )
         } catch {
             throw EditorError(

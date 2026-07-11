@@ -55,6 +55,7 @@ extension AutomationCommand {
              .createViewAlignedConstructionPlane,
              .renameConstructionPlane,
              .setConstructionPlane,
+             .appendFeatureGraph,
              .createSketch,
              .createLineSketch,
              .createCircleSketch,
@@ -139,5 +140,12 @@ extension AutomationCommand {
              .createExtrudedCircle:
             .sourceMutation
         }
+    }
+
+    var requestsWorkspaceContext: Bool {
+        if case .describeDocument = self {
+            return true
+        }
+        return false
     }
 }

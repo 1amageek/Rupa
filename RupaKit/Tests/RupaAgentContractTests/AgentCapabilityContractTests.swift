@@ -30,6 +30,7 @@ import SwiftCAD
     #expect(capabilities.contains("setSelectionDimensionTargetExpression"))
     #expect(capabilities.contains("listParameters"))
     #expect(capabilities.contains("cadInteractionQualityAssessment"))
+    #expect(capabilities.contains("appendFeatureGraph"))
     #expect(capabilities.contains("createComponentDefinition"))
     #expect(capabilities.contains("createComponentInstance"))
     #expect(capabilities.contains("createPatternArray"))

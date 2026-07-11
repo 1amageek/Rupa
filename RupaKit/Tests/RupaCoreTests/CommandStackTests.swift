@@ -72,12 +72,12 @@ import Testing
     let undoCache = try #require(session.currentEvaluationCache)
     #expect(session.generation != originalGeneration)
     #expect(undoCache.generation == session.generation)
-    #expect(undoCache.sourceFingerprint == originalCache.sourceFingerprint)
+    #expect(undoCache.evaluatedDocument.brep == originalCache.evaluatedDocument.brep)
 
     _ = try session.redo()
     let redoCache = try #require(session.currentEvaluationCache)
     #expect(redoCache.generation == session.generation)
-    #expect(redoCache.sourceFingerprint == changedCache.sourceFingerprint)
+    #expect(redoCache.evaluatedDocument.brep == changedCache.evaluatedDocument.brep)
 }
 
 @MainActor

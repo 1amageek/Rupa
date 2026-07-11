@@ -1,5 +1,6 @@
 import Foundation
 import RupaCore
+import SwiftCAD
 
 public struct ManufacturingMeshAnalyzer: Sendable {
     public init() {}
@@ -54,11 +55,14 @@ public struct ManufacturingMeshAnalyzer: Sendable {
     private func meshArtifactReference(
         evaluatedDocument: EvaluatedDocument
     ) throws -> MeshArtifactReference {
+        let caches = evaluatedDocument.caches.brep == nil
+            ? try DocumentCacheMaterializer().caches(for: evaluatedDocument)
+            : evaluatedDocument.caches
         let bodyIDs = evaluatedDocument.meshes.keys.sorted {
             $0.description < $1.description
         }
         guard let firstBodyID = bodyIDs.first,
-              let firstCache = evaluatedDocument.caches.meshes[firstBodyID] else {
+              let firstCache = caches.meshes[firstBodyID] else {
             throw ReferenceValidationError(
                 code: .invalidIdentity,
                 message: "Manufacturing analysis requires evaluated mesh cache provenance."
@@ -66,7 +70,7 @@ public struct ManufacturingMeshAnalyzer: Sendable {
         }
 
         for bodyID in bodyIDs {
-            guard let cache = evaluatedDocument.caches.meshes[bodyID] else {
+            guard let cache = caches.meshes[bodyID] else {
                 throw ReferenceValidationError(
                     code: .invalidIdentity,
                     message: "Manufacturing analysis is missing mesh artifact provenance for body \(bodyID.description)."

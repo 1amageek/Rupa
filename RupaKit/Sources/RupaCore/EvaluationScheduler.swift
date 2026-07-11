@@ -12,22 +12,26 @@ public struct EvaluationScheduler: Sendable {
     public func evaluate(
         document: DesignDocument,
         generation: DocumentGeneration,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        reusing previous: EvaluatedDocument? = nil
     ) -> EvaluationSnapshot {
         evaluateResult(
             document: document,
             generation: generation,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            reusing: previous
         ).snapshot
     }
 
     public func evaluateResult(
         document: DesignDocument,
         generation: DocumentGeneration,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        reusing previous: EvaluatedDocument? = nil
     ) -> DocumentEvaluationResult {
+        let validatedDocument: ValidatedDesignDocument
         do {
-            try document.validate(objectRegistry: objectRegistry)
+            validatedDocument = try document.validate(objectRegistry: objectRegistry)
         } catch {
             return DocumentEvaluationResult(
                 snapshot: failedSnapshot(
@@ -36,6 +40,22 @@ public struct EvaluationScheduler: Sendable {
                 )
             )
         }
+
+        return evaluateResult(
+            validatedDocument: validatedDocument,
+            generation: generation,
+            objectRegistry: objectRegistry,
+            reusing: previous
+        )
+    }
+
+    public func evaluateResult(
+        validatedDocument: ValidatedDesignDocument,
+        generation: DocumentGeneration,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        reusing previous: EvaluatedDocument? = nil
+    ) -> DocumentEvaluationResult {
+        let document = validatedDocument.document
 
         guard document.cadDocument.hasActiveRenderableTopologyFeatures else {
             return DocumentEvaluationResult(
@@ -47,12 +67,16 @@ public struct EvaluationScheduler: Sendable {
             for: document,
             objectRegistry: objectRegistry
         )
-        let report = evaluator.evaluateReport(document.cadDocument)
-        guard report.isComplete, let evaluatedDocument = report.evaluatedDocument else {
-            let message = report.failure?.message ?? "Document evaluation did not complete."
+        let evaluatedDocument: EvaluatedDocument
+        do {
+            evaluatedDocument = try evaluator.evaluate(
+                validatedDocument.validatedCADDocument,
+                reusing: previous
+            )
+        } catch {
             return DocumentEvaluationResult(
                 snapshot: failedSnapshot(
-                    message: message,
+                    message: String(describing: error),
                     generation: generation
                 )
             )
@@ -79,7 +103,8 @@ public struct EvaluationScheduler: Sendable {
             evaluationCache: EvaluatedDocumentCache(
                 generation: generation,
                 modelingSettings: document.modelingSettings,
-                evaluatedDocument: evaluatedDocument
+                evaluatedDocument: evaluatedDocument,
+                validatedDocument: validatedDocument
             )
         )
     }

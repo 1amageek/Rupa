@@ -105,6 +105,8 @@ The transport layer is intentionally not the owner of project semantics. It only
 | Transaction revision | Source-mutation requests encode `expectedTransactionRevision` as an object with a `value` integer. |
 | Dependency identity | Artifact, validation, export, and job requests carry or resolve source-dependency/content identity and do not use revision as freshness. |
 | Optional revision guard | `expectedTransactionRevision` may be omitted only when the client intentionally accepts the current source state; mutation results return the committed revision. |
+| Mutation result context | Mutation commands return compact command receipts. To receive workspace bounds, scale, precision, grid, saved views, and merged diagnostics in the same round trip, append `describeDocument` as the final batch command. |
+| Context query ordering | `describeDocument` must be the final command in a batch because its result describes the completed staged state. |
 
 Wire schemas are declared in `RupaAgentProtocol` DTOs and fixtures. They do not
 inherit an internal Codable shape implicitly. Reusing a value type requires an
@@ -117,6 +119,7 @@ explicit wire-schema/version decision and compatibility test.
 | `EmptyParams` | none |
 | `SessionGenerationParams` | `sessionID`, `expectedGeneration?` |
 | `ExecuteParams` | `sessionID`, `command`, `expectedGeneration?` |
+| `ExecuteBatchParams` | `sessionID`, `batch` |
 | `SetParameterExpressionParams` | `sessionID`, `name`, `expression`, `kind`, `defaults`, `expectedGeneration?` |
 | `SelectionMeasurementParams` | `sessionID`, `query`, `expectedGeneration?` |
 | `ResolveSnapParams` | `sessionID`, `point`, `options`, `expectedGeneration?` |
@@ -137,6 +140,7 @@ explicit wire-schema/version decision and compatibility test.
 | `agent.cadInteractionQualityAssessment` | `EmptyParams` | `CADInteractionQualityAssessmentResult` | No |
 | `sessions.list` | `EmptyParams` | `[WorkspaceSessionSummary]` | No |
 | `command.apply` | `ExecuteParams` | `AutomationResult` | Depends on command |
+| `command.applyBatch` | `ExecuteBatchParams` | `AgentBatchResult` | Depends on the validated homogeneous batch effect |
 | `parameter.setExpression` | `SetParameterExpressionParams` | `AutomationResult` | Yes |
 | `document.parameters` | `SessionGenerationParams` | `ParameterListResult` | No |
 | `document.evaluate` | `SessionGenerationParams` | `EvaluationSnapshot` | No |

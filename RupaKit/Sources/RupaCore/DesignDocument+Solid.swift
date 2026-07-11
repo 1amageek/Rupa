@@ -134,16 +134,6 @@ extension DesignDocument {
         )
         try cadDocument.validate()
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
-        do {
-            _ = try CADPipeline
-                .modelingDefault(for: self, objectRegistry: objectRegistry)
-                .evaluate(cadDocument)
-        } catch {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Revolve produced unsupported or invalid geometry: \(error)."
-            )
-        }
         didCommitRevolve = true
         return featureID
     }
@@ -233,16 +223,6 @@ extension DesignDocument {
         )
         try cadDocument.validate()
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
-        do {
-            _ = try CADPipeline
-                .modelingDefault(for: self, objectRegistry: objectRegistry)
-                .evaluate(cadDocument)
-        } catch {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Sweep produced unsupported or invalid geometry: \(error)."
-            )
-        }
         didCommitSweep = true
         return featureID
     }
@@ -309,16 +289,6 @@ extension DesignDocument {
         )
         try cadDocument.validate()
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
-        do {
-            _ = try CADPipeline
-                .modelingDefault(for: self, objectRegistry: objectRegistry)
-                .evaluate(cadDocument)
-        } catch {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Loft produced unsupported or invalid geometry: \(error)."
-            )
-        }
         didCommitLoft = true
         return featureID
     }
@@ -390,16 +360,6 @@ extension DesignDocument {
         )
         try cadDocument.validate()
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
-        do {
-            _ = try CADPipeline
-                .modelingDefault(for: self, objectRegistry: objectRegistry)
-                .evaluate(cadDocument)
-        } catch {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Boolean produced unsupported or invalid geometry: \(error)."
-            )
-        }
         didCommitBoolean = true
         return featureID
     }

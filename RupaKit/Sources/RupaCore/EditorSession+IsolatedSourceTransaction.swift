@@ -5,9 +5,8 @@ public extension EditorSession {
         _ operation: (EditorSession) throws -> Value
     ) throws -> IsolatedSourceTransactionExecution<Value> {
         let baseGeneration = generation
-        let initialSnapshot = transactionSnapshot()
+        let initialSnapshot = isolatedTransactionSnapshot()
         let stagedSession = makeIsolatedTransactionSession(from: initialSnapshot)
-        let initialUndoCount = stagedSession.commandStack.undoEntries.count
 
         let value = try operation(stagedSession)
         try requireUnchangedWorkspaceState(
@@ -16,20 +15,31 @@ public extension EditorSession {
             transactionName: "Isolated source transactions"
         )
         stagedSession.commandStack.collapseUndoEntries(
-            startingAt: initialUndoCount,
+            startingAt: 0,
             commandName: commandName
         )
         let proposedGeneration = stagedSession.generation
+        let didMutateSource = proposedGeneration != baseGeneration
+        guard stagedSession.commandStack.undoEntries.count == (didMutateSource ? 1 : 0) else {
+            throw EditorError(
+                code: .commandFailed,
+                message: "Isolated source transaction history does not match its generation change."
+            )
+        }
 
-        if commits {
-            restoreTransactionSnapshot(stagedSession.transactionSnapshot())
+        if commits, didMutateSource {
+            publishIsolatedSourceTransaction(
+                stagedSession.transactionSnapshot(),
+                commandName: commandName,
+                before: initialSnapshot.store.document
+            )
         }
 
         return IsolatedSourceTransactionExecution(
             value: value,
             baseGeneration: baseGeneration,
             proposedGeneration: proposedGeneration,
-            didCommit: commits && proposedGeneration != baseGeneration
+            didCommit: commits && didMutateSource
         )
     }
 }

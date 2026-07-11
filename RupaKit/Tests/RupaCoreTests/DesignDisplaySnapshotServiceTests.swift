@@ -547,16 +547,14 @@ private func designDisplayEvaluationContext(
     document: DesignDocument,
     generation: DocumentGeneration
 ) throws -> DocumentEvaluationContext {
+    let validatedDocument = try document.validate()
     let evaluatedDocument = try DocumentEvaluator.modelingDefault(for: document)
-        .evaluate(document.cadDocument)
-    let sourceFingerprint = try document.cadDocument.sourceFingerprint(
-        tolerance: document.modelingSettings.tolerance
-    )
+        .evaluate(validatedDocument.validatedCADDocument)
     return DocumentEvaluationContext(
         generation: generation,
-        sourceFingerprint: sourceFingerprint,
         modelingSettings: document.modelingSettings,
-        evaluatedDocument: evaluatedDocument
+        evaluatedDocument: evaluatedDocument,
+        validatedDocument: validatedDocument
     )
 }
 

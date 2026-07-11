@@ -71,6 +71,10 @@ flowchart LR
 | Non-mutating command errors | `EditorSession.record(_:)` | UI-friendly command wrappers may record diagnostics, but they must preserve the existing evaluation status and cache generation when the document did not mutate. A command error is not a geometry evaluation failure. |
 | Live mutation dry-run | `RupaCLIKit` | File dry-run means "execute without saving". Live session mutation has no safe dry-run because the app document would be mutated through Agent transport, so live dry-run must be rejected before dispatch. |
 | CLI process tests | `RupaCLITests` | Process E2E tests must execute the current Xcode build product only, must have bounded process timeouts, and must not fall back to package `.build` executables that could be stale. |
+| Agent source batch | `EditorSession.withSourceCommandGroup` | Related source commands defer document evaluation, publish one valid final state, and create one undo entry. A failed final evaluation restores source, history, selection, workspace state, diagnostics, and the evaluation cache. |
+| Batch response context | `RupaAutomation` | Mutation results are compact command receipts. Workspace measurement context is generated only when `describeDocument` is the final batch command. |
+| Validated source capability | `ValidatedDesignDocument` and `ValidatedCADDocument` | Full validation produces an immutable capability. Graph-stable feature edits may derive a new capability only when inputs, outputs, and suppression are unchanged and the edited operation and expressions validate locally. The evaluation cache carries the capability so Core does not repeat whole-document validation. |
+| Incremental exact evaluation | `SwiftCAD.DocumentEvaluationEngine` | A changed feature invalidates its dependency closure. Unchanged profiles, curves, BRep deltas, generated names, and meshes are reused; rebuilt feature results are validated before deterministic delta merge. |
 
 ## Surface M3 Status
 

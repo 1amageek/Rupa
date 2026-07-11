@@ -2,7 +2,7 @@ public extension EditorSession {
     func executeIsolatedReadTransaction<Value>(
         _ operation: (EditorSession) throws -> Value
     ) throws -> Value {
-        let initialSnapshot = transactionSnapshot()
+        let initialSnapshot = isolatedTransactionSnapshot()
         let stagedSession = makeIsolatedTransactionSession(from: initialSnapshot)
 
         let value = try operation(stagedSession)

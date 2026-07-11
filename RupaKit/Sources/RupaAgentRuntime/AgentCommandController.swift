@@ -83,31 +83,38 @@ public final class AgentCommandController: AgentClientProtocol {
                     expectedWorkspaceRevision: expectedWorkspaceRevision,
                     session: session
                 )
-                let result = try runner.executeBatch(
+                let execution = try runner.executeBatchTransaction(
                     AutomationBatch(
                         commands: [command],
                         expectedGeneration: expectedGeneration,
                         expectedWorkspaceRevision: expectedWorkspaceRevision
                     ),
-                    in: session
+                    in: session,
+                    commits: true
                 )
-                guard let commandResult = result.first else {
+                guard var commandResult = execution.results.first else {
                     throw EditorError(
                         code: .commandFailed,
                         message: "Agent command produced no result."
                     )
                 }
+                commandResult.executionMetrics = execution.metrics
                 return .command(commandResult)
             case let .executeBatch(sessionID, batch):
                 let session = try registry.session(id: sessionID)
                 try requireBatchPreconditions(batch, session: session)
-                let results = try runner.executeBatch(batch, in: session)
+                let execution = try runner.executeBatchTransaction(
+                    batch,
+                    in: session,
+                    commits: true
+                )
                 return .batch(
                     AgentBatchResult(
-                        results: results,
+                        results: execution.results,
                         generation: session.generation,
                         workspaceRevision: session.workspaceState.revision,
-                        dirty: session.isDirty
+                        dirty: session.isDirty,
+                        metrics: execution.metrics
                     )
                 )
             case let .executeDomain(sessionID, request):

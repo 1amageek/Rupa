@@ -16,18 +16,11 @@ public struct DocumentEvaluationContextResolver: Sendable {
         failurePrefix: String
     ) throws -> EvaluatedDocument {
         if let currentEvaluation {
-            do {
-                if try currentEvaluation.matches(
-                    document: document,
-                    generation: currentGeneration
-                ) {
-                    return currentEvaluation.evaluatedDocument
-                }
-            } catch {
-                throw EditorError(
-                    code: .evaluationFailed,
-                    message: "\(failurePrefix): \(String(describing: error))"
-                )
+            if currentEvaluation.matches(
+                document: document,
+                generation: currentGeneration
+            ) {
+                return currentEvaluation.evaluatedDocument
             }
         }
 

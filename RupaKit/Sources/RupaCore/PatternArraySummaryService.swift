@@ -160,14 +160,14 @@ public struct PatternArraySummaryService: Sendable {
         guard source.outputMode == .independentCopy else {
             return []
         }
-        let sourceFeatureIDs = definition.flatMap {
+        let resolvedSourceFeatureIDs = definition.flatMap {
             sourceFeatureIDs(
                 for: $0,
                 metadata: metadata,
                 cadDocument: cadDocument
             )
         }
-        let sourceFingerprints = sourceFeatureIDs.flatMap {
+        let sourceFingerprints = resolvedSourceFeatureIDs.flatMap {
             featureStructureFingerprints(
                 featureIDs: $0,
                 cadDocument: cadDocument
@@ -185,7 +185,7 @@ public struct PatternArraySummaryService: Sendable {
                 cadDocument: cadDocument
             )
             let state = independentCopyOutputState(
-                sourceFeatureIDs: sourceFeatureIDs,
+                sourceFeatureIDs: resolvedSourceFeatureIDs,
                 sourceFingerprints: sourceFingerprints,
                 outputFeatureIDs: outputFeatureIDs,
                 cadDocument: cadDocument

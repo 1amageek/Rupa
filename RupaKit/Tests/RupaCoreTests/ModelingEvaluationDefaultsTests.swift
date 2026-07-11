@@ -80,9 +80,9 @@ import Testing
     var changedSettingsDocument = session.document
     changedSettingsDocument.modelingSettings.tolerance.distance *= 2.0
 
-    #expect(try cache.matches(document: session.document, generation: session.generation))
-    #expect(try !cache.matches(document: changedSettingsDocument, generation: session.generation))
-    #expect(try DocumentEvaluationContext(cache: cache).matches(
+    #expect(cache.matches(document: session.document, generation: session.generation))
+    #expect(!cache.matches(document: changedSettingsDocument, generation: session.generation))
+    #expect(DocumentEvaluationContext(cache: cache).matches(
         document: session.document,
         generation: session.generation
     ))

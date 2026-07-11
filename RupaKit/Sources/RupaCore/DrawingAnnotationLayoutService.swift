@@ -130,10 +130,10 @@ public struct DrawingAnnotationLayoutService: Sendable {
                     : .adjusted
             }
 
-            let labelBox = labelBox(centeredAt: chosenPoint, size: size)
+            let placedLabelBox = labelBox(centeredAt: chosenPoint, size: size)
             let leader = leader(
                 from: anchorCenter,
-                to: labelBox,
+                to: placedLabelBox,
                 size: size,
                 isManual: isManual
             )
@@ -142,13 +142,13 @@ public struct DrawingAnnotationLayoutService: Sendable {
             laidOutAnnotation.labelPoint2D = chosenPoint
             laidOutAnnotation.labelLayout = DrawingProjectionResult.AnnotationLabelLayout(
                 placement: placement,
-                bounds2D: labelBox.bounds2D,
+                bounds2D: placedLabelBox.bounds2D,
                 leaderStart2D: leader?.start,
                 leaderEnd2D: leader?.end,
                 priorityIndex: index
             )
             laidOutAnnotations.append(laidOutAnnotation)
-            reservedLabelBoxes.append(labelBox.padded(by: size.padding))
+            reservedLabelBoxes.append(placedLabelBox.padded(by: size.padding))
         }
 
         return laidOutAnnotations

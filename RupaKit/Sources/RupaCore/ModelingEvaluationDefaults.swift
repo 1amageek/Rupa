@@ -3,7 +3,7 @@ import SwiftCAD
 
 public extension DocumentEvaluator {
     static var modelingDefault: DocumentEvaluator {
-        DocumentEvaluator()
+        DocumentEvaluator(artifactPolicy: .deferred)
     }
 
     static func modelingDefault(
@@ -12,7 +12,8 @@ public extension DocumentEvaluator {
     ) -> DocumentEvaluator {
         DocumentEvaluator(
             tolerance: document.modelingSettings.tolerance,
-            tessellationOptions: document.modelingSettings.tessellationOptions
+            tessellationOptions: document.modelingSettings.tessellationOptions,
+            artifactPolicy: .deferred
         )
     }
 }
@@ -30,7 +31,8 @@ public extension CADPipeline {
         return CADPipeline(
             evaluator: DocumentEvaluator(
                 tolerance: tolerance,
-                tessellationOptions: document.modelingSettings.tessellationOptions
+                tessellationOptions: document.modelingSettings.tessellationOptions,
+                artifactPolicy: .deferred
             ),
             snapQueryEvaluator: SnapQueryEvaluator(tolerance: tolerance),
             selectionMeasurementEvaluator: SelectionMeasurementEvaluator(tolerance: tolerance),

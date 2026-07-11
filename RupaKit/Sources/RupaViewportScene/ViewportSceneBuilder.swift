@@ -1468,14 +1468,10 @@ public struct ViewportSceneBuilder {
         evaluationCache: EvaluatedDocumentCache?
     ) -> EvaluatedDocument? {
         if let currentEvaluation {
-            do {
-                guard try currentEvaluation.matches(
-                    document: document,
-                    generation: documentGeneration
-                ) else {
-                    return nil
-                }
-            } catch {
+            guard currentEvaluation.matches(
+                document: document,
+                generation: documentGeneration
+            ) else {
                 return nil
             }
             return currentEvaluation.evaluatedDocument
@@ -1485,17 +1481,13 @@ public struct ViewportSceneBuilder {
               let evaluationCache else {
             return nil
         }
-        do {
-            guard try evaluationCache.matches(
-                document: document,
-                generation: documentGeneration
-            ) else {
-                return nil
-            }
-            return evaluationCache.evaluatedDocument
-        } catch {
+        guard evaluationCache.matches(
+            document: document,
+            generation: documentGeneration
+        ) else {
             return nil
         }
+        return evaluationCache.evaluatedDocument
     }
 
     private func evaluatedMeshBodyItem(

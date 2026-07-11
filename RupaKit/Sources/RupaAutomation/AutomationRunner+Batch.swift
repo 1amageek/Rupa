@@ -37,17 +37,20 @@ public extension AutomationRunner {
     ) throws -> AutomationBatchExecution {
         let baseGeneration = session.generation
         let baseWorkspaceRevision = session.workspaceState.revision
-        let results = try session.executeIsolatedReadTransaction { stagedSession in
-            try executeCommands(batch.commands, in: stagedSession)
+        let stage = try session.executeIsolatedReadTransaction { stagedSession in
+            try executeStage(batch.commands, in: stagedSession) {
+                try executeCommandsWithRequestedContext(batch.commands, in: stagedSession)
+            }
         }
         return AutomationBatchExecution(
-            results: results,
+            results: stage.results,
             effect: .readOnly,
             baseGeneration: baseGeneration,
             proposedGeneration: baseGeneration,
             baseWorkspaceRevision: baseWorkspaceRevision,
             proposedWorkspaceRevision: baseWorkspaceRevision,
-            didCommit: false
+            didCommit: false,
+            metrics: stage.metrics
         )
     }
 
@@ -61,16 +64,28 @@ public extension AutomationRunner {
             commandName: "automationBatch.source",
             commits: commits
         ) { stagedSession in
-            try executeCommands(batch.commands, in: stagedSession)
+            try executeStage(batch.commands, in: stagedSession) {
+                let results = try stagedSession.withSourceCommandGroup(
+                    named: "automationBatch.source"
+                ) { groupedSession in
+                    try executeCommandOnlyResults(batch.commands, in: groupedSession)
+                }
+                return addingRequestedFinalContext(
+                    to: results,
+                    commands: batch.commands,
+                    in: stagedSession
+                )
+            }
         }
         return AutomationBatchExecution(
-            results: execution.value,
+            results: execution.value.results,
             effect: .sourceMutation,
             baseGeneration: execution.baseGeneration,
             proposedGeneration: execution.proposedGeneration,
             baseWorkspaceRevision: workspaceRevision,
             proposedWorkspaceRevision: workspaceRevision,
-            didCommit: execution.didCommit
+            didCommit: execution.didCommit,
+            metrics: execution.value.metrics
         )
     }
 
@@ -83,25 +98,87 @@ public extension AutomationRunner {
         let execution = try session.executeIsolatedWorkspaceTransaction(
             commits: commits
         ) { stagedSession in
-            try executeCommands(batch.commands, in: stagedSession)
+            try executeStage(batch.commands, in: stagedSession) {
+                try executeCommandsWithRequestedContext(batch.commands, in: stagedSession)
+            }
         }
         return AutomationBatchExecution(
-            results: execution.value,
+            results: execution.value.results,
             effect: .workspaceMutation,
             baseGeneration: generation,
             proposedGeneration: generation,
             baseWorkspaceRevision: execution.baseRevision,
             proposedWorkspaceRevision: execution.proposedRevision,
-            didCommit: execution.didCommit
+            didCommit: execution.didCommit,
+            metrics: execution.value.metrics
         )
     }
 
-    private func executeCommands(
+    private func executeCommandsWithRequestedContext(
         _ commands: [AutomationCommand],
         in session: EditorSession
     ) throws -> [AutomationResult] {
-        try commands.map { command in
-            try execute(command, in: session)
+        addingRequestedFinalContext(
+            to: try executeCommandOnlyResults(commands, in: session),
+            commands: commands,
+            in: session
+        )
+    }
+
+    private func executeCommandOnlyResults(
+        _ commands: [AutomationCommand],
+        in session: EditorSession
+    ) throws -> [AutomationResult] {
+        let commandRunner = AutomationRunner(resultDetail: .commandOnly)
+        return try commands.map { command in
+            try commandRunner.execute(command, in: session)
         }
     }
+
+    private func addingRequestedFinalContext(
+        to results: [AutomationResult],
+        commands: [AutomationCommand],
+        in session: EditorSession
+    ) -> [AutomationResult] {
+        guard commands.last?.requestsWorkspaceContext == true,
+              let lastIndex = results.indices.last else {
+            return results
+        }
+        var contextualResults = results
+        contextualResults[lastIndex] = addingWorkspaceContext(
+            to: contextualResults[lastIndex],
+            in: session
+        )
+        return contextualResults
+    }
+
+    private func executeStage(
+        _ commands: [AutomationCommand],
+        in session: EditorSession,
+        _ operation: () throws -> [AutomationResult]
+    ) throws -> AutomationBatchStageExecution {
+        let initialEvaluationCount = session.store.completedEvaluationPassCount
+        let initialHistoryCount = session.commandStack.undoEntries.count
+        let results = try operation()
+        let evaluationPassCount = session.store.completedEvaluationPassCount
+            - initialEvaluationCount
+        return AutomationBatchStageExecution(
+            results: results,
+            metrics: AutomationBatchMetrics(
+                commandCount: commands.count,
+                evaluationPassCount: evaluationPassCount,
+                historyEntryCount: session.commandStack.undoEntries.count
+                    - initialHistoryCount,
+                richResultCount: results.filter { $0.workspaceScale != nil }.count,
+                modelingEvaluation: evaluationPassCount == 0
+                    ? nil
+                    : session.store.currentModelingEvaluationMetrics
+            )
+        )
+    }
+}
+
+private struct AutomationBatchStageExecution {
+    var results: [AutomationResult]
+    var metrics: AutomationBatchMetrics
 }

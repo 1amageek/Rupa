@@ -8,6 +8,29 @@ extension DesignDocument {
         distance: CADExpression,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws {
+        let validatedDocument = try validate(objectRegistry: objectRegistry)
+        _ = try setExtrudeDistance(
+            featureID: featureID,
+            distance: distance,
+            validatedDocument: validatedDocument
+        )
+    }
+
+    @discardableResult
+    package mutating func setExtrudeDistance(
+        featureID: FeatureID,
+        distance: CADExpression,
+        validatedDocument: ValidatedDesignDocument
+    ) throws -> ValidatedDesignDocument {
+        guard validatedDocument.document.modelingSettings == modelingSettings,
+              LiveDocumentEvaluationIdentity(
+                document: validatedDocument.document.cadDocument
+              ).matches(cadDocument) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Extrude distance requires validation for the current document source."
+            )
+        }
         _ = try resolvedLengthValue(distance, owner: "Extrude distance")
         guard var feature = cadDocument.designGraph.nodes[featureID] else {
             throw EditorError(
@@ -25,9 +48,10 @@ extension DesignDocument {
         extrude.distance = distance
         feature.operation = .extrude(extrude)
 
-        var updatedCADDocument = cadDocument
+        let updatedCADDocument: ValidatedCADDocument
         do {
-            try updatedCADDocument.replaceFeature(feature)
+            updatedCADDocument = try validatedDocument.validatedCADDocument
+                .replacingGraphStableFeature(feature)
         } catch {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -35,8 +59,11 @@ extension DesignDocument {
             )
         }
 
-        cadDocument = updatedCADDocument
-        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        cadDocument = updatedCADDocument.document
+        return ValidatedDesignDocument(
+            document: self,
+            validatedCADDocument: updatedCADDocument
+        )
     }
 
     public mutating func setCubeDimensions(

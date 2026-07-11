@@ -316,6 +316,32 @@ enum AgentCapabilityCatalog {
             failureMode: "Does not inspect or mutate a session; reports the current static product-quality assessment model."
         ),
         capability(
+            "appendFeatureGraph",
+            category: .document,
+            summary: "Append an ordered CAD feature subgraph with caller-owned feature and scene identities in one source transaction, one undo entry, and one evaluation pass.",
+            access: .automationCommand,
+            stateEffect: .sourceMutation,
+            targets: [.document],
+            failureMode: "Rejects duplicate or colliding identities, unresolved dependencies, invalid presentation ownership or hierarchy, stale generations, and failed kernel evaluation without publishing partial source.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "identityOwnership",
+                    supportedValues: ["caller-owned FeatureID", "caller-owned SceneNodeID"],
+                    notes: [
+                        "Feature nodes must be dependency ordered and every presentation must own one transaction feature.",
+                        "The returned createdFeatureIDs preserve transaction feature order and primaryFeatureID preserves the caller-selected result identity.",
+                    ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "transactionBoundary",
+                    supportedValues: ["one graph revision", "one undo entry", "one evaluation pass"],
+                    notes: [
+                        "Use this command for generated feature graphs that would otherwise require multiple dependent command round trips.",
+                    ]
+                ),
+            ]
+        ),
+        capability(
             "createComponentDefinition",
             category: .component,
             summary: "Create a reusable component definition from existing root scene nodes.",

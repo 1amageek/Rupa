@@ -22,6 +22,7 @@ public struct CommandHistoryEntry: Sendable {
 public final class CommandStack {
     public private(set) var undoEntries: [CommandHistoryEntry]
     public private(set) var redoEntries: [CommandHistoryEntry]
+    @ObservationIgnored private var groupedExecution: GroupedExecutionState?
 
     public init(
         undoEntries: [CommandHistoryEntry] = [],
@@ -63,6 +64,10 @@ public final class CommandStack {
               let lastEntry = groupedEntries.last else {
             return
         }
+        if groupedEntries.count == 1 {
+            undoEntries[startIndex].commandName = commandName
+            return
+        }
         undoEntries.replaceSubrange(
             startIndex...,
             with: [
@@ -93,6 +98,21 @@ public final class CommandStack {
         }
     }
 
+    func appendCommittedEntry(
+        commandName: String,
+        before: DocumentSnapshot,
+        after: DocumentSnapshot
+    ) {
+        undoEntries.append(
+            CommandHistoryEntry(
+                commandName: commandName,
+                before: before,
+                after: after
+            )
+        )
+        redoEntries.removeAll()
+    }
+
     @discardableResult
     public func execute(
         _ command: EditorCommand,
@@ -100,6 +120,13 @@ public final class CommandStack {
         expectedGeneration: DocumentGeneration? = nil
     ) throws -> CommandExecutionResult {
         try store.requireGeneration(expectedGeneration)
+        if groupedExecution != nil {
+            let result = try store.apply(command)
+            if result.didMutate {
+                groupedExecution?.didMutate = true
+            }
+            return result
+        }
         let before = store.snapshot()
         let result = try store.apply(command)
         let after = store.snapshot()
@@ -116,6 +143,79 @@ public final class CommandStack {
         }
 
         return result
+    }
+
+    package func withGroupedExecution<Value>(
+        commandName: String,
+        in store: CADDocumentStore,
+        _ operation: () throws -> Value
+    ) throws -> Value {
+        guard groupedExecution == nil else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Source command groups cannot be nested."
+            )
+        }
+        guard !commandName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Source command group names must not be empty."
+            )
+        }
+
+        let storeSnapshot = store.transactionSnapshot()
+        let historySnapshot = snapshot()
+        groupedExecution = GroupedExecutionState()
+        do {
+            let value = try store.withDeferredEvaluation(operation)
+            let completedGroup = groupedExecution
+            groupedExecution = nil
+            let generationChanged = store.generation != storeSnapshot.document.generation
+            if completedGroup?.didMutate == true {
+                guard generationChanged else {
+                    throw EditorError(
+                        code: .commandFailed,
+                        message: "A source command reported a mutation without advancing the document generation."
+                    )
+                }
+                guard store.evaluatedGeneration == store.generation else {
+                    throw EditorError(
+                        code: .evaluationFailed,
+                        message: "Source command group evaluation did not reach the proposed generation."
+                    )
+                }
+                switch store.evaluationStatus {
+                case .valid:
+                    break
+                case .failed(let message):
+                    throw EditorError(code: .evaluationFailed, message: message)
+                case .notEvaluated:
+                    throw EditorError(
+                        code: .evaluationFailed,
+                        message: "Source command group did not produce an evaluated document."
+                    )
+                }
+                undoEntries.append(
+                    CommandHistoryEntry(
+                        commandName: commandName,
+                        before: storeSnapshot.document,
+                        after: store.snapshot()
+                    )
+                )
+                redoEntries.removeAll()
+            } else if generationChanged {
+                throw EditorError(
+                    code: .commandFailed,
+                    message: "A source command advanced the document generation without reporting a mutation."
+                )
+            }
+            return value
+        } catch {
+            groupedExecution = nil
+            store.restoreTransactionSnapshot(storeSnapshot)
+            restore(historySnapshot)
+            throw error
+        }
     }
 
     @discardableResult
@@ -155,4 +255,8 @@ public final class CommandStack {
             diagnostics: store.diagnostics
         )
     }
+}
+
+private struct GroupedExecutionState {
+    var didMutate = false
 }
