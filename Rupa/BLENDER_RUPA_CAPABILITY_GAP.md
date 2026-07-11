@@ -49,8 +49,8 @@ than copied into hundreds of redundant rows.
 | Rendering and shading | Internal | Render engines, cameras/lights, shader graph, textures, color management | RupaRendering / optional engines |
 | Compositing, tracking, video | Missing | Image compositor, camera tracking, masks, sequencer and audio | Optional RupaMedia modules |
 | Assets, files, and pipeline | Partial | Asset libraries, linking, overrides, broad DCC exchange semantics | RupaProject / RupaExchange |
-| Scripting and extensions | Partial | Embedded scripting, runtime extension loader, custom operators/nodes/editors | RupaProject / plugin host |
-| Agent integration | Partial | MCP adapter and capability-complete routes for all future systems | RupaAgent adapters |
+| Scripting, extensions, and Agent access | Partial | Embedded scripting, runtime extension loader, custom operators/nodes/editors, MCP, compact procedural programs | RupaProject / plugin host / Agent adapters |
+| Production and platform | Partial | Cross-platform app, GPU shaded scene, broad dependency graph, recovery, distributed jobs | App / RupaProject / RupaRendering |
 
 ## Current Rupa Baseline
 

@@ -35,7 +35,7 @@
     { "area": "Rendering and shading", "state": "internal", "priority": "P1" },
     { "area": "Compositing, tracking, video", "state": "missing", "priority": "P3" },
     { "area": "Assets, files, and pipeline", "state": "partial", "priority": "P0" },
-    { "area": "Scripting and extensions", "state": "partial", "priority": "P0" },
-    { "area": "Agent integration", "state": "partial", "priority": "P0" }
+    { "area": "Scripting, extensions, and Agent access", "state": "partial", "priority": "P0" },
+    { "area": "Production and platform", "state": "partial", "priority": "P0" }
   ]
 }
