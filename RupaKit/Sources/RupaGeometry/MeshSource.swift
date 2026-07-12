@@ -121,6 +121,10 @@ public struct MeshSource: Codable, Equatable, Sendable {
         return vertexPositions[index]
     }
 
+    public func bounds() throws -> GeometryBounds3D {
+        try GeometryBounds3D(points: vertexPositions)
+    }
+
     private func validateUnique<Element: Hashable>(
         _ values: GeometryBuffer<Element>,
         label: String

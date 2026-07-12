@@ -28,7 +28,9 @@ The plan is executable and the following slices have evidence in the repository:
 | M1 / G01 shared immutable buffers | First slice complete | `RupaGeometry` exposes immutable buffers, zero-copy views, COW builders, and copy telemetry; targeted tests pass. |
 | M1 / G02 editable polygon mesh source | First slice complete | `MeshSource` stores vertex/edge/face/corner SoA buffers, preserves n-gon face loops, validates references, and round-trips through its source codec. |
 | M1 / G04 generic geometry attributes | First slice complete | `GeometryAttributeSet` validates typed dense/sparse layers across vertex, edge, face, and corner domains; UV and material-index fixtures pass. |
-| M1 project/evaluation integration | Not started | Requires source aggregate, dependency graph, CAD provider adapter, and immutable evaluated snapshot. |
+| M1 project source aggregate | First slice complete | `RupaProjectModel` validates mesh references, object definitions, occurrence hierarchy, roots, and external provider references without importing CAD. |
+| M1 evaluation integration | First slice complete | `RupaEvaluation` evaluates mesh providers into immutable occurrence snapshots with composed transforms and world bounds; provider injection leaves the CAD adapter boundary explicit. |
+| M1 CAD/project integration | Not started | Requires the Swift-CAD adapter, transaction staging, and `DesignDocument` composition without moving CAD types into project contracts. |
 
 The first-slice rows are not milestone completion. The remaining M1 work must
 integrate CAD and mesh sources into one project transaction/evaluation route

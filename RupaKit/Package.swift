@@ -29,6 +29,14 @@ let package = Package(
             targets: ["RupaGeometry"]
         ),
         .library(
+            name: "RupaProjectModel",
+            targets: ["RupaProjectModel"]
+        ),
+        .library(
+            name: "RupaEvaluation",
+            targets: ["RupaEvaluation"]
+        ),
+        .library(
             name: "RupaUI",
             targets: ["RupaUI"]
         ),
@@ -126,6 +134,21 @@ let package = Package(
             name: "RupaGeometry",
             dependencies: [
                 "RupaCoreTypes",
+            ]
+        ),
+        .target(
+            name: "RupaProjectModel",
+            dependencies: [
+                "RupaCoreTypes",
+                "RupaGeometry",
+            ]
+        ),
+        .target(
+            name: "RupaEvaluation",
+            dependencies: [
+                "RupaCoreTypes",
+                "RupaGeometry",
+                "RupaProjectModel",
             ]
         ),
         .target(
@@ -285,6 +308,14 @@ let package = Package(
         .testTarget(
             name: "RupaGeometryTests",
             dependencies: ["RupaGeometry"]
+        ),
+        .testTarget(
+            name: "RupaProjectModelTests",
+            dependencies: ["RupaProjectModel"]
+        ),
+        .testTarget(
+            name: "RupaEvaluationTests",
+            dependencies: ["RupaEvaluation"]
         ),
         .testTarget(
             name: "RupaAutomationTests",
