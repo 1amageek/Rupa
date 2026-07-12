@@ -261,6 +261,7 @@ let package = Package(
                 "RupaCore",
                 "RupaAutomation",
                 "RupaDomainFoundation",
+                "RupaCapabilities",
                 "RupaAgentProtocol",
             ]
         ),
@@ -395,6 +396,7 @@ let package = Package(
                 "RupaAutomation",
                 "RupaDomainFoundation",
                 "RupaCore",
+                "RupaCapabilities",
                 "RupaAgentTestFixtures",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
             ],

@@ -1,6 +1,7 @@
 import Foundation
 import RupaAgentProtocol
 import RupaAutomation
+import RupaCapabilities
 import RupaCore
 import RupaDomainFoundation
 
@@ -41,6 +42,10 @@ public final class AgentCommandController: AgentClientProtocol {
 
     public func capabilityDescriptors() -> [AgentCapabilityDescriptor] {
         AgentCapabilityCatalog.descriptors(domainRegistry: domainRegistry)
+    }
+
+    public func capabilityRegistry() throws -> CapabilityRegistry {
+        try AgentCapabilityCatalog.capabilityRegistry(domainRegistry: domainRegistry)
     }
 
     @discardableResult

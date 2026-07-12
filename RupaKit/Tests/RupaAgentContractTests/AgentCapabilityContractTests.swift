@@ -1,6 +1,7 @@
 import Testing
 import Darwin
 import Foundation
+import RupaCapabilities
 import RupaAutomation
 import RupaCore
 import RupaDomainFoundation
@@ -165,6 +166,17 @@ import SwiftCAD
     #expect(capabilities.contains("validateDocument"))
     #expect(capabilities == descriptorNames)
     #expect(Set(descriptorNames).count == descriptorNames.count)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func agentCapabilityRegistryProjectsTheExistingAgentSurface() throws {
+    let controller = AgentCommandController()
+    let registry = try controller.capabilityRegistry()
+
+    #expect(registry.descriptors(for: .agent).count == controller.capabilityDescriptors().count)
+    #expect(registry.descriptor(for: "agent.describeDocument")?.effect == .query)
+    #expect(registry.descriptor(for: "agent.createSweep")?.effect == .sourceMutation)
+    #expect(registry.descriptor(for: "agent.setDisplayUnit")?.effect == .workspaceMutation)
 }
 
 @Test func agentCapabilityDescriptorsIncludeInjectedDomainCapabilities() async throws {

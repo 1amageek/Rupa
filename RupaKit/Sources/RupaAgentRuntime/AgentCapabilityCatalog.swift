@@ -1,5 +1,6 @@
 import RupaAgentProtocol
 import RupaAutomation
+import RupaCapabilities
 import RupaCore
 import RupaDomainFoundation
 
@@ -2200,6 +2201,14 @@ enum AgentCapabilityCatalog {
 
     static func descriptors(domainRegistry: DomainRegistry) -> [AgentCapabilityDescriptor] {
         descriptors + domainRegistry.sortedCapabilityDescriptors().map(domainCapability)
+    }
+
+    static func capabilityRegistry(domainRegistry: DomainRegistry) throws -> CapabilityRegistry {
+        try CapabilityRegistry(
+            descriptors: descriptors(domainRegistry: domainRegistry).map {
+                try $0.capabilityDescriptor()
+            }
+        )
     }
 
     private static func capability(

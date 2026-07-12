@@ -86,8 +86,8 @@ public extension DomainCapabilityDescriptor {
     }
 }
 
-private extension DomainCommandParameterDescriptor {
-    func capabilityParameterDescriptor() throws -> CapabilityParameterDescriptor {
+extension DomainCommandParameterDescriptor {
+    public func capabilityParameterDescriptor() throws -> CapabilityParameterDescriptor {
         let canonicalDefaultValue: CanonicalValue?
         if let defaultValue {
             canonicalDefaultValue = try Self.canonicalValue(defaultValue)
