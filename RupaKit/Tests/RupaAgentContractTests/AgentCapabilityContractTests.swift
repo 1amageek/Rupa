@@ -179,6 +179,18 @@ func agentCapabilityRegistryProjectsTheExistingAgentSurface() throws {
     #expect(registry.descriptor(for: "agent.setDisplayUnit")?.effect == .workspaceMutation)
 }
 
+@Test(.timeLimit(.minutes(1)))
+func agentProtocolExposesUniversalCapabilityRegistryDiscovery() throws {
+    let response = AgentCommandController().handle(.capabilityRegistry)
+    guard case .capabilityRegistry(let descriptors) = response else {
+        Issue.record("Expected the universal capability registry response.")
+        return
+    }
+
+    #expect(descriptors.contains { $0.id.rawValue == "agent.createSweep" })
+    #expect(descriptors.contains { $0.id.rawValue == "agent.setDisplayUnit" })
+}
+
 @Test func agentCapabilityDescriptorsIncludeInjectedDomainCapabilities() async throws {
     let namespace: SemanticNamespaceID = "architecture"
     let capabilityID: DomainCapabilityID = "architecture.createWall"

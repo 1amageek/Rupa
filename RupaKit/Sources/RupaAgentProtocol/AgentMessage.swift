@@ -1,10 +1,12 @@
 import Foundation
+import RupaCapabilities
 import RupaAutomation
 import RupaCore
 import RupaDomainFoundation
 
 public enum AgentRequest: Codable, Equatable, Sendable {
     case capabilities
+    case capabilityRegistry
     case status
     case sessions
     case cadInteractionQualityAssessment
@@ -205,6 +207,7 @@ public enum AgentRequest: Codable, Equatable, Sendable {
 
 public enum AgentResponse: Codable, Equatable, Sendable {
     case capabilities([AgentCapabilityDescriptor])
+    case capabilityRegistry([CapabilityDescriptor])
     case status(AgentStatus)
     case sessions([WorkspaceSessionSummary])
     case cadInteractionQualityAssessment(CADInteractionQualityAssessmentResult)
@@ -245,6 +248,8 @@ public extension AgentRequest {
         switch self {
         case .capabilities:
             "agent.capabilities"
+        case .capabilityRegistry:
+            "agent.capabilityRegistry"
         case .status:
             "agent.status"
         case .sessions:

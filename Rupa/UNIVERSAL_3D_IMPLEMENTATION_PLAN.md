@@ -26,6 +26,7 @@ The plan is executable and the following slices have evidence in the repository:
 | M0 / F03 universal capability registry | Complete | `RupaCapabilities` compiles; duplicate, version, effect/result, path, availability, and surface discovery tests pass. |
 | Domain capability adapter | Complete | `DomainRegistry.capabilityRegistry()` converts validated domain descriptors and bridge tests pass. |
 | Agent capability projection | First slice complete | `AgentCommandController.capabilityRegistry()` projects the current Agent surface into the universal registry; static catalog removal remains gated on handler migration. |
+| Agent protocol universal discovery | First slice complete | `agent.capabilityRegistry` request/response round-trips typed universal descriptors through the existing JSON-RPC envelope. |
 | M1 / G01 shared immutable buffers | First slice complete | `RupaGeometry` exposes immutable buffers, zero-copy views, COW builders, and copy telemetry; targeted tests pass. |
 | M1 / G02 editable polygon mesh source | First slice complete | `MeshSource` stores vertex/edge/face/corner SoA buffers, preserves n-gon face loops, validates references, and round-trips through its source codec. |
 | M1 / G04 generic geometry attributes | First slice complete | `GeometryAttributeSet` validates typed dense/sparse layers across vertex, edge, face, and corner domains; UV and material-index fixtures pass. |

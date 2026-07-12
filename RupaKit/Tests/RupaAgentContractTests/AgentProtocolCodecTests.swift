@@ -24,6 +24,30 @@ import SwiftCAD
     #expect(descriptors.contains { $0.name == "patternArraySummary" && $0.discovery.contains(.patternArraySummary) })
 }
 
+@Test func agentMessageCodecRoundTripsUniversalCapabilityRegistryRoute() async throws {
+    let codec = AgentMessageCodec()
+    let requestData = try codec.encode(.capabilityRegistry, id: "universal-request")
+    let request = try codec.decodeRequest(from: requestData)
+    #expect(request == .capabilityRegistry)
+
+    let response = AgentCommandController().handle(request)
+    let responseData = try codec.encode(
+        response,
+        id: "universal-request",
+        method: request.methodName
+    )
+    let decoded = try codec.decodeResponse(
+        from: responseData,
+        expectedID: "universal-request",
+        expectedMethod: request.methodName
+    )
+    guard case .capabilityRegistry(let descriptors) = decoded else {
+        Issue.record("Expected a universal capability registry response.")
+        return
+    }
+    #expect(descriptors.contains { $0.id.rawValue == "agent.createSweep" })
+}
+
 @Test func agentMessageCodecWrapsRequestsInJSONRPCEnvelope() async throws {
     let codec = AgentMessageCodec()
 

@@ -1,4 +1,5 @@
 import Foundation
+import RupaCapabilities
 import RupaAutomation
 import RupaCore
 import RupaDomainFoundation
@@ -157,6 +158,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
         switch result {
         case .capabilities(let value):
             try container.encode(value, forKey: .result)
+        case .capabilityRegistry(let value):
+            try container.encode(value, forKey: .result)
         case .status(let value):
             try container.encode(value, forKey: .result)
         case .sessions(let value):
@@ -237,6 +240,10 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
         case "agent.capabilities":
             return .capabilities(
                 try container.decode([AgentCapabilityDescriptor].self, forKey: .result)
+            )
+        case "agent.capabilityRegistry":
+            return .capabilityRegistry(
+                try container.decode([CapabilityDescriptor].self, forKey: .result)
             )
         case "agent.status":
             return .status(try container.decode(AgentStatus.self, forKey: .result))
@@ -352,6 +359,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
         switch response {
         case .capabilities:
             "agent.capabilities"
+        case .capabilityRegistry:
+            "agent.capabilityRegistry"
         case .status:
             "agent.status"
         case .sessions:
@@ -424,6 +433,7 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
     private static func isCompatible(result: AgentResponse, with method: String) -> Bool {
         switch (method, result) {
         case ("agent.capabilities", .capabilities),
+             ("agent.capabilityRegistry", .capabilityRegistry),
              ("agent.status", .status),
              ("sessions.list", .sessions),
              ("agent.cadInteractionQualityAssessment", .cadInteractionQualityAssessment),

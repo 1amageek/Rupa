@@ -253,6 +253,7 @@ let package = Package(
                 "RupaCore",
                 "RupaAutomation",
                 "RupaDomainFoundation",
+                "RupaCapabilities",
             ]
         ),
         .target(

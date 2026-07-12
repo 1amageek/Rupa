@@ -66,6 +66,7 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
     private func encodeParams(to container: inout KeyedEncodingContainer<CodingKeys>) throws {
         switch params {
         case .capabilities,
+             .capabilityRegistry,
              .status,
              .sessions,
              .cadInteractionQualityAssessment:
@@ -329,6 +330,9 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
         case "agent.capabilities":
             try decodeEmptyParams(from: container, method: method)
             return .capabilities
+        case "agent.capabilityRegistry":
+            try decodeEmptyParams(from: container, method: method)
+            return .capabilityRegistry
         case "agent.status":
             try decodeEmptyParams(from: container, method: method)
             return .status

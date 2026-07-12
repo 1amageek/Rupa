@@ -66,6 +66,12 @@ public final class AgentCommandController: AgentClientProtocol {
             switch request {
             case .capabilities:
                 return .capabilities(capabilityDescriptors())
+            case .capabilityRegistry:
+                do {
+                    return .capabilityRegistry(try capabilityRegistry().sortedDescriptors())
+                } catch let error as CapabilityRegistryError {
+                    throw EditorError(code: .commandFailed, message: error.message)
+                }
             case .status:
                 return .status(
                     AgentStatus(
