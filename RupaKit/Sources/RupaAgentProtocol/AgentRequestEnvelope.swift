@@ -1,4 +1,5 @@
 import Foundation
+import RupaCapabilities
 import RupaAutomation
 import RupaCore
 import RupaDomainFoundation
@@ -98,6 +99,15 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                     payload: request.payload,
                     expectedGeneration: request.expectedGeneration,
                     dryRun: request.dryRun
+                ),
+                forKey: .params
+            )
+        case let .invokeCapability(sessionID, invocation, expectedWorkspaceRevision):
+            try container.encode(
+                CapabilityInvokeParams(
+                    sessionID: sessionID,
+                    invocation: invocation,
+                    expectedWorkspaceRevision: expectedWorkspaceRevision
                 ),
                 forKey: .params
             )
@@ -367,6 +377,13 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                     expectedGeneration: payload.expectedGeneration,
                     dryRun: payload.dryRun
                 )
+            )
+        case "capability.invoke":
+            let payload = try decodeParams(CapabilityInvokeParams.self, from: container, method: method)
+            return .invokeCapability(
+                sessionID: payload.sessionID,
+                invocation: payload.invocation,
+                expectedWorkspaceRevision: payload.expectedWorkspaceRevision
             )
         case "document.parameters":
             let payload = try decodeParams(SessionGenerationParams.self, from: container, method: method)
@@ -710,6 +727,18 @@ private struct DomainExecuteParams: AgentRequestParameterPayload, Equatable {
     var payload: SemanticJSONValue
     var expectedGeneration: DocumentGeneration?
     var dryRun: Bool
+}
+
+private struct CapabilityInvokeParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = [
+        "sessionID",
+        "invocation",
+        "expectedWorkspaceRevision",
+    ]
+
+    var sessionID: UUID
+    var invocation: CapabilityInvocation
+    var expectedWorkspaceRevision: WorkspaceRevision?
 }
 
 private struct SetParameterExpressionParams: AgentRequestParameterPayload, Equatable {

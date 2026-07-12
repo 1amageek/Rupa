@@ -24,6 +24,11 @@ public enum AgentRequest: Codable, Equatable, Sendable {
         sessionID: UUID,
         request: DomainCommandRequest
     )
+    case invokeCapability(
+        sessionID: UUID,
+        invocation: CapabilityInvocation,
+        expectedWorkspaceRevision: WorkspaceRevision?
+    )
     case parameters(
         sessionID: UUID,
         expectedGeneration: DocumentGeneration?
@@ -214,6 +219,7 @@ public enum AgentResponse: Codable, Equatable, Sendable {
     case command(AutomationResult)
     case batch(AgentBatchResult)
     case domainExecution(DomainExecutionResult)
+    case capabilityExecution(AgentCapabilityExecutionResult)
     case parameters(ParameterListResult)
     case evaluation(EvaluationSnapshot)
     case measurement(MeasurementResult)
@@ -262,6 +268,8 @@ public extension AgentRequest {
             "command.applyBatch"
         case .executeDomain:
             "domain.execute"
+        case .invokeCapability:
+            "capability.invoke"
         case .parameters:
             "document.parameters"
         case .setParameterExpression:

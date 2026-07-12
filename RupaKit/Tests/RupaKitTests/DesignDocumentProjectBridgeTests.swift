@@ -1,4 +1,5 @@
 import RupaKit
+import RupaCoreTypes
 import SwiftCAD
 import Testing
 
@@ -41,4 +42,20 @@ func designDocumentBridgeFeedsCADEvaluationThroughUniversalProjectModel() throws
     #expect(snapshot.occurrences.values.contains { occurrence in
         occurrence.reference.providerID == "cad" && occurrence.mesh.faceIDs.count > 0
     })
+}
+
+@Test(.timeLimit(.minutes(1)))
+func designDocumentProjectSnapshotBuilderCarriesSourceRevisionIntoViewport() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+
+    let snapshot = try await DesignDocumentProjectSnapshotBuilder().build(
+        document: session.document,
+        generation: session.generation
+    )
+
+    #expect(snapshot.documentGeneration == session.generation)
+    #expect(snapshot.sourceRevision == DocumentTransactionRevision(session.generation.value))
+    #expect(snapshot.evaluation.id.sourceRevision == snapshot.sourceRevision)
+    #expect(snapshot.viewport.snapshotID == snapshot.evaluation.id)
 }

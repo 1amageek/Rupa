@@ -176,3 +176,51 @@ func meshSourceRejectsNonPlanarPolygonTriangulation() throws {
 
     #expect(error?.code == .nonPlanar)
 }
+
+@Test(.timeLimit(.minutes(1)))
+func meshEditBufferStagesVertexMovesWithoutChangingTheSource() throws {
+    var builder = MeshSourceBuilder(identity: "fixture.edit-vertex")
+    let v0 = try builder.addVertex(GeometryPoint3D(x: 0, y: 0, z: 0))
+    let v1 = try builder.addVertex(GeometryPoint3D(x: 1, y: 0, z: 0))
+    let v2 = try builder.addVertex(GeometryPoint3D(x: 0, y: 1, z: 0))
+    _ = try builder.addFace(vertexIDs: [v0, v1, v2])
+    let source = try builder.build()
+    var edit = MeshEditBuffer(source: source)
+
+    try edit.setVertexPosition(
+        GeometryPoint3D(x: 0, y: 0, z: 2),
+        for: v0
+    )
+    #expect(edit.hasEdits)
+    #expect(try edit.position(for: v0) == GeometryPoint3D(x: 0, y: 0, z: 2))
+    #expect(source.vertexPositions[0] == GeometryPoint3D(x: 0, y: 0, z: 0))
+
+    let committed = try edit.commit()
+    #expect(committed.source.vertexPositions[0] == GeometryPoint3D(x: 0, y: 0, z: 2))
+    #expect(committed.source.faceIDs == source.faceIDs)
+    #expect(committed.telemetry.didCopy)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func meshEditBufferPreservesFaceIdentityAcrossTopologyEdits() throws {
+    var builder = MeshSourceBuilder(identity: "fixture.edit-topology")
+    let v0 = try builder.addVertex(GeometryPoint3D(x: 0, y: 0, z: 0))
+    let v1 = try builder.addVertex(GeometryPoint3D(x: 1, y: 0, z: 0))
+    let v2 = try builder.addVertex(GeometryPoint3D(x: 1, y: 1, z: 0))
+    let v3 = try builder.addVertex(GeometryPoint3D(x: 0, y: 1, z: 0))
+    let originalFaceID = try builder.addFace(vertexIDs: [v0, v1, v2])
+    let source = try builder.build()
+    var edit = MeshEditBuffer(source: source)
+    let addedFaceID = try edit.addFace(vertexIDs: [v0, v2, v3])
+
+    let added = try edit.commit()
+    #expect(added.source.faceIDs.contains(originalFaceID))
+    #expect(added.source.faceIDs.contains(addedFaceID))
+    #expect(added.source.faceIDs.count == 2)
+
+    var deletion = MeshEditBuffer(source: added.source)
+    try deletion.deleteFace(originalFaceID)
+    let removed = try deletion.commit()
+    #expect(!removed.source.faceIDs.contains(originalFaceID))
+    #expect(removed.source.faceIDs.contains(addedFaceID))
+}

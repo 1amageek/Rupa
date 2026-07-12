@@ -27,6 +27,7 @@ public extension AgentCapabilityDescriptor {
                 reportsProgress: domainContract?.reportsProgress ?? false,
                 determinism: capabilityDeterminism,
                 requiresTransactionRevision: requiresExpectedSourceGeneration,
+                requiresWorkspaceRevision: requiresExpectedWorkspaceRevision,
                 retrySafe: stateEffect == .readOnly
             ),
             availability: CapabilityAvailability(surfaces: [.agent]),

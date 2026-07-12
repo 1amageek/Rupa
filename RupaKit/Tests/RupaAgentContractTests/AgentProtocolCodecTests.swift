@@ -1,6 +1,7 @@
 import Testing
 import Darwin
 import Foundation
+import RupaCapabilities
 import RupaAutomation
 import RupaCore
 import RupaDomainFoundation
@@ -46,6 +47,93 @@ import SwiftCAD
         return
     }
     #expect(descriptors.contains { $0.id.rawValue == "agent.createSweep" })
+}
+
+@Test func universalCapabilityInvocationExecutesAutomationCommandAndRoundTrips() async throws {
+    let codec = AgentMessageCodec()
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+    let capabilityID = CapabilityID(rawValue: "agent.createExtrudedRectangle")
+    let descriptor = try #require(
+        server.capabilityRegistry().descriptor(for: capabilityID)
+    )
+    let command = AutomationCommand.createExtrudedRectangle(
+        name: "Universal Invocation Box",
+        plane: .xy,
+        width: .length(20.0, .millimeter),
+        height: .length(12.0, .millimeter),
+        depth: .length(6.0, .millimeter),
+        direction: .normal
+    )
+    let invocation = CapabilityInvocation(
+        capabilityID: capabilityID,
+        version: descriptor.version,
+        payload: try canonicalValue(for: command),
+        expectedTransactionRevision: DocumentTransactionRevision(session.generation.value)
+    )
+    let request = AgentRequest.invokeCapability(
+        sessionID: sessionID,
+        invocation: invocation,
+        expectedWorkspaceRevision: session.workspaceState.revision
+    )
+
+    let encodedRequest = try codec.encode(request, id: "capability-invocation")
+    #expect(try codec.decodeRequest(from: encodedRequest) == request)
+
+    let response = server.handle(request)
+    guard case .capabilityExecution(let result) = response else {
+        Issue.record("Expected universal capability execution response.")
+        return
+    }
+    #expect(result.capabilityID == capabilityID)
+    #expect(result.automation?.didMutate == true)
+    #expect(session.generation.value == 1)
+
+    let encodedResponse = try codec.encode(
+        response,
+        id: "capability-invocation",
+        method: request.methodName
+    )
+    #expect(
+        try codec.decodeResponse(
+            from: encodedResponse,
+            expectedID: "capability-invocation",
+            expectedMethod: request.methodName
+        ) == response
+    )
+}
+
+@Test func universalCapabilityInvocationRejectsStaleSourceRevision() throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+    let capabilityID = CapabilityID(rawValue: "agent.createExtrudedRectangle")
+    let descriptor = try #require(
+        server.capabilityRegistry().descriptor(for: capabilityID)
+    )
+    let invocation = CapabilityInvocation(
+        capabilityID: capabilityID,
+        version: descriptor.version,
+        payload: .object([:]),
+        expectedTransactionRevision: DocumentTransactionRevision(99)
+    )
+
+    let response = server.handle(
+        .invokeCapability(
+            sessionID: sessionID,
+            invocation: invocation,
+            expectedWorkspaceRevision: session.workspaceState.revision
+        )
+    )
+
+    guard case .failure = response else {
+        Issue.record("Expected stale universal capability invocation to fail.")
+        return
+    }
+    #expect(session.generation.value == 0)
 }
 
 @Test func agentMessageCodecWrapsRequestsInJSONRPCEnvelope() async throws {
@@ -1325,6 +1413,11 @@ private struct AgentDomainRenameLowering: DomainCommandLowering {
             )
         )
     }
+}
+
+private func canonicalValue<Value: Encodable>(for value: Value) throws -> CanonicalValue {
+    let data = try JSONEncoder().encode(value)
+    return try JSONDecoder().decode(CanonicalValue.self, from: data)
 }
 
 private func agentDomainExecutionRegistry(

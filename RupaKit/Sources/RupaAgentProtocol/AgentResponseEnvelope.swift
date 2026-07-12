@@ -172,6 +172,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             try container.encode(value, forKey: .result)
         case .domainExecution(let value):
             try container.encode(value, forKey: .result)
+        case .capabilityExecution(let value):
+            try container.encode(value, forKey: .result)
         case .parameters(let value):
             try container.encode(value, forKey: .result)
         case .evaluation(let value):
@@ -265,6 +267,10 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
         case "domain.execute":
             return .domainExecution(
                 try container.decode(DomainExecutionResult.self, forKey: .result)
+            )
+        case "capability.invoke":
+            return .capabilityExecution(
+                try container.decode(AgentCapabilityExecutionResult.self, forKey: .result)
             )
         case "document.parameters":
             return .parameters(try container.decode(ParameterListResult.self, forKey: .result))
@@ -373,6 +379,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             "command.applyBatch"
         case .domainExecution:
             "domain.execute"
+        case .capabilityExecution:
+            "capability.invoke"
         case .parameters:
             "document.parameters"
         case .evaluation:
@@ -440,6 +448,7 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
              ("command.apply", .command),
              ("command.applyBatch", .batch),
              ("domain.execute", .domainExecution),
+             ("capability.invoke", .capabilityExecution),
              ("parameter.setExpression", .command),
              ("document.setSurfaceFrameDisplay", .command),
              ("document.movePolySplineSurfaceVertex", .command),

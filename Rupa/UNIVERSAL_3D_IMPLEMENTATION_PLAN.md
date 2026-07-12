@@ -26,9 +26,11 @@ The plan is executable and the following slices have evidence in the repository:
 | M0 / F03 universal capability registry | Complete | `RupaCapabilities` compiles; duplicate, version, effect/result, path, availability, and surface discovery tests pass. |
 | Domain capability adapter | Complete | `DomainRegistry.capabilityRegistry()` converts validated domain descriptors and bridge tests pass. |
 | Agent capability projection | First slice complete | `AgentCommandController.capabilityRegistry()` projects the current Agent surface into the universal registry; static catalog removal remains gated on handler migration. |
+| Universal Agent invocation | First slice complete | `capability.invoke` validates universal ID/version/effect/revisions and executes registered automation-command and domain-capability routes; typed legacy Agent request routes remain explicit follow-on adapters. |
 | Agent protocol universal discovery | First slice complete | `agent.capabilityRegistry` request/response round-trips typed universal descriptors through the existing JSON-RPC envelope. |
 | M1 / G01 shared immutable buffers | First slice complete | `RupaGeometry` exposes immutable buffers, zero-copy views, COW builders, and copy telemetry; targeted tests pass. |
 | M1 / G02 editable polygon mesh source | First slice complete | `MeshSource` stores vertex/edge/face/corner SoA buffers, preserves n-gon face loops, validates references, and round-trips through its source codec. |
+| M1 / G03 mesh edit buffer | First slice complete | `MeshEditBuffer` stages vertex moves and face add/delete operations without mutating the source, preserves existing face IDs, records commit copies, and rejects topology edits with unremapped attributes. |
 | M1 / G04 generic geometry attributes | First slice complete | `GeometryAttributeSet` validates typed dense/sparse layers across vertex, edge, face, and corner domains; UV and material-index fixtures pass. |
 | M1 curve source foundation | First slice complete | `NURBSCurve` validates degree, knots, weights, parameter domain, rational evaluation, and sampling without depending on Swift-CAD. |
 | M1 polygon triangulation view | First slice complete | `MeshSource.triangulate` performs planarity validation and concave-safe ear clipping as derived data; source face loops remain unchanged. |

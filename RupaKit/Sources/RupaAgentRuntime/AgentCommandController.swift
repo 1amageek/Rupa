@@ -135,6 +135,37 @@ public final class AgentCommandController: AgentClientProtocol {
                     automationRunner: runner
                 ).execute(request, in: session)
                 return .domainExecution(result)
+            case let .invokeCapability(sessionID, invocation, expectedWorkspaceRevision):
+                let session = try registry.session(id: sessionID)
+                let capabilityDescriptor = try capabilityRegistry().descriptor(
+                    for: invocation.capabilityID,
+                    version: invocation.version
+                )
+                let agentName = String(
+                    invocation.capabilityID.rawValue.dropFirst("agent.".count)
+                )
+                guard invocation.capabilityID.rawValue.hasPrefix("agent."),
+                      let agentDescriptor = AgentCapabilityCatalog.descriptors(
+                        domainRegistry: domainRegistry
+                      ).first(where: { $0.name == agentName }) else {
+                    throw AgentCapabilityExecutionError(
+                        code: .unsupportedRoute,
+                        message: "Capability \(invocation.capabilityID.rawValue) is not an Agent capability."
+                    )
+                }
+                return .capabilityExecution(
+                    try AgentCapabilityInvocationExecutor(
+                        runner: runner,
+                        domainRegistry: domainRegistry
+                    ).execute(
+                        invocation,
+                        descriptor: capabilityDescriptor,
+                        agentDescriptor: agentDescriptor,
+                        sessionID: sessionID,
+                        expectedWorkspaceRevision: expectedWorkspaceRevision,
+                        in: session
+                    )
+                )
             case let .parameters(sessionID, expectedGeneration):
                 let session = try registry.session(id: sessionID)
                 try session.store.requireGeneration(expectedGeneration)

@@ -4,6 +4,7 @@ public struct CapabilityExecutionContract: Codable, Equatable, Sendable {
     public var reportsProgress: Bool
     public var determinism: CapabilityDeterminism
     public var requiresTransactionRevision: Bool
+    public var requiresWorkspaceRevision: Bool
     public var retrySafe: Bool
 
     public init(
@@ -12,6 +13,7 @@ public struct CapabilityExecutionContract: Codable, Equatable, Sendable {
         reportsProgress: Bool = false,
         determinism: CapabilityDeterminism = .deterministic,
         requiresTransactionRevision: Bool = false,
+        requiresWorkspaceRevision: Bool = false,
         retrySafe: Bool = false
     ) {
         self.supportsDryRun = supportsDryRun
@@ -19,6 +21,7 @@ public struct CapabilityExecutionContract: Codable, Equatable, Sendable {
         self.reportsProgress = reportsProgress
         self.determinism = determinism
         self.requiresTransactionRevision = requiresTransactionRevision
+        self.requiresWorkspaceRevision = requiresWorkspaceRevision
         self.retrySafe = retrySafe
     }
 }

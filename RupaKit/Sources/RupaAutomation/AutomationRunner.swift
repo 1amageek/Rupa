@@ -1,7 +1,7 @@
 import Foundation
 import RupaCore
 
-public struct AutomationRunner {
+public struct AutomationRunner: Sendable {
     let resultDetail: AutomationResultDetail
 
     public init() {

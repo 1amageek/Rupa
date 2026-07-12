@@ -122,6 +122,7 @@ let package = Package(
                 "RupaEvaluation",
                 "RupaGeometry",
                 "RupaProjectModel",
+                "RupaViewportScene",
             ]
         ),
         .target(

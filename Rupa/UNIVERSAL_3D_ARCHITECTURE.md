@@ -54,6 +54,14 @@ flowchart LR
     MCP --> Capability
 ```
 
+Universal Agent execution is staged through a typed invocation boundary. The
+invocation carries the qualified capability ID, exact version, canonical payload,
+source transaction revision, and dry-run intent. The Agent composition root
+resolves the descriptor and dispatches only to a registered automation-command or
+domain-capability adapter. Dedicated legacy request routes remain separate until
+their payload contracts are migrated; discovery must not imply that those routes
+are already executable through `capability.invoke`.
+
 ## 2. Product Equivalence Target
 
 "Blender-class" means that a user or Agent can complete the major stages of a
@@ -101,6 +109,7 @@ comparison alone.
 | `ObjectDescriptor` models `body`, `sketch`, and CAD `FeatureID` references; camera and light contain no real payload. | Scene objects are descriptions of CAD output, not independent reusable data definitions. | Separate scene occurrences, object definitions, and typed content records. |
 | `SceneNode` embeds object, material, visibility, transform, and child IDs. | Occurrence, reusable data, hierarchy, and appearance ownership are conflated. | Move reusable content and material slots to `ObjectDefinition`; keep occurrence overrides on `SceneNode`. |
 | `SwiftCAD.Mesh` is positions, normals, triangle indices, UVs, colors, and one material. | It is suitable for exchange/tessellation, not editable polygon topology. | Keep it in Swift-CAD and add `RupaGeometry.MeshSource`. |
+| `MeshEditBuffer` stages source edits separately from `MeshSource`. | Vertex edits can remain deferred and topology commits can preserve source identities; attribute/topology correspondence is an explicit precondition. | Never mutate an evaluated or shared source buffer in place; use the edit buffer and publish a new immutable source. |
 | `UniversalViewportSceneBuilder` consumes `EvaluatedProjectSnapshot`. | The first universal CPU-side viewport boundary now preserves source identity and world-space bounds. | Renderer resource realization and GPU picking must consume this boundary instead of reconstructing CAD-specific display snapshots. |
 | `BodyDisplaySnapshot.Mesh` stores only positions and indices; face/edge/vertex display records copy points. | The display boundary cannot carry generic attributes or source topology efficiently. | Replace it with universal `GeometrySnapshot` and element correspondence. |
 | `RupaViewportScene` has only `sketch` and `body` item kinds plus box-like face/edge enums. | Viewport projection is CAD-specific before rendering begins. | Make viewport scene construction consume evaluated scene instances and geometry components. |
