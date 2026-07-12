@@ -9,7 +9,7 @@ import Testing
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let sceneNodeID = try #require(
+    let bodySceneNodeID = try #require(
         sceneNodeID(
             for: bodyFeatureID,
             kind: .body,
@@ -52,9 +52,9 @@ import Testing
         ))
     )
 
-    #expect(faceTarget.sceneNodeID == sceneNodeID)
-    #expect(edgeTarget.sceneNodeID == sceneNodeID)
-    #expect(vertexTarget.sceneNodeID == sceneNodeID)
+    #expect(faceTarget.sceneNodeID == bodySceneNodeID)
+    #expect(edgeTarget.sceneNodeID == bodySceneNodeID)
+    #expect(vertexTarget.sceneNodeID == bodySceneNodeID)
     guard case .face(let faceComponentID) = faceTarget.component else {
         Issue.record("Expected a face component.")
         return

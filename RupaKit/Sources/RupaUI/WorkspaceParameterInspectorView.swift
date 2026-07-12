@@ -15,6 +15,18 @@ struct WorkspaceParameterInspectorView: View {
 
     private let supportedKinds: [QuantityKind] = [.length, .angle, .scalar]
 
+    init(
+        state: WorkspaceParameterInspectorState,
+        onRename: @escaping (String, String) -> Bool,
+        onUpsert: @escaping (String, String, QuantityKind) -> Bool,
+        onDelete: @escaping (String) -> Bool
+    ) {
+        self.state = state
+        self.onRename = onRename
+        self.onUpsert = onUpsert
+        self.onDelete = onDelete
+    }
+
     var body: some View {
         inspectorSection("Parameters") {
             workspaceInspectorValueRow("Count", state.summaryTitle)

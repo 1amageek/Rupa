@@ -9,6 +9,16 @@ struct WorkspaceAgentSessionPublisher: ViewModifier {
 
     @State private var publication = WorkspaceAgentSessionPublication()
 
+    init(
+        publisher: (any WorkspaceAgentSessionPublishing)?,
+        session: EditorSession,
+        path: URL?
+    ) {
+        self.publisher = publisher
+        self.session = session
+        self.path = path
+    }
+
     func body(content: Content) -> some View {
         content
             .task(id: WorkspaceAgentSessionPublication.Key(

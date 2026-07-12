@@ -10,6 +10,18 @@ struct WorkspaceDomainCommandRow: View {
 
     @State private var isPresented = false
 
+    init(
+        command: WorkspaceCommandDescriptor,
+        displayUnit: LengthDisplayUnit,
+        generation: DocumentGeneration,
+        execute: @escaping @MainActor (DomainCommandRequest) throws -> DomainExecutionResult
+    ) {
+        self.command = command
+        self.displayUnit = displayUnit
+        self.generation = generation
+        self.execute = execute
+    }
+
     var body: some View {
         Button {
             isPresented = true

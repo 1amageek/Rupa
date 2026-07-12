@@ -32,7 +32,7 @@ import Testing
     )
 
     let draftFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let draftSceneNodeID = try #require(draftSceneNodeID(for: draftFeatureID, in: session.document))
+    let draftNodeID = try #require(draftSceneNodeID(for: draftFeatureID, in: session.document))
     let draftFeature = try #require(session.document.cadDocument.designGraph.nodes[draftFeatureID])
     guard case let .faceDraft(faceDraft) = draftFeature.operation else {
         Issue.record("Draft Face command should create a FaceDraft feature.")
@@ -44,7 +44,7 @@ import Testing
     let measurement = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
     let draftFaces = afterTopology.entries.filter {
         $0.kind == .face &&
-            $0.sceneNodeID == draftSceneNodeID.description &&
+            $0.sceneNodeID == draftNodeID.description &&
             $0.generatedRole == "faceDraft"
     }
 
@@ -60,7 +60,7 @@ import Testing
     #expect(measurement.counts.solids == 1)
     #expect(measurement.solids.first?.featureID == draftFeatureID.description)
     #expect((measurement.solids.first?.volumeCubicMeters ?? 0.0) > 0.0)
-    #expect(session.document.productMetadata.sceneNodes[draftSceneNodeID]?.object?.geometryRole == .solid)
+    #expect(session.document.productMetadata.sceneNodes[draftNodeID]?.object?.geometryRole == .solid)
     #expect(session.evaluationStatus == .valid)
 }
 
@@ -97,7 +97,7 @@ import Testing
     )
 
     let draftFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let draftSceneNodeID = try #require(draftSceneNodeID(for: draftFeatureID, in: session.document))
+    let draftNodeID = try #require(draftSceneNodeID(for: draftFeatureID, in: session.document))
     let draftFeature = try #require(session.document.cadDocument.designGraph.nodes[draftFeatureID])
     guard case let .faceDraft(faceDraft) = draftFeature.operation else {
         Issue.record("Draft Face command should create a FaceDraft feature.")
@@ -109,7 +109,7 @@ import Testing
     let measurement = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
     let draftFaces = afterTopology.entries.filter {
         $0.kind == .face &&
-            $0.sceneNodeID == draftSceneNodeID.description &&
+            $0.sceneNodeID == draftNodeID.description &&
             $0.generatedRole == "faceDraft"
     }
 
@@ -126,7 +126,7 @@ import Testing
     #expect(measurement.counts.solids == 1)
     #expect(measurement.solids.first?.featureID == draftFeatureID.description)
     #expect((measurement.solids.first?.volumeCubicMeters ?? 0.0) > 0.0)
-    #expect(session.document.productMetadata.sceneNodes[draftSceneNodeID]?.object?.geometryRole == .solid)
+    #expect(session.document.productMetadata.sceneNodes[draftNodeID]?.object?.geometryRole == .solid)
     #expect(session.evaluationStatus == .valid)
 }
 
