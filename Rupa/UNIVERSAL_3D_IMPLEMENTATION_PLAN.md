@@ -16,6 +16,23 @@ conformance manifests and executable evidence remain the completion authority.
 | Compatibility | Breaking development changes are expected; no deprecated command or schema aliases |
 | Integration model | Contract freeze, parallel leaf work, orchestrator review, then integration gate |
 
+## Current Implementation Status
+
+The plan is executable and the following slices have evidence in the repository:
+
+| Slice | Status | Evidence |
+|---|---|---|
+| M0 / F02 stable revisions and canonical values | Complete | `RupaCoreTypes` compiles; canonical JSON bytes, validation, and revision tests pass. |
+| M0 / F03 universal capability registry | Complete | `RupaCapabilities` compiles; duplicate, version, effect/result, path, availability, and surface discovery tests pass. |
+| Domain capability adapter | Complete | `DomainRegistry.capabilityRegistry()` converts validated domain descriptors and bridge tests pass. |
+| M1 / G01 shared immutable buffers | First slice complete | `RupaGeometry` exposes immutable buffers, zero-copy views, COW builders, and copy telemetry; targeted tests pass. |
+| M1 / G02 editable polygon mesh source | First slice complete | `MeshSource` stores vertex/edge/face/corner SoA buffers, preserves n-gon face loops, validates references, and round-trips through its source codec. |
+| M1 project/evaluation integration | Not started | Requires source aggregate, dependency graph, CAD provider adapter, and immutable evaluated snapshot. |
+
+The first-slice rows are not milestone completion. The remaining M1 work must
+integrate CAD and mesh sources into one project transaction/evaluation route
+before M1 can be marked complete.
+
 ## 1. Completion Model
 
 The work is divided into foundation, authoring breadth, and convergence. A high
