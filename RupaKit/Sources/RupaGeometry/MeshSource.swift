@@ -121,6 +121,16 @@ public struct MeshSource: Codable, Equatable, Sendable {
         return vertexPositions[index]
     }
 
+    public func vertexID(of cornerID: MeshCornerID) throws -> MeshVertexID {
+        guard let index = cornerIDs.firstIndex(of: cornerID) else {
+            throw MeshSourceError(
+                code: .invalidReference,
+                message: "Mesh corner \(cornerID.rawValue) is not present in the source."
+            )
+        }
+        return cornerVertexIDs[index]
+    }
+
     public func bounds() throws -> GeometryBounds3D {
         try GeometryBounds3D(points: vertexPositions)
     }

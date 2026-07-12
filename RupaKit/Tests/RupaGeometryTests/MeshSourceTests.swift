@@ -133,3 +133,46 @@ func meshSourceRejectsAttributeDomainLengthMismatch() throws {
     }
     #expect(error?.code == .invalidBuffer)
 }
+
+@Test(.timeLimit(.minutes(1)))
+func meshSourceTriangulatesConcavePolygonWithoutChangingSourceTopology() throws {
+    var builder = MeshSourceBuilder(identity: "fixture.concave")
+    let points = [
+        GeometryPoint3D(x: 0, y: 0, z: 0),
+        GeometryPoint3D(x: 2, y: 0, z: 0),
+        GeometryPoint3D(x: 2, y: 2, z: 0),
+        GeometryPoint3D(x: 1, y: 1, z: 0),
+        GeometryPoint3D(x: 0, y: 2, z: 0),
+    ]
+    let vertices = try points.map { try builder.addVertex($0) }
+    let faceID = try builder.addFace(vertexIDs: vertices)
+    let source = try builder.build()
+
+    let triangles = try source.triangulate(faceID: faceID)
+
+    #expect(triangles.count == 3)
+    #expect(source.faceCornerRanges[0].count == 5)
+    #expect(triangles.allSatisfy { $0.faceID == faceID })
+}
+
+@Test(.timeLimit(.minutes(1)))
+func meshSourceRejectsNonPlanarPolygonTriangulation() throws {
+    var builder = MeshSourceBuilder(identity: "fixture.nonplanar")
+    let vertices = try [
+        GeometryPoint3D(x: 0, y: 0, z: 0),
+        GeometryPoint3D(x: 1, y: 0, z: 0),
+        GeometryPoint3D(x: 1, y: 1, z: 0.1),
+        GeometryPoint3D(x: 0, y: 1, z: 0),
+    ].map { try builder.addVertex($0) }
+    let faceID = try builder.addFace(vertexIDs: vertices)
+    let source = try builder.build()
+    var error: MeshTriangulationError?
+
+    do {
+        _ = try source.triangulate(faceID: faceID)
+    } catch let caught as MeshTriangulationError {
+        error = caught
+    }
+
+    #expect(error?.code == .nonPlanar)
+}

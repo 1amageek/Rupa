@@ -31,6 +31,7 @@ The plan is executable and the following slices have evidence in the repository:
 | M1 / G02 editable polygon mesh source | First slice complete | `MeshSource` stores vertex/edge/face/corner SoA buffers, preserves n-gon face loops, validates references, and round-trips through its source codec. |
 | M1 / G04 generic geometry attributes | First slice complete | `GeometryAttributeSet` validates typed dense/sparse layers across vertex, edge, face, and corner domains; UV and material-index fixtures pass. |
 | M1 curve source foundation | First slice complete | `NURBSCurve` validates degree, knots, weights, parameter domain, rational evaluation, and sampling without depending on Swift-CAD. |
+| M1 polygon triangulation view | First slice complete | `MeshSource.triangulate` performs planarity validation and concave-safe ear clipping as derived data; source face loops remain unchanged. |
 | M1 project source aggregate | First slice complete | `RupaProjectModel` validates mesh references, object definitions, occurrence hierarchy, roots, and external provider references without importing CAD. |
 | M1 evaluation integration | First slice complete | `RupaEvaluation` evaluates mesh providers into immutable occurrence snapshots with composed transforms and world bounds; provider injection leaves the CAD adapter boundary explicit. |
 | M1 CAD provider integration | First slice complete | `RupaCADIntegration` converts evaluated Swift-CAD body meshes at the provider boundary and participates in `ProjectEvaluationEngine`; source transaction composition is still open. |
