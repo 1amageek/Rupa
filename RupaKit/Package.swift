@@ -41,6 +41,10 @@ let package = Package(
             targets: ["RupaCADIntegration"]
         ),
         .library(
+            name: "RupaProject",
+            targets: ["RupaProject"]
+        ),
+        .library(
             name: "RupaUI",
             targets: ["RupaUI"]
         ),
@@ -162,6 +166,14 @@ let package = Package(
                 "RupaGeometry",
                 "RupaProjectModel",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
+            ]
+        ),
+        .target(
+            name: "RupaProject",
+            dependencies: [
+                "RupaCoreTypes",
+                "RupaEvaluation",
+                "RupaProjectModel",
             ]
         ),
         .target(
@@ -338,6 +350,10 @@ let package = Package(
                 "RupaCore",
                 "RupaEvaluation",
             ]
+        ),
+        .testTarget(
+            name: "RupaProjectTests",
+            dependencies: ["RupaProject"]
         ),
         .testTarget(
             name: "RupaAutomationTests",
