@@ -35,8 +35,10 @@ The plan is executable and the following slices have evidence in the repository:
 | M1 project source aggregate | First slice complete | `RupaProjectModel` validates mesh references, object definitions, occurrence hierarchy, roots, and external provider references without importing CAD. |
 | M1 evaluation integration | First slice complete | `RupaEvaluation` evaluates mesh providers into immutable occurrence snapshots with composed transforms and world bounds; provider injection leaves the CAD adapter boundary explicit. |
 | M1 CAD provider integration | First slice complete | `RupaCADIntegration` converts evaluated Swift-CAD body meshes at the provider boundary and participates in `ProjectEvaluationEngine`; source transaction composition is still open. |
+| M1 DesignDocument source bridge | First slice complete | `DesignDocumentProjectBridge` derives a validated universal project hierarchy from `DesignDocument` without moving CAD types into `RupaProjectModel`; CAD body feature IDs resolve through the provider boundary. |
+| M1 universal viewport scene | First slice complete | `UniversalViewportSceneBuilder` projects immutable evaluated occurrences into a renderer-facing scene while preserving occurrence, definition, source reference, transform, mesh, and world bounds. Metal resource realization remains open. |
 | M1 project transaction controller | First slice complete | `RupaProject.ProjectController` stages immutable source, evaluates off-actor, rechecks source revision, and publishes only successful results. |
-| M1 CAD/project transaction integration | Not started | Requires transaction staging and `DesignDocument` composition without moving CAD types into project contracts. |
+| M1 CAD/project transaction integration | In progress | Read-only `DesignDocument` projection and universal evaluation are connected; bidirectional source publication and persistent mesh/project-source storage remain open. |
 
 The first-slice rows are not milestone completion. The remaining M1 work must
 integrate CAD and mesh sources into one project transaction/evaluation route

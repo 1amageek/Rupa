@@ -35,13 +35,12 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
             )
         }
         guard let outputID,
-              let bodyUUID = UUID(uuidString: outputID) else {
+              UUID(uuidString: outputID) != nil else {
             throw CADIntegrationError(
                 code: .bodyUnavailable,
-                message: "CAD geometry references require a valid body output ID."
+                message: "CAD geometry references require a valid body or feature output ID."
             )
         }
-        let bodyID = BodyID(bodyUUID)
         let evaluatedDocument: EvaluatedDocument
         do {
             evaluatedDocument = try evaluator.evaluate(document)
@@ -49,6 +48,15 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
             throw CADIntegrationError(
                 code: .evaluationFailed,
                 message: "CAD document evaluation failed: \(error)"
+            )
+        }
+        guard let bodyID = resolveBodyID(
+            outputID: outputID,
+            in: evaluatedDocument
+        ) else {
+            throw CADIntegrationError(
+                code: .bodyUnavailable,
+                message: "CAD evaluation produced no body for output \(outputID)."
             )
         }
         guard let mesh = evaluatedDocument.meshes[bodyID] else {
@@ -63,6 +71,39 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
             mesh: source,
             localBounds: try source.bounds()
         )
+    }
+
+    private func resolveBodyID(
+        outputID: String,
+        in evaluatedDocument: EvaluatedDocument
+    ) -> BodyID? {
+        guard let uuid = UUID(uuidString: outputID) else {
+            return nil
+        }
+        let directBodyID = BodyID(uuid)
+        if evaluatedDocument.meshes[directBodyID] != nil {
+            return directBodyID
+        }
+
+        let featureID = FeatureID(uuid)
+        let bodyIDs = evaluatedDocument.generatedNames.materializedDictionary().compactMap {
+            name, reference -> BodyID? in
+            guard case .body(let bodyID) = reference else {
+                return nil
+            }
+            let belongsToFeature = name.components.contains { component in
+                guard case .feature(let candidate) = component else {
+                    return false
+                }
+                return candidate == featureID
+            }
+            return belongsToFeature ? bodyID : nil
+        }
+        let uniqueBodyIDs = Set(bodyIDs)
+        guard uniqueBodyIDs.count == 1 else {
+            return nil
+        }
+        return uniqueBodyIDs.first
     }
 
     private func makeMeshSource(bodyID: BodyID, mesh: Mesh) throws -> MeshSource {
