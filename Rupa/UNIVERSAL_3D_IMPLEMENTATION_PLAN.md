@@ -27,6 +27,7 @@ The plan is executable and the following slices have evidence in the repository:
 | Domain capability adapter | Complete | `DomainRegistry.capabilityRegistry()` converts validated domain descriptors and bridge tests pass. |
 | M1 / G01 shared immutable buffers | First slice complete | `RupaGeometry` exposes immutable buffers, zero-copy views, COW builders, and copy telemetry; targeted tests pass. |
 | M1 / G02 editable polygon mesh source | First slice complete | `MeshSource` stores vertex/edge/face/corner SoA buffers, preserves n-gon face loops, validates references, and round-trips through its source codec. |
+| M1 / G04 generic geometry attributes | First slice complete | `GeometryAttributeSet` validates typed dense/sparse layers across vertex, edge, face, and corner domains; UV and material-index fixtures pass. |
 | M1 project/evaluation integration | Not started | Requires source aggregate, dependency graph, CAD provider adapter, and immutable evaluated snapshot. |
 
 The first-slice rows are not milestone completion. The remaining M1 work must

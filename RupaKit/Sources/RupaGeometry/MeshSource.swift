@@ -11,6 +11,7 @@ public struct MeshSource: Codable, Equatable, Sendable {
     public let cornerIDs: GeometryBuffer<MeshCornerID>
     public let cornerVertexIDs: GeometryBuffer<MeshVertexID>
     public let cornerEdgeIDs: GeometryBuffer<MeshEdgeID?>
+    public let attributes: GeometryAttributeSet
 
     public init(
         identity: MeshSourceID = MeshSourceID(),
@@ -22,7 +23,8 @@ public struct MeshSource: Codable, Equatable, Sendable {
         faceCornerRanges: GeometryBuffer<MeshIndexRange>,
         cornerIDs: GeometryBuffer<MeshCornerID>,
         cornerVertexIDs: GeometryBuffer<MeshVertexID>,
-        cornerEdgeIDs: GeometryBuffer<MeshEdgeID?>
+        cornerEdgeIDs: GeometryBuffer<MeshEdgeID?>,
+        attributes: GeometryAttributeSet = GeometryAttributeSet()
     ) throws {
         self.identity = identity
         self.vertexIDs = vertexIDs
@@ -34,6 +36,7 @@ public struct MeshSource: Codable, Equatable, Sendable {
         self.cornerIDs = cornerIDs
         self.cornerVertexIDs = cornerVertexIDs
         self.cornerEdgeIDs = cornerEdgeIDs
+        self.attributes = attributes
         try validate()
     }
 
@@ -86,6 +89,14 @@ public struct MeshSource: Codable, Equatable, Sendable {
                 throw invalid("Faces must contain at least three corners.")
             }
         }
+        try attributes.validate(
+            counts: GeometryAttributeDomainCounts(
+                vertex: vertexIDs.count,
+                edge: edgeIDs.count,
+                face: faceIDs.count,
+                corner: cornerIDs.count
+            )
+        )
     }
 
     public func faceLoop(for faceID: MeshFaceID) throws -> MeshFaceLoop {

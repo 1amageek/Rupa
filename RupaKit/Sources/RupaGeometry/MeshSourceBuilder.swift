@@ -11,6 +11,7 @@ public struct MeshSourceBuilder: Sendable {
     private var cornerIDs: [MeshCornerID] = []
     private var cornerVertexIDs: [MeshVertexID] = []
     private var cornerEdgeIDs: [MeshEdgeID?] = []
+    private var attributes = GeometryAttributeSet()
     private var edgeByVertices: [MeshUndirectedEdgeKey: MeshEdgeID] = [:]
 
     public init(identity: MeshSourceID = MeshSourceID()) {
@@ -58,6 +59,10 @@ public struct MeshSourceBuilder: Sendable {
         return faceID
     }
 
+    public mutating func setAttribute(_ layer: GeometryAttributeLayer) throws {
+        attributes = try attributes.setting(layer)
+    }
+
     public func build() throws -> MeshSource {
         try MeshSource(
             identity: identity,
@@ -69,7 +74,8 @@ public struct MeshSourceBuilder: Sendable {
             faceCornerRanges: GeometryBuffer(faceCornerRanges),
             cornerIDs: GeometryBuffer(cornerIDs),
             cornerVertexIDs: GeometryBuffer(cornerVertexIDs),
-            cornerEdgeIDs: GeometryBuffer(cornerEdgeIDs)
+            cornerEdgeIDs: GeometryBuffer(cornerEdgeIDs),
+            attributes: attributes
         )
     }
 
