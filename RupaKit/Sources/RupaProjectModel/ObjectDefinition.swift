@@ -20,6 +20,8 @@ public struct ObjectDefinition: Codable, Equatable, Sendable {
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw ProjectModelError(code: .invalidIdentity, message: "Object definition names must not be empty.")
         }
-        try geometry?.validate()
+        if let geometry {
+            try geometry.validate()
+        }
     }
 }
