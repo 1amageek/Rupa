@@ -1,0 +1,8 @@
+{
+  "generations": [
+    {"id":"G0","swiftCAD":"35ffd6e","swiftOpenUSD":"998e505","selection":"PersistentName / topology","rupaBuild":"passed","geometryFailures":null,"role":"integration baseline candidate"},
+    {"id":"G1","swiftCAD":"1060739","swiftOpenUSD":"current","selection":"SubshapeID","rupaBuild":"failed","geometryFailures":null,"role":"selection transition"},
+    {"id":"G2","swiftCAD":"a875eeb","swiftOpenUSD":"current","selection":"StableSubshapeReference","rupaBuild":"failed","geometryFailures":9,"role":"exact architecture checkpoint"},
+    {"id":"G3","swiftCAD":"dirty worktree","swiftOpenUSD":"current","selection":"StableSubshapeReference + certified truth","rupaBuild":"failed","geometryFailures":18,"kernelFailures":48,"role":"active research WIP"}
+  ]
+}

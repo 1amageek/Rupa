@@ -1,0 +1,22 @@
+{
+  "evaluationFlow": [
+    "CADDocument",
+    "ValidatedCADDocument(ModelingTolerance)",
+    "DocumentEvaluator",
+    "DocumentEvaluationEngine",
+    "Feature evaluators",
+    "BRep validation",
+    "Tessellation",
+    "SubshapeIndex + lineage",
+    "EvaluatedDocument",
+    "Rupa selection/material/measurement/UI"
+  ],
+  "implementationOrder": [
+    "Certified Geometry",
+    "Topology + volume",
+    "IR + Modeling",
+    "Kernel boolean/query/capabilities",
+    "Exchange",
+    "Rupa contract migration"
+  ]
+}

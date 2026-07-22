@@ -1,0 +1,5 @@
+{
+  "committedArchitectureStep": {"from":"1060739","to":"a875eeb","files":789,"insertions":108226,"deletions":18442},
+  "workingTreeStep": {"base":"a875eeb","trackedFiles":259,"modified":248,"deleted":11,"untracked":186,"insertions":26520,"deletions":9233,"untrackedLines":52885},
+  "sourceFiles": {"originMain":280,"a875eeb":626,"current":753}
+}

@@ -1,0 +1,12 @@
+{
+  "clusters": [
+    {"id":1,"name":"Capability catalog split","atomicRisk":"tracked deletion depends on untracked extensions and checker"},
+    {"id":2,"name":"Certified geometry truth","atomicRisk":"intersection truth, certification tolerance, graph cells, pcurves must move together"},
+    {"id":3,"name":"Exact topology and volume","atomicRisk":"pcurve flux/area and trimmed volume depend on certified geometry"},
+    {"id":4,"name":"Surface/curve/edit modeling","atomicRisk":"IR schema and evaluator contracts move together"},
+    {"id":5,"name":"Kernel boolean/query","atomicRisk":"arrangement, classification, materialization and validation are coupled"},
+    {"id":6,"name":"Exact exchange","atomicRisk":"STEP/IGES/native transfer must preserve implicit curve truth"},
+    {"id":7,"name":"Docs, CI and evidence","atomicRisk":"CI references an untracked checker and goal contract is not achieved"},
+    {"id":8,"name":"Canonical rational B-spline","atomicRisk":"specialized type deletion requires canonical type and all callers/tests"}
+  ]
+}

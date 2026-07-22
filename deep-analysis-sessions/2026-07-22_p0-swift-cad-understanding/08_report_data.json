@@ -1,0 +1,52 @@
+{
+  "title": "P0 Swift-CAD implementation understanding",
+  "date": "2026-07-22",
+  "verdict": "The workspace contains four contract generations and eight atomic implementation clusters; P0 must preserve and separate them before integration work.",
+  "baselineTuple": {
+    "rupaMinimum": "03e341d42e45a543ca19b999a4bb9b339db1a454",
+    "swiftCAD": "35ffd6e",
+    "swiftOpenUSD": "998e505",
+    "build": "passed",
+    "representativeGeneratedTopologyTest": {"total":1,"passed":1,"failed":0},
+    "typedMeshSelectionTests": {"total":2,"passed":2,"failed":0}
+  },
+  "currentWorktree": {
+    "base": "a875eeb",
+    "modified": 248,
+    "deleted": 11,
+    "untracked": 186,
+    "trackedDiff": {"files":259,"insertions":26520,"deletions":9233},
+    "untrackedLines": 52885
+  },
+  "currentTests": {
+    "CADGeometry": {"total":242,"passed":224,"failed":18},
+    "CADKernel": {"total":464,"passed":416,"failed":48}
+  },
+  "historicalCheckpoint": {
+    "revision": "a875eeb",
+    "facadeBuild": "passed",
+    "CADGeometryUniqueFailures": 9
+  },
+  "execution": {
+    "swiftCADCheckpoint": {
+      "branch": "codex/p0-swift-cad-checkpoint",
+      "revision": "288d5cd2d618c6f8db2f147ba8aa2dfd2e8157d3",
+      "integrationReady": false
+    },
+    "rupaSelectionCommit": "03e341d42e45a543ca19b999a4bb9b339db1a454",
+    "baselineManifest": "P0_INTEGRATION_BASELINE.json",
+    "baselineChecker": "Scripts/check_p0_integration_baseline.py"
+  },
+  "p0ExitCriteria": [
+    "Recoverable G3 checkpoint",
+    "Explicit G0 three-repository baseline manifest",
+    "Preserved G1/G2/G3 boundaries",
+    "Eight atomic cluster manifests",
+    "Deterministic local dependency resolution"
+  ],
+  "limitations": [
+    "Full RupaKit test suite was not run on G0",
+    "G2 kernel suite was not run",
+    "The G3 preservation checkpoint retains 66 known failing tests"
+  ]
+}

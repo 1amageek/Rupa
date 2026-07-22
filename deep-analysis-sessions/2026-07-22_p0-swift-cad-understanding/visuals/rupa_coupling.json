@@ -1,0 +1,12 @@
+{
+  "swiftCADImports": {"sourceFiles":310,"testFiles":153},
+  "legacyReferences": {
+    "PersistentName":520,
+    "generatedNames":40,
+    "SurfaceReferenceFaceName":12,
+    "SelectionReferenceTopology":11,
+    "DocumentEvaluatorConstructors":14,
+    "SketchProfileExtractorConstructors":9,
+    "ParameterResolverConstructors":14
+  }
+}

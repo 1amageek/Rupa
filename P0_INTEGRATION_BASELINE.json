@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "baselineID": "rupa-p0-2026-07-22",
+  "repositories": [
+    {
+      "name": "Rupa",
+      "path": ".",
+      "revision": "03e341d42e45a543ca19b999a4bb9b339db1a454",
+      "revisionPolicy": "ancestor",
+      "requireClean": false
+    },
+    {
+      "name": "swift-CAD",
+      "path": "swift-CAD",
+      "revision": "35ffd6e442478f660b2c0310672346e2ae072c3f",
+      "revisionPolicy": "exact",
+      "requireClean": true
+    },
+    {
+      "name": "swift-OpenUSD",
+      "path": "swift-OpenUSD",
+      "revision": "998e5051493adeaa138103cfcb0b17680ef0f7fe",
+      "revisionPolicy": "exact",
+      "requireClean": true
+    }
+  ],
+  "preservedWorkInProgress": {
+    "repository": "swift-CAD",
+    "branch": "codex/p0-swift-cad-checkpoint",
+    "revision": "288d5cd2d618c6f8db2f147ba8aa2dfd2e8157d3",
+    "integrationReady": false
+  },
+  "verification": [
+    {
+      "scope": "RupaKit package build",
+      "result": "passed",
+      "totalTests": null
+    },
+    {
+      "scope": "Generated topology selection round trip",
+      "result": "passed",
+      "totalTests": 1
+    },
+    {
+      "scope": "Typed mesh selection",
+      "result": "passed",
+      "totalTests": 2
+    }
+  ]
+}

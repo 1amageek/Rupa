@@ -1,0 +1,124 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "ea": "https://deep-analysis.dev/vocab#",
+    "rel": "https://deep-analysis.dev/relations#",
+    "schema": "https://schema.org/",
+    "prov": "http://www.w3.org/ns/prov#",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "Topic": "ea:Topic",
+    "Evidence": "ea:Evidence",
+    "Insight": "ea:Insight",
+    "Question": "ea:Question",
+    "title": "schema:name",
+    "content": "schema:description",
+    "session": {"@id":"ea:sessionMetadata","@type":"@json"},
+    "view": {"@id":"ea:view","@type":"@json"},
+    "epistemicStatus": "ea:epistemicStatus",
+    "confidence": {"@id":"ea:confidence","@type":"xsd:decimal"},
+    "source": "ea:source",
+    "sourceUrl": "schema:url",
+    "reliability": {"@id":"ea:reliability","@type":"xsd:decimal"},
+    "derivedFrom": {"@id":"ea:derivedFrom","@type":"@id","@container":"@set"},
+    "rationale": "ea:rationale",
+    "questionStatus": "ea:questionStatus",
+    "supportsClaim": {"@id":"ea:supportsClaim","@type":"@id","@container":"@set"},
+    "primaryEvidence": {"@id":"ea:primaryEvidence","@type":"@id","@container":"@set"},
+    "sourceTopics": {"@id":"ea:sourceTopics","@type":"@id","@container":"@set"},
+    "visualEvidenceRequirement": {"@id":"ea:visualEvidenceRequirement","@type":"@json"},
+    "synthesis": {"@id":"ea:synthesis","@type":"@json"},
+    "createdAt": {"@id":"prov:generatedAtTime","@type":"xsd:dateTime"}
+  },
+  "session": {
+    "id": "session:p0-swift-cad-understanding",
+    "title": "P0 Swift-CAD Implementation Understanding",
+    "createdAt": "2026-07-22T12:05:00+09:00"
+  },
+  "view": {
+    "groups": [
+      {
+        "id":"group:layer/context","kind":"layer","title":"Context","layer":"Context",
+        "children":[{"id":"group:category/context/repository-state","kind":"category","title":"Repository State","layer":"Context","category":"Repository State","members":["ea:p0/T001"]}]
+      },
+      {
+        "id":"group:layer/situation","kind":"layer","title":"Situation","layer":"Situation",
+        "children":[{"id":"group:category/situation/version-strata","kind":"category","title":"Version Strata","layer":"Situation","category":"Version Strata","members":["ea:p0/E001"]}]
+      },
+      {
+        "id":"group:layer/operation","kind":"layer","title":"Operation","layer":"Operation",
+        "children":[{"id":"group:category/operation/executed-verification","kind":"category","title":"Executed Verification","layer":"Operation","category":"Executed Verification","members":["ea:p0/E002","ea:p0/E003"]}]
+      },
+      {
+        "id":"group:layer/problem","kind":"layer","title":"Problem","layer":"Problem",
+        "children":[{"id":"group:category/problem/contract-overlap","kind":"category","title":"Contract Overlap","layer":"Problem","category":"Contract Overlap","members":["ea:p0/I001"]}]
+      },
+      {
+        "id":"group:layer/issue","kind":"layer","title":"Issue","layer":"Issue",
+        "children":[{"id":"group:category/issue/baseline-choice","kind":"category","title":"Baseline Choice","layer":"Issue","category":"Baseline Choice","members":["ea:p0/Q001"]}]
+      },
+      {
+        "id":"group:layer/solution","kind":"layer","title":"Solution","layer":"Solution",
+        "children":[{"id":"group:category/solution/isolate-and-freeze","kind":"category","title":"Isolate and Freeze","layer":"Solution","category":"Isolate and Freeze","members":["ea:p0/T002"]}]
+      },
+      {
+        "id":"group:layer/outcome","kind":"layer","title":"Outcome","layer":"Outcome",
+        "children":[{"id":"group:category/outcome/p0-definition","kind":"category","title":"P0 Definition","layer":"Outcome","category":"P0 Definition","members":["ea:p0/I002"]}]
+      }
+    ]
+  },
+  "@graph": [
+    {
+      "@id":"ea:p0/T001","@type":"Topic","title":"Three-repository local integration state",
+      "content":"RupaKit resolves sibling swift-CAD by local path; swift-CAD resolves sibling swift-OpenUSD, so integration state is a revision tuple rather than one repository commit.",
+      "epistemicStatus":"verified","confidence":0.99
+    },
+    {
+      "@id":"ea:p0/E001","@type":"Evidence","title":"Four contract generations and large WIP",
+      "content":"G0 PersistentName, G1 SubshapeID, G2 StableSubshapeReference/exact architecture, and G3 certified-geometry WIP are layered. Current swift-CAD has 248 modified, 11 deleted, and 186 untracked entries.",
+      "epistemicStatus":"verified","confidence":0.99,
+      "source":"Git history, status, diff statistics, source inspection","sourceUrl":"local://swift-CAD","reliability":0.99
+    },
+    {
+      "@id":"ea:p0/E002","@type":"Evidence","title":"Current and historical test outcomes",
+      "content":"Current CADGeometry is 224/242 pass and CADKernel is 416/464 pass. Pure a875eeb facade builds but CADGeometry has 9 unique failing tests.",
+      "epistemicStatus":"verified","confidence":0.99,
+      "source":"xcodebuild and xcresult summaries","sourceUrl":"local://xcodebuild/swift-cad","reliability":0.99
+    },
+    {
+      "@id":"ea:p0/E003","@type":"Evidence","title":"Buildable Rupa-compatible revision tuple",
+      "content":"Rupa 4d90a4b with swift-CAD 35ffd6e and swift-OpenUSD 998e505 builds the full RupaKit package. The generated topology selection round-trip test executed once and passed once.",
+      "epistemicStatus":"verified","confidence":0.99,
+      "source":"Isolated Git worktrees, xcodebuild, xcresult totalTestCount","sourceUrl":"local://xcodebuild/rupa-compatible-tuple","reliability":0.99
+    },
+    {
+      "@id":"ea:p0/I001","@type":"Insight","title":"The blocker is overlapping contract generations",
+      "content":"Committing or fixing the current tree as one unit would conflate a recoverable Rupa contract, two selection migrations, and several unfinished exact-kernel research clusters.",
+      "epistemicStatus":"evidenced","confidence":0.97,
+      "derivedFrom":["ea:p0/E001","ea:p0/E002","ea:p0/E003"],
+      "rationale":"The version boundaries produce different compile behavior, test behavior, and persistence identities; the working diff also has untracked dependencies that cannot be omitted.",
+      "supportsClaim":["ea:p0/I002"]
+    },
+    {
+      "@id":"ea:p0/Q001","@type":"Question","title":"What should P0 freeze?",
+      "content":"Should P0 treat the current WIP as the integration baseline, or preserve it separately from the last verified Rupa-compatible tuple?",
+      "epistemicStatus":"answered","confidence":0.99,"questionStatus":"answered"
+    },
+    {
+      "@id":"ea:p0/T002","@type":"Topic","title":"Separate preservation from integration",
+      "content":"Preserve G3 as an explicitly red archival checkpoint, define the G0 three-repository tuple as the Rupa integration baseline, and extract G1-G3 in eight dependency-ordered atomic clusters.",
+      "epistemicStatus":"recommended","confidence":0.96,
+      "primaryEvidence":["ea:p0/E001","ea:p0/E002","ea:p0/E003"]
+    },
+    {
+      "@id":"ea:p0/I002","@type":"Insight","title":"P0 is a recoverability and determinism gate",
+      "content":"P0 is complete when no WIP is lost, the buildable revision tuple is explicit, contract generations remain separated, atomic closures are documented, and local dependency resolution no longer points at an unspecified dirty tree.",
+      "epistemicStatus":"evidenced","confidence":0.97,
+      "derivedFrom":["ea:p0/I001","ea:p0/T002"],
+      "rationale":"These conditions restore a reproducible integration base without falsely declaring the exact-kernel WIP stable or discarding research work.",
+      "primaryEvidence":["ea:p0/E001","ea:p0/E002","ea:p0/E003"],
+      "sourceTopics":["ea:p0/T001","ea:p0/T002"],
+      "visualEvidenceRequirement":{"required":true,"charts":["version strata","test matrix","atomic clusters","exit criteria"]},
+      "synthesis":{"claimRole":"final-claim"}
+    }
+  ]
+}

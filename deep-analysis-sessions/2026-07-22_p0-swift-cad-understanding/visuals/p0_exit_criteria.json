@@ -1,0 +1,9 @@
+{
+  "criteria": [
+    {"order":1,"criterion":"G3 checkpoint is complete and recoverable","proof":"tracked and untracked closure recorded; no user data lost"},
+    {"order":2,"criterion":"G0 integration tuple is explicit","proof":"Rupa 4d90a4b + CAD 35ffd6e + OpenUSD 998e505 manifest"},
+    {"order":3,"criterion":"Generation boundaries are preserved","proof":"G1/G2/G3 are not presented as one stable change"},
+    {"order":4,"criterion":"Atomic clusters are enumerated","proof":"8 clusters with dependency order and test ownership"},
+    {"order":5,"criterion":"Local dependency is deterministic","proof":"Rupa no longer resolves an unspecified dirty swift-CAD tree"}
+  ]
+}

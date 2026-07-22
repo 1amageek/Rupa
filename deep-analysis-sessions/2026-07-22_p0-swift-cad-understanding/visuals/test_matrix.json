@@ -1,0 +1,13 @@
+{
+  "runs": [
+    {"target":"Current CADGeometry-Tests","revision":"dirty G3","total":242,"passed":224,"failed":18,"skipped":0,"result":"failed"},
+    {"target":"Current CADKernel-Tests","revision":"dirty G3","total":464,"passed":416,"failed":48,"skipped":0,"result":"failed"},
+    {"target":"CADGeometry-Tests","revision":"a875eeb G2","failedUnique":9,"result":"failed"},
+    {"target":"RupaKit package build","revision":"Rupa 4d90a4b + CAD 35ffd6e + OpenUSD 998e505","result":"passed"},
+    {"target":"Generated topology selection round trip","revision":"G0 compatible tuple","total":1,"passed":1,"failed":0,"result":"passed"},
+    {"target":"Typed mesh selection","revision":"Rupa 03e341d + G0 dependencies","total":2,"passed":2,"failed":0,"result":"passed"}
+  ],
+  "excluded": [
+    {"target":"Incorrectly filtered selection suite","total":0,"reason":"No tests executed; not success evidence"}
+  ]
+}

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>P0 Swift-CAD Understanding — 2026-07-22</title>
+  <style>
+    :root{color-scheme:dark;--bg:#070d18;--panel:#101a2a;--line:#263b56;--text:#edf4ff;--muted:#9cb0c8;--cyan:#4ed7ff;--green:#5ee09a;--amber:#ffca62;--red:#ff7188;--violet:#aa92ff}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 10% 0,#14365b 0,transparent 34rem),radial-gradient(circle at 92% 8%,#30235f 0,transparent 30rem),var(--bg);color:var(--text);font:15px/1.65 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    main{width:min(1180px,calc(100% - 32px));margin:auto;padding:52px 0 76px}header{display:grid;grid-template-columns:1.45fr .8fr;gap:24px;align-items:end}.eyebrow{color:var(--cyan);letter-spacing:.15em;text-transform:uppercase;font-size:12px}h1{margin:8px 0 14px;font-size:clamp(35px,6vw,68px);line-height:1.03;letter-spacing:-.045em}h2{margin:0 0 18px;font-size:23px}h3{margin:0 0 7px;font-size:16px}p{margin:0}.lead{max-width:780px;color:#cedbec;font-size:18px}.verdict,.card{border:1px solid var(--line);border-radius:18px;background:linear-gradient(150deg,rgba(18,31,49,.97),rgba(10,20,34,.97));padding:22px;box-shadow:0 18px 50px rgba(0,0,0,.16)}.verdict strong{display:block;color:var(--amber);font-size:26px;margin:7px 0}.note{color:var(--muted);font-size:13px}.grid{display:grid;gap:18px}.metrics{grid-template-columns:repeat(4,1fr);margin:32px 0}.value{font-size:36px;font-weight:760;letter-spacing:-.04em}.label{color:var(--muted)}.red{color:var(--red)}.green{color:var(--green)}.cyan{color:var(--cyan)}.amber{color:var(--amber)}section{margin-top:40px}.strata{grid-template-columns:repeat(4,1fr)}.generation{position:relative;min-height:225px}.generation:not(:last-child)::after{content:"→";position:absolute;right:-18px;top:90px;color:var(--muted);font-size:22px}.tag{display:inline-block;border-radius:99px;padding:3px 9px;background:#1b2b43;color:var(--muted);font-size:12px}.generation strong{display:block;margin:13px 0 8px;font-size:19px}.generation ul{padding-left:18px;margin:10px 0}.two{grid-template-columns:1fr 1fr}.bar{display:grid;grid-template-columns:185px 1fr 64px;gap:10px;align-items:center;margin:13px 0}.track{height:13px;background:#07101e;border:1px solid #213752;border-radius:99px;overflow:hidden}.fill{height:100%}.flow{display:flex;gap:22px;align-items:stretch}.flow .step{position:relative;flex:1;padding:17px;border:1px solid var(--line);border-radius:14px;background:#0b1727}.flow .step:not(:last-child)::after{content:"→";position:absolute;right:-18px;top:42%;color:var(--muted);font-size:21px}.step b{display:block;margin-bottom:8px}table{width:100%;border-collapse:collapse}th,td{padding:12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em}.pill{display:inline-block;padding:3px 8px;border-radius:99px;background:#1b2d45;font-size:12px}ol{margin:0;padding-left:22px}li{margin:8px 0}code{color:#bceaff}footer{margin-top:48px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted)}
+    @media(max-width:900px){header,.two,.strata{grid-template-columns:1fr}.metrics{grid-template-columns:1fr 1fr}.generation:not(:last-child)::after{content:"↓";right:auto;left:49%;top:auto;bottom:-24px}.flow{flex-direction:column}.flow .step:not(:last-child)::after{content:"↓";right:auto;left:49%;top:auto;bottom:-25px}}@media(max-width:560px){.metrics{grid-template-columns:1fr}.bar{grid-template-columns:135px 1fr 48px}}
+  </style>
+</head>
+<body><main>
+  <header>
+    <div><div class="eyebrow">P0 implementation evidence · 2026-07-22</div><h1>Swift-CAD WIPを<br>世代ごとに分離する</h1><p class="lead">現在の問題は、巨大な差分そのものではなく、Rupa互換契約・selection移行・exact architecture・certified geometry研究が同じlocal dependencyに積層していることです。</p></div>
+    <aside class="verdict"><span>P0判定</span><strong>保存と統合を分離する</strong><p class="note">現行WIPは欠落なくcheckpoint化し、Rupaの統合基準は検証済み3-repository tupleとして別に固定する。</p></aside>
+  </header>
+
+  <div class="grid metrics">
+    <article class="card"><div class="value red">445</div><div class="label">swift-CAD dirty entries</div></article>
+    <article class="card"><div class="value amber">4</div><div class="label">重なったcontract generations</div></article>
+    <article class="card"><div class="value cyan">8</div><div class="label">atomic implementation clusters</div></article>
+    <article class="card"><div class="value green">1 / 1</div><div class="label">旧selection代表テスト</div></article>
+  </div>
+
+  <section><h2>契約の4世代</h2><div class="grid strata">
+    <article class="card generation"><span class="tag">G0 · 35ffd6e</span><strong class="green">Rupa互換</strong><ul><li><code>PersistentName</code></li><li><code>.topology</code></li><li>OpenUSD <code>998e505</code></li></ul><p class="note">RupaKit build成功、selection 1/1 pass</p></article>
+    <article class="card generation"><span class="tag">G1 · 1060739</span><strong class="amber">ID移行</strong><ul><li><code>SubshapeID</code></li><li><code>.subshape</code></li><li>Rupa未追随</li></ul><p class="note">Rupa compile failure</p></article>
+    <article class="card generation"><span class="tag">G2 · a875eeb</span><strong class="amber">Exact architecture</strong><ul><li><code>StableSubshapeReference</code></li><li>explicit tolerance</li><li>exact index + lineage</li></ul><p class="note">facade build成功、Geometry 9 failures</p></article>
+    <article class="card generation"><span class="tag">G3 · worktree</span><strong class="red">Research WIP</strong><ul><li>certified implicit truth</li><li>exact volume / boolean</li><li>capability split</li></ul><p class="note">Geometry 18 / Kernel 48 failures</p></article>
+  </div></section>
+
+  <section class="grid two">
+    <article class="card"><h2>変更量</h2><div class="bar"><span>Modified</span><div class="track"><div class="fill" style="width:55.7%;background:var(--amber)"></div></div><b>248</b></div><div class="bar"><span>Deleted</span><div class="track"><div class="fill" style="width:2.5%;background:var(--red)"></div></div><b>11</b></div><div class="bar"><span>Untracked</span><div class="track"><div class="fill" style="width:41.8%;background:var(--cyan)"></div></div><b>186</b></div><p class="note">untrackedだけで52,885行。tracked差分だけの保存は、capability extensionやcertified geometryの依存closureを欠落させます。</p></article>
+    <article class="card"><h2>実行結果</h2><div class="bar"><span>Current Geometry</span><div class="track"><div class="fill" style="width:92.6%;background:var(--green)"></div></div><b>224/242</b></div><div class="bar"><span>Current Kernel</span><div class="track"><div class="fill" style="width:89.7%;background:var(--green)"></div></div><b>416/464</b></div><div class="bar"><span>G0 selection</span><div class="track"><div class="fill" style="width:100%;background:var(--green)"></div></div><b>1/1</b></div><p class="note">0件実行になった誤filterは成功証拠から除外し、xcresultのtotalTestCountを確認しています。</p></article>
+  </section>
+
+  <section><h2>実装の依存方向</h2><div class="flow">
+    <div class="step"><b>Geometry</b><span class="note">certified intersections<br>rational B-spline</span></div>
+    <div class="step"><b>Topology</b><span class="note">pcurves<br>exact volume</span></div>
+    <div class="step"><b>IR / Modeling</b><span class="note">schema<br>feature evaluators</span></div>
+    <div class="step"><b>Kernel / Exchange</b><span class="note">boolean/query<br>STEP/IGES/native</span></div>
+    <div class="step"><b>Rupa</b><span class="note">selection persistence<br>material/measure/UI</span></div>
+  </div></section>
+
+  <section class="card"><h2>Atomic cluster map</h2><table><thead><tr><th>#</th><th>Cluster</th><th>一緒に保存・検証すべき理由</th></tr></thead><tbody>
+    <tr><td>1</td><td>Capability catalog split</td><td>tracked本体削除がuntracked extension群とcheckerに依存</td></tr>
+    <tr><td>2</td><td>Certified geometry truth</td><td>intersection curve、dual pcurve、residual、certification toleranceが一契約</td></tr>
+    <tr><td>3</td><td>Exact topology / volume</td><td>pcurve積分とtrimmed volumeがGeometry証明に依存</td></tr>
+    <tr><td>4</td><td>Surface / curve / edit modeling</td><td>IR schemaとfeature evaluatorを同時に変更</td></tr>
+    <tr><td>5</td><td>Kernel boolean / query</td><td>arrangement、classification、materialization、validationが連動</td></tr>
+    <tr><td>6</td><td>Exact exchange</td><td>implicit curve truthをSTEP/IGES/nativeで保持</td></tr>
+    <tr><td>7</td><td>Docs / CI / evidence</td><td>CIがuntracked checkerを参照し、0/8 gateは未達</td></tr>
+    <tr><td>8</td><td>Canonical rational B-spline</td><td>specialized型削除とcanonical型・全caller/testが不可分</td></tr>
+  </tbody></table></section>
+
+  <section class="grid two">
+    <article class="card"><h2>検証済みintegration tuple</h2><table><tbody><tr><td>Rupa</td><td><code>4d90a4b</code></td></tr><tr><td>swift-CAD</td><td><code>35ffd6e</code></td></tr><tr><td>swift-OpenUSD</td><td><code>998e505</code></td></tr><tr><td>RupaKit build</td><td><span class="pill green">passed</span></td></tr><tr><td>Generated topology round trip</td><td><span class="pill green">1 / 1 passed</span></td></tr></tbody></table><p class="note">これはfull test greenの主張ではなく、compile-compatibleかつ代表selection behaviorが通る回復基準です。</p></article>
+    <article class="card"><h2>P0 exit criteria</h2><ol><li>G3をtracked/untracked closureごと回復可能に保存</li><li>G0の3-repository tupleをmanifest化</li><li>G1/G2/G3の世代境界を保持</li><li>8 clusterごとの対象files・tests・known failuresを固定</li><li>local path dependencyが未指定dirty treeを参照しない</li></ol></article>
+  </section>
+
+  <section class="card"><h2>P0 execution record</h2><table><tbody><tr><td>Swift-CAD WIP checkpoint</td><td><code>codex/p0-swift-cad-checkpoint @ 288d5cd</code></td></tr><tr><td>Rupa typed mesh selection</td><td><code>03e341d</code></td></tr><tr><td>Typed mesh selection verification</td><td><span class="pill green">2 / 2 passed</span></td></tr><tr><td>Baseline enforcement</td><td><code>P0_INTEGRATION_BASELINE.json</code> + checker</td></tr></tbody></table></section>
+
+  <footer>Source of truth: repository source, Git history/state, skltn structural scan, xcodebuild, xcresult. Structured evidence is stored in <code>02_ontology.jsonld</code>, <code>08_report_data.json</code>, and <code>visuals/</code>.</footer>
+</main></body></html>
