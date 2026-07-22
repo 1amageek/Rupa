@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "integrationID": "rupa-p0-forward-contract-2026-07-22",
+  "repositories": [
+    {
+      "name": "Rupa",
+      "path": ".",
+      "revision": "0c5868990c9c4bae2968fba324431a9a5fee5f1b",
+      "revisionPolicy": "ancestor",
+      "requireClean": false
+    },
+    {
+      "name": "swift-CAD",
+      "path": "swift-CAD",
+      "revision": "288d5cd2d618c6f8db2f147ba8aa2dfd2e8157d3",
+      "revisionPolicy": "exact",
+      "requireClean": true
+    },
+    {
+      "name": "swift-OpenUSD",
+      "path": "swift-OpenUSD",
+      "revision": "2c943c75ef9c0c32974663b13441a0972bec7d3e",
+      "revisionPolicy": "exact",
+      "requireClean": true
+    }
+  ],
+  "dependencyContracts": [
+    {
+      "file": "RupaKit/Package.swift",
+      "requiredText": ".package(name: \"swift-CAD\", path: \"../swift-CAD\")"
+    },
+    {
+      "file": "swift-CAD/Package.swift",
+      "requiredText": "revision: \"2c943c75ef9c0c32974663b13441a0972bec7d3e\""
+    }
+  ],
+  "contracts": [
+    "StableSubshapeReference is the generated-topology selection contract.",
+    "ModelingTolerance is explicit at evaluation and validation boundaries.",
+    "SurfaceTrimFeature owns authored trim loops independently from source surface domains.",
+    "Sketch tangency payloads preserve side, contact, endpoint, and orientation semantics.",
+    "Unsupported generated-topology offset options fail before mutation."
+  ]
+}
