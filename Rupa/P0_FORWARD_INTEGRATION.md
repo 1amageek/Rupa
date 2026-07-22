@@ -4,7 +4,7 @@
 
 Rupa revision `0c5868990c9c4bae2968fba324431a9a5fee5f1b` adopts the forward
 Swift-CAD contract preserved at revision
-`26406fcdaa09cf5eed6d291f7e29afe72916cfc8`. The reproducible repository
+`e9cce6416b448b5f1b16482b94192a8bf1ec7f42`. The reproducible repository
 tuple and dependency declarations are recorded in `P0_FORWARD_INTEGRATION.json`.
 
 The recoverable legacy integration baseline remains unchanged. This forward
@@ -34,9 +34,11 @@ The following checks were executed against the recorded tuple on 2026-07-22:
 | CLI, Automation, and Agent contract boundaries | Passed in the focused contract run. |
 | Focused forward-contract run | Passed: 13 of 13 tests; count verified from the Xcode result bundle. |
 | Full `RupaCoreTests` execution | Failed with a broad failure list; it remains an open integration gate. |
-| Full Swift-CAD `CADGeometry-Tests` execution | Failed: 230 of 242 tests passed and 12 failed; count verified from the Xcode result bundle. |
+| Full Swift-CAD `CADGeometry-Tests` execution at parent revision `26406fc` | Failed: 230 of 242 tests passed and 12 failed; count verified from the Xcode result bundle. |
 | Separated cone-torus exact-empty contract | Passed in the focused run and the full Geometry run; the obsolete unsupported-capability expectation was removed. |
 | General revolved-surface contracts | Passed in the focused run and the full Geometry run; exact curve results validate residuals and both surface parameter curves. |
+| Current-revision surface-surface suite | Passed: 14 of 14 tests; count verified from the Xcode result bundle. |
+| Current-revision full Geometry execution | Did not complete within the 120-second outer timeout; it remains an open same-revision gate. |
 
 ## Remaining P0 completion gates
 
