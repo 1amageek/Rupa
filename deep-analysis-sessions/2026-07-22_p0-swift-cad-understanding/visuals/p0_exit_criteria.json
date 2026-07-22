@@ -1,9 +1,16 @@
 {
-  "criteria": [
+  "preservationPrerequisites": [
     {"order":1,"criterion":"G3 checkpoint is complete and recoverable","proof":"tracked and untracked closure recorded; no user data lost"},
     {"order":2,"criterion":"G0 integration tuple is explicit","proof":"Rupa 4d90a4b + CAD 35ffd6e + OpenUSD 998e505 manifest"},
     {"order":3,"criterion":"Generation boundaries are preserved","proof":"G1/G2/G3 are not presented as one stable change"},
     {"order":4,"criterion":"Atomic clusters are enumerated","proof":"8 clusters with dependency order and test ownership"},
     {"order":5,"criterion":"Local dependency is deterministic","proof":"Rupa no longer resolves an unspecified dirty swift-CAD tree"}
+  ],
+  "actualCompletionCriteria": [
+    {"order":1,"criterion":"Finish P0 vertical capability slices","proof":"source, command, evaluator, topology, stable selection, UI, Automation, Agent, diagnostics, and tests agree"},
+    {"order":2,"criterion":"Adopt the forward Swift-CAD contract in Rupa","proof":"StableSubshapeReference and explicit ModelingTolerance replace PersistentName-era dependencies"},
+    {"order":3,"criterion":"Close exact-kernel regressions","proof":"relevant Geometry, Topology, Modeling, Kernel, and Exchange suites pass"},
+    {"order":4,"criterion":"Remove development-envelope completion exemptions","proof":"valid public inputs are not rejected merely because an implemented shape envelope is narrow"},
+    {"order":5,"criterion":"Record same-revision evidence","proof":"normative Rupa completion contracts and Swift-CAD gate manifests are satisfied"}
   ]
 }

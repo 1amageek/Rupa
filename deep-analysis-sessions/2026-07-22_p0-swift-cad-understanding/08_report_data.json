@@ -1,7 +1,24 @@
 {
   "title": "P0 Swift-CAD implementation understanding",
   "date": "2026-07-22",
-  "verdict": "The workspace contains four contract generations and eight atomic implementation clusters; P0 must preserve and separate them before integration work.",
+  "verdict": "Preservation and reproducibility prerequisites are complete, but P0 implementation is not complete. The forward goal is the stable-subshape exact-kernel contract integrated through Rupa and verified by the authoritative same-revision gates.",
+  "goalCorrection": {
+    "preservationStatus": "complete",
+    "p0ImplementationStatus": "open",
+    "swiftCADCompletionGates": "0/8 at the audited WIP revision",
+    "rupaCADQualityP0": [
+      "Robust filleting and blending",
+      "Powerful exact booleans",
+      "Direct stable-topology manipulation"
+    ],
+    "forwardContract": [
+      "StableSubshapeReference",
+      "explicit ModelingTolerance",
+      "exact or certified geometry truth",
+      "validated B-rep and deterministic lineage",
+      "shared UI/Core/Automation/Agent paths"
+    ]
+  },
   "baselineTuple": {
     "rupaMinimum": "03e341d42e45a543ca19b999a4bb9b339db1a454",
     "swiftCAD": "35ffd6e",
@@ -37,12 +54,19 @@
     "baselineManifest": "P0_INTEGRATION_BASELINE.json",
     "baselineChecker": "Scripts/check_p0_integration_baseline.py"
   },
-  "p0ExitCriteria": [
+  "preservationExitCriteria": [
     "Recoverable G3 checkpoint",
     "Explicit G0 three-repository baseline manifest",
     "Preserved G1/G2/G3 boundaries",
     "Eight atomic cluster manifests",
     "Deterministic local dependency resolution"
+  ],
+  "actualP0ExitCriteria": [
+    "P0 CAD capability vertical slices are complete across source, command, evaluation, selection, UI, Automation, Agent, diagnostics, and tests",
+    "Rupa consumes the stable-subshape and explicit-tolerance Swift-CAD contracts without compatibility fallback",
+    "Known geometry and kernel regressions are fixed and relevant suites pass",
+    "No named valid public-domain input is rejected only because it is outside an implementation envelope",
+    "Required same-revision completion evidence is recorded"
   ],
   "limitations": [
     "Full RupaKit test suite was not run on G0",

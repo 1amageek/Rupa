@@ -42,7 +42,7 @@
       },
       {
         "id":"group:layer/situation","kind":"layer","title":"Situation","layer":"Situation",
-        "children":[{"id":"group:category/situation/version-strata","kind":"category","title":"Version Strata","layer":"Situation","category":"Version Strata","members":["ea:p0/E001"]}]
+        "children":[{"id":"group:category/situation/version-strata","kind":"category","title":"Version Strata and Goal Authority","layer":"Situation","category":"Version Strata and Goal Authority","members":["ea:p0/E001","ea:p0/E004"]}]
       },
       {
         "id":"group:layer/operation","kind":"layer","title":"Operation","layer":"Operation",
@@ -91,6 +91,12 @@
       "source":"Isolated Git worktrees, xcodebuild, xcresult totalTestCount","sourceUrl":"local://xcodebuild/rupa-compatible-tuple","reliability":0.99
     },
     {
+      "@id":"ea:p0/E004","@type":"Evidence","title":"Authoritative completion contracts reject preservation as completion",
+      "content":"Rupa requires implementation, tests, review, fixes, and re-verification across the named conformance scope. Swift-CAD requires all public contracts supported and G0 through G7 passing on one revision; local builds and bounded envelopes earn no completion credit.",
+      "epistemicStatus":"verified","confidence":0.99,
+      "source":"Rupa GOAL_STATEMENT, CAD_QUALITY_MILESTONES, IMPLEMENTATION_STATUS, and Swift-CAD ROADMAP at the WIP checkpoint","sourceUrl":"local://goal-authority","reliability":0.99
+    },
+    {
       "@id":"ea:p0/I001","@type":"Insight","title":"The blocker is overlapping contract generations",
       "content":"Committing or fixing the current tree as one unit would conflate a recoverable Rupa contract, two selection migrations, and several unfinished exact-kernel research clusters.",
       "epistemicStatus":"evidenced","confidence":0.97,
@@ -110,12 +116,12 @@
       "primaryEvidence":["ea:p0/E001","ea:p0/E002","ea:p0/E003"]
     },
     {
-      "@id":"ea:p0/I002","@type":"Insight","title":"P0 is a recoverability and determinism gate",
-      "content":"P0 is complete when no WIP is lost, the buildable revision tuple is explicit, contract generations remain separated, atomic closures are documented, and local dependency resolution no longer points at an unspecified dirty tree.",
+      "@id":"ea:p0/I002","@type":"Insight","title":"Recoverability is a prerequisite, not P0 completion",
+      "content":"Checkpointing and a reproducible legacy tuple protect the work but do not finish P0. Completion requires the forward stable-subshape exact-kernel contract to work through Rupa's source, command, evaluation, selection, UI, Automation, Agent, diagnostic, and verification paths under the authoritative same-revision gates.",
       "epistemicStatus":"evidenced","confidence":0.97,
-      "derivedFrom":["ea:p0/I001","ea:p0/T002"],
-      "rationale":"These conditions restore a reproducible integration base without falsely declaring the exact-kernel WIP stable or discarding research work.",
-      "primaryEvidence":["ea:p0/E001","ea:p0/E002","ea:p0/E003"],
+      "derivedFrom":["ea:p0/I001","ea:p0/T002","ea:p0/E004"],
+      "rationale":"The preservation conditions restore a safe base, while the normative goal documents explicitly deny completion credit to local builds, partial capability envelopes, and checkpoints with open regressions.",
+      "primaryEvidence":["ea:p0/E001","ea:p0/E002","ea:p0/E003","ea:p0/E004"],
       "sourceTopics":["ea:p0/T001","ea:p0/T002"],
       "visualEvidenceRequirement":{"required":true,"charts":["version strata","test matrix","atomic clusters","exit criteria"]},
       "synthesis":{"claimRole":"final-claim"}

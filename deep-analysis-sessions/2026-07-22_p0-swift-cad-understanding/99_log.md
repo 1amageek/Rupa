@@ -20,3 +20,5 @@
 - Rupa `codex/p0-integration-baseline`を作成し、typed mesh-selection sliceを`03e341d`としてcommit。
 - Rupa `03e341d` + swift-CAD `35ffd6e` + swift-OpenUSD `998e505`で追加selection testsを実行: xcresult 2 total / 2 passed。
 - 3-repository baseline manifest、decision record、revision/cleanliness checkerを追加。
+- Goal authorityを再監査。previous reportがpreservation prerequisiteをP0 completionへ誤って昇格させていたと判定。
+- Rupa Goal Statement、CAD Quality P0、Implementation Status、Swift-CAD G0-G7 completion contractに合わせ、P0 implementation statusをOPENへ訂正。

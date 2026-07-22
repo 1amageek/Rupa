@@ -14,7 +14,7 @@
 <body><main>
   <header>
     <div><div class="eyebrow">P0 implementation evidence · 2026-07-22</div><h1>Swift-CAD WIPを<br>世代ごとに分離する</h1><p class="lead">現在の問題は、巨大な差分そのものではなく、Rupa互換契約・selection移行・exact architecture・certified geometry研究が同じlocal dependencyに積層していることです。</p></div>
-    <aside class="verdict"><span>P0判定</span><strong>保存と統合を分離する</strong><p class="note">現行WIPは欠落なくcheckpoint化し、Rupaの統合基準は検証済み3-repository tupleとして別に固定する。</p></aside>
+    <aside class="verdict"><span>P0判定</span><strong>P0実装は未完了</strong><p class="note">現行WIPの保存とlegacy baselineの再現は完了したが、これは着手条件であり製品・kernelの完了条件ではない。</p></aside>
   </header>
 
   <div class="grid metrics">
@@ -57,8 +57,10 @@
 
   <section class="grid two">
     <article class="card"><h2>検証済みintegration tuple</h2><table><tbody><tr><td>Rupa</td><td><code>4d90a4b</code></td></tr><tr><td>swift-CAD</td><td><code>35ffd6e</code></td></tr><tr><td>swift-OpenUSD</td><td><code>998e505</code></td></tr><tr><td>RupaKit build</td><td><span class="pill green">passed</span></td></tr><tr><td>Generated topology round trip</td><td><span class="pill green">1 / 1 passed</span></td></tr></tbody></table><p class="note">これはfull test greenの主張ではなく、compile-compatibleかつ代表selection behaviorが通る回復基準です。</p></article>
-    <article class="card"><h2>P0 exit criteria</h2><ol><li>G3をtracked/untracked closureごと回復可能に保存</li><li>G0の3-repository tupleをmanifest化</li><li>G1/G2/G3の世代境界を保持</li><li>8 clusterごとの対象files・tests・known failuresを固定</li><li>local path dependencyが未指定dirty treeを参照しない</li></ol></article>
+    <article class="card"><h2>保存前提 — 完了</h2><ol><li>G3をtracked/untracked closureごと回復可能に保存</li><li>legacy 3-repository tupleをmanifest化</li><li>G1/G2/G3の世代境界を保持</li><li>8 clusterを記録</li><li>local dependencyを検査可能にする</li></ol></article>
   </section>
+
+  <section class="card"><h2>実際のP0完了条件 — 未完了</h2><table><tbody><tr><td>Kernel truth</td><td>exact parametricまたはcertified implicit geometryとvalidated B-repを完成</td></tr><tr><td>P0 capability</td><td>robust fillet/blend、powerful Boolean、stable topology direct editを縦断完成</td></tr><tr><td>Rupa migration</td><td><code>StableSubshapeReference</code>とexplicit toleranceへ移行</td></tr><tr><td>Route parity</td><td>UI / Core / Automation / Agent / diagnostics / undo-redoを同一契約へ接続</td></tr><tr><td>Evidence</td><td>既知回帰を修正し、正本が要求するsame-revision verificationを通す</td></tr></tbody></table></section>
 
   <section class="card"><h2>P0 execution record</h2><table><tbody><tr><td>Swift-CAD WIP checkpoint</td><td><code>codex/p0-swift-cad-checkpoint @ 288d5cd</code></td></tr><tr><td>Rupa typed mesh selection</td><td><code>03e341d</code></td></tr><tr><td>Typed mesh selection verification</td><td><span class="pill green">2 / 2 passed</span></td></tr><tr><td>Baseline enforcement</td><td><code>P0_INTEGRATION_BASELINE.json</code> + checker</td></tr></tbody></table></section>
 
