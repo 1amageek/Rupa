@@ -11,7 +11,17 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
 
     public init(
         document: CADDocument,
-        evaluator: DocumentEvaluator = DocumentEvaluator()
+        tolerance: ModelingTolerance
+    ) {
+        self.init(
+            document: document,
+            evaluator: DocumentEvaluator(tolerance: tolerance)
+        )
+    }
+
+    public init(
+        document: CADDocument,
+        evaluator: DocumentEvaluator
     ) {
         self.document = document
         self.evaluator = evaluator
@@ -50,15 +60,10 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
                 message: "CAD document evaluation failed: \(error)"
             )
         }
-        guard let bodyID = resolveBodyID(
+        let bodyID = try resolveBodyID(
             outputID: outputID,
             in: evaluatedDocument
-        ) else {
-            throw CADIntegrationError(
-                code: .bodyUnavailable,
-                message: "CAD evaluation produced no body for output \(outputID)."
-            )
-        }
+        )
         guard let mesh = evaluatedDocument.meshes[bodyID] else {
             throw CADIntegrationError(
                 code: .bodyUnavailable,
@@ -76,34 +81,40 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
     private func resolveBodyID(
         outputID: String,
         in evaluatedDocument: EvaluatedDocument
-    ) -> BodyID? {
+    ) throws -> BodyID {
         guard let uuid = UUID(uuidString: outputID) else {
-            return nil
+            throw CADIntegrationError(
+                code: .bodyUnavailable,
+                message: "CAD output ID is not a valid body or feature identifier."
+            )
         }
+
+        var candidates: Set<BodyID> = []
         let directBodyID = BodyID(uuid)
         if evaluatedDocument.meshes[directBodyID] != nil {
-            return directBodyID
+            candidates.insert(directBodyID)
         }
 
         let featureID = FeatureID(uuid)
-        let bodyIDs = evaluatedDocument.generatedNames.materializedDictionary().compactMap {
-            name, reference -> BodyID? in
-            guard case .body(let bodyID) = reference else {
-                return nil
-            }
-            let belongsToFeature = name.components.contains { component in
-                guard case .feature(let candidate) = component else {
-                    return false
-                }
-                return candidate == featureID
-            }
-            return belongsToFeature ? bodyID : nil
+        let bodySubshapeID = SubshapeID(
+            featureID: featureID,
+            role: GeneratedSubshapeRole.body.rawValue,
+            ordinal: 0
+        )
+        if case let .body(bodyID) = evaluatedDocument.subshapes[bodySubshapeID],
+           evaluatedDocument.meshes[bodyID] != nil {
+            candidates.insert(bodyID)
         }
-        let uniqueBodyIDs = Set(bodyIDs)
-        guard uniqueBodyIDs.count == 1 else {
-            return nil
+
+        guard candidates.count == 1,
+              let resolved = candidates.first else {
+            let reason = candidates.isEmpty ? "no live body" : "more than one live body"
+            throw CADIntegrationError(
+                code: .bodyUnavailable,
+                message: "CAD evaluation resolved \(reason) for output \(outputID)."
+            )
         }
-        return uniqueBodyIDs.first
+        return resolved
     }
 
     private func makeMeshSource(bodyID: BodyID, mesh: Mesh) throws -> MeshSource {

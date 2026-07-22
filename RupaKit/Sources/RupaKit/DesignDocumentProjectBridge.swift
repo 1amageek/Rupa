@@ -98,7 +98,10 @@ public struct DesignDocumentProjectBridge: Sendable {
     public func evaluationEngine(for document: DesignDocument) -> ProjectEvaluationEngine {
         ProjectEvaluationEngine(
             providers: [
-                CADGeometrySourceProvider(document: document.cadDocument),
+                CADGeometrySourceProvider(
+                    document: document.cadDocument,
+                    tolerance: document.modelingSettings.tolerance
+                ),
             ]
         )
     }
