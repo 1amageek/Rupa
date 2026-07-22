@@ -4,7 +4,7 @@
 
 Rupa revision `0c5868990c9c4bae2968fba324431a9a5fee5f1b` adopts the forward
 Swift-CAD contract preserved at revision
-`288d5cd2d618c6f8db2f147ba8aa2dfd2e8157d3`. The reproducible repository
+`efdbd6c9d5beb513b14f0973e2345dbb31949179`. The reproducible repository
 tuple and dependency declarations are recorded in `P0_FORWARD_INTEGRATION.json`.
 
 The recoverable legacy integration baseline remains unchanged. This forward
@@ -34,6 +34,8 @@ The following checks were executed against the recorded tuple on 2026-07-22:
 | CLI, Automation, and Agent contract boundaries | Passed in the focused contract run. |
 | Focused forward-contract run | Passed: 13 of 13 tests; count verified from the Xcode result bundle. |
 | Full `RupaCoreTests` execution | Failed with a broad failure list; it remains an open integration gate. |
+| Full Swift-CAD `CADGeometry-Tests` execution | Failed: 225 of 242 tests passed and 17 failed; count verified from the Xcode result bundle. |
+| Separated cone-torus exact-empty contract | Passed in the focused run and the full Geometry run; the obsolete unsupported-capability expectation was removed. |
 
 ## Remaining P0 completion gates
 

@@ -12,7 +12,7 @@
     {
       "name": "swift-CAD",
       "path": "swift-CAD",
-      "revision": "288d5cd2d618c6f8db2f147ba8aa2dfd2e8157d3",
+      "revision": "efdbd6c9d5beb513b14f0973e2345dbb31949179",
       "revisionPolicy": "exact",
       "requireClean": true
     },
