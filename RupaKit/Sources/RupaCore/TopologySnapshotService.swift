@@ -104,6 +104,7 @@ public struct TopologySnapshotService: Sendable {
         sceneNodeIDsByFeatureID: [FeatureID: SceneNodeID]
     ) throws -> TopologySummaryResult.Entry {
         let subshapeID = stableReference.subshapeID
+        let identityRole = identityRoleComponents(subshapeID.role)
         let sceneNodeID = sceneNodeIDsByFeatureID[subshapeID.featureID]?.description
         switch reference {
         case .body(let bodyID):
@@ -114,7 +115,8 @@ public struct TopologySnapshotService: Sendable {
                 referenceID: bodyID.description,
                 sourceFeatureID: subshapeID.featureID.description,
                 sceneNodeID: sceneNodeID,
-                generatedRole: subshapeID.role,
+                generatedRole: identityRole.generatedRole,
+                subshapeRole: identityRole.subshapeRole,
                 index: subshapeID.ordinal,
                 shellCount: body?.shellIDs.count
             )
@@ -134,7 +136,8 @@ public struct TopologySnapshotService: Sendable {
                 referenceID: faceID.description,
                 sourceFeatureID: subshapeID.featureID.description,
                 sceneNodeID: sceneNodeID,
-                generatedRole: subshapeID.role,
+                generatedRole: identityRole.generatedRole,
+                subshapeRole: identityRole.subshapeRole,
                 index: subshapeID.ordinal,
                 selectionComponentID: try SelectionComponentID.stableTopology(stableReference).rawValue,
                 surfaceKind: surfaceInfo?.kind,
@@ -177,7 +180,8 @@ public struct TopologySnapshotService: Sendable {
                 referenceID: edgeID.description,
                 sourceFeatureID: subshapeID.featureID.description,
                 sceneNodeID: sceneNodeID,
-                generatedRole: subshapeID.role,
+                generatedRole: identityRole.generatedRole,
+                subshapeRole: identityRole.subshapeRole,
                 index: subshapeID.ordinal,
                 selectionComponentID: try SelectionComponentID.stableTopology(stableReference).rawValue,
                 curveKind: curveInfo?.kind,
@@ -206,12 +210,26 @@ public struct TopologySnapshotService: Sendable {
                 referenceID: vertexID.description,
                 sourceFeatureID: subshapeID.featureID.description,
                 sceneNodeID: sceneNodeID,
-                generatedRole: subshapeID.role,
+                generatedRole: identityRole.generatedRole,
+                subshapeRole: identityRole.subshapeRole,
                 index: subshapeID.ordinal,
                 selectionComponentID: try SelectionComponentID.stableTopology(stableReference).rawValue,
                 start: vertex.map { point($0.point) }
             )
         }
+    }
+
+    private func identityRoleComponents(
+        _ role: String
+    ) -> (generatedRole: String, subshapeRole: String?) {
+        guard let separator = role.firstIndex(of: ".") else {
+            return (role, nil)
+        }
+        let subshapeStart = role.index(after: separator)
+        return (
+            String(role[..<separator]),
+            String(role[subshapeStart...])
+        )
     }
 
     private func sceneNodeIDsByFeatureID(in document: DesignDocument) -> [FeatureID: SceneNodeID] {

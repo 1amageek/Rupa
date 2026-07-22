@@ -28,17 +28,18 @@ The following checks were executed against the recorded tuple on 2026-07-22:
 | Check | Result |
 |---|---|
 | Full RupaKit package build | Passed |
-| Surface trim add, replace, and remove behavior | Passed |
-| Stable edge offset and explicit gap-fill rejection | Passed |
-| Line/circular, spline/line, and spline/spline tangency behavior | Passed |
-| CLI, Automation, and Agent contract boundaries | Passed |
-| Full `RupaCoreTests` execution | Inconclusive: the Xcode/Swift Testing runner reported a broad failure list without assertion diagnostics; focused tests passed. |
+| Surface trim add, replace, and remove behavior | Passed in the focused contract run. |
+| Stable edge offset and explicit gap-fill rejection | Passed in the focused contract run. |
+| Line/circular, spline/line, and spline/spline tangency behavior | Passed in the focused contract run. |
+| CLI, Automation, and Agent contract boundaries | Passed in the focused contract run. |
+| Focused forward-contract run | Passed: 13 of 13 tests; count verified from the Xcode result bundle. |
+| Full `RupaCoreTests` execution | Failed with a broad failure list; it remains an open integration gate. |
 
 ## Remaining P0 completion gates
 
 1. Close the exact-kernel Geometry, Topology, Modeling, Kernel, and Exchange regressions recorded by the Swift-CAD checkpoint.
 2. Remove development-envelope completion exemptions for supported public inputs.
-3. Run and record the normative same-revision gate set without the current full-suite runner anomaly.
+3. Close the full-suite failures and record the normative same-revision gate set.
 
 ## Verification
 

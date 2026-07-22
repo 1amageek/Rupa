@@ -916,6 +916,14 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     let surfaceTrimFeature = try #require(
         designDocumentSurfaceTrimFeature(in: document, targetFeatureID: featureID)
     )
+    let initialTrimFeatureIDs: [FeatureID] = document.cadDocument.designGraph.nodes.values.compactMap { feature in
+        guard case let .surfaceTrim(surfaceTrim) = feature.operation,
+              surfaceTrim.target.featureID == featureID else {
+            return nil
+        }
+        return feature.id
+    }
+    let initialTrimFeatureID = try #require(initialTrimFeatureIDs.first)
     #expect(surfaceTrimFeature.loops == [trimLoop])
 
     let trimmedSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
@@ -933,7 +941,9 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         "loop:0:edge:1:start",
         "loop:0:edge:2:start",
     ])
-    #expect(summaryTrimLoop.edgePersistentNames.allSatisfy { $0.contains("subshape:patch:0:loop:0:edge:") })
+    #expect(summaryTrimLoop.edgePersistentNames == (0..<3).map {
+        "feature:\(initialTrimFeatureID.description)/role:edge/ordinal:\($0)"
+    })
     #expect(summaryTrimLoop.edges.allSatisfy { !$0.supportsBoundaryContinuityMatching })
     #expect(summaryTrimLoop.edges.allSatisfy { edge in
         edge.unsupportedReason == "Authored trim edges do not expose boundary control rows for continuity matching."
@@ -967,14 +977,6 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
             ]),
         ]
     )
-    let initialTrimFeatureIDs: [FeatureID] = document.cadDocument.designGraph.nodes.values.compactMap { feature in
-        guard case let .surfaceTrim(surfaceTrim) = feature.operation,
-              surfaceTrim.target.featureID == featureID else {
-            return nil
-        }
-        return feature.id
-    }
-
     try document.setSurfaceTrimLoops(
         target: faceReference,
         trimLoops: [replacementTrimLoop]

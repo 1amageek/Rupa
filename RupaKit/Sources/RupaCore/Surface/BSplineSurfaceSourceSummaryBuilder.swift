@@ -12,6 +12,8 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         featureID: FeatureID,
         feature: FeatureNode,
         surfaceFeature: BSplineSurfaceFeature,
+        authoredTrimFeatureID: FeatureID?,
+        authoredTrimFeature: SurfaceTrimFeature?,
         sceneNodeID: SceneNodeID?,
         surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay],
         surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay],
@@ -19,14 +21,15 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         tolerance: ModelingTolerance
     ) throws -> SurfaceSourceSummaryResult.Source? {
         let surface = surfaceFeature.surface
-        let usesAuthoredTrimLoops = false
+        let usesAuthoredTrimLoops = authoredTrimFeature != nil
+        let topologyFeatureID = authoredTrimFeatureID ?? featureID
         let trimDomain = try surfaceFeature.resolvedParameterDomain(tolerance: tolerance)
         let fullDomain = try SurfaceParameterDomain2D.fullDomain(
             of: surface,
             tolerance: tolerance
         )
         let trimsFullSurfaceDomain = trimDomain == fullDomain
-        let sourceTrimLoops = [rectangularTrimLoop(domain: trimDomain)]
+        let sourceTrimLoops = authoredTrimFeature?.loops ?? [rectangularTrimLoop(domain: trimDomain)]
         let boundaryEdgeCount = sourceTrimLoops
             .filter { $0.role == .outer }
             .reduce(0) { partial, loop in partial + loop.parameterCurves.count }
@@ -35,6 +38,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
             .reduce(0) { partial, loop in partial + loop.parameterCurves.count }
         let patchBuildResult = try bSplinePatch(
             featureID: featureID,
+            topologyFeatureID: topologyFeatureID,
             surface: surface,
             sourceTrimLoops: sourceTrimLoops,
             usesAuthoredTrimLoops: usesAuthoredTrimLoops,
@@ -122,6 +126,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
 
     private func bSplinePatch(
         featureID: FeatureID,
+        topologyFeatureID: FeatureID,
         surface: BSplineSurface3D,
         sourceTrimLoops: [SurfaceTrimLoop],
         usesAuthoredTrimLoops: Bool,
@@ -133,10 +138,9 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry],
         tolerance: ModelingTolerance
     ) throws -> PatchBuildResult {
-        let faceIdentityKey = stableSubshapeKey(
-            featureID: featureID,
-            subshape: "patch:0:face"
-        )
+        let faceIdentityKey = usesAuthoredTrimLoops
+            ? stableSubshapeKey(featureID: topologyFeatureID, role: "face", ordinal: 0)
+            : stableSubshapeKey(featureID: topologyFeatureID, subshape: "patch:0:face")
         guard let faceEntry = topologyEntriesByPersistentName[faceIdentityKey] else {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -147,6 +151,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         let faceSelectionReference: SelectionReference? = .surface(.whole(surfaceReference))
         let trimLoops = try trimLoops(
             featureID: featureID,
+            topologyFeatureID: topologyFeatureID,
             surface: surface,
             surfaceReference: surfaceReference,
             sourceTrimLoops: sourceTrimLoops,
@@ -238,6 +243,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
 
     private func trimLoops(
         featureID: FeatureID,
+        topologyFeatureID: FeatureID,
         surface: BSplineSurface3D,
         surfaceReference: SurfaceReference,
         sourceTrimLoops: [SurfaceTrimLoop],
@@ -251,6 +257,8 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         try sourceTrimLoops.enumerated().map { loopIndex, sourceLoop in
             let edges = try trimEdges(
                 featureID: featureID,
+                topologyFeatureID: topologyFeatureID,
+                sourceTrimLoops: sourceTrimLoops,
                 surface: surface,
                 surfaceReference: surfaceReference,
                 sourceLoop: sourceLoop,
@@ -288,6 +296,8 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
 
     private func trimEdges(
         featureID: FeatureID,
+        topologyFeatureID: FeatureID,
+        sourceTrimLoops: [SurfaceTrimLoop],
         surface: BSplineSurface3D,
         surfaceReference: SurfaceReference,
         sourceLoop: SurfaceTrimLoop,
@@ -306,13 +316,27 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                 edgeIndex: index,
                 sourceLoop: sourceLoop
             )
-            let subshape = trimEdgeSubshape(
-                sourceLoop: sourceLoop,
-                loopIndex: loopIndex,
-                edgeIndex: index,
-                side: side
-            )
-            let edgePersistentName = stableSubshapeKey(featureID: featureID, subshape: subshape)
+            let edgePersistentName: String
+            if usesAuthoredTrimLoops {
+                let edgeOrdinal = sourceTrimLoops[..<loopIndex]
+                    .reduce(0) { $0 + $1.parameterCurves.count } + index
+                edgePersistentName = stableSubshapeKey(
+                    featureID: topologyFeatureID,
+                    role: "edge",
+                    ordinal: edgeOrdinal
+                )
+            } else {
+                let subshape = trimEdgeSubshape(
+                    sourceLoop: sourceLoop,
+                    loopIndex: loopIndex,
+                    edgeIndex: index,
+                    side: side
+                )
+                edgePersistentName = stableSubshapeKey(
+                    featureID: topologyFeatureID,
+                    subshape: subshape
+                )
+            }
             let selectionReference: SelectionReference? = topologyEntriesByPersistentName[edgePersistentName] == nil
                 ? nil
                 : .surface(.trim(SurfaceTrimReference(
@@ -1214,11 +1238,19 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         featureID: FeatureID,
         subshape: String
     ) -> String {
-        let subshapeID = SubshapeID(
+        stableSubshapeKey(
             featureID: featureID,
             role: "bSplineSurface.\(subshape)",
             ordinal: 0
         )
+    }
+
+    private func stableSubshapeKey(
+        featureID: FeatureID,
+        role: String,
+        ordinal: Int
+    ) -> String {
+        let subshapeID = SubshapeID(featureID: featureID, role: role, ordinal: ordinal)
         return "feature:\(subshapeID.featureID.description)/role:\(subshapeID.role)/ordinal:\(subshapeID.ordinal)"
     }
 }

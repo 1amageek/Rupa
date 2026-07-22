@@ -51,6 +51,7 @@ public struct SurfaceSourceSummaryService: Sendable {
             currentEvaluation: currentEvaluation,
             currentGeneration: currentGeneration
         )
+        let surfaceTrimFeaturesByTarget = try surfaceTrimFeaturesByTarget(in: document)
         var sources: [SurfaceSourceSummaryResult.Source] = []
         for featureID in document.cadDocument.designGraph.order {
             guard let feature = document.cadDocument.designGraph.nodes[featureID],
@@ -70,11 +71,15 @@ public struct SurfaceSourceSummaryService: Sendable {
                     tolerance: document.modelingSettings.tolerance
                 ))
             case let .bSplineSurface(surfaceFeature):
+                let authoredTrim = surfaceTrimFeaturesByTarget[featureID]
                 if let surfaceSource = try BSplineSurfaceSourceSummaryBuilder().source(
                     featureID: featureID,
                     feature: feature,
                     surfaceFeature: surfaceFeature,
-                    sceneNodeID: sceneNodeIDsByFeatureID[featureID],
+                    authoredTrimFeatureID: authoredTrim?.featureID,
+                    authoredTrimFeature: authoredTrim?.feature,
+                    sceneNodeID: authoredTrim.flatMap { sceneNodeIDsByFeatureID[$0.featureID] }
+                        ?? sceneNodeIDsByFeatureID[featureID],
                     surfaceControlPointDisplays: surfaceControlPointDisplays,
                     surfaceFrameDisplays: surfaceFrameDisplays,
                     topologyEntriesByPersistentName: topologyEntriesByPersistentName,
@@ -98,6 +103,28 @@ public struct SurfaceSourceSummaryService: Sendable {
                 ),
             ]
         )
+    }
+
+    private func surfaceTrimFeaturesByTarget(
+        in document: DesignDocument
+    ) throws -> [FeatureID: (featureID: FeatureID, feature: SurfaceTrimFeature)] {
+        var result: [FeatureID: (featureID: FeatureID, feature: SurfaceTrimFeature)] = [:]
+        for featureID in document.cadDocument.designGraph.order {
+            guard let node = document.cadDocument.designGraph.nodes[featureID],
+                  node.isSuppressed == false,
+                  case let .surfaceTrim(surfaceTrim) = node.operation else {
+                continue
+            }
+            let targetFeatureID = surfaceTrim.target.featureID
+            guard result[targetFeatureID] == nil else {
+                throw EditorError(
+                    code: .evaluationFailed,
+                    message: "Surface source summary requires at most one active trim feature per source surface."
+                )
+            }
+            result[targetFeatureID] = (featureID, surfaceTrim)
+        }
+        return result
     }
 
     private func source(

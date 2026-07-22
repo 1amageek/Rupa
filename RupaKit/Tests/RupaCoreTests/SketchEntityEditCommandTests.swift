@@ -5743,6 +5743,7 @@ import Testing
     #expect(constraint.references == [
         "splineEndpoint:\(setup.splineID.description):start",
         "entity:\(setup.lineID.description)",
+        "orientation:aligned",
     ])
     #expect(abs(alignedHandle.x - 0.005) < 1.0e-12)
     #expect(abs(alignedHandle.y - 0.0) < 1.0e-12)
@@ -5779,6 +5780,7 @@ import Testing
     #expect(constraint.references == [
         "splineEndpoint:\(setup.firstSplineID.description):end",
         "splineEndpoint:\(setup.secondSplineID.description):start",
+        "orientation:aligned",
     ])
     #expect(abs(alignedHandle.x - 0.012) < 1.0e-12)
     #expect(abs(alignedHandle.y - 0.0) < 1.0e-12)
