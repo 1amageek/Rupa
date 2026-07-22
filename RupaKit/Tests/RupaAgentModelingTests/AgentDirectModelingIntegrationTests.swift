@@ -332,7 +332,7 @@ import SwiftCAD
     #expect(result.generation == DocumentGeneration(2))
     #expect(body.kind == .sheet)
     #expect(afterTopology.counts.faceCount == 5)
-    #expect(afterTopology.entries.contains { $0.persistentName == faceEntry.persistentName } == false)
+    #expect(afterTopology.entries.contains { $0.stableReference == faceEntry.stableReference } == false)
     #expect(carriedFaces.count == 5)
     #expect(session.evaluationStatus == .valid)
 }
@@ -468,8 +468,8 @@ import SwiftCAD
     #expect(result.commandName == "draftBodyFaces")
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(2))
-    #expect(faceDraft.facePersistentNames.count == 2)
-    #expect(Set(faceDraft.facePersistentNames).count == 2)
+    #expect(faceDraft.faces.count == 2)
+    #expect(Set(faceDraft.faces).count == 2)
     #expect(body.kind == .solid)
     #expect(afterTopology.counts.faceCount == 6)
     #expect(draftFaces.count == 6)
@@ -514,10 +514,7 @@ import SwiftCAD
             command: .offsetCurve(
                 target: target,
                 distance: .length(1.0, .millimeter),
-                options: OffsetCurveOptions(
-                    gapFill: .linear,
-                    supportTarget: supportFaceTarget
-                ),
+                options: OffsetCurveOptions(supportTarget: supportFaceTarget),
                 vertexHandle: nil
             ),
             expectedGeneration: DocumentGeneration(1)
@@ -546,7 +543,8 @@ import SwiftCAD
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(2))
     #expect(edgeOffset.target == EdgeOffsetTargetReference(featureID: bodyFeatureID))
-    #expect(edgeOffset.gapFill == .linear)
+    #expect(edgeOffset.edge == edgeEntry.stableReference)
+    #expect(edgeOffset.supportFace == supportFaceEntry.stableReference)
     #expect(afterTopology.counts.faceCount == 7)
     #expect(afterTopology.counts.edgeCount == 15)
     #expect(afterTopology.counts.vertexCount == 10)
@@ -604,7 +602,7 @@ import SwiftCAD
             command: .offsetCurve(
                 target: edgeTarget,
                 distance: .length(1.0, .millimeter),
-                options: OffsetCurveOptions(gapFill: .linear),
+                options: OffsetCurveOptions(),
                 vertexHandle: nil
             ),
             expectedGeneration: DocumentGeneration(1)
@@ -634,7 +632,8 @@ import SwiftCAD
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(2))
     #expect(edgeOffset.target == EdgeOffsetTargetReference(featureID: bodyFeatureID))
-    #expect(edgeOffset.gapFill == .linear)
+    #expect(edgeOffset.edge == edgeEntry.stableReference)
+    #expect(edgeOffset.supportFace == supportFaceEntry.stableReference)
     #expect(generatedOffsetEdges.count == 1)
     #expect(session.evaluationStatus == .valid)
 }
@@ -688,7 +687,7 @@ import SwiftCAD
             command: .offsetCurve(
                 target: edgeTarget,
                 distance: .length(1.0, .millimeter),
-                options: OffsetCurveOptions(gapFill: .linear),
+                options: OffsetCurveOptions(),
                 vertexHandle: nil
             ),
             expectedGeneration: DocumentGeneration(1)
@@ -718,11 +717,8 @@ import SwiftCAD
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(2))
     #expect(edgeOffset.target == EdgeOffsetTargetReference(featureID: bodyFeatureID))
-    #expect(edgeOffset.supportFacePersistentName.components == [
-        .feature(bodyFeatureID),
-        .generated(GeneratedSubshapeRole.startFace.rawValue),
-    ])
-    #expect(edgeOffset.gapFill == .linear)
+    #expect(edgeOffset.edge == edgeEntry.stableReference)
+    #expect(edgeOffset.supportFace == supportFaceEntry.stableReference)
     #expect(generatedOffsetEdges.count == 1)
     #expect(session.evaluationStatus == .valid)
 }

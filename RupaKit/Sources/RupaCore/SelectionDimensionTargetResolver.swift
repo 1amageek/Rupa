@@ -5,7 +5,6 @@ import RupaCoreTypes
 public struct SelectionDimensionTargetResolver: Sendable {
     private let topologyService: TopologySnapshotService
     private let sketchEntityService: SketchEntitySnapshotService
-    private let persistentNameParser: GeneratedTopologyPersistentNameParser
 
     public init(
         topologyService: TopologySnapshotService = TopologySnapshotService(),
@@ -13,7 +12,6 @@ public struct SelectionDimensionTargetResolver: Sendable {
     ) {
         self.topologyService = topologyService
         self.sketchEntityService = sketchEntityService
-        self.persistentNameParser = GeneratedTopologyPersistentNameParser()
     }
 
     public func reference(
@@ -80,12 +78,9 @@ public struct SelectionDimensionTargetResolver: Sendable {
         document: DesignDocument,
         objectRegistry: ObjectTypeRegistry
     ) throws -> SelectionReference {
-        guard let persistentNameString = componentID.generatedTopologyPersistentName else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Selection dimension generated topology target requires a generated topology component ID."
-            )
-        }
+        let stableReference = try componentID.stableTopologyReference(
+            operationName: "Selection dimension"
+        )
         let topology = try topologyService.snapshot(
             document: document,
             objectRegistry: objectRegistry
@@ -93,17 +88,14 @@ public struct SelectionDimensionTargetResolver: Sendable {
         guard topology.entries.contains(where: {
             $0.kind == kind &&
                 $0.sceneNodeID == target.sceneNodeID.description &&
-                $0.persistentName == persistentNameString
+                $0.stableReference == stableReference
         }) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Selection dimension generated topology target was not found in the current evaluation."
             )
         }
-        return .topology(try persistentNameParser.parse(
-            persistentNameString,
-            operationName: "Selection dimension"
-        ))
+        return .subshape(stableReference)
     }
 
     private func sketchReference(

@@ -1241,7 +1241,7 @@ import SwiftCAD
     }
     let candidate = try #require(result.candidates.first { candidate in
         candidate.kind == .edgeMidpoint &&
-            candidate.topologySource?.persistentName == edge.persistentName
+            candidate.topologySource?.stableReference == edge.stableReference
     })
     #expect(candidate.topologySource?.selectionTarget == edgeTarget)
     #expect(abs(candidate.point.x - midpoint.x) <= 1.0e-12)
@@ -1260,11 +1260,12 @@ import SwiftCAD
         sourceMesh: agentPolySplineQuadMesh()
     ))
     let topology = try TopologySnapshotService().snapshot(document: session.document)
-    let vertex = try #require(topology.entries.first { entry in
+    let polySplineVertices = topology.entries.filter { entry in
         entry.kind == .vertex
-            && PolySplineSurfaceVertexTarget.canParsePersistentName(entry.persistentName)
-            && entry.start != nil
-            && entry.selectionTarget() != nil
+            && PolySplineSurfaceVertexTarget.canParse(subshapeID: entry.stableReference.subshapeID)
+    }
+    let vertex = try #require(polySplineVertices.first { entry in
+        entry.start != nil && entry.selectionTarget() != nil
     })
     let point = try #require(vertex.start)
     let vertexTarget = try #require(vertex.selectionTarget())
@@ -1291,7 +1292,7 @@ import SwiftCAD
     }
     let candidate = try #require(result.candidates.first { candidate in
         candidate.kind == .surfaceControlVertex
-            && candidate.topologySource?.persistentName == vertex.persistentName
+            && candidate.topologySource?.stableReference == vertex.stableReference
     })
     #expect(result.selectedCandidate?.kind == .surfaceControlVertex)
     #expect(candidate.label == "Surface CV")

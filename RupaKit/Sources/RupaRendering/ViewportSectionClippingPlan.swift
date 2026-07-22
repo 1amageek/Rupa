@@ -9,7 +9,7 @@ public struct ViewportSectionClippingPlan: Equatable {
         public var featureID: FeatureID
         public var bodyID: String
         public var sourceFeatureID: String?
-        public var persistentName: String?
+        public var stableReference: StableSubshapeReference?
         public var action: SectionAnalysisClippingPlan.BodyAction
 
         public init(
@@ -17,7 +17,7 @@ public struct ViewportSectionClippingPlan: Equatable {
             featureID: FeatureID,
             bodyID: String,
             sourceFeatureID: String? = nil,
-            persistentName: String? = nil,
+            stableReference: StableSubshapeReference? = nil,
             action: SectionAnalysisClippingPlan.BodyAction
         ) {
             self.id = sceneItemID
@@ -25,7 +25,7 @@ public struct ViewportSectionClippingPlan: Equatable {
             self.featureID = featureID
             self.bodyID = bodyID
             self.sourceFeatureID = sourceFeatureID
-            self.persistentName = persistentName
+            self.stableReference = stableReference
             self.action = action
         }
     }
@@ -62,7 +62,7 @@ public struct ViewportSectionClippingPlan: Equatable {
                 featureID: item.featureID,
                 bodyID: body.bodyID,
                 sourceFeatureID: body.sourceFeatureID,
-                persistentName: body.persistentName,
+                stableReference: body.stableReference,
                 action: body.action
             )
         }
@@ -93,8 +93,8 @@ public struct ViewportSectionClippingPlan: Equatable {
         component: ViewportBodyComponent,
         bodies: [SectionAnalysisClippingPlan.Body]
     ) -> SectionAnalysisClippingPlan.Body? {
-        if let persistentName = component.persistentName,
-           let body = bodies.first(where: { $0.persistentName == persistentName }) {
+        if let stableReference = component.stableReference,
+           let body = bodies.first(where: { $0.stableReference == stableReference }) {
             return body
         }
         let sourceFeatureIDs = [

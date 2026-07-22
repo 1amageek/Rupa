@@ -56,7 +56,7 @@ public struct DocumentPackageStore: Sendable {
     }
 
     private func loadLegacyCADPackage(from source: any ByteSource) throws -> DesignDocument {
-        let cadDocument = try CADPipeline().loadDocument(from: source)
+        let cadDocument = try CADPipeline(tolerance: .standard).loadDocument(from: source)
         return DesignDocument(
             cadDocument: cadDocument,
             modelingSettings: .standard,

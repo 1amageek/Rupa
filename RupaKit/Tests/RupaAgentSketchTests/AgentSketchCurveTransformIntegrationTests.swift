@@ -363,10 +363,11 @@ import SwiftCAD
     #expect(result.commandName == "joinSketchCurves")
     #expect(result.didMutate)
     #expect(joinedSource.continuity == .g2)
-    #expect(sketch.constraints.contains(.smoothSplineEndpoints(
+    #expect(sketch.constraints.contains(.smoothSplineEndpoints(SketchSplineEndpointTangencyConstraint(
         first: SketchSplineEndpointReference(splineID: setup.firstSplineID, endpoint: .end),
-        second: SketchSplineEndpointReference(splineID: setup.secondSplineID, endpoint: .start)
-    )))
+        second: SketchSplineEndpointReference(splineID: setup.secondSplineID, endpoint: .start),
+        orientation: .aligned
+    ))))
     #expect(abs(solvedEndpoint.x - 0.009) < 1.0e-12)
     #expect(abs(solvedEndpoint.y - 0.0) < 1.0e-12)
     #expect(abs(solvedHandle.x - 0.012) < 1.0e-12)

@@ -176,11 +176,11 @@ struct WorkspaceSurfaceInspectorStateBuilder {
             return false
         }
         return node.object?.geometryRole == .surface
-            || !generatedTopologyPersistentNames().isEmpty
+            || !selectedStableTopologyKeys().isEmpty
     }
 
-    func generatedTopologyPersistentNames() -> Set<String> {
-        var names = Set<String>()
+    func selectedStableTopologyKeys() -> Set<String> {
+        var keys = Set<String>()
         for target in selection.selectedTargets {
             let componentID: SelectionComponentID?
             switch target.component {
@@ -189,12 +189,19 @@ struct WorkspaceSurfaceInspectorStateBuilder {
             case .face(let id), .edge(let id):
                 componentID = id
             }
-            guard let name = componentID?.generatedTopologyPersistentName else {
+            guard let componentID, componentID.isStableTopology else {
                 continue
             }
-            names.insert(name)
+            do {
+                let reference = try componentID.stableTopologyReference(
+                    operationName: "Surface inspector"
+                )
+                keys.insert(stableTopologyKey(reference))
+            } catch {
+                assertionFailure("Invalid stable topology selection: \(error)")
+            }
         }
-        return names
+        return keys
     }
 
     private func resolveAnalysis(for nodes: [SceneNode]) throws -> InspectorSurfaceAnalysis? {
@@ -271,7 +278,7 @@ struct WorkspaceSurfaceInspectorStateBuilder {
     }
 
     private func resolveSurfaceBasisState(for nodes: [SceneNode]) throws -> SurfaceBasisInspectorState? {
-        let selectedPersistentNames = generatedTopologyPersistentNames()
+        let selectedPersistentNames = selectedStableTopologyKeys()
         let hasSurfaceNode = nodes.contains { node in
             node.object?.geometryRole == .surface
         }
@@ -351,7 +358,7 @@ struct WorkspaceSurfaceInspectorStateBuilder {
         guard nodes.count == 1, let node = nodes.first else {
             return nil
         }
-        let selectedPersistentNames = generatedTopologyPersistentNames()
+        let selectedPersistentNames = selectedStableTopologyKeys()
         guard !selectedPersistentNames.isEmpty || node.object?.geometryRole == .surface else {
             return nil
         }
@@ -373,7 +380,7 @@ struct WorkspaceSurfaceInspectorStateBuilder {
         _ faces: [SurfaceAnalysisResult.FaceAnalysis],
         nodes: [SceneNode]
     ) -> [SurfaceAnalysisResult.FaceAnalysis] {
-        let selectedPersistentNames = generatedTopologyPersistentNames()
+        let selectedPersistentNames = selectedStableTopologyKeys()
         if !selectedPersistentNames.isEmpty {
             return faces.filter { face in
                 analysisFace(face, containsAny: selectedPersistentNames)
@@ -402,7 +409,7 @@ struct WorkspaceSurfaceInspectorStateBuilder {
         guard let result = try resolveContinuitySummary(for: nodes) else {
             return nil
         }
-        let selectedPersistentNames = generatedTopologyPersistentNames()
+        let selectedPersistentNames = selectedStableTopologyKeys()
         let adjacencies: [RupaCore.SurfaceContinuityResult.Adjacency]
         if selectedPersistentNames.isEmpty {
             adjacencies = result.adjacencies
@@ -439,7 +446,7 @@ struct WorkspaceSurfaceInspectorStateBuilder {
         guard nodes.count == 1, let node = nodes.first else {
             return nil
         }
-        let selectedPersistentNames = generatedTopologyPersistentNames()
+        let selectedPersistentNames = selectedStableTopologyKeys()
         guard !selectedPersistentNames.isEmpty || node.object?.geometryRole == .surface else {
             return nil
         }
@@ -492,5 +499,10 @@ struct WorkspaceSurfaceInspectorStateBuilder {
             return true
         }
         return face.edgePersistentNames.contains { persistentNames.contains($0) }
+    }
+
+    private func stableTopologyKey(_ reference: StableSubshapeReference) -> String {
+        let id = reference.subshapeID
+        return "feature:\(id.featureID.description)/role:\(id.role)/ordinal:\(id.ordinal)"
     }
 }

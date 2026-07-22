@@ -161,9 +161,11 @@ import SwiftCAD
         .lineStart(setup.secondLineID)
     )))
     #expect(sketch.constraints.contains(.splineEndpointTangent(
-        spline: bridgeID,
-        endpoint: .start,
-        line: setup.firstLineID
+        SketchSplineLineTangencyConstraint(
+            splineEndpoint: SketchSplineEndpointReference(splineID: bridgeID, endpoint: .start),
+            line: setup.firstLineID,
+            orientation: .aligned
+        )
     )))
     let bridgeCurve = try #require(analysis.curves.first { $0.entityID == bridgeID.description })
     #expect(bridgeCurve.curveKind == .spline)
@@ -232,14 +234,18 @@ import SwiftCAD
         .lineEnd(setup.secondLineID)
     )))
     #expect(updatedSketch.constraints.contains(.splineEndpointTangent(
-        spline: bridgeID,
-        endpoint: .start,
-        line: setup.firstLineID
+        SketchSplineLineTangencyConstraint(
+            splineEndpoint: SketchSplineEndpointReference(splineID: bridgeID, endpoint: .start),
+            line: setup.firstLineID,
+            orientation: .aligned
+        )
     )))
     #expect(updatedSketch.constraints.contains(.splineEndpointTangent(
-        spline: bridgeID,
-        endpoint: .end,
-        line: setup.secondLineID
+        SketchSplineLineTangencyConstraint(
+            splineEndpoint: SketchSplineEndpointReference(splineID: bridgeID, endpoint: .end),
+            line: setup.secondLineID,
+            orientation: .aligned
+        )
     )))
     #expect(updatedControlPoints.count == 7)
     #expect(nearlyEqualAgent(updatedControlPoints[0].x, 0.0025))

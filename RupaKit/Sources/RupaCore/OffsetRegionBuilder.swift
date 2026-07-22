@@ -1080,11 +1080,8 @@ struct OffsetRegionBuilder: Sendable {
                 try remappedEntityID(first, idMap: idMap),
                 try remappedEntityID(second, idMap: idMap)
             )
-        case .tangent(let first, let second):
-            return .tangent(
-                try remappedEntityID(first, idMap: idMap),
-                try remappedEntityID(second, idMap: idMap)
-            )
+        case .tangent(let tangency):
+            return .tangent(try remappedTangency(tangency, idMap: idMap))
         case .concentric(let first, let second):
             return .concentric(
                 try remappedEntityID(first, idMap: idMap),
@@ -1100,24 +1097,55 @@ struct OffsetRegionBuilder: Sendable {
                 entity: try remappedEntityID(entityID, idMap: idMap),
                 index: index
             )
-        case .splineEndpointTangent(let splineID, let endpoint, let lineID):
+        case .splineEndpointTangent(let tangency):
             return .splineEndpointTangent(
-                spline: try remappedEntityID(splineID, idMap: idMap),
-                endpoint: endpoint,
-                line: try remappedEntityID(lineID, idMap: idMap)
+                SketchSplineLineTangencyConstraint(
+                    splineEndpoint: try remappedSplineEndpointReference(
+                        tangency.splineEndpoint,
+                        idMap: idMap
+                    ),
+                    line: try remappedEntityID(tangency.line, idMap: idMap),
+                    orientation: tangency.orientation
+                )
             )
-        case .tangentSplineEndpoints(let first, let second):
+        case .tangentSplineEndpoints(let tangency):
             return .tangentSplineEndpoints(
-                first: try remappedSplineEndpointReference(first, idMap: idMap),
-                second: try remappedSplineEndpointReference(second, idMap: idMap)
+                SketchSplineEndpointTangencyConstraint(
+                    first: try remappedSplineEndpointReference(tangency.first, idMap: idMap),
+                    second: try remappedSplineEndpointReference(tangency.second, idMap: idMap),
+                    orientation: tangency.orientation
+                )
             )
-        case .smoothSplineEndpoints(let first, let second):
+        case .smoothSplineEndpoints(let tangency):
             return .smoothSplineEndpoints(
-                first: try remappedSplineEndpointReference(first, idMap: idMap),
-                second: try remappedSplineEndpointReference(second, idMap: idMap)
+                SketchSplineEndpointTangencyConstraint(
+                    first: try remappedSplineEndpointReference(tangency.first, idMap: idMap),
+                    second: try remappedSplineEndpointReference(tangency.second, idMap: idMap),
+                    orientation: tangency.orientation
+                )
             )
         case .fixed(let reference):
             return .fixed(try remappedReference(reference, idMap: idMap))
+        }
+    }
+
+    private func remappedTangency(
+        _ tangency: SketchTangencyConstraint,
+        idMap: [SketchEntityID: SketchEntityID]
+    ) throws -> SketchTangencyConstraint {
+        switch tangency {
+        case let .lineCircular(line, circular, side):
+            return .lineCircular(
+                line: try remappedEntityID(line, idMap: idMap),
+                circular: try remappedEntityID(circular, idMap: idMap),
+                side: side
+            )
+        case let .circularCircular(first, second, contact):
+            return .circularCircular(
+                first: try remappedEntityID(first, idMap: idMap),
+                second: try remappedEntityID(second, idMap: idMap),
+                contact: contact
+            )
         }
     }
 

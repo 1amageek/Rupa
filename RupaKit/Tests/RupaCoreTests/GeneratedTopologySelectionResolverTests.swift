@@ -18,7 +18,7 @@ import SwiftCAD
                 in: session.document
             )
         )
-        #expect(componentID.generatedTopologyPersistentName != nil)
+        #expect(componentID.isStableTopology)
         let target = SelectionTarget(sceneNodeID: sceneNodeID, component: .face(componentID))
         let resolvedFace = try resolver.bodyFace(for: target, in: session.document)
         #expect(resolvedFace == bodyFace)
@@ -32,7 +32,7 @@ import SwiftCAD
                 in: session.document
             )
         )
-        #expect(componentID.generatedTopologyPersistentName != nil)
+        #expect(componentID.isStableTopology)
         let target = SelectionTarget(sceneNodeID: sceneNodeID, component: .edge(componentID))
         let resolvedEdge = try resolver.cornerEdge(for: target, in: session.document)
         #expect(resolvedEdge == cornerEdge)
@@ -46,7 +46,7 @@ import SwiftCAD
                 in: session.document
             )
         )
-        #expect(componentID.generatedTopologyPersistentName != nil)
+        #expect(componentID.isStableTopology)
         let target = SelectionTarget(sceneNodeID: sceneNodeID, component: .vertex(componentID))
         let resolvedVertex = try resolver.cornerVertex(for: target, in: session.document)
         #expect(resolvedVertex == cornerVertex)
@@ -118,9 +118,9 @@ import SwiftCAD
         )
     )
 
-    #expect(frontComponentID.generatedTopologyPersistentName != nil)
-    #expect(backComponentID.generatedTopologyPersistentName != nil)
-    #expect(sideComponentID.generatedTopologyPersistentName != nil)
+    #expect(frontComponentID.isStableTopology)
+    #expect(backComponentID.isStableTopology)
+    #expect(sideComponentID.isStableTopology)
     #expect(
         try resolver.bodyFace(
             for: SelectionTarget(sceneNodeID: sceneNodeID, component: .face(frontComponentID)),

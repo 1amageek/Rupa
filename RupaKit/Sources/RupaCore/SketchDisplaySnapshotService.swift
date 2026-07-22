@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import CADModeling
 
 public struct SketchDisplaySnapshotService: Sendable {
     public init() {}
@@ -18,7 +19,8 @@ public struct SketchDisplaySnapshotService: Sendable {
                       featureID: featureID,
                       sketch: sketch,
                       parameters: parameters,
-                      ruler: ruler
+                      ruler: ruler,
+                      tolerance: document.modelingSettings.tolerance
                   ) else {
                 continue
             }
@@ -76,7 +78,8 @@ public struct SketchDisplaySnapshotService: Sendable {
         featureID: FeatureID,
         sketch: Sketch,
         parameters: ParameterTable,
-        ruler: RulerConfiguration
+        ruler: RulerConfiguration,
+        tolerance: ModelingTolerance
     ) -> SketchDisplaySnapshot? {
         guard let bounds = bounds(
             for: sketch,
@@ -96,7 +99,8 @@ public struct SketchDisplaySnapshotService: Sendable {
             regions: regions(
                 for: sketch,
                 featureID: featureID,
-                parameters: parameters
+                parameters: parameters,
+                tolerance: tolerance
             ),
             singleCircleProfileRadiusMeters: singleCircleProfileRadius(
                 for: sketch,
@@ -235,12 +239,13 @@ public struct SketchDisplaySnapshotService: Sendable {
     private func regions(
         for sketch: Sketch,
         featureID: FeatureID,
-        parameters: ParameterTable
+        parameters: ParameterTable,
+        tolerance: ModelingTolerance
     ) -> [SketchDisplaySnapshot.Region] {
         let profiles: [CADProfile]
         do {
             let resolvedParameters = try ParameterResolver().resolve(parameters)
-            profiles = try SketchProfileExtractor().extractProfiles(
+            profiles = try SketchProfileExtractor(tolerance: tolerance).extractProfiles(
                 from: sketch,
                 sourceFeatureID: featureID,
                 parameters: resolvedParameters
@@ -249,7 +254,7 @@ public struct SketchDisplaySnapshotService: Sendable {
             return []
         }
 
-        let regionAnalyzer = ProfileRegionAnalyzer()
+        let regionAnalyzer = ProfileRegionAnalyzer(tolerance: tolerance)
         return profiles.enumerated().compactMap { profileIndex, profile in
             let summary: ProfileRegionSummary
             do {

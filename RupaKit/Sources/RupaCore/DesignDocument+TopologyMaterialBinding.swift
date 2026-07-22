@@ -8,7 +8,7 @@ extension DesignDocument {
         process: TopologyMaterialBinding.Process? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws {
-        let persistentName = try topologyMaterialPersistentName(for: target)
+        let stableReference = try topologyMaterialStableReference(for: target)
         guard productMetadata.sceneNodes[target.sceneNodeID] != nil else {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -38,7 +38,7 @@ extension DesignDocument {
         )
         guard topology.entries.contains(where: {
             $0.kind == .face
-                && $0.persistentName == persistentName
+                && $0.stableReference == stableReference
                 && $0.sceneNodeID == target.sceneNodeID.description
         }) else {
             throw EditorError(
@@ -60,14 +60,17 @@ extension DesignDocument {
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
     }
 
-    private func topologyMaterialPersistentName(for target: SelectionTarget) throws -> String {
-        guard case .face(let componentID) = target.component,
-              let persistentName = componentID.generatedTopologyPersistentName else {
+    private func topologyMaterialStableReference(
+        for target: SelectionTarget
+    ) throws -> StableSubshapeReference {
+        guard case .face(let componentID) = target.component else {
             throw EditorError(
                 code: .commandInvalid,
-                message: "Topology material binding requires a generated face target."
+                message: "Topology material binding requires a stable face target."
             )
         }
-        return persistentName
+        return try componentID.stableTopologyReference(
+            operationName: "Topology material binding"
+        )
     }
 }

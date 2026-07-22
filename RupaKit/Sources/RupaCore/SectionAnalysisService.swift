@@ -1,4 +1,5 @@
 import Foundation
+import CADTopology
 import SwiftCAD
 
 public struct SectionAnalysisService: Sendable {
@@ -86,14 +87,18 @@ public struct SectionAnalysisService: Sendable {
         var segments: [SectionAnalysisResult.IntersectionSegment] = []
         var truncatedSegments = false
         let identitiesByBodyID = identityResolver.bodyIdentityByBodyID(
-            in: evaluatedDocument.generatedNames
+            in: evaluatedDocument.subshapes
         )
 
         for (bodyID, mesh) in evaluatedDocument.meshes.sorted(by: { $0.key.description < $1.key.description }) {
             let body = evaluatedDocument.brep.bodies[bodyID]
+            let stableReference = try identitiesByBodyID[bodyID].map { identity in
+                try evaluatedDocument.stableSubshapeReference(for: identity.subshapeID)
+            }
             let analysis = analyzeBody(
                 bodyID: bodyID,
                 identity: identitiesByBodyID[bodyID],
+                stableReference: stableReference,
                 body: body,
                 mesh: mesh,
                 plane: plane.coordinateSystem,
@@ -365,6 +370,7 @@ public struct SectionAnalysisService: Sendable {
     private func analyzeBody(
         bodyID: BodyID,
         identity: GeneratedBodyIdentityResolver.Identity?,
+        stableReference: StableSubshapeReference?,
         body: Body?,
         mesh: Mesh,
         plane: SketchPlaneCoordinateSystem,
@@ -470,7 +476,7 @@ public struct SectionAnalysisService: Sendable {
         let resultBody = SectionAnalysisResult.Body(
             bodyID: bodyID.description,
             sourceFeatureID: identity?.sourceFeatureID.description,
-            persistentName: identity?.persistentName,
+            stableReference: stableReference,
             name: body?.name,
             kind: body?.kind,
             materialID: mesh.material?.description ?? body?.material?.description,

@@ -129,7 +129,7 @@ public enum ViewportSceneItemKind: Equatable {
 
 public struct ViewportBodyComponent: Equatable {
     public var bodyID: String?
-    public var persistentName: String?
+    public var stableReference: StableSubshapeReference?
     public var typeID: ObjectTypeID?
     public var properties: ObjectPropertySet
     public var sizeXMeters: Double
@@ -151,7 +151,7 @@ public struct ViewportBodyComponent: Equatable {
 
     public init(
         bodyID: String? = nil,
-        persistentName: String? = nil,
+        stableReference: StableSubshapeReference? = nil,
         typeID: ObjectTypeID? = nil,
         properties: ObjectPropertySet = ObjectPropertySet(),
         sizeXMeters: Double,
@@ -172,7 +172,7 @@ public struct ViewportBodyComponent: Equatable {
         surfaceFrameDisplays: [ViewportSurfaceFrameDisplay] = []
     ) {
         self.bodyID = bodyID
-        self.persistentName = persistentName
+        self.stableReference = stableReference
         self.typeID = typeID
         self.properties = properties
         self.sizeXMeters = sizeXMeters

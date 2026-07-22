@@ -599,18 +599,31 @@ import Testing
 }
 
 @Test func measurementAnnotationRequiresSingleGeneratedTopologyAnchorForTopologyMetrics() throws {
-    let sceneNodeID = SceneNodeID()
+    var document = DesignDocument.empty(named: "Measurement topology anchors")
+    _ = try document.createExtrudedRectangle(
+        name: "Measurement source",
+        plane: .xy,
+        width: .length(1.0, .meter),
+        height: .length(1.0, .meter),
+        depth: .length(1.0, .meter),
+        direction: .normal
+    )
+    let topology = try TopologySnapshotService().snapshot(document: document)
+    let faceEntry = try #require(topology.entries.first { $0.kind == .face })
+    let edgeEntry = try #require(topology.entries.first { $0.kind == .edge })
+    let faceTarget = try #require(faceEntry.selectionTarget())
+    let edgeTarget = try #require(edgeEntry.selectionTarget())
     let faceAnchor = MeasurementAnchor.topologyReference(
-        sceneNodeID: sceneNodeID,
-        component: .face(.generatedTopology("face-a")),
+        sceneNodeID: faceTarget.sceneNodeID,
+        component: faceTarget.component,
         kind: .face,
-        persistentName: "face-a"
+        stableReference: faceEntry.stableReference
     )
     let edgeAnchor = MeasurementAnchor.topologyReference(
-        sceneNodeID: sceneNodeID,
-        component: .edge(.generatedTopology("edge-a")),
+        sceneNodeID: edgeTarget.sceneNodeID,
+        component: edgeTarget.component,
         kind: .edge,
-        persistentName: "edge-a"
+        stableReference: edgeEntry.stableReference
     )
     let worldPoint = MeasurementAnchor.worldPoint(
         Point3D(x: 0.0, y: 0.0, z: 0.0),
@@ -691,7 +704,7 @@ import Testing
                     sceneNodeID: faceTarget.sceneNodeID,
                     component: faceTarget.component,
                     kind: .face,
-                    persistentName: faceEntry.persistentName,
+                    stableReference: faceEntry.stableReference,
                     referenceID: faceEntry.referenceID
                 ),
             ]
@@ -707,7 +720,7 @@ import Testing
                     sceneNodeID: edgeTarget.sceneNodeID,
                     component: edgeTarget.component,
                     kind: .edge,
-                    persistentName: edgeEntry.persistentName,
+                    stableReference: edgeEntry.stableReference,
                     referenceID: edgeEntry.referenceID
                 ),
             ]
@@ -769,7 +782,7 @@ import Testing
                     sceneNodeID: edgeTarget.sceneNodeID,
                     component: edgeTarget.component,
                     kind: .edge,
-                    persistentName: edgeEntry.persistentName,
+                    stableReference: edgeEntry.stableReference,
                     referenceID: edgeEntry.referenceID
                 ),
             ]

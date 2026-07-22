@@ -83,7 +83,9 @@ func farFromOriginExtrudeMeasuresWithoutUnsupportedProfile() throws {
 @Test(.timeLimit(.minutes(1)))
 func farFromOriginLoopStitchingAcceptsCoordinateResolutionGap() throws {
     let document = try farFromOriginAlmostClosedRectangleDocument()
-    let measurement = try MeasurementService().measure(
+    let measurement = try MeasurementService(
+        tolerance: document.modelingSettings.tolerance
+    ).measure(
         document: document,
         ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
     )
@@ -176,7 +178,7 @@ private func farFromOriginAlmostClosedRectangleDocument() throws -> DesignDocume
         name: "Remote Almost Closed Profile",
         operation: .sketch(sketch),
         outputs: [FeatureOutput(role: .profile)]
-    ))
+    ), tolerance: document.modelingSettings.tolerance)
     try document.cadDocument.appendFeature(FeatureNode(
         id: extrudeFeatureID,
         name: "Remote Almost Closed Solid",
@@ -187,7 +189,7 @@ private func farFromOriginAlmostClosedRectangleDocument() throws -> DesignDocume
         )),
         inputs: [FeatureInput(featureID: sketchFeatureID, role: .profile)],
         outputs: [FeatureOutput(role: .body)]
-    ))
+    ), tolerance: document.modelingSettings.tolerance)
     return document
 }
 

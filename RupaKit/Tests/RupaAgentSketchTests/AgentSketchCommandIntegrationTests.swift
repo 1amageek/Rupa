@@ -680,11 +680,14 @@ import SwiftCAD
             sessionID: sessionID,
             command: .addSketchConstraint(
                 featureID: setup.featureID,
-                constraint: .splineEndpointTangent(
-                    spline: setup.splineID,
-                    endpoint: .start,
-                    line: setup.lineID
-                )
+                constraint: .splineEndpointTangent(SketchSplineLineTangencyConstraint(
+                    splineEndpoint: SketchSplineEndpointReference(
+                        splineID: setup.splineID,
+                        endpoint: .start
+                    ),
+                    line: setup.lineID,
+                    orientation: .aligned
+                ))
             ),
             expectedGeneration: DocumentGeneration(0)
         )
@@ -723,10 +726,11 @@ import SwiftCAD
             sessionID: sessionID,
             command: .addSketchConstraint(
                 featureID: setup.featureID,
-                constraint: .tangentSplineEndpoints(
+                constraint: .tangentSplineEndpoints(SketchSplineEndpointTangencyConstraint(
                     first: SketchSplineEndpointReference(splineID: setup.firstSplineID, endpoint: .end),
-                    second: SketchSplineEndpointReference(splineID: setup.secondSplineID, endpoint: .start)
-                )
+                    second: SketchSplineEndpointReference(splineID: setup.secondSplineID, endpoint: .start),
+                    orientation: .aligned
+                ))
             ),
             expectedGeneration: DocumentGeneration(0)
         )
@@ -765,10 +769,11 @@ import SwiftCAD
             sessionID: sessionID,
             command: .addSketchConstraint(
                 featureID: setup.featureID,
-                constraint: .smoothSplineEndpoints(
+                constraint: .smoothSplineEndpoints(SketchSplineEndpointTangencyConstraint(
                     first: SketchSplineEndpointReference(splineID: setup.firstSplineID, endpoint: .end),
-                    second: SketchSplineEndpointReference(splineID: setup.secondSplineID, endpoint: .start)
-                )
+                    second: SketchSplineEndpointReference(splineID: setup.secondSplineID, endpoint: .start),
+                    orientation: .aligned
+                ))
             ),
             expectedGeneration: DocumentGeneration(0)
         )
@@ -876,7 +881,11 @@ import SwiftCAD
             sessionID: sessionID,
             command: .addSketchConstraint(
                 featureID: setup.featureID,
-                constraint: .tangent(setup.lineID, setup.circleID)
+                constraint: .tangent(.lineCircular(
+                    line: setup.lineID,
+                    circular: setup.circleID,
+                    side: .left
+                ))
             ),
             expectedGeneration: DocumentGeneration(0)
         )

@@ -203,15 +203,21 @@ extension DesignDocument {
                 return id == entityID ? nil : constraint
             case .parallel(let first, let second),
                  .perpendicular(let first, let second),
-                 .equalLength(let first, let second),
-                 .tangent(let first, let second):
+                 .equalLength(let first, let second):
                 return first == entityID || second == entityID ? nil : constraint
+            case .tangent(let tangency):
+                switch tangency {
+                case .lineCircular(let line, let circular, _):
+                    return line == entityID || circular == entityID ? nil : constraint
+                case .circularCircular(let first, let second, _):
+                    return first == entityID || second == entityID ? nil : constraint
+                }
             case .concentric, .equalRadius:
                 return constraint
             case .smoothSplineControlPoint:
                 return constraint
-            case .splineEndpointTangent(_, _, let lineID):
-                return lineID == entityID ? nil : constraint
+            case .splineEndpointTangent(let tangency):
+                return tangency.line == entityID ? nil : constraint
             case .tangentSplineEndpoints,
                  .smoothSplineEndpoints:
                 return constraint
@@ -283,10 +289,20 @@ extension DesignDocument {
             }
         case .parallel(let first, let second),
              .perpendicular(let first, let second),
-             .equalLength(let first, let second),
-             .tangent(let first, let second):
+             .equalLength(let first, let second):
             if first == entityID || second == entityID {
                 throw lineSplineConversionError(owner, reason: "line relationship constraints")
+            }
+        case .tangent(let tangency):
+            switch tangency {
+            case .lineCircular(let line, let circular, _):
+                if line == entityID || circular == entityID {
+                    throw lineSplineConversionError(owner, reason: "line relationship constraints")
+                }
+            case .circularCircular(let first, let second, _):
+                if first == entityID || second == entityID {
+                    throw lineSplineConversionError(owner, reason: "line relationship constraints")
+                }
             }
         case .concentric(let first, let second),
              .equalRadius(let first, let second):
@@ -361,11 +377,11 @@ extension DesignDocument {
                  .tangentSplineEndpoints,
                  .smoothSplineEndpoints:
                 return constraint
-            case .splineEndpointTangent(let splineID, let endpoint, let lineID):
-                guard lineID == entityID else {
+            case .splineEndpointTangent(let tangency):
+                guard tangency.line == entityID else {
                     return constraint
                 }
-                let source = SketchSplineEndpointReference(splineID: splineID, endpoint: endpoint)
+                let source = tangency.splineEndpoint
                 let convertedEndpoint = try convertedLineSplineEndpointForTangency(
                     source: source,
                     lineID: entityID,
@@ -373,13 +389,14 @@ extension DesignDocument {
                     originalSketch: originalSketch,
                     owner: owner
                 )
-                return .tangentSplineEndpoints(
+                return .tangentSplineEndpoints(SketchSplineEndpointTangencyConstraint(
                     first: source,
                     second: SketchSplineEndpointReference(
                         splineID: entityID,
                         endpoint: convertedEndpoint
-                    )
-                )
+                    ),
+                    orientation: tangency.orientation
+                ))
             }
         }
     }

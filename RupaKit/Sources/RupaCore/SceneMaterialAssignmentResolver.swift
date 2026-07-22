@@ -30,7 +30,8 @@ struct SceneMaterialAssignmentResolver: Sendable {
             meshes: meshes,
             curves: evaluatedDocument.curves,
             caches: DocumentCaches(),
-            generatedNames: evaluatedDocument.generatedNames,
+            subshapes: evaluatedDocument.subshapes,
+            lineage: evaluatedDocument.lineage,
             configuration: evaluatedDocument.configuration,
             evaluationMetrics: evaluatedDocument.evaluationMetrics
         )
@@ -58,7 +59,7 @@ struct SceneMaterialAssignmentResolver: Sendable {
         metadata: ProductMetadata
     ) -> [BodyID: MaterialID] {
         let identitiesByBodyID = GeneratedBodyIdentityResolver()
-            .bodyIdentityByBodyID(in: evaluatedDocument.generatedNames)
+            .bodyIdentityByBodyID(in: evaluatedDocument.subshapes)
         var assignments: [BodyID: MaterialID] = [:]
         for (bodyID, identity) in identitiesByBodyID {
             guard let materialID = sceneMaterialID(

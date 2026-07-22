@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import SwiftCAD
+import CADModeling
 @testable import RupaCore
 
 @Test func bodyDisplaySnapshotMeshSharesStorageAcrossValueCopiesAndPreservesCodableValueSemantics() throws {
@@ -37,7 +38,7 @@ import SwiftCAD
         .modelingDefault(for: session.document)
         .evaluate(session.document.cadDocument)
     let documentSnapshots = try service.snapshots(document: session.document)
-    let evaluatedDocumentSnapshots = service.snapshots(evaluatedDocument: evaluatedDocument)
+    let evaluatedDocumentSnapshots = try service.snapshots(evaluatedDocument: evaluatedDocument)
 
     let snapshots = evaluatedDocumentSnapshots
     let snapshot = try #require(snapshots[bodyFeatureID])
@@ -45,8 +46,8 @@ import SwiftCAD
 
     #expect(snapshot.featureID == bodyFeatureID)
     #expect(snapshot.bodyID?.isEmpty == false)
-    #expect(snapshot.persistentName?.isEmpty == false)
-    #expect(snapshot.persistentName == documentSnapshot.persistentName)
+    #expect(snapshot.stableReference != nil)
+    #expect(snapshot.stableReference == documentSnapshot.stableReference)
     #expect(snapshot.mesh == documentSnapshot.mesh)
     #expect(snapshot.bounds == documentSnapshot.bounds)
     #expect(snapshot.topology == documentSnapshot.topology)
@@ -58,9 +59,9 @@ import SwiftCAD
     #expect(snapshot.topology.faces.count == 6)
     #expect(snapshot.topology.edges.count == 12)
     #expect(snapshot.topology.vertices.count == 8)
-    #expect(snapshot.topology.faces.allSatisfy { $0.componentID.generatedTopologyPersistentName != nil })
-    #expect(snapshot.topology.edges.allSatisfy { $0.componentID.generatedTopologyPersistentName != nil })
-    #expect(snapshot.topology.vertices.allSatisfy { $0.componentID.generatedTopologyPersistentName != nil })
+    #expect(snapshot.topology.faces.allSatisfy { $0.componentID.isStableTopology })
+    #expect(snapshot.topology.edges.allSatisfy { $0.componentID.isStableTopology })
+    #expect(snapshot.topology.vertices.allSatisfy { $0.componentID.isStableTopology })
 }
 
 @MainActor
@@ -72,12 +73,16 @@ import SwiftCAD
         .evaluate(session.document.cadDocument)
     let service = BodyDisplaySnapshotService(
         pipeline: CADPipeline(
-            evaluator: DocumentEvaluator(featureEvaluator: FailingFeatureEvaluator())
+            tolerance: session.document.modelingSettings.tolerance,
+            evaluator: DocumentEvaluator(
+                featureEvaluator: FailingFeatureEvaluator(),
+                tolerance: session.document.modelingSettings.tolerance
+            )
         )
     )
 
-    let firstSnapshots = service.snapshots(evaluatedDocument: evaluatedDocument)
-    let secondSnapshots = service.snapshots(evaluatedDocument: evaluatedDocument)
+    let firstSnapshots = try service.snapshots(evaluatedDocument: evaluatedDocument)
+    let secondSnapshots = try service.snapshots(evaluatedDocument: evaluatedDocument)
 
     #expect(firstSnapshots.isEmpty == false)
     #expect(secondSnapshots == firstSnapshots)
@@ -92,6 +97,6 @@ import SwiftCAD
 
 private struct FailingFeatureEvaluator: FeatureEvaluating {
     func evaluate(feature _: FeatureNode, context _: EvaluationContext) throws -> EvaluationResult {
-        throw FeatureEvaluationError.unsupportedOperation("Injected evaluator should not be used.")
+        throw FeatureEvaluationError.invalidGraph("Injected evaluator should not be used.")
     }
 }

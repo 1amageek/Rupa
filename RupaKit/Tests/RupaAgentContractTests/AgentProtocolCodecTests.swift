@@ -747,21 +747,26 @@ import SwiftCAD
                         "kind": "span",
                         "span": {
                           "surface": {
-                            "faceName": {
-                              "components": [
-                                {
-                                  "kind": "feature",
-                                  "featureID": "00000000-0000-0000-0000-000000000101"
-                                },
-                                {
-                                  "kind": "generated",
-                                  "value": "bSplineSurface"
-                                },
-                                {
-                                  "kind": "subshape",
-                                  "value": "patch:0:face"
+                            "subshape": {
+                              "subshapeID": {
+                                "featureID": "00000000-0000-0000-0000-000000000101",
+                                "role": "bSplineSurface.patch:0.face",
+                                "ordinal": 0
+                              },
+                              "geometrySignature": {
+                                "kind": "face",
+                                "face": {
+                                  "surface": {
+                                    "kind": "plane",
+                                    "plane": {
+                                      "origin": { "x": 0, "y": 0, "z": 0 },
+                                      "normal": { "x": 0, "y": 0, "z": 1 }
+                                    }
+                                  },
+                                  "orientation": "forward",
+                                  "loops": []
                                 }
-                              ]
+                              }
                             }
                           },
                           "direction": "u",
@@ -799,11 +804,18 @@ import SwiftCAD
                 ))
                 let expectedTarget = SelectionReference.surface(.span(SurfaceSpanReference(
                     surface: SurfaceReference(
-                        faceName: PersistentName(components: [
-                            .feature(FeatureID(expectedFeatureID)),
-                            .generated("bSplineSurface"),
-                            .subshape("patch:0:face"),
-                        ])
+                        subshape: StableSubshapeReference(
+                            subshapeID: SubshapeID(
+                                featureID: FeatureID(expectedFeatureID),
+                                role: "bSplineSurface.patch:0.face",
+                                ordinal: 0
+                            ),
+                            geometrySignature: .face(FaceGeometrySignature(
+                                surface: .plane(Plane3D(origin: .origin, normal: .unitZ)),
+                                orientation: .forward,
+                                loops: []
+                            ))
+                        )
                     ),
                     direction: .u,
                     spanIndex: 0

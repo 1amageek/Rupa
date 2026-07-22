@@ -1,4 +1,5 @@
 import Foundation
+import CADTopology
 import SwiftCAD
 import RupaCoreTypes
 
@@ -85,7 +86,7 @@ public struct SectionAnalysisResult: Codable, Equatable, Sendable {
     public struct Body: Codable, Equatable, Sendable {
         public var bodyID: String
         public var sourceFeatureID: String?
-        public var persistentName: String?
+        public var stableReference: StableSubshapeReference?
         public var name: String?
         public var kind: BodyKind?
         public var materialID: String?
@@ -105,7 +106,7 @@ public struct SectionAnalysisResult: Codable, Equatable, Sendable {
         public init(
             bodyID: String,
             sourceFeatureID: String? = nil,
-            persistentName: String? = nil,
+            stableReference: StableSubshapeReference? = nil,
             name: String?,
             kind: BodyKind?,
             materialID: String?,
@@ -124,7 +125,7 @@ public struct SectionAnalysisResult: Codable, Equatable, Sendable {
         ) {
             self.bodyID = bodyID
             self.sourceFeatureID = sourceFeatureID
-            self.persistentName = persistentName
+            self.stableReference = stableReference
             self.name = name
             self.kind = kind
             self.materialID = materialID

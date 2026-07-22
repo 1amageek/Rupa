@@ -573,20 +573,35 @@ struct WorkspaceSketchEntityInspectorStateBuilder {
         try sketch.entities.flatMap { candidateID, entity -> [InspectorSplineEndpointCandidate] in
             guard candidateID != entityID,
                   case let .spline(spline) = entity,
+                  spline.controlPoints.count >= 4,
                   let start = spline.controlPoints.first,
                   let end = spline.controlPoints.last else {
                 return []
             }
+            let resolvedStart = try resolvedPoint(start)
+            let resolvedStartHandle = try resolvedPoint(spline.controlPoints[1])
+            let resolvedEnd = try resolvedPoint(end)
+            let resolvedEndHandle = try resolvedPoint(
+                spline.controlPoints[spline.controlPoints.count - 2]
+            )
             return [
                 InspectorSplineEndpointCandidate(
                     splineID: candidateID,
                     endpoint: .start,
-                    point: try resolvedPoint(start)
+                    point: resolvedStart,
+                    tangent: SketchEntitySummaryResult.Point(
+                        x: resolvedStartHandle.x - resolvedStart.x,
+                        y: resolvedStartHandle.y - resolvedStart.y
+                    )
                 ),
                 InspectorSplineEndpointCandidate(
                     splineID: candidateID,
                     endpoint: .end,
-                    point: try resolvedPoint(end)
+                    point: resolvedEnd,
+                    tangent: SketchEntitySummaryResult.Point(
+                        x: resolvedEnd.x - resolvedEndHandle.x,
+                        y: resolvedEnd.y - resolvedEndHandle.y
+                    )
                 ),
             ]
         }
@@ -601,12 +616,12 @@ struct WorkspaceSketchEntityInspectorStateBuilder {
         endpoint: SketchSplineEndpoint
     ) -> Set<SketchEntityID> {
         Set(sketch.constraints.compactMap { constraint -> SketchEntityID? in
-            guard case let .splineEndpointTangent(candidateSplineID, candidateEndpoint, lineID) = constraint,
-                  candidateSplineID == splineID,
-                  candidateEndpoint == endpoint else {
+            guard case let .splineEndpointTangent(tangency) = constraint,
+                  tangency.splineEndpoint.splineID == splineID,
+                  tangency.splineEndpoint.endpoint == endpoint else {
                 return nil
             }
-            return lineID
+            return tangency.line
         })
     }
 
@@ -617,14 +632,14 @@ struct WorkspaceSketchEntityInspectorStateBuilder {
     ) -> Set<SketchSplineEndpointReference> {
         let selectedEndpoint = SketchSplineEndpointReference(splineID: splineID, endpoint: endpoint)
         return Set(sketch.constraints.compactMap { constraint -> SketchSplineEndpointReference? in
-            guard case let .tangentSplineEndpoints(first, second) = constraint else {
+            guard case let .tangentSplineEndpoints(tangency) = constraint else {
                 return nil
             }
-            if first == selectedEndpoint {
-                return second
+            if tangency.first == selectedEndpoint {
+                return tangency.second
             }
-            if second == selectedEndpoint {
-                return first
+            if tangency.second == selectedEndpoint {
+                return tangency.first
             }
             return nil
         })
@@ -637,14 +652,14 @@ struct WorkspaceSketchEntityInspectorStateBuilder {
     ) -> Set<SketchSplineEndpointReference> {
         let selectedEndpoint = SketchSplineEndpointReference(splineID: splineID, endpoint: endpoint)
         return Set(sketch.constraints.compactMap { constraint -> SketchSplineEndpointReference? in
-            guard case let .smoothSplineEndpoints(first, second) = constraint else {
+            guard case let .smoothSplineEndpoints(tangency) = constraint else {
                 return nil
             }
-            if first == selectedEndpoint {
-                return second
+            if tangency.first == selectedEndpoint {
+                return tangency.second
             }
-            if second == selectedEndpoint {
-                return first
+            if tangency.second == selectedEndpoint {
+                return tangency.first
             }
             return nil
         })

@@ -4,9 +4,24 @@ import RupaCore
 struct WorkspaceSplineEndpointConstraintControlsView: View {
     var entity: InspectorSketchEntity
     var displayUnit: LengthDisplayUnit
-    var onAddLineTangency: (InspectorSketchEntity, SketchSplineEndpoint, SketchEntityID) -> Void
-    var onAddEndpointTangency: (InspectorSketchEntity, SketchSplineEndpoint, SketchSplineEndpointReference) -> Void
-    var onAddEndpointSmoothness: (InspectorSketchEntity, SketchSplineEndpoint, SketchSplineEndpointReference) -> Void
+    var onAddLineTangency: (
+        InspectorSketchEntity,
+        SketchSplineEndpoint,
+        SketchEntityID,
+        SketchTangentOrientation
+    ) -> Void
+    var onAddEndpointTangency: (
+        InspectorSketchEntity,
+        SketchSplineEndpoint,
+        SketchSplineEndpointReference,
+        SketchTangentOrientation
+    ) -> Void
+    var onAddEndpointSmoothness: (
+        InspectorSketchEntity,
+        SketchSplineEndpoint,
+        SketchSplineEndpointReference,
+        SketchTangentOrientation
+    ) -> Void
 
     var body: some View {
         tangencyControls
@@ -113,25 +128,47 @@ struct WorkspaceSplineEndpointConstraintControlsView: View {
             if entity.tangentLineCandidates.isEmpty == false {
                 Section("Lines") {
                     ForEach(entity.tangentLineCandidates) { candidate in
+                        let orientation = tangentOrientation(
+                            endpoint: endpoint,
+                            target: SketchEntitySummaryResult.Point(
+                                x: candidate.end.x - candidate.start.x,
+                                y: candidate.end.y - candidate.start.y
+                            )
+                        )
                         Button {
-                            onAddLineTangency(entity, endpoint, candidate.id)
+                            if let orientation {
+                                onAddLineTangency(entity, endpoint, candidate.id, orientation)
+                            }
                         } label: {
                             Label(sketchLineCandidateTitle(candidate), systemImage: "line.diagonal")
                         }
+                        .disabled(orientation == nil)
                     }
                 }
             }
             if entity.tangentSplineEndpointCandidates.isEmpty == false {
                 Section("Splines") {
                     ForEach(entity.tangentSplineEndpointCandidates) { candidate in
+                        let orientation = tangentOrientation(
+                            endpoint: endpoint,
+                            target: candidate.tangent
+                        )
                         Button {
-                            onAddEndpointTangency(entity, endpoint, candidate.reference)
+                            if let orientation {
+                                onAddEndpointTangency(
+                                    entity,
+                                    endpoint,
+                                    candidate.reference,
+                                    orientation
+                                )
+                            }
                         } label: {
                             Label(
                                 sketchSplineEndpointCandidateTitle(candidate),
                                 systemImage: "point.3.connected.trianglepath.dotted"
                             )
                         }
+                        .disabled(orientation == nil)
                     }
                 }
             }
@@ -147,14 +184,26 @@ struct WorkspaceSplineEndpointConstraintControlsView: View {
     ) -> some View {
         Menu {
             ForEach(entity.tangentSplineEndpointCandidates) { candidate in
+                let orientation = tangentOrientation(
+                    endpoint: endpoint,
+                    target: candidate.tangent
+                )
                 Button {
-                    onAddEndpointSmoothness(entity, endpoint, candidate.reference)
+                    if let orientation {
+                        onAddEndpointSmoothness(
+                            entity,
+                            endpoint,
+                            candidate.reference,
+                            orientation
+                        )
+                    }
                 } label: {
                     Label(
                         sketchSplineEndpointCandidateTitle(candidate),
                         systemImage: "point.3.connected.trianglepath.dotted"
                     )
                 }
+                .disabled(orientation == nil)
             }
         } label: {
             Label(title, systemImage: "point.3.connected.trianglepath.dotted")
@@ -180,6 +229,48 @@ struct WorkspaceSplineEndpointConstraintControlsView: View {
         case .end:
             return entity.endSmoothSplineEndpoints.isEmpty == false
         }
+    }
+
+    private func tangentOrientation(
+        endpoint: SketchSplineEndpoint,
+        target: SketchEntitySummaryResult.Point
+    ) -> SketchTangentOrientation? {
+        guard entity.controlPoints.count >= 4 else {
+            return nil
+        }
+        let endpointPoint: SketchEntitySummaryResult.Point
+        let handlePoint: SketchEntitySummaryResult.Point
+        switch endpoint {
+        case .start:
+            endpointPoint = entity.controlPoints[0]
+            handlePoint = entity.controlPoints[1]
+        case .end:
+            endpointPoint = entity.controlPoints[entity.controlPoints.count - 1]
+            handlePoint = entity.controlPoints[entity.controlPoints.count - 2]
+        }
+        let source: SketchEntitySummaryResult.Point
+        switch endpoint {
+        case .start:
+            source = SketchEntitySummaryResult.Point(
+                x: handlePoint.x - endpointPoint.x,
+                y: handlePoint.y - endpointPoint.y
+            )
+        case .end:
+            source = SketchEntitySummaryResult.Point(
+                x: endpointPoint.x - handlePoint.x,
+                y: endpointPoint.y - handlePoint.y
+            )
+        }
+        let sourceLengthSquared = source.x * source.x + source.y * source.y
+        let targetLengthSquared = target.x * target.x + target.y * target.y
+        guard sourceLengthSquared.isFinite,
+              targetLengthSquared.isFinite,
+              sourceLengthSquared > 0.0,
+              targetLengthSquared > 0.0 else {
+            return nil
+        }
+        let dot = source.x * target.x + source.y * target.y
+        return dot >= 0.0 ? .aligned : .opposed
     }
 
     private func splineEndpointTangencySummary(

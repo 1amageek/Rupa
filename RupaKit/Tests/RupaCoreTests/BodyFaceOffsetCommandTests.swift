@@ -62,7 +62,7 @@ import Testing
 }
 
 @MainActor
-@Test func offsetBodyFaceCommandAcceptsGeneratedTopologyFaceReference() async throws {
+@Test func offsetBodyFaceCommandAcceptsStableTopologyFaceReference() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
@@ -88,12 +88,12 @@ import Testing
     #expect(result.commandName == "offsetBodyFace")
     #expect(result.didMutate)
     #expect(session.generation == DocumentGeneration(2))
-    #expect(componentID.generatedTopologyPersistentName != nil)
+    #expect(componentID.isStableTopology)
     #expect(nearlyEqual(afterBounds.maxX, beforeBounds.maxX + 0.002))
 }
 
 @MainActor
-@Test func offsetBodyFaceCommandResolvesComponentInstanceGeneratedFaceToSourceBody() async throws {
+@Test func offsetBodyFaceCommandResolvesComponentInstanceStableFaceToSourceBody() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
@@ -147,7 +147,7 @@ import Testing
     #expect(result.commandName == "offsetBodyFace")
     #expect(result.didMutate)
     #expect(session.generation == DocumentGeneration(4))
-    #expect(componentID.generatedTopologyPersistentName != nil)
+    #expect(componentID.isStableTopology)
     #expect(nearlyEqual(afterBounds.maxX, beforeBounds.maxX + 0.002))
     #expect(session.document.productMetadata.patternArrays[source.id] != nil)
 }

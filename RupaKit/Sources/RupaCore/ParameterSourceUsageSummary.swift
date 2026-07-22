@@ -89,6 +89,8 @@ public struct ParameterSourceUsageService: Sendable {
         }
 
         switch node.operation {
+        case .primitive(let feature):
+            collectPrimitiveUsages(feature.definition, record: record)
         case .sketch(let sketch):
             collectSketchUsages(sketch, record: record)
         case .extrude(let feature):
@@ -103,9 +105,16 @@ public struct ParameterSourceUsageService: Sendable {
              .boolean,
              .polySpline,
              .bSplineSurface,
+             .patchSurface,
              .faceKnife,
              .faceDelete,
              .bridgeCurve,
+             .curveDrivenPattern,
+             .bridgeSurface,
+             .curveMatch,
+             .surfaceTrim,
+             .surfaceExtend,
+             .surfaceMatch,
              .curveEdit,
              .curveTrim:
             break
@@ -115,8 +124,62 @@ public struct ParameterSourceUsageService: Sendable {
             record(feature.distance, path: "edgeOffset.distance")
         case .faceDraft(let feature):
             record(feature.angle, path: "faceDraft.angle")
+        case .faceOffset(let feature):
+            record(feature.distance, path: "faceOffset.distance")
+        case .faceMove(let feature):
+            record(feature.translation.distance, path: "faceMove.translation.distance")
+        case .edgeMove(let feature):
+            record(feature.translation.distance, path: "edgeMove.translation.distance")
+        case .vertexMove(let feature):
+            record(feature.translation.distance, path: "vertexMove.translation.distance")
+        case .linearPattern(let feature):
+            record(feature.spacing, path: "linearPattern.spacing")
+        case .radialPattern(let feature):
+            record(feature.angularSpacing, path: "radialPattern.angularSpacing")
+        case .gridPattern(let feature):
+            record(feature.firstSpacing, path: "gridPattern.firstSpacing")
+            record(feature.secondSpacing, path: "gridPattern.secondSpacing")
+        case .chamfer(let feature):
+            record(feature.distance, path: "chamfer.distance")
+        case .fillet(let feature):
+            record(feature.radius, path: "fillet.radius")
+        case .g2Blend(let feature):
+            record(feature.distance, path: "g2Blend.distance")
+        case .setbackCorner(let feature):
+            record(feature.radius, path: "setbackCorner.radius")
+        case .shell(let feature):
+            record(feature.thickness, path: "shell.thickness")
+        case .thicken(let feature):
+            record(feature.thickness, path: "thicken.thickness")
+        case .curveExtend(let feature):
+            record(feature.distance, path: "curveExtend.distance")
+        case .surfaceOffset(let feature):
+            record(feature.distance, path: "surfaceOffset.distance")
         case .curveOffset(let feature):
             record(feature.distance, path: "curveOffset.distance")
+        }
+    }
+
+    private func collectPrimitiveUsages(
+        _ definition: PrimitiveDefinition,
+        record: (CADExpression, String) -> Void
+    ) {
+        switch definition {
+        case .box(let primitive):
+            record(primitive.width, "primitive.box.width")
+            record(primitive.depth, "primitive.box.depth")
+            record(primitive.height, "primitive.box.height")
+        case .cylinder(let primitive):
+            record(primitive.radius, "primitive.cylinder.radius")
+            record(primitive.height, "primitive.cylinder.height")
+        case .cone(let primitive):
+            record(primitive.baseRadius, "primitive.cone.baseRadius")
+            record(primitive.height, "primitive.cone.height")
+        case .sphere(let primitive):
+            record(primitive.radius, "primitive.sphere.radius")
+        case .torus(let primitive):
+            record(primitive.majorRadius, "primitive.torus.majorRadius")
+            record(primitive.minorRadius, "primitive.torus.minorRadius")
         }
     }
 
@@ -201,6 +264,8 @@ public struct ParameterSourceUsageService: Sendable {
 
     private func operationName(_ operation: FeatureOperation) -> String {
         switch operation {
+        case .primitive:
+            "primitive"
         case .sketch:
             "sketch"
         case .extrude:
@@ -217,6 +282,8 @@ public struct ParameterSourceUsageService: Sendable {
             "polySpline"
         case .bSplineSurface:
             "bSplineSurface"
+        case .patchSurface:
+            "patchSurface"
         case .faceLoopOffset:
             "faceLoopOffset"
         case .edgeOffset:
@@ -227,6 +294,36 @@ public struct ParameterSourceUsageService: Sendable {
             "faceDelete"
         case .faceDraft:
             "faceDraft"
+        case .faceOffset:
+            "faceOffset"
+        case .faceMove:
+            "faceMove"
+        case .edgeMove:
+            "edgeMove"
+        case .vertexMove:
+            "vertexMove"
+        case .linearPattern:
+            "linearPattern"
+        case .radialPattern:
+            "radialPattern"
+        case .gridPattern:
+            "gridPattern"
+        case .curveDrivenPattern:
+            "curveDrivenPattern"
+        case .chamfer:
+            "chamfer"
+        case .fillet:
+            "fillet"
+        case .g2Blend:
+            "g2Blend"
+        case .setbackCorner:
+            "setbackCorner"
+        case .shell:
+            "shell"
+        case .thicken:
+            "thicken"
+        case .bridgeSurface:
+            "bridgeSurface"
         case .bridgeCurve:
             "bridgeCurve"
         case .curveEdit:
@@ -235,6 +332,18 @@ public struct ParameterSourceUsageService: Sendable {
             "curveOffset"
         case .curveTrim:
             "curveTrim"
+        case .curveExtend:
+            "curveExtend"
+        case .curveMatch:
+            "curveMatch"
+        case .surfaceOffset:
+            "surfaceOffset"
+        case .surfaceTrim:
+            "surfaceTrim"
+        case .surfaceExtend:
+            "surfaceExtend"
+        case .surfaceMatch:
+            "surfaceMatch"
         }
     }
 }

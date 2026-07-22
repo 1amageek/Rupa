@@ -2955,7 +2955,7 @@ public struct MainView: View {
                 guard case .edge(let componentID) = target.component else {
                     return false
                 }
-                return componentID.generatedTopologyPersistentName != nil
+                return componentID.isStableTopology
             }
             if !sketchEntityTargets.isEmpty {
                 let summary = try SketchDimensionSummaryService().summarize(
@@ -3185,7 +3185,9 @@ public struct MainView: View {
         }
 
         do {
-            let plane = try WorkspaceConstructionPlaneEditBuilder().planePreservingOrigin(
+            let plane = try WorkspaceConstructionPlaneEditBuilder(
+                tolerance: session.document.modelingSettings.tolerance
+            ).planePreservingOrigin(
                 from: entry.plane,
                 viewNormal: viewNormal
             )
@@ -3244,7 +3246,9 @@ public struct MainView: View {
             return
         }
         do {
-            let plane = try WorkspaceConstructionPlaneEditBuilder().planeSettingOriginComponent(
+            let plane = try WorkspaceConstructionPlaneEditBuilder(
+                tolerance: session.document.modelingSettings.tolerance
+            ).planeSettingOriginComponent(
                 component,
                 value: value,
                 on: entry.plane
@@ -3279,7 +3283,9 @@ public struct MainView: View {
             return
         }
         do {
-            let plane = try WorkspaceConstructionPlaneEditBuilder().planeSettingNormalComponent(
+            let plane = try WorkspaceConstructionPlaneEditBuilder(
+                tolerance: session.document.modelingSettings.tolerance
+            ).planeSettingNormalComponent(
                 component,
                 value: value,
                 on: entry.plane
@@ -3787,7 +3793,11 @@ public struct MainView: View {
         }
 
         do {
-            guard let edit = try WorkspaceConstructionPlaneViewportDragCommitService().edit(
+            guard let edit = try WorkspaceConstructionPlaneViewportDragCommitService(
+                editBuilder: WorkspaceConstructionPlaneEditBuilder(
+                    tolerance: session.document.modelingSettings.tolerance
+                )
+            ).edit(
                 for: target,
                 entries: savedConstructionPlaneSummary.planes
             ) else {
@@ -6101,25 +6111,28 @@ public struct MainView: View {
                 WorkspaceSplineEndpointConstraintControlsView(
                     entity: entity,
                     displayUnit: session.workspaceState.displayUnit,
-                    onAddLineTangency: { entity, endpoint, lineID in
+                    onAddLineTangency: { entity, endpoint, lineID, orientation in
                         addSplineEndpointTangentConstraint(
                             entity,
                             endpoint: endpoint,
-                            lineID: lineID
+                            lineID: lineID,
+                            orientation: orientation
                         )
                     },
-                    onAddEndpointTangency: { entity, endpoint, target in
+                    onAddEndpointTangency: { entity, endpoint, target, orientation in
                         addTangentSplineEndpointsConstraint(
                             entity,
                             endpoint: endpoint,
-                            target: target
+                            target: target,
+                            orientation: orientation
                         )
                     },
-                    onAddEndpointSmoothness: { entity, endpoint, target in
+                    onAddEndpointSmoothness: { entity, endpoint, target, orientation in
                         addSmoothSplineEndpointsConstraint(
                             entity,
                             endpoint: endpoint,
-                            target: target
+                            target: target,
+                            orientation: orientation
                         )
                     }
                 )
@@ -6931,15 +6944,19 @@ public struct MainView: View {
     private func addSplineEndpointTangentConstraint(
         _ entity: InspectorSketchEntity,
         endpoint: SketchSplineEndpoint,
-        lineID: SketchEntityID
+        lineID: SketchEntityID,
+        orientation: SketchTangentOrientation
     ) {
         let result = session.addSketchConstraint(
             featureID: entity.sourceFeatureID,
-            constraint: .splineEndpointTangent(
-                spline: entity.entityID,
-                endpoint: endpoint,
-                line: lineID
-            )
+            constraint: .splineEndpointTangent(SketchSplineLineTangencyConstraint(
+                splineEndpoint: SketchSplineEndpointReference(
+                    splineID: entity.entityID,
+                    endpoint: endpoint
+                ),
+                line: lineID,
+                orientation: orientation
+            ))
         )
         if result?.diagnostics.isEmpty == false {
             isPreviewExpanded = true
@@ -6949,17 +6966,19 @@ public struct MainView: View {
     private func addTangentSplineEndpointsConstraint(
         _ entity: InspectorSketchEntity,
         endpoint: SketchSplineEndpoint,
-        target: SketchSplineEndpointReference
+        target: SketchSplineEndpointReference,
+        orientation: SketchTangentOrientation
     ) {
         let result = session.addSketchConstraint(
             featureID: entity.sourceFeatureID,
-            constraint: .tangentSplineEndpoints(
+            constraint: .tangentSplineEndpoints(SketchSplineEndpointTangencyConstraint(
                 first: SketchSplineEndpointReference(
                     splineID: entity.entityID,
                     endpoint: endpoint
                 ),
-                second: target
-            )
+                second: target,
+                orientation: orientation
+            ))
         )
         if result?.diagnostics.isEmpty == false {
             isPreviewExpanded = true
@@ -6969,17 +6988,19 @@ public struct MainView: View {
     private func addSmoothSplineEndpointsConstraint(
         _ entity: InspectorSketchEntity,
         endpoint: SketchSplineEndpoint,
-        target: SketchSplineEndpointReference
+        target: SketchSplineEndpointReference,
+        orientation: SketchTangentOrientation
     ) {
         let result = session.addSketchConstraint(
             featureID: entity.sourceFeatureID,
-            constraint: .smoothSplineEndpoints(
+            constraint: .smoothSplineEndpoints(SketchSplineEndpointTangencyConstraint(
                 first: SketchSplineEndpointReference(
                     splineID: entity.entityID,
                     endpoint: endpoint
                 ),
-                second: target
-            )
+                second: target,
+                orientation: orientation
+            ))
         )
         if result?.diagnostics.isEmpty == false {
             isPreviewExpanded = true

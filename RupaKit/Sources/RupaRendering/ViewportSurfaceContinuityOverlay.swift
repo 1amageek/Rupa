@@ -54,15 +54,15 @@ public struct ViewportSurfaceContinuityOverlay: Equatable {
             return ViewportSurfaceContinuityOverlay()
         }
 
-        let selectedGeneratedNames = generatedTopologyPersistentNames(in: selection.selectedTargets)
+        let selectedStableKeys = stableTopologyKeys(in: selection.selectedTargets)
         let selectedFeatureIDs = selectedBodyFeatureIDs(in: selection.selectedTargets, document: document)
-        guard selectedGeneratedNames.isEmpty == false || selectedFeatureIDs.isEmpty == false else {
+        guard selectedStableKeys.isEmpty == false || selectedFeatureIDs.isEmpty == false else {
             return ViewportSurfaceContinuityOverlay()
         }
 
         let edgeLookup = edgeLookup(in: scene, selectedFeatureIDs: selectedFeatureIDs)
         let items = result.adjacencies.compactMap { adjacency -> Item? in
-            guard shouldShow(adjacency, selectedGeneratedNames: selectedGeneratedNames) else {
+            guard shouldShow(adjacency, selectedStableKeys: selectedStableKeys) else {
                 return nil
             }
             guard let edge = resolvedEdge(for: adjacency, edgeLookup: edgeLookup) else {
@@ -95,22 +95,29 @@ public struct ViewportSurfaceContinuityOverlay: Equatable {
         })
     }
 
-    private static func generatedTopologyPersistentNames(
+    private static func stableTopologyKeys(
         in targets: [SelectionTarget]
     ) -> Set<String> {
-        var names = Set<String>()
+        var keys = Set<String>()
         for target in targets {
             switch target.component {
             case .object, .sketchEntity, .region, .constructionPlane:
                 continue
             case .face(let componentID), .edge(let componentID), .vertex(let componentID):
-                guard let persistentName = componentID.generatedTopologyPersistentName else {
+                guard componentID.isStableTopology else {
                     continue
                 }
-                names.insert(persistentName)
+                do {
+                    let reference = try componentID.stableTopologyReference(
+                        operationName: "Surface continuity overlay"
+                    )
+                    keys.insert(stableTopologyKey(reference))
+                } catch {
+                    assertionFailure("Invalid stable topology selection: \(error)")
+                }
             }
         }
-        return names
+        return keys
     }
 
     private static func edgeLookup(
@@ -125,14 +132,22 @@ public struct ViewportSurfaceContinuityOverlay: Equatable {
                 continue
             }
             for edge in topology.edges {
-                guard let persistentName = edge.componentID.generatedTopologyPersistentName else {
+                guard edge.componentID.isStableTopology else {
                     continue
                 }
-                result[persistentName] = EdgeRecord(
-                    persistentName: persistentName,
-                    start: edge.start,
-                    end: edge.end
-                )
+                do {
+                    let reference = try edge.componentID.stableTopologyReference(
+                        operationName: "Surface continuity overlay"
+                    )
+                    let stableKey = stableTopologyKey(reference)
+                    result[stableKey] = EdgeRecord(
+                        persistentName: stableKey,
+                        start: edge.start,
+                        end: edge.end
+                    )
+                } catch {
+                    assertionFailure("Invalid stable topology edge: \(error)")
+                }
             }
         }
         return result
@@ -140,20 +155,20 @@ public struct ViewportSurfaceContinuityOverlay: Equatable {
 
     private static func shouldShow(
         _ adjacency: RupaCore.SurfaceContinuityResult.Adjacency,
-        selectedGeneratedNames: Set<String>
+        selectedStableKeys: Set<String>
     ) -> Bool {
-        guard selectedGeneratedNames.isEmpty == false else {
+        guard selectedStableKeys.isEmpty == false else {
             return true
         }
         if let firstFacePersistentName = adjacency.firstFacePersistentName,
-           selectedGeneratedNames.contains(firstFacePersistentName) {
+           selectedStableKeys.contains(firstFacePersistentName) {
             return true
         }
         if let secondFacePersistentName = adjacency.secondFacePersistentName,
-           selectedGeneratedNames.contains(secondFacePersistentName) {
+           selectedStableKeys.contains(secondFacePersistentName) {
             return true
         }
-        return adjacency.edgePersistentNames.contains { selectedGeneratedNames.contains($0) }
+        return adjacency.edgePersistentNames.contains { selectedStableKeys.contains($0) }
     }
 
     private static func resolvedEdge(
@@ -166,6 +181,11 @@ public struct ViewportSurfaceContinuityOverlay: Equatable {
             }
         }
         return nil
+    }
+
+    private static func stableTopologyKey(_ reference: StableSubshapeReference) -> String {
+        let id = reference.subshapeID
+        return "feature:\(id.featureID.description)/role:\(id.role)/ordinal:\(id.ordinal)"
     }
 
     private struct EdgeRecord: Equatable {

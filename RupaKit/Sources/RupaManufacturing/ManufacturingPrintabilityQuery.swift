@@ -204,7 +204,9 @@ struct ManufacturingPrintabilityQuery: DomainCommandQuery {
                 ]),
             ])
         )
-        let sourceFingerprint = try document.cadDocument.sourceFingerprint()
+        let sourceFingerprint = try document.cadDocument.sourceFingerprint(
+            tolerance: document.modelingSettings.tolerance
+        )
         let sourceDependencies = try SourceDependencySetIdentity(
             dependencies: [
                 SourceDependencyIdentity(
@@ -607,7 +609,7 @@ struct ManufacturingPrintabilityQuery: DomainCommandQuery {
                 measurements: [
                     countMeasurement("conflictingFaceCount", conflicts.count),
                 ],
-                references: conflicts.map(\.persistentName)
+                references: conflicts.map { stableSubshapeKey($0.stableReference) }
             )
         }
         return ManufacturingPrintabilityReport.Check(
@@ -618,8 +620,13 @@ struct ManufacturingPrintabilityQuery: DomainCommandQuery {
             measurements: [
                 countMeasurement("matchedFaceCount", manufacturingBindings.count),
             ],
-            references: manufacturingBindings.map(\.persistentName)
+            references: manufacturingBindings.map { stableSubshapeKey($0.stableReference) }
         )
+    }
+
+    private static func stableSubshapeKey(_ reference: StableSubshapeReference) -> String {
+        let id = reference.subshapeID
+        return "feature:\(id.featureID.description)/role:\(id.role)/ordinal:\(id.ordinal)"
     }
 
     private static func materialAssignmentCheck(

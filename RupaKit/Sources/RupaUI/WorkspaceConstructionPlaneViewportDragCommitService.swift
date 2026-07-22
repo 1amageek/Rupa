@@ -11,9 +11,7 @@ struct WorkspaceConstructionPlaneViewportDragCommitService: Sendable {
 
     var editBuilder: WorkspaceConstructionPlaneEditBuilder
 
-    init(
-        editBuilder: WorkspaceConstructionPlaneEditBuilder = WorkspaceConstructionPlaneEditBuilder()
-    ) {
+    init(editBuilder: WorkspaceConstructionPlaneEditBuilder) {
         self.editBuilder = editBuilder
     }
 

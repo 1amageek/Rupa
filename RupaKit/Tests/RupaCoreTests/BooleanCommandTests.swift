@@ -53,15 +53,14 @@ import SwiftCAD
     #expect(boolean.keepTools == false)
     #expect(evaluated.brep.bodies.count == 1)
     #expect(evaluated.brep.faces.count == 6)
-    #expect(evaluated.generatedNames.keys.contains {
-        $0.components.contains(.feature(targetID))
-    } == false)
-    #expect(evaluated.generatedNames.keys.contains {
-        $0.components == [
-            .feature(booleanID),
-            .generated(GeneratedSubshapeRole.body.rawValue),
-        ]
-    })
+    #expect(evaluated.subshapes.entries.keys.contains { $0.featureID == targetID } == false)
+    #expect(evaluated.subshapes.entries[
+        SubshapeID(
+            featureID: booleanID,
+            role: GeneratedSubshapeRole.body.rawValue,
+            ordinal: 0
+        )
+    ] != nil)
     #expect(document.productMetadata.sceneNodes.values.contains {
         $0.reference == .body(booleanID)
     })
@@ -97,19 +96,17 @@ import SwiftCAD
     let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
 
     #expect(evaluated.brep.bodies.count == 3)
-    #expect(evaluated.generatedNames.keys.contains {
-        $0.components.contains(.feature(targetID))
+    #expect(evaluated.subshapes.entries.keys.contains { $0.featureID == targetID })
+    #expect(evaluated.subshapes.entries.keys.contains {
+        $0.featureID == toolID && $0.role.contains("tool")
     })
-    #expect(evaluated.generatedNames.keys.contains {
-        $0.components.contains(.feature(toolID))
-            && $0.components.contains(.subshape("tool"))
-    })
-    #expect(evaluated.generatedNames.keys.contains {
-        $0.components == [
-            .feature(booleanID),
-            .generated(GeneratedSubshapeRole.body.rawValue),
-        ]
-    })
+    #expect(evaluated.subshapes.entries[
+        SubshapeID(
+            featureID: booleanID,
+            role: GeneratedSubshapeRole.body.rawValue,
+            ordinal: 0
+        )
+    ] != nil)
 }
 
 @Test func createBooleanCanUsePreviousCellUnionBooleanAsTarget() throws {
@@ -155,19 +152,30 @@ import SwiftCAD
 
     #expect(evaluated.brep.bodies.count == 1)
     #expect(evaluated.brep.faces.count > 6)
-    #expect(evaluated.generatedNames.keys.contains {
-        $0.components.contains(.feature(firstBooleanID))
-    } == false)
-    #expect(evaluated.generatedNames.keys.contains {
-        $0.components == [
-            .feature(secondBooleanID),
-            .generated(GeneratedSubshapeRole.body.rawValue),
-        ]
-    })
-    #expect(evaluated.generatedNames.values.filter { $0.isBody }.count == 1)
-    #expect(evaluated.generatedNames.values.filter { $0.isFace }.count == evaluated.brep.faces.count)
-    #expect(evaluated.generatedNames.values.filter { $0.isEdge }.count == evaluated.brep.edges.count)
-    #expect(evaluated.generatedNames.values.filter { $0.isVertex }.count == evaluated.brep.vertices.count)
+    #expect(evaluated.subshapes.entries.keys.contains { $0.featureID == firstBooleanID } == false)
+    #expect(evaluated.subshapes.entries[
+        SubshapeID(
+            featureID: secondBooleanID,
+            role: GeneratedSubshapeRole.body.rawValue,
+            ordinal: 0
+        )
+    ] != nil)
+    #expect(evaluated.subshapes.entries.values.filter {
+        if case .body = $0 { return true }
+        return false
+    }.count == 1)
+    #expect(evaluated.subshapes.entries.values.filter {
+        if case .face = $0 { return true }
+        return false
+    }.count == evaluated.brep.faces.count)
+    #expect(evaluated.subshapes.entries.values.filter {
+        if case .edge = $0 { return true }
+        return false
+    }.count == evaluated.brep.edges.count)
+    #expect(evaluated.subshapes.entries.values.filter {
+        if case .vertex = $0 { return true }
+        return false
+    }.count == evaluated.brep.vertices.count)
     try document.validate()
 }
 

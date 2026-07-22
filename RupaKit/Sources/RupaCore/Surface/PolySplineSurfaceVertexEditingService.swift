@@ -1,7 +1,14 @@
 import SwiftCAD
+import CADModeling
 import RupaCoreTypes
 
 struct PolySplineSurfaceVertexEditingService: Sendable {
+    private let tolerance: ModelingTolerance
+
+    init(tolerance: ModelingTolerance) {
+        self.tolerance = tolerance
+    }
+
     func sourceVertexIndex(
         for target: PolySplineSurfaceVertexTarget,
         in polySpline: PolySplineFeature,
@@ -9,7 +16,8 @@ struct PolySplineSurfaceVertexEditingService: Sendable {
     ) throws -> Int {
         let analysis = PolySplineMeshAnalyzer().analyze(
             mesh: polySpline.sourceMesh,
-            options: polySpline.options
+            options: polySpline.options,
+            tolerance: tolerance
         )
         guard analysis.result.isSupported else {
             throw EditorError(
@@ -41,7 +49,8 @@ struct PolySplineSurfaceVertexEditingService: Sendable {
     ) throws {
         let analysis = PolySplineMeshAnalyzer().analyze(
             mesh: polySpline.sourceMesh,
-            options: polySpline.options
+            options: polySpline.options,
+            tolerance: tolerance
         )
         guard analysis.result.isSupported else {
             throw EditorError(
@@ -72,7 +81,8 @@ struct PolySplineSurfaceVertexEditingService: Sendable {
     ) throws -> Vector3D {
         let analysis = PolySplineMeshAnalyzer().analyze(
             mesh: polySpline.sourceMesh,
-            options: polySpline.options
+            options: polySpline.options,
+            tolerance: tolerance
         )
         guard analysis.result.isSupported else {
             throw EditorError(

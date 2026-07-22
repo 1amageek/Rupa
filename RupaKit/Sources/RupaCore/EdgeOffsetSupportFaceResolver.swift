@@ -87,7 +87,7 @@ public struct EdgeOffsetSupportFaceResolver: Sendable {
         ) {
             return selectedSupportFace
         }
-        guard edgeComponentID.generatedTopologyPersistentName != nil else {
+        guard edgeComponentID.isStableTopology else {
             return .unavailable("Offset Edge requires a generated topology edge target.")
         }
         return try inferredCapSupportFaceTarget(
@@ -109,7 +109,7 @@ public struct EdgeOffsetSupportFaceResolver: Sendable {
             guard target.sceneNodeID == edgeTarget.sceneNodeID,
                   target != edgeTarget,
                   case .face(let componentID) = target.component,
-                  componentID.generatedTopologyPersistentName != nil else {
+                  componentID.isStableTopology else {
                 return false
             }
             return true
@@ -130,18 +130,21 @@ public struct EdgeOffsetSupportFaceResolver: Sendable {
         objectRegistry: ObjectTypeRegistry
     ) throws -> EdgeOffsetSupportFaceResolution {
         guard case .edge(let edgeComponentID) = edgeTarget.component,
-              let edgePersistentName = edgeComponentID.generatedTopologyPersistentName else {
+              edgeComponentID.isStableTopology else {
             return .unavailable("Offset Edge requires a generated topology edge target.")
         }
+        let stableReference = try edgeComponentID.stableTopologyReference(
+            operationName: "Offset Edge support face inference"
+        )
 
         let topology = try TopologySnapshotService().snapshot(
             document: document,
             objectRegistry: objectRegistry
         )
-        guard let edgeEntry = topology.entries.first(where: { entry in
-            entry.kind == .edge &&
-                entry.sceneNodeID == edgeTarget.sceneNodeID.description &&
-                entry.persistentName == edgePersistentName
+        guard let edgeEntry = topology.entries.first(where: {
+            $0.kind == .edge &&
+                $0.sceneNodeID == edgeTarget.sceneNodeID.description &&
+                $0.stableReference == stableReference
         }) else {
             return .unavailable("Offset Edge generated topology edge was not found in the current evaluation.")
         }
@@ -155,7 +158,12 @@ public struct EdgeOffsetSupportFaceResolver: Sendable {
             guard entry.kind == .face,
                   entry.sceneNodeID == edgeTarget.sceneNodeID.description,
                   entry.generatedRole == "startFace" || entry.generatedRole == "endFace",
-                  edgeEndpoints(start, end, lieOnPlaneOf: entry),
+                  edgeEndpoints(
+                      start,
+                      end,
+                      lieOnPlaneOf: entry,
+                      tolerance: document.modelingSettings.tolerance.distance
+                  ),
                   let target = entry.selectionTarget() else {
                 return nil
             }
@@ -174,14 +182,14 @@ public struct EdgeOffsetSupportFaceResolver: Sendable {
     private func edgeEndpoints(
         _ start: TopologySummaryResult.Entry.Point,
         _ end: TopologySummaryResult.Entry.Point,
-        lieOnPlaneOf face: TopologySummaryResult.Entry
+        lieOnPlaneOf face: TopologySummaryResult.Entry,
+        tolerance: Double
     ) -> Bool {
         guard face.surfaceKind == "plane",
               let origin = face.surfaceOrigin,
               let normal = face.surfaceNormal else {
             return false
         }
-        let tolerance = 1.0e-8
         return point(start, liesOnPlaneOrigin: origin, normal: normal, tolerance: tolerance) &&
             point(end, liesOnPlaneOrigin: origin, normal: normal, tolerance: tolerance)
     }

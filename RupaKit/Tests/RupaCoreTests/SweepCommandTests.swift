@@ -1027,7 +1027,10 @@ private func sweepBooleanMeasureDocument(
         inputs: [FeatureInput(featureID: sourceSectionID, role: .curve)],
         outputs: [FeatureOutput(role: .curve)]
     )
-    try document.cadDocument.appendFeature(generatedSection)
+    try document.cadDocument.appendFeature(
+        generatedSection,
+        tolerance: document.modelingSettings.tolerance
+    )
     let pathID = try document.createLineSketch(
         name: "Generated Curve Section Sweep Path",
         plane: .yz,
@@ -1102,7 +1105,10 @@ private func sweepBooleanMeasureDocument(
         inputs: [FeatureInput(featureID: sourcePathID, role: .curve)],
         outputs: [FeatureOutput(role: .curve)]
     )
-    try document.cadDocument.appendFeature(generatedPath)
+    try document.cadDocument.appendFeature(
+        generatedPath,
+        tolerance: document.modelingSettings.tolerance
+    )
 
     let sweepID = try document.createSweep(
         name: "Generated Curve Path Sweep",
@@ -1111,7 +1117,9 @@ private func sweepBooleanMeasureDocument(
     )
     let feature = try #require(document.cadDocument.designGraph.nodes[sweepID])
     let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
-    let result = try MeasurementService().measure(document: document, ruler: RulerConfiguration.standard(for: .millimeter))
+    let result = try MeasurementService(
+        tolerance: document.modelingSettings.tolerance
+    ).measure(document: document, ruler: RulerConfiguration.standard(for: .millimeter))
     let solid = try #require(result.solids.first)
     let pathLength = try #require(solid.linearDimensions.first { $0.kind == .sweepPathLength })
 
@@ -1158,20 +1166,24 @@ private func sweepBooleanMeasureDocument(
         operation: .curveOffset(CurveOffsetFeature(
             source: CurveOutputReference(featureID: sourcePathID),
             distance: .length(1.0, .millimeter),
-            planeNormal: .unitX,
-            sampleCount: 4
+            planeNormal: .unitX
         )),
         inputs: [FeatureInput(featureID: sourcePathID, role: .curve)],
         outputs: [FeatureOutput(role: .curve)]
     )
-    try document.cadDocument.appendFeature(generatedPath)
+    try document.cadDocument.appendFeature(
+        generatedPath,
+        tolerance: document.modelingSettings.tolerance
+    )
 
     let sweepID = try document.createSweep(
         name: "Generated Sparse Offset Arc Sweep",
         sections: [.profile(ProfileReference(featureID: profileID))],
         path: SweepPathReference(featureID: generatedPathID)
     )
-    let result = try MeasurementService().measure(document: document, ruler: RulerConfiguration.standard(for: .millimeter))
+    let result = try MeasurementService(
+        tolerance: document.modelingSettings.tolerance
+    ).measure(document: document, ruler: RulerConfiguration.standard(for: .millimeter))
     let solid = try #require(result.solids.first)
     let pathLength = try #require(solid.linearDimensions.first { $0.kind == .sweepPathLength })
     let generatedCurve = try #require(

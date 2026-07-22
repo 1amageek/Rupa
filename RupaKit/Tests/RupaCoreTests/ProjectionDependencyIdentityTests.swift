@@ -246,10 +246,17 @@ func projectionDependencyIdentityTracksOnlyReferencedSceneMaterialBindings() thr
         sourceMaterial.id: sourceMaterial,
         unrelatedMaterial.id: unrelatedMaterial,
     ]
+    let bodySnapshots = try BodyDisplaySnapshotService().snapshots(document: document)
+    let sourceFaceComponentID = try #require(
+        bodySnapshots[sourceFeatureID]?.topology.faces.first?.componentID
+    )
+    let unrelatedFaceComponentID = try #require(
+        bodySnapshots[unrelatedFeatureID]?.topology.faces.first?.componentID
+    )
     let sourceBinding = TopologyMaterialBinding(
         target: SelectionTarget(
             sceneNodeID: sourceSceneNodeID,
-            component: .face(.generatedTopology("feature:source/generated:front"))
+            component: .face(sourceFaceComponentID)
         ),
         materialID: sourceMaterial.id,
         process: TopologyMaterialBinding.Process(
@@ -260,7 +267,7 @@ func projectionDependencyIdentityTracksOnlyReferencedSceneMaterialBindings() thr
     let unrelatedBinding = TopologyMaterialBinding(
         target: SelectionTarget(
             sceneNodeID: unrelatedSceneNodeID,
-            component: .face(.generatedTopology("feature:unrelated/generated:front"))
+            component: .face(unrelatedFaceComponentID)
         ),
         materialID: unrelatedMaterial.id,
         process: TopologyMaterialBinding.Process(

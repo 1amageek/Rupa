@@ -54,7 +54,10 @@ extension WorkspaceState {
             target: target,
             isVisible: nextVisibility
         )
-        try display.validate(against: document.cadDocument)
+        try display.validate(
+            against: document.cadDocument,
+            tolerance: document.modelingSettings.tolerance
+        )
         surfaceControlPointDisplays[displayID] = display
     }
 

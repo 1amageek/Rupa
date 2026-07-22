@@ -2435,14 +2435,24 @@ struct CLISketchEditCommandTests {
         let joinedSource = try #require(joined.productMetadata.joinedCurveGroupSources.values.first)
         #expect(joinedSource.continuity == .g1)
         #expect(joinedSketch.constraints.contains(.coincident(.lineEnd(lineID), .arcStart(arcID))))
-        #expect(joinedSketch.constraints.contains(.tangent(lineID, arcID)))
+        #expect(joinedSketch.constraints.contains { constraint in
+            guard case let .tangent(.lineCircular(line, circular, _)) = constraint else {
+                return false
+            }
+            return line == lineID && circular == arcID
+        })
         #expect(unjoinResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: unjoinResult.standardError))
         #expect(unjoinResponse.message == "Sketch curve unjoined.")
         #expect(unjoinResponse.saved)
         #expect(unjoined.productMetadata.joinedCurveSources.isEmpty)
         #expect(unjoined.productMetadata.joinedCurveGroupSources.isEmpty)
         #expect(!unjoinedSketch.constraints.contains(.coincident(.lineEnd(lineID), .arcStart(arcID))))
-        #expect(!unjoinedSketch.constraints.contains(.tangent(lineID, arcID)))
+        #expect(unjoinedSketch.constraints.contains { constraint in
+            guard case let .tangent(.lineCircular(line, circular, _)) = constraint else {
+                return false
+            }
+            return line == lineID && circular == arcID
+        } == false)
     }
 
     private func sourceLine(in document: DesignDocument) throws -> SketchEntitySummaryResult.EntityEntry {
@@ -3508,6 +3518,56 @@ struct CLIModelDirectEditCommandTests {
 
 @Suite(.serialized)
 struct CLICommandApplyTests {
+    @Test(.timeLimit(.minutes(1)))
+    func typedTangencyOptionsPreservePayloadContracts() throws {
+        let lineID = SketchEntityID()
+        let circleID = SketchEntityID()
+        let lineCircularOptions = try CLISketchConstraintTypedOptions.parse([
+            "--kind",
+            "tangent",
+            "--first-id",
+            lineID.description,
+            "--second-id",
+            circleID.description,
+            "--tangency-kind",
+            "lineCircular",
+            "--tangent-side",
+            "left",
+        ])
+
+        #expect(try lineCircularOptions.decodedConstraint() == .tangent(.lineCircular(
+            line: lineID,
+            circular: circleID,
+            side: .left
+        )))
+
+        let splineID = SketchEntityID()
+        let tangentLineID = SketchEntityID()
+        let splineLineOptions = try CLISketchConstraintTypedOptions.parse([
+            "--kind",
+            "splineEndpointTangent",
+            "--spline-id",
+            splineID.description,
+            "--endpoint",
+            "end",
+            "--line-id",
+            tangentLineID.description,
+            "--orientation",
+            "opposed",
+        ])
+
+        #expect(try splineLineOptions.decodedConstraint() == .splineEndpointTangent(
+            SketchSplineLineTangencyConstraint(
+                splineEndpoint: SketchSplineEndpointReference(
+                    splineID: splineID,
+                    endpoint: .end
+                ),
+                line: tangentLineID,
+                orientation: .opposed
+            )
+        ))
+    }
+
     @Test(.timeLimit(.minutes(1)))
     func batchCommandParsesDryRunForLiveSessionTargets() throws {
         let sessionID = UUID()
@@ -5130,12 +5190,13 @@ func cliExecutableSurfaceSourcesReturnsSelectionReferencesAsJSON() async throws 
         CLITopologySummaryResponse.self,
         from: topologyResult.standardOutputData
     )
-    let facePersistentName = try #require(
-        topologyResponse.topologySummary.entries.first { $0.kind == .face }?.persistentName
+    let frameFaceEntry = try #require(
+        topologyResponse.topologySummary.entries.first { $0.kind == .face }
     )
+    let faceStableReference = frameFaceEntry.stableReference
     let frameQueryJSON = try encodedSurfaceFrameQuery(
         SurfaceFrameQuery(
-            facePersistentName: facePersistentName,
+            faceStableReference: faceStableReference,
             u: 0.5,
             v: 0.5
         )
@@ -5200,7 +5261,7 @@ func cliExecutableSurfaceSourcesReturnsSelectionReferencesAsJSON() async throws 
     #expect(topologyResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: topologyResult.standardError))
     #expect(frameResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: frameResult.standardError))
     #expect(frameResponse.surfaceFrames.frames.count == 1)
-    #expect(frame.facePersistentNames.contains(facePersistentName))
+    #expect(frame.faceID == frameFaceEntry.referenceID)
     #expect(frame.u == 0.5)
     #expect(frame.v == 0.5)
     #expect(abs(abs(frame.handedness) - 1.0) < 0.000_000_01)
@@ -5598,7 +5659,7 @@ func cliExecutableSurfaceTrimDomainCommandMutatesClosedDocumentAsJSON() async th
         Issue.record("Expected a direct B-spline surface feature.")
         return
     }
-    let trimDomain = try #require(surfaceFeature.outerTrimDomain)
+    let trimDomain = try #require(surfaceFeature.parameterDomain)
     let updatedSummary = try SurfaceSourceSummaryService().summarize(document: loaded, displayUnit: .millimeter)
     let updatedPatch = try #require(updatedSummary.sources.first?.patches.first)
 
@@ -5630,21 +5691,21 @@ func cliExecutableSurfaceTrimLoopsCommandMutatesClosedDocumentAsJSON() async thr
     )
     let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
-    let trimLoop = BSplineSurfaceTrimLoop(
+    let trimLoop = SurfaceTrimLoop(
         role: .outer,
-        edges: [
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+        parameterCurves: [
+            .polyline([
                 SurfaceParameter(u: 0.2, v: 0.2),
                 SurfaceParameter(u: 0.8, v: 0.25),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.8, v: 0.25),
                 SurfaceParameter(u: 0.45, v: 0.8),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.45, v: 0.8),
                 SurfaceParameter(u: 0.2, v: 0.2),
-            ])),
+            ]),
         ]
     )
     let faceJSON = try encodedSelectionReference(faceReference)
@@ -5668,19 +5729,14 @@ func cliExecutableSurfaceTrimLoopsCommandMutatesClosedDocumentAsJSON() async thr
         from: result.standardOutputData
     )
     let loaded = try DocumentFileService().load(from: documentURL)
-    let feature = try #require(loaded.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
-        Issue.record("Expected a direct B-spline surface feature.")
-        return
-    }
+    let trimFeature = try cliSurfaceTrimFeature(sourceFeatureID: featureID, in: loaded)
     let updatedSummary = try SurfaceSourceSummaryService().summarize(document: loaded, displayUnit: .millimeter)
     let updatedTrimLoop = try #require(updatedSummary.sources.first?.patches.first?.trimLoops.first)
 
     #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
     #expect(response.message == "Surface trim loops updated.")
     #expect(response.saved)
-    #expect(surfaceFeature.outerTrimDomain == nil)
-    #expect(surfaceFeature.trimLoops == [trimLoop])
+    #expect(trimFeature.loops == [trimLoop])
     #expect(updatedTrimLoop.edges.count == 3)
     #expect(updatedTrimLoop.edgePersistentNames.count == 3)
     #expect(updatedTrimLoop.selectionReferences.count == 3)
@@ -5701,21 +5757,21 @@ func cliExecutableSurfaceTrimEndpointCommandMutatesClosedDocumentAsJSON() async 
     )
     let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
-    let trimLoop = BSplineSurfaceTrimLoop(
+    let trimLoop = SurfaceTrimLoop(
         role: .outer,
-        edges: [
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+        parameterCurves: [
+            .polyline([
                 SurfaceParameter(u: 0.2, v: 0.2),
                 SurfaceParameter(u: 0.8, v: 0.25),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.8, v: 0.25),
                 SurfaceParameter(u: 0.45, v: 0.8),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.45, v: 0.8),
                 SurfaceParameter(u: 0.2, v: 0.2),
-            ])),
+            ]),
         ]
     )
     try document.setSurfaceTrimLoops(
@@ -5751,14 +5807,12 @@ func cliExecutableSurfaceTrimEndpointCommandMutatesClosedDocumentAsJSON() async 
         from: result.standardOutputData
     )
     let loaded = try DocumentFileService().load(from: documentURL)
-    let feature = try #require(loaded.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
-        Issue.record("Expected a direct B-spline surface feature.")
-        return
-    }
-    let updatedLoop = try #require(surfaceFeature.trimLoops.first)
-    let updatedFirst = try #require(updatedLoop.edges.first).parameterCurve.endParameter()
-    let updatedSecond = try #require(updatedLoop.edges.dropFirst().first).parameterCurve.startParameter()
+    let trimFeature = try cliSurfaceTrimFeature(sourceFeatureID: featureID, in: loaded)
+    let updatedLoop = try #require(trimFeature.loops.first)
+    let updatedFirst = try #require(updatedLoop.parameterCurves.first)
+        .endParameter(tolerance: .standard)
+    let updatedSecond = try #require(updatedLoop.parameterCurves.dropFirst().first)
+        .startParameter(tolerance: .standard)
     let updatedSummary = try SurfaceSourceSummaryService().summarize(document: loaded, displayUnit: .millimeter)
     let updatedSummaryTrimLoop = try #require(updatedSummary.sources.first?.patches.first?.trimLoops.first)
 
@@ -5786,10 +5840,10 @@ func cliExecutableSurfaceTrimControlPointCommandMutatesClosedDocumentAsJSON() as
     )
     let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
-    let trimLoop = BSplineSurfaceTrimLoop(
+    let trimLoop = SurfaceTrimLoop(
         role: .outer,
-        edges: [
-            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+        parameterCurves: [
+            .bSpline(BSplineCurve2D(
                 degree: 2,
                 knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
                 controlPoints: [
@@ -5797,15 +5851,15 @@ func cliExecutableSurfaceTrimControlPointCommandMutatesClosedDocumentAsJSON() as
                     Point2D(x: 0.52, y: 0.42),
                     Point2D(x: 0.8, y: 0.25),
                 ]
-            ))),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            )),
+            .polyline([
                 SurfaceParameter(u: 0.8, v: 0.25),
                 SurfaceParameter(u: 0.45, v: 0.8),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.45, v: 0.8),
                 SurfaceParameter(u: 0.2, v: 0.2),
-            ])),
+            ]),
         ]
     )
     try document.setSurfaceTrimLoops(
@@ -5841,13 +5895,9 @@ func cliExecutableSurfaceTrimControlPointCommandMutatesClosedDocumentAsJSON() as
         from: result.standardOutputData
     )
     let loaded = try DocumentFileService().load(from: documentURL)
-    let feature = try #require(loaded.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
-        Issue.record("Expected a direct B-spline surface feature.")
-        return
-    }
-    let updatedLoop = try #require(surfaceFeature.trimLoops.first)
-    guard case .bSpline(let movedCurve) = updatedLoop.edges[0].parameterCurve else {
+    let trimFeature = try cliSurfaceTrimFeature(sourceFeatureID: featureID, in: loaded)
+    let updatedLoop = try #require(trimFeature.loops.first)
+    guard case .bSpline(let movedCurve) = updatedLoop.parameterCurves[0] else {
         Issue.record("Expected a B-spline trim parameter curve.")
         return
     }
@@ -5879,10 +5929,10 @@ func cliExecutableSurfaceTrimControlPointWeightCommandMutatesClosedDocumentAsJSO
     )
     let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
-    let trimLoop = BSplineSurfaceTrimLoop(
+    let trimLoop = SurfaceTrimLoop(
         role: .outer,
-        edges: [
-            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+        parameterCurves: [
+            .bSpline(BSplineCurve2D(
                 degree: 2,
                 knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
                 controlPoints: [
@@ -5891,15 +5941,15 @@ func cliExecutableSurfaceTrimControlPointWeightCommandMutatesClosedDocumentAsJSO
                     Point2D(x: 0.8, y: 0.25),
                 ],
                 weights: [1.0, 1.2, 1.0]
-            ))),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            )),
+            .polyline([
                 SurfaceParameter(u: 0.8, v: 0.25),
                 SurfaceParameter(u: 0.45, v: 0.8),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.45, v: 0.8),
                 SurfaceParameter(u: 0.2, v: 0.2),
-            ])),
+            ]),
         ]
     )
     try document.setSurfaceTrimLoops(
@@ -5933,13 +5983,9 @@ func cliExecutableSurfaceTrimControlPointWeightCommandMutatesClosedDocumentAsJSO
         from: result.standardOutputData
     )
     let loaded = try DocumentFileService().load(from: documentURL)
-    let feature = try #require(loaded.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
-        Issue.record("Expected a direct B-spline surface feature.")
-        return
-    }
-    let updatedLoop = try #require(surfaceFeature.trimLoops.first)
-    guard case .bSpline(let weightedCurve) = updatedLoop.edges[0].parameterCurve else {
+    let trimFeature = try cliSurfaceTrimFeature(sourceFeatureID: featureID, in: loaded)
+    let updatedLoop = try #require(trimFeature.loops.first)
+    guard case .bSpline(let weightedCurve) = updatedLoop.parameterCurves[0] else {
         Issue.record("Expected a B-spline trim parameter curve.")
         return
     }
@@ -5974,10 +6020,10 @@ func cliExecutableSurfaceTrimKnotCommandMutatesClosedDocumentAsJSON() async thro
     )
     let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
-    let trimLoop = BSplineSurfaceTrimLoop(
+    let trimLoop = SurfaceTrimLoop(
         role: .outer,
-        edges: [
-            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+        parameterCurves: [
+            .bSpline(BSplineCurve2D(
                 degree: 2,
                 knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
                 controlPoints: [
@@ -5986,15 +6032,15 @@ func cliExecutableSurfaceTrimKnotCommandMutatesClosedDocumentAsJSON() async thro
                     Point2D(x: 0.8, y: 0.25),
                 ],
                 weights: [1.0, 1.2, 1.0]
-            ))),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            )),
+            .polyline([
                 SurfaceParameter(u: 0.8, v: 0.25),
                 SurfaceParameter(u: 0.45, v: 0.8),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.45, v: 0.8),
                 SurfaceParameter(u: 0.2, v: 0.2),
-            ])),
+            ]),
         ]
     )
     try document.setSurfaceTrimLoops(
@@ -6027,13 +6073,9 @@ func cliExecutableSurfaceTrimKnotCommandMutatesClosedDocumentAsJSON() async thro
             from: result.standardOutputData
         )
         let loaded = try DocumentFileService().load(from: documentURL)
-        let feature = try #require(loaded.cadDocument.designGraph.nodes[featureID])
-        guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
-            Issue.record("Expected a direct B-spline surface feature.")
-            return
-        }
-        let updatedLoop = try #require(surfaceFeature.trimLoops.first)
-        guard case .bSpline(let refinedCurve) = updatedLoop.edges[0].parameterCurve else {
+        let trimFeature = try cliSurfaceTrimFeature(sourceFeatureID: featureID, in: loaded)
+        let updatedLoop = try #require(trimFeature.loops.first)
+        guard case .bSpline(let refinedCurve) = updatedLoop.parameterCurves[0] else {
             Issue.record("Expected a B-spline trim parameter curve.")
             return
         }
@@ -6069,10 +6111,9 @@ func cliExecutableSurfaceTrimKnotCommandMutatesClosedDocumentAsJSON() async thro
             from: valueResult.standardOutputData
         )
         let retimed = try DocumentFileService().load(from: documentURL)
-        let retimedFeature = try #require(retimed.cadDocument.designGraph.nodes[featureID])
-        guard case let .bSplineSurface(retimedSurfaceFeature) = retimedFeature.operation,
-              let retimedLoop = retimedSurfaceFeature.trimLoops.first,
-              case .bSpline(let retimedCurve) = retimedLoop.edges[0].parameterCurve else {
+        let retimedTrimFeature = try cliSurfaceTrimFeature(sourceFeatureID: featureID, in: retimed)
+        guard let retimedLoop = retimedTrimFeature.loops.first,
+              case .bSpline(let retimedCurve) = retimedLoop.parameterCurves[0] else {
             Issue.record("Expected a retimed B-spline trim parameter curve.")
             return
         }
@@ -6100,10 +6141,9 @@ func cliExecutableSurfaceTrimKnotCommandMutatesClosedDocumentAsJSON() async thro
             from: multiplicityResult.standardOutputData
         )
         let saturated = try DocumentFileService().load(from: documentURL)
-        let saturatedFeature = try #require(saturated.cadDocument.designGraph.nodes[featureID])
-        guard case let .bSplineSurface(saturatedSurfaceFeature) = saturatedFeature.operation,
-              let saturatedLoop = saturatedSurfaceFeature.trimLoops.first,
-              case .bSpline(let saturatedCurve) = saturatedLoop.edges[0].parameterCurve else {
+        let saturatedTrimFeature = try cliSurfaceTrimFeature(sourceFeatureID: featureID, in: saturated)
+        guard let saturatedLoop = saturatedTrimFeature.loops.first,
+              case .bSpline(let saturatedCurve) = saturatedLoop.parameterCurves[0] else {
             Issue.record("Expected a saturated B-spline trim parameter curve.")
             return
         }
@@ -10500,9 +10540,29 @@ private func encodedSelectionReference(_ reference: SelectionReference) throws -
     return String(decoding: data, as: UTF8.self)
 }
 
-private func encodedSurfaceTrimLoop(_ trimLoop: BSplineSurfaceTrimLoop) throws -> String {
+private func encodedSurfaceTrimLoop(_ trimLoop: SurfaceTrimLoop) throws -> String {
     let data = try JSONEncoder().encode(trimLoop)
     return String(decoding: data, as: UTF8.self)
+}
+
+private func cliSurfaceTrimFeature(
+    sourceFeatureID: FeatureID,
+    in document: DesignDocument
+) throws -> SurfaceTrimFeature {
+    let matches = document.cadDocument.designGraph.nodes.values.compactMap { feature -> SurfaceTrimFeature? in
+        guard case let .surfaceTrim(trimFeature) = feature.operation,
+              trimFeature.target.featureID == sourceFeatureID else {
+            return nil
+        }
+        return trimFeature
+    }
+    guard matches.count == 1, let trimFeature = matches.first else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Expected exactly one Surface Trim feature for the source surface."
+        )
+    }
+    return trimFeature
 }
 
 private func encodedSelectionTarget(_ target: SelectionTarget) throws -> String {

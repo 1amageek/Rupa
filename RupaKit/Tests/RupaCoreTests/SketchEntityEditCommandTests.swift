@@ -173,10 +173,11 @@ import Testing
         .splineControlPoint(entity: referenceSplineID, index: 3),
         .splineControlPoint(entity: targetSplineID, index: 0)
     )))
-    #expect(sketch.constraints.contains(.smoothSplineEndpoints(
+    #expect(sketch.constraints.contains(.smoothSplineEndpoints(SketchSplineEndpointTangencyConstraint(
         first: SketchSplineEndpointReference(splineID: referenceSplineID, endpoint: .end),
-        second: SketchSplineEndpointReference(splineID: targetSplineID, endpoint: .start)
-    )))
+        second: SketchSplineEndpointReference(splineID: targetSplineID, endpoint: .start),
+        orientation: .aligned
+    ))))
     #expect(continuityJoin.requiredContinuity == .g2)
     #expect(continuityJoin.continuity == .g2)
     #expect(continuityJoin.constraintKinds.contains("smoothSplineEndpoints"))
@@ -1300,7 +1301,7 @@ import Testing
         .offsetCurve(
             target: target,
             distance: .length(2.0, .millimeter),
-            options: OffsetCurveOptions(mode: .offset, isSymmetric: false, gapFill: .linear),
+            options: OffsetCurveOptions(mode: .offset, isSymmetric: false),
             vertexHandle: nil
         )
     )
@@ -1324,7 +1325,9 @@ import Testing
     #expect(result.didMutate)
     #expect(session.generation == (try beforeGeneration.advanced()))
     #expect(faceLoopOffset.target == FaceLoopOffsetTargetReference(featureID: bodyFeatureID))
-    #expect(faceLoopOffset.gapFill == .linear)
+    #expect(faceLoopOffset.face == (try componentID.stableTopologyReference(
+        operationName: "Offset Face Loop test"
+    )))
     #expect(feature.inputs == [FeatureInput(featureID: bodyFeatureID, role: .target)])
     #expect(feature.outputs == [FeatureOutput(role: .body)])
     #expect(topology.counts.bodyCount == 1)
@@ -1388,7 +1391,6 @@ import Testing
             options: OffsetCurveOptions(
                 mode: .offset,
                 isSymmetric: false,
-                gapFill: .linear,
                 supportTarget: supportFaceTarget
             ),
             vertexHandle: nil
@@ -1401,7 +1403,6 @@ import Testing
         Issue.record("Edge target Offset Curve must create an EdgeOffset feature.")
         return
     }
-    let parser = GeneratedTopologyPersistentNameParser()
     let topology = try TopologySnapshotService().snapshot(document: session.document)
     let generatedOffsetEdges = topology.entries.filter {
         $0.kind == .edge &&
@@ -1415,9 +1416,8 @@ import Testing
     #expect(result.didMutate)
     #expect(session.generation == (try beforeGeneration.advanced()))
     #expect(edgeOffset.target == EdgeOffsetTargetReference(featureID: bodyFeatureID))
-    #expect(edgeOffset.edgePersistentName == (try parser.parse(edgeEntry.persistentName, operationName: "Offset Edge")))
-    #expect(edgeOffset.supportFacePersistentName == (try parser.parse(supportFaceEntry.persistentName, operationName: "Offset Edge")))
-    #expect(edgeOffset.gapFill == .linear)
+    #expect(edgeOffset.edge == edgeEntry.stableReference)
+    #expect(edgeOffset.supportFace == supportFaceEntry.stableReference)
     #expect(feature.inputs == [FeatureInput(featureID: bodyFeatureID, role: .target)])
     #expect(feature.outputs == [FeatureOutput(role: .body)])
     #expect(topology.counts.bodyCount == 1)
@@ -1425,7 +1425,7 @@ import Testing
     #expect(topology.counts.edgeCount == 15)
     #expect(topology.counts.vertexCount == 10)
     #expect(generatedOffsetEdges.count == 1)
-    #expect(topology.entries.contains { $0.persistentName == edgeEntry.persistentName })
+    #expect(topology.entries.contains { $0.stableReference == edgeEntry.stableReference })
     #expect(offsetSceneNode.object?.sourceSection == nil)
     #expect(offsetSceneNode.object?.typeID == nil)
     #expect(session.evaluationStatus == .valid)
@@ -1482,7 +1482,6 @@ import Testing
             options: OffsetCurveOptions(
                 mode: .offset,
                 isSymmetric: true,
-                gapFill: .linear,
                 supportTarget: supportFaceTarget
             ),
             vertexHandle: nil
@@ -1508,7 +1507,6 @@ import Testing
     #expect(session.generation == (try beforeGeneration.advanced()))
     #expect(edgeOffset.target == EdgeOffsetTargetReference(featureID: bodyFeatureID))
     #expect(edgeOffset.isSymmetric)
-    #expect(edgeOffset.gapFill == .linear)
     #expect(feature.inputs == [FeatureInput(featureID: bodyFeatureID, role: .target)])
     #expect(feature.outputs == [FeatureOutput(role: .body)])
     #expect(topology.counts.bodyCount == 1)
@@ -1516,8 +1514,79 @@ import Testing
     #expect(topology.counts.edgeCount == 18)
     #expect(topology.counts.vertexCount == 12)
     #expect(generatedOffsetEdges.count == 2)
-    #expect(topology.entries.contains { $0.persistentName == edgeEntry.persistentName })
+    #expect(topology.entries.contains { $0.stableReference == edgeEntry.stableReference })
     #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func offsetCurveRejectsUnsupportedGeneratedTopologyGapFillBeforeMutation() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createExtrudedRectangleFromCorners(
+            name: "Unsupported Gap Fill Box",
+            plane: .xy,
+            firstCorner: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(20.0, .millimeter),
+                y: .length(12.0, .millimeter)
+            ),
+            depth: .length(5.0, .millimeter),
+            direction: .normal
+        )
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
+    let supportFaceEntry = try #require(topology.entries.first {
+        $0.kind == .face &&
+            $0.sceneNodeID == bodyNodeID.description &&
+            $0.generatedRole == "startFace"
+    })
+    let supportFaceTarget = try #require(supportFaceEntry.selectionTarget())
+    let supportDepth = try #require(supportFaceEntry.center?.z)
+    let edgeEntry = try #require(topology.entries.first {
+        $0.kind == .edge &&
+            $0.sceneNodeID == bodyNodeID.description &&
+            $0.curveKind == "line" &&
+            topologyPoint($0.start, isOnDepth: supportDepth) &&
+            topologyPoint($0.end, isOnDepth: supportDepth) &&
+            $0.selectionTarget() != nil
+    })
+    let edgeTarget = try #require(edgeEntry.selectionTarget())
+    let generation = session.generation
+    let featureCount = session.document.cadDocument.designGraph.order.count
+
+    for command in [
+        EditorCommand.offsetCurve(
+            target: supportFaceTarget,
+            distance: .length(2.0, .millimeter),
+            options: OffsetCurveOptions(gapFill: .linear),
+            vertexHandle: nil
+        ),
+        EditorCommand.offsetCurve(
+            target: edgeTarget,
+            distance: .length(2.0, .millimeter),
+            options: OffsetCurveOptions(
+                gapFill: .linear,
+                supportTarget: supportFaceTarget
+            ),
+            vertexHandle: nil
+        ),
+    ] {
+        do {
+            _ = try session.execute(command)
+            Issue.record("Generated topology offsets must reject unsupported gap-fill strategies.")
+        } catch let error as EditorError {
+            #expect(error.code == .commandInvalid)
+            #expect(error.message.contains("non-default gap-fill"))
+        }
+    }
+
+    #expect(session.generation == generation)
+    #expect(session.document.cadDocument.designGraph.order.count == featureCount)
 }
 
 @MainActor
@@ -1577,7 +1646,7 @@ import Testing
                 target: target,
                 distance: .length(2.0, .millimeter),
                 options: OffsetCurveOptions(
-                    gapFill: .linear,
+                    gapFill: .round,
                     supportTarget: invalidSupportTarget
                 ),
                 vertexHandle: nil
@@ -5653,11 +5722,14 @@ import Testing
     let result = try session.execute(
         .addSketchConstraint(
             featureID: setup.featureID,
-            constraint: .splineEndpointTangent(
-                spline: setup.splineID,
-                endpoint: .start,
-                line: setup.lineID
-            )
+            constraint: .splineEndpointTangent(SketchSplineLineTangencyConstraint(
+                splineEndpoint: SketchSplineEndpointReference(
+                    splineID: setup.splineID,
+                    endpoint: .start
+                ),
+                line: setup.lineID,
+                orientation: .aligned
+            ))
         )
     )
 
@@ -5687,7 +5759,11 @@ import Testing
     let result = try session.execute(
         .addSketchConstraint(
             featureID: setup.featureID,
-            constraint: .tangentSplineEndpoints(first: firstEndpoint, second: secondEndpoint)
+            constraint: .tangentSplineEndpoints(SketchSplineEndpointTangencyConstraint(
+                first: firstEndpoint,
+                second: secondEndpoint,
+                orientation: .aligned
+            ))
         )
     )
 
@@ -5716,10 +5792,11 @@ import Testing
     _ = try session.execute(
         .addSketchConstraint(
             featureID: setup.featureID,
-            constraint: .tangentSplineEndpoints(
+            constraint: .tangentSplineEndpoints(SketchSplineEndpointTangencyConstraint(
                 first: SketchSplineEndpointReference(splineID: setup.firstSplineID, endpoint: .end),
-                second: SketchSplineEndpointReference(splineID: setup.secondSplineID, endpoint: .start)
-            )
+                second: SketchSplineEndpointReference(splineID: setup.secondSplineID, endpoint: .start),
+                orientation: .aligned
+            ))
         )
     )
     let beforeMove = try SketchEntitySnapshotService().snapshot(document: session.document)
@@ -5757,7 +5834,11 @@ import Testing
     let result = try session.execute(
         .addSketchConstraint(
             featureID: setup.featureID,
-            constraint: .smoothSplineEndpoints(first: firstEndpoint, second: secondEndpoint)
+            constraint: .smoothSplineEndpoints(SketchSplineEndpointTangencyConstraint(
+                first: firstEndpoint,
+                second: secondEndpoint,
+                orientation: .aligned
+            ))
         )
     )
 
@@ -5789,10 +5870,11 @@ import Testing
     _ = try session.execute(
         .addSketchConstraint(
             featureID: setup.featureID,
-            constraint: .smoothSplineEndpoints(
+            constraint: .smoothSplineEndpoints(SketchSplineEndpointTangencyConstraint(
                 first: SketchSplineEndpointReference(splineID: setup.firstSplineID, endpoint: .end),
-                second: SketchSplineEndpointReference(splineID: setup.secondSplineID, endpoint: .start)
-            )
+                second: SketchSplineEndpointReference(splineID: setup.secondSplineID, endpoint: .start),
+                orientation: .aligned
+            ))
         )
     )
     let beforeMove = try SketchEntitySnapshotService().snapshot(document: session.document)
@@ -5829,11 +5911,14 @@ import Testing
     _ = try session.execute(
         .addSketchConstraint(
             featureID: setup.featureID,
-            constraint: .splineEndpointTangent(
-                spline: setup.splineID,
-                endpoint: .start,
-                line: setup.lineID
-            )
+            constraint: .splineEndpointTangent(SketchSplineLineTangencyConstraint(
+                splineEndpoint: SketchSplineEndpointReference(
+                    splineID: setup.splineID,
+                    endpoint: .start
+                ),
+                line: setup.lineID,
+                orientation: .aligned
+            ))
         )
     )
     let beforeMove = try SketchEntitySnapshotService().snapshot(document: session.document)
@@ -5868,11 +5953,14 @@ import Testing
     _ = try session.execute(
         .addSketchConstraint(
             featureID: setup.featureID,
-            constraint: .splineEndpointTangent(
-                spline: setup.splineID,
-                endpoint: .start,
-                line: setup.lineID
-            )
+            constraint: .splineEndpointTangent(SketchSplineLineTangencyConstraint(
+                splineEndpoint: SketchSplineEndpointReference(
+                    splineID: setup.splineID,
+                    endpoint: .start
+                ),
+                line: setup.lineID,
+                orientation: .aligned
+            ))
         )
     )
     let beforeMove = try SketchEntitySnapshotService().snapshot(document: session.document)
@@ -6806,11 +6894,14 @@ import Testing
     _ = try session.execute(
         .addSketchConstraint(
             featureID: setup.featureID,
-            constraint: .splineEndpointTangent(
-                spline: setup.splineID,
-                endpoint: .start,
-                line: setup.lineID
-            )
+            constraint: .splineEndpointTangent(SketchSplineLineTangencyConstraint(
+                splineEndpoint: SketchSplineEndpointReference(
+                    splineID: setup.splineID,
+                    endpoint: .start
+                ),
+                line: setup.lineID,
+                orientation: .aligned
+            ))
         )
     )
 
@@ -7044,9 +7135,14 @@ import Testing
         .lineStart(firstLineID)
     )))
     #expect(updatedSketch.constraints.contains(.splineEndpointTangent(
-        spline: source.entityID,
-        endpoint: .start,
-        line: firstLineID
+        SketchSplineLineTangencyConstraint(
+            splineEndpoint: SketchSplineEndpointReference(
+                splineID: source.entityID,
+                endpoint: .start
+            ),
+            line: firstLineID,
+            orientation: .aligned
+        )
     )))
     #expect(session.evaluationStatus == .valid)
 }
@@ -7284,7 +7380,12 @@ import Testing
     #expect(result.didMutate)
     #expect(joinedSource.continuity == .g1)
     #expect(sketch.constraints.contains(.coincident(.lineEnd(setup.lineID), .arcStart(setup.arcID))))
-    #expect(sketch.constraints.contains(.tangent(setup.lineID, setup.arcID)))
+    #expect(sketch.constraints.contains { constraint in
+        guard case let .tangent(.lineCircular(line, circular, _)) = constraint else {
+            return false
+        }
+        return line == setup.lineID && circular == setup.arcID
+    })
     #expect(continuityJoin.requiredContinuity == .g1)
     #expect(continuityJoin.continuity == .g1)
     #expect(continuityJoin.constraintKinds.contains("joinedCurveGroup"))
@@ -7337,10 +7438,11 @@ import Testing
         .splineControlPoint(entity: setup.firstSplineID, index: 3),
         .splineControlPoint(entity: setup.secondSplineID, index: 0)
     )))
-    #expect(sketch.constraints.contains(.smoothSplineEndpoints(
+    #expect(sketch.constraints.contains(.smoothSplineEndpoints(SketchSplineEndpointTangencyConstraint(
         first: SketchSplineEndpointReference(splineID: setup.firstSplineID, endpoint: .end),
-        second: SketchSplineEndpointReference(splineID: setup.secondSplineID, endpoint: .start)
-    )))
+        second: SketchSplineEndpointReference(splineID: setup.secondSplineID, endpoint: .start),
+        orientation: .aligned
+    ))))
     #expect(abs(solvedEndpoint.x - 0.009) < 1.0e-12)
     #expect(abs(solvedEndpoint.y - 0.0) < 1.0e-12)
     #expect(abs(solvedHandle.x - 0.012) < 1.0e-12)
@@ -9468,7 +9570,11 @@ private func lineCircleTangentSketchDocument(
             radius: .length(0.002, .meter)
         )
     )
-    sketch.constraints.append(.tangent(lineID, circleID))
+    sketch.constraints.append(.tangent(.lineCircular(
+        line: lineID,
+        circular: circleID,
+        side: .left
+    )))
     feature.operation = .sketch(sketch)
     document.cadDocument.designGraph.nodes[featureID] = feature
     document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
@@ -9863,15 +9969,21 @@ private func sketchConstraint(
     case .parallel(let first, let second),
          .perpendicular(let first, let second),
          .equalLength(let first, let second),
-         .tangent(let first, let second),
          .concentric(let first, let second),
          .equalRadius(let first, let second):
         return first == entityID || second == entityID
-    case .splineEndpointTangent(let splineID, _, let lineID):
-        return splineID == entityID || lineID == entityID
-    case .tangentSplineEndpoints(let first, let second),
-         .smoothSplineEndpoints(let first, let second):
-        return first.splineID == entityID || second.splineID == entityID
+    case .tangent(let tangency):
+        switch tangency {
+        case .lineCircular(let line, let circular, _):
+            return line == entityID || circular == entityID
+        case .circularCircular(let first, let second, _):
+            return first == entityID || second == entityID
+        }
+    case .splineEndpointTangent(let tangency):
+        return tangency.splineEndpoint.splineID == entityID || tangency.line == entityID
+    case .tangentSplineEndpoints(let tangency),
+         .smoothSplineEndpoints(let tangency):
+        return tangency.first.splineID == entityID || tangency.second.splineID == entityID
     }
 }
 

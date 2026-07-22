@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import SwiftCAD
+import CADModeling
 import RupaCoreTypes
 
 @Observable
@@ -2558,7 +2559,7 @@ public final class EditorSession {
     @discardableResult
     public func setSurfaceTrimLoops(
         target: SelectionReference,
-        trimLoops: [BSplineSurfaceTrimLoop]
+        trimLoops: [SurfaceTrimLoop]
     ) -> CommandExecutionResult? {
         perform(
             .setSurfaceTrimLoops(
@@ -3001,7 +3002,9 @@ public final class EditorSession {
         }
         do {
             let parameters = try ParameterResolver().resolve(document.cadDocument.parameters)
-            let profiles = try SketchProfileExtractor().extractProfiles(
+            let profiles = try SketchProfileExtractor(
+                tolerance: document.modelingSettings.tolerance
+            ).extractProfiles(
                 from: sketch,
                 sourceFeatureID: featureID,
                 parameters: parameters

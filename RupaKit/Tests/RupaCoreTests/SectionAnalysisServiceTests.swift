@@ -30,8 +30,13 @@ import Testing
     })
     #expect(body.classification == .intersects)
     #expect(body.sourceFeatureID?.isEmpty == false)
-    #expect(body.persistentName?.contains("feature:") == true)
-    #expect(body.persistentName?.contains(body.sourceFeatureID ?? "") == true)
+    let stableReference = try #require(body.stableReference)
+    #expect(stableReference.subshapeID.featureID.description == body.sourceFeatureID)
+    if case .body = stableReference.geometrySignature {
+        // Expected stable body signature.
+    } else {
+        Issue.record("Section body identity must carry a body geometry signature.")
+    }
     #expect(body.frontVertexCount > 0)
     #expect(body.behindVertexCount > 0)
     #expect(body.intersectingTriangleCount > 0)

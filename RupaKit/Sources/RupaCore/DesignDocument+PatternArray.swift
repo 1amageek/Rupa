@@ -64,7 +64,8 @@ extension DesignDocument {
         try synchronizer.synchronizeOutputs(
             for: source.id,
             metadata: &updatedMetadata,
-            cadDocument: &updatedCADDocument
+            cadDocument: &updatedCADDocument,
+            tolerance: modelingSettings.tolerance
         )
         try updatedMetadata.validate(against: updatedCADDocument, objectRegistry: objectRegistry)
         cadDocument = updatedCADDocument
@@ -141,7 +142,8 @@ extension DesignDocument {
             for: id,
             previousSource: previousSource,
             metadata: &updatedMetadata,
-            cadDocument: &updatedCADDocument
+            cadDocument: &updatedCADDocument,
+            tolerance: modelingSettings.tolerance
         )
         try updatedMetadata.validate(against: updatedCADDocument, objectRegistry: objectRegistry)
         cadDocument = updatedCADDocument
@@ -171,7 +173,8 @@ extension DesignDocument {
         let result = try PatternArrayDocumentSynchronizer().materializedOutputsForExplode(
             source: source,
             metadata: &updatedMetadata,
-            cadDocument: &updatedCADDocument
+            cadDocument: &updatedCADDocument,
+            tolerance: modelingSettings.tolerance
         )
         updatedMetadata.patternArrays.removeValue(forKey: id)
         try updatedMetadata.validate(against: updatedCADDocument, objectRegistry: objectRegistry)
@@ -196,7 +199,8 @@ extension DesignDocument {
             try synchronizer.synchronizeOutputs(
                 for: sourceID,
                 metadata: &updatedMetadata,
-                cadDocument: &updatedCADDocument
+                cadDocument: &updatedCADDocument,
+                tolerance: modelingSettings.tolerance
             )
         }
         try updatedMetadata.validate(against: updatedCADDocument, objectRegistry: objectRegistry)

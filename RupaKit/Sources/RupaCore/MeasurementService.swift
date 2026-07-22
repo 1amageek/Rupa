@@ -1,5 +1,7 @@
 import Foundation
+import CADTopology
 import SwiftCAD
+import CADModeling
 import RupaCoreTypes
 
 public struct MeasurementService {
@@ -833,6 +835,35 @@ public struct MeasurementService {
                 sheets.append(sheet)
                 totals.sheetAreaSquareMeters += sheet.surfaceAreaSquareMeters
                 bounds.include(sheet.bounds)
+            case .primitive,
+                 .patchSurface,
+                 .faceOffset,
+                 .faceMove,
+                 .edgeMove,
+                 .vertexMove,
+                 .linearPattern,
+                 .radialPattern,
+                 .gridPattern,
+                 .curveDrivenPattern,
+                 .chamfer,
+                 .fillet,
+                 .g2Blend,
+                 .setbackCorner,
+                 .shell,
+                 .thicken,
+                 .bridgeSurface,
+                 .curveExtend,
+                 .curveMatch,
+                 .surfaceOffset,
+                 .surfaceTrim,
+                 .surfaceExtend,
+                 .surfaceMatch:
+                // Forward migration is incomplete: document measurement currently reaches these operations through graph traversal; do not report them as measured until evaluated body or sheet classification is implemented.
+                diagnostics.append(EditorDiagnostic(
+                    severity: .warning,
+                    message: "Measurement does not yet classify this forward feature operation."
+                ))
+                continue
             case .bridgeCurve:
                 continue
             case .curveEdit:
@@ -1348,35 +1379,34 @@ public struct MeasurementService {
         for featureID: FeatureID,
         in evaluatedDocument: EvaluatedDocument
     ) -> EvaluatedBodyReference? {
-        let bodyName = evaluatedPrimaryBodyName(for: featureID)
-        guard case .body(let bodyID) = evaluatedDocument.generatedNames[bodyName] else {
+        let bodySubshapeID = evaluatedPrimaryBodySubshapeID(for: featureID)
+        guard case .body(let bodyID) = evaluatedDocument.subshapes[bodySubshapeID] else {
             return nil
         }
-        return EvaluatedBodyReference(persistentName: bodyName, bodyID: bodyID)
+        return EvaluatedBodyReference(subshapeID: bodySubshapeID, bodyID: bodyID)
     }
 
     private func evaluatedBodyReferences(
         for featureID: FeatureID,
         in evaluatedDocument: EvaluatedDocument
     ) -> [EvaluatedBodyReference] {
-        let primaryName = evaluatedPrimaryBodyName(for: featureID)
-        let candidates: [EvaluatedBodyReference] = evaluatedDocument.generatedNames.compactMap { entry in
-            let name = entry.key
+        let primarySubshapeID = evaluatedPrimaryBodySubshapeID(for: featureID)
+        let candidates: [EvaluatedBodyReference] = evaluatedDocument.subshapes.entries.compactMap { entry in
+            let subshapeID = entry.key
             let reference = entry.value
-            guard name.components.first == .feature(featureID),
+            guard subshapeID.featureID == featureID,
                   case .body(let bodyID) = reference else {
                 return nil
             }
-            return EvaluatedBodyReference(persistentName: name, bodyID: bodyID)
+            return EvaluatedBodyReference(subshapeID: subshapeID, bodyID: bodyID)
         }.sorted { lhs, rhs in
-            if lhs.persistentName == primaryName {
+            if lhs.subshapeID == primarySubshapeID {
                 return true
             }
-            if rhs.persistentName == primaryName {
+            if rhs.subshapeID == primarySubshapeID {
                 return false
             }
-            return evaluatedBodyReferenceSortKey(lhs.persistentName) <
-                evaluatedBodyReferenceSortKey(rhs.persistentName)
+            return lhs.subshapeID < rhs.subshapeID
         }
         var includedBodyIDs: Set<BodyID> = []
         return candidates.filter { reference in
@@ -1384,26 +1414,12 @@ public struct MeasurementService {
         }
     }
 
-    private func evaluatedPrimaryBodyName(for featureID: FeatureID) -> PersistentName {
-        PersistentName(components: [
-            .feature(featureID),
-            .generated(GeneratedSubshapeRole.body.rawValue),
-        ])
-    }
-
-    private func evaluatedBodyReferenceSortKey(_ name: PersistentName) -> String {
-        name.components.map { component in
-            switch component {
-            case .feature(let featureID):
-                return "feature:\(featureID.description)"
-            case .generated(let value):
-                return "generated:\(value)"
-            case .subshape(let value):
-                return "subshape:\(value)"
-            case .index(let index):
-                return "index:\(index)"
-            }
-        }.joined(separator: "/")
+    private func evaluatedPrimaryBodySubshapeID(for featureID: FeatureID) -> SubshapeID {
+        SubshapeID(
+            featureID: featureID,
+            role: GeneratedSubshapeRole.body.rawValue,
+            ordinal: 0
+        )
     }
 
     private func evaluatedMeshMeasurement(
@@ -2060,7 +2076,7 @@ private struct EvaluatedMeshMeasurement {
 }
 
 private struct EvaluatedBodyReference {
-    var persistentName: PersistentName
+    var subshapeID: SubshapeID
     var bodyID: BodyID
 }
 

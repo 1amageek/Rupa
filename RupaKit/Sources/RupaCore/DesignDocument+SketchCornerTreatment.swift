@@ -504,18 +504,25 @@ extension DesignDocument {
              .perpendicular:
             return false
         case .equalLength(let first, let second),
-             .tangent(let first, let second),
              .concentric(let first, let second),
              .equalRadius(let first, let second):
             return affectedEntityIDs.contains(first) || affectedEntityIDs.contains(second)
+        case .tangent(let tangency):
+            switch tangency {
+            case .lineCircular(let line, let circular, _):
+                return affectedEntityIDs.contains(line) || affectedEntityIDs.contains(circular)
+            case .circularCircular(let first, let second, _):
+                return affectedEntityIDs.contains(first) || affectedEntityIDs.contains(second)
+            }
         case .smoothSplineControlPoint(let entityID, _):
             return affectedEntityIDs.contains(entityID)
-        case .splineEndpointTangent(let splineID, _, let lineID):
-            return affectedEntityIDs.contains(splineID) || affectedEntityIDs.contains(lineID)
-        case .tangentSplineEndpoints(let first, let second),
-             .smoothSplineEndpoints(let first, let second):
-            return affectedEntityIDs.contains(first.splineID) ||
-                affectedEntityIDs.contains(second.splineID)
+        case .splineEndpointTangent(let tangency):
+            return affectedEntityIDs.contains(tangency.splineEndpoint.splineID) ||
+                affectedEntityIDs.contains(tangency.line)
+        case .tangentSplineEndpoints(let tangency),
+             .smoothSplineEndpoints(let tangency):
+            return affectedEntityIDs.contains(tangency.first.splineID) ||
+                affectedEntityIDs.contains(tangency.second.splineID)
         }
     }
 

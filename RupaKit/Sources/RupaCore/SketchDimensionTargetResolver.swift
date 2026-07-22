@@ -93,16 +93,19 @@ public struct SketchDimensionTargetResolver: Sendable {
         topologyEntries: [TopologySummaryResult.Entry]
     ) throws -> ResolvedTarget {
         guard case .edge(let componentID) = target.component,
-              let persistentName = componentID.generatedTopologyPersistentName else {
+              componentID.isStableTopology else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Sketch dimension summary requires generated body edge targets."
             )
         }
+        let stableReference = try componentID.stableTopologyReference(
+            operationName: "Sketch dimension summary"
+        )
         guard let edgeEntry = topologyEntries.first(where: {
             $0.kind == .edge &&
                 $0.sceneNodeID == target.sceneNodeID.description &&
-                $0.persistentName == persistentName
+                $0.stableReference == stableReference
         }) else {
             throw EditorError(
                 code: .referenceUnresolved,

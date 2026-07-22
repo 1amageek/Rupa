@@ -119,15 +119,12 @@ import SwiftCAD
     #expect(plan.evaluationKind == .exactStraightExtrude)
     #expect(plan.outputTopologyKind == .exactStraightSolid)
     #expect(plan.booleanSupportKind == .newBody)
-    #expect(plan.guideStrategyCandidates == [.none])
-    #expect(plan.resolvedGuideStrategy == nil)
-    #expect(plan.guideStrategyResolutions == [
-        SweepGuideStrategyResolution(
-            strategy: .none,
-            status: .notRequired,
-            message: "Sweep has no guide constraints."
-        ),
-    ])
+    #expect(plan.guideCount == 0)
+    #expect(plan.checks.contains {
+        $0.kind == .guideConstraints
+            && $0.status == .passed
+            && $0.message == "Sweep has no guide constraints."
+    })
     #expect(plan.checks.last?.kind == .capabilityDecision)
     #expect(plan.checks.last?.status == .passed)
     #expect(session.generation == initialGeneration)
@@ -198,22 +195,15 @@ import SwiftCAD
     }
 
     #expect(plan.status == .supported)
-    #expect(plan.sectionState == .guided)
+    #expect(plan.sectionState == .pointGuide)
     #expect(plan.guideCount == 1)
-    #expect(plan.guideStrategyCandidates == [.pointSimilarity])
-    #expect(plan.resolvedGuideStrategy == .pointSimilarity)
-    #expect(plan.guideStrategyResolutions == [
-        SweepGuideStrategyResolution(
-            strategy: .pointSimilarity,
-            status: .resolved,
-            message: "Sweep guide constraints solve as pointSimilarity."
-        ),
-    ])
     #expect(plan.checks.contains {
         $0.kind == .guideConstraints &&
             $0.status == .passed &&
-            $0.message.contains("pointSimilarity")
+            $0.message == "Sweep guide curves resolve to finite guide constraint paths."
     })
+    #expect(plan.checks.last?.kind == .capabilityDecision)
+    #expect(plan.checks.last?.status == .passed)
     #expect(session.generation == initialGeneration)
     #expect(session.document.cadDocument.designGraph.order == initialFeatureOrder)
 }
@@ -282,20 +272,10 @@ import SwiftCAD
     }
 
     #expect(plan.status == .unsupported)
-    #expect(plan.unsupportedCode == .invalidGuideConstraintSet)
-    #expect(plan.guideStrategyCandidates == [.pointSimilarity])
-    #expect(plan.resolvedGuideStrategy == nil)
-    #expect(plan.guideStrategyResolutions == [
-        SweepGuideStrategyResolution(
-            strategy: .pointSimilarity,
-            status: .failed,
-            unsupportedCode: .invalidGuideConstraintSet,
-            message: plan.message
-        ),
-    ])
-    #expect(plan.message.contains("guide constraints do not solve"))
-    #expect(plan.message.contains("initially touch"))
-    #expect(plan.checks.last?.kind == .guideConstraints)
+    #expect(plan.unsupportedCode == .sweepGuideContactUnavailable)
+    #expect(plan.sectionState == .guided)
+    #expect(plan.message == "Exact point-guide Sweep must begin at a point on the section boundary.")
+    #expect(plan.checks.last?.kind == .capabilityDecision)
     #expect(plan.checks.last?.status == .unsupported)
     #expect(session.generation == initialGeneration)
     #expect(session.document.cadDocument.designGraph.order == initialFeatureOrder)
@@ -478,8 +458,7 @@ import SwiftCAD
     #expect(plan.resultTopologyCounts?.faceCount == 10)
     #expect(plan.resultTopologyCounts?.edgeCount == 24)
     #expect(plan.resultTopologyCounts?.vertexCount == 16)
-    #expect(plan.topologyNameSchemes.contains(.frameHoleSideFaces))
-    #expect(plan.topologyNameSchemes.contains(.frameBridgeEdges))
+    #expect(plan.topologyNameSchemes.contains(.orthogonalBoundaryTopology))
     #expect(plan.topologySlots.count == 51)
     #expect(plan.topologySlots.contains(BooleanEvaluationTopologySlot(
         role: .sideFace,
@@ -969,35 +948,18 @@ private func expectAgentPlannedTopologyNames(
     for featureID: FeatureID,
     in topology: TopologySummaryResult
 ) {
-    let plannedNames = plan.topologyPersistentNames(featureID: featureID)
-    #expect(Set(plannedNames).count == plannedNames.count)
-    let plannedEntries = zip(plan.topologySlots, plannedNames)
-    for (slot, name) in plannedEntries {
-        let persistentName = agentPersistentNameString(name)
+    let plannedSubshapeIDs = plan.topologySubshapeIDs(featureID: featureID)
+    #expect(Set(plannedSubshapeIDs).count == plannedSubshapeIDs.count)
+    let plannedEntries = zip(plan.topologySlots, plannedSubshapeIDs)
+    for (slot, subshapeID) in plannedEntries {
         #expect(topology.entries.contains { entry in
-            entry.persistentName == persistentName
+            entry.stableReference.subshapeID == subshapeID
                 && entry.sourceFeatureID == featureID.description
                 && entry.generatedRole == slot.role.rawValue
                 && entry.subshapeRole == slot.subshape
                 && (slot.role == .body || entry.selectionComponentID != nil)
         })
     }
-}
-
-private func agentPersistentNameString(_ name: PersistentName) -> String {
-    name.components.map { component in
-        switch component {
-        case .feature(let featureID):
-            return "feature:\(featureID.description)"
-        case .generated(let value):
-            return "generated:\(value)"
-        case .subshape(let value):
-            return "subshape:\(value)"
-        case .index(let index):
-            return "index:\(index)"
-        }
-    }
-    .joined(separator: "/")
 }
 
 @MainActor

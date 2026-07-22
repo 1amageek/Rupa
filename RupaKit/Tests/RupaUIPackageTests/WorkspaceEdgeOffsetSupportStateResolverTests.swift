@@ -1,16 +1,17 @@
 import RupaCore
+import SwiftCAD
 import Testing
 @testable import RupaUI
 
-@Test func workspaceEdgeOffsetSupportStateResolverRequiresOneSelectedEdgeTarget() {
+@Test func workspaceEdgeOffsetSupportStateResolverRequiresOneSelectedEdgeTarget() throws {
     let sceneNodeID = SceneNodeID()
     let firstTarget = SelectionTarget(
         sceneNodeID: sceneNodeID,
-        component: .edge(.generatedTopology("edge:first"))
+        component: .edge(try workspaceTestEdgeComponent(role: "edge.first"))
     )
     let secondTarget = SelectionTarget(
         sceneNodeID: sceneNodeID,
-        component: .edge(.generatedTopology("edge:second"))
+        component: .edge(try workspaceTestEdgeComponent(role: "edge.second"))
     )
     let resolver = WorkspaceEdgeOffsetSupportStateResolver(
         document: .empty(),
@@ -40,10 +41,10 @@ import Testing
     #expect(resolver.supportTitle(for: resolution) == "Unsupported")
 }
 
-@Test func workspaceEdgeOffsetSupportStateResolverMapsSupportTitles() {
+@Test func workspaceEdgeOffsetSupportStateResolverMapsSupportTitles() throws {
     let target = SelectionTarget(
         sceneNodeID: SceneNodeID(),
-        component: .face(.generatedTopology("face:support"))
+        component: .face(try workspaceTestFaceComponent(role: "face.support"))
     )
     let resolver = WorkspaceEdgeOffsetSupportStateResolver(
         document: .empty(),

@@ -21,7 +21,10 @@ import SwiftCAD
     #expect(result.entries.filter { $0.kind == .face }.count == 6)
     #expect(result.entries.filter { $0.kind == .edge }.count == 12)
     #expect(result.entries.filter { $0.kind == .vertex }.count == 8)
-    #expect(result.entries.allSatisfy { $0.persistentName.isEmpty == false })
+    for entry in result.entries {
+        try entry.stableReference.validate()
+    }
+    #expect(Set(result.entries.map(\.stableReference)).count == result.entries.count)
     #expect(result.entries.allSatisfy { $0.referenceID.isEmpty == false })
     #expect(result.entries.allSatisfy { $0.sourceFeatureID != nil })
     #expect(result.entries.allSatisfy { $0.sceneNodeID != nil })
@@ -50,21 +53,30 @@ import SwiftCAD
         Issue.record("Topology edge summary must create an edge selection target.")
         return
     }
-    #expect(componentID.generatedTopologyPersistentName == edgeEntry.persistentName)
+    #expect(
+        try componentID.stableTopologyReference(operationName: "Topology summary test")
+            == edgeEntry.stableReference
+    )
     let faceEntry = try #require(result.entries.first { $0.kind == .face })
     let faceTarget = try #require(faceEntry.selectionTarget())
     guard case .face(let faceComponentID) = faceTarget.component else {
         Issue.record("Topology face summary must create a face selection target.")
         return
     }
-    #expect(faceComponentID.generatedTopologyPersistentName == faceEntry.persistentName)
+    #expect(
+        try faceComponentID.stableTopologyReference(operationName: "Topology summary test")
+            == faceEntry.stableReference
+    )
     let vertexEntry = try #require(result.entries.first { $0.kind == .vertex })
     let vertexTarget = try #require(vertexEntry.selectionTarget())
     guard case .vertex(let vertexComponentID) = vertexTarget.component else {
         Issue.record("Topology vertex summary must create a vertex selection target.")
         return
     }
-    #expect(vertexComponentID.generatedTopologyPersistentName == vertexEntry.persistentName)
+    #expect(
+        try vertexComponentID.stableTopologyReference(operationName: "Topology summary test")
+            == vertexEntry.stableReference
+    )
 }
 
 @MainActor
@@ -232,8 +244,8 @@ import SwiftCAD
     #expect(ringVertex.selectionTarget() != nil)
     #expect(railEdge.selectionTarget() != nil)
     #expect(sideTriangle.selectionTarget() != nil)
-    #expect(railEdge.persistentName.contains("subshape:railEdge:span:0:profile:0"))
-    #expect(sideTriangle.persistentName.contains("subshape:sideTriangle:span:0:profile:0:triangle:0"))
+    #expect(railEdge.stableReference.subshapeID.role.contains("railEdge:span:0:profile:0"))
+    #expect(sideTriangle.stableReference.subshapeID.role.contains("sideTriangle:span:0:profile:0:triangle:0"))
 }
 
 @MainActor
@@ -342,8 +354,8 @@ import SwiftCAD
     #expect(boxFace.selectionTarget() != nil)
     #expect(boxEdge.selectionTarget() != nil)
     #expect(boxCorner.selectionTarget() != nil)
-    #expect(boxFace.persistentName.contains("subshape:box:0:face:maxX"))
-    #expect(boxEdge.persistentName.contains("subshape:box:0:zEdge:x:maxX:y:maxY"))
+    #expect(boxFace.stableReference.subshapeID.role.contains("box:0:face:maxX"))
+    #expect(boxEdge.stableReference.subshapeID.role.contains("box:0:zEdge:x:maxX:y:maxY"))
 }
 
 @MainActor
@@ -419,8 +431,8 @@ import SwiftCAD
     #expect(cellUnionFace.selectionTarget() != nil)
     #expect(cellUnionEdge.selectionTarget() != nil)
     #expect(cellUnionVertex.selectionTarget() != nil)
-    #expect(cellUnionFace.persistentName.contains("subshape:cellUnion:component:0:face:maxX"))
-    #expect(cellUnionEdge.persistentName.contains("subshape:cellUnion:component:0:zEdge"))
+    #expect(cellUnionFace.stableReference.subshapeID.role.contains("cellUnion:component:0:face:maxX"))
+    #expect(cellUnionEdge.stableReference.subshapeID.role.contains("cellUnion:component:0:zEdge"))
 }
 
 private func hasExpectedCylinderDefinition(_ entry: TopologySummaryResult.Entry) -> Bool {

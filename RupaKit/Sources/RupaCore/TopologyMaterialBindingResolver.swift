@@ -1,8 +1,9 @@
+import CADTopology
 import SwiftCAD
 
 struct TopologyMaterialBindingResolver: Sendable {
     struct ResolvedBinding: Equatable, Sendable {
-        var persistentName: String
+        var stableReference: StableSubshapeReference
         var bodyID: BodyID
         var faceID: FaceID
         var materialID: MaterialID?
@@ -12,19 +13,22 @@ struct TopologyMaterialBindingResolver: Sendable {
     func resolvedBindings(
         evaluatedDocument: EvaluatedDocument,
         metadata: ProductMetadata
-    ) -> [ResolvedBinding] {
-        let faceIDByPersistentName = faceIDMap(in: evaluatedDocument.generatedNames)
+    ) throws -> [ResolvedBinding] {
         let bodyIDByFaceID = bodyIDMap(in: evaluatedDocument.brep)
         var bindings: [ResolvedBinding] = []
         for binding in metadata.topologyMaterialBindings.values.sorted(by: bindingSortKey) {
-            guard let persistentName = binding.persistentName,
-                  let faceID = faceIDByPersistentName[persistentName],
-                  let bodyID = bodyIDByFaceID[faceID] else {
-                continue
+            let stableReference = try binding.stableReference()
+            guard case .face(let faceID) = try evaluatedDocument.topologyReference(
+                for: stableReference
+            ), let bodyID = bodyIDByFaceID[faceID] else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Topology material binding does not resolve to a face in an evaluated body."
+                )
             }
             bindings.append(
                 ResolvedBinding(
-                    persistentName: persistentName,
+                    stableReference: stableReference,
                     bodyID: bodyID,
                     faceID: faceID,
                     materialID: binding.materialID,
@@ -38,8 +42,8 @@ struct TopologyMaterialBindingResolver: Sendable {
     func resolvedBindingsByBodyID(
         evaluatedDocument: EvaluatedDocument,
         metadata: ProductMetadata
-    ) -> [BodyID: [ResolvedBinding]] {
-        Dictionary(grouping: resolvedBindings(
+    ) throws -> [BodyID: [ResolvedBinding]] {
+        Dictionary(grouping: try resolvedBindings(
             evaluatedDocument: evaluatedDocument,
             metadata: metadata
         ), by: \.bodyID)
@@ -64,25 +68,33 @@ struct TopologyMaterialBindingResolver: Sendable {
         _ lhs: TopologyMaterialBinding,
         _ rhs: TopologyMaterialBinding
     ) -> Bool {
-        let leftName = lhs.persistentName ?? ""
-        let rightName = rhs.persistentName ?? ""
-        if leftName == rightName {
+        let leftTarget = bindingTargetSortKey(lhs.target)
+        let rightTarget = bindingTargetSortKey(rhs.target)
+        if leftTarget == rightTarget {
             return lhs.id.rawValue.uuidString < rhs.id.rawValue.uuidString
         }
-        return leftName < rightName
+        return leftTarget < rightTarget
     }
 
-    private func faceIDMap(
-        in generatedNames: PersistentMap<PersistentName, TopologyReference>
-    ) -> [String: FaceID] {
-        var result: [String: FaceID] = [:]
-        for (name, reference) in generatedNames {
-            guard case .face(let faceID) = reference else {
-                continue
-            }
-            result[persistentNameString(name)] = faceID
+    private func bindingTargetSortKey(_ target: SelectionTarget) -> String {
+        let component: String
+        switch target.component {
+        case .object:
+            component = "object"
+        case .face(let id):
+            component = "face:\(id.rawValue)"
+        case .edge(let id):
+            component = "edge:\(id.rawValue)"
+        case .vertex(let id):
+            component = "vertex:\(id.rawValue)"
+        case .sketchEntity(let id):
+            component = "sketchEntity:\(id.rawValue)"
+        case .region(let id):
+            component = "region:\(id.rawValue)"
+        case .constructionPlane(let id):
+            component = "constructionPlane:\(id.description)"
         }
-        return result
+        return "\(target.sceneNodeID.description):\(component)"
     }
 
     private func bodyIDMap(in model: BRepModel) -> [FaceID: BodyID] {
@@ -98,21 +110,5 @@ struct TopologyMaterialBindingResolver: Sendable {
             }
         }
         return result
-    }
-
-    private func persistentNameString(_ name: PersistentName) -> String {
-        name.components.map { component in
-            switch component {
-            case .feature(let featureID):
-                return "feature:\(featureID.description)"
-            case .generated(let value):
-                return "generated:\(value)"
-            case .subshape(let value):
-                return "subshape:\(value)"
-            case .index(let index):
-                return "index:\(index)"
-            }
-        }
-        .joined(separator: "/")
     }
 }

@@ -56,7 +56,10 @@ import SwiftCAD
         Issue.record("Agent topology summary must expose vertex selection targets.")
         return
     }
-    #expect(vertexComponentID.generatedTopologyPersistentName == vertexEntry.persistentName)
+    #expect(
+        try vertexComponentID.stableTopologyReference(operationName: "Agent topology summary")
+            == vertexEntry.stableReference
+    )
     #expect(session.generation == DocumentGeneration(1))
     #expect(session.commandStack.canUndo)
 }

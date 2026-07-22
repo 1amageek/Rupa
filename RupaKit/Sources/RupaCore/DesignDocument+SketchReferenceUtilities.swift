@@ -75,15 +75,18 @@ extension DesignDocument {
         case .parallel(let first, let second),
              .perpendicular(let first, let second),
              .equalLength(let first, let second),
-             .tangent(let first, let second),
              .concentric(let first, let second),
              .equalRadius(let first, let second):
             return entityIDs.contains(first) || entityIDs.contains(second)
-        case .splineEndpointTangent(let splineID, _, let lineID):
-            return entityIDs.contains(splineID) || entityIDs.contains(lineID)
-        case .tangentSplineEndpoints(let first, let second),
-             .smoothSplineEndpoints(let first, let second):
-            return entityIDs.contains(first.splineID) || entityIDs.contains(second.splineID)
+        case .tangent(let tangency):
+            return tangencyEntityIDs(tangency).contains { entityIDs.contains($0) }
+        case .splineEndpointTangent(let tangency):
+            return entityIDs.contains(tangency.splineEndpoint.splineID) ||
+                entityIDs.contains(tangency.line)
+        case .tangentSplineEndpoints(let tangency),
+             .smoothSplineEndpoints(let tangency):
+            return entityIDs.contains(tangency.first.splineID) ||
+                entityIDs.contains(tangency.second.splineID)
         case .fixed(let reference):
             return entityIDs.contains(entityID(for: reference))
         }
@@ -122,15 +125,27 @@ extension DesignDocument {
         case .parallel(let first, let second),
              .perpendicular(let first, let second),
              .equalLength(let first, let second),
-             .tangent(let first, let second),
              .concentric(let first, let second),
              .equalRadius(let first, let second):
             return first == entityID || second == entityID
-        case .splineEndpointTangent(let splineID, _, let lineID):
-            return splineID == entityID || lineID == entityID
-        case .tangentSplineEndpoints(let first, let second),
-             .smoothSplineEndpoints(let first, let second):
-            return first.splineID == entityID || second.splineID == entityID
+        case .tangent(let tangency):
+            return tangencyEntityIDs(tangency).contains(entityID)
+        case .splineEndpointTangent(let tangency):
+            return tangency.splineEndpoint.splineID == entityID || tangency.line == entityID
+        case .tangentSplineEndpoints(let tangency),
+             .smoothSplineEndpoints(let tangency):
+            return tangency.first.splineID == entityID || tangency.second.splineID == entityID
+        }
+    }
+
+    private func tangencyEntityIDs(
+        _ tangency: SketchTangencyConstraint
+    ) -> [SketchEntityID] {
+        switch tangency {
+        case .lineCircular(let line, let circular, _):
+            return [line, circular]
+        case .circularCircular(let first, let second, _):
+            return [first, second]
         }
     }
 

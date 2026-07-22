@@ -41,7 +41,9 @@ import Testing
     let evaluation = try #require(session.currentEvaluationCache?.evaluatedDocument)
     let body = try #require(evaluation.brep.bodies.values.first)
     let afterTopology = try TopologySnapshotService().snapshot(document: session.document)
-    let measurement = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
+    let measurement = try MeasurementService(
+        tolerance: session.document.modelingSettings.tolerance
+    ).measure(document: session.document, ruler: session.workspaceState.ruler)
     let draftFaces = afterTopology.entries.filter {
         $0.kind == .face &&
             $0.sceneNodeID == draftNodeID.description &&
@@ -53,7 +55,8 @@ import Testing
     #expect(result.generation == DocumentGeneration(2))
     #expect(draftFeature.outputs == [FeatureOutput(role: .body)])
     #expect(faceDraft.target.featureID == bodyFeatureID)
-    #expect(faceDraft.facePersistentNames.count == 1)
+    #expect(faceDraft.faces == [targetEntry.stableReference])
+    #expect(faceDraft.neutralFace == neutralEntry.stableReference)
     #expect(body.kind == .solid)
     #expect(afterTopology.counts.faceCount == 6)
     #expect(draftFaces.count == 6)
@@ -106,7 +109,9 @@ import Testing
     let evaluation = try #require(session.currentEvaluationCache?.evaluatedDocument)
     let body = try #require(evaluation.brep.bodies.values.first)
     let afterTopology = try TopologySnapshotService().snapshot(document: session.document)
-    let measurement = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
+    let measurement = try MeasurementService(
+        tolerance: session.document.modelingSettings.tolerance
+    ).measure(document: session.document, ruler: session.workspaceState.ruler)
     let draftFaces = afterTopology.entries.filter {
         $0.kind == .face &&
             $0.sceneNodeID == draftNodeID.description &&
@@ -118,8 +123,8 @@ import Testing
     #expect(result.generation == DocumentGeneration(2))
     #expect(draftFeature.outputs == [FeatureOutput(role: .body)])
     #expect(faceDraft.target.featureID == bodyFeatureID)
-    #expect(faceDraft.facePersistentNames.count == 2)
-    #expect(Set(faceDraft.facePersistentNames).count == 2)
+    #expect(Set(faceDraft.faces) == Set(targetEntries.prefix(2).map(\.stableReference)))
+    #expect(faceDraft.neutralFace == neutralEntry.stableReference)
     #expect(body.kind == .solid)
     #expect(afterTopology.counts.faceCount == 6)
     #expect(draftFaces.count == 6)

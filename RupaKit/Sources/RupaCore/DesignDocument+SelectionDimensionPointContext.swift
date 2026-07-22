@@ -64,7 +64,7 @@ extension DesignDocument {
             }
         case .sketchPoint(let point):
             return try sourceStandalonePointContext(point)
-        case .topology, .edge, .surface:
+        case .subshape, .edge, .surface:
             throw EditorError(
                 code: .commandInvalid,
                 message: "Selection point distance application requires source sketch point references."

@@ -51,7 +51,7 @@ struct WorkspaceSelectionTargetClassification {
         var seen = Set<String>()
         for target in targets {
             guard case .edge(let componentID) = target.component,
-                  componentID.generatedTopologyPersistentName != nil else {
+                  componentID.isStableTopology else {
                 continue
             }
             let key = "\(target.sceneNodeID.description):\(String(describing: target.component))"
@@ -66,6 +66,6 @@ struct WorkspaceSelectionTargetClassification {
         guard case .edge(let componentID) = target.component else {
             return false
         }
-        return componentID.generatedTopologyPersistentName != nil
+        return componentID.isStableTopology
     }
 }

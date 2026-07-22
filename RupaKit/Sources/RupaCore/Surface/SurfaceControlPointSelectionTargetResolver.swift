@@ -1,3 +1,4 @@
+import CADModeling
 import SwiftCAD
 import RupaCoreTypes
 
@@ -40,12 +41,17 @@ public struct SurfaceControlPointSelectionTargetResolver: Sendable {
         for selection: SelectionReference,
         in document: DesignDocument
     ) throws -> SurfaceControlPointReference {
-        try validateDisplayTarget(for: selection, in: document.cadDocument)
+        try validateDisplayTarget(
+            for: selection,
+            in: document.cadDocument,
+            tolerance: document.modelingSettings.tolerance
+        )
     }
 
     public func validateDisplayTarget(
         for selection: SelectionReference,
-        in cadDocument: CADDocument
+        in cadDocument: CADDocument,
+        tolerance: ModelingTolerance
     ) throws -> SurfaceControlPointReference {
         guard case .surface(.controlPoint(let reference)) = selection else {
             throw EditorError(
@@ -53,7 +59,11 @@ public struct SurfaceControlPointSelectionTargetResolver: Sendable {
                 message: "Surface control point display requires a surface control point selection reference."
             )
         }
-        try validateDisplayTarget(for: reference, in: cadDocument)
+        try validateDisplayTarget(
+            for: reference,
+            in: cadDocument,
+            tolerance: tolerance
+        )
         return reference
     }
 
@@ -83,7 +93,7 @@ public struct SurfaceControlPointSelectionTargetResolver: Sendable {
             )
         }
 
-        let patchFace = try surfacePatchFace(from: reference.surface.faceName)
+        let patchFace = try surfacePatchFace(from: reference.surface.subshape)
         guard let feature = document.cadDocument.designGraph.nodes[patchFace.featureID] else {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -122,7 +132,8 @@ public struct SurfaceControlPointSelectionTargetResolver: Sendable {
 
     private func validateDisplayTarget(
         for reference: SurfaceControlPointReference,
-        in cadDocument: CADDocument
+        in cadDocument: CADDocument,
+        tolerance: ModelingTolerance
     ) throws {
         do {
             try reference.validate()
@@ -132,7 +143,7 @@ public struct SurfaceControlPointSelectionTargetResolver: Sendable {
                 message: "Surface control point display requires a valid selection reference: \(error)."
             )
         }
-        let patchFace = try surfacePatchFace(from: reference.surface.faceName)
+        let patchFace = try surfacePatchFace(from: reference.surface.subshape)
         guard let feature = cadDocument.designGraph.nodes[patchFace.featureID] else {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -144,7 +155,8 @@ public struct SurfaceControlPointSelectionTargetResolver: Sendable {
             try validatePolySplineDisplayTarget(
                 reference,
                 patchFace: patchFace,
-                polySpline: polySpline
+                polySpline: polySpline,
+                tolerance: tolerance
             )
         case .bSplineSurface(let surfaceFeature):
             try validateBSplineSurfacePatchFace(
@@ -204,7 +216,8 @@ public struct SurfaceControlPointSelectionTargetResolver: Sendable {
     private func validatePolySplineDisplayTarget(
         _ reference: SurfaceControlPointReference,
         patchFace: SurfacePatchFace,
-        polySpline: PolySplineFeature
+        polySpline: PolySplineFeature,
+        tolerance: ModelingTolerance
     ) throws {
         try validatePolySplinePatchFace(
             patchFace,
@@ -219,7 +232,8 @@ public struct SurfaceControlPointSelectionTargetResolver: Sendable {
         }
         let analysis = PolySplineMeshAnalyzer().analyze(
             mesh: polySpline.sourceMesh,
-            options: polySpline.options
+            options: polySpline.options,
+            tolerance: tolerance
         )
         guard analysis.result.isSupported else {
             throw EditorError(
@@ -282,41 +296,41 @@ public struct SurfaceControlPointSelectionTargetResolver: Sendable {
         in document: DesignDocument
     ) throws -> SelectionTarget {
         let sceneNodeID = try sceneNodeID(for: patchFace.featureID, in: document)
-        let persistentName = persistentNameString(
-            PersistentName(components: [
-                .feature(patchFace.featureID),
-                .generated("polySpline"),
-                .subshape("patch:\(patchFace.patchID):vertex:\(boundaryRole.rawValue)"),
-            ])
+        let evaluatedDocument = try DocumentEvaluationContextResolver().evaluatedDocument(
+            document: document,
+            failurePrefix: "Surface control point editing requires current PolySpline topology"
         )
+        let subshapeID = SubshapeID(
+            featureID: patchFace.featureID,
+            role: "polySpline.patch:\(patchFace.patchID):vertex:\(boundaryRole.rawValue)",
+            ordinal: 0
+        )
+        let stableReference = try evaluatedDocument.stableSubshapeReference(for: subshapeID)
         return SelectionTarget(
             sceneNodeID: sceneNodeID,
-            component: .vertex(.generatedTopology(persistentName))
+            component: .vertex(try .stableTopology(stableReference))
         )
     }
 
-    private func surfacePatchFace(from name: PersistentName) throws -> SurfacePatchFace {
-        var featureID: FeatureID?
-        var generatedRole: String?
-        var subshape: String?
-        for component in name.components {
-            switch component {
-            case .feature(let id):
-                featureID = id
-            case .generated(let value):
-                generatedRole = value
-            case .subshape(let value):
-                subshape = value
-            case .index:
-                throw invalidSurfaceReference()
-            }
-        }
-        guard let featureID,
-              let generatedRole,
-              let subshape else {
+    private func surfacePatchFace(
+        from reference: StableSubshapeReference
+    ) throws -> SurfacePatchFace {
+        let subshapeID = reference.subshapeID
+        guard subshapeID.ordinal == 0 else {
             throw invalidSurfaceReference()
         }
-        let parts = subshape.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
+        let roleParts = subshapeID.role.split(
+            separator: ".",
+            maxSplits: 1,
+            omittingEmptySubsequences: false
+        ).map(String.init)
+        guard roleParts.count == 2 else {
+            throw invalidSurfaceReference()
+        }
+        let parts = roleParts[1].split(
+            separator: ":",
+            omittingEmptySubsequences: false
+        ).map(String.init)
         guard parts.count == 3,
               parts[0] == "patch",
               let patchID = Int(parts[1]),
@@ -324,8 +338,8 @@ public struct SurfaceControlPointSelectionTargetResolver: Sendable {
             throw invalidSurfaceReference()
         }
         return SurfacePatchFace(
-            featureID: featureID,
-            generatedRole: generatedRole,
+            featureID: subshapeID.featureID,
+            generatedRole: roleParts[0],
             patchID: patchID
         )
     }
@@ -362,22 +376,6 @@ public struct SurfaceControlPointSelectionTargetResolver: Sendable {
             )
         }
         return sceneNode.id
-    }
-
-    private func persistentNameString(_ name: PersistentName) -> String {
-        name.components.map { component in
-            switch component {
-            case .feature(let featureID):
-                return "feature:\(featureID.description)"
-            case .generated(let value):
-                return "generated:\(value)"
-            case .subshape(let value):
-                return "subshape:\(value)"
-            case .index(let index):
-                return "index:\(index)"
-            }
-        }
-        .joined(separator: "/")
     }
 
     private func invalidSurfaceReference() -> EditorError {

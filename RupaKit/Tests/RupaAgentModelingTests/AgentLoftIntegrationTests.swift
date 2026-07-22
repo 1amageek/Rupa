@@ -303,11 +303,11 @@ import SwiftCAD
     let loftID = try #require(session.document.cadDocument.designGraph.order.last)
     let feature = try #require(session.document.cadDocument.designGraph.nodes[loftID])
     let evaluated = try #require(session.currentEvaluation?.evaluatedDocument)
-    let vertexReference = try #require(evaluated.generatedNames[PersistentName(components: [
-        .feature(loftID),
-        .generated(GeneratedSubshapeRole.vertex.rawValue),
-        .index(0),
-    ])])
+    let vertexReference = try #require(evaluated.subshapes[SubshapeID(
+        featureID: loftID,
+        role: GeneratedSubshapeRole.vertex.rawValue,
+        ordinal: 0
+    )])
     guard case .loft(let loft) = feature.operation,
           case .vertex(let vertexID) = vertexReference,
           let vertex = evaluated.brep.vertices[vertexID] else {

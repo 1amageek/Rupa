@@ -2,6 +2,12 @@ import SwiftCAD
 import RupaCoreTypes
 
 struct BSplineSurfaceKnotEditingService: Sendable {
+    private let tolerance: ModelingTolerance
+
+    init(tolerance: ModelingTolerance) {
+        self.tolerance = tolerance
+    }
+
     func updatedFeature(
         insertingKnot direction: SurfaceParameterDirection,
         value: Double,
@@ -18,7 +24,8 @@ struct BSplineSurfaceKnotEditingService: Sendable {
         do {
             updatedFeature.surface = try feature.surface.insertingKnot(
                 direction: direction,
-                value: value
+                value: value,
+                tolerance: tolerance
             )
         } catch {
             throw EditorError(
@@ -26,7 +33,7 @@ struct BSplineSurfaceKnotEditingService: Sendable {
                 message: "\(owner) could not insert the B-spline surface knot: \(error)."
             )
         }
-        try updatedFeature.validate()
+        try updatedFeature.validate(tolerance: tolerance)
         return updatedFeature
     }
 
@@ -62,7 +69,7 @@ struct BSplineSurfaceKnotEditingService: Sendable {
                 owner: owner
             )
         }
-        try updatedFeature.validate()
+        try updatedFeature.validate(tolerance: tolerance)
         return updatedFeature
     }
 
@@ -95,7 +102,8 @@ struct BSplineSurfaceKnotEditingService: Sendable {
             for _ in knot.multiplicity..<multiplicity {
                 updatedFeature.surface = try updatedFeature.surface.insertingKnot(
                     direction: reference.direction,
-                    value: knot.value
+                    value: knot.value,
+                    tolerance: tolerance
                 )
             }
         } catch {
@@ -104,7 +112,7 @@ struct BSplineSurfaceKnotEditingService: Sendable {
                 message: "\(owner) could not set the B-spline surface knot multiplicity: \(error)."
             )
         }
-        try updatedFeature.validate()
+        try updatedFeature.validate(tolerance: tolerance)
         return updatedFeature
     }
 

@@ -234,6 +234,7 @@ struct InspectorSplineEndpointCandidate: Identifiable, Equatable {
     var splineID: SketchEntityID
     var endpoint: SketchSplineEndpoint
     var point: SketchEntitySummaryResult.Point
+    var tangent: SketchEntitySummaryResult.Point
 
     var id: String {
         "\(splineID.description):\(endpoint.rawValue)"

@@ -446,7 +446,7 @@ public struct MeasurementAnchorWorldPointResolver: Sendable {
     ) -> TopologySummaryResult.Entry? {
         topology.entries.first { entry in
             guard entry.kind == anchor.kind,
-                  entry.persistentName == anchor.persistentName,
+                  entry.stableReference == anchor.stableReference,
                   let target = entry.selectionTarget() else {
                 return false
             }
@@ -461,7 +461,7 @@ public struct MeasurementAnchorWorldPointResolver: Sendable {
     ) -> TopologySummaryResult.Entry? {
         topology.entries.first { entry in
             guard entry.kind == .edge,
-                  entry.persistentName == anchor.persistentName,
+                  entry.stableReference == anchor.stableReference,
                   let target = entry.selectionTarget() else {
                 return false
             }

@@ -118,9 +118,9 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
             return ViewportSurfaceAnalysisOverlay()
         }
 
-        let selectedGeneratedNames = generatedTopologyPersistentNames(in: selection.selectedTargets)
+        let selectedStableKeys = stableTopologyKeys(in: selection.selectedTargets)
         let selectedFeatureIDs = selectedBodyFeatureIDs(in: selection.selectedTargets, document: document)
-        guard selectedGeneratedNames.isEmpty == false || selectedFeatureIDs.isEmpty == false else {
+        guard selectedStableKeys.isEmpty == false || selectedFeatureIDs.isEmpty == false else {
             return ViewportSurfaceAnalysisOverlay()
         }
 
@@ -129,7 +129,7 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
         var boundaryOverlayItems: [BoundaryItem] = []
         for face in result.faces where shouldShow(
             face,
-            selectedGeneratedNames: selectedGeneratedNames,
+            selectedStableKeys: selectedStableKeys,
             selectedFeatureIDs: selectedFeatureIDs
         ) {
             if options.showsTrimBoundaries {
@@ -163,40 +163,52 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
         })
     }
 
-    private static func generatedTopologyPersistentNames(
+    private static func stableTopologyKeys(
         in targets: [SelectionTarget]
     ) -> Set<String> {
-        var names = Set<String>()
+        var keys = Set<String>()
         for target in targets {
             switch target.component {
             case .object, .sketchEntity, .region, .constructionPlane:
                 continue
             case .face(let componentID), .edge(let componentID), .vertex(let componentID):
-                guard let persistentName = componentID.generatedTopologyPersistentName else {
+                guard componentID.isStableTopology else {
                     continue
                 }
-                names.insert(persistentName)
+                do {
+                    let reference = try componentID.stableTopologyReference(
+                        operationName: "Surface analysis overlay"
+                    )
+                    keys.insert(stableTopologyKey(reference))
+                } catch {
+                    assertionFailure("Invalid stable topology selection: \(error)")
+                }
             }
         }
-        return names
+        return keys
     }
 
     private static func shouldShow(
         _ face: SurfaceAnalysisResult.FaceAnalysis,
-        selectedGeneratedNames: Set<String>,
+        selectedStableKeys: Set<String>,
         selectedFeatureIDs: Set<String>
     ) -> Bool {
         if let sourceFeatureID = face.sourceFeatureID,
            selectedFeatureIDs.contains(sourceFeatureID) {
             return true
         }
-        guard selectedGeneratedNames.isEmpty == false else {
+        guard selectedStableKeys.isEmpty == false else {
             return false
         }
-        if face.facePersistentNames.contains(where: { selectedGeneratedNames.contains($0) }) {
+        if face.facePersistentNames.contains(where: { selectedStableKeys.contains($0) }) {
             return true
         }
-        return face.edgePersistentNames.contains { selectedGeneratedNames.contains($0) }
+        return face.edgePersistentNames.contains { selectedStableKeys.contains($0) }
+    }
+
+    private static func stableTopologyKey(_ reference: StableSubshapeReference) -> String {
+        let id = reference.subshapeID
+        return "feature:\(id.featureID.description)/role:\(id.role)/ordinal:\(id.ordinal)"
     }
 
     private static func overlayItems(

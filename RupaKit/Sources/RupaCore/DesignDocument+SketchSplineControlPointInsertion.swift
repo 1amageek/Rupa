@@ -195,14 +195,14 @@ extension DesignDocument {
                 return constraint
             case .tangentSplineEndpoints:
                 return constraint
-            case .smoothSplineEndpoints(let first, let second):
+            case .smoothSplineEndpoints(let tangency):
                 guard splineEndpointHandleIsShortenedByInsertion(
-                    first,
+                    tangency.first,
                     entityID: entityID,
                     insertion: insertion
                 ) == false,
                     splineEndpointHandleIsShortenedByInsertion(
-                        second,
+                    tangency.second,
                         entityID: entityID,
                         insertion: insertion
                     ) == false else {
@@ -222,10 +222,23 @@ extension DesignDocument {
             case .parallel(let first, let second),
                  .perpendicular(let first, let second),
                  .equalLength(let first, let second),
-                 .tangent(let first, let second),
                  .concentric(let first, let second),
                  .equalRadius(let first, let second):
                 guard first != entityID && second != entityID else {
+                    throw sketchSplineControlPointInsertionUnsupportedReference(
+                        "whole-spline relationship constraints"
+                    )
+                }
+                return constraint
+            case .tangent(let tangency):
+                let referencesSpline: Bool
+                switch tangency {
+                case .lineCircular(let line, let circular, _):
+                    referencesSpline = line == entityID || circular == entityID
+                case .circularCircular(let first, let second, _):
+                    referencesSpline = first == entityID || second == entityID
+                }
+                guard referencesSpline == false else {
                     throw sketchSplineControlPointInsertionUnsupportedReference(
                         "whole-spline relationship constraints"
                     )

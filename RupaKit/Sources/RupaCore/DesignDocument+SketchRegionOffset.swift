@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import CADModeling
 import RupaCoreTypes
 
 extension DesignDocument {
@@ -293,7 +294,9 @@ extension DesignDocument {
         let profiles: [Profile]
         do {
             let resolvedParameters = try ParameterResolver().resolve(cadDocument.parameters)
-            profiles = try SketchProfileExtractor().extractProfiles(
+            profiles = try SketchProfileExtractor(
+                tolerance: modelingSettings.tolerance
+            ).extractProfiles(
                 from: sketch,
                 sourceFeatureID: featureID,
                 parameters: resolvedParameters

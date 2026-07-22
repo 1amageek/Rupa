@@ -4,7 +4,10 @@ import RupaCoreTypes
 
 extension DesignDocument {
     mutating func appendFeature(_ feature: FeatureNode) throws {
-        try cadDocument.appendFeature(feature)
+        try cadDocument.appendFeature(
+            feature,
+            tolerance: modelingSettings.tolerance
+        )
     }
 
     func normalizedMetadataName(

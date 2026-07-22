@@ -136,7 +136,8 @@ extension DesignDocument {
     ) throws -> ConstructionPlaneSourceID {
         let plane = try ConstructionPlaneViewResolver().plane(
             origin: origin,
-            viewNormal: viewNormal
+            viewNormal: viewNormal,
+            tolerance: modelingSettings.tolerance
         )
         return try createConstructionPlane(
             name: name,

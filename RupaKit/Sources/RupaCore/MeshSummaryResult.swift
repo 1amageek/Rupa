@@ -84,20 +84,20 @@ public extension MeshSummaryResult {
     }
 
     struct FaceMaterialBinding: Codable, Equatable, Sendable {
-        public var persistentName: String
+        public var stableReference: StableSubshapeReference
         public var faceID: String
         public var materialID: String?
         public var processNamespace: String?
         public var processID: String?
 
         public init(
-            persistentName: String,
+            stableReference: StableSubshapeReference,
             faceID: String,
             materialID: String?,
             processNamespace: String? = nil,
             processID: String? = nil
         ) {
-            self.persistentName = persistentName
+            self.stableReference = stableReference
             self.faceID = faceID
             self.materialID = materialID
             self.processNamespace = processNamespace

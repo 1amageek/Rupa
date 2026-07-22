@@ -22,10 +22,16 @@ private extension ValidationRegionTarget {
                 "firstBodyID": .string(first.description),
                 "secondBodyID": .string(second.description),
             ])
-        case .generatedTopology(let bodyID, let persistentNames):
+        case .stableTopology(let bodyID, let references):
             .object([
                 "bodyID": bodyID.map { .string($0.description) } ?? .null,
-                "persistentNames": .array(persistentNames.map(SemanticJSONValue.string)),
+                "subshapeIDs": .array(references.map { reference in
+                    .object([
+                        "featureID": .string(reference.subshapeID.featureID.description),
+                        "role": .string(reference.subshapeID.role),
+                        "ordinal": .number(Double(reference.subshapeID.ordinal)),
+                    ])
+                }),
             ])
         case .meshTriangles(let artifact, let selections):
             .object([

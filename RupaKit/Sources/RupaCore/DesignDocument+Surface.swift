@@ -11,7 +11,7 @@ extension DesignDocument {
     ) throws -> FeatureID {
         let trimmedName = try normalizedMetadataName(name, owner: "B-spline surface")
         let surfaceFeature = BSplineSurfaceFeature(surface: surface)
-        try surfaceFeature.validate()
+        try surfaceFeature.validate(tolerance: modelingSettings.tolerance)
 
         let featureID = FeatureID()
         let feature = FeatureNode(
@@ -50,7 +50,7 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         )
-        try cadDocument.validate()
+        try cadDocument.validate(tolerance: modelingSettings.tolerance)
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         didCommitSurface = true
         return featureID
@@ -67,7 +67,8 @@ extension DesignDocument {
         let polySpline = PolySplineFeature(sourceMesh: sourceMesh, options: options)
         let analysis = PolySplineMeshAnalysisService().analyze(
             sourceMesh: sourceMesh,
-            options: options
+            options: options,
+            tolerance: modelingSettings.tolerance
         )
         guard analysis.isSupported else {
             throw EditorError(
@@ -113,7 +114,7 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         )
-        try cadDocument.validate()
+        try cadDocument.validate(tolerance: modelingSettings.tolerance)
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         didCommitPolySpline = true
         return featureID
@@ -126,14 +127,16 @@ extension DesignDocument {
         deltaZ: CADExpression,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws {
-        let surfaceVertexEditor = PolySplineSurfaceVertexEditingService()
+        let surfaceVertexEditor = PolySplineSurfaceVertexEditingService(
+            tolerance: modelingSettings.tolerance
+        )
         let resolvedTarget = try PolySplineSurfaceVertexTarget.resolve(target, in: self)
         let delta = Vector3D(
             x: try resolvedLengthValue(deltaX, owner: "PolySpline surface vertex delta x"),
             y: try resolvedLengthValue(deltaY, owner: "PolySpline surface vertex delta y"),
             z: try resolvedLengthValue(deltaZ, owner: "PolySpline surface vertex delta z")
         )
-        guard delta.length > ModelingTolerance.standard.distance else {
+        guard delta.length > modelingSettings.tolerance.distance else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "PolySpline surface vertex move requires a non-zero delta."
@@ -161,7 +164,7 @@ extension DesignDocument {
 
         polySpline.sourceMesh.positions[sourceVertexIndex] =
             polySpline.sourceMesh.positions[sourceVertexIndex] + delta
-        try polySpline.validate()
+        try polySpline.validate(tolerance: modelingSettings.tolerance)
         try surfaceVertexEditor.validateTargetStillStable(
             resolvedTarget,
             sourceVertexIndex: sourceVertexIndex,
@@ -174,7 +177,7 @@ extension DesignDocument {
 
         let previousCADDocument = cadDocument
         do {
-            try updatedCADDocument.replaceFeature(feature)
+            try updatedCADDocument.replaceFeature(feature, tolerance: modelingSettings.tolerance)
             cadDocument = updatedCADDocument
             try validate(objectRegistry: objectRegistry)
         } catch {
@@ -260,7 +263,7 @@ extension DesignDocument {
             vDistance: vDistance,
             normalDistance: normalDistance
         )
-        guard delta.length > ModelingTolerance.standard.distance else {
+        guard delta.length > modelingSettings.tolerance.distance else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Surface control point frame move requires a non-zero UVN offset."
@@ -318,7 +321,9 @@ extension DesignDocument {
             )
         }
 
-        let controlPointEditor = PolySplineSurfaceControlPointEditingService()
+        let controlPointEditor = PolySplineSurfaceControlPointEditingService(
+            tolerance: modelingSettings.tolerance
+        )
         feature.operation = .polySpline(try controlPointEditor.updatedPolySpline(
             moving: target,
             by: delta,
@@ -329,7 +334,7 @@ extension DesignDocument {
         var updatedCADDocument = cadDocument
         let previousCADDocument = cadDocument
         do {
-            try updatedCADDocument.replaceFeature(feature)
+            try updatedCADDocument.replaceFeature(feature, tolerance: modelingSettings.tolerance)
             cadDocument = updatedCADDocument
             try validate(objectRegistry: objectRegistry)
         } catch {
@@ -367,7 +372,9 @@ extension DesignDocument {
             )
         }
 
-        let controlPointEditor = BSplineSurfaceControlPointEditingService()
+        let controlPointEditor = BSplineSurfaceControlPointEditingService(
+            tolerance: modelingSettings.tolerance
+        )
         feature.operation = .bSplineSurface(try controlPointEditor.updatedFeature(
             moving: target,
             by: delta,
@@ -378,7 +385,7 @@ extension DesignDocument {
         var updatedCADDocument = cadDocument
         let previousCADDocument = cadDocument
         do {
-            try updatedCADDocument.replaceFeature(feature)
+            try updatedCADDocument.replaceFeature(feature, tolerance: modelingSettings.tolerance)
             cadDocument = updatedCADDocument
             try validate(objectRegistry: objectRegistry)
         } catch {
@@ -443,7 +450,7 @@ extension DesignDocument {
             z: vector.z
         )
         do {
-            try result.validateUnitLength()
+            try result.validateUnitLength(tolerance: modelingSettings.tolerance)
         } catch {
             throw EditorError(
                 code: .commandInvalid,
@@ -500,7 +507,9 @@ extension DesignDocument {
             )
         }
 
-        let controlPointEditor = PolySplineSurfaceControlPointEditingService()
+        let controlPointEditor = PolySplineSurfaceControlPointEditingService(
+            tolerance: modelingSettings.tolerance
+        )
         feature.operation = .polySpline(try controlPointEditor.updatedPolySpline(
             settingWeight: resolvedWeight,
             for: controlPointTarget,
@@ -511,7 +520,7 @@ extension DesignDocument {
         var updatedCADDocument = cadDocument
         let previousCADDocument = cadDocument
         do {
-            try updatedCADDocument.replaceFeature(feature)
+            try updatedCADDocument.replaceFeature(feature, tolerance: modelingSettings.tolerance)
             cadDocument = updatedCADDocument
             try validate(objectRegistry: objectRegistry)
         } catch {
@@ -536,7 +545,9 @@ extension DesignDocument {
             )
         }
 
-        let controlPointEditor = BSplineSurfaceControlPointEditingService()
+        let controlPointEditor = BSplineSurfaceControlPointEditingService(
+            tolerance: modelingSettings.tolerance
+        )
         feature.operation = .bSplineSurface(try controlPointEditor.updatedFeature(
             settingWeight: resolvedWeight,
             for: controlPointTarget,
@@ -547,7 +558,7 @@ extension DesignDocument {
         var updatedCADDocument = cadDocument
         let previousCADDocument = cadDocument
         do {
-            try updatedCADDocument.replaceFeature(feature)
+            try updatedCADDocument.replaceFeature(feature, tolerance: modelingSettings.tolerance)
             cadDocument = updatedCADDocument
             try validate(objectRegistry: objectRegistry)
         } catch {
@@ -580,7 +591,7 @@ extension DesignDocument {
             )
         }
 
-        let knotEditor = BSplineSurfaceKnotEditingService()
+        let knotEditor = BSplineSurfaceKnotEditingService(tolerance: modelingSettings.tolerance)
         feature.operation = .bSplineSurface(try knotEditor.updatedFeature(
             settingValue: resolvedValue,
             for: knotReference.reference,
@@ -591,7 +602,7 @@ extension DesignDocument {
         var updatedCADDocument = cadDocument
         let previousCADDocument = cadDocument
         do {
-            try updatedCADDocument.replaceFeature(feature)
+            try updatedCADDocument.replaceFeature(feature, tolerance: modelingSettings.tolerance)
             cadDocument = updatedCADDocument
             try validate(objectRegistry: objectRegistry)
         } catch {
@@ -630,7 +641,7 @@ extension DesignDocument {
             owner: "B-spline surface knot insertion"
         )
 
-        let knotEditor = BSplineSurfaceKnotEditingService()
+        let knotEditor = BSplineSurfaceKnotEditingService(tolerance: modelingSettings.tolerance)
         feature.operation = .bSplineSurface(try knotEditor.updatedFeature(
             insertingKnot: insertionResolution.direction,
             value: insertionValue,
@@ -641,7 +652,7 @@ extension DesignDocument {
         var updatedCADDocument = cadDocument
         let previousCADDocument = cadDocument
         do {
-            try updatedCADDocument.replaceFeature(feature)
+            try updatedCADDocument.replaceFeature(feature, tolerance: modelingSettings.tolerance)
             cadDocument = updatedCADDocument
             try validate(objectRegistry: objectRegistry)
         } catch {
@@ -687,7 +698,7 @@ extension DesignDocument {
         let insertionValue = spanBounds.lower
             + (spanBounds.upper - spanBounds.lower) * resolvedFraction
 
-        let knotEditor = BSplineSurfaceKnotEditingService()
+        let knotEditor = BSplineSurfaceKnotEditingService(tolerance: modelingSettings.tolerance)
         feature.operation = .bSplineSurface(try knotEditor.updatedFeature(
             insertingKnot: spanResolution.reference.direction,
             value: insertionValue,
@@ -698,7 +709,7 @@ extension DesignDocument {
         var updatedCADDocument = cadDocument
         let previousCADDocument = cadDocument
         do {
-            try updatedCADDocument.replaceFeature(feature)
+            try updatedCADDocument.replaceFeature(feature, tolerance: modelingSettings.tolerance)
             cadDocument = updatedCADDocument
             try validate(objectRegistry: objectRegistry)
         } catch {
@@ -727,7 +738,7 @@ extension DesignDocument {
             )
         }
 
-        let knotEditor = BSplineSurfaceKnotEditingService()
+        let knotEditor = BSplineSurfaceKnotEditingService(tolerance: modelingSettings.tolerance)
         feature.operation = .bSplineSurface(try knotEditor.updatedFeature(
             settingMultiplicity: multiplicity,
             for: knotReference.reference,
@@ -738,7 +749,7 @@ extension DesignDocument {
         var updatedCADDocument = cadDocument
         let previousCADDocument = cadDocument
         do {
-            try updatedCADDocument.replaceFeature(feature)
+            try updatedCADDocument.replaceFeature(feature, tolerance: modelingSettings.tolerance)
             cadDocument = updatedCADDocument
             try validate(objectRegistry: objectRegistry)
         } catch {
@@ -786,14 +797,17 @@ extension DesignDocument {
             )
         }
 
-        let trimDomain = BSplineSurfaceTrimDomain(
+        let trimDomain = SurfaceParameterDomain2D(
             uLowerBound: resolvedULowerBound,
             uUpperBound: resolvedUUpperBound,
             vLowerBound: resolvedVLowerBound,
             vUpperBound: resolvedVUpperBound
         )
         do {
-            try trimDomain.validate(containedIn: surfaceFeature.surface)
+            try trimDomain.validate(
+                containedIn: surfaceFeature.surface,
+                tolerance: modelingSettings.tolerance
+            )
         } catch {
             throw EditorError(
                 code: .commandInvalid,
@@ -802,15 +816,17 @@ extension DesignDocument {
         }
 
         var updatedSurfaceFeature = surfaceFeature
-        let storesFullSurfaceDomain = try trimDomain.isFullSurfaceDomain(of: surfaceFeature.surface)
-        updatedSurfaceFeature.outerTrimDomain = storesFullSurfaceDomain ? nil : trimDomain
-        updatedSurfaceFeature.trimLoops = []
+        let fullDomain = try SurfaceParameterDomain2D.fullDomain(
+            of: surfaceFeature.surface,
+            tolerance: modelingSettings.tolerance
+        )
+        updatedSurfaceFeature.parameterDomain = trimDomain == fullDomain ? nil : trimDomain
         feature.operation = .bSplineSurface(updatedSurfaceFeature)
 
         var updatedCADDocument = cadDocument
         let previousCADDocument = cadDocument
         do {
-            try updatedCADDocument.replaceFeature(feature)
+            try updatedCADDocument.replaceFeature(feature, tolerance: modelingSettings.tolerance)
             cadDocument = updatedCADDocument
             try validate(objectRegistry: objectRegistry)
         } catch {
@@ -824,24 +840,39 @@ extension DesignDocument {
 
     public mutating func setSurfaceTrimLoops(
         target: SelectionReference,
-        trimLoops: [BSplineSurfaceTrimLoop],
+        trimLoops: [SurfaceTrimLoop],
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws {
         let surfaceResolution = try resolvedBSplineSurfaceSourceReference(
             target,
             owner: "B-spline surface trim loops"
         )
-        guard var feature = cadDocument.designGraph.nodes[surfaceResolution.featureID],
-              case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        guard let sourceFeature = cadDocument.designGraph.nodes[surfaceResolution.featureID],
+              case .bSplineSurface = sourceFeature.operation else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "B-spline surface trim loops require an existing direct B-spline surface source feature."
             )
         }
 
+        let existingTrimFeatures = cadDocument.designGraph.order.compactMap { featureID -> FeatureNode? in
+            guard let feature = cadDocument.designGraph.nodes[featureID],
+                  case let .surfaceTrim(surfaceTrim) = feature.operation,
+                  surfaceTrim.target.featureID == surfaceResolution.featureID else {
+                return nil
+            }
+            return feature
+        }
+        guard existingTrimFeatures.count <= 1 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface trim loops found multiple active trim features for one source surface."
+            )
+        }
+
         do {
             for trimLoop in trimLoops {
-                try trimLoop.validate(on: surfaceFeature.surface)
+                try trimLoop.validate(tolerance: modelingSettings.tolerance)
             }
             if trimLoops.isEmpty == false,
                trimLoops.filter({ $0.role == .outer }).count != 1 {
@@ -859,24 +890,87 @@ extension DesignDocument {
             )
         }
 
-        var updatedSurfaceFeature = surfaceFeature
-        updatedSurfaceFeature.outerTrimDomain = nil
-        updatedSurfaceFeature.trimLoops = trimLoops
-        feature.operation = .bSplineSurface(updatedSurfaceFeature)
-
-        var updatedCADDocument = cadDocument
         let previousCADDocument = cadDocument
+        let previousProductMetadata = productMetadata
+        var didCommit = false
+        defer {
+            if didCommit == false {
+                cadDocument = previousCADDocument
+                productMetadata = previousProductMetadata
+            }
+        }
         do {
-            try updatedCADDocument.replaceFeature(feature)
-            cadDocument = updatedCADDocument
+            if trimLoops.isEmpty {
+                if let existingFeature = existingTrimFeatures.first {
+                    cadDocument = try DocumentEditor().apply(
+                        .removeFeature(existingFeature.id),
+                        to: cadDocument,
+                        tolerance: modelingSettings.tolerance
+                    )
+                    removeSurfaceTrimSceneNodes(featureID: existingFeature.id)
+                }
+            } else {
+                let trimFeature = SurfaceTrimFeature(
+                    target: SurfaceOperationTargetReference(featureID: surfaceResolution.featureID),
+                    loops: trimLoops
+                )
+                try trimFeature.validate(tolerance: modelingSettings.tolerance)
+                if var existingFeature = existingTrimFeatures.first {
+                    existingFeature.operation = .surfaceTrim(trimFeature)
+                    try cadDocument.replaceFeature(
+                        existingFeature,
+                        tolerance: modelingSettings.tolerance
+                    )
+                } else {
+                    let featureID = FeatureID()
+                    let feature = FeatureNode(
+                        id: featureID,
+                        name: "\(sourceFeature.name ?? "B-spline Surface") Trim",
+                        operation: .surfaceTrim(trimFeature),
+                        inputs: [FeatureInput(featureID: surfaceResolution.featureID, role: .target)],
+                        outputs: [FeatureOutput(role: .sheet)]
+                    )
+                    try appendFeature(feature)
+                    _ = try productMetadata.appendSceneNodeToFirstRoot(
+                        name: feature.name ?? "B-spline Surface Trim",
+                        reference: .body(featureID),
+                        object: .body(
+                            featureID: featureID,
+                            sourceSection: nil,
+                            typeID: .bSplineSurface,
+                            geometryRole: .surface,
+                            properties: ObjectPropertySet(),
+                            objectRegistry: objectRegistry
+                        )
+                    )
+                }
+            }
             try validate(objectRegistry: objectRegistry)
+            didCommit = true
         } catch {
-            cadDocument = previousCADDocument
             throw EditorError(
                 code: .commandInvalid,
                 message: "B-spline surface trim loops produced invalid source geometry: \(error)."
             )
         }
+    }
+
+    private mutating func removeSurfaceTrimSceneNodes(featureID: FeatureID) {
+        let removedNodeIDs = Set(productMetadata.sceneNodes.compactMap { sceneNodeID, node in
+            node.reference?.featureID == featureID ? sceneNodeID : nil
+        })
+        guard removedNodeIDs.isEmpty == false else {
+            return
+        }
+        productMetadata.sceneNodes = productMetadata.sceneNodes.reduce(into: [:]) { result, entry in
+            guard removedNodeIDs.contains(entry.key) == false else {
+                return
+            }
+            var node = entry.value
+            node.childIDs.removeAll { removedNodeIDs.contains($0) }
+            result[entry.key] = node
+        }
+        productMetadata.rootSceneNodeIDs.removeAll { removedNodeIDs.contains($0) }
     }
 
     public mutating func moveSurfaceTrimEndpoint(
@@ -899,28 +993,22 @@ extension DesignDocument {
             owner: "B-spline surface trim endpoint move"
         )
         guard var feature = cadDocument.designGraph.nodes[trimResolution.featureID],
-              case let .bSplineSurface(surfaceFeature) = feature.operation else {
+              case let .surfaceTrim(surfaceTrimFeature) = feature.operation else {
             throw EditorError(
                 code: .referenceUnresolved,
-                message: "B-spline surface trim endpoint move requires an existing direct B-spline surface source feature."
+                message: "B-spline surface trim endpoint move requires an existing surface trim feature."
             )
         }
-        guard surfaceFeature.trimLoops.isEmpty == false else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "B-spline surface trim endpoint move requires authored UV trim loops; rectangular trim domains must be edited with setSurfaceTrimDomain."
-            )
-        }
-        guard surfaceFeature.trimLoops.indices.contains(trimResolution.reference.loopIndex) else {
+        guard surfaceTrimFeature.loops.indices.contains(trimResolution.reference.loopIndex) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "B-spline surface trim endpoint move references a missing trim loop."
             )
         }
 
-        var updatedTrimLoops = surfaceFeature.trimLoops
+        var updatedTrimLoops = surfaceTrimFeature.loops
         var trimLoop = updatedTrimLoops[trimResolution.reference.loopIndex]
-        guard trimLoop.edges.indices.contains(trimResolution.reference.edgeIndex) else {
+        guard trimLoop.parameterCurves.indices.contains(trimResolution.reference.edgeIndex) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "B-spline surface trim endpoint move references a missing trim edge."
@@ -937,35 +1025,39 @@ extension DesignDocument {
         }
 
         let edgeIndex = trimResolution.reference.edgeIndex
+        var parameterCurves = trimLoop.parameterCurves
         let adjacentEdgeIndex: Int
         let adjacentEndpoint: SurfaceTrimEndpoint
         switch endpoint {
         case .start:
-            adjacentEdgeIndex = edgeIndex == trimLoop.edges.startIndex
-                ? trimLoop.edges.index(before: trimLoop.edges.endIndex)
-                : trimLoop.edges.index(before: edgeIndex)
+            adjacentEdgeIndex = edgeIndex == trimLoop.parameterCurves.startIndex
+                ? trimLoop.parameterCurves.index(before: trimLoop.parameterCurves.endIndex)
+                : trimLoop.parameterCurves.index(before: edgeIndex)
             adjacentEndpoint = .end
         case .end:
-            let nextIndex = trimLoop.edges.index(after: edgeIndex)
-            adjacentEdgeIndex = nextIndex == trimLoop.edges.endIndex ? trimLoop.edges.startIndex : nextIndex
+            let nextIndex = trimLoop.parameterCurves.index(after: edgeIndex)
+            adjacentEdgeIndex = nextIndex == trimLoop.parameterCurves.endIndex
+                ? trimLoop.parameterCurves.startIndex
+                : nextIndex
             adjacentEndpoint = .start
         }
 
-        trimLoop.edges[edgeIndex].parameterCurve = try surfaceParameterCurve(
-            trimLoop.edges[edgeIndex].parameterCurve,
+        parameterCurves[edgeIndex] = try surfaceParameterCurve(
+            parameterCurves[edgeIndex],
             moving: endpoint,
             to: movedParameter,
             owner: "B-spline surface trim endpoint move"
         )
-        trimLoop.edges[adjacentEdgeIndex].parameterCurve = try surfaceParameterCurve(
-            trimLoop.edges[adjacentEdgeIndex].parameterCurve,
+        parameterCurves[adjacentEdgeIndex] = try surfaceParameterCurve(
+            parameterCurves[adjacentEdgeIndex],
             moving: adjacentEndpoint,
             to: movedParameter,
             owner: "B-spline surface trim endpoint move"
         )
+        trimLoop = SurfaceTrimLoop(role: trimLoop.role, parameterCurves: parameterCurves)
 
         do {
-            try trimLoop.validate(on: surfaceFeature.surface)
+            try trimLoop.validate(tolerance: modelingSettings.tolerance)
         } catch {
             throw EditorError(
                 code: .commandInvalid,
@@ -974,23 +1066,24 @@ extension DesignDocument {
         }
         updatedTrimLoops[trimResolution.reference.loopIndex] = trimLoop
 
-        var updatedSurfaceFeature = surfaceFeature
-        updatedSurfaceFeature.outerTrimDomain = nil
-        updatedSurfaceFeature.trimLoops = updatedTrimLoops
+        let updatedSurfaceTrimFeature = SurfaceTrimFeature(
+            target: surfaceTrimFeature.target,
+            loops: updatedTrimLoops
+        )
         do {
-            try updatedSurfaceFeature.validate()
+            try updatedSurfaceTrimFeature.validate(tolerance: modelingSettings.tolerance)
         } catch {
             throw EditorError(
                 code: .commandInvalid,
                 message: "B-spline surface trim endpoint move produced invalid source geometry: \(error)."
             )
         }
-        feature.operation = .bSplineSurface(updatedSurfaceFeature)
+        feature.operation = .surfaceTrim(updatedSurfaceTrimFeature)
 
         var updatedCADDocument = cadDocument
         let previousCADDocument = cadDocument
         do {
-            try updatedCADDocument.replaceFeature(feature)
+            try updatedCADDocument.replaceFeature(feature, tolerance: modelingSettings.tolerance)
             cadDocument = updatedCADDocument
             try validate(objectRegistry: objectRegistry)
         } catch {
@@ -1063,6 +1156,7 @@ extension DesignDocument {
             weight,
             owner: "B-spline surface trim control point weight"
         )
+        let tolerance = modelingSettings.tolerance
 
         try updateBSplineSurfaceTrimParameterCurve(
             target: target,
@@ -1073,6 +1167,7 @@ extension DesignDocument {
                 curve,
                 settingControlPointWeightAt: controlPointIndex,
                 to: resolvedWeight,
+                tolerance: tolerance,
                 owner: "B-spline surface trim control point weight"
             )
         }
@@ -1091,6 +1186,7 @@ extension DesignDocument {
             target,
             owner: "B-spline surface trim p-curve knot insertion"
         )
+        let tolerance = modelingSettings.tolerance
 
         try updateBSplineSurfaceTrimParameterCurve(
             target: .surface(.trim(insertionTarget.trimReference)),
@@ -1106,6 +1202,7 @@ extension DesignDocument {
             return try Self.surfaceParameterCurve(
                 curve,
                 insertingKnot: insertionValue,
+                tolerance: tolerance,
                 owner: "B-spline surface trim p-curve knot insertion"
             )
         }
@@ -1132,6 +1229,7 @@ extension DesignDocument {
             fallbackKnotIndex: knotIndex,
             owner: "B-spline surface trim p-curve knot value"
         )
+        let tolerance = modelingSettings.tolerance
 
         try updateBSplineSurfaceTrimParameterCurve(
             target: .surface(.trim(knotResolution.reference.trim)),
@@ -1142,6 +1240,7 @@ extension DesignDocument {
                 curve,
                 settingKnotValueAt: knotResolution.reference.knotIndex,
                 to: resolvedValue,
+                tolerance: tolerance,
                 owner: "B-spline surface trim p-curve knot value"
             )
         }
@@ -1170,6 +1269,7 @@ extension DesignDocument {
             fallbackKnotIndex: knotIndex,
             owner: "B-spline surface trim p-curve knot multiplicity"
         )
+        let tolerance = modelingSettings.tolerance
 
         try updateBSplineSurfaceTrimParameterCurve(
             target: .surface(.trim(knotResolution.reference.trim)),
@@ -1180,6 +1280,7 @@ extension DesignDocument {
                 curve,
                 settingKnotMultiplicityAt: knotResolution.reference.knotIndex,
                 to: multiplicity,
+                tolerance: tolerance,
                 owner: "B-spline surface trim p-curve knot multiplicity"
             )
         }
@@ -1231,7 +1332,9 @@ extension DesignDocument {
             owner: "B-spline surface boundary continuity reference"
         )
 
-        let continuityEditor = BSplineSurfaceBoundaryContinuityEditingService()
+        let continuityEditor = BSplineSurfaceBoundaryContinuityEditingService(
+            tolerance: modelingSettings.tolerance
+        )
         targetFeature.operation = .bSplineSurface(try continuityEditor.updatedFeature(
             matching: targetSurfaceFeature,
             targetSide: targetResolution.side,
@@ -1246,7 +1349,7 @@ extension DesignDocument {
         var updatedCADDocument = cadDocument
         let previousCADDocument = cadDocument
         do {
-            try updatedCADDocument.replaceFeature(targetFeature)
+            try updatedCADDocument.replaceFeature(targetFeature, tolerance: modelingSettings.tolerance)
             cadDocument = updatedCADDocument
             try validate(objectRegistry: objectRegistry)
         } catch {
@@ -1293,7 +1396,9 @@ extension DesignDocument {
             owner: "B-spline surface boundary continuity compatibility reference"
         )
 
-        return try SurfaceBoundaryContinuityCompatibilityService().compatibility(
+        return try SurfaceBoundaryContinuityCompatibilityService(
+            tolerance: modelingSettings.tolerance
+        ).compatibility(
             targetFeatureID: targetResolution.featureID,
             targetSelectionReference: target,
             targetFeature: targetSurfaceFeature,
@@ -1417,7 +1522,7 @@ extension DesignDocument {
             )
         }
         let patchFace = try resolvedSurfacePatchFace(
-            from: reference.surface.faceName,
+            from: reference.surface.subshape,
             owner: owner
         )
         guard patchFace.generatedRole == "bSplineSurface",
@@ -1465,19 +1570,15 @@ extension DesignDocument {
                 message: "\(owner) requires a valid surface trim selection reference: \(error)."
             )
         }
-        let patchFace = try resolvedSurfacePatchFace(
-            from: reference.surface.faceName,
-            owner: owner
-        )
-        guard patchFace.generatedRole == "bSplineSurface",
-              patchFace.patchID == 0 else {
+        let featureID = reference.surface.subshape.subshapeID.featureID
+        guard case .surfaceTrim = cadDocument.designGraph.nodes[featureID]?.operation else {
             throw EditorError(
                 code: .commandInvalid,
-                message: "\(owner) requires a direct B-spline surface patch face selection reference."
+                message: "\(owner) requires a surface trim output selection reference."
             )
         }
         return BSplineSurfaceTrimResolution(
-            featureID: patchFace.featureID,
+            featureID: featureID,
             reference: reference
         )
     }
@@ -1625,7 +1726,7 @@ extension DesignDocument {
             )
         }
         let patchFace = try resolvedSurfacePatchFace(
-            from: reference.faceName,
+            from: reference.subshape,
             owner: owner
         )
         guard patchFace.generatedRole == "bSplineSurface",
@@ -1645,14 +1746,14 @@ extension DesignDocument {
         _ feature: BSplineSurfaceFeature,
         owner: String
     ) throws {
-        guard feature.trimLoops.isEmpty else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) requires a full-domain rectangular outer trim because authored trim loops do not expose boundary control rows for continuity matching."
-            )
-        }
-        let trimDomain = try feature.resolvedOuterTrimDomain()
-        guard try trimDomain.isFullSurfaceDomain(of: feature.surface) else {
+        let parameterDomain = try feature.resolvedParameterDomain(
+            tolerance: modelingSettings.tolerance
+        )
+        let fullDomain = try SurfaceParameterDomain2D.fullDomain(
+            of: feature.surface,
+            tolerance: modelingSettings.tolerance
+        )
+        guard parameterDomain == fullDomain else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(owner) requires a full-domain rectangular outer trim because interior trim domains do not expose boundary control rows for continuity matching."
@@ -1671,28 +1772,22 @@ extension DesignDocument {
             owner: owner
         )
         guard var feature = cadDocument.designGraph.nodes[trimResolution.featureID],
-              case let .bSplineSurface(surfaceFeature) = feature.operation else {
+              case let .surfaceTrim(surfaceTrimFeature) = feature.operation else {
             throw EditorError(
                 code: .referenceUnresolved,
-                message: "\(owner) requires an existing direct B-spline surface source feature."
+                message: "\(owner) requires an existing surface trim feature."
             )
         }
-        guard surfaceFeature.trimLoops.isEmpty == false else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) requires authored UV trim loops; rectangular trim domains must be edited with setSurfaceTrimDomain."
-            )
-        }
-        guard surfaceFeature.trimLoops.indices.contains(trimResolution.reference.loopIndex) else {
+        guard surfaceTrimFeature.loops.indices.contains(trimResolution.reference.loopIndex) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "\(owner) references a missing trim loop."
             )
         }
 
-        var updatedTrimLoops = surfaceFeature.trimLoops
-        var trimLoop = updatedTrimLoops[trimResolution.reference.loopIndex]
-        guard trimLoop.edges.indices.contains(trimResolution.reference.edgeIndex) else {
+        var updatedTrimLoops = surfaceTrimFeature.loops
+        let trimLoop = updatedTrimLoops[trimResolution.reference.loopIndex]
+        guard trimLoop.parameterCurves.indices.contains(trimResolution.reference.edgeIndex) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "\(owner) references a missing trim edge."
@@ -1700,34 +1795,31 @@ extension DesignDocument {
         }
 
         let edgeIndex = trimResolution.reference.edgeIndex
-        trimLoop.edges[edgeIndex].parameterCurve = try update(trimLoop.edges[edgeIndex].parameterCurve)
-        do {
-            try trimLoop.validate(on: surfaceFeature.surface)
-        } catch {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) produced an invalid closed UV trim loop: \(error)."
-            )
-        }
-        updatedTrimLoops[trimResolution.reference.loopIndex] = trimLoop
+        var parameterCurves = trimLoop.parameterCurves
+        parameterCurves[edgeIndex] = try update(parameterCurves[edgeIndex])
+        updatedTrimLoops[trimResolution.reference.loopIndex] = SurfaceTrimLoop(
+            role: trimLoop.role,
+            parameterCurves: parameterCurves
+        )
 
-        var updatedSurfaceFeature = surfaceFeature
-        updatedSurfaceFeature.outerTrimDomain = nil
-        updatedSurfaceFeature.trimLoops = updatedTrimLoops
+        let updatedSurfaceTrimFeature = SurfaceTrimFeature(
+            target: surfaceTrimFeature.target,
+            loops: updatedTrimLoops
+        )
         do {
-            try updatedSurfaceFeature.validate()
+            try updatedSurfaceTrimFeature.validate(tolerance: modelingSettings.tolerance)
         } catch {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(owner) produced invalid source geometry: \(error)."
             )
         }
-        feature.operation = .bSplineSurface(updatedSurfaceFeature)
+        feature.operation = .surfaceTrim(updatedSurfaceTrimFeature)
 
         var updatedCADDocument = cadDocument
         let previousCADDocument = cadDocument
         do {
-            try updatedCADDocument.replaceFeature(feature)
+            try updatedCADDocument.replaceFeature(feature, tolerance: modelingSettings.tolerance)
             cadDocument = updatedCADDocument
             try validate(objectRegistry: objectRegistry)
         } catch {
@@ -1747,15 +1839,15 @@ extension DesignDocument {
     ) throws -> SurfaceParameterCurve {
         switch curve {
         case .constantU:
-            let currentStart = try curve.startParameter()
-            let currentEnd = try curve.endParameter()
+            let currentStart = try curve.startParameter(tolerance: modelingSettings.tolerance)
+            let currentEnd = try curve.endParameter(tolerance: modelingSettings.tolerance)
             return linearSurfaceParameterCurve(
                 from: endpoint == .start ? parameter : currentStart,
                 to: endpoint == .end ? parameter : currentEnd
             )
         case .constantV:
-            let currentStart = try curve.startParameter()
-            let currentEnd = try curve.endParameter()
+            let currentStart = try curve.startParameter(tolerance: modelingSettings.tolerance)
+            let currentEnd = try curve.endParameter(tolerance: modelingSettings.tolerance)
             return linearSurfaceParameterCurve(
                 from: endpoint == .start ? parameter : currentStart,
                 to: endpoint == .end ? parameter : currentEnd
@@ -1791,6 +1883,17 @@ extension DesignDocument {
                 updatedCurve.controlPoints[updatedCurve.controlPoints.index(before: updatedCurve.controlPoints.endIndex)] = point
             }
             return .bSpline(updatedCurve)
+        case .affine,
+             .harmonic,
+             .sphericalGreatCircle,
+             .certifiedImplicit,
+             .certifiedAnalyticImplicit,
+             .certifiedAnalyticPair,
+             .projectedAnalytic:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) does not support endpoint editing for this exact p-curve kind."
+            )
         }
     }
 
@@ -1840,6 +1943,17 @@ extension DesignDocument {
             var updatedCurve = curve
             updatedCurve.controlPoints[index] = Point2D(x: parameter.u, y: parameter.v)
             return .bSpline(updatedCurve)
+        case .affine,
+             .harmonic,
+             .sphericalGreatCircle,
+             .certifiedImplicit,
+             .certifiedAnalyticImplicit,
+             .certifiedAnalyticPair,
+             .projectedAnalytic:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) does not expose editable control points for this exact p-curve kind."
+            )
         }
     }
 
@@ -1847,6 +1961,7 @@ extension DesignDocument {
         _ curve: SurfaceParameterCurve,
         settingControlPointWeightAt index: Int,
         to weight: Double,
+        tolerance: ModelingTolerance,
         owner: String
     ) throws -> SurfaceParameterCurve {
         switch curve {
@@ -1871,7 +1986,7 @@ extension DesignDocument {
             var updatedCurve = curve
             updatedCurve.weights[index] = weight
             do {
-                try updatedCurve.validate()
+                try updatedCurve.validate(tolerance: tolerance)
             } catch {
                 throw EditorError(
                     code: .commandInvalid,
@@ -1879,12 +1994,24 @@ extension DesignDocument {
                 )
             }
             return .bSpline(updatedCurve)
+        case .affine,
+             .harmonic,
+             .sphericalGreatCircle,
+             .certifiedImplicit,
+             .certifiedAnalyticImplicit,
+             .certifiedAnalyticPair,
+             .projectedAnalytic:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) does not expose editable weights for this exact p-curve kind."
+            )
         }
     }
 
     private static func surfaceParameterCurve(
         _ curve: SurfaceParameterCurve,
         insertingKnot value: Double,
+        tolerance: ModelingTolerance,
         owner: String
     ) throws -> SurfaceParameterCurve {
         switch curve {
@@ -1895,13 +2022,24 @@ extension DesignDocument {
             )
         case let .bSpline(curve):
             do {
-                return .bSpline(try curve.insertingKnot(value))
+                return .bSpline(try curve.insertingKnot(value, tolerance: tolerance))
             } catch {
                 throw EditorError(
                     code: .commandInvalid,
                     message: "\(owner) could not insert the B-spline trim p-curve knot: \(error)."
                 )
             }
+        case .affine,
+             .harmonic,
+             .sphericalGreatCircle,
+             .certifiedImplicit,
+             .certifiedAnalyticImplicit,
+             .certifiedAnalyticPair,
+             .projectedAnalytic:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a B-spline trim p-curve."
+            )
         }
     }
 
@@ -2015,6 +2153,7 @@ extension DesignDocument {
         _ curve: SurfaceParameterCurve,
         settingKnotValueAt index: Int,
         to value: Double,
+        tolerance: ModelingTolerance,
         owner: String
     ) throws -> SurfaceParameterCurve {
         switch curve {
@@ -2025,13 +2164,28 @@ extension DesignDocument {
             )
         case let .bSpline(curve):
             do {
-                return .bSpline(try curve.settingKnotValue(at: index, to: value))
+                return .bSpline(try curve.settingKnotValue(
+                    at: index,
+                    to: value,
+                    tolerance: tolerance
+                ))
             } catch {
                 throw EditorError(
                     code: .commandInvalid,
                     message: "\(owner) could not set the B-spline trim p-curve knot value: \(error)."
                 )
             }
+        case .affine,
+             .harmonic,
+             .sphericalGreatCircle,
+             .certifiedImplicit,
+             .certifiedAnalyticImplicit,
+             .certifiedAnalyticPair,
+             .projectedAnalytic:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a B-spline trim p-curve."
+            )
         }
     }
 
@@ -2039,6 +2193,7 @@ extension DesignDocument {
         _ curve: SurfaceParameterCurve,
         settingKnotMultiplicityAt index: Int,
         to multiplicity: Int,
+        tolerance: ModelingTolerance,
         owner: String
     ) throws -> SurfaceParameterCurve {
         switch curve {
@@ -2049,13 +2204,28 @@ extension DesignDocument {
             )
         case let .bSpline(curve):
             do {
-                return .bSpline(try curve.settingKnotMultiplicity(at: index, to: multiplicity))
+                return .bSpline(try curve.settingKnotMultiplicity(
+                    at: index,
+                    to: multiplicity,
+                    tolerance: tolerance
+                ))
             } catch {
                 throw EditorError(
                     code: .commandInvalid,
                     message: "\(owner) could not set the B-spline trim p-curve knot multiplicity: \(error)."
                 )
             }
+        case .affine,
+             .harmonic,
+             .sphericalGreatCircle,
+             .certifiedImplicit,
+             .certifiedAnalyticImplicit,
+             .certifiedAnalyticPair,
+             .projectedAnalytic:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a B-spline trim p-curve."
+            )
         }
     }
 
@@ -2091,7 +2261,7 @@ extension DesignDocument {
             )
         }
         let patchFace = try resolvedSurfacePatchFace(
-            from: reference.surface.faceName,
+            from: reference.surface.subshape,
             owner: owner
         )
         guard patchFace.generatedRole == "bSplineSurface",
@@ -2126,7 +2296,7 @@ extension DesignDocument {
             )
         }
         let patchFace = try resolvedSurfacePatchFace(
-            from: reference.surface.faceName,
+            from: reference.surface.subshape,
             owner: owner
         )
         guard patchFace.generatedRole == "bSplineSurface",
@@ -2278,36 +2448,32 @@ extension DesignDocument {
     }
 
     private func resolvedSurfacePatchFace(
-        from name: PersistentName,
+        from reference: StableSubshapeReference,
         owner: String
     ) throws -> SurfacePatchFaceResolution {
-        var featureID: FeatureID?
-        var generatedRole: String?
-        var subshape: String?
-        for component in name.components {
-            switch component {
-            case .feature(let id):
-                featureID = id
-            case .generated(let value):
-                generatedRole = value
-            case .subshape(let value):
-                subshape = value
-            case .index:
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "\(owner) requires a source-owned surface patch face selection reference."
-                )
-            }
-        }
-        guard let featureID,
-              let generatedRole,
-              let subshape else {
+        let subshapeID = reference.subshapeID
+        guard subshapeID.ordinal == 0 else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(owner) requires a source-owned surface patch face selection reference."
             )
         }
-        let parts = subshape.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
+        let roleParts = subshapeID.role.split(
+            separator: ".",
+            maxSplits: 1,
+            omittingEmptySubsequences: false
+        ).map(String.init)
+        guard roleParts.count == 2 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a source-owned surface patch face selection reference."
+            )
+        }
+        let generatedRole = roleParts[0]
+        let parts = roleParts[1].split(
+            separator: ":",
+            omittingEmptySubsequences: false
+        ).map(String.init)
         guard parts.count == 3,
               parts[0] == "patch",
               let patchID = Int(parts[1]),
@@ -2318,7 +2484,7 @@ extension DesignDocument {
             )
         }
         return SurfacePatchFaceResolution(
-            featureID: featureID,
+            featureID: subshapeID.featureID,
             generatedRole: generatedRole,
             patchID: patchID
         )
@@ -2330,7 +2496,9 @@ extension DesignDocument {
         distance: CADExpression,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws {
-        let surfaceVertexEditor = PolySplineSurfaceVertexEditingService()
+        let surfaceVertexEditor = PolySplineSurfaceVertexEditingService(
+            tolerance: modelingSettings.tolerance
+        )
         guard targets.isEmpty == false else {
             throw EditorError(
                 code: .commandInvalid,
@@ -2341,7 +2509,7 @@ extension DesignDocument {
             distance,
             owner: "PolySpline surface vertex slide distance"
         )
-        guard abs(resolvedDistance) > ModelingTolerance.standard.distance else {
+        guard abs(resolvedDistance) > modelingSettings.tolerance.distance else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "PolySpline surface vertex slide requires a non-zero distance."
@@ -2437,7 +2605,7 @@ extension DesignDocument {
         }
 
         for (featureID, polySpline) in polySplinesByID {
-            try polySpline.validate()
+            try polySpline.validate(tolerance: modelingSettings.tolerance)
             for update in updates where update.featureID == featureID {
                 try surfaceVertexEditor.validateTargetStillStable(
                     update.target,
@@ -2464,7 +2632,10 @@ extension DesignDocument {
 
         let previousCADDocument = cadDocument
         do {
-            try updatedCADDocument.replaceFeatures(replacementFeatures)
+            try updatedCADDocument.replaceFeatures(
+                replacementFeatures,
+                tolerance: modelingSettings.tolerance
+            )
             cadDocument = updatedCADDocument
             try validate(objectRegistry: objectRegistry)
         } catch {
@@ -2570,7 +2741,9 @@ extension DesignDocument {
         var featuresByID: [FeatureID: FeatureNode] = [:]
         var polySplinesByID: [FeatureID: PolySplineFeature] = [:]
         var seenTargets: Set<ControlPointKey> = []
-        let controlPointEditor = PolySplineSurfaceControlPointEditingService()
+        let controlPointEditor = PolySplineSurfaceControlPointEditingService(
+            tolerance: modelingSettings.tolerance
+        )
 
         for target in targets {
             let duplicateKey = ControlPointKey(
@@ -2634,7 +2807,10 @@ extension DesignDocument {
         var updatedCADDocument = cadDocument
         let previousCADDocument = cadDocument
         do {
-            try updatedCADDocument.replaceFeatures(replacementFeatures)
+            try updatedCADDocument.replaceFeatures(
+                replacementFeatures,
+                tolerance: modelingSettings.tolerance
+            )
             cadDocument = updatedCADDocument
             try validate(objectRegistry: objectRegistry)
         } catch {
@@ -2678,7 +2854,9 @@ extension DesignDocument {
         var featuresByID: [FeatureID: FeatureNode] = [:]
         var surfaceFeaturesByID: [FeatureID: BSplineSurfaceFeature] = [:]
         var seenTargets: Set<ControlPointKey> = []
-        let controlPointEditor = BSplineSurfaceControlPointEditingService()
+        let controlPointEditor = BSplineSurfaceControlPointEditingService(
+            tolerance: modelingSettings.tolerance
+        )
 
         for target in targets {
             let duplicateKey = ControlPointKey(
@@ -2741,7 +2919,10 @@ extension DesignDocument {
         var updatedCADDocument = cadDocument
         let previousCADDocument = cadDocument
         do {
-            try updatedCADDocument.replaceFeatures(replacementFeatures)
+            try updatedCADDocument.replaceFeatures(
+                replacementFeatures,
+                tolerance: modelingSettings.tolerance
+            )
             cadDocument = updatedCADDocument
             try validate(objectRegistry: objectRegistry)
         } catch {

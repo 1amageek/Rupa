@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import CADModeling
 import Testing
 @testable import RupaCore
 
@@ -64,7 +65,11 @@ import Testing
     let gridSettings = ViewportGridSettings(visualSpacingMode: .fixed)
     _ = try session.execute(.setViewportGridSettings(gridSettings))
     let failingPipeline = CADPipeline(
-        evaluator: DocumentEvaluator(featureEvaluator: DesignDisplayFailingFeatureEvaluator())
+        tolerance: session.document.modelingSettings.tolerance,
+        evaluator: DocumentEvaluator(
+            featureEvaluator: DesignDisplayFailingFeatureEvaluator(),
+            tolerance: session.document.modelingSettings.tolerance
+        )
     )
 
     let result = try DesignDisplaySnapshotService(
@@ -581,6 +586,6 @@ private func designDisplaySavedView(
 
 private struct DesignDisplayFailingFeatureEvaluator: FeatureEvaluating {
     func evaluate(feature _: FeatureNode, context _: EvaluationContext) throws -> EvaluationResult {
-        throw FeatureEvaluationError.unsupportedOperation("Body evaluation should not be required.")
+        throw FeatureEvaluationError.invalidGraph("Body evaluation should not be required.")
     }
 }

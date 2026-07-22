@@ -106,7 +106,7 @@ struct ObjectFaceDimensionResolver: Sendable {
         if let bodyFace = fixedBodyFace(for: componentID) {
             return bodyFace
         }
-        guard componentID.generatedTopologyPersistentName != nil else {
+        guard componentID.isStableTopology else {
             return nil
         }
         let topologyResolver = GeneratedTopologySelectionResolver()

@@ -431,7 +431,7 @@ public struct ProjectionDependencyIdentityBuilder: Sendable {
     }
 
     private func topologyReferenceKey(_ reference: ProjectionManifest.TopologyReference) -> String {
-        "\(reference.semanticEntityID.rawValue):\(reference.owningFeatureID.description):\(reference.role.rawValue):\(reference.persistentName)"
+        "\(reference.semanticEntityID.rawValue):\(reference.owningFeatureID.description):\(reference.role.rawValue):\(stableSubshapeKey(reference.stableReference))"
     }
 
     private func boundaryTagKey(_ tag: ProjectionManifest.BoundaryTag) -> String {
@@ -446,9 +446,14 @@ public struct ProjectionDependencyIdentityBuilder: Sendable {
             return "feature:\(id.description)"
         case .sceneNode(let id):
             return "scene:\(id.rawValue.uuidString)"
-        case .topology(let persistentName, let owningFeatureID):
-            return "topology:\(owningFeatureID.description):\(persistentName)"
+        case .topology(let reference, let owningFeatureID):
+            return "topology:\(owningFeatureID.description):\(stableSubshapeKey(reference))"
         }
+    }
+
+    private func stableSubshapeKey(_ reference: StableSubshapeReference) -> String {
+        let id = reference.subshapeID
+        return "\(id.featureID.description):\(id.role):\(id.ordinal)"
     }
 
     private func payloadPathKey(_ path: SemanticPayloadPath) -> String {

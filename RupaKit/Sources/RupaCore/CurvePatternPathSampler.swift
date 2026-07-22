@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import CADModeling
 import RupaCoreTypes
 
 struct CurvePatternPathSampler: Sendable {
@@ -73,7 +74,10 @@ struct CurvePatternPathSampler: Sendable {
             case .unbounded:
                 return nil
             }
-        case .bSpline:
+        case .analytic, .bSpline, .implicit, .surfaceLift:
+            // Curve-driven patterns currently route these exact curve kinds through the
+            // evaluated polyline path. This path is incomplete and must not be reported as
+            // exact until dedicated zero-loss evaluators preserve their parameter domains.
             return nil
         }
     }

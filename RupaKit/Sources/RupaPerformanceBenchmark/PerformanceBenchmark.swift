@@ -10,8 +10,12 @@ struct PerformanceBenchmark {
     static func main() throws {
         let options = try BenchmarkOptions(arguments: Array(CommandLine.arguments.dropFirst()))
         let transaction = makeBoxTransaction(bodyCount: options.bodyCount)
-        let validatedCADDocument = try makeValidatedCADDocument(transaction: transaction)
-        let evaluator = DocumentEvaluator.modelingDefault
+        let tolerance = ModelingTolerance.standard
+        let validatedCADDocument = try makeValidatedCADDocument(
+            transaction: transaction,
+            tolerance: tolerance
+        )
+        let evaluator = DocumentEvaluator(tolerance: tolerance, artifactPolicy: .deferred)
         let primaryFeatureID = try requiredPrimaryFeatureID(in: transaction)
         let kernelEditBenchmark = try KernelEditBenchmark(
             source: validatedCADDocument,
@@ -123,11 +127,12 @@ struct PerformanceBenchmark {
     }
 
     private static func makeValidatedCADDocument(
-        transaction: FeatureGraphTransaction
+        transaction: FeatureGraphTransaction,
+        tolerance: ModelingTolerance
     ) throws -> ValidatedCADDocument {
         var document = CADDocument(units: .meters)
-        try document.appendFeatures(transaction.features)
-        return try ValidatedCADDocument(document)
+        try document.appendFeatures(transaction.features, tolerance: tolerance)
+        return try ValidatedCADDocument(document, tolerance: tolerance)
     }
 
     private static func requiredPrimaryFeatureID(

@@ -24,7 +24,7 @@ struct WorkspaceProjectionTargetResolver {
             if let sketchCurveTarget = wholeSketchCurveTarget(for: target) {
                 curveTarget = sketchCurveTarget
             } else if case .edge(let componentID) = target.component,
-                      componentID.generatedTopologyPersistentName != nil {
+                      componentID.isStableTopology {
                 curveTarget = target
             } else {
                 curveTarget = nil

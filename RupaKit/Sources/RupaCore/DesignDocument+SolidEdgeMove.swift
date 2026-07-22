@@ -23,7 +23,7 @@ extension DesignDocument {
         )
 
         if case .edge(let componentID) = resolvedTarget.target.component,
-           componentID.generatedTopologyPersistentName != nil {
+           componentID.isStableTopology {
             if try moveGeneratedProfileEdge(
                 target: resolvedTarget.target,
                 bodyFeatureID: resolvedTarget.featureID,
@@ -154,7 +154,10 @@ extension DesignDocument {
         var profileFeature = selection.feature
         profileFeature.operation = .sketch(nextSketch)
         do {
-            try cadDocument.replaceFeature(profileFeature)
+            try cadDocument.replaceFeature(
+                profileFeature,
+                tolerance: modelingSettings.tolerance
+            )
             try synchronizeSketchObjectProperties(
                 featureID: selection.featureID,
                 sketch: nextSketch,
@@ -263,7 +266,10 @@ extension DesignDocument {
 
         var updatedCADDocument = cadDocument
         do {
-            try updatedCADDocument.replaceFeatures([profileFeature, feature])
+            try updatedCADDocument.replaceFeatures(
+                [profileFeature, feature],
+                tolerance: modelingSettings.tolerance
+            )
             try validateEditableBodyCandidate(
                 updatedCADDocument,
                 operationName: "Body edge move",

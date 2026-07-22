@@ -78,11 +78,11 @@ public func agentDirectBSplineSurfaceWithInteriorKnots() -> BSplineSurface3D {
     )
 }
 
-public func agentAuthoredBSplineSurfaceTrimLoop() -> BSplineSurfaceTrimLoop {
-    BSplineSurfaceTrimLoop(
+public func agentAuthoredBSplineSurfaceTrimLoop() -> SurfaceTrimLoop {
+    SurfaceTrimLoop(
         role: .outer,
-        edges: [
-            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+        parameterCurves: [
+            .bSpline(BSplineCurve2D(
                 degree: 2,
                 knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
                 controlPoints: [
@@ -90,15 +90,15 @@ public func agentAuthoredBSplineSurfaceTrimLoop() -> BSplineSurfaceTrimLoop {
                     Point2D(x: 0.52, y: 0.42),
                     Point2D(x: 0.8, y: 0.25),
                 ]
-            ))),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            )),
+            .polyline([
                 SurfaceParameter(u: 0.8, v: 0.25),
                 SurfaceParameter(u: 0.45, v: 0.8),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.45, v: 0.8),
                 SurfaceParameter(u: 0.2, v: 0.2),
-            ])),
+            ]),
         ]
     )
 }

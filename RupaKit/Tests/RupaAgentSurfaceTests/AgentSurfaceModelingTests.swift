@@ -749,21 +749,21 @@ import SwiftCAD
         return
     }
     let faceReference = try #require(initialSummary.sources.first?.patches.first?.faceSelectionReference)
-    let trimLoop = BSplineSurfaceTrimLoop(
+    let trimLoop = SurfaceTrimLoop(
         role: .outer,
-        edges: [
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+        parameterCurves: [
+            .polyline([
                 SurfaceParameter(u: 0.2, v: 0.2),
                 SurfaceParameter(u: 0.8, v: 0.25),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.8, v: 0.25),
                 SurfaceParameter(u: 0.45, v: 0.8),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.45, v: 0.8),
                 SurfaceParameter(u: 0.2, v: 0.2),
-            ])),
+            ]),
         ]
     )
 
@@ -821,16 +821,16 @@ import SwiftCAD
 
     let featureID = try #require(session.document.cadDocument.designGraph.order.last)
     let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
-        Issue.record("Agent trim endpoint edit must keep a direct B-spline surface feature.")
+    guard case let .surfaceTrim(trimFeature) = feature.operation else {
+        Issue.record("Agent trim endpoint edit must update the authored Surface Trim feature.")
         return
     }
-    let movedLoop = try #require(surfaceFeature.trimLoops.first)
-    #expect(try movedLoop.edges[0].startParameter().isApproximatelyEqual(
+    let movedLoop = try #require(trimFeature.loops.first)
+    #expect(try movedLoop.parameterCurves[0].startParameter(tolerance: .standard).isApproximatelyEqual(
         to: SurfaceParameter(u: 0.25, v: 0.3),
         tolerance: 1.0e-12
     ))
-    #expect(try movedLoop.edges[2].endParameter().isApproximatelyEqual(
+    #expect(try movedLoop.parameterCurves[2].endParameter(tolerance: .standard).isApproximatelyEqual(
         to: SurfaceParameter(u: 0.25, v: 0.3),
         tolerance: 1.0e-12
     ))
@@ -933,12 +933,12 @@ import SwiftCAD
 
     let featureID = try #require(session.document.cadDocument.designGraph.order.last)
     let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
-        Issue.record("Agent trim control point edit must keep a direct B-spline surface feature.")
+    guard case let .surfaceTrim(trimFeature) = feature.operation else {
+        Issue.record("Agent trim control point edit must update the authored Surface Trim feature.")
         return
     }
-    let movedLoop = try #require(surfaceFeature.trimLoops.first)
-    guard case .bSpline(let movedCurve) = movedLoop.edges[0].parameterCurve else {
+    let movedLoop = try #require(trimFeature.loops.first)
+    guard case .bSpline(let movedCurve) = movedLoop.parameterCurves[0] else {
         Issue.record("Agent must keep the authored B-spline trim p-curve.")
         return
     }
@@ -966,9 +966,9 @@ import SwiftCAD
     #expect(weightResult.generation == DocumentGeneration(4))
 
     let weightedFeature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(weightedSurfaceFeature) = weightedFeature.operation,
-          let weightedLoop = weightedSurfaceFeature.trimLoops.first,
-          case .bSpline(let weightedCurve) = weightedLoop.edges[0].parameterCurve else {
+    guard case let .surfaceTrim(weightedTrimFeature) = weightedFeature.operation,
+          let weightedLoop = weightedTrimFeature.loops.first,
+          case .bSpline(let weightedCurve) = weightedLoop.parameterCurves[0] else {
         Issue.record("Agent trim weight edit must keep the authored B-spline trim p-curve.")
         return
     }
@@ -1014,9 +1014,9 @@ import SwiftCAD
     #expect(knotResult.generation == DocumentGeneration(5))
 
     let refinedFeature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(refinedSurfaceFeature) = refinedFeature.operation,
-          let refinedLoop = refinedSurfaceFeature.trimLoops.first,
-          case .bSpline(let refinedCurve) = refinedLoop.edges[0].parameterCurve else {
+    guard case let .surfaceTrim(refinedTrimFeature) = refinedFeature.operation,
+          let refinedLoop = refinedTrimFeature.loops.first,
+          case .bSpline(let refinedCurve) = refinedLoop.parameterCurves[0] else {
         Issue.record("Agent trim knot insertion must keep the authored B-spline trim p-curve.")
         return
     }
@@ -1062,9 +1062,9 @@ import SwiftCAD
     #expect(knotMultiplicityResult.generation == DocumentGeneration(7))
 
     let saturatedFeature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(saturatedSurfaceFeature) = saturatedFeature.operation,
-          let saturatedLoop = saturatedSurfaceFeature.trimLoops.first,
-          case .bSpline(let saturatedCurve) = saturatedLoop.edges[0].parameterCurve else {
+    guard case let .surfaceTrim(saturatedTrimFeature) = saturatedFeature.operation,
+          let saturatedLoop = saturatedTrimFeature.loops.first,
+          case .bSpline(let saturatedCurve) = saturatedLoop.parameterCurves[0] else {
         Issue.record("Agent trim knot multiplicity must keep the authored B-spline trim p-curve.")
         return
     }
@@ -2107,11 +2107,11 @@ import SwiftCAD
     #expect(source.patches.map(\.patchID) == [0, 2])
     let patch = try #require(source.patches.first)
     #expect(patch.facePersistentName?.contains("subshape:patch:0:face") == true)
-    #expect(patch.faceSelectionComponentID?.hasPrefix(SelectionComponentID.generatedTopologyPrefix) == true)
+    #expect(patch.faceSelectionComponentID?.hasPrefix(SelectionComponentID.stableTopologyPrefix) == true)
     #expect(patch.basis.kind == "cubicBezierBSpline")
     #expect(patch.controlVertices.count == 4)
     #expect(patch.controlVertices.allSatisfy {
-        $0.selectionComponentID.hasPrefix(SelectionComponentID.generatedTopologyPrefix)
+        $0.selectionComponentID.hasPrefix(SelectionComponentID.stableTopologyPrefix)
     })
     let firstControlVertex = try #require(patch.controlVertices.first)
     let measurementResponse = server.handle(

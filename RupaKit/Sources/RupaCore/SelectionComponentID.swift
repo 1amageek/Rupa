@@ -10,14 +10,20 @@ public struct SelectionComponentID: Codable, Equatable, Hashable, RawRepresentab
 }
 
 public extension SelectionComponentID {
-    static let generatedTopologyPrefix = "generatedTopology:"
+    static let stableTopologyPrefix = "stableTopology:"
     static let sketchEntityPrefix = "sketchEntity:"
     static let sketchPointHandlePrefix = "sketchPointHandle:"
     static let sketchControlPointPrefix = "sketchControlPoint:"
     static let profileRegionPrefix = "profileRegion:"
 
-    static func generatedTopology(_ persistentName: String) -> SelectionComponentID {
-        SelectionComponentID(rawValue: "\(generatedTopologyPrefix)\(persistentName)")
+    static func stableTopology(
+        _ reference: StableSubshapeReference
+    ) throws -> SelectionComponentID {
+        try reference.validate()
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let payload = try encoder.encode(reference).base64EncodedString()
+        return SelectionComponentID(rawValue: "\(stableTopologyPrefix)\(payload)")
     }
 
     static func sketchEntity(featureID: FeatureID, entityID: SketchEntityID) -> SelectionComponentID {
@@ -48,13 +54,37 @@ public extension SelectionComponentID {
         SelectionComponentID(rawValue: "\(profileRegionPrefix)\(featureID.description):\(profileIndex)")
     }
 
-    var generatedTopologyPersistentName: String? {
-        guard rawValue.hasPrefix(Self.generatedTopologyPrefix) else {
-            return nil
+    var isStableTopology: Bool {
+        rawValue.hasPrefix(Self.stableTopologyPrefix)
+    }
+
+    func stableTopologyReference(
+        operationName: String
+    ) throws -> StableSubshapeReference {
+        guard isStableTopology else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(operationName) requires a stable topology selection component."
+            )
         }
-        let start = rawValue.index(rawValue.startIndex, offsetBy: Self.generatedTopologyPrefix.count)
-        let persistentName = String(rawValue[start...])
-        return persistentName.isEmpty ? nil : persistentName
+        let start = rawValue.index(rawValue.startIndex, offsetBy: Self.stableTopologyPrefix.count)
+        let payload = String(rawValue[start...])
+        guard let data = Data(base64Encoded: payload) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(operationName) contains an invalid stable topology payload."
+            )
+        }
+        do {
+            let reference = try JSONDecoder().decode(StableSubshapeReference.self, from: data)
+            try reference.validate()
+            return reference
+        } catch {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(operationName) contains an invalid stable topology reference: \(error)."
+            )
+        }
     }
 
     var sketchEntityReference: (featureID: FeatureID, entityID: SketchEntityID)? {

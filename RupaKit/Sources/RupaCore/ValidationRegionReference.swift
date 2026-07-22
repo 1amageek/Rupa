@@ -23,7 +23,7 @@ public struct ValidationRegionReference: Codable, Equatable, Identifiable, Senda
             .body
         case .bodyPair:
             .bodyPair
-        case .generatedTopology:
+        case .stableTopology:
             .generatedTopology
         case .meshTriangles:
             .meshTriangles
@@ -51,11 +51,16 @@ public struct ValidationRegionReference: Codable, Equatable, Identifiable, Senda
             guard first != second else {
                 throw invalidReference("Validation body-pair regions must reference two different bodies.")
             }
-        case .generatedTopology(_, let persistentNames):
-            try validateStrings(
-                persistentNames,
-                fieldName: "persistent topology names"
-            )
+        case .stableTopology(_, let references):
+            guard references.isEmpty == false,
+                  Set(references).count == references.count else {
+                throw invalidReference(
+                    "Validation topology regions must contain unique stable references."
+                )
+            }
+            for reference in references {
+                try reference.validate()
+            }
         case .meshTriangles(let artifact, let selections):
             try artifact.validate()
             try requireMatchingDocument(artifact.documentID)

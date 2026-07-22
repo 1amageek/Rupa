@@ -649,7 +649,7 @@ public struct DrawingProjectionService: Sendable {
             }
             if let entry = topology.entries.first(where: { entry in
                 guard entry.kind == topologyKind,
-                      entry.persistentName == topologyReference.persistentName,
+                      entry.stableReference == topologyReference.stableReference,
                       let target = entry.selectionTarget() else {
                     return false
                 }

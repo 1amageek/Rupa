@@ -35,7 +35,10 @@ public struct SurfaceControlPointDisplay: Codable, Hashable, Sendable {
         )
     }
 
-    public func validate(against cadDocument: CADDocument) throws {
+    public func validate(
+        against cadDocument: CADDocument,
+        tolerance: ModelingTolerance
+    ) throws {
         let expectedID = try SurfaceControlPointDisplayID(selectionReference: target)
         guard id == expectedID else {
             throw DocumentValidationError.invalidProductMetadata(
@@ -44,7 +47,8 @@ public struct SurfaceControlPointDisplay: Codable, Hashable, Sendable {
         }
         _ = try SurfaceControlPointSelectionTargetResolver().validateDisplayTarget(
             for: target,
-            in: cadDocument
+            in: cadDocument,
+            tolerance: tolerance
         )
     }
 }

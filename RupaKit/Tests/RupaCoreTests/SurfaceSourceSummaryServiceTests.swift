@@ -42,13 +42,14 @@ import SwiftCAD
     #expect(adjacency.sharedEdgePersistentName?.contains("subshape:patch:0:edge:uMax") == true)
 
     let patch = try #require(source.patches.first)
-    #expect(patch.facePersistentName?.contains("subshape:patch:0:face") == true)
-    #expect(patch.faceSelectionComponentID?.hasPrefix(SelectionComponentID.generatedTopologyPrefix) == true)
+    #expect(patch.faceSelectionComponentID?.hasPrefix(SelectionComponentID.stableTopologyPrefix) == true)
     guard case .surface(.whole(let faceReference)) = patch.faceSelectionReference else {
         Issue.record("Patch must expose a kernel surface selection reference.")
         return
     }
-    #expect(faceReference.faceName.components.count == 3)
+    #expect(faceReference.subshape.subshapeID.featureID == featureID)
+    #expect(faceReference.subshape.subshapeID.role == "polySpline.patch:0:face")
+    #expect(patch.facePersistentName == surfaceSourceStableSubshapeKey(faceReference.subshape))
     #expect(patch.basis.kind == "cubicBezierBSpline")
     #expect(patch.basis.uDegree == 3)
     #expect(patch.basis.vDegree == 3)
@@ -141,7 +142,7 @@ import SwiftCAD
     #expect(controlVertex.role == "uMin:vMin")
     #expect(controlVertex.sourceVertexIndex == 0)
     #expect(controlVertex.generatedVertexPersistentName.contains("subshape:patch:0:vertex:uMin:vMin"))
-    #expect(controlVertex.selectionComponentID.hasPrefix(SelectionComponentID.generatedTopologyPrefix))
+    #expect(controlVertex.selectionComponentID.hasPrefix(SelectionComponentID.stableTopologyPrefix))
     guard case .surface(.controlPoint(let controlPointReference)) = controlVertex.selectionReference else {
         Issue.record("Surface source control vertex must expose a kernel surface control-point reference.")
         return
@@ -194,8 +195,13 @@ import SwiftCAD
     #expect(source.support.isSupported)
     #expect(source.support.candidateKind == "directBSplineSurface")
     let patch = try #require(source.patches.first)
-    #expect(patch.facePersistentName?.contains("generated:bSplineSurface/subshape:patch:0:face") == true)
-    #expect(patch.faceSelectionComponentID?.hasPrefix(SelectionComponentID.generatedTopologyPrefix) == true)
+    #expect(patch.faceSelectionComponentID?.hasPrefix(SelectionComponentID.stableTopologyPrefix) == true)
+    guard case .surface(.whole(let directSurfaceReference)) = patch.faceSelectionReference else {
+        Issue.record("Direct B-spline patch must expose a stable surface reference.")
+        return
+    }
+    #expect(directSurfaceReference.subshape.subshapeID.featureID == featureID)
+    #expect(patch.facePersistentName == surfaceSourceStableSubshapeKey(directSurfaceReference.subshape))
     #expect(patch.basis.kind == "bSplineSurface")
     #expect(patch.basis.uDegree == 3)
     #expect(patch.basis.vDegree == 3)
@@ -294,10 +300,10 @@ import SwiftCAD
     try document.setSurfaceTrimLoops(
         target: faceReference,
         trimLoops: [
-            BSplineSurfaceTrimLoop(
+            SurfaceTrimLoop(
                 role: .outer,
-                edges: [
-                    BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+                parameterCurves: [
+                    .bSpline(BSplineCurve2D(
                         degree: 2,
                         knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
                         controlPoints: [
@@ -306,15 +312,15 @@ import SwiftCAD
                             Point2D(x: 0.8, y: 0.25),
                         ],
                         weights: [1.0, 1.25, 1.0]
-                    ))),
-                    BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                    )),
+                    .polyline([
                         SurfaceParameter(u: 0.8, v: 0.25),
                         SurfaceParameter(u: 0.45, v: 0.8),
-                    ])),
-                    BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                    ]),
+                    .polyline([
                         SurfaceParameter(u: 0.45, v: 0.8),
                         SurfaceParameter(u: 0.2, v: 0.2),
-                    ])),
+                    ]),
                 ]
             ),
         ]
@@ -567,6 +573,13 @@ private func surfaceSourceSummaryDirectBSplineSurface() -> BSplineSurface3D {
         controlPoints: base.controlPoints,
         weights: weights
     )
+}
+
+private func surfaceSourceStableSubshapeKey(
+    _ reference: StableSubshapeReference
+) -> String {
+    let id = reference.subshapeID
+    return "feature:\(id.featureID.description)/role:\(id.role)/ordinal:\(id.ordinal)"
 }
 
 private func surfaceSourceSummaryPatchNetworkMesh(centerZ: Double) -> Mesh {

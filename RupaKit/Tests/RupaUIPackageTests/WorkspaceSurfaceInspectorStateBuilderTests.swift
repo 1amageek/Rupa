@@ -40,10 +40,13 @@ import Testing
     )
     let fullAnalysis = try #require(try objectBuilder.analysisResult(for: [fixture.sceneNode]).get())
     let faceName = try #require(fullAnalysis.faces.first?.facePersistentNames.first)
-    let faceTarget = SelectionTarget(
-        sceneNodeID: fixture.sceneNode.id,
-        component: .face(.generatedTopology(faceName))
+    let topology = try TopologySnapshotService().snapshot(document: fixture.document)
+    let faceEntry = try #require(
+        topology.entries.first {
+            $0.kind == .face && workspaceSurfaceStableTopologyKey($0.stableReference) == faceName
+        }
     )
+    let faceTarget = try #require(faceEntry.selectionTarget())
     let faceBuilder = WorkspaceSurfaceInspectorStateBuilder(
         document: fixture.document,
         selection: SelectionModel(selectedTargets: [faceTarget]),
@@ -56,7 +59,7 @@ import Testing
 
     let filteredAnalysis = try #require(try faceBuilder.analysisResult(for: [fixture.sceneNode]).get())
 
-    #expect(faceBuilder.generatedTopologyPersistentNames() == [faceName])
+    #expect(faceBuilder.selectedStableTopologyKeys() == [faceName])
     #expect(faceBuilder.showsContinuitySection(for: [fixture.sceneNode]))
     #expect(filteredAnalysis.bSplineFaceCount == 1)
     #expect(filteredAnalysis.faces.first?.facePersistentNames.contains(faceName) == true)
@@ -150,10 +153,13 @@ import Testing
         entry.sourceID == firstFeatureID.description
     })
     let faceName = try #require(firstFeatureEntry.facePersistentName)
-    let faceTarget = SelectionTarget(
-        sceneNodeID: firstSceneNode.id,
-        component: .face(.generatedTopology(faceName))
+    let topology = try TopologySnapshotService().snapshot(document: document)
+    let faceEntry = try #require(
+        topology.entries.first {
+            $0.kind == .face && workspaceSurfaceStableTopologyKey($0.stableReference) == faceName
+        }
     )
+    let faceTarget = try #require(faceEntry.selectionTarget())
     let faceBuilder = WorkspaceSurfaceInspectorStateBuilder(
         document: document,
         selection: SelectionModel(selectedTargets: [faceTarget]),
@@ -410,6 +416,13 @@ private func workspaceSurfaceInspectorTrimReference(
         )
     }
     return trimLoop.selectionReferences[edgeIndex]
+}
+
+private func workspaceSurfaceStableTopologyKey(
+    _ reference: StableSubshapeReference
+) -> String {
+    let id = reference.subshapeID
+    return "feature:\(id.featureID.description)/role:\(id.role)/ordinal:\(id.ordinal)"
 }
 
 private func workspaceSurfaceInspectorPatchNetworkMesh(centerZ: Double) -> Mesh {

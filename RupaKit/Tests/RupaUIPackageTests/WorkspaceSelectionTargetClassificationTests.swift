@@ -3,14 +3,14 @@ import SwiftCAD
 import Testing
 @testable import RupaUI
 
-@Test func workspaceSelectionTargetClassificationGroupsTargetsByComponent() {
+@Test func workspaceSelectionTargetClassificationGroupsTargetsByComponent() throws {
     let sceneNodeID = SceneNodeID()
     let objectTarget = SelectionTarget(sceneNodeID: sceneNodeID)
     let faceTarget = SelectionTarget(sceneNodeID: sceneNodeID, component: .face(.bodyFaceTop))
     let edgeTarget = SelectionTarget(sceneNodeID: sceneNodeID, component: .edge(.bodyEdgeRightTop))
     let vertexTarget = SelectionTarget(
         sceneNodeID: sceneNodeID,
-        component: .vertex(.generatedTopology("body:vertex:first"))
+        component: .vertex(try workspaceClassificationVertexComponent(role: "body.vertex.first"))
     )
     let sketchTarget = SelectionTarget(
         sceneNodeID: sceneNodeID,
@@ -32,14 +32,14 @@ import Testing
     #expect(classification.regionTargets == [regionTarget])
 }
 
-@Test func workspaceSelectionTargetClassificationBuildsDimensionTargets() {
+@Test func workspaceSelectionTargetClassificationBuildsDimensionTargets() throws {
     let sceneNodeID = SceneNodeID()
     let objectTarget = SelectionTarget(sceneNodeID: sceneNodeID)
     let faceTarget = SelectionTarget(sceneNodeID: sceneNodeID, component: .face(.bodyFaceTop))
     let semanticEdgeTarget = SelectionTarget(sceneNodeID: sceneNodeID, component: .edge(.bodyEdgeRightTop))
     let generatedEdgeTarget = SelectionTarget(
         sceneNodeID: sceneNodeID,
-        component: .edge(.generatedTopology("body:edge:generated"))
+        component: .edge(try workspaceClassificationEdgeComponent(role: "body.edge.generated"))
     )
     let sketchTarget = SelectionTarget(
         sceneNodeID: sceneNodeID,
@@ -53,11 +53,11 @@ import Testing
     #expect(classification.sketchDimensionTargets == [generatedEdgeTarget, sketchTarget])
 }
 
-@Test func workspaceSelectionTargetClassificationDeduplicatesGeneratedEdgesForProjection() {
+@Test func workspaceSelectionTargetClassificationDeduplicatesGeneratedEdgesForProjection() throws {
     let sceneNodeID = SceneNodeID()
     let generatedEdgeTarget = SelectionTarget(
         sceneNodeID: sceneNodeID,
-        component: .edge(.generatedTopology("body:edge:generated"))
+        component: .edge(try workspaceClassificationEdgeComponent(role: "body.edge.generated"))
     )
     let semanticEdgeTarget = SelectionTarget(sceneNodeID: sceneNodeID, component: .edge(.bodyEdgeRightTop))
     let classification = WorkspaceSelectionTargetClassification(
@@ -67,4 +67,24 @@ import Testing
     #expect(classification.edgeTargets == [generatedEdgeTarget, generatedEdgeTarget, semanticEdgeTarget])
     #expect(classification.generatedEdgeTargets == [generatedEdgeTarget])
     #expect(classification.generatedEdgeTargets(from: classification.edgeTargets) == [generatedEdgeTarget])
+}
+
+private func workspaceClassificationEdgeComponent(role: String) throws -> SelectionComponentID {
+    try .stableTopology(StableSubshapeReference(
+        subshapeID: SubshapeID(featureID: FeatureID(), role: role, ordinal: 0),
+        geometrySignature: .edge(CurveSpanGeometrySignature(
+            curve: .line(Line3D(origin: .origin, direction: .unitX)),
+            startParameter: 0.0,
+            endParameter: 1.0,
+            startPoint: .origin,
+            endPoint: Point3D(x: 1.0, y: 0.0, z: 0.0)
+        ))
+    ))
+}
+
+private func workspaceClassificationVertexComponent(role: String) throws -> SelectionComponentID {
+    try .stableTopology(StableSubshapeReference(
+        subshapeID: SubshapeID(featureID: FeatureID(), role: role, ordinal: 0),
+        geometrySignature: .vertex(point: .origin)
+    ))
 }

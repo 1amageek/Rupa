@@ -37,9 +37,9 @@ public struct PolySplineSurfaceVertexTarget: Equatable, Hashable, Sendable {
         self.boundaryRole = boundaryRole
     }
 
-    public static func canParsePersistentName(_ persistentName: String) -> Bool {
+    public static func canParse(subshapeID: SubshapeID) -> Bool {
         do {
-            _ = try parsePersistentName(persistentName)
+            _ = try parse(subshapeID: subshapeID)
             return true
         } catch {
             return false
@@ -47,11 +47,11 @@ public struct PolySplineSurfaceVertexTarget: Equatable, Hashable, Sendable {
     }
 
     public static func parse(componentID: SelectionComponentID) -> PolySplineSurfaceVertexTarget? {
-        guard let persistentName = componentID.generatedTopologyPersistentName else {
-            return nil
-        }
         do {
-            return try parsePersistentName(persistentName)
+            let reference = try componentID.stableTopologyReference(
+                operationName: "PolySpline surface vertex"
+            )
+            return try parse(subshapeID: reference.subshapeID)
         } catch {
             return nil
         }
@@ -61,14 +61,16 @@ public struct PolySplineSurfaceVertexTarget: Equatable, Hashable, Sendable {
         _ target: SelectionTarget,
         in document: DesignDocument
     ) throws -> PolySplineSurfaceVertexTarget {
-        guard case .vertex(let componentID) = target.component,
-              let persistentName = componentID.generatedTopologyPersistentName else {
+        guard case .vertex(let componentID) = target.component else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "PolySpline surface vertex move requires a generated topology vertex selection."
             )
         }
-        let parsed = try parsePersistentName(persistentName)
+        let stableReference = try componentID.stableTopologyReference(
+            operationName: "PolySpline surface vertex move"
+        )
+        let parsed = try parse(subshapeID: stableReference.subshapeID)
         guard let sceneNode = document.productMetadata.sceneNodes[target.sceneNodeID] else {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -91,48 +93,34 @@ public struct PolySplineSurfaceVertexTarget: Equatable, Hashable, Sendable {
         return parsed
     }
 
-    private static func parsePersistentName(_ persistentName: String) throws -> PolySplineSurfaceVertexTarget {
-        var featureID: FeatureID?
-        var generatedRole: String?
-        var subshape: String?
-        for component in persistentName.split(separator: "/", omittingEmptySubsequences: false) {
-            let text = String(component)
-            if text.hasPrefix("feature:") {
-                let uuidText = String(text.dropFirst("feature:".count))
-                guard let uuid = UUID(uuidString: uuidText) else {
-                    throw invalidPersistentName()
-                }
-                featureID = FeatureID(uuid)
-            } else if text.hasPrefix("generated:") {
-                generatedRole = String(text.dropFirst("generated:".count))
-            } else if text.hasPrefix("subshape:") {
-                subshape = String(text.dropFirst("subshape:".count))
-            }
+    private static func parse(
+        subshapeID: SubshapeID
+    ) throws -> PolySplineSurfaceVertexTarget {
+        let prefix = "polySpline."
+        guard subshapeID.role.hasPrefix(prefix),
+              subshapeID.ordinal == 0 else {
+            throw invalidStableReference()
         }
-        guard generatedRole == "polySpline",
-              let featureID,
-              let subshape else {
-            throw invalidPersistentName()
-        }
+        let subshape = String(subshapeID.role.dropFirst(prefix.count))
         let parts = subshape.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
         guard parts.count == 5,
               parts[0] == "patch",
               let patchID = Int(parts[1]),
               parts[2] == "vertex",
               let boundaryRole = BoundaryRole(rawValue: "\(parts[3]):\(parts[4])") else {
-            throw invalidPersistentName()
+            throw invalidStableReference()
         }
         return PolySplineSurfaceVertexTarget(
-            featureID: featureID,
+            featureID: subshapeID.featureID,
             patchID: patchID,
             boundaryRole: boundaryRole
         )
     }
 
-    private static func invalidPersistentName() -> EditorError {
+    private static func invalidStableReference() -> EditorError {
         EditorError(
             code: .commandInvalid,
-            message: "PolySpline surface vertex move requires a PolySpline patch vertex persistent name."
+            message: "PolySpline surface vertex move requires a stable PolySpline patch vertex reference."
         )
     }
 }

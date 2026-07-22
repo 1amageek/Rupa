@@ -26,12 +26,7 @@ struct PatternArrayFeatureIDRemapper: Sendable {
     }
 
     func remappedOutput(_ output: FeatureOutput) throws -> FeatureOutput {
-        FeatureOutput(
-            role: output.role,
-            persistentName: try output.persistentName.map {
-                try remappedPersistentName($0)
-            }
-        )
+        FeatureOutput(role: output.role)
     }
 
     func remappedOperation(_ operation: FeatureOperation) throws -> FeatureOperation {
@@ -85,37 +80,33 @@ struct PatternArrayFeatureIDRemapper: Sendable {
             faceLoopOffset.target = FaceLoopOffsetTargetReference(
                 featureID: try remappedFeatureID(faceLoopOffset.target.featureID)
             )
-            faceLoopOffset.facePersistentName = try remappedPersistentName(
-                faceLoopOffset.facePersistentName
-            )
+            faceLoopOffset.face = try remappedStableReference(faceLoopOffset.face)
             return .faceLoopOffset(faceLoopOffset)
         case .edgeOffset(var edgeOffset):
             edgeOffset.target = EdgeOffsetTargetReference(
                 featureID: try remappedFeatureID(edgeOffset.target.featureID)
             )
-            edgeOffset.edgePersistentName = try remappedPersistentName(edgeOffset.edgePersistentName)
-            edgeOffset.supportFacePersistentName = try remappedPersistentName(
-                edgeOffset.supportFacePersistentName
-            )
+            edgeOffset.edge = try remappedStableReference(edgeOffset.edge)
+            edgeOffset.supportFace = try remappedStableReference(edgeOffset.supportFace)
             return .edgeOffset(edgeOffset)
         case .faceKnife(var faceKnife):
             faceKnife.target = FaceKnifeTargetReference(
                 featureID: try remappedFeatureID(faceKnife.target.featureID)
             )
-            faceKnife.facePersistentName = try remappedPersistentName(faceKnife.facePersistentName)
+            faceKnife.face = try remappedStableReference(faceKnife.face)
             return .faceKnife(faceKnife)
         case .faceDelete(var faceDelete):
             faceDelete.target = FaceDeleteTargetReference(
                 featureID: try remappedFeatureID(faceDelete.target.featureID)
             )
-            faceDelete.facePersistentNames = try faceDelete.facePersistentNames.map(remappedPersistentName)
+            faceDelete.faces = try faceDelete.faces.map(remappedStableReference)
             return .faceDelete(faceDelete)
         case .faceDraft(var faceDraft):
             faceDraft.target = FaceDraftTargetReference(
                 featureID: try remappedFeatureID(faceDraft.target.featureID)
             )
-            faceDraft.facePersistentNames = try faceDraft.facePersistentNames.map(remappedPersistentName)
-            faceDraft.neutralFacePersistentName = try remappedPersistentName(faceDraft.neutralFacePersistentName)
+            faceDraft.faces = try faceDraft.faces.map(remappedStableReference)
+            faceDraft.neutralFace = try remappedStableReference(faceDraft.neutralFace)
             return .faceDraft(faceDraft)
         case .bridgeCurve:
             return operation
@@ -129,18 +120,50 @@ struct PatternArrayFeatureIDRemapper: Sendable {
         case .curveTrim(var curveTrim):
             curveTrim.source = try remappedCurveOutputReference(curveTrim.source)
             return .curveTrim(curveTrim)
+        case .primitive,
+             .patchSurface,
+             .faceOffset,
+             .faceMove,
+             .edgeMove,
+             .vertexMove,
+             .linearPattern,
+             .radialPattern,
+             .gridPattern,
+             .curveDrivenPattern,
+             .chamfer,
+             .fillet,
+             .g2Blend,
+             .setbackCorner,
+             .shell,
+             .thicken,
+             .bridgeSurface,
+             .curveExtend,
+             .curveMatch,
+             .surfaceOffset,
+             .surfaceTrim,
+             .surfaceExtend,
+             .surfaceMatch:
+            // Pattern-array cloning currently reaches this remapper for every source feature.
+            // Forward feature operations are not yet cloned here, and must fail until every
+            // embedded feature and stable-subshape reference is remapped deterministically.
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Pattern arrays do not yet support cloning this forward CAD operation."
+            )
         }
     }
 
-    func remappedPersistentName(_ name: PersistentName) throws -> PersistentName {
-        PersistentName(components: try name.components.map { component in
-            switch component {
-            case .feature(let featureID):
-                return .feature(try remappedFeatureID(featureID))
-            case .generated, .subshape, .index:
-                return component
-            }
-        })
+    func remappedStableReference(
+        _ reference: StableSubshapeReference
+    ) throws -> StableSubshapeReference {
+        StableSubshapeReference(
+            subshapeID: SubshapeID(
+                featureID: try remappedFeatureID(reference.subshapeID.featureID),
+                role: reference.subshapeID.role,
+                ordinal: reference.subshapeID.ordinal
+            ),
+            geometrySignature: reference.geometrySignature
+        )
     }
 
     private func remappedProfileReference(_ reference: ProfileReference) throws -> ProfileReference {

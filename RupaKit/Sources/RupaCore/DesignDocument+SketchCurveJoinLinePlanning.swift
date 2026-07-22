@@ -359,22 +359,29 @@ extension DesignDocument {
                     )
                 }
                 updated.append(constraint)
-            case .tangent(let first, let second):
+            case .tangent(let tangency):
+                let entityIDs: (SketchEntityID, SketchEntityID)
+                switch tangency {
+                case .lineCircular(let line, let circular, _):
+                    entityIDs = (line, circular)
+                case .circularCircular(let first, let second, _):
+                    entityIDs = (first, second)
+                }
                 try rejectSketchLineJoinWholeLineConstraintIfNeeded(
-                    first,
-                    second,
+                    entityIDs.0,
+                    entityIDs.1,
                     join: join,
                     message: "Join Curves cannot preserve removed-line tangent constraints yet."
                 )
                 updated.append(constraint)
-            case .splineEndpointTangent(let splineID, let endpoint, let lineID):
-                guard lineID != join.removedEntityID else {
+            case .splineEndpointTangent(let tangency):
+                guard tangency.line != join.removedEntityID else {
                     throw EditorError(
                         code: .commandInvalid,
                         message: "Join Curves cannot preserve removed-line spline tangent constraints yet."
                     )
                 }
-                updated.append(.splineEndpointTangent(spline: splineID, endpoint: endpoint, line: lineID))
+                updated.append(constraint)
             case .concentric,
                  .equalRadius,
                  .smoothSplineControlPoint,

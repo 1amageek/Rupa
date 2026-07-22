@@ -27,7 +27,7 @@ extension DesignDocument {
             )
         }
         if case .edge(let componentID) = target.component,
-           componentID.generatedTopologyPersistentName != nil {
+           componentID.isStableTopology {
             return (
                 entity: try projectedGeneratedEdgeSketchEntity(
                     for: target,

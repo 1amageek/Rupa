@@ -4,16 +4,16 @@ import RupaCoreTypes
 
 public struct DocumentExportService: Sendable {
     private let pipelineOverride: CADPipeline?
-    private let exchange: OfficialFormatExchange
+    private let exchangeOverride: OfficialFormatExchange?
     private let preflightValidators: [any DocumentExportPreflightValidator]
 
     public init(
         pipeline: CADPipeline? = nil,
-        exchange: OfficialFormatExchange = OfficialFormatExchange(),
+        exchange: OfficialFormatExchange? = nil,
         preflightValidators: [any DocumentExportPreflightValidator] = []
     ) {
         self.pipelineOverride = pipeline
-        self.exchange = exchange
+        self.exchangeOverride = exchange
         self.preflightValidators = preflightValidators
     }
 
@@ -72,6 +72,9 @@ public struct DocumentExportService: Sendable {
                 if plan.format == .stl, plan.outputUnit == .micrometer {
                     try exportBinarySTLInMicrometers(evaluatedDocument, to: destinationURL)
                 } else {
+                    let exchange = exchangeOverride ?? OfficialFormatExchange(
+                        tolerance: document.modelingSettings.tolerance
+                    )
                     try exchange.export(evaluatedDocument, to: destinationURL)
                 }
             } catch {
@@ -334,7 +337,7 @@ public struct DocumentExportService: Sendable {
             )
         }
         let triangleCount = try evaluatedDocument.meshes.values.reduce(0) { partial, mesh in
-            try mesh.validate()
+            try mesh.validate(tolerance: evaluatedDocument.configuration.tolerance)
             return partial + mesh.indices.count / 3
         }
         guard UInt64(triangleCount) <= UInt64(UInt32.max) else {

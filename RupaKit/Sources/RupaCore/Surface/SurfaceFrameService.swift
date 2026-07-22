@@ -92,7 +92,7 @@ public struct SurfaceFrameService: Sendable {
             failurePrefix: "Document must evaluate successfully before surface frame resolution"
         )
 
-        let persistentNames = persistentTopologyNames(in: evaluatedDocument)
+        let persistentNames = try persistentTopologyNames(in: evaluatedDocument)
         let sceneNodeIDsByFeatureID = sceneNodeIDsByFeatureID(in: document)
         return try queries.map { query in
             try frame(
@@ -185,14 +185,12 @@ public struct SurfaceFrameService: Sendable {
 
     private func validate(_ query: SurfaceFrameQuery) throws {
         let hasFaceID = query.faceID.map { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ?? false
-        let hasPersistentName = query.facePersistentName.map {
-            !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        } ?? false
+        let hasStableReference = query.faceStableReference != nil
         let hasSelectionReference = query.selectionReference != nil
-        guard [hasFaceID, hasPersistentName, hasSelectionReference].filter({ $0 }).count == 1 else {
+        guard [hasFaceID, hasStableReference, hasSelectionReference].filter({ $0 }).count == 1 else {
             throw EditorError(
                 code: .referenceUnresolved,
-                message: "Surface frame queries require exactly one faceID, facePersistentName, or selectionReference."
+                message: "Surface frame queries require exactly one faceID, faceStableReference, or selectionReference."
             )
         }
         if let selectionReference = query.selectionReference {
@@ -215,7 +213,7 @@ public struct SurfaceFrameService: Sendable {
               let v = query.v else {
             throw EditorError(
                 code: .commandInvalid,
-                message: "Surface frame faceID or facePersistentName queries require both u and v parameters."
+                message: "Surface frame faceID or faceStableReference queries require both u and v parameters."
             )
         }
         guard u.isFinite,
@@ -232,7 +230,7 @@ public struct SurfaceFrameService: Sendable {
         query: SurfaceFrameQuery
     ) throws {
         switch selectionReference {
-        case .topology:
+        case .subshape:
             try validateExplicitUV(query)
         case .surface(.whole):
             try validateExplicitUV(query)
@@ -279,11 +277,11 @@ public struct SurfaceFrameService: Sendable {
                 explicitV: query.v
             )
         }
-        if let facePersistentName = query.facePersistentName {
+        if let faceStableReference = query.faceStableReference {
             return ResolvedFrameTarget(
                 faceID: try resolvedFaceID(
-                    forPersistentName: facePersistentName,
-                    persistentNames: persistentNames
+                    for: faceStableReference,
+                    in: evaluatedDocument
                 ),
                 explicitU: query.u,
                 explicitV: query.v
@@ -310,11 +308,11 @@ public struct SurfaceFrameService: Sendable {
         persistentNames: PersistentTopologyNames
     ) throws -> ResolvedFrameTarget {
         switch selectionReference {
-        case .topology(let name):
+        case .subshape(let reference):
             return ResolvedFrameTarget(
                 faceID: try resolvedFaceID(
-                    forPersistentName: persistentNameString(name),
-                    persistentNames: persistentNames
+                    for: reference,
+                    in: evaluatedDocument
                 ),
                 explicitU: query.u,
                 explicitV: query.v
@@ -322,8 +320,8 @@ public struct SurfaceFrameService: Sendable {
         case .surface(.whole(let reference)):
             return ResolvedFrameTarget(
                 faceID: try resolvedFaceID(
-                    forPersistentName: persistentNameString(reference.faceName),
-                    persistentNames: persistentNames
+                    for: reference.subshape,
+                    in: evaluatedDocument
                 ),
                 explicitU: query.u,
                 explicitV: query.v
@@ -331,8 +329,8 @@ public struct SurfaceFrameService: Sendable {
         case .surface(.parameter(let reference)):
             return ResolvedFrameTarget(
                 faceID: try resolvedFaceID(
-                    forPersistentName: persistentNameString(reference.surface.faceName),
-                    persistentNames: persistentNames
+                    for: reference.surface.subshape,
+                    in: evaluatedDocument
                 ),
                 explicitU: reference.u,
                 explicitV: reference.v
@@ -340,8 +338,8 @@ public struct SurfaceFrameService: Sendable {
         case .surface(.controlPoint(let reference)):
             return ResolvedFrameTarget(
                 faceID: try resolvedFaceID(
-                    forPersistentName: persistentNameString(reference.surface.faceName),
-                    persistentNames: persistentNames
+                    for: reference.surface.subshape,
+                    in: evaluatedDocument
                 ),
                 controlPointIndex: ControlPointIndex(
                     uIndex: reference.uIndex,
@@ -355,8 +353,8 @@ public struct SurfaceFrameService: Sendable {
             )
             return ResolvedFrameTarget(
                 faceID: try resolvedFaceID(
-                    forPersistentName: persistentNameString(reference.trim.surface.faceName),
-                    persistentNames: persistentNames
+                    for: reference.trim.surface.subshape,
+                    in: evaluatedDocument
                 ),
                 explicitU: parameter.u,
                 explicitV: parameter.v
@@ -368,8 +366,8 @@ public struct SurfaceFrameService: Sendable {
             )
             return ResolvedFrameTarget(
                 faceID: try resolvedFaceID(
-                    forPersistentName: persistentNameString(reference.trim.surface.faceName),
-                    persistentNames: persistentNames
+                    for: reference.trim.surface.subshape,
+                    in: evaluatedDocument
                 ),
                 explicitU: parameter.u,
                 explicitV: parameter.v
@@ -460,14 +458,15 @@ public struct SurfaceFrameService: Sendable {
     }
 
     private func resolvedFaceID(
-        forPersistentName facePersistentName: String,
-        persistentNames: PersistentTopologyNames
+        for reference: StableSubshapeReference,
+        in evaluatedDocument: EvaluatedDocument
     ) throws -> FaceID {
-        let trimmed = facePersistentName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let faceID = persistentNames.faceIDsByName[trimmed] else {
+        guard case .face(let faceID) = try evaluatedDocument.topologyReference(
+            for: reference
+        ) else {
             throw EditorError(
                 code: .referenceUnresolved,
-                message: "Surface frame facePersistentName did not resolve to a generated face."
+                message: "Surface frame stable reference did not resolve to a generated face."
             )
         }
         return faceID
@@ -559,19 +558,21 @@ public struct SurfaceFrameService: Sendable {
 
     private func persistentTopologyNames(
         in evaluatedDocument: EvaluatedDocument
-    ) -> PersistentTopologyNames {
+    ) throws -> PersistentTopologyNames {
         var faceIDsByName: [String: FaceID] = [:]
         var faceNamesByID: [FaceID: [String]] = [:]
         var sourceFeatureIDsByFaceID: [FaceID: FeatureID] = [:]
-        for (name, reference) in evaluatedDocument.generatedNames {
+        for (subshapeID, reference) in evaluatedDocument.subshapes.entries {
             guard case .face(let faceID) = reference else {
                 continue
             }
-            let stringName = persistentNameString(name)
+            let stringName = stableSubshapeKey(
+                try evaluatedDocument.stableSubshapeReference(for: subshapeID)
+            )
             faceIDsByName[stringName] = faceID
             faceNamesByID[faceID, default: []].append(stringName)
             if sourceFeatureIDsByFaceID[faceID] == nil {
-                sourceFeatureIDsByFaceID[faceID] = sourceFeatureID(in: name)
+                sourceFeatureIDsByFaceID[faceID] = subshapeID.featureID
             }
         }
         for faceID in faceNamesByID.keys {
@@ -595,30 +596,9 @@ public struct SurfaceFrameService: Sendable {
         return mapping
     }
 
-    private func sourceFeatureID(in name: PersistentName) -> FeatureID? {
-        for component in name.components {
-            guard case .feature(let featureID) = component else {
-                continue
-            }
-            return featureID
-        }
-        return nil
-    }
-
-    private func persistentNameString(_ name: PersistentName) -> String {
-        name.components.map { component in
-            switch component {
-            case .feature(let featureID):
-                return "feature:\(featureID.description)"
-            case .generated(let value):
-                return "generated:\(value)"
-            case .subshape(let value):
-                return "subshape:\(value)"
-            case .index(let index):
-                return "index:\(index)"
-            }
-        }
-        .joined(separator: "/")
+    private func stableSubshapeKey(_ reference: StableSubshapeReference) -> String {
+        let id = reference.subshapeID
+        return "feature:\(id.featureID.description)/role:\(id.role)/ordinal:\(id.ordinal)"
     }
 
     private func point(_ point: Point3D) -> SurfaceAnalysisResult.Point {

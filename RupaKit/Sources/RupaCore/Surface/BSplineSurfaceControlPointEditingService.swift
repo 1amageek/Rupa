@@ -2,6 +2,12 @@ import SwiftCAD
 import RupaCoreTypes
 
 struct BSplineSurfaceControlPointEditingService: Sendable {
+    private let tolerance: ModelingTolerance
+
+    init(tolerance: ModelingTolerance) {
+        self.tolerance = tolerance
+    }
+
     func updatedFeature(
         moving target: BSplineSurfaceControlPointEditTarget,
         by delta: Vector3D,
@@ -12,7 +18,7 @@ struct BSplineSurfaceControlPointEditingService: Sendable {
         let currentPoint = try controlPoint(for: target, in: feature, owner: owner)
         var updatedFeature = feature
         updatedFeature.surface.controlPoints[target.vIndex][target.uIndex] = currentPoint + delta
-        try updatedFeature.validate()
+        try updatedFeature.validate(tolerance: tolerance)
         return updatedFeature
     }
 
@@ -37,7 +43,7 @@ struct BSplineSurfaceControlPointEditingService: Sendable {
         _ = try controlPoint(for: target, in: feature, owner: owner)
         var updatedFeature = feature
         updatedFeature.surface.weights[target.vIndex][target.uIndex] = weight
-        try updatedFeature.validate()
+        try updatedFeature.validate(tolerance: tolerance)
         return updatedFeature
     }
 

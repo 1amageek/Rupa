@@ -10,12 +10,8 @@ import Testing
     let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
     let plan = ViewportIdentityPickRenderPlanBuilder().build(scene: scene, layout: layout)
     let renderer = try ViewportIdentityBufferRenderer()
-    let faceComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:identity:face:front"
-    )
-    let vertexComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:identity:vertex:frontBottomLeft"
-    )
+    let faceComponentID = identityBufferFaceComponentID(in: scene)
+    let vertexComponentID = identityBufferVertexComponentID(in: scene)
 
     let buffer = try renderer.render(plan: plan, viewportSize: viewportSize)
     let faceSample = try buffer.sample(
@@ -41,12 +37,8 @@ import Testing
     let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
     let renderer = try ViewportIdentityBufferRenderer()
     let samplePoint = layout.project(Point3D(x: -0.020, y: 0.0, z: -0.020))
-    let faceComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:identity:face:front"
-    )
-    let vertexComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:identity:vertex:frontBottomLeft"
-    )
+    let faceComponentID = identityBufferFaceComponentID(in: scene)
+    let vertexComponentID = identityBufferVertexComponentID(in: scene)
 
     let facePlan = ViewportIdentityPickRenderPlanBuilder().build(
         scene: scene,
@@ -77,9 +69,7 @@ import Testing
 @Test func viewportIdentityPickIndexLooksUpRecordsByFeatureSceneAndGeometry() throws {
     let scene = identityBufferGeneratedTopologyScene()
     let item = try #require(scene.items.first)
-    let faceComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:identity:face:front"
-    )
+    let faceComponentID = identityBufferFaceComponentID(in: scene)
     let index = ViewportIdentityPickIndexBuilder().build(scene: scene)
 
     let record = index.record(
@@ -158,9 +148,7 @@ import Testing
     let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
     let plan = ViewportIdentityPickRenderPlanBuilder().build(scene: scene, layout: layout)
     let renderer = try ViewportIdentityBufferRenderer()
-    let faceComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:identity:face:front"
-    )
+    let faceComponentID = identityBufferFaceComponentID(in: scene)
 
     let encodedPoints = identityPlanPoints(plan)
     let buffer = try renderer.render(plan: plan, viewportSize: viewportSize)
@@ -252,12 +240,8 @@ import Testing
         throw ViewportIdentityBufferRendererError.deviceUnavailable
     })
     let samplePoint = layout.project(Point3D(x: -0.018, y: 0.0, z: -0.018))
-    let faceComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:identity:face:front"
-    )
-    let vertexComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:identity:vertex:frontBottomLeft"
-    )
+    let faceComponentID = identityBufferFaceComponentID(in: scene)
+    let vertexComponentID = identityBufferVertexComponentID(in: scene)
 
     let faceHit = resolver.hitTest(
         point: samplePoint,
@@ -292,9 +276,7 @@ import Testing
     let viewportSize = CGSize(width: 240.0, height: 180.0)
     let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
     let resolver = ViewportIdentityHitResolver()
-    let faceComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:identity:face:front"
-    )
+    let faceComponentID = identityBufferFaceComponentID(in: scene)
 
     let hit = resolver.hitTest(
         point: layout.project(Point3D(x: 0.0, y: 0.0, z: 0.0)),
@@ -315,9 +297,7 @@ import Testing
     let resolver = ViewportIdentityHitResolver(rendererFactory: {
         throw ViewportIdentityBufferRendererError.deviceUnavailable
     })
-    let faceComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:identity:face:front"
-    )
+    let faceComponentID = identityBufferFaceComponentID(in: scene)
 
     let hit = resolver.hitTest(
         point: layout.project(Point3D(x: 0.0, y: 0.0, z: 0.0)),
@@ -355,15 +335,9 @@ import Testing
     let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
     let plan = ViewportIdentityPickRenderPlanBuilder().build(scene: scene, layout: layout)
     let renderer = try ViewportIdentityBufferRenderer()
-    let faceComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:identity:face:front"
-    )
-    let edgeComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:identity:edge:frontBottom"
-    )
-    let vertexComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:identity:vertex:frontBottomLeft"
-    )
+    let faceComponentID = identityBufferFaceComponentID(in: scene)
+    let edgeComponentID = identityBufferEdgeComponentID(in: scene)
+    let vertexComponentID = identityBufferVertexComponentID(in: scene)
 
     let buffer = try renderer.render(plan: plan, viewportSize: viewportSize)
     let hits = buffer.hits(
@@ -392,9 +366,7 @@ import Testing
     let viewportSize = CGSize(width: 240.0, height: 180.0)
     let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
     let resolver = ViewportIdentityHitResolver()
-    let vertexComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:identity:vertex:frontBottomLeft"
-    )
+    let vertexComponentID = identityBufferVertexComponentID(in: scene)
 
     let hits = resolver.selectionHits(
         in: CGRect(x: 0.0, y: 0.0, width: viewportSize.width, height: viewportSize.height),
@@ -413,15 +385,9 @@ import Testing
     let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
     let resolver = ViewportIdentityHitResolver()
     let selectionRect = CGRect(x: 0.0, y: 0.0, width: viewportSize.width, height: viewportSize.height)
-    let faceComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:identity:face:front"
-    )
-    let edgeComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:identity:edge:frontBottom"
-    )
-    let vertexComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:identity:vertex:frontBottomLeft"
-    )
+    let faceComponentID = identityBufferFaceComponentID(in: scene)
+    let edgeComponentID = identityBufferEdgeComponentID(in: scene)
+    let vertexComponentID = identityBufferVertexComponentID(in: scene)
 
     let faceHits = resolver.selectionHits(
         in: selectionRect,
@@ -551,9 +517,7 @@ import Testing
             maximumEncodedPointCount: 1_000_000
         )
     )
-    let faceComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:identity:face:front"
-    )
+    let faceComponentID = identityBufferFaceComponentID(in: scene)
 
     let hit = resolver.hitTest(
         point: layout.project(Point3D(x: 0.0, y: 0.0, z: 0.0)),
@@ -768,9 +732,7 @@ import Testing
     let resolver = ViewportIdentityHitResolver(rendererFactory: {
         throw ViewportIdentityBufferRendererError.deviceUnavailable
     })
-    let vertexComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:identity:vertex:frontBottomLeft"
-    )
+    let vertexComponentID = identityBufferVertexComponentID(in: scene)
 
     let hits = resolver.selectionHits(
         in: CGRect(x: 0.0, y: 0.0, width: viewportSize.width, height: viewportSize.height),
@@ -852,15 +814,6 @@ private func identityBufferGeneratedTopologyScene(
     origin: Point3D = .origin
 ) -> ViewportScene {
     let featureID = FeatureID()
-    let faceComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:identity:face:front"
-    )
-    let edgeComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:identity:edge:frontBottom"
-    )
-    let vertexComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:identity:vertex:frontBottomLeft"
-    )
     let frontBottomLeft = Point3D(
         x: origin.x - 0.020,
         y: origin.y,
@@ -880,6 +833,35 @@ private func identityBufferGeneratedTopologyScene(
         x: origin.x - 0.020,
         y: origin.y,
         z: origin.z + 0.020
+    )
+    let faceComponentID = identityBufferStableComponentID(
+        featureID: featureID,
+        role: "identity.face.front",
+        signature: .face(
+            FaceGeometrySignature(
+                surface: .plane(Plane3D(origin: origin, normal: .unitY)),
+                orientation: .forward,
+                loops: []
+            )
+        )
+    )
+    let edgeComponentID = identityBufferStableComponentID(
+        featureID: featureID,
+        role: "identity.edge.frontBottom",
+        signature: .edge(
+            CurveSpanGeometrySignature(
+                curve: .line(Line3D(origin: frontBottomLeft, direction: .unitX)),
+                startParameter: 0.0,
+                endParameter: 0.040,
+                startPoint: frontBottomLeft,
+                endPoint: frontBottomRight
+            )
+        )
+    )
+    let vertexComponentID = identityBufferStableComponentID(
+        featureID: featureID,
+        role: "identity.vertex.frontBottomLeft",
+        signature: .vertex(point: frontBottomLeft)
     )
     let topology = ViewportBodyTopology(
         faces: [
@@ -927,6 +909,63 @@ private func identityBufferGeneratedTopologyScene(
         kind: .body(component: component)
     )
     return ViewportScene(items: [item])
+}
+
+private func identityBufferStableComponentID(
+    featureID: FeatureID,
+    role: String,
+    signature: SubshapeGeometrySignature
+) -> SelectionComponentID {
+    do {
+        return try SelectionComponentID.stableTopology(
+            StableSubshapeReference(
+                subshapeID: SubshapeID(featureID: featureID, role: role, ordinal: 0),
+                geometrySignature: signature
+            )
+        )
+    } catch {
+        fatalError("Invalid identity-buffer stable topology fixture: \(error)")
+    }
+}
+
+private func identityBufferFaceComponentID(
+    in scene: ViewportScene
+) -> SelectionComponentID {
+    guard let componentID = identityBufferBodyTopology(in: scene).faces.first?.componentID else {
+        fatalError("Identity-buffer fixture requires a face component.")
+    }
+    return componentID
+}
+
+private func identityBufferEdgeComponentID(
+    in scene: ViewportScene
+) -> SelectionComponentID {
+    guard let componentID = identityBufferBodyTopology(in: scene).edges.first?.componentID else {
+        fatalError("Identity-buffer fixture requires an edge component.")
+    }
+    return componentID
+}
+
+private func identityBufferVertexComponentID(
+    in scene: ViewportScene
+) -> SelectionComponentID {
+    guard let componentID = identityBufferBodyTopology(in: scene).vertices.first?.componentID else {
+        fatalError("Identity-buffer fixture requires a vertex component.")
+    }
+    return componentID
+}
+
+private func identityBufferBodyTopology(
+    in scene: ViewportScene
+) -> ViewportBodyTopology {
+    for item in scene.items {
+        guard case .body(let component) = item.kind,
+              let topology = component.topology else {
+            continue
+        }
+        return topology
+    }
+    fatalError("Identity-buffer fixture requires body topology.")
 }
 
 private func identityPlanPoints(_ plan: ViewportIdentityPickRenderPlan) -> [CGPoint] {

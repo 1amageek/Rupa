@@ -279,10 +279,10 @@ public struct SlotProfileBuilder: Sendable {
             .coincident(.lineEnd(lastRightLineID), .arcEnd(startCapID)),
             .coincident(.arcStart(startCapID), .lineStart(firstLeftLineID)),
             .equalRadius(endCapID, startCapID),
-            .tangent(lastLeftLineID, endCapID),
-            .tangent(endCapID, firstRightLineID),
-            .tangent(lastRightLineID, startCapID),
-            .tangent(startCapID, firstLeftLineID),
+            .tangent(.lineCircular(line: lastLeftLineID, circular: endCapID, side: .right)),
+            .tangent(.lineCircular(line: firstRightLineID, circular: endCapID, side: .right)),
+            .tangent(.lineCircular(line: lastRightLineID, circular: startCapID, side: .right)),
+            .tangent(.lineCircular(line: firstLeftLineID, circular: startCapID, side: .right)),
         ])
         for pair in zip(leftLineIDs, rightLineIDs.reversed()) {
             constraints.append(.parallel(pair.0, pair.1))

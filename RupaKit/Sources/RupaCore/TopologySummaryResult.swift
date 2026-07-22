@@ -1,5 +1,6 @@
 import Foundation
 import RupaCoreTypes
+import SwiftCAD
 
 public struct TopologySummaryResult: Codable, Equatable, Sendable {
     public struct Counts: Codable, Equatable, Sendable {
@@ -51,7 +52,7 @@ public struct TopologySummaryResult: Codable, Equatable, Sendable {
             }
         }
 
-        public var persistentName: String
+        public var stableReference: StableSubshapeReference
         public var kind: Kind
         public var referenceID: String
         public var sourceFeatureID: String?
@@ -92,7 +93,7 @@ public struct TopologySummaryResult: Codable, Equatable, Sendable {
         public var shellCount: Int?
 
         public init(
-            persistentName: String,
+            stableReference: StableSubshapeReference,
             kind: Kind,
             referenceID: String,
             sourceFeatureID: String? = nil,
@@ -132,7 +133,7 @@ public struct TopologySummaryResult: Codable, Equatable, Sendable {
             edgeCount: Int? = nil,
             shellCount: Int? = nil
         ) {
-            self.persistentName = persistentName
+            self.stableReference = stableReference
             self.kind = kind
             self.referenceID = referenceID
             self.sourceFeatureID = sourceFeatureID

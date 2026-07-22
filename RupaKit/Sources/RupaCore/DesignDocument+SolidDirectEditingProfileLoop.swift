@@ -9,7 +9,7 @@ extension DesignDocument {
         objectRegistry: ObjectTypeRegistry
     ) throws {
         do {
-            try updatedCADDocument.validate()
+            try updatedCADDocument.validate(tolerance: modelingSettings.tolerance)
             var candidate = self
             candidate.cadDocument = updatedCADDocument
             try candidate.validate(objectRegistry: objectRegistry)
@@ -106,17 +106,16 @@ extension DesignDocument {
                 message: "\(operationName) requires generated topology \(expectedKind.rawValue) targets for non-rectangle profile loops."
             )
         }
-        guard let persistentName = componentID.generatedTopologyPersistentName else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(operationName) requires generated topology targets for non-rectangle profile loops."
-            )
-        }
+        let stableReference = try componentID.stableTopologyReference(
+            operationName: operationName
+        )
         let topology = try TopologySnapshotService().snapshot(
             document: self,
             objectRegistry: objectRegistry
         )
-        guard let entry = topology.entries.first(where: { $0.persistentName == persistentName }) else {
+        guard let entry = topology.entries.first(where: {
+            $0.stableReference == stableReference
+        }) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "\(operationName) generated topology target was not found in the current evaluation."

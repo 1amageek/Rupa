@@ -10,17 +10,14 @@ struct WorkspaceConstructionPlaneInspectorState: Equatable, Sendable {
     var origin: Point3D
     var normal: Vector3D
 
-    init(
-        entry: ConstructionPlaneSummaryResult.Entry,
-        editBuilder: WorkspaceConstructionPlaneEditBuilder = WorkspaceConstructionPlaneEditBuilder()
-    ) {
+    init(entry: ConstructionPlaneSummaryResult.Entry) {
         self.id = entry.id
         self.name = entry.name
         self.sceneNodeID = entry.sceneNodeID
         self.isActive = entry.isActive
         self.planeKindTitle = Self.planeKindTitle(entry.plane)
-        self.origin = editBuilder.origin(from: entry.plane)
-        self.normal = editBuilder.normal(from: entry.plane)
+        self.origin = WorkspaceConstructionPlaneEditBuilder.origin(from: entry.plane)
+        self.normal = WorkspaceConstructionPlaneEditBuilder.normal(from: entry.plane)
     }
 
     private static func planeKindTitle(_ plane: SketchPlane) -> String {

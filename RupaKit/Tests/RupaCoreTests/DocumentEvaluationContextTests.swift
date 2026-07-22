@@ -1,5 +1,6 @@
 import Testing
 import SwiftCAD
+import CADModeling
 @testable import RupaCore
 
 @MainActor
@@ -68,9 +69,7 @@ import SwiftCAD
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
     let currentEvaluation = try #require(session.currentEvaluation)
-    let failingPipeline = CADPipeline(
-        evaluator: DocumentEvaluator(featureEvaluator: ContextFailingFeatureEvaluator())
-    )
+    let failingPipeline = contextFailingPipeline(for: session.document)
 
     let meshSummary = try MeshSummaryService(pipeline: failingPipeline).summarize(
         document: session.document,
@@ -121,9 +120,7 @@ import SwiftCAD
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
     let currentEvaluation = try #require(session.currentEvaluation)
-    let failingPipeline = CADPipeline(
-        evaluator: DocumentEvaluator(featureEvaluator: ContextFailingFeatureEvaluator())
-    )
+    let failingPipeline = contextFailingPipeline(for: session.document)
 
     do {
         _ = try MeshSummaryService(pipeline: failingPipeline).summarize(
@@ -147,9 +144,7 @@ import SwiftCAD
 
     let circleSession = EditorSession()
     _ = try #require(circleSession.createDefaultExtrudedCircle())
-    let failingPipeline = CADPipeline(
-        evaluator: DocumentEvaluator(featureEvaluator: ContextFailingFeatureEvaluator())
-    )
+    let failingPipeline = contextFailingPipeline(for: circleSession.document)
 
     do {
         _ = try MeshSummaryService(pipeline: failingPipeline).summarize(
@@ -189,9 +184,7 @@ import SwiftCAD
     let session = EditorSession(document: document)
     session.store.evaluateCurrentDocument()
     let currentEvaluation = try #require(session.currentEvaluation)
-    let failingPipeline = CADPipeline(
-        evaluator: DocumentEvaluator(featureEvaluator: ContextFailingFeatureEvaluator())
-    )
+    let failingPipeline = contextFailingPipeline(for: session.document)
 
     let result = try MeasurementService(pipeline: failingPipeline).measure(
         document: session.document,
@@ -221,15 +214,13 @@ import SwiftCAD
         currentGeneration: session.generation
     )
     let faceEntry = try #require(topology.entries.first { $0.kind == .face })
-    let failingPipeline = CADPipeline(
-        evaluator: DocumentEvaluator(featureEvaluator: ContextFailingFeatureEvaluator())
-    )
+    let failingPipeline = contextFailingPipeline(for: session.document)
 
     let result = try SurfaceFrameService(pipeline: failingPipeline).resolve(
         document: session.document,
         queries: [
             SurfaceFrameQuery(
-                facePersistentName: faceEntry.persistentName,
+                faceStableReference: faceEntry.stableReference,
                 u: 0.5,
                 v: 0.5
             ),
@@ -247,9 +238,7 @@ import SwiftCAD
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
     let currentEvaluation = try #require(session.currentEvaluation)
-    let failingPipeline = CADPipeline(
-        evaluator: DocumentEvaluator(featureEvaluator: ContextFailingFeatureEvaluator())
-    )
+    let failingPipeline = contextFailingPipeline(for: session.document)
 
     let result = try SelectionDimensionService(pipeline: failingPipeline).evaluate(
         document: session.document,
@@ -263,8 +252,19 @@ import SwiftCAD
 
 private struct ContextFailingFeatureEvaluator: FeatureEvaluating {
     func evaluate(feature _: FeatureNode, context _: EvaluationContext) throws -> EvaluationResult {
-        throw FeatureEvaluationError.unsupportedOperation("Injected evaluator should not be used.")
+        throw FeatureEvaluationError.invalidGraph("Injected evaluator should not be used.")
     }
+}
+
+private func contextFailingPipeline(for document: DesignDocument) -> CADPipeline {
+    let tolerance = document.modelingSettings.tolerance
+    return CADPipeline(
+        tolerance: tolerance,
+        evaluator: DocumentEvaluator(
+            featureEvaluator: ContextFailingFeatureEvaluator(),
+            tolerance: tolerance
+        )
+    )
 }
 
 private func contextFramePolySplinePatchNetworkMesh(centerZ: Double) -> Mesh {

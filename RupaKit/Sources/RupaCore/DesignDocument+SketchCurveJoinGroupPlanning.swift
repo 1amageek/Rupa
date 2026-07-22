@@ -360,12 +360,38 @@ extension DesignDocument {
                 point: (x: sample.point.x, y: sample.point.y),
                 tangent: (x: sample.tangent.x, y: sample.tangent.y)
             )
+        case .splineControlPoint(let entityID, let index):
+            guard case .spline(let spline) = sketch.entities[entityID],
+                  index == 0 || index == spline.controlPoints.count - 1 else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "\(owner) requires a source spline endpoint."
+                )
+            }
+            let controlPoints = try spline.controlPoints.map {
+                let point = try resolvedJoinCurvePoint($0, owner: owner)
+                return CADCore.Point2D(x: point.x, y: point.y)
+            }
+            let parameter = index == 0 ? 0.0 : 1.0
+            guard let sample = sampler.splineSample(
+                for: controlPoints,
+                parameter: parameter
+            ) else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "\(owner) requires a non-degenerate source spline endpoint."
+                )
+            }
+            return SketchCurveJoinEndpointSample(
+                reference: reference,
+                point: (x: sample.point.x, y: sample.point.y),
+                tangent: (x: sample.tangent.x, y: sample.tangent.y)
+            )
         case .entity,
              .circleCenter,
              .circleRadius,
              .arcCenter,
-             .arcRadius,
-             .splineControlPoint:
+             .arcRadius:
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "\(owner) requires a source line or arc endpoint."
@@ -510,18 +536,38 @@ extension DesignDocument {
         case .g1:
             switch (firstEndpoint, secondEndpoint) {
             case (.line(let lineID), .arc(let arcID)):
-                return .tangent(lineID, arcID)
+                return .tangent(try joinLineCircularTangency(
+                    lineID: lineID,
+                    circularID: arcID,
+                    sketch: sketch
+                ))
             case (.arc(let arcID), .line(let lineID)):
-                return .tangent(lineID, arcID)
+                return .tangent(try joinLineCircularTangency(
+                    lineID: lineID,
+                    circularID: arcID,
+                    sketch: sketch
+                ))
             case (.spline(let splineEndpoint), .line(let lineID)),
                  (.line(let lineID), .spline(let splineEndpoint)):
-                return .splineEndpointTangent(
-                    spline: splineEndpoint.splineID,
-                    endpoint: splineEndpoint.endpoint,
-                    line: lineID
-                )
+                return .splineEndpointTangent(SketchSplineLineTangencyConstraint(
+                    splineEndpoint: splineEndpoint,
+                    line: lineID,
+                    orientation: try joinSplineLineTangentOrientation(
+                        splineEndpoint: splineEndpoint,
+                        lineID: lineID,
+                        sketch: sketch
+                    )
+                ))
             case (.spline(let first), .spline(let second)):
-                return .tangentSplineEndpoints(first: first, second: second)
+                return .tangentSplineEndpoints(SketchSplineEndpointTangencyConstraint(
+                    first: first,
+                    second: second,
+                    orientation: try joinSplineEndpointTangentOrientation(
+                        first: first,
+                        second: second,
+                        sketch: sketch
+                    )
+                ))
             case (.line, .line),
                  (.arc, .arc),
                  (.arc, .spline),
@@ -531,7 +577,15 @@ extension DesignDocument {
         case .g2:
             switch (firstEndpoint, secondEndpoint) {
             case (.spline(let first), .spline(let second)):
-                return .smoothSplineEndpoints(first: first, second: second)
+                return .smoothSplineEndpoints(SketchSplineEndpointTangencyConstraint(
+                    first: first,
+                    second: second,
+                    orientation: try joinSplineEndpointTangentOrientation(
+                        first: first,
+                        second: second,
+                        sketch: sketch
+                    )
+                ))
             case (.line, _),
                  (.arc, _),
                  (.spline, .line),
@@ -592,29 +646,124 @@ extension DesignDocument {
         continuityConstraint: SketchConstraint
     ) -> Bool {
         switch (constraint, continuityConstraint) {
-        case let (.tangent(first, second), .tangent(expectedFirst, expectedSecond)):
-            return (first == expectedFirst && second == expectedSecond) ||
-                (first == expectedSecond && second == expectedFirst)
+        case let (.tangent(existing), .tangent(expected)):
+            return existing == expected
         case let (
-            .splineEndpointTangent(splineID, endpoint, lineID),
-            .splineEndpointTangent(expectedSplineID, expectedEndpoint, expectedLineID)
+            .splineEndpointTangent(existing),
+            .splineEndpointTangent(expected)
         ):
-            return splineID == expectedSplineID &&
-                endpoint == expectedEndpoint &&
-                lineID == expectedLineID
+            return existing == expected
         case let (
-            .tangentSplineEndpoints(first, second),
-            .tangentSplineEndpoints(expectedFirst, expectedSecond)
+            .tangentSplineEndpoints(existing),
+            .tangentSplineEndpoints(expected)
         ),
         let (
-            .smoothSplineEndpoints(first, second),
-            .smoothSplineEndpoints(expectedFirst, expectedSecond)
+            .smoothSplineEndpoints(existing),
+            .smoothSplineEndpoints(expected)
         ):
-            return (first == expectedFirst && second == expectedSecond) ||
-                (first == expectedSecond && second == expectedFirst)
+            return existing == expected || (
+                existing.orientation == expected.orientation &&
+                existing.first == expected.second &&
+                existing.second == expected.first
+            )
         default:
             return false
         }
+    }
+
+    private func joinLineCircularTangency(
+        lineID: SketchEntityID,
+        circularID: SketchEntityID,
+        sketch: Sketch
+    ) throws -> SketchTangencyConstraint {
+        guard case .line(let line) = sketch.entities[lineID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Join Curves requires an existing line for tangent continuity."
+            )
+        }
+        let center: SketchPoint
+        switch sketch.entities[circularID] {
+        case .circle(let circle):
+            center = circle.center
+        case .arc(let arc):
+            center = arc.center
+        default:
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Join Curves requires an existing circular curve for tangent continuity."
+            )
+        }
+        let start = try resolvedJoinCurvePoint(line.start, owner: "Join Curves tangent line start")
+        let end = try resolvedJoinCurvePoint(line.end, owner: "Join Curves tangent line end")
+        let resolvedCenter = try resolvedJoinCurvePoint(center, owner: "Join Curves tangent circle center")
+        let cross = (end.x - start.x) * (resolvedCenter.y - start.y) -
+            (end.y - start.y) * (resolvedCenter.x - start.x)
+        return .lineCircular(
+            line: lineID,
+            circular: circularID,
+            side: cross >= 0.0 ? .left : .right
+        )
+    }
+
+    private func joinSplineLineTangentOrientation(
+        splineEndpoint: SketchSplineEndpointReference,
+        lineID: SketchEntityID,
+        sketch: Sketch
+    ) throws -> SketchTangentOrientation {
+        let splineReference = try joinSplineSketchReference(splineEndpoint, sketch: sketch)
+        let lineReference: SketchReference = .lineStart(lineID)
+        let splineSample = try joinCurveEndpointSample(
+            splineReference,
+            sketch: sketch,
+            owner: "Join Curves spline tangent"
+        )
+        let lineSample = try joinCurveEndpointSample(
+            lineReference,
+            sketch: sketch,
+            owner: "Join Curves line tangent"
+        )
+        return joinTangentOrientation(splineSample.tangent, lineSample.tangent)
+    }
+
+    private func joinSplineEndpointTangentOrientation(
+        first: SketchSplineEndpointReference,
+        second: SketchSplineEndpointReference,
+        sketch: Sketch
+    ) throws -> SketchTangentOrientation {
+        let firstSample = try joinCurveEndpointSample(
+            try joinSplineSketchReference(first, sketch: sketch),
+            sketch: sketch,
+            owner: "Join Curves first spline tangent"
+        )
+        let secondSample = try joinCurveEndpointSample(
+            try joinSplineSketchReference(second, sketch: sketch),
+            sketch: sketch,
+            owner: "Join Curves second spline tangent"
+        )
+        return joinTangentOrientation(firstSample.tangent, secondSample.tangent)
+    }
+
+    private func joinSplineSketchReference(
+        _ endpoint: SketchSplineEndpointReference,
+        sketch: Sketch
+    ) throws -> SketchReference {
+        guard case .spline(let spline) = sketch.entities[endpoint.splineID],
+              spline.controlPoints.isEmpty == false else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Join Curves requires an existing spline endpoint for tangent continuity."
+            )
+        }
+        let index = endpoint.endpoint == .start ? 0 : spline.controlPoints.count - 1
+        return .splineControlPoint(entity: endpoint.splineID, index: index)
+    }
+
+    private func joinTangentOrientation(
+        _ first: (x: Double, y: Double),
+        _ second: (x: Double, y: Double)
+    ) -> SketchTangentOrientation {
+        first.x * second.x + first.y * second.y >= 0.0 ? .aligned : .opposed
     }
 
         private func joinedCurveReferenceEntityID(_ reference: SketchReference) -> SketchEntityID? {

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import CADModeling
 import RupaCoreTypes
 
 extension DesignDocument {

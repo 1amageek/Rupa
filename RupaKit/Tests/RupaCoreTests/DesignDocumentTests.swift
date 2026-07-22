@@ -709,8 +709,12 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     #expect(surfaceFeature.surface.vControlPointCount == surface.vControlPointCount)
     for u in [0.0, 0.2, 0.45, 0.8, 1.0] {
         for v in [0.0, 0.3, 0.6, 1.0] {
-            let before = try surface.point(u: u, v: v)
-            let after = try surfaceFeature.surface.point(u: u, v: v)
+            let before = try surface.point(u: u, v: v, tolerance: document.modelingSettings.tolerance)
+            let after = try surfaceFeature.surface.point(
+                u: u,
+                v: v,
+                tolerance: document.modelingSettings.tolerance
+            )
             #expect(abs(before.x - after.x) <= 1.0e-10)
             #expect(abs(before.y - after.y) <= 1.0e-10)
             #expect(abs(before.z - after.z) <= 1.0e-10)
@@ -755,8 +759,12 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     #expect(surfaceFeature.surface.vControlPointCount == surface.vControlPointCount + 1)
     for u in [0.0, 0.2, 0.45, 0.8, 1.0] {
         for v in [0.0, 0.3, 0.625, 0.9, 1.0] {
-            let before = try surface.point(u: u, v: v)
-            let after = try surfaceFeature.surface.point(u: u, v: v)
+            let before = try surface.point(u: u, v: v, tolerance: document.modelingSettings.tolerance)
+            let after = try surfaceFeature.surface.point(
+                u: u,
+                v: v,
+                tolerance: document.modelingSettings.tolerance
+            )
             #expect(abs(before.x - after.x) <= 1.0e-10)
             #expect(abs(before.y - after.y) <= 1.0e-10)
             #expect(abs(before.z - after.z) <= 1.0e-10)
@@ -802,7 +810,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         Issue.record("Expected a direct B-spline surface feature.")
         return
     }
-    let trimDomain = try #require(surfaceFeature.outerTrimDomain)
+    let trimDomain = try #require(surfaceFeature.parameterDomain)
     #expect(trimDomain.uLowerBound == 0.25)
     #expect(trimDomain.uUpperBound == 0.75)
     #expect(trimDomain.vLowerBound == 0.2)
@@ -853,7 +861,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         Issue.record("Expected a direct B-spline surface feature after reset.")
         return
     }
-    #expect(resetSurfaceFeature.outerTrimDomain == nil)
+    #expect(resetSurfaceFeature.parameterDomain == nil)
 }
 
 @Test func directBSplineSurfaceTrimLoopsUpdateSummaryAndContinuityContracts() async throws {
@@ -876,21 +884,21 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         )
     }
 
-    let trimLoop = BSplineSurfaceTrimLoop(
+    let trimLoop = SurfaceTrimLoop(
         role: .outer,
-        edges: [
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+        parameterCurves: [
+            .polyline([
                 SurfaceParameter(u: 0.2, v: 0.2),
                 SurfaceParameter(u: 0.8, v: 0.25),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.8, v: 0.25),
                 SurfaceParameter(u: 0.45, v: 0.8),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.45, v: 0.8),
                 SurfaceParameter(u: 0.2, v: 0.2),
-            ])),
+            ]),
         ]
     )
 
@@ -904,8 +912,11 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         Issue.record("Expected a direct B-spline surface feature.")
         return
     }
-    #expect(surfaceFeature.outerTrimDomain == nil)
-    #expect(surfaceFeature.trimLoops == [trimLoop])
+    #expect(surfaceFeature.parameterDomain == nil)
+    let surfaceTrimFeature = try #require(
+        designDocumentSurfaceTrimFeature(in: document, targetFeatureID: featureID)
+    )
+    #expect(surfaceTrimFeature.loops == [trimLoop])
 
     let trimmedSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let trimmedPatch = try #require(trimmedSummary.sources.first?.patches.first)
@@ -939,6 +950,50 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         )
     }
 
+    let replacementTrimLoop = SurfaceTrimLoop(
+        role: .outer,
+        parameterCurves: [
+            .polyline([
+                SurfaceParameter(u: 0.25, v: 0.25),
+                SurfaceParameter(u: 0.75, v: 0.25),
+            ]),
+            .polyline([
+                SurfaceParameter(u: 0.75, v: 0.25),
+                SurfaceParameter(u: 0.5, v: 0.75),
+            ]),
+            .polyline([
+                SurfaceParameter(u: 0.5, v: 0.75),
+                SurfaceParameter(u: 0.25, v: 0.25),
+            ]),
+        ]
+    )
+    let initialTrimFeatureIDs: [FeatureID] = document.cadDocument.designGraph.nodes.values.compactMap { feature in
+        guard case let .surfaceTrim(surfaceTrim) = feature.operation,
+              surfaceTrim.target.featureID == featureID else {
+            return nil
+        }
+        return feature.id
+    }
+
+    try document.setSurfaceTrimLoops(
+        target: faceReference,
+        trimLoops: [replacementTrimLoop]
+    )
+
+    let replacementTrimFeatureIDs: [FeatureID] = document.cadDocument.designGraph.nodes.values.compactMap { feature in
+        guard case let .surfaceTrim(surfaceTrim) = feature.operation,
+              surfaceTrim.target.featureID == featureID else {
+            return nil
+        }
+        return feature.id
+    }
+    #expect(initialTrimFeatureIDs.count == 1)
+    #expect(replacementTrimFeatureIDs == initialTrimFeatureIDs)
+    #expect(
+        designDocumentSurfaceTrimFeature(in: document, targetFeatureID: featureID)?.loops
+            == [replacementTrimLoop]
+    )
+
     try document.setSurfaceTrimLoops(
         target: faceReference,
         trimLoops: []
@@ -948,8 +1003,8 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         Issue.record("Expected a direct B-spline surface feature after reset.")
         return
     }
-    #expect(resetSurfaceFeature.outerTrimDomain == nil)
-    #expect(resetSurfaceFeature.trimLoops.isEmpty)
+    #expect(resetSurfaceFeature.parameterDomain == nil)
+    #expect(designDocumentSurfaceTrimFeature(in: document, targetFeatureID: featureID) == nil)
 }
 
 @Test func directBSplineSurfaceTrimEndpointMovePreservesAuthoredLoopClosure() async throws {
@@ -962,21 +1017,21 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     )
     let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
-    let trimLoop = BSplineSurfaceTrimLoop(
+    let trimLoop = SurfaceTrimLoop(
         role: .outer,
-        edges: [
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+        parameterCurves: [
+            .polyline([
                 SurfaceParameter(u: 0.2, v: 0.2),
                 SurfaceParameter(u: 0.8, v: 0.25),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.8, v: 0.25),
                 SurfaceParameter(u: 0.45, v: 0.8),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.45, v: 0.8),
                 SurfaceParameter(u: 0.2, v: 0.2),
-            ])),
+            ]),
         ]
     )
     try document.setSurfaceTrimLoops(
@@ -995,24 +1050,32 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         v: .scalar(0.3)
     )
 
-    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
-        Issue.record("Expected a direct B-spline surface feature.")
-        return
-    }
-    let movedLoop = try #require(surfaceFeature.trimLoops.first)
+    let movedSurfaceTrim = try #require(
+        designDocumentSurfaceTrimFeature(in: document, targetFeatureID: featureID)
+    )
+    let movedLoop = try #require(movedSurfaceTrim.loops.first)
+    let tolerance = document.modelingSettings.tolerance
     let movedParameter = SurfaceParameter(u: 0.25, v: 0.3)
-    #expect(try movedLoop.edges[0].startParameter().isApproximatelyEqual(to: movedParameter, tolerance: 1.0e-12))
-    #expect(try movedLoop.edges[2].endParameter().isApproximatelyEqual(to: movedParameter, tolerance: 1.0e-12))
-    #expect(try movedLoop.edges[0].endParameter().isApproximatelyEqual(
+    #expect(try movedLoop.parameterCurves[0].startParameter(tolerance: tolerance).isApproximatelyEqual(
+        to: movedParameter,
+        tolerance: 1.0e-12
+    ))
+    #expect(try movedLoop.parameterCurves[2].endParameter(tolerance: tolerance).isApproximatelyEqual(
+        to: movedParameter,
+        tolerance: 1.0e-12
+    ))
+    #expect(try movedLoop.parameterCurves[0].endParameter(tolerance: tolerance).isApproximatelyEqual(
         to: SurfaceParameter(u: 0.8, v: 0.25),
         tolerance: 1.0e-12
     ))
-    #expect(try movedLoop.edges[2].startParameter().isApproximatelyEqual(
+    #expect(try movedLoop.parameterCurves[2].startParameter(tolerance: tolerance).isApproximatelyEqual(
         to: SurfaceParameter(u: 0.45, v: 0.8),
         tolerance: 1.0e-12
     ))
-    try movedLoop.validate(on: surfaceFeature.surface)
+    try movedLoop.validate(tolerance: tolerance)
+    for parameterCurve in movedLoop.parameterCurves {
+        try parameterCurve.validate(on: .bSpline(surface), tolerance: tolerance)
+    }
 
     let movedSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let movedEdge = try #require(movedSummary.sources.first?.patches.first?.trimLoops.first?.edges.first)
@@ -1030,10 +1093,10 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     )
     let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
-    let trimLoop = BSplineSurfaceTrimLoop(
+    let trimLoop = SurfaceTrimLoop(
         role: .outer,
-        edges: [
-            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+        parameterCurves: [
+            .bSpline(BSplineCurve2D(
                 degree: 2,
                 knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
                 controlPoints: [
@@ -1041,15 +1104,15 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
                     Point2D(x: 0.52, y: 0.42),
                     Point2D(x: 0.8, y: 0.25),
                 ]
-            ))),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            )),
+            .polyline([
                 SurfaceParameter(u: 0.8, v: 0.25),
                 SurfaceParameter(u: 0.45, v: 0.8),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.45, v: 0.8),
                 SurfaceParameter(u: 0.2, v: 0.2),
-            ])),
+            ]),
         ]
     )
     try document.setSurfaceTrimLoops(
@@ -1077,28 +1140,30 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         v: .scalar(0.46)
     )
 
-    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
-        Issue.record("Expected a direct B-spline surface feature.")
-        return
-    }
-    let movedLoop = try #require(surfaceFeature.trimLoops.first)
-    guard case .bSpline(let movedCurve) = movedLoop.edges[0].parameterCurve else {
+    let movedSurfaceTrim = try #require(
+        designDocumentSurfaceTrimFeature(in: document, targetFeatureID: featureID)
+    )
+    let movedLoop = try #require(movedSurfaceTrim.loops.first)
+    guard case .bSpline(let movedCurve) = movedLoop.parameterCurves[0] else {
         Issue.record("Expected a B-spline trim parameter curve.")
         return
     }
     #expect(movedCurve.controlPoints[0] == Point2D(x: 0.2, y: 0.2))
     #expect(movedCurve.controlPoints[1] == Point2D(x: 0.58, y: 0.46))
     #expect(movedCurve.controlPoints[2] == Point2D(x: 0.8, y: 0.25))
-    #expect(try movedLoop.edges[0].startParameter().isApproximatelyEqual(
+    let tolerance = document.modelingSettings.tolerance
+    #expect(try movedLoop.parameterCurves[0].startParameter(tolerance: tolerance).isApproximatelyEqual(
         to: SurfaceParameter(u: 0.2, v: 0.2),
         tolerance: 1.0e-12
     ))
-    #expect(try movedLoop.edges[0].endParameter().isApproximatelyEqual(
+    #expect(try movedLoop.parameterCurves[0].endParameter(tolerance: tolerance).isApproximatelyEqual(
         to: SurfaceParameter(u: 0.8, v: 0.25),
         tolerance: 1.0e-12
     ))
-    try movedLoop.validate(on: surfaceFeature.surface)
+    try movedLoop.validate(tolerance: tolerance)
+    for parameterCurve in movedLoop.parameterCurves {
+        try parameterCurve.validate(on: .bSpline(surface), tolerance: tolerance)
+    }
 }
 
 @Test func directBSplineSurfaceTrimControlPointWeightUpdatesAuthoredBSplinePcurve() async throws {
@@ -1111,10 +1176,10 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     )
     let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
-    let trimLoop = BSplineSurfaceTrimLoop(
+    let trimLoop = SurfaceTrimLoop(
         role: .outer,
-        edges: [
-            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+        parameterCurves: [
+            .bSpline(BSplineCurve2D(
                 degree: 2,
                 knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
                 controlPoints: [
@@ -1123,15 +1188,15 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
                     Point2D(x: 0.8, y: 0.25),
                 ],
                 weights: [1.0, 1.2, 1.0]
-            ))),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            )),
+            .polyline([
                 SurfaceParameter(u: 0.8, v: 0.25),
                 SurfaceParameter(u: 0.45, v: 0.8),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.45, v: 0.8),
                 SurfaceParameter(u: 0.2, v: 0.2),
-            ])),
+            ]),
         ]
     )
     try document.setSurfaceTrimLoops(
@@ -1170,18 +1235,20 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         weight: .scalar(2.4)
     )
 
-    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
-        Issue.record("Expected a direct B-spline surface feature.")
-        return
-    }
-    let movedLoop = try #require(surfaceFeature.trimLoops.first)
-    guard case .bSpline(let movedCurve) = movedLoop.edges[0].parameterCurve else {
+    let movedSurfaceTrim = try #require(
+        designDocumentSurfaceTrimFeature(in: document, targetFeatureID: featureID)
+    )
+    let movedLoop = try #require(movedSurfaceTrim.loops.first)
+    guard case .bSpline(let movedCurve) = movedLoop.parameterCurves[0] else {
         Issue.record("Expected a B-spline trim parameter curve.")
         return
     }
     #expect(movedCurve.weights == [1.0, 2.4, 1.0])
-    try movedLoop.validate(on: surfaceFeature.surface)
+    let tolerance = document.modelingSettings.tolerance
+    try movedLoop.validate(tolerance: tolerance)
+    for parameterCurve in movedLoop.parameterCurves {
+        try parameterCurve.validate(on: .bSpline(surface), tolerance: tolerance)
+    }
 
     let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let updatedEdge = try #require(updatedSummary.sources.first?.patches.first?.trimLoops.first?.edges.first)
@@ -1212,18 +1279,18 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         ],
         weights: [1.0, 1.2, 1.0]
     )
-    let trimLoop = BSplineSurfaceTrimLoop(
+    let trimLoop = SurfaceTrimLoop(
         role: .outer,
-        edges: [
-            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(originalCurve)),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+        parameterCurves: [
+            .bSpline(originalCurve),
+            .polyline([
                 SurfaceParameter(u: 0.8, v: 0.25),
                 SurfaceParameter(u: 0.45, v: 0.8),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.45, v: 0.8),
                 SurfaceParameter(u: 0.2, v: 0.2),
-            ])),
+            ]),
         ]
     )
     try document.setSurfaceTrimLoops(
@@ -1237,7 +1304,10 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         trimmedSummary.sources.first?.patches.first?.trimLoops.first?.edges.dropFirst().first?.selectionReference
     )
     let sampleParameters = [0.0, 0.2, 0.5, 0.8, 1.0]
-    let expectedPoints = try sampleParameters.map { try originalCurve.point(at: $0) }
+    let tolerance = document.modelingSettings.tolerance
+    let expectedPoints = try sampleParameters.map {
+        try originalCurve.point(at: $0, tolerance: tolerance)
+    }
 
     #expect(trimEdge.parameterCurve.kind == "bSpline")
     #expect(trimEdge.parameterCurve.degree == 2)
@@ -1257,17 +1327,17 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         value: .scalar(0.5)
     )
 
-    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
-        Issue.record("Expected a direct B-spline surface feature.")
-        return
-    }
-    let updatedLoop = try #require(surfaceFeature.trimLoops.first)
-    guard case .bSpline(let updatedCurve) = updatedLoop.edges[0].parameterCurve else {
+    let updatedSurfaceTrim = try #require(
+        designDocumentSurfaceTrimFeature(in: document, targetFeatureID: featureID)
+    )
+    let updatedLoop = try #require(updatedSurfaceTrim.loops.first)
+    guard case .bSpline(let updatedCurve) = updatedLoop.parameterCurves[0] else {
         Issue.record("Expected a B-spline trim parameter curve.")
         return
     }
-    let actualPoints = try sampleParameters.map { try updatedCurve.point(at: $0) }
+    let actualPoints = try sampleParameters.map {
+        try updatedCurve.point(at: $0, tolerance: tolerance)
+    }
     #expect(updatedCurve.knots == [0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0])
     #expect(updatedCurve.controlPoints.count == originalCurve.controlPoints.count + 1)
     #expect(updatedCurve.weights.count == originalCurve.weights.count + 1)
@@ -1275,7 +1345,10 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         #expect(abs(actualPoints[index].x - expectedPoints[index].x) <= 1.0e-12)
         #expect(abs(actualPoints[index].y - expectedPoints[index].y) <= 1.0e-12)
     }
-    try updatedLoop.validate(on: surfaceFeature.surface)
+    try updatedLoop.validate(tolerance: tolerance)
+    for parameterCurve in updatedLoop.parameterCurves {
+        try parameterCurve.validate(on: .bSpline(surface), tolerance: tolerance)
+    }
 
     let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let updatedEdge = try #require(updatedSummary.sources.first?.patches.first?.trimLoops.first?.edges.first)
@@ -1290,30 +1363,36 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         knotIndex: 3,
         value: .scalar(0.4)
     )
-    let retimedFeature = try #require(document.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(retimedSurfaceFeature) = retimedFeature.operation,
-          let retimedLoop = retimedSurfaceFeature.trimLoops.first,
-          case .bSpline(let retimedCurve) = retimedLoop.edges[0].parameterCurve else {
+    let retimedSurfaceTrim = try #require(
+        designDocumentSurfaceTrimFeature(in: document, targetFeatureID: featureID)
+    )
+    guard let retimedLoop = retimedSurfaceTrim.loops.first,
+          case .bSpline(let retimedCurve) = retimedLoop.parameterCurves[0] else {
         Issue.record("Expected a retimed B-spline trim parameter curve.")
         return
     }
     #expect(retimedCurve.knots == [0.0, 0.0, 0.0, 0.4, 1.0, 1.0, 1.0])
 
     let retimedSampleParameters = [0.0, 0.2, 0.4, 0.7, 1.0]
-    let retimedExpectedPoints = try retimedSampleParameters.map { try retimedCurve.point(at: $0) }
+    let retimedExpectedPoints = try retimedSampleParameters.map {
+        try retimedCurve.point(at: $0, tolerance: tolerance)
+    }
     try document.setSurfaceTrimKnotMultiplicity(
         target: trimReference,
         knotIndex: 3,
         multiplicity: 2
     )
-    let saturatedFeature = try #require(document.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(saturatedSurfaceFeature) = saturatedFeature.operation,
-          let saturatedLoop = saturatedSurfaceFeature.trimLoops.first,
-          case .bSpline(let saturatedCurve) = saturatedLoop.edges[0].parameterCurve else {
+    let saturatedSurfaceTrim = try #require(
+        designDocumentSurfaceTrimFeature(in: document, targetFeatureID: featureID)
+    )
+    guard let saturatedLoop = saturatedSurfaceTrim.loops.first,
+          case .bSpline(let saturatedCurve) = saturatedLoop.parameterCurves[0] else {
         Issue.record("Expected a saturated B-spline trim parameter curve.")
         return
     }
-    let saturatedActualPoints = try retimedSampleParameters.map { try saturatedCurve.point(at: $0) }
+    let saturatedActualPoints = try retimedSampleParameters.map {
+        try saturatedCurve.point(at: $0, tolerance: tolerance)
+    }
     #expect(saturatedCurve.knots == [0.0, 0.0, 0.0, 0.4, 0.4, 1.0, 1.0, 1.0])
     for index in retimedSampleParameters.indices {
         #expect(abs(saturatedActualPoints[index].x - retimedExpectedPoints[index].x) <= 1.0e-12)
@@ -1332,14 +1411,13 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     let summarySpan = try #require(patch.basis.uSpans.first)
     #expect(summarySpan.isEditable == false)
     #expect(summarySpan.selectionReference == nil)
+    let faceSelectionReference = try #require(patch.faceSelectionReference)
+    guard case .surface(.whole(let surfaceReference)) = faceSelectionReference else {
+        Issue.record("Expected a stable PolySpline surface reference.")
+        return
+    }
     let spanReference = SelectionReference.surface(.span(SurfaceSpanReference(
-        surface: SurfaceReference(
-            faceName: PersistentName(components: [
-                .feature(featureID),
-                .generated("polySpline"),
-                .subshape("patch:\(patch.patchID):face"),
-            ])
-        ),
+        surface: surfaceReference,
         direction: .u,
         spanIndex: summarySpan.index
     )))
@@ -1386,8 +1464,12 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     #expect(surfaceFeature.surface.uControlPointCount == surface.uControlPointCount + 1)
     for u in [0.0, 0.2, 0.5, 0.8, 1.0] {
         for v in [0.0, 0.3, 0.6, 1.0] {
-            let before = try surface.point(u: u, v: v)
-            let after = try surfaceFeature.surface.point(u: u, v: v)
+            let before = try surface.point(u: u, v: v, tolerance: document.modelingSettings.tolerance)
+            let after = try surfaceFeature.surface.point(
+                u: u,
+                v: v,
+                tolerance: document.modelingSettings.tolerance
+            )
             #expect(abs(before.x - after.x) <= 1.0e-10)
             #expect(abs(before.y - after.y) <= 1.0e-10)
             #expect(abs(before.z - after.z) <= 1.0e-10)
@@ -1433,8 +1515,12 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     #expect(surfaceFeature.surface.vControlPointCount == surface.vControlPointCount)
     for u in [0.0, 0.2, 0.5, 0.8, 1.0] {
         for v in [0.0, 0.3, 0.6, 1.0] {
-            let before = try surface.point(u: u, v: v)
-            let after = try surfaceFeature.surface.point(u: u, v: v)
+            let before = try surface.point(u: u, v: v, tolerance: document.modelingSettings.tolerance)
+            let after = try surfaceFeature.surface.point(
+                u: u,
+                v: v,
+                tolerance: document.modelingSettings.tolerance
+            )
             #expect(abs(before.x - after.x) <= 1.0e-10)
             #expect(abs(before.y - after.y) <= 1.0e-10)
             #expect(abs(before.z - after.z) <= 1.0e-10)
@@ -1564,8 +1650,16 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         #expect(matchedSurface.weights[2][uIndex] == expectedSecond.weight)
     }
     for u in [0.25, 0.5, 0.75] {
-        let matchedGeometry = try matchedSurface.differentialGeometry(atU: u, v: 0.0)
-        let referenceGeometry = try storedReferenceSurface.differentialGeometry(atU: u, v: 1.0)
+        let matchedGeometry = try matchedSurface.differentialGeometry(
+            atU: u,
+            v: 0.0,
+            tolerance: document.modelingSettings.tolerance
+        )
+        let referenceGeometry = try storedReferenceSurface.differentialGeometry(
+            atU: u,
+            v: 1.0,
+            tolerance: document.modelingSettings.tolerance
+        )
         #expect(matchedGeometry.position.isApproximatelyEqual(
             to: referenceGeometry.position,
             tolerance: 1.0e-12
@@ -1994,7 +2088,8 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
 @Test func polySplineMeshAnalysisServiceReportsPreflightDiagnostics() async throws {
     let result = PolySplineMeshAnalysisService().analyze(
         sourceMesh: designDocumentPolySplineQuadMesh(),
-        options: PolySplineOptions(roundedCorners: true)
+        options: PolySplineOptions(roundedCorners: true),
+        tolerance: .standard
     )
 
     #expect(!result.isSupported)
@@ -2008,7 +2103,8 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
 
 @Test func polySplineMeshAnalysisServiceReportsPatchGraphCandidates() async throws {
     let result = PolySplineMeshAnalysisService().analyze(
-        sourceMesh: designDocumentPolySplinePatchNetworkMesh()
+        sourceMesh: designDocumentPolySplinePatchNetworkMesh(),
+        tolerance: .standard
     )
 
     #expect(!result.isSupported)
@@ -2036,7 +2132,8 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
 @Test func polySplineMeshAnalysisServiceSupportsPlanarUnmergedPatchNetwork() async throws {
     let result = PolySplineMeshAnalysisService().analyze(
         sourceMesh: designDocumentPolySplinePatchNetworkMesh(centerZ: 0.0),
-        options: PolySplineOptions(mergePatches: false)
+        options: PolySplineOptions(mergePatches: false),
+        tolerance: .standard
     )
 
     #expect(result.isSupported)
@@ -2852,7 +2949,10 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
 
     let url = temporaryDirectory.appendingPathComponent("legacy.swcad")
     let sourceDocument = DesignDocument.empty(named: "Legacy")
-    try CADPipeline().save(sourceDocument.cadDocument, to: url)
+    try CADPipeline(tolerance: sourceDocument.modelingSettings.tolerance).save(
+        sourceDocument.cadDocument,
+        to: url
+    )
 
     let loaded = try DocumentFileService().load(from: url)
 
@@ -3021,7 +3121,9 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         to: outputURL,
         options: ExportOptions(presetName: "Site 3MF")
     )
-    let imported = try ThreeMFExchange().import(try Data(contentsOf: outputURL))
+    let imported = try ThreeMFExchange(
+        tolerance: session.document.modelingSettings.tolerance
+    ).import(try Data(contentsOf: outputURL))
     let bounds = try meshBounds(imported.meshes.values.flatMap(\.positions))
 
     #expect(result.format == .threeMF)
@@ -3363,6 +3465,20 @@ private func distanceFromOrigin(
     let numerator = abs((end.x - start.x) * start.y - (end.y - start.y) * start.x)
     let denominator = distance(from: start, to: end)
     return numerator / denominator
+}
+
+private func designDocumentSurfaceTrimFeature(
+    in document: DesignDocument,
+    targetFeatureID: FeatureID
+) -> SurfaceTrimFeature? {
+    document.cadDocument.designGraph.order.lazy.compactMap { featureID in
+        guard let feature = document.cadDocument.designGraph.nodes[featureID],
+              case let .surfaceTrim(surfaceTrim) = feature.operation,
+              surfaceTrim.target.featureID == targetFeatureID else {
+            return nil
+        }
+        return surfaceTrim
+    }.first
 }
 
 private func designDocumentPolySplineQuadMesh() -> Mesh {

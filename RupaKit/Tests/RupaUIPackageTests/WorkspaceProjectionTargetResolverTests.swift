@@ -8,11 +8,11 @@ import Testing
     let fixture = try workspaceProjectionSketchFixture()
     let faceTarget = SelectionTarget(
         sceneNodeID: SceneNodeID(),
-        component: .face(.generatedTopology("body:face:target"))
+        component: .face(try workspaceTestFaceComponent(role: "body.face.target"))
     )
     let generatedEdgeTarget = SelectionTarget(
         sceneNodeID: SceneNodeID(),
-        component: .edge(.generatedTopology("body:edge:generated"))
+        component: .edge(try workspaceTestEdgeComponent(role: "body.edge.generated"))
     )
     let resolver = WorkspaceProjectionTargetResolver(
         document: fixture.document,
@@ -57,11 +57,11 @@ import Testing
     #expect(faceResolver.bodyOutlineProjectionTargets(from: [bodyNode]) == [])
 }
 
-@Test func workspaceProjectionTargetResolverDeduplicatesGeneratedEdges() {
+@Test func workspaceProjectionTargetResolverDeduplicatesGeneratedEdges() throws {
     let sceneNodeID = SceneNodeID()
     let generatedEdgeTarget = SelectionTarget(
         sceneNodeID: sceneNodeID,
-        component: .edge(.generatedTopology("body:edge:generated"))
+        component: .edge(try workspaceTestEdgeComponent(role: "body.edge.generated"))
     )
     let semanticEdgeTarget = SelectionTarget(sceneNodeID: sceneNodeID, component: .edge(.bodyEdgeRightTop))
     let resolver = WorkspaceProjectionTargetResolver(

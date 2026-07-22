@@ -97,7 +97,7 @@ private func surfaceFrameAxisLayout() -> ViewportLayout {
 private func surfaceFrameDisplay() -> ViewportSurfaceFrameDisplay {
     ViewportSurfaceFrameDisplay(
         id: SurfaceFrameDisplayID(rawValue: "test-surface-frame"),
-        query: SurfaceFrameQuery(facePersistentName: "feature:test/generated:surface/subshape:face", u: 0.5, v: 0.5),
+        query: SurfaceFrameQuery(faceID: "test-face", u: 0.5, v: 0.5),
         position: Point3D(x: 0.0, y: 0.0, z: 0.0),
         uAxis: Vector3D(x: 1.0, y: 0.0, z: 0.0),
         vAxis: Vector3D(x: 0.0, y: 0.0, z: 1.0),

@@ -475,7 +475,7 @@ import Testing
         .offsetCurve(
             target: target,
             distance: .length(2.0, .millimeter),
-            options: OffsetCurveOptions(gapFill: .linear),
+            options: OffsetCurveOptions(),
             vertexHandle: nil
         )
     )
@@ -600,21 +600,11 @@ import Testing
         Issue.record("Selection-context Offset Curve edge target must create an EdgeOffset feature.")
         return
     }
-    guard case .face(let supportComponentID) = supportFaceTarget.component,
-          let supportPersistentNameString = supportComponentID.generatedTopologyPersistentName else {
-        Issue.record("Support target must be a generated topology face target.")
-        return
-    }
-    let expectedSupportPersistentName = try GeneratedTopologyPersistentNameParser().parse(
-        supportPersistentNameString,
-        operationName: "Offset Edge"
-    )
-
     #expect(result.commandName == "offsetCurve")
     #expect(result.didMutate)
     #expect(edgeOffset.target == EdgeOffsetTargetReference(featureID: bodyFeatureID))
-    #expect(edgeOffset.supportFacePersistentName == expectedSupportPersistentName)
-    #expect(edgeOffset.gapFill == .linear)
+    #expect(edgeOffset.edge == edgeEntry.stableReference)
+    #expect(edgeOffset.supportFace == supportFaceEntry.stableReference)
     #expect(session.selection.selectedTargets == [supportFaceTarget, edgeTarget])
     #expect(session.evaluationStatus == .valid)
 }
@@ -651,7 +641,7 @@ import Testing
         .offsetCurve(
             target: edgeTarget,
             distance: .length(2.0, .millimeter),
-            options: OffsetCurveOptions(gapFill: .linear),
+            options: OffsetCurveOptions(),
             vertexHandle: nil
         )
     )
@@ -662,16 +652,11 @@ import Testing
         Issue.record("Single selected cap edge Offset Curve must create an EdgeOffset feature.")
         return
     }
-    let expectedSupportPersistentName = try GeneratedTopologyPersistentNameParser().parse(
-        supportFaceEntry.persistentName,
-        operationName: "Offset Edge"
-    )
-
     #expect(result.commandName == "offsetCurve")
     #expect(result.didMutate)
     #expect(edgeOffset.target == EdgeOffsetTargetReference(featureID: bodyFeatureID))
-    #expect(edgeOffset.supportFacePersistentName == expectedSupportPersistentName)
-    #expect(edgeOffset.gapFill == .linear)
+    #expect(edgeOffset.edge == edgeEntry.stableReference)
+    #expect(edgeOffset.supportFace == supportFaceEntry.stableReference)
     #expect(session.selection.selectedTargets == [edgeTarget])
     #expect(session.evaluationStatus == .valid)
 }
@@ -1893,7 +1878,10 @@ import Testing
         inputs: [FeatureInput(featureID: sourceSectionID, role: .curve)],
         outputs: [FeatureOutput(role: .curve)]
     )
-    try document.cadDocument.appendFeature(generatedSection)
+    try document.cadDocument.appendFeature(
+        generatedSection,
+        tolerance: document.modelingSettings.tolerance
+    )
     let generatedNodeID = try document.productMetadata.appendSceneNodeToFirstRoot(
         name: "Generated Offset Section",
         reference: .feature(generatedSectionID)
@@ -3332,7 +3320,11 @@ import Testing
     let result = try session.execute(
         .addSketchConstraint(
             featureID: setup.featureID,
-            constraint: .tangent(setup.lineID, setup.circleID)
+            constraint: .tangent(.lineCircular(
+                line: setup.lineID,
+                circular: setup.circleID,
+                side: .left
+            ))
         )
     )
 
@@ -3343,7 +3335,11 @@ import Testing
     #expect(result.commandName == "addSketchConstraint")
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(1))
-    #expect(sketch.constraints == [.tangent(setup.lineID, setup.circleID)])
+    #expect(sketch.constraints == [.tangent(.lineCircular(
+        line: setup.lineID,
+        circular: setup.circleID,
+        side: .left
+    ))])
     #expect(abs(center.x - 0.005) < 1.0e-12)
     #expect(abs(center.y - radius) < 1.0e-12)
     #expect(abs(radius - 0.002) < 1.0e-12)
@@ -5539,17 +5535,27 @@ import Testing
         name: "Downstream Output Dependent",
         operation: .faceLoopOffset(FaceLoopOffsetFeature(
             target: FaceLoopOffsetTargetReference(featureID: firstCloneBodyFeatureID),
-            facePersistentName: PersistentName(components: [
-                .feature(firstCloneBodyFeatureID),
-                .generated("extrude"),
-                .subshape("startFace"),
-            ]),
+            face: StableSubshapeReference(
+                subshapeID: SubshapeID(
+                    featureID: firstCloneBodyFeatureID,
+                    role: GeneratedSubshapeRole.startFace.rawValue,
+                    ordinal: 0
+                ),
+                geometrySignature: .face(FaceGeometrySignature(
+                    surface: .plane(Plane3D(origin: .origin, normal: .unitZ)),
+                    orientation: .forward,
+                    loops: []
+                ))
+            ),
             distance: .length(1.0, .millimeter)
         )),
         inputs: [FeatureInput(featureID: firstCloneBodyFeatureID, role: .target)],
         outputs: [FeatureOutput(role: .body)]
     )
-    try document.cadDocument.appendFeature(dependentFeature)
+    try document.cadDocument.appendFeature(
+        dependentFeature,
+        tolerance: document.modelingSettings.tolerance
+    )
     let summary = PatternArraySummaryService().summarize(
         document: document,
         generation: session.generation,

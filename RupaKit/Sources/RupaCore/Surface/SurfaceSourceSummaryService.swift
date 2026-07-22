@@ -59,14 +59,15 @@ public struct SurfaceSourceSummaryService: Sendable {
             }
             switch feature.operation {
             case let .polySpline(polySpline):
-                sources.append(source(
+                sources.append(try source(
                     featureID: featureID,
                     feature: feature,
                     polySpline: polySpline,
                     sceneNodeID: sceneNodeIDsByFeatureID[featureID],
                     surfaceControlPointDisplays: surfaceControlPointDisplays,
                     surfaceFrameDisplays: surfaceFrameDisplays,
-                    topologyEntriesByPersistentName: topologyEntriesByPersistentName
+                    topologyEntriesByPersistentName: topologyEntriesByPersistentName,
+                    tolerance: document.modelingSettings.tolerance
                 ))
             case let .bSplineSurface(surfaceFeature):
                 if let surfaceSource = try BSplineSurfaceSourceSummaryBuilder().source(
@@ -76,7 +77,8 @@ public struct SurfaceSourceSummaryService: Sendable {
                     sceneNodeID: sceneNodeIDsByFeatureID[featureID],
                     surfaceControlPointDisplays: surfaceControlPointDisplays,
                     surfaceFrameDisplays: surfaceFrameDisplays,
-                    topologyEntriesByPersistentName: topologyEntriesByPersistentName
+                    topologyEntriesByPersistentName: topologyEntriesByPersistentName,
+                    tolerance: document.modelingSettings.tolerance
                 ) {
                     sources.append(surfaceSource)
                 }
@@ -105,18 +107,20 @@ public struct SurfaceSourceSummaryService: Sendable {
         sceneNodeID: SceneNodeID?,
         surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay],
         surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay],
-        topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry]
-    ) -> SurfaceSourceSummaryResult.Source {
+        topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry],
+        tolerance: ModelingTolerance
+    ) throws -> SurfaceSourceSummaryResult.Source {
         let analysis = PolySplineMeshAnalysisService().analyze(
             sourceMesh: polySpline.sourceMesh,
-            options: polySpline.options
+            options: polySpline.options,
+            tolerance: tolerance
         )
         let patchCandidates = selectedPatchCandidates(
             from: analysis,
             sourceMesh: polySpline.sourceMesh
         )
-        let patchResults = patchCandidates.map { patchCandidate in
-            patch(
+        let patchResults = try patchCandidates.map { patchCandidate in
+            try patch(
                 featureID: featureID,
                 patchCandidate: patchCandidate,
                 polySpline: polySpline,
@@ -176,26 +180,33 @@ public struct SurfaceSourceSummaryService: Sendable {
         surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay],
         surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay],
         topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry]
-    ) -> PatchSummaryBuildResult {
+    ) throws -> PatchSummaryBuildResult {
         let patchID = patchCandidate.patchID
         let sourceMesh = polySpline.sourceMesh
-        let faceName = persistentName(
+        let faceSubshapeID = subshapeID(
             featureID: featureID,
             subshape: "patch:\(patchID):face"
         )
-        let facePersistentName = persistentNameString(faceName)
-        let surfaceReference = SurfaceReference(faceName: faceName)
-        let faceSelectionComponentID = topologyEntriesByPersistentName[facePersistentName]?.selectionComponentID
-        let faceSelectionReference: SelectionReference? = topologyEntriesByPersistentName[facePersistentName] == nil
-            ? nil
-            : .surface(.whole(surfaceReference))
+        let faceIdentityKey = stableSubshapeKey(faceSubshapeID)
+        guard let faceEntry = topologyEntriesByPersistentName[faceIdentityKey] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Surface source summary requires current stable PolySpline face topology."
+            )
+        }
+        let surfaceReference = SurfaceReference(subshape: faceEntry.stableReference)
+        let faceSelectionComponentID = faceEntry.selectionComponentID
+        let faceSelectionReference: SelectionReference? = .surface(.whole(surfaceReference))
         let edgePersistentNames = edgeRoles.map {
-            persistentNameString(persistentName(featureID: featureID, subshape: "patch:\(patchID):\($0.subshape)"))
+            stableSubshapeKey(subshapeID(
+                featureID: featureID,
+                subshape: "patch:\(patchID):\($0.subshape)"
+            ))
         }
         .filter { topologyEntriesByPersistentName[$0] != nil }
         let trimSelectionReferences = edgeRoles.enumerated().compactMap { index, role -> SelectionReference? in
-            let edgeName = persistentNameString(
-                persistentName(featureID: featureID, subshape: "patch:\(patchID):\(role.subshape)")
+            let edgeName = stableSubshapeKey(
+                subshapeID(featureID: featureID, subshape: "patch:\(patchID):\(role.subshape)")
             )
             guard topologyEntriesByPersistentName[edgeName] != nil else {
                 return nil
@@ -206,15 +217,16 @@ public struct SurfaceSourceSummaryService: Sendable {
                 edgeIndex: index
             )))
         }
-        let controlVertices = zip(vertexRoles, patchCandidate.boundaryVertexIndices).map { role, sourceVertexIndex in
-            controlVertex(
+        let controlVertices = try zip(vertexRoles, patchCandidate.boundaryVertexIndices).map { role, sourceVertexIndex in
+            try controlVertex(
                 featureID: featureID,
                 patchID: patchID,
                 role: role,
                 surfaceReference: surfaceReference,
                 sourceVertexIndex: sourceVertexIndex,
                 sourceMesh: sourceMesh,
-                surfaceControlPointDisplays: surfaceControlPointDisplays
+                surfaceControlPointDisplays: surfaceControlPointDisplays,
+                topologyEntriesByPersistentName: topologyEntriesByPersistentName
             )
         }
         let patchSurface = polySplinePatchSurface(
@@ -253,7 +265,7 @@ public struct SurfaceSourceSummaryService: Sendable {
 
         return PatchSummaryBuildResult(patch: SurfaceSourceSummaryResult.Patch(
             patchID: patchID,
-            facePersistentName: topologyEntriesByPersistentName[facePersistentName]?.persistentName,
+            facePersistentName: faceIdentityKey,
             faceSelectionComponentID: faceSelectionComponentID,
             faceSelectionReference: faceSelectionReference,
             uDomain: SurfaceSourceSummaryResult.ParameterRange(lowerBound: 0.0, upperBound: 1.0),
@@ -284,8 +296,8 @@ public struct SurfaceSourceSummaryService: Sendable {
         topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry]
     ) -> [SurfaceSourceSummaryResult.TrimLoop.Edge] {
         BSplineSurfaceBoundarySide.allCases.enumerated().map { index, side in
-            let edgePersistentName = persistentNameString(
-                persistentName(featureID: featureID, subshape: "patch:\(patchID):edge:\(side.rawValue)")
+            let edgePersistentName = stableSubshapeKey(
+                subshapeID(featureID: featureID, subshape: "patch:\(patchID):edge:\(side.rawValue)")
             )
             let selectionReference: SelectionReference? = topologyEntriesByPersistentName[edgePersistentName] == nil
                 ? nil
@@ -516,13 +528,20 @@ public struct SurfaceSourceSummaryService: Sendable {
         surfaceReference: SurfaceReference,
         sourceVertexIndex: Int,
         sourceMesh: Mesh,
-        surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay]
-    ) -> SurfaceSourceSummaryResult.ControlVertex {
-        let generatedVertexName = persistentName(
+        surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay],
+        topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry]
+    ) throws -> SurfaceSourceSummaryResult.ControlVertex {
+        let generatedVertexSubshapeID = subshapeID(
             featureID: featureID,
             subshape: "patch:\(patchID):\(role.subshape)"
         )
-        let generatedVertexPersistentName = persistentNameString(generatedVertexName)
+        let generatedVertexIdentityKey = stableSubshapeKey(generatedVertexSubshapeID)
+        guard let vertexEntry = topologyEntriesByPersistentName[generatedVertexIdentityKey] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Surface source summary requires current stable PolySpline vertex topology."
+            )
+        }
         let point: Point3D
         if sourceMesh.positions.indices.contains(sourceVertexIndex) {
             point = sourceMesh.positions[sourceVertexIndex]
@@ -539,9 +558,9 @@ public struct SurfaceSourceSummaryService: Sendable {
             role: role.id,
             sourceVertexIndex: sourceVertexIndex,
             point: SurfaceSourceSummaryResult.Point(x: point.x, y: point.y, z: point.z),
-            generatedVertexPersistentName: generatedVertexPersistentName,
-            selectionComponentID: SelectionComponentID
-                .generatedTopology(generatedVertexPersistentName)
+            generatedVertexPersistentName: generatedVertexIdentityKey,
+            selectionComponentID: try SelectionComponentID
+                .stableTopology(vertexEntry.stableReference)
                 .rawValue,
             selectionReference: selectionReference,
             isPointDisplayVisible: isSurfaceControlPointDisplayVisible(
@@ -618,11 +637,12 @@ public struct SurfaceSourceSummaryService: Sendable {
                   edgeRoles.indices.contains(index) else {
                 continue
             }
-            let candidateName = persistentName(
+            let candidateSubshapeID = subshapeID(
                 featureID: featureID,
                 subshape: "patch:\(adjacency.firstCandidateID):\(edgeRoles[index].subshape)"
             )
-            return topologyEntriesByPersistentName[persistentNameString(candidateName)]?.persistentName
+            return topologyEntriesByPersistentName[stableSubshapeKey(candidateSubshapeID)]
+                .map { stableSubshapeKey($0.stableReference.subshapeID) }
         }
         return nil
     }
@@ -747,7 +767,9 @@ public struct SurfaceSourceSummaryService: Sendable {
             currentEvaluation: currentEvaluation,
             currentGeneration: currentGeneration
         )
-        return Dictionary(uniqueKeysWithValues: summary.entries.map { ($0.persistentName, $0) })
+        return Dictionary(uniqueKeysWithValues: summary.entries.map {
+            (stableSubshapeKey($0.stableReference.subshapeID), $0)
+        })
     }
 
     private func sceneNodeIDsByFeatureID(in document: DesignDocument) -> [FeatureID: SceneNodeID] {
@@ -801,32 +823,20 @@ public struct SurfaceSourceSummaryService: Sendable {
         )
     }
 
-    private func persistentName(
+    private func subshapeID(
         featureID: FeatureID,
         generatedRole: String = "polySpline",
         subshape: String
-    ) -> PersistentName {
-        PersistentName(components: [
-            .feature(featureID),
-            .generated(generatedRole),
-            .subshape(subshape),
-        ])
+    ) -> SubshapeID {
+        SubshapeID(
+            featureID: featureID,
+            role: "\(generatedRole).\(subshape)",
+            ordinal: 0
+        )
     }
 
-    private func persistentNameString(_ name: PersistentName) -> String {
-        name.components.map { component in
-            switch component {
-            case .feature(let featureID):
-                return "feature:\(featureID.description)"
-            case .generated(let value):
-                return "generated:\(value)"
-            case .subshape(let value):
-                return "subshape:\(value)"
-            case .index(let index):
-                return "index:\(index)"
-            }
-        }
-        .joined(separator: "/")
+    private func stableSubshapeKey(_ subshapeID: SubshapeID) -> String {
+        "feature:\(subshapeID.featureID.description)/role:\(subshapeID.role)/ordinal:\(subshapeID.ordinal)"
     }
 
     private func isRationalPatch(

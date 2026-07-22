@@ -31,7 +31,8 @@ public extension DesignDocument {
                 kind: kind,
                 first: firstReference,
                 second: secondReference,
-                target: target
+                target: target,
+                tolerance: modelingSettings.tolerance
             )
         } catch {
             throw EditorError(
@@ -61,7 +62,8 @@ public extension DesignDocument {
         do {
             updatedDimension = try updatedCADDocument.setSelectionDimensionTarget(
                 id: id,
-                target: target
+                target: target,
+                tolerance: modelingSettings.tolerance
             )
         } catch {
             throw EditorError(
@@ -131,7 +133,7 @@ public extension DesignDocument {
 
                 cadDocument.selectionDimensions[updatedDimensionIndex].first = updatedFirst
                 cadDocument.selectionDimensions[updatedDimensionIndex].second = updatedSecond
-                try cadDocument.validate()
+                try cadDocument.validate(tolerance: modelingSettings.tolerance)
                 try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
                 return cadDocument.selectionDimensions[updatedDimensionIndex]
             case .circularRadius(let context):
@@ -148,7 +150,7 @@ public extension DesignDocument {
                     )
                 }
 
-                try cadDocument.validate()
+                try cadDocument.validate(tolerance: modelingSettings.tolerance)
                 try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
                 return cadDocument.selectionDimensions[updatedDimensionIndex]
             case .lineRelativeAngle(let context):
@@ -174,7 +176,7 @@ public extension DesignDocument {
                     )
                 }
 
-                try cadDocument.validate()
+                try cadDocument.validate(tolerance: modelingSettings.tolerance)
                 try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
                 return cadDocument.selectionDimensions[updatedDimensionIndex]
             case .arcSpanAngle(let context):
@@ -207,7 +209,7 @@ public extension DesignDocument {
 
                 cadDocument.selectionDimensions[updatedDimensionIndex].first = updatedFirst
                 cadDocument.selectionDimensions[updatedDimensionIndex].second = updatedSecond
-                try cadDocument.validate()
+                try cadDocument.validate(tolerance: modelingSettings.tolerance)
                 try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
                 return cadDocument.selectionDimensions[updatedDimensionIndex]
             case .sourcePointDistance(let context):
@@ -224,7 +226,7 @@ public extension DesignDocument {
                     )
                 }
 
-                try cadDocument.validate()
+                try cadDocument.validate(tolerance: modelingSettings.tolerance)
                 try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
                 return cadDocument.selectionDimensions[updatedDimensionIndex]
             case .sourcePointLineDistance(let context):
@@ -241,7 +243,7 @@ public extension DesignDocument {
                     )
                 }
 
-                try cadDocument.validate()
+                try cadDocument.validate(tolerance: modelingSettings.tolerance)
                 try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
                 return cadDocument.selectionDimensions[updatedDimensionIndex]
             case .objectFaceDistance(let context):
@@ -257,7 +259,7 @@ public extension DesignDocument {
                     )
                 }
 
-                try cadDocument.validate()
+                try cadDocument.validate(tolerance: modelingSettings.tolerance)
                 try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
                 return cadDocument.selectionDimensions[updatedDimensionIndex]
             }
@@ -288,7 +290,10 @@ public extension DesignDocument {
         var updatedCADDocument = cadDocument
         let removedDimension: SelectionDimension
         do {
-            removedDimension = try updatedCADDocument.removeSelectionDimension(id: id)
+            removedDimension = try updatedCADDocument.removeSelectionDimension(
+                id: id,
+                tolerance: modelingSettings.tolerance
+            )
         } catch {
             throw EditorError(
                 code: .commandInvalid,

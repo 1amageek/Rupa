@@ -17,14 +17,14 @@ public struct ProjectionManifest: Codable, Hashable, Sendable {
         case semanticEntity(SemanticEntityID)
         case sourceFeature(FeatureID)
         case sceneNode(SceneNodeID)
-        case topology(persistentName: String, owningFeatureID: FeatureID)
+        case topology(reference: StableSubshapeReference, owningFeatureID: FeatureID)
 
         private enum CodingKeys: String, CodingKey {
             case kind
             case semanticEntityID
             case featureID
             case sceneNodeID
-            case persistentName
+            case stableReference
             case owningFeatureID
         }
 
@@ -47,7 +47,10 @@ public struct ProjectionManifest: Codable, Hashable, Sendable {
                 self = .sceneNode(try container.decode(SceneNodeID.self, forKey: .sceneNodeID))
             case .topology:
                 self = .topology(
-                    persistentName: try container.decode(String.self, forKey: .persistentName),
+                    reference: try container.decode(
+                        StableSubshapeReference.self,
+                        forKey: .stableReference
+                    ),
                     owningFeatureID: try container.decode(FeatureID.self, forKey: .owningFeatureID)
                 )
             }
@@ -65,9 +68,9 @@ public struct ProjectionManifest: Codable, Hashable, Sendable {
             case .sceneNode(let id):
                 try container.encode(Kind.sceneNode, forKey: .kind)
                 try container.encode(id, forKey: .sceneNodeID)
-            case .topology(let persistentName, let owningFeatureID):
+            case .topology(let reference, let owningFeatureID):
                 try container.encode(Kind.topology, forKey: .kind)
-                try container.encode(persistentName, forKey: .persistentName)
+                try container.encode(reference, forKey: .stableReference)
                 try container.encode(owningFeatureID, forKey: .owningFeatureID)
             }
         }
@@ -96,19 +99,14 @@ public struct ProjectionManifest: Codable, Hashable, Sendable {
                         "Projection boundary tags must reference an existing scene node."
                     )
                 }
-            case .topology(let persistentName, let owningFeatureID):
-                guard !persistentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                    throw DocumentValidationError.invalidProductMetadata(
-                        "Projection boundary topology references must not be empty."
-                    )
-                }
+            case .topology(let reference, let owningFeatureID):
                 guard cadDocument.designGraph.nodes[owningFeatureID] != nil else {
                     throw DocumentValidationError.invalidProductMetadata(
                         "Projection boundary topology owners must point to existing CAD features."
                     )
                 }
-                try validateProjectionTopologyName(
-                    persistentName,
+                try validateProjectionTopologyReference(
+                    reference,
                     owningFeatureID: owningFeatureID
                 )
             }
@@ -152,18 +150,18 @@ public struct ProjectionManifest: Codable, Hashable, Sendable {
 
     public struct TopologyReference: Codable, Hashable, Sendable {
         public var semanticEntityID: SemanticEntityID
-        public var persistentName: String
+        public var stableReference: StableSubshapeReference
         public var role: TopologyRole
         public var owningFeatureID: FeatureID
 
         public init(
             semanticEntityID: SemanticEntityID,
-            persistentName: String,
+            stableReference: StableSubshapeReference,
             role: TopologyRole,
             owningFeatureID: FeatureID
         ) {
             self.semanticEntityID = semanticEntityID
-            self.persistentName = persistentName
+            self.stableReference = stableReference
             self.role = role
             self.owningFeatureID = owningFeatureID
         }
@@ -331,18 +329,13 @@ public struct ProjectionManifest: Codable, Hashable, Sendable {
     ) throws {
         for reference in references {
             try requireSemanticEntity(reference.semanticEntityID, in: semanticEntityIDs)
-            guard !reference.persistentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                throw DocumentValidationError.invalidProductMetadata(
-                    "Projection topology references must not be empty."
-                )
-            }
             if cadDocument.designGraph.nodes[reference.owningFeatureID] == nil {
                 throw DocumentValidationError.invalidProductMetadata(
                     "Projection topology owner references must point to existing CAD features."
                 )
             }
-            try validateProjectionTopologyName(
-                reference.persistentName,
+            try validateProjectionTopologyReference(
+                reference.stableReference,
                 owningFeatureID: reference.owningFeatureID
             )
         }
@@ -404,40 +397,31 @@ public struct ProjectionManifest: Codable, Hashable, Sendable {
 
     private struct TopologyReferenceTarget: Hashable {
         var semanticEntityID: SemanticEntityID
-        var persistentName: String
+        var stableReference: StableSubshapeReference
         var owningFeatureID: FeatureID
 
         init(_ reference: TopologyReference) {
             semanticEntityID = reference.semanticEntityID
-            persistentName = reference.persistentName
+            stableReference = reference.stableReference
             owningFeatureID = reference.owningFeatureID
         }
     }
 }
 
-private func validateProjectionTopologyName(
-    _ value: String,
+private func validateProjectionTopologyReference(
+    _ reference: StableSubshapeReference,
     owningFeatureID: FeatureID
 ) throws {
-    let persistentName: PersistentName
     do {
-        persistentName = try GeneratedTopologyPersistentNameParser().parse(
-            value,
-            operationName: "Projection manifest"
-        )
+        try reference.validate()
     } catch {
         throw DocumentValidationError.invalidProductMetadata(
-            "Projection topology references must use a valid persistent topology name."
+            "Projection topology references must use a valid stable topology reference."
         )
     }
-    guard persistentName.components.contains(where: { component in
-        if case .feature(let featureID) = component {
-            return featureID == owningFeatureID
-        }
-        return false
-    }) else {
+    guard reference.subshapeID.featureID == owningFeatureID else {
         throw DocumentValidationError.invalidProductMetadata(
-            "Projection topology persistent names must contain their owning CAD feature."
+            "Projection topology references must contain their owning CAD feature."
         )
     }
 }

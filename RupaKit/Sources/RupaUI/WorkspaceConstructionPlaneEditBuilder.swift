@@ -2,13 +2,20 @@ import RupaCore
 import SwiftCAD
 
 struct WorkspaceConstructionPlaneEditBuilder: Sendable {
+    private let tolerance: ModelingTolerance
+
+    init(tolerance: ModelingTolerance) {
+        self.tolerance = tolerance
+    }
+
     func planePreservingOrigin(
         from sourcePlane: SketchPlane,
         viewNormal: Vector3D
     ) throws -> SketchPlane {
         try ConstructionPlaneViewResolver().plane(
-            origin: origin(from: sourcePlane),
-            viewNormal: viewNormal
+            origin: Self.origin(from: sourcePlane),
+            viewNormal: viewNormal,
+            tolerance: tolerance
         )
     }
 
@@ -16,14 +23,14 @@ struct WorkspaceConstructionPlaneEditBuilder: Sendable {
         _ origin: Point3D,
         on sourcePlane: SketchPlane
     ) throws -> SketchPlane {
-        try plane(origin: origin, normal: normal(from: sourcePlane))
+        try plane(origin: origin, normal: Self.normal(from: sourcePlane))
     }
 
     func planeSettingNormal(
         _ normal: Vector3D,
         on sourcePlane: SketchPlane
     ) throws -> SketchPlane {
-        try plane(origin: origin(from: sourcePlane), normal: normal)
+        try plane(origin: Self.origin(from: sourcePlane), normal: normal)
     }
 
     func planeSettingOriginComponent(
@@ -31,7 +38,7 @@ struct WorkspaceConstructionPlaneEditBuilder: Sendable {
         value: Double,
         on sourcePlane: SketchPlane
     ) throws -> SketchPlane {
-        var nextOrigin = origin(from: sourcePlane)
+        var nextOrigin = Self.origin(from: sourcePlane)
         switch component {
         case .x:
             nextOrigin.x = value
@@ -48,7 +55,7 @@ struct WorkspaceConstructionPlaneEditBuilder: Sendable {
         value: Double,
         on sourcePlane: SketchPlane
     ) throws -> SketchPlane {
-        var nextNormal = normal(from: sourcePlane)
+        var nextNormal = Self.normal(from: sourcePlane)
         switch component {
         case .x:
             nextNormal.x = value
@@ -60,7 +67,7 @@ struct WorkspaceConstructionPlaneEditBuilder: Sendable {
         return try planeSettingNormal(nextNormal, on: sourcePlane)
     }
 
-    func origin(from plane: SketchPlane) -> Point3D {
+    static func origin(from plane: SketchPlane) -> Point3D {
         switch plane {
         case .xy, .yz, .zx:
             .origin
@@ -69,7 +76,7 @@ struct WorkspaceConstructionPlaneEditBuilder: Sendable {
         }
     }
 
-    func normal(from plane: SketchPlane) -> Vector3D {
+    static func normal(from plane: SketchPlane) -> Vector3D {
         switch plane {
         case .xy:
             .unitZ
@@ -83,9 +90,9 @@ struct WorkspaceConstructionPlaneEditBuilder: Sendable {
     }
 
     private func plane(origin: Point3D, normal: Vector3D) throws -> SketchPlane {
-        let normalizedNormal = try normal.normalized(tolerance: 1.0e-12)
+        let normalizedNormal = try normal.normalized(tolerance: tolerance.distance)
         let plane = Plane3D(origin: origin, normal: normalizedNormal)
-        try plane.validate()
+        try plane.validate(tolerance: tolerance)
         return .plane(plane)
     }
 }

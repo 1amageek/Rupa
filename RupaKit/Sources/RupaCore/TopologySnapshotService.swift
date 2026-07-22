@@ -1,4 +1,5 @@
 import Foundation
+import CADTopology
 import SwiftCAD
 import RupaCoreTypes
 
@@ -69,10 +70,10 @@ public struct TopologySnapshotService: Sendable {
         )
 
         let sceneNodeIDsByFeatureID = sceneNodeIDsByFeatureID(in: document)
-        let entries = evaluatedDocument.generatedNames
-            .map { name, reference in
-                topologyEntry(
-                    name: name,
+        let entries = try evaluatedDocument.subshapes.entries
+            .map { subshapeID, reference in
+                try topologyEntry(
+                    stableReference: evaluatedDocument.stableSubshapeReference(for: subshapeID),
                     reference: reference,
                     evaluatedDocument: evaluatedDocument,
                     sceneNodeIDsByFeatureID: sceneNodeIDsByFeatureID
@@ -80,7 +81,7 @@ public struct TopologySnapshotService: Sendable {
             }
             .sorted {
                 if $0.kind.rawValue == $1.kind.rawValue {
-                    return $0.persistentName < $1.persistentName
+                    return $0.stableReference.subshapeID < $1.stableReference.subshapeID
                 }
                 return $0.kind.rawValue < $1.kind.rawValue
             }
@@ -97,29 +98,27 @@ public struct TopologySnapshotService: Sendable {
     }
 
     private func topologyEntry(
-        name: PersistentName,
+        stableReference: StableSubshapeReference,
         reference: TopologyReference,
         evaluatedDocument: EvaluatedDocument,
         sceneNodeIDsByFeatureID: [FeatureID: SceneNodeID]
-    ) -> TopologySummaryResult.Entry {
-        let components = parsedComponents(from: name)
-        let sceneNodeID = components.sourceFeatureID.flatMap { sceneNodeIDsByFeatureID[$0]?.description }
+    ) throws -> TopologySummaryResult.Entry {
+        let subshapeID = stableReference.subshapeID
+        let sceneNodeID = sceneNodeIDsByFeatureID[subshapeID.featureID]?.description
         switch reference {
         case .body(let bodyID):
             let body = evaluatedDocument.brep.bodies[bodyID]
             return TopologySummaryResult.Entry(
-                persistentName: persistentNameString(name),
+                stableReference: stableReference,
                 kind: .body,
                 referenceID: bodyID.description,
-                sourceFeatureID: components.sourceFeatureID?.description,
+                sourceFeatureID: subshapeID.featureID.description,
                 sceneNodeID: sceneNodeID,
-                generatedRole: components.generatedRole,
-                subshapeRole: components.subshapeRole,
-                index: components.index,
+                generatedRole: subshapeID.role,
+                index: subshapeID.ordinal,
                 shellCount: body?.shellIDs.count
             )
         case .face(let faceID):
-            let persistentName = persistentNameString(name)
             let face = evaluatedDocument.brep.faces[faceID]
             let edgeCount = face?.loops.reduce(0) { partial, loopID in
                 partial + (evaluatedDocument.brep.loops[loopID]?.edges.count ?? 0)
@@ -130,15 +129,14 @@ public struct TopologySnapshotService: Sendable {
             let center = face.flatMap { faceCenter($0, in: evaluatedDocument.brep) }
             let normal = face.flatMap { faceNormal($0, in: evaluatedDocument.brep) }
             return TopologySummaryResult.Entry(
-                persistentName: persistentName,
+                stableReference: stableReference,
                 kind: .face,
                 referenceID: faceID.description,
-                sourceFeatureID: components.sourceFeatureID?.description,
+                sourceFeatureID: subshapeID.featureID.description,
                 sceneNodeID: sceneNodeID,
-                generatedRole: components.generatedRole,
-                subshapeRole: components.subshapeRole,
-                index: components.index,
-                selectionComponentID: SelectionComponentID.generatedTopology(persistentName).rawValue,
+                generatedRole: subshapeID.role,
+                index: subshapeID.ordinal,
+                selectionComponentID: try SelectionComponentID.stableTopology(stableReference).rawValue,
                 surfaceKind: surfaceInfo?.kind,
                 surfaceOrigin: surfaceInfo?.origin,
                 surfaceNormal: surfaceInfo?.normal,
@@ -157,7 +155,6 @@ public struct TopologySnapshotService: Sendable {
                 edgeCount: edgeCount
             )
         case .edge(let edgeID):
-            let persistentName = persistentNameString(name)
             let edge = evaluatedDocument.brep.edges[edgeID]
             let curveInfo = edge.flatMap { edge in
                 evaluatedDocument.brep.geometry.curves[edge.curveID].map(describeCurve)
@@ -175,15 +172,14 @@ public struct TopologySnapshotService: Sendable {
                 )
             }
             return TopologySummaryResult.Entry(
-                persistentName: persistentName,
+                stableReference: stableReference,
                 kind: .edge,
                 referenceID: edgeID.description,
-                sourceFeatureID: components.sourceFeatureID?.description,
+                sourceFeatureID: subshapeID.featureID.description,
                 sceneNodeID: sceneNodeID,
-                generatedRole: components.generatedRole,
-                subshapeRole: components.subshapeRole,
-                index: components.index,
-                selectionComponentID: SelectionComponentID.generatedTopology(persistentName).rawValue,
+                generatedRole: subshapeID.role,
+                index: subshapeID.ordinal,
+                selectionComponentID: try SelectionComponentID.stableTopology(stableReference).rawValue,
                 curveKind: curveInfo?.kind,
                 curveOrigin: curveInfo?.origin,
                 curveDirection: curveInfo?.direction,
@@ -203,18 +199,16 @@ public struct TopologySnapshotService: Sendable {
                 end: end
             )
         case .vertex(let vertexID):
-            let persistentName = persistentNameString(name)
             let vertex = evaluatedDocument.brep.vertices[vertexID]
             return TopologySummaryResult.Entry(
-                persistentName: persistentName,
+                stableReference: stableReference,
                 kind: .vertex,
                 referenceID: vertexID.description,
-                sourceFeatureID: components.sourceFeatureID?.description,
+                sourceFeatureID: subshapeID.featureID.description,
                 sceneNodeID: sceneNodeID,
-                generatedRole: components.generatedRole,
-                subshapeRole: components.subshapeRole,
-                index: components.index,
-                selectionComponentID: SelectionComponentID.generatedTopology(persistentName).rawValue,
+                generatedRole: subshapeID.role,
+                index: subshapeID.ordinal,
+                selectionComponentID: try SelectionComponentID.stableTopology(stableReference).rawValue,
                 start: vertex.map { point($0.point) }
             )
         }
@@ -229,44 +223,6 @@ public struct TopologySnapshotService: Sendable {
             mapping[featureID] = sceneNodeID
         }
         return mapping
-    }
-
-    private func parsedComponents(
-        from name: PersistentName
-    ) -> (sourceFeatureID: FeatureID?, generatedRole: String?, subshapeRole: String?, index: Int?) {
-        var sourceFeatureID: FeatureID?
-        var generatedRole: String?
-        var subshapeRole: String?
-        var index: Int?
-        for component in name.components {
-            switch component {
-            case .feature(let featureID):
-                sourceFeatureID = featureID
-            case .generated(let value):
-                generatedRole = value
-            case .subshape(let value):
-                subshapeRole = value
-            case .index(let value):
-                index = value
-            }
-        }
-        return (sourceFeatureID, generatedRole, subshapeRole, index)
-    }
-
-    private func persistentNameString(_ name: PersistentName) -> String {
-        name.components.map { component in
-            switch component {
-            case .feature(let featureID):
-                return "feature:\(featureID.description)"
-            case .generated(let value):
-                return "generated:\(value)"
-            case .subshape(let value):
-                return "subshape:\(value)"
-            case .index(let index):
-                return "index:\(index)"
-            }
-        }
-        .joined(separator: "/")
     }
 
     private func point(_ point: Point3D) -> TopologySummaryResult.Entry.Point {
@@ -349,11 +305,13 @@ public struct TopologySnapshotService: Sendable {
             }
         case .bSpline(let surface):
             do {
-                let normal = try surface.normal(u: 0.5, v: 0.5)
+                let normal = try surface.normal(u: 0.5, v: 0.5, tolerance: .standard)
                 return point(face.orientation == .forward ? normal : -normal)
             } catch {
                 return nil
             }
+        case .analytic:
+            return nil
         }
     }
 
@@ -371,7 +329,7 @@ public struct TopologySnapshotService: Sendable {
                 plane: plane,
                 in: model
             )
-        case .cylinder, .bSpline:
+        case .cylinder, .analytic, .bSpline:
             return nil
         }
     }
@@ -463,6 +421,8 @@ public struct TopologySnapshotService: Sendable {
             return finitePositiveLength(length)
         case .bSpline(let curve):
             return bSplineEdgeLengthMeters(curve, trim: edge.trim)
+        case .analytic, .implicit, .surfaceLift:
+            return nil
         }
     }
 
@@ -635,6 +595,12 @@ public struct TopologySnapshotService: Sendable {
                 controlPointCount: curve.controlPointCount,
                 isRational: curve.isRational
             )
+        case .analytic:
+            return CurveSummary(kind: "analytic")
+        case .implicit:
+            return CurveSummary(kind: "implicit")
+        case .surfaceLift:
+            return CurveSummary(kind: "surfaceLift")
         }
     }
 
@@ -675,6 +641,8 @@ public struct TopologySnapshotService: Sendable {
                 uControlPointCount: surface.uControlPointCount,
                 vControlPointCount: surface.vControlPointCount
             )
+        case .analytic:
+            return SurfaceSummary(kind: "analytic")
         }
     }
 }

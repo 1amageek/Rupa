@@ -49,7 +49,7 @@ public struct MeshSnapshotService: Sendable {
         var triangleCount = 0
         var indexedElementCount = 0
         let topologyMaterialResolver = TopologyMaterialBindingResolver()
-        let faceBindingsByBodyID = topologyMaterialResolver.resolvedBindingsByBodyID(
+        let faceBindingsByBodyID = try topologyMaterialResolver.resolvedBindingsByBodyID(
             evaluatedDocument: evaluatedDocument,
             metadata: document.productMetadata
         )
@@ -76,7 +76,7 @@ public struct MeshSnapshotService: Sendable {
             let faceBindings = faceBindingsByBodyID[bodyID] ?? []
             let faceBindingSummaries = faceBindings.map { binding in
                 MeshSummaryResult.FaceMaterialBinding(
-                    persistentName: binding.persistentName,
+                    stableReference: binding.stableReference,
                     faceID: binding.faceID.description,
                     materialID: binding.materialID?.description,
                     processNamespace: binding.process?.namespace,

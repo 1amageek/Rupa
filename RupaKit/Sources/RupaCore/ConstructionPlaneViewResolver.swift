@@ -7,7 +7,8 @@ public struct ConstructionPlaneViewResolver: Sendable {
 
     public func plane(
         origin: Point3D = .origin,
-        viewNormal: Vector3D
+        viewNormal: Vector3D,
+        tolerance: ModelingTolerance
     ) throws -> SketchPlane {
         let unitNormal: Vector3D
         do {
@@ -24,7 +25,7 @@ public struct ConstructionPlaneViewResolver: Sendable {
             normal: unitNormal
         )
         do {
-            try plane.validate()
+            try plane.validate(tolerance: tolerance)
         } catch {
             throw EditorError(
                 code: .commandInvalid,

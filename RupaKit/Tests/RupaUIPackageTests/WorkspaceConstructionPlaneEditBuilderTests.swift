@@ -5,7 +5,7 @@ import SwiftCAD
 @testable import RupaCore
 
 @Test func constructionPlaneEditBuilderPreservesWorldOriginForStandardPlanes() throws {
-    let updated = try WorkspaceConstructionPlaneEditBuilder().planePreservingOrigin(
+    let updated = try WorkspaceConstructionPlaneEditBuilder(tolerance: .standard).planePreservingOrigin(
         from: .xy,
         viewNormal: Vector3D(x: 0.0, y: 4.0, z: 0.0)
     )
@@ -28,7 +28,7 @@ import SwiftCAD
         )
     )
 
-    let updated = try WorkspaceConstructionPlaneEditBuilder().planePreservingOrigin(
+    let updated = try WorkspaceConstructionPlaneEditBuilder(tolerance: .standard).planePreservingOrigin(
         from: source,
         viewNormal: Vector3D(x: 3.0, y: 0.0, z: 0.0)
     )
@@ -45,7 +45,7 @@ import SwiftCAD
 
 @Test func constructionPlaneEditBuilderRejectsInvalidViewNormal() throws {
     #expect(throws: EditorError.self) {
-        _ = try WorkspaceConstructionPlaneEditBuilder().planePreservingOrigin(
+        _ = try WorkspaceConstructionPlaneEditBuilder(tolerance: .standard).planePreservingOrigin(
             from: .xy,
             viewNormal: Vector3D(x: 0.0, y: 0.0, z: 0.0)
         )
@@ -53,7 +53,7 @@ import SwiftCAD
 }
 
 @Test func constructionPlaneEditBuilderMovesStandardPlaneOriginIntoCustomPlane() throws {
-    let updated = try WorkspaceConstructionPlaneEditBuilder().planeSettingOriginComponent(
+    let updated = try WorkspaceConstructionPlaneEditBuilder(tolerance: .standard).planeSettingOriginComponent(
         .y,
         value: 0.25,
         on: .xy
@@ -75,7 +75,7 @@ import SwiftCAD
         )
     )
 
-    let updated = try WorkspaceConstructionPlaneEditBuilder().planeSettingNormalComponent(
+    let updated = try WorkspaceConstructionPlaneEditBuilder(tolerance: .standard).planeSettingNormalComponent(
         .x,
         value: 1.0,
         on: source
@@ -101,7 +101,7 @@ import SwiftCAD
     )
 
     #expect(throws: (any Error).self) {
-        _ = try WorkspaceConstructionPlaneEditBuilder().planeSettingNormalComponent(
+        _ = try WorkspaceConstructionPlaneEditBuilder(tolerance: .standard).planeSettingNormalComponent(
             .x,
             value: 0.0,
             on: source

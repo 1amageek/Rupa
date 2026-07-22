@@ -275,17 +275,7 @@ import SwiftCAD
             evaluationKind: nil,
             outputTopologyKind: nil,
             booleanSupportKind: nil,
-            guideStrategyCandidates: [.pointSimilarity],
-            resolvedGuideStrategy: nil,
-            guideStrategyResolutions: [
-                SweepGuideStrategyResolution(
-                    strategy: .pointSimilarity,
-                    status: .failed,
-                    unsupportedCode: .invalidGuideConstraintSet,
-                    message: "Sweep guide constraints do not solve before mutation."
-                ),
-            ],
-            unsupportedCode: .invalidGuideConstraintSet,
+            unsupportedCode: .sweepGuideContactUnavailable,
             message: "Sweep guide constraints do not solve before mutation.",
             checks: [
                 SweepEvaluationPreflightCheck(
@@ -338,14 +328,7 @@ import SwiftCAD
             outputTopologyKind: .zThroughFrame,
             topologyNameSchemes: [
                 .body,
-                .frameOuterVertices,
-                .frameHoleVertices,
-                .frameOuterEdges,
-                .frameHoleEdges,
-                .frameBridgeEdges,
-                .frameCapFaces,
-                .frameOuterSideFaces,
-                .frameHoleSideFaces,
+                .orthogonalBoundaryTopology,
             ],
             topologySlots: [
                 BooleanEvaluationTopologySlot(role: .body),
@@ -551,9 +534,7 @@ import SwiftCAD
     let face = SelectionTarget(
         sceneNodeID: SceneNodeID(),
         component: .face(
-            SelectionComponentID.generatedTopology(
-                "face-1"
-            )
+            try .stableTopology(agentCodecFaceReference(role: "projectedFace"))
         )
     )
     let request = AgentRequest.execute(
@@ -919,9 +900,7 @@ import SwiftCAD
     let target = SelectionTarget(
         sceneNodeID: SceneNodeID(),
         component: .vertex(
-            .generatedTopology(
-                "feature:\(FeatureID().description)/generated:polySpline/subshape:patch:0:vertex:uMax:vMax"
-            )
+            try .stableTopology(agentCodecVertexReference(role: "polySpline.patch:0.vertex:uMax:vMax"))
         )
     )
     let request = AgentRequest.execute(
@@ -947,11 +926,7 @@ import SwiftCAD
         .controlPoint(
             SurfaceControlPointReference(
                 surface: SurfaceReference(
-                    faceName: PersistentName(components: [
-                        .feature(FeatureID()),
-                        .generated("polySpline"),
-                        .subshape("patch:0:face"),
-                    ])
+                    subshape: agentCodecFaceReference(role: "polySpline.patch:0.face")
                 ),
                 uIndex: 3,
                 vIndex: 3
@@ -1016,11 +991,7 @@ import SwiftCAD
         .knot(
             SurfaceKnotReference(
                 surface: SurfaceReference(
-                    faceName: PersistentName(components: [
-                        .feature(FeatureID()),
-                        .generated("bSplineSurface"),
-                        .subshape("patch:0:face"),
-                    ])
+                    subshape: agentCodecFaceReference(role: "bSplineSurface.patch:0.face")
                 ),
                 direction: .u,
                 knotIndex: 3
@@ -1039,11 +1010,7 @@ import SwiftCAD
         .span(
             SurfaceSpanReference(
                 surface: SurfaceReference(
-                    faceName: PersistentName(components: [
-                        .feature(FeatureID()),
-                        .generated("bSplineSurface"),
-                        .subshape("patch:0:face"),
-                    ])
+                    subshape: agentCodecFaceReference(role: "bSplineSurface.patch:0.face")
                 ),
                 direction: .u,
                 spanIndex: 0
@@ -1078,11 +1045,7 @@ import SwiftCAD
         .trim(
             SurfaceTrimReference(
                 surface: SurfaceReference(
-                    faceName: PersistentName(components: [
-                        .feature(FeatureID()),
-                        .generated("bSplineSurface"),
-                        .subshape("patch:0:face"),
-                    ])
+                    subshape: agentCodecFaceReference(role: "bSplineSurface.patch:0.face")
                 ),
                 loopIndex: 0,
                 edgeIndex: 0
@@ -1093,11 +1056,7 @@ import SwiftCAD
         .trim(
             SurfaceTrimReference(
                 surface: SurfaceReference(
-                    faceName: PersistentName(components: [
-                        .feature(FeatureID()),
-                        .generated("bSplineSurface"),
-                        .subshape("patch:0:face"),
-                    ])
+                    subshape: agentCodecFaceReference(role: "bSplineSurface.patch:0.face")
                 ),
                 loopIndex: 0,
                 edgeIndex: 2
@@ -1126,21 +1085,21 @@ import SwiftCAD
         ),
         expectedGeneration: DocumentGeneration(5)
     )
-    let surfaceTrimLoop = BSplineSurfaceTrimLoop(
+    let surfaceTrimLoop = SurfaceTrimLoop(
         role: .outer,
-        edges: [
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+        parameterCurves: [
+            .polyline([
                 SurfaceParameter(u: 0.2, v: 0.2),
                 SurfaceParameter(u: 0.8, v: 0.25),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.8, v: 0.25),
                 SurfaceParameter(u: 0.45, v: 0.8),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.45, v: 0.8),
                 SurfaceParameter(u: 0.2, v: 0.2),
-            ])),
+            ]),
         ]
     )
     let surfaceTrimLoopsRequest = AgentRequest.execute(
@@ -1407,13 +1366,11 @@ import SwiftCAD
             )
         )
     )
-    let selectionMeasurementFaceName = PersistentName(components: [
-        .feature(FeatureID(UUID())),
-        .generated("polySpline"),
-        .subshape("patch:0:face"),
-    ])
+    let selectionMeasurementFaceReference = agentCodecFaceReference(
+        role: "polySpline.patch:0.face"
+    )
     let selectionMeasurementReference = SelectionReference.surface(.controlPoint(SurfaceControlPointReference(
-        surface: SurfaceReference(faceName: selectionMeasurementFaceName),
+        surface: SurfaceReference(subshape: selectionMeasurementFaceReference),
         uIndex: 0,
         vIndex: 0
     )))
@@ -1567,12 +1524,15 @@ import SwiftCAD
     let surfaceCodecFacePersistentName = "feature:\(surfaceCodecFeatureID.description)/generated:polySpline/subshape:patch:0:face"
     let surfaceCodecEdgePersistentName = "feature:\(surfaceCodecFeatureID.description)/generated:polySpline/subshape:patch:0:edge:vMin"
     let surfaceCodecVertexPersistentName = "feature:\(surfaceCodecFeatureID.description)/generated:polySpline/subshape:patch:0:vertex:uMin:vMin"
-    let surfaceCodecFaceName = PersistentName(components: [
-        .feature(surfaceCodecFeatureID),
-        .generated("polySpline"),
-        .subshape("patch:0:face"),
-    ])
-    let surfaceCodecReference = SurfaceReference(faceName: surfaceCodecFaceName)
+    let surfaceCodecFaceStableReference = agentCodecFaceReference(
+        featureID: surfaceCodecFeatureID,
+        role: "polySpline.patch:0.face"
+    )
+    let surfaceCodecVertexStableReference = agentCodecVertexReference(
+        featureID: surfaceCodecFeatureID,
+        role: "polySpline.patch:0.vertex:uMin:vMin"
+    )
+    let surfaceCodecReference = SurfaceReference(subshape: surfaceCodecFaceStableReference)
     let surfaceCodecControlPointReference = SelectionReference.surface(.controlPoint(SurfaceControlPointReference(
         surface: surfaceCodecReference,
         uIndex: 0,
@@ -1619,9 +1579,8 @@ import SwiftCAD
                         SurfaceSourceSummaryResult.Patch(
                             patchID: 0,
                             facePersistentName: surfaceCodecFacePersistentName,
-                            faceSelectionComponentID: SelectionComponentID
-                                .generatedTopology(surfaceCodecFacePersistentName)
-                                .rawValue,
+                            faceSelectionComponentID: try SelectionComponentID
+                                .stableTopology(surfaceCodecFaceStableReference).rawValue,
                             faceSelectionReference: .surface(.whole(surfaceCodecReference)),
                             uDomain: SurfaceSourceSummaryResult.ParameterRange(lowerBound: 0.0, upperBound: 1.0),
                             vDomain: SurfaceSourceSummaryResult.ParameterRange(lowerBound: 0.0, upperBound: 1.0),
@@ -1696,11 +1655,8 @@ import SwiftCAD
                                     sourceVertexIndex: 0,
                                     point: SurfaceSourceSummaryResult.Point(x: 0.0, y: 0.0, z: 0.0),
                                     generatedVertexPersistentName: surfaceCodecVertexPersistentName,
-                                    selectionComponentID: SelectionComponentID
-                                        .generatedTopology(
-                                            surfaceCodecVertexPersistentName
-                                        )
-                                        .rawValue,
+                                    selectionComponentID: try SelectionComponentID
+                                        .stableTopology(surfaceCodecVertexStableReference).rawValue,
                                     selectionReference: surfaceCodecControlPointReference
                                 ),
                             ],
@@ -1872,7 +1828,7 @@ import SwiftCAD
         sessionID: sessionID,
         queries: [
             SurfaceFrameQuery(
-                facePersistentName: "feature:a/generated:polySpline/subshape:patch:0:face",
+                faceStableReference: surfaceCodecFaceStableReference,
                 u: 0.5,
                 v: 0.5
             ),
@@ -1947,11 +1903,7 @@ import SwiftCAD
         .trim(
             SurfaceTrimReference(
                 surface: SurfaceReference(
-                    faceName: PersistentName(components: [
-                        .feature(FeatureID()),
-                        .generated("bSplineSurface"),
-                        .subshape("patch:0:face"),
-                    ])
+                    subshape: agentCodecFaceReference(role: "bSplineSurface.patch:0.face")
                 ),
                 loopIndex: 0,
                 edgeIndex: 0
@@ -1962,11 +1914,7 @@ import SwiftCAD
         .trim(
             SurfaceTrimReference(
                 surface: SurfaceReference(
-                    faceName: PersistentName(components: [
-                        .feature(FeatureID()),
-                        .generated("bSplineSurface"),
-                        .subshape("patch:0:face"),
-                    ])
+                    subshape: agentCodecFaceReference(role: "bSplineSurface.patch:0.face")
                 ),
                 loopIndex: 0,
                 edgeIndex: 2
@@ -2024,7 +1972,7 @@ import SwiftCAD
     )
     let selectionTarget = SelectionTarget(
         sceneNodeID: SceneNodeID(UUID()),
-        component: .vertex(.generatedTopology("feature:body/generated:vertex/index:0"))
+        component: .vertex(try .stableTopology(agentCodecVertexReference(role: "vertex")))
     )
     let selectRequest = AgentRequest.selectTargets(
         sessionID: sessionID,
@@ -2058,11 +2006,7 @@ import SwiftCAD
     )
     let selectionReference = SelectionReference.surface(.controlPoint(SurfaceControlPointReference(
         surface: SurfaceReference(
-            faceName: PersistentName(components: [
-                .feature(FeatureID()),
-                .generated("polySpline"),
-                .subshape("patch:0:face"),
-            ])
+            subshape: agentCodecFaceReference(role: "polySpline.patch:0.face")
         ),
         uIndex: 1,
         vIndex: 1
@@ -2195,6 +2139,32 @@ private func agentCodecSavedView(
             ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration,
             scaleBarLengthMeters: 1_000.0
         )
+    )
+}
+
+private func agentCodecFaceReference(
+    featureID: FeatureID = FeatureID(),
+    role: String,
+    ordinal: Int = 0
+) -> StableSubshapeReference {
+    StableSubshapeReference(
+        subshapeID: SubshapeID(featureID: featureID, role: role, ordinal: ordinal),
+        geometrySignature: .face(FaceGeometrySignature(
+            surface: .plane(Plane3D(origin: .origin, normal: .unitZ)),
+            orientation: .forward,
+            loops: []
+        ))
+    )
+}
+
+private func agentCodecVertexReference(
+    featureID: FeatureID = FeatureID(),
+    role: String,
+    ordinal: Int = 0
+) -> StableSubshapeReference {
+    StableSubshapeReference(
+        subshapeID: SubshapeID(featureID: featureID, role: role, ordinal: ordinal),
+        geometrySignature: .vertex(point: .origin)
     )
 }
 

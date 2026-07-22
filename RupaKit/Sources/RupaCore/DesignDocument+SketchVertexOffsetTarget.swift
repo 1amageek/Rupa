@@ -14,13 +14,15 @@ extension DesignDocument {
         objectRegistry: ObjectTypeRegistry
     ) throws -> GeneratedSketchVertexOffsetTarget {
         let operationName = "Generated vertex Offset Vertex"
-        guard case .vertex(let componentID) = target.component,
-              let persistentName = componentID.generatedTopologyPersistentName else {
+        guard case .vertex(let componentID) = target.component else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(operationName) requires a generated topology vertex target."
             )
         }
+        let stableReference = try componentID.stableTopologyReference(
+            operationName: operationName
+        )
         let resolvedTarget = try editableBodyTargetResolution(
             for: target,
             operationName: operationName
@@ -46,7 +48,9 @@ extension DesignDocument {
             document: self,
             objectRegistry: objectRegistry
         )
-        guard let entry = topology.entries.first(where: { $0.persistentName == persistentName }) else {
+        guard let entry = topology.entries.first(where: {
+            $0.stableReference == stableReference
+        }) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "\(operationName) generated topology target was not found in the current evaluation."

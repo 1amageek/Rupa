@@ -21,10 +21,10 @@ struct SketchPointConstraintPropagator: Sendable {
         var centerReference: SketchReference
     }
 
-    private struct TangentPair: Sendable {
+    private struct LineCircularTangency: Sendable {
         var lineID: SketchEntityID
         var circularID: SketchEntityID
-        var lineIsFirst: Bool
+        var side: SketchTangencyConstraint.LineSide
     }
 
     private struct SmoothSplineControlPointReferences: Sendable {
@@ -39,6 +39,7 @@ struct SketchPointConstraintPropagator: Sendable {
         var endpointReference: SketchReference
         var handleReference: SketchReference
         var lineID: SketchEntityID
+        var orientation: SketchTangentOrientation
     }
 
     private struct TangentSplineEndpointReferences: Sendable {
@@ -46,6 +47,7 @@ struct SketchPointConstraintPropagator: Sendable {
         var endpointReference: SketchReference
         var handleReference: SketchReference
         var curvatureReference: SketchReference
+        var orientation: SketchTangentOrientation
     }
 
     private struct TangentSplineEndpointPairReferences: Sendable {
@@ -134,10 +136,9 @@ struct SketchPointConstraintPropagator: Sendable {
                 in: &sketch,
                 owner: owner
             )
-        case let .tangent(first, second):
+        case let .tangent(tangency):
             try satisfyAddedTangentConstraint(
-                first,
-                second,
+                tangency,
                 in: &sketch,
                 owner: owner
             )
@@ -162,25 +163,28 @@ struct SketchPointConstraintPropagator: Sendable {
                 in: &sketch,
                 owner: owner
             )
-        case let .splineEndpointTangent(splineID, endpoint, lineID):
+        case let .splineEndpointTangent(tangency):
             try satisfyAddedSplineEndpointTangentConstraint(
-                splineID: splineID,
-                endpoint: endpoint,
-                lineID: lineID,
+                splineID: tangency.splineEndpoint.splineID,
+                endpoint: tangency.splineEndpoint.endpoint,
+                lineID: tangency.line,
+                orientation: tangency.orientation,
                 in: &sketch,
                 owner: owner
             )
-        case let .tangentSplineEndpoints(first, second):
+        case let .tangentSplineEndpoints(tangency):
             try satisfyAddedTangentSplineEndpointsConstraint(
-                first,
-                second,
+                tangency.first,
+                tangency.second,
+                orientation: tangency.orientation,
                 in: &sketch,
                 owner: owner
             )
-        case let .smoothSplineEndpoints(first, second):
+        case let .smoothSplineEndpoints(tangency):
             try satisfyAddedSmoothSplineEndpointsConstraint(
-                first,
-                second,
+                tangency.first,
+                tangency.second,
+                orientation: tangency.orientation,
                 in: &sketch,
                 owner: owner
             )
@@ -507,13 +511,14 @@ struct SketchPointConstraintPropagator: Sendable {
             return
         }
         for constraint in sketch.constraints {
-            guard case let .splineEndpointTangent(splineID, endpoint, lineID) = constraint else {
+            guard case let .splineEndpointTangent(tangency) = constraint else {
                 continue
             }
             let references = try splineEndpointTangentReferences(
-                splineID: splineID,
-                endpoint: endpoint,
-                lineID: lineID,
+                splineID: tangency.splineEndpoint.splineID,
+                endpoint: tangency.splineEndpoint.endpoint,
+                lineID: tangency.line,
+                orientation: tangency.orientation,
                 in: sketch,
                 owner: owner
             )
@@ -557,12 +562,13 @@ struct SketchPointConstraintPropagator: Sendable {
             return
         }
         for constraint in sketch.constraints {
-            guard case let .tangentSplineEndpoints(first, second) = constraint else {
+            guard case let .tangentSplineEndpoints(tangency) = constraint else {
                 continue
             }
             let pair = try tangentSplineEndpointPairReferences(
-                first,
-                second,
+                tangency.first,
+                tangency.second,
+                orientation: tangency.orientation,
                 in: sketch,
                 owner: owner
             )
@@ -601,12 +607,13 @@ struct SketchPointConstraintPropagator: Sendable {
             return
         }
         for constraint in sketch.constraints {
-            guard case let .smoothSplineEndpoints(first, second) = constraint else {
+            guard case let .smoothSplineEndpoints(tangency) = constraint else {
                 continue
             }
             let pair = try tangentSplineEndpointPairReferences(
-                first,
-                second,
+                tangency.first,
+                tangency.second,
+                orientation: tangency.orientation,
                 in: sketch,
                 owner: owner
             )
@@ -744,10 +751,11 @@ struct SketchPointConstraintPropagator: Sendable {
                     }
                 }
             }
-            for circularID in tangentCircularUpdates(from: sourceLineID, in: sketch) {
+            for tangency in tangentCircularUpdates(from: sourceLineID, in: sketch) {
                 if let movedReference = try moveCircularEntityToTangent(
-                    circularID,
+                    tangency.circularID,
                     withLine: sourceLineID,
+                    side: tangency.side,
                     in: &sketch,
                     owner: owner
                 ) {
@@ -934,69 +942,44 @@ struct SketchPointConstraintPropagator: Sendable {
     }
 
     private func satisfyAddedTangentConstraint(
-        _ first: SketchEntityID,
-        _ second: SketchEntityID,
+        _ tangency: SketchTangencyConstraint,
         in sketch: inout Sketch,
         owner: String
     ) throws {
-        let pair = try tangentPair(first, second, in: sketch, owner: owner)
-        if pair.lineIsFirst {
-            if let movedReference = try moveCircularEntityToTangent(
-                pair.circularID,
-                withLine: pair.lineID,
-                in: &sketch,
-                owner: owner
-            ) {
-                try propagateFromReference(
-                    movedReference,
-                    in: &sketch,
-                    owner: owner,
-                    lockedLineIDs: [pair.lineID]
-                )
-            } else {
-                try validateTangentConstraints(in: sketch, owner: owner)
-                try validateSmoothSplineControlPointConstraints(in: sketch, owner: owner)
-            }
-        } else {
-            let movedReferences = try translateLineToTangent(
-                pair.lineID,
-                withCircularEntity: pair.circularID,
+        let movedReference: SketchReference?
+        let lockedLineIDs: Set<SketchEntityID>
+        switch tangency {
+        case let .lineCircular(lineID, circularID, side):
+            _ = try lineMetrics(for: lineID, in: sketch, owner: owner)
+            _ = try circularMetrics(for: circularID, in: sketch, owner: owner)
+            movedReference = try moveCircularEntityToTangent(
+                circularID,
+                withLine: lineID,
+                side: side,
                 in: &sketch,
                 owner: owner
             )
-            if movedReferences.isEmpty {
-                try validateTangentConstraints(in: sketch, owner: owner)
-                try validateSmoothSplineControlPointConstraints(in: sketch, owner: owner)
-                try validateSplineEndpointTangentConstraints(in: sketch, owner: owner)
-            } else {
-                var pending = [(reference: SketchReference, point: Point)]()
-                var affectedLineIDs = Set<SketchEntityID>()
-                for movedReference in movedReferences {
-                    pending.append((
-                        reference: movedReference,
-                        point: try point(for: movedReference, in: sketch, owner: owner)
-                    ))
-                }
-                try resolvePointConstraints(
-                    pending: &pending,
-                    in: &sketch,
-                    owner: owner,
-                    affectedLineIDs: &affectedLineIDs
-                )
-                affectedLineIDs.insert(pair.lineID)
-                try propagateLineAngleConstraints(
-                    changedLineIDs: &affectedLineIDs,
-                    in: &sketch,
-                    owner: owner,
-                    lockedLineIDs: [pair.circularID]
-                )
-                try validateLineLengths(in: sketch, owner: owner)
-                try validateLineAngleConstraints(affecting: affectedLineIDs, in: sketch, owner: owner)
-                try validateLineLengthConstraints(affecting: affectedLineIDs, in: sketch, owner: owner)
-                try validateTangentConstraints(in: sketch, owner: owner)
-                try validateSmoothSplineControlPointConstraints(in: sketch, owner: owner)
-                try validateSplineEndpointTangentConstraints(in: sketch, owner: owner)
-            }
+            lockedLineIDs = [lineID]
+        case .circularCircular:
+            movedReference = try satisfyCircularCircularTangency(
+                tangency,
+                preferredMovableEntityID: nil,
+                in: &sketch,
+                owner: owner
+            )
+            lockedLineIDs = []
+        }
+        if let movedReference {
+            try propagateFromReference(
+                movedReference,
+                in: &sketch,
+                owner: owner,
+                lockedLineIDs: lockedLineIDs
+            )
+        } else {
+            try validateTangentConstraints(in: sketch, owner: owner)
+            try validateSmoothSplineControlPointConstraints(in: sketch, owner: owner)
+            try validateSplineEndpointTangentConstraints(in: sketch, owner: owner)
         }
     }
 
@@ -1119,6 +1102,7 @@ struct SketchPointConstraintPropagator: Sendable {
         splineID: SketchEntityID,
         endpoint: SketchSplineEndpoint,
         lineID: SketchEntityID,
+        orientation: SketchTangentOrientation,
         in sketch: inout Sketch,
         owner: String
     ) throws {
@@ -1126,6 +1110,7 @@ struct SketchPointConstraintPropagator: Sendable {
             splineID: splineID,
             endpoint: endpoint,
             lineID: lineID,
+            orientation: orientation,
             in: sketch,
             owner: owner
         )
@@ -1152,7 +1137,7 @@ struct SketchPointConstraintPropagator: Sendable {
             try validateSplineEndpointTangentConstraints(in: sketch, owner: owner)
         } else if let movedReference = try alignLine(
             references.lineID,
-            toAngle: splineEndpointTangentAngle(references, in: sketch, owner: owner),
+            toAngle: splineEndpointLineAngle(references, in: sketch, owner: owner),
             in: &sketch,
             owner: owner,
             lockedLineIDs: []
@@ -1171,10 +1156,17 @@ struct SketchPointConstraintPropagator: Sendable {
     private func satisfyAddedTangentSplineEndpointsConstraint(
         _ first: SketchSplineEndpointReference,
         _ second: SketchSplineEndpointReference,
+        orientation: SketchTangentOrientation,
         in sketch: inout Sketch,
         owner: String
     ) throws {
-        let pair = try tangentSplineEndpointPairReferences(first, second, in: sketch, owner: owner)
+        let pair = try tangentSplineEndpointPairReferences(
+            first,
+            second,
+            orientation: orientation,
+            in: sketch,
+            owner: owner
+        )
         guard try tangentSplineEndpointsAreSatisfied(pair, in: sketch, owner: owner) == false else {
             try validateSplineEndpointTangentConstraints(in: sketch, owner: owner)
             return
@@ -1217,10 +1209,17 @@ struct SketchPointConstraintPropagator: Sendable {
     private func satisfyAddedSmoothSplineEndpointsConstraint(
         _ first: SketchSplineEndpointReference,
         _ second: SketchSplineEndpointReference,
+        orientation: SketchTangentOrientation,
         in sketch: inout Sketch,
         owner: String
     ) throws {
-        let pair = try tangentSplineEndpointPairReferences(first, second, in: sketch, owner: owner)
+        let pair = try tangentSplineEndpointPairReferences(
+            first,
+            second,
+            orientation: orientation,
+            in: sketch,
+            owner: owner
+        )
         guard try smoothSplineEndpointsAreSatisfied(pair, in: sketch, owner: owner) == false else {
             try validateSplineEndpointTangentConstraints(in: sketch, owner: owner)
             return
@@ -1369,15 +1368,17 @@ struct SketchPointConstraintPropagator: Sendable {
     private func tangentCircularUpdates(
         from lineID: SketchEntityID,
         in sketch: Sketch
-    ) -> [SketchEntityID] {
+    ) -> [LineCircularTangency] {
         sketch.constraints.compactMap { constraint in
             switch constraint {
-            case let .tangent(first, second):
-                if first == lineID, isCircularEntity(second, in: sketch) {
-                    return second
-                }
-                if second == lineID, isCircularEntity(first, in: sketch) {
-                    return first
+            case let .tangent(tangency):
+                if case let .lineCircular(line, circular, side) = tangency,
+                   line == lineID {
+                    return LineCircularTangency(
+                        lineID: line,
+                        circularID: circular,
+                        side: side
+                    )
                 }
                 return nil
             case .coincident,
@@ -1532,6 +1533,7 @@ struct SketchPointConstraintPropagator: Sendable {
     private func moveCircularEntityToTangent(
         _ circularID: SketchEntityID,
         withLine lineID: SketchEntityID,
+        side: SketchTangencyConstraint.LineSide,
         in sketch: inout Sketch,
         owner: String
     ) throws -> SketchReference? {
@@ -1539,7 +1541,7 @@ struct SketchPointConstraintPropagator: Sendable {
         let circular = try circularMetrics(for: circularID, in: sketch, owner: owner)
         let normal = lineNormal(for: line)
         let signedDistance = signedDistanceFromLine(line, to: circular.center, normal: normal)
-        let targetDistance = tangentTargetDistance(currentDistance: signedDistance, radius: circular.radius)
+        let targetDistance = tangentTargetDistance(side: side, radius: circular.radius)
         let offset = targetDistance - signedDistance
         guard abs(offset) > tolerance else {
             return nil
@@ -1558,9 +1560,79 @@ struct SketchPointConstraintPropagator: Sendable {
         return circular.centerReference
     }
 
+    private func satisfyCircularCircularTangency(
+        _ tangency: SketchTangencyConstraint,
+        preferredMovableEntityID: SketchEntityID?,
+        in sketch: inout Sketch,
+        owner: String
+    ) throws -> SketchReference? {
+        guard case let .circularCircular(firstID, secondID, contact) = tangency else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a circular-circular tangent constraint."
+            )
+        }
+        let first = try circularMetrics(for: firstID, in: sketch, owner: owner)
+        let second = try circularMetrics(for: secondID, in: sketch, owner: owner)
+        let targetDistance: Double
+        switch contact {
+        case .external:
+            targetDistance = first.radius + second.radius
+        case .firstContainsSecond:
+            guard first.radius - second.radius > tolerance else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(owner) first-containing tangency requires the first radius to be larger."
+                )
+            }
+            targetDistance = first.radius - second.radius
+        case .secondContainsFirst:
+            guard second.radius - first.radius > tolerance else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(owner) second-containing tangency requires the second radius to be larger."
+                )
+            }
+            targetDistance = second.radius - first.radius
+        }
+
+        let preferredID = preferredMovableEntityID ?? secondID
+        let preferred = preferredID == firstID ? first : second
+        let alternate = preferredID == firstID ? second : first
+        let preferredEntityID = preferredID == firstID ? firstID : secondID
+        let alternateEntityID = preferredID == firstID ? secondID : firstID
+        let movable: (id: SketchEntityID, metrics: CircularMetrics, source: CircularMetrics)
+        if isAnchored(preferred.centerReference, in: sketch) == false {
+            movable = (preferredEntityID, preferred, alternate)
+        } else if isAnchored(alternate.centerReference, in: sketch) == false {
+            movable = (alternateEntityID, alternate, preferred)
+        } else {
+            return nil
+        }
+
+        let delta = Point(
+            x: movable.metrics.center.x - movable.source.center.x,
+            y: movable.metrics.center.y - movable.source.center.y
+        )
+        let currentDistance = hypot(delta.x, delta.y)
+        guard abs(currentDistance - targetDistance) > tolerance else {
+            return nil
+        }
+        let direction = currentDistance > tolerance
+            ? Point(x: delta.x / currentDistance, y: delta.y / currentDistance)
+            : Point(x: 1.0, y: 0.0)
+        let center = Point(
+            x: movable.source.center.x + direction.x * targetDistance,
+            y: movable.source.center.y + direction.y * targetDistance
+        )
+        try set(center, for: movable.metrics.centerReference, in: &sketch, owner: owner)
+        return movable.metrics.centerReference
+    }
+
     private func translateLineToTangent(
         _ lineID: SketchEntityID,
         withCircularEntity circularID: SketchEntityID,
+        side: SketchTangencyConstraint.LineSide,
         in sketch: inout Sketch,
         owner: String
     ) throws -> [SketchReference] {
@@ -1568,7 +1640,7 @@ struct SketchPointConstraintPropagator: Sendable {
         let circular = try circularMetrics(for: circularID, in: sketch, owner: owner)
         let normal = lineNormal(for: line)
         let signedDistance = signedDistanceFromLine(line, to: circular.center, normal: normal)
-        let targetDistance = tangentTargetDistance(currentDistance: signedDistance, radius: circular.radius)
+        let targetDistance = tangentTargetDistance(side: side, radius: circular.radius)
         let offset = signedDistance - targetDistance
         guard abs(offset) > tolerance else {
             return []
@@ -1598,24 +1670,6 @@ struct SketchPointConstraintPropagator: Sendable {
         )
         sketch.entities[lineID] = .line(updatedLine)
         return [startReference, endReference]
-    }
-
-    private func tangentPair(
-        _ first: SketchEntityID,
-        _ second: SketchEntityID,
-        in sketch: Sketch,
-        owner: String
-    ) throws -> TangentPair {
-        if isLineEntity(first, in: sketch), isCircularEntity(second, in: sketch) {
-            return TangentPair(lineID: first, circularID: second, lineIsFirst: true)
-        }
-        if isCircularEntity(first, in: sketch), isLineEntity(second, in: sketch) {
-            return TangentPair(lineID: second, circularID: first, lineIsFirst: false)
-        }
-        throw EditorError(
-            code: .referenceUnresolved,
-            message: "\(owner) tangent constraint requires one sketch line and one circular sketch entity."
-        )
     }
 
     private func circularMetrics(
@@ -1673,11 +1727,11 @@ struct SketchPointConstraintPropagator: Sendable {
         return deltaX * normal.x + deltaY * normal.y
     }
 
-    private func tangentTargetDistance(currentDistance: Double, radius: Double) -> Double {
-        if currentDistance < 0.0 {
-            return -radius
-        }
-        return radius
+    private func tangentTargetDistance(
+        side: SketchTangencyConstraint.LineSide,
+        radius: Double
+    ) -> Double {
+        side == .left ? radius : -radius
     }
 
     private func isLineEntity(_ entityID: SketchEntityID, in sketch: Sketch) -> Bool {
@@ -1784,10 +1838,11 @@ struct SketchPointConstraintPropagator: Sendable {
         in sketch: inout Sketch,
         owner: String
     ) throws {
-        for lineID in tangentLineIDs(forCircularEntity: entityID, in: sketch) {
+        for tangency in tangentLineConstraints(forCircularEntity: entityID, in: sketch) {
             if let movedReference = try moveCircularEntityToTangent(
                 entityID,
-                withLine: lineID,
+                withLine: tangency.lineID,
+                side: tangency.side,
                 in: &sketch,
                 owner: owner
             ) {
@@ -1795,24 +1850,47 @@ struct SketchPointConstraintPropagator: Sendable {
                     movedReference,
                     in: &sketch,
                     owner: owner,
-                    lockedLineIDs: [lineID]
+                    lockedLineIDs: [tangency.lineID]
+                )
+            }
+        }
+        for constraint in sketch.constraints {
+            guard case let .tangent(tangency) = constraint,
+                  case let .circularCircular(first, second, _) = tangency,
+                  first == entityID || second == entityID else {
+                continue
+            }
+            let otherID = first == entityID ? second : first
+            if let movedReference = try satisfyCircularCircularTangency(
+                tangency,
+                preferredMovableEntityID: otherID,
+                in: &sketch,
+                owner: owner
+            ) {
+                try propagateFromReference(
+                    movedReference,
+                    in: &sketch,
+                    owner: owner,
+                    lockedLineIDs: []
                 )
             }
         }
     }
 
-    private func tangentLineIDs(
+    private func tangentLineConstraints(
         forCircularEntity entityID: SketchEntityID,
         in sketch: Sketch
-    ) -> [SketchEntityID] {
+    ) -> [LineCircularTangency] {
         sketch.constraints.compactMap { constraint in
             switch constraint {
-            case let .tangent(first, second):
-                if first == entityID, isLineEntity(second, in: sketch) {
-                    return second
-                }
-                if second == entityID, isLineEntity(first, in: sketch) {
-                    return first
+            case let .tangent(tangency):
+                if case let .lineCircular(line, circular, side) = tangency,
+                   circular == entityID {
+                    return LineCircularTangency(
+                        lineID: line,
+                        circularID: circular,
+                        side: side
+                    )
                 }
                 return nil
             case .coincident,
@@ -2347,13 +2425,38 @@ struct SketchPointConstraintPropagator: Sendable {
     private func validateTangentConstraints(in sketch: Sketch, owner: String) throws {
         for constraint in sketch.constraints {
             switch constraint {
-            case let .tangent(first, second):
-                let pair = try tangentPair(first, second, in: sketch, owner: owner)
-                let line = try lineMetrics(for: pair.lineID, in: sketch, owner: owner)
-                let circular = try circularMetrics(for: pair.circularID, in: sketch, owner: owner)
-                let normal = lineNormal(for: line)
-                let distance = abs(signedDistanceFromLine(line, to: circular.center, normal: normal))
-                guard abs(distance - circular.radius) <= 1.0e-9 else {
+            case let .tangent(tangency):
+                let residual: Double
+                switch tangency {
+                case let .lineCircular(lineID, circularID, side):
+                    let line = try lineMetrics(for: lineID, in: sketch, owner: owner)
+                    let circular = try circularMetrics(for: circularID, in: sketch, owner: owner)
+                    let signedDistance = signedDistanceFromLine(
+                        line,
+                        to: circular.center,
+                        normal: lineNormal(for: line)
+                    )
+                    residual = signedDistance - tangentTargetDistance(
+                        side: side,
+                        radius: circular.radius
+                    )
+                case let .circularCircular(firstID, secondID, contact):
+                    let first = try circularMetrics(for: firstID, in: sketch, owner: owner)
+                    let second = try circularMetrics(for: secondID, in: sketch, owner: owner)
+                    let centerDistance = hypot(
+                        second.center.x - first.center.x,
+                        second.center.y - first.center.y
+                    )
+                    switch contact {
+                    case .external:
+                        residual = centerDistance - first.radius - second.radius
+                    case .firstContainsSecond:
+                        residual = centerDistance - first.radius + second.radius
+                    case .secondContainsFirst:
+                        residual = centerDistance + first.radius - second.radius
+                    }
+                }
+                guard abs(residual) <= 1.0e-9 else {
                     throw EditorError(
                         code: .commandInvalid,
                         message: "\(owner) cannot satisfy a tangent sketch constraint."
@@ -2467,14 +2570,15 @@ struct SketchPointConstraintPropagator: Sendable {
         var updates: [SplineEndpointTangentReferences] = []
         for constraint in sketch.constraints {
             switch constraint {
-            case let .splineEndpointTangent(splineID, endpoint, tangentLineID):
-                guard tangentLineID == lineID else {
+            case let .splineEndpointTangent(tangency):
+                guard tangency.line == lineID else {
                     continue
                 }
                 let update = try splineEndpointTangentReferences(
-                    splineID: splineID,
-                    endpoint: endpoint,
-                    lineID: tangentLineID,
+                    splineID: tangency.splineEndpoint.splineID,
+                    endpoint: tangency.splineEndpoint.endpoint,
+                    lineID: tangency.line,
+                    orientation: tangency.orientation,
                     in: sketch,
                     owner: owner
                 )
@@ -2526,6 +2630,7 @@ struct SketchPointConstraintPropagator: Sendable {
         splineID: SketchEntityID,
         endpoint: SketchSplineEndpoint,
         lineID: SketchEntityID,
+        orientation: SketchTangentOrientation,
         in sketch: Sketch,
         owner: String
     ) throws -> SplineEndpointTangentReferences {
@@ -2553,13 +2658,15 @@ struct SketchPointConstraintPropagator: Sendable {
             endpoint: endpoint,
             endpointReference: endpointReference,
             handleReference: handleReference,
-            lineID: lineID
+            lineID: lineID,
+            orientation: orientation
         )
     }
 
     private func tangentSplineEndpointPairReferences(
         _ first: SketchSplineEndpointReference,
         _ second: SketchSplineEndpointReference,
+        orientation: SketchTangentOrientation,
         in sketch: Sketch,
         owner: String
     ) throws -> TangentSplineEndpointPairReferences {
@@ -2570,13 +2677,24 @@ struct SketchPointConstraintPropagator: Sendable {
             )
         }
         return TangentSplineEndpointPairReferences(
-            first: try tangentSplineEndpointReferences(first, in: sketch, owner: owner),
-            second: try tangentSplineEndpointReferences(second, in: sketch, owner: owner)
+            first: try tangentSplineEndpointReferences(
+                first,
+                orientation: orientation,
+                in: sketch,
+                owner: owner
+            ),
+            second: try tangentSplineEndpointReferences(
+                second,
+                orientation: orientation,
+                in: sketch,
+                owner: owner
+            )
         )
     }
 
     private func tangentSplineEndpointReferences(
         _ reference: SketchSplineEndpointReference,
+        orientation: SketchTangentOrientation,
         in sketch: Sketch,
         owner: String
     ) throws -> TangentSplineEndpointReferences {
@@ -2605,7 +2723,8 @@ struct SketchPointConstraintPropagator: Sendable {
             endpoint: reference,
             endpointReference: endpointReference,
             handleReference: handleReference,
-            curvatureReference: curvatureReference
+            curvatureReference: curvatureReference,
+            orientation: orientation
         )
     }
 
@@ -2616,7 +2735,22 @@ struct SketchPointConstraintPropagator: Sendable {
     ) throws -> Bool {
         let tangentAngle = try splineEndpointTangentAngle(references, in: sketch, owner: owner)
         let line = try lineMetrics(for: references.lineID, in: sketch, owner: owner)
-        return angleMatches(tangentAngle, line.angle, period: Double.pi)
+        return angleMatches(
+            tangentAngle,
+            orientedAngle(line.angle, orientation: references.orientation),
+            period: Double.pi * 2.0
+        )
+    }
+
+    private func splineEndpointLineAngle(
+        _ references: SplineEndpointTangentReferences,
+        in sketch: Sketch,
+        owner: String
+    ) throws -> Double {
+        orientedAngle(
+            try splineEndpointTangentAngle(references, in: sketch, owner: owner),
+            orientation: references.orientation
+        )
     }
 
     private func splineEndpointTangentAngle(
@@ -2653,7 +2787,11 @@ struct SketchPointConstraintPropagator: Sendable {
     ) throws -> Bool {
         let firstAngle = try tangentSplineEndpointAngle(pair.first, in: sketch, owner: owner)
         let secondAngle = try tangentSplineEndpointAngle(pair.second, in: sketch, owner: owner)
-        return angleMatches(firstAngle, secondAngle, period: Double.pi)
+        return angleMatches(
+            firstAngle,
+            orientedAngle(secondAngle, orientation: pair.first.orientation),
+            period: Double.pi * 2.0
+        )
     }
 
     private func smoothSplineEndpointsAreSatisfied(
@@ -2668,7 +2806,11 @@ struct SketchPointConstraintPropagator: Sendable {
         }
         let firstVector = try tangentSplineEndpointVector(pair.first, in: sketch, owner: owner)
         let secondVector = try tangentSplineEndpointVector(pair.second, in: sketch, owner: owner)
-        guard pointsDiffer(firstVector, secondVector) == false else {
+        let orientedSecondVector = orientedVector(
+            secondVector,
+            orientation: pair.first.orientation
+        )
+        guard pointsDiffer(firstVector, orientedSecondVector) == false else {
             return false
         }
         let firstSecondDerivative = try splineEndpointSecondDerivativeVector(
@@ -2785,12 +2927,13 @@ struct SketchPointConstraintPropagator: Sendable {
                 message: "\(owner) spline tangent handle must not collapse onto its endpoint."
             )
         }
-        let lineDirection = Point(x: cos(line.angle), y: sin(line.angle))
-        let projection = currentVector.x * lineDirection.x + currentVector.y * lineDirection.y
-        let sign = projection < 0.0 ? -1.0 : 1.0
+        let lineDirection = orientedVector(
+            Point(x: cos(line.angle), y: sin(line.angle)),
+            orientation: references.orientation
+        )
         let tangentVector = Point(
-            x: lineDirection.x * currentLength * sign,
-            y: lineDirection.y * currentLength * sign
+            x: lineDirection.x * currentLength,
+            y: lineDirection.y * currentLength
         )
         switch references.endpoint {
         case .start:
@@ -2836,8 +2979,11 @@ struct SketchPointConstraintPropagator: Sendable {
             )
         } else if angleMatches(
             try tangentSplineEndpointAngle(source, in: sketch, owner: owner),
-            try tangentSplineEndpointAngle(target, in: sketch, owner: owner),
-            period: Double.pi
+            orientedAngle(
+                try tangentSplineEndpointAngle(target, in: sketch, owner: owner),
+                orientation: source.orientation
+            ),
+            period: Double.pi * 2.0
         ) == false {
             throw EditorError(
                 code: .commandInvalid,
@@ -3122,7 +3268,10 @@ struct SketchPointConstraintPropagator: Sendable {
         owner: String
     ) throws -> Point {
         let targetEndpointPoint = try point(for: target.endpointReference, in: sketch, owner: owner)
-        let sourceVector = try tangentSplineEndpointVector(source, in: sketch, owner: owner)
+        let sourceVector = orientedVector(
+            try tangentSplineEndpointVector(source, in: sketch, owner: owner),
+            orientation: target.orientation
+        )
         switch target.endpoint.endpoint {
         case .start:
             return Point(
@@ -3185,12 +3334,13 @@ struct SketchPointConstraintPropagator: Sendable {
             )
         }
         let sourceAngle = try tangentSplineEndpointAngle(source, in: sketch, owner: owner)
-        let sourceDirection = Point(x: cos(sourceAngle), y: sin(sourceAngle))
-        let projection = currentVector.x * sourceDirection.x + currentVector.y * sourceDirection.y
-        let sign = projection < 0.0 ? -1.0 : 1.0
+        let sourceDirection = orientedVector(
+            Point(x: cos(sourceAngle), y: sin(sourceAngle)),
+            orientation: target.orientation
+        )
         let tangentVector = Point(
-            x: sourceDirection.x * currentLength * sign,
-            y: sourceDirection.y * currentLength * sign
+            x: sourceDirection.x * currentLength,
+            y: sourceDirection.y * currentLength
         )
         switch target.endpoint.endpoint {
         case .start:
@@ -3206,14 +3356,31 @@ struct SketchPointConstraintPropagator: Sendable {
         }
     }
 
+    private func orientedAngle(
+        _ angle: Double,
+        orientation: SketchTangentOrientation
+    ) -> Double {
+        orientation == .aligned ? angle : angle + Double.pi
+    }
+
+    private func orientedVector(
+        _ vector: Point,
+        orientation: SketchTangentOrientation
+    ) -> Point {
+        orientation == .aligned
+            ? vector
+            : Point(x: -vector.x, y: -vector.y)
+    }
+
     private func validateSplineEndpointTangentConstraints(in sketch: Sketch, owner: String) throws {
         for constraint in sketch.constraints {
             switch constraint {
-            case let .splineEndpointTangent(splineID, endpoint, lineID):
+            case let .splineEndpointTangent(tangency):
                 let references = try splineEndpointTangentReferences(
-                    splineID: splineID,
-                    endpoint: endpoint,
-                    lineID: lineID,
+                    splineID: tangency.splineEndpoint.splineID,
+                    endpoint: tangency.splineEndpoint.endpoint,
+                    lineID: tangency.line,
+                    orientation: tangency.orientation,
                     in: sketch,
                     owner: owner
                 )
@@ -3223,16 +3390,28 @@ struct SketchPointConstraintPropagator: Sendable {
                         message: "\(owner) cannot satisfy a spline endpoint tangent constraint."
                     )
                 }
-            case let .tangentSplineEndpoints(first, second):
-                let pair = try tangentSplineEndpointPairReferences(first, second, in: sketch, owner: owner)
+            case let .tangentSplineEndpoints(tangency):
+                let pair = try tangentSplineEndpointPairReferences(
+                    tangency.first,
+                    tangency.second,
+                    orientation: tangency.orientation,
+                    in: sketch,
+                    owner: owner
+                )
                 guard try tangentSplineEndpointsAreSatisfied(pair, in: sketch, owner: owner) else {
                     throw EditorError(
                         code: .commandInvalid,
                         message: "\(owner) cannot satisfy a tangent spline endpoints constraint."
                     )
                 }
-            case let .smoothSplineEndpoints(first, second):
-                let pair = try tangentSplineEndpointPairReferences(first, second, in: sketch, owner: owner)
+            case let .smoothSplineEndpoints(tangency):
+                let pair = try tangentSplineEndpointPairReferences(
+                    tangency.first,
+                    tangency.second,
+                    orientation: tangency.orientation,
+                    in: sketch,
+                    owner: owner
+                )
                 guard try smoothSplineEndpointsAreSatisfied(pair, in: sketch, owner: owner) else {
                     throw EditorError(
                         code: .commandInvalid,

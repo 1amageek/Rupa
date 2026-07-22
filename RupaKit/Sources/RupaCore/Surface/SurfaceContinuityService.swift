@@ -1,4 +1,5 @@
 import Foundation
+import CADTopology
 import SwiftCAD
 import RupaCoreTypes
 
@@ -20,7 +21,7 @@ public struct SurfaceContinuityService: Sendable {
         var isPlanar: Bool
         var surface: Surface3D
         var faceOrientation: Orientation
-        var orientedEdge: OrientedEdge
+        var orientedEdge: Coedge
     }
 
     private struct PersistentTopologyNames {
@@ -66,7 +67,7 @@ public struct SurfaceContinuityService: Sendable {
             failurePrefix: "Document must evaluate successfully before surface continuity summary"
         )
 
-        let persistentNames = persistentTopologyNames(in: evaluatedDocument)
+        let persistentNames = try persistentTopologyNames(in: evaluatedDocument)
         let bSplineFaceIDs = Set(
             evaluatedDocument.brep.faces.compactMap { faceID, face -> FaceID? in
                 guard let surface = evaluatedDocument.brep.geometry.surfaces[face.surfaceID],
@@ -349,11 +350,13 @@ public struct SurfaceContinuityService: Sendable {
 
     private func persistentTopologyNames(
         in evaluatedDocument: EvaluatedDocument
-    ) -> PersistentTopologyNames {
+    ) throws -> PersistentTopologyNames {
         var faceNamesByID: [FaceID: String] = [:]
         var edgeNamesByID: [EdgeID: [String]] = [:]
-        for (name, reference) in evaluatedDocument.generatedNames {
-            let stringName = persistentNameString(name)
+        for (subshapeID, reference) in evaluatedDocument.subshapes.entries {
+            let stringName = stableSubshapeKey(
+                try evaluatedDocument.stableSubshapeReference(for: subshapeID)
+            )
             switch reference {
             case .body, .vertex:
                 continue
@@ -372,19 +375,8 @@ public struct SurfaceContinuityService: Sendable {
         )
     }
 
-    private func persistentNameString(_ name: PersistentName) -> String {
-        name.components.map { component in
-            switch component {
-            case .feature(let featureID):
-                return "feature:\(featureID.description)"
-            case .generated(let value):
-                return "generated:\(value)"
-            case .subshape(let value):
-                return "subshape:\(value)"
-            case .index(let index):
-                return "index:\(index)"
-            }
-        }
-        .joined(separator: "/")
+    private func stableSubshapeKey(_ reference: StableSubshapeReference) -> String {
+        let id = reference.subshapeID
+        return "feature:\(id.featureID.description)/role:\(id.role)/ordinal:\(id.ordinal)"
     }
 }

@@ -33,7 +33,10 @@ extension DesignDocument {
         candidateFeature.operation = .sketch(candidateSketch)
         var candidateCADDocument = cadDocument
         do {
-            try candidateCADDocument.replaceFeature(candidateFeature)
+            try candidateCADDocument.replaceFeature(
+                candidateFeature,
+                tolerance: modelingSettings.tolerance
+            )
         } catch {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -51,7 +54,10 @@ extension DesignDocument {
 
         var updatedCADDocument = cadDocument
         do {
-            try updatedCADDocument.replaceFeature(feature)
+            try updatedCADDocument.replaceFeature(
+                feature,
+                tolerance: modelingSettings.tolerance
+            )
         } catch {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -101,7 +107,10 @@ extension DesignDocument {
 
         var updatedCADDocument = cadDocument
         do {
-            try updatedCADDocument.replaceFeature(feature)
+            try updatedCADDocument.replaceFeature(
+                feature,
+                tolerance: modelingSettings.tolerance
+            )
         } catch {
             throw EditorError(
                 code: .referenceUnresolved,

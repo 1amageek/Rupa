@@ -12,7 +12,10 @@ extension DesignDocument {
         feature.operation = .sketch(sketch)
         var updatedCADDocument = cadDocument
         do {
-            try updatedCADDocument.replaceFeature(feature)
+            try updatedCADDocument.replaceFeature(
+                feature,
+                tolerance: modelingSettings.tolerance
+            )
         } catch {
             throw EditorError(
                 code: .referenceUnresolved,

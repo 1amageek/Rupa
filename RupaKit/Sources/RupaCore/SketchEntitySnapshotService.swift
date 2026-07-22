@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import CADModeling
 import RupaCoreTypes
 
 public struct SketchEntitySnapshotService: Sendable {
@@ -20,7 +21,9 @@ public struct SketchEntitySnapshotService: Sendable {
 
         let sceneNodeIDsByFeatureID = sceneNodeIDsByFeatureID(in: document)
         let resolvedParameters = try ParameterResolver().resolve(document.cadDocument.parameters)
-        let profileExtractor = SketchProfileExtractor()
+        let profileExtractor = SketchProfileExtractor(
+            tolerance: document.modelingSettings.tolerance
+        )
         var sketchEntries: [SketchEntitySummaryResult.SketchEntry] = []
         var entityEntries: [SketchEntitySummaryResult.EntityEntry] = []
         var regionEntries: [SketchEntitySummaryResult.RegionEntry] = []
@@ -71,6 +74,7 @@ public struct SketchEntitySnapshotService: Sendable {
                     sketch: sketch,
                     resolvedParameters: resolvedParameters,
                     profileExtractor: profileExtractor,
+                    tolerance: document.modelingSettings.tolerance,
                     diagnostics: &diagnostics
                 )
             }
@@ -98,6 +102,7 @@ public struct SketchEntitySnapshotService: Sendable {
         sketch: Sketch,
         resolvedParameters: ResolvedParameterTable,
         profileExtractor: SketchProfileExtractor,
+        tolerance: ModelingTolerance,
         diagnostics: inout [EditorDiagnostic]
     ) -> [SketchEntitySummaryResult.RegionEntry] {
         let profiles: [Profile]
@@ -123,7 +128,7 @@ public struct SketchEntitySnapshotService: Sendable {
             return []
         }
 
-        let regionAnalyzer = ProfileRegionAnalyzer()
+        let regionAnalyzer = ProfileRegionAnalyzer(tolerance: tolerance)
         return profiles.enumerated().compactMap { profileIndex, profile in
             let summary: ProfileRegionSummary
             do {
@@ -368,18 +373,24 @@ public struct SketchEntitySnapshotService: Sendable {
         case let .parallel(first, second),
              let .perpendicular(first, second),
              let .equalLength(first, second),
-             let .tangent(first, second),
              let .concentric(first, second),
              let .equalRadius(first, second):
             return first == entityID || second == entityID
+        case let .tangent(tangency):
+            switch tangency {
+            case let .lineCircular(line, circular, _):
+                return line == entityID || circular == entityID
+            case let .circularCircular(first, second, _):
+                return first == entityID || second == entityID
+            }
         case let .smoothSplineControlPoint(id, _):
             return id == entityID
-        case let .splineEndpointTangent(splineID, _, lineID):
-            return splineID == entityID || lineID == entityID
-        case let .tangentSplineEndpoints(first, second):
-            return first.splineID == entityID || second.splineID == entityID
-        case let .smoothSplineEndpoints(first, second):
-            return first.splineID == entityID || second.splineID == entityID
+        case let .splineEndpointTangent(tangency):
+            return tangency.splineEndpoint.splineID == entityID || tangency.line == entityID
+        case let .tangentSplineEndpoints(tangency):
+            return tangency.first.splineID == entityID || tangency.second.splineID == entityID
+        case let .smoothSplineEndpoints(tangency):
+            return tangency.first.splineID == entityID || tangency.second.splineID == entityID
         case let .fixed(reference):
             return referenceAffects(reference, entityID: entityID)
         }
@@ -444,11 +455,27 @@ public struct SketchEntitySnapshotService: Sendable {
                 kind: "equalLength",
                 references: [entityDescription(first), entityDescription(second)]
             )
-        case let .tangent(first, second):
-            return SketchEntitySummaryResult.ConstraintEntry(
-                kind: "tangent",
-                references: [entityDescription(first), entityDescription(second)]
-            )
+        case let .tangent(tangency):
+            switch tangency {
+            case let .lineCircular(line, circular, side):
+                return SketchEntitySummaryResult.ConstraintEntry(
+                    kind: "tangent",
+                    references: [
+                        entityDescription(line),
+                        entityDescription(circular),
+                        "side:\(side.rawValue)",
+                    ]
+                )
+            case let .circularCircular(first, second, contact):
+                return SketchEntitySummaryResult.ConstraintEntry(
+                    kind: "tangent",
+                    references: [
+                        entityDescription(first),
+                        entityDescription(second),
+                        "contact:\(contact.rawValue)",
+                    ]
+                )
+            }
         case let .concentric(first, second):
             return SketchEntitySummaryResult.ConstraintEntry(
                 kind: "concentric",
@@ -464,28 +491,31 @@ public struct SketchEntitySnapshotService: Sendable {
                 kind: "smoothSplineControlPoint",
                 references: ["splineControlPoint:\(entityID.description):\(index)"]
             )
-        case let .splineEndpointTangent(splineID, endpoint, lineID):
+        case let .splineEndpointTangent(tangency):
             return SketchEntitySummaryResult.ConstraintEntry(
                 kind: "splineEndpointTangent",
                 references: [
-                    "splineEndpoint:\(splineID.description):\(endpoint.rawValue)",
-                    entityDescription(lineID),
+                    "splineEndpoint:\(tangency.splineEndpoint.splineID.description):\(tangency.splineEndpoint.endpoint.rawValue)",
+                    entityDescription(tangency.line),
+                    "orientation:\(tangency.orientation.rawValue)",
                 ]
             )
-        case let .tangentSplineEndpoints(first, second):
+        case let .tangentSplineEndpoints(tangency):
             return SketchEntitySummaryResult.ConstraintEntry(
                 kind: "tangentSplineEndpoints",
                 references: [
-                    "splineEndpoint:\(first.splineID.description):\(first.endpoint.rawValue)",
-                    "splineEndpoint:\(second.splineID.description):\(second.endpoint.rawValue)",
+                    "splineEndpoint:\(tangency.first.splineID.description):\(tangency.first.endpoint.rawValue)",
+                    "splineEndpoint:\(tangency.second.splineID.description):\(tangency.second.endpoint.rawValue)",
+                    "orientation:\(tangency.orientation.rawValue)",
                 ]
             )
-        case let .smoothSplineEndpoints(first, second):
+        case let .smoothSplineEndpoints(tangency):
             return SketchEntitySummaryResult.ConstraintEntry(
                 kind: "smoothSplineEndpoints",
                 references: [
-                    "splineEndpoint:\(first.splineID.description):\(first.endpoint.rawValue)",
-                    "splineEndpoint:\(second.splineID.description):\(second.endpoint.rawValue)",
+                    "splineEndpoint:\(tangency.first.splineID.description):\(tangency.first.endpoint.rawValue)",
+                    "splineEndpoint:\(tangency.second.splineID.description):\(tangency.second.endpoint.rawValue)",
+                    "orientation:\(tangency.orientation.rawValue)",
                 ]
             )
         case let .fixed(reference):

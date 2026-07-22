@@ -405,7 +405,10 @@ func semanticProjectionValidationRejectsTopologyNameWithDifferentOwner() throws 
             topologyReferences: [
                 ProjectionManifest.TopologyReference(
                     semanticEntityID: "wall",
-                    persistentName: "feature:\(namedFeatureID.description)/generated:front",
+                    stableReference: semanticExtensionFaceReference(
+                        featureID: namedFeatureID,
+                        role: "front"
+                    ),
                     role: .face,
                     owningFeatureID: declaredOwnerID
                 ),
@@ -465,7 +468,10 @@ private func topologyMaterialBindingFixture(
         id: bindingID,
         target: SelectionTarget(
             sceneNodeID: sceneNodeID,
-            component: .face(.generatedTopology("feature:box/generated:front"))
+            component: .face(try .stableTopology(semanticExtensionFaceReference(
+                featureID: FeatureID(),
+                role: "front"
+            )))
         ),
         materialID: material.id,
         process: TopologyMaterialBinding.Process(
@@ -475,6 +481,20 @@ private func topologyMaterialBindingFixture(
     )
     metadata.topologyMaterialBindings = [bindingID: binding]
     return (metadata, binding)
+}
+
+private func semanticExtensionFaceReference(
+    featureID: FeatureID,
+    role: String
+) -> StableSubshapeReference {
+    StableSubshapeReference(
+        subshapeID: SubshapeID(featureID: featureID, role: role, ordinal: 0),
+        geometrySignature: .face(FaceGeometrySignature(
+            surface: .plane(Plane3D(origin: .origin, normal: .unitZ)),
+            orientation: .forward,
+            loops: []
+        ))
+    )
 }
 
 private func semanticExtensionTemporaryDirectory() throws -> URL {

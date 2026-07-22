@@ -48,9 +48,9 @@ extension DesignDocument {
                 return constraint
             case .tangentSplineEndpoints:
                 return constraint
-            case .smoothSplineEndpoints(let first, let second):
+            case .smoothSplineEndpoints(let tangency):
                 guard rebuilt.changesControlPointCount == false ||
-                    (first.splineID != entityID && second.splineID != entityID) else {
+                    (tangency.first.splineID != entityID && tangency.second.splineID != entityID) else {
                     throw sketchCurveRebuildUnsupportedReference(
                         "smooth spline endpoint constraints when the point count changes"
                     )
@@ -67,10 +67,23 @@ extension DesignDocument {
             case .parallel(let first, let second),
                  .perpendicular(let first, let second),
                  .equalLength(let first, let second),
-                 .tangent(let first, let second),
                  .concentric(let first, let second),
                  .equalRadius(let first, let second):
                 guard first != entityID && second != entityID else {
+                    throw sketchCurveRebuildUnsupportedReference(
+                        "whole-spline relationship constraints"
+                    )
+                }
+                return constraint
+            case .tangent(let tangency):
+                let referencesEntity: Bool
+                switch tangency {
+                case .lineCircular(let line, let circular, _):
+                    referencesEntity = line == entityID || circular == entityID
+                case .circularCircular(let first, let second, _):
+                    referencesEntity = first == entityID || second == entityID
+                }
+                guard referencesEntity == false else {
                     throw sketchCurveRebuildUnsupportedReference(
                         "whole-spline relationship constraints"
                     )

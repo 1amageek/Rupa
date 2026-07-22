@@ -31,7 +31,9 @@ import SwiftCAD
     let evaluation = try #require(session.currentEvaluationCache?.evaluatedDocument)
     let body = try #require(evaluation.brep.bodies.values.first)
     let afterTopology = try TopologySnapshotService().snapshot(document: session.document)
-    let measurement = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
+    let measurement = try MeasurementService(
+        tolerance: session.document.modelingSettings.tolerance
+    ).measure(document: session.document, ruler: session.workspaceState.ruler)
     let carriedFaces = afterTopology.entries.filter {
         $0.kind == .face &&
             $0.sceneNodeID == deleteSceneNodeID.description &&
@@ -44,10 +46,12 @@ import SwiftCAD
     #expect(result.generation == DocumentGeneration(2))
     #expect(deleteFeature.outputs == [FeatureOutput(role: .sheet)])
     #expect(faceDelete.target.featureID == bodyFeatureID)
-    #expect(faceDelete.facePersistentNames.count == 1)
+    #expect(faceDelete.faces == [faceEntry.stableReference])
     #expect(body.kind == .sheet)
     #expect(afterTopology.counts.faceCount == 5)
-    #expect(afterTopology.entries.contains { $0.persistentName == faceEntry.persistentName } == false)
+    #expect(afterTopology.entries.contains {
+        $0.stableReference == faceEntry.stableReference
+    } == false)
     #expect(carriedFaces.count == 5)
     #expect(measurement.counts.sheets == 1)
     #expect(measurement.sheets.first?.featureID == deleteFeatureID.description)

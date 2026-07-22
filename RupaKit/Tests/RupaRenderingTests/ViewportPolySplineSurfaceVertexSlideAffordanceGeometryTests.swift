@@ -206,6 +206,7 @@ import Testing
             topologyVertices: topologyVertices,
             direction: .positiveU,
             distanceMeters: 0.001,
+            tolerance: .standard,
             sampleSegmentCount: 1
         )?.first
     )
@@ -334,6 +335,7 @@ import Testing
             topologyVertices: polySplineSurfaceVertexSlideTopologyVertices(featureID: featureID),
             direction: .positiveU,
             distanceMeters: 0.001,
+            tolerance: .standard,
             sampleSegmentCount: 2
         )
     )
@@ -367,7 +369,8 @@ private func polySplineSurfaceVertexSlideInput(
 ) throws -> ViewportPolySplineSurfaceVertexSlideInput {
     let componentID = polySplineSurfaceVertexSlideComponentID(
         featureID: featureID,
-        role: role
+        role: role,
+        point: point
     )
     let target = try #require(PolySplineSurfaceVertexTarget.parse(componentID: componentID))
     return ViewportPolySplineSurfaceVertexSlideInput(
@@ -390,11 +393,22 @@ private func surfaceControlPointSlideInput(
 ) -> ViewportSurfaceControlPointSlideInput {
     ViewportSurfaceControlPointSlideInput(
         target: .surface(.controlPoint(SurfaceControlPointReference(
-            surface: SurfaceReference(faceName: PersistentName(components: [
-                .feature(featureID),
-                .generated("polySpline"),
-                .subshape("patch:0:face"),
-            ])),
+            surface: SurfaceReference(
+                subshape: StableSubshapeReference(
+                    subshapeID: SubshapeID(
+                        featureID: featureID,
+                        role: "polySpline.patch:0:face",
+                        ordinal: 0
+                    ),
+                    geometrySignature: .face(
+                        FaceGeometrySignature(
+                            surface: .plane(Plane3D(origin: .origin, normal: .unitY)),
+                            orientation: .forward,
+                            loops: []
+                        )
+                    )
+                )
+            ),
             uIndex: uIndex,
             vIndex: vIndex
         ))),
@@ -429,7 +443,8 @@ private func polySplineSurfaceVertexSlideTopologyVertices(
         ViewportBodyTopology.Vertex(
             componentID: polySplineSurfaceVertexSlideComponentID(
                 featureID: featureID,
-                role: role
+                role: role,
+                point: point
             ),
             point: point
         )
@@ -438,9 +453,21 @@ private func polySplineSurfaceVertexSlideTopologyVertices(
 
 private func polySplineSurfaceVertexSlideComponentID(
     featureID: FeatureID,
-    role: PolySplineSurfaceVertexTarget.BoundaryRole
+    role: PolySplineSurfaceVertexTarget.BoundaryRole,
+    point: Point3D
 ) -> SelectionComponentID {
-    SelectionComponentID.generatedTopology(
-        "feature:\(featureID.description)/generated:polySpline/subshape:patch:0:vertex:\(role.rawValue)"
-    )
+    do {
+        return try SelectionComponentID.stableTopology(
+            StableSubshapeReference(
+                subshapeID: SubshapeID(
+                    featureID: featureID,
+                    role: "polySpline.patch:0:vertex:\(role.rawValue)",
+                    ordinal: 0
+                ),
+                geometrySignature: .vertex(point: point)
+            )
+        )
+    } catch {
+        fatalError("Invalid PolySpline stable topology fixture: \(error)")
+    }
 }

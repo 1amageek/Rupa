@@ -35,7 +35,7 @@ struct WorkspaceReferenceContextSummary: Equatable, Sendable {
 
     private static func item(for reference: SelectionReference) -> Item {
         switch reference {
-        case .topology:
+        case .subshape:
             return Item(
                 familyTitle: "Topology",
                 kindTitle: "Shape",

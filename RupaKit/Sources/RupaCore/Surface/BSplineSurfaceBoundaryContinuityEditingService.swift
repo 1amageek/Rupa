@@ -4,6 +4,11 @@ import RupaCoreTypes
 struct BSplineSurfaceBoundaryContinuityEditingService: Sendable {
     private let profileBuilder = BSplineSurfaceBoundaryProfileBuilder()
     private let compatibilityEvaluator = BSplineSurfaceBoundaryContinuityCompatibilityEvaluator()
+    private let tolerance: ModelingTolerance
+
+    init(tolerance: ModelingTolerance) {
+        self.tolerance = tolerance
+    }
 
     func updatedFeature(
         matching target: BSplineSurfaceFeature,
@@ -15,8 +20,8 @@ struct BSplineSurfaceBoundaryContinuityEditingService: Sendable {
         referenceDirection: SurfaceBoundaryReferenceDirection,
         owner: String
     ) throws -> BSplineSurfaceFeature {
-        try target.validate()
-        try reference.validate()
+        try target.validate(tolerance: tolerance)
+        try reference.validate(tolerance: tolerance)
         try validateCompatibility(
             target: target.surface,
             targetSide: targetSide,
@@ -179,7 +184,7 @@ struct BSplineSurfaceBoundaryContinuityEditingService: Sendable {
             }
         }
 
-        try updatedFeature.validate()
+        try updatedFeature.validate(tolerance: tolerance)
         return updatedFeature
     }
 

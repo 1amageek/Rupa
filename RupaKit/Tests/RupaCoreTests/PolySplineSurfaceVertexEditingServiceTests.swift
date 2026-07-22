@@ -4,7 +4,7 @@ import Testing
 @testable import RupaCore
 
 @Test func polySplineSurfaceVertexEditingServiceResolvesBoundaryVertexSourceIndex() throws {
-    let service = PolySplineSurfaceVertexEditingService()
+    let service = PolySplineSurfaceVertexEditingService(tolerance: .standard)
     let polySpline = PolySplineFeature(sourceMesh: polySplineEditingQuadMesh())
     let featureID = FeatureID()
     let target = PolySplineSurfaceVertexTarget(
@@ -23,7 +23,7 @@ import Testing
 }
 
 @Test func polySplineSurfaceVertexEditingServiceUsesPatchHullForSlideDirections() throws {
-    let service = PolySplineSurfaceVertexEditingService()
+    let service = PolySplineSurfaceVertexEditingService(tolerance: .standard)
     let polySpline = PolySplineFeature(sourceMesh: polySplineEditingQuadMesh())
     let featureID = FeatureID()
     let target = PolySplineSurfaceVertexTarget(

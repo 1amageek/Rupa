@@ -468,16 +468,22 @@ extension DesignDocument {
             return first == entityID || second == entityID
         case .parallel(let first, let second),
              .perpendicular(let first, let second),
-             .equalLength(let first, let second),
-             .tangent(let first, let second):
+             .equalLength(let first, let second):
             return first == entityID || second == entityID
+        case .tangent(let tangency):
+            switch tangency {
+            case .lineCircular(let line, let circular, _):
+                return line == entityID || circular == entityID
+            case .circularCircular(let first, let second, _):
+                return first == entityID || second == entityID
+            }
         case .smoothSplineControlPoint(let id, _):
             return id == entityID
-        case .splineEndpointTangent(let splineID, _, let lineID):
-            return splineID == entityID || lineID == entityID
-        case .tangentSplineEndpoints(let first, let second),
-             .smoothSplineEndpoints(let first, let second):
-            return first.splineID == entityID || second.splineID == entityID
+        case .splineEndpointTangent(let tangency):
+            return tangency.splineEndpoint.splineID == entityID || tangency.line == entityID
+        case .tangentSplineEndpoints(let tangency),
+             .smoothSplineEndpoints(let tangency):
+            return tangency.first.splineID == entityID || tangency.second.splineID == entityID
         }
     }
 

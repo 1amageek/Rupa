@@ -127,9 +127,15 @@ extension DesignDocument {
         var updatedCADDocument = cadDocument
         do {
             if updatesProfile {
-                try updatedCADDocument.replaceFeatures([profileFeature, feature])
+                try updatedCADDocument.replaceFeatures(
+                    [profileFeature, feature],
+                    tolerance: modelingSettings.tolerance
+                )
             } else {
-                try updatedCADDocument.replaceFeature(feature)
+                try updatedCADDocument.replaceFeature(
+                    feature,
+                    tolerance: modelingSettings.tolerance
+                )
             }
         } catch {
             throw EditorError(
@@ -236,9 +242,15 @@ extension DesignDocument {
         var updatedCADDocument = cadDocument
         do {
             if updatesProfile {
-                try updatedCADDocument.replaceFeatures([profileFeature, feature])
+                try updatedCADDocument.replaceFeatures(
+                    [profileFeature, feature],
+                    tolerance: modelingSettings.tolerance
+                )
             } else {
-                try updatedCADDocument.replaceFeature(feature)
+                try updatedCADDocument.replaceFeature(
+                    feature,
+                    tolerance: modelingSettings.tolerance
+                )
             }
         } catch {
             throw EditorError(

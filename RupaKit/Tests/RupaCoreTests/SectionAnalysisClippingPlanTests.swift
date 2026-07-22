@@ -1,8 +1,13 @@
 import Testing
 import RupaCore
+import SwiftCAD
 
-@Test func sectionAnalysisClippingPlanClassifiesBodiesForRetainedFrontSide() {
+@Test func sectionAnalysisClippingPlanClassifiesBodiesForRetainedFrontSide() throws {
     let result = sectionAnalysisClippingFixture()
+    let frontStableReference = try #require(
+        result.bodies.first { $0.bodyID == "front" }?.stableReference
+    )
+    try frontStableReference.validate()
     let plan = SectionAnalysisClippingPlan(
         result: result,
         retaining: .front
@@ -11,7 +16,7 @@ import RupaCore
     #expect(plan.retainedSide == .front)
     #expect(plan.action(for: "front") == .visible)
     #expect(plan.action(forSourceFeatureID: "feature-front") == .visible)
-    #expect(plan.action(forPersistentName: "persistent-front") == .visible)
+    #expect(plan.action(forStableReference: frontStableReference) == .visible)
     #expect(plan.action(for: "behind") == .hidden)
     #expect(plan.action(for: "touching") == .visible)
     #expect(plan.action(for: "coplanar") == .visible)
@@ -72,7 +77,7 @@ private func sectionAnalysisClippingBody(
     SectionAnalysisResult.Body(
         bodyID: id,
         sourceFeatureID: "feature-\(id)",
-        persistentName: "persistent-\(id)",
+        stableReference: sectionAnalysisBodyStableReference(),
         name: id,
         kind: nil,
         materialID: nil,
@@ -88,5 +93,32 @@ private func sectionAnalysisClippingBody(
         touchingTriangleCount: 0,
         intersectingTriangleCount: 0,
         intersectionSegmentCount: 0
+    )
+}
+
+private func sectionAnalysisBodyStableReference() -> StableSubshapeReference {
+    StableSubshapeReference(
+        subshapeID: SubshapeID(
+            featureID: FeatureID(),
+            role: GeneratedSubshapeRole.body.rawValue,
+            ordinal: 0
+        ),
+        geometrySignature: .body(
+            BodyGeometrySignature(
+                kind: .solid,
+                shells: [
+                    ShellGeometrySignature(
+                        orientation: .forward,
+                        faces: [
+                            FaceGeometrySignature(
+                                surface: .plane(Plane3D(origin: .origin, normal: .unitZ)),
+                                orientation: .forward,
+                                loops: []
+                            ),
+                        ]
+                    ),
+                ]
+            )
+        )
     )
 }

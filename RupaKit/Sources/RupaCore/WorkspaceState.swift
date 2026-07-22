@@ -74,7 +74,12 @@ public struct WorkspaceState: Sendable {
             isValid { try display.validate(against: document.cadDocument) }
         }
         surfaceControlPointDisplays = surfaceControlPointDisplays.filter { _, display in
-            isValid { try display.validate(against: document.cadDocument) }
+            isValid {
+                try display.validate(
+                    against: document.cadDocument,
+                    tolerance: document.modelingSettings.tolerance
+                )
+            }
         }
         surfaceFrameDisplays = surfaceFrameDisplays.filter { _, display in
             isValid {
@@ -103,7 +108,10 @@ public struct WorkspaceState: Sendable {
             try display.validate(against: document.cadDocument)
         }
         for display in surfaceControlPointDisplays.values {
-            try display.validate(against: document.cadDocument)
+            try display.validate(
+                against: document.cadDocument,
+                tolerance: document.modelingSettings.tolerance
+            )
         }
         for display in surfaceFrameDisplays.values {
             try display.validate()

@@ -49,7 +49,7 @@ import Testing
     #expect(sectionAnalysis.intersectionContours.contains { $0.isClosed })
     #expect(clippingPlan.retainedSide == .front)
     #expect(clippingPlan.clippedBodyCount == 1)
-    #expect(clippingPlan.bodies.first?.persistentName == sectionAnalysis.bodies.first?.persistentName)
+    #expect(clippingPlan.bodies.first?.stableReference == sectionAnalysis.bodies.first?.stableReference)
     #expect(decodedResponse == response)
 }
 

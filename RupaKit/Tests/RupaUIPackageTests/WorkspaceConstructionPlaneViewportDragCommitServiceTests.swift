@@ -28,7 +28,11 @@ import Testing
     )
 
     let edit = try #require(
-        try WorkspaceConstructionPlaneViewportDragCommitService().edit(
+        try WorkspaceConstructionPlaneViewportDragCommitService(
+            editBuilder: WorkspaceConstructionPlaneEditBuilder(
+                tolerance: session.document.modelingSettings.tolerance
+            )
+        ).edit(
             for: dragTarget,
             entries: [entry]
         )
@@ -73,7 +77,11 @@ import Testing
     )
 
     let edit = try #require(
-        try WorkspaceConstructionPlaneViewportDragCommitService().edit(
+        try WorkspaceConstructionPlaneViewportDragCommitService(
+            editBuilder: WorkspaceConstructionPlaneEditBuilder(
+                tolerance: session.document.modelingSettings.tolerance
+            )
+        ).edit(
             for: dragTarget,
             entries: [entry]
         )
@@ -114,7 +122,11 @@ import Testing
         normal: .unitZ
     )
 
-    let edit = try WorkspaceConstructionPlaneViewportDragCommitService().edit(
+    let edit = try WorkspaceConstructionPlaneViewportDragCommitService(
+        editBuilder: WorkspaceConstructionPlaneEditBuilder(
+            tolerance: session.document.modelingSettings.tolerance
+        )
+    ).edit(
         for: dragTarget,
         entries: [entry]
     )

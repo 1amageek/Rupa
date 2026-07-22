@@ -169,7 +169,7 @@ public struct DesignDisplaySnapshotService: Sendable {
             currentGeneration: currentGeneration,
             failurePrefix: "Document must evaluate successfully before design display snapshots"
         )
-        let bodies = BodyDisplaySnapshotService(
+        let bodies = try BodyDisplaySnapshotService(
             pipeline: pipelineOverride
         ).snapshots(evaluatedDocument: evaluatedDocument)
         return (

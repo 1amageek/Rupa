@@ -3345,7 +3345,8 @@ public struct Viewport: View {
             selectedVertices: selectedInputs,
             topologyVertices: polySplineSurfaceTopologyVertices(in: scene),
             direction: activePolySplineSurfaceVertexSlideDrag.target.direction,
-            distanceMeters: activePolySplineSurfaceVertexSlideDrag.distanceMeters
+            distanceMeters: activePolySplineSurfaceVertexSlideDrag.distanceMeters,
+            tolerance: document.modelingSettings.tolerance
         ) {
             for surface in previewSurfaces {
                 drawPolySplineSurfaceVertexSlidePreviewMesh(
@@ -4980,7 +4981,7 @@ public struct Viewport: View {
             case .object, .sketchEntity, .region, .constructionPlane:
                 continue
             case .face(let componentID):
-                guard componentID.generatedTopologyPersistentName != nil,
+                guard componentID.isStableTopology,
                       let face = topology.faces.first(where: { $0.componentID == componentID }) else {
                     continue
                 }
@@ -4992,7 +4993,7 @@ public struct Viewport: View {
                     in: &context
                 )
             case .edge(let componentID):
-                guard componentID.generatedTopologyPersistentName != nil,
+                guard componentID.isStableTopology,
                       let edge = topology.edges.first(where: { $0.componentID == componentID }) else {
                     continue
                 }
@@ -5004,7 +5005,7 @@ public struct Viewport: View {
                     in: &context
                 )
             case .vertex(let componentID):
-                guard componentID.generatedTopologyPersistentName != nil,
+                guard componentID.isStableTopology,
                       let vertex = topology.vertices.first(where: { $0.componentID == componentID }) else {
                     continue
                 }
@@ -6097,19 +6098,19 @@ public struct Viewport: View {
                 return false
             }
             return bodyComponent.topology?.faces.contains { $0.componentID == componentID } == true
-                || componentID.generatedTopologyPersistentName == nil
+                || !componentID.isStableTopology
         case .edge(let componentID):
             guard case .body(let bodyComponent) = item.kind else {
                 return false
             }
             return bodyComponent.topology?.edges.contains { $0.componentID == componentID } == true
-                || componentID.generatedTopologyPersistentName == nil
+                || !componentID.isStableTopology
         case .vertex(let componentID):
             guard case .body(let bodyComponent) = item.kind else {
                 return false
             }
             return bodyComponent.topology?.vertices.contains { $0.componentID == componentID } == true
-                || componentID.generatedTopologyPersistentName == nil
+                || !componentID.isStableTopology
         case .sketchEntity(let componentID):
             guard case .sketch(let primitives) = item.kind else {
                 return false
@@ -6129,7 +6130,7 @@ public struct Viewport: View {
     ) -> Point3D? {
         guard let target = selection.primaryTarget,
               case .face(let componentID) = target.component,
-              componentID.generatedTopologyPersistentName != nil,
+              componentID.isStableTopology,
               let item = sceneItem(for: target, in: scene),
               case .body(let component) = item.kind,
               let face = component.topology?.faces.first(where: { $0.componentID == componentID }) else {
@@ -9343,34 +9344,18 @@ public struct Viewport: View {
         guard case .surface(.controlPoint(let controlPoint)) = reference else {
             return nil
         }
-        var featureID: FeatureID?
-        var generatedRole: String?
-        var subshape: String?
-        for component in controlPoint.surface.faceName.components {
-            switch component {
-            case .feature(let id):
-                featureID = id
-            case .generated(let value):
-                generatedRole = value
-            case .subshape(let value):
-                subshape = value
-            case .index:
-                return nil
-            }
-        }
-        guard generatedRole == "polySpline",
-              let featureID,
-              let subshape else {
-            return nil
-        }
-        let parts = subshape.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
+        let subshapeID = controlPoint.surface.subshape.subshapeID
+        let parts = subshapeID.role
+            .split(separator: ":", omittingEmptySubsequences: false)
+            .map(String.init)
         guard parts.count == 3,
-              parts[0] == "patch",
+              parts[0] == "polySpline.patch",
               let patchID = Int(parts[1]),
-              parts[2] == "face" else {
+              parts[2] == "face",
+              subshapeID.ordinal == 0 else {
             return nil
         }
-        return (featureID, patchID)
+        return (subshapeID.featureID, patchID)
     }
 
     private func sketchEntityIDs(
@@ -9448,7 +9433,7 @@ public struct Viewport: View {
         case .bodyFaceSide:
             return .side
         default:
-            guard componentID.generatedTopologyPersistentName != nil else {
+            guard componentID.isStableTopology else {
                 return nil
             }
             do {
@@ -9498,7 +9483,7 @@ public struct Viewport: View {
         case .bodyEdgeLeftTop:
             return .leftTop
         default:
-            guard componentID.generatedTopologyPersistentName != nil else {
+            guard componentID.isStableTopology else {
                 return nil
             }
             do {
@@ -9532,7 +9517,7 @@ public struct Viewport: View {
         for componentID: SelectionComponentID,
         target: SelectionTarget
     ) -> ViewportBodyVertex? {
-        guard componentID.generatedTopologyPersistentName != nil else {
+        guard componentID.isStableTopology else {
             return nil
         }
         do {

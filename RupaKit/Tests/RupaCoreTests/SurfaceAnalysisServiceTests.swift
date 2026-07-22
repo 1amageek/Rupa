@@ -95,7 +95,7 @@ import SwiftCAD
     #expect(high.faces.allSatisfy { $0.trimBoundaries.count == 1 })
 }
 
-@Test func surfaceFrameServiceResolvesOrientedUVNFrameByPersistentName() async throws {
+@Test func surfaceFrameServiceResolvesOrientedUVNFrameByStableReference() async throws {
     var document = DesignDocument.empty()
     _ = try document.createPolySplineSurface(
         name: "Frame Surface Analysis",
@@ -109,7 +109,7 @@ import SwiftCAD
         document: document,
         queries: [
             SurfaceFrameQuery(
-                facePersistentName: faceEntry.persistentName,
+                faceStableReference: faceEntry.stableReference,
                 u: 0.5,
                 v: 0.5
             ),
@@ -119,7 +119,9 @@ import SwiftCAD
 
     #expect(result.frames.count == 1)
     let frame = try #require(result.frames.first)
-    #expect(frame.facePersistentNames.contains(faceEntry.persistentName))
+    #expect(frame.facePersistentNames.contains(
+        surfaceAnalysisStableSubshapeKey(faceEntry.stableReference)
+    ))
     #expect(frame.u == 0.5)
     #expect(frame.v == 0.5)
     #expect(frame.uDomain.lowerBound == 0.0)
@@ -387,11 +389,11 @@ private func surfaceAnalysisDirectBSplineSurface() -> BSplineSurface3D {
     )
 }
 
-private func surfaceAnalysisAuthoredTrimLoop() -> BSplineSurfaceTrimLoop {
-    BSplineSurfaceTrimLoop(
+private func surfaceAnalysisAuthoredTrimLoop() -> SurfaceTrimLoop {
+    SurfaceTrimLoop(
         role: .outer,
-        edges: [
-            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+        parameterCurves: [
+            .bSpline(BSplineCurve2D(
                 degree: 2,
                 knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
                 controlPoints: [
@@ -399,15 +401,22 @@ private func surfaceAnalysisAuthoredTrimLoop() -> BSplineSurfaceTrimLoop {
                     Point2D(x: 0.52, y: 0.42),
                     Point2D(x: 0.8, y: 0.25),
                 ]
-            ))),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            )),
+            .polyline([
                 SurfaceParameter(u: 0.8, v: 0.25),
                 SurfaceParameter(u: 0.45, v: 0.8),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.45, v: 0.8),
                 SurfaceParameter(u: 0.2, v: 0.2),
-            ])),
+            ]),
         ]
     )
+}
+
+private func surfaceAnalysisStableSubshapeKey(
+    _ reference: StableSubshapeReference
+) -> String {
+    let id = reference.subshapeID
+    return "feature:\(id.featureID.description)/role:\(id.role)/ordinal:\(id.ordinal)"
 }

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import CADTopology
 import RupaCoreTypes
 
 public struct SurfaceAnalysisService: Sendable {
@@ -400,7 +401,7 @@ public struct SurfaceAnalysisService: Sendable {
     }
 
     private func estimatedLength(
-        for orientedEdge: OrientedEdge,
+        for orientedEdge: Coedge,
         in model: BRepModel
     ) throws -> Double {
         let vertexIDs = try orientedVertexIDs(for: orientedEdge, in: model)
@@ -422,7 +423,10 @@ public struct SurfaceAnalysisService: Sendable {
                 return chordLength
             }
             return abs(trim.endParameter - trim.startParameter) * circle.radius
-        case .bSpline:
+        case .analytic,
+             .bSpline,
+             .implicit,
+             .surfaceLift:
             return try estimatedSampledLength(
                 for: curve,
                 edge: edge,
@@ -479,7 +483,7 @@ public struct SurfaceAnalysisService: Sendable {
     }
 
     private func orientedVertexIDs(
-        for orientedEdge: OrientedEdge,
+        for orientedEdge: Coedge,
         in model: BRepModel
     ) throws -> (start: VertexID, end: VertexID) {
         guard let edge = model.edges[orientedEdge.edgeID] else {
@@ -588,15 +592,15 @@ public struct SurfaceAnalysisService: Sendable {
         var faceNamesByID: [FaceID: [String]] = [:]
         var edgeNamesByID: [EdgeID: [String]] = [:]
         var sourceFeatureIDsByFaceID: [FaceID: FeatureID] = [:]
-        for (name, reference) in evaluatedDocument.generatedNames {
-            let stringName = persistentNameString(name)
+        for (subshapeID, reference) in evaluatedDocument.subshapes.entries {
+            let stringName = stableSubshapeKey(subshapeID)
             switch reference {
             case .body, .vertex:
                 continue
             case .face(let faceID):
                 faceNamesByID[faceID, default: []].append(stringName)
                 if sourceFeatureIDsByFaceID[faceID] == nil {
-                    sourceFeatureIDsByFaceID[faceID] = sourceFeatureID(in: name)
+                    sourceFeatureIDsByFaceID[faceID] = subshapeID.featureID
                 }
             case .edge(let edgeID):
                 edgeNamesByID[edgeID, default: []].append(stringName)
@@ -626,30 +630,8 @@ public struct SurfaceAnalysisService: Sendable {
         return mapping
     }
 
-    private func sourceFeatureID(in name: PersistentName) -> FeatureID? {
-        for component in name.components {
-            guard case .feature(let featureID) = component else {
-                continue
-            }
-            return featureID
-        }
-        return nil
-    }
-
-    private func persistentNameString(_ name: PersistentName) -> String {
-        name.components.map { component in
-            switch component {
-            case .feature(let featureID):
-                return "feature:\(featureID.description)"
-            case .generated(let value):
-                return "generated:\(value)"
-            case .subshape(let value):
-                return "subshape:\(value)"
-            case .index(let index):
-                return "index:\(index)"
-            }
-        }
-        .joined(separator: "/")
+    private func stableSubshapeKey(_ subshapeID: SubshapeID) -> String {
+        "feature:\(subshapeID.featureID.description)/role:\(subshapeID.role)/ordinal:\(subshapeID.ordinal)"
     }
 
     private func point(_ point: Point3D) -> SurfaceAnalysisResult.Point {

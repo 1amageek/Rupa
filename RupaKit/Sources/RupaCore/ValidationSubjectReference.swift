@@ -11,10 +11,9 @@ public enum ValidationSubjectReference: Codable, Hashable, Sendable {
         extensionID: SemanticExtensionID,
         entityID: SemanticEntityID
     )
-    case generatedTopology(
+    case stableTopology(
         documentID: DocumentID,
-        owningFeatureID: FeatureID,
-        persistentName: String
+        reference: StableSubshapeReference
     )
     case artifact(MaterializedArtifactReference)
     case meshBody(artifact: MeshArtifactReference, bodyID: BodyID)
@@ -26,8 +25,7 @@ public enum ValidationSubjectReference: Codable, Hashable, Sendable {
         case sceneNodeID
         case extensionID
         case entityID
-        case owningFeatureID
-        case persistentName
+        case stableReference
         case artifact
         case bodyID
     }
@@ -37,7 +35,7 @@ public enum ValidationSubjectReference: Codable, Hashable, Sendable {
         case feature
         case sceneNode
         case semanticEntity
-        case generatedTopology
+        case stableTopology
         case artifact
         case meshBody
     }
@@ -63,11 +61,13 @@ public enum ValidationSubjectReference: Codable, Hashable, Sendable {
                 extensionID: try container.decode(SemanticExtensionID.self, forKey: .extensionID),
                 entityID: try container.decode(SemanticEntityID.self, forKey: .entityID)
             )
-        case .generatedTopology:
-            self = .generatedTopology(
+        case .stableTopology:
+            self = .stableTopology(
                 documentID: try container.decode(DocumentID.self, forKey: .documentID),
-                owningFeatureID: try container.decode(FeatureID.self, forKey: .owningFeatureID),
-                persistentName: try container.decode(String.self, forKey: .persistentName)
+                reference: try container.decode(
+                    StableSubshapeReference.self,
+                    forKey: .stableReference
+                )
             )
         case .artifact:
             self = .artifact(try container.decode(MaterializedArtifactReference.self, forKey: .artifact))
@@ -98,11 +98,10 @@ public enum ValidationSubjectReference: Codable, Hashable, Sendable {
             try container.encode(documentID, forKey: .documentID)
             try container.encode(extensionID, forKey: .extensionID)
             try container.encode(entityID, forKey: .entityID)
-        case .generatedTopology(let documentID, let owningFeatureID, let persistentName):
-            try container.encode(Kind.generatedTopology, forKey: .kind)
+        case .stableTopology(let documentID, let reference):
+            try container.encode(Kind.stableTopology, forKey: .kind)
             try container.encode(documentID, forKey: .documentID)
-            try container.encode(owningFeatureID, forKey: .owningFeatureID)
-            try container.encode(persistentName, forKey: .persistentName)
+            try container.encode(reference, forKey: .stableReference)
         case .artifact(let artifact):
             try container.encode(Kind.artifact, forKey: .kind)
             try container.encode(artifact, forKey: .artifact)
@@ -120,7 +119,7 @@ public enum ValidationSubjectReference: Codable, Hashable, Sendable {
         case .feature(let id, _),
              .sceneNode(let id, _),
              .semanticEntity(let id, _, _),
-             .generatedTopology(let id, _, _):
+             .stableTopology(let id, _):
             id
         case .artifact(let artifact):
             artifact.documentID
@@ -135,26 +134,8 @@ public enum ValidationSubjectReference: Codable, Hashable, Sendable {
             break
         case .semanticEntity(_, _, let entityID):
             try entityID.validate()
-        case .generatedTopology(_, let owningFeatureID, let persistentName):
-            let parsedName: PersistentName
-            do {
-                parsedName = try GeneratedTopologyPersistentNameParser().parse(
-                    persistentName,
-                    operationName: "Validation subject"
-                )
-            } catch {
-                throw invalidSubject("Validation topology subjects require a valid persistent name.")
-            }
-            guard parsedName.components.contains(where: { component in
-                if case .feature(let featureID) = component {
-                    return featureID == owningFeatureID
-                }
-                return false
-            }) else {
-                throw invalidSubject(
-                    "Validation topology subjects must contain their owning feature in the persistent name."
-                )
-            }
+        case .stableTopology(_, let reference):
+            try reference.validate()
         case .artifact(let artifact):
             guard artifact.documentID == documentID else {
                 throw invalidSubject("Validation artifact subjects must preserve their document identity.")

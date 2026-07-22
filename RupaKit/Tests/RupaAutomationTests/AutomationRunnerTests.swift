@@ -1196,7 +1196,7 @@ import SwiftCAD
         Issue.record("Automation must keep a direct B-spline surface feature.")
         return
     }
-    let trimDomain = try #require(surfaceFeature.outerTrimDomain)
+    let trimDomain = try #require(surfaceFeature.parameterDomain)
     #expect(result.message == "Surface trim domain updated.")
     #expect(result.commandName == "setSurfaceTrimDomain")
     #expect(result.didMutate)
@@ -1220,21 +1220,21 @@ import SwiftCAD
     )
     let summary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
-    let trimLoop = BSplineSurfaceTrimLoop(
+    let trimLoop = SurfaceTrimLoop(
         role: .outer,
-        edges: [
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+        parameterCurves: [
+            .polyline([
                 SurfaceParameter(u: 0.2, v: 0.2),
                 SurfaceParameter(u: 0.8, v: 0.25),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.8, v: 0.25),
                 SurfaceParameter(u: 0.45, v: 0.8),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.45, v: 0.8),
                 SurfaceParameter(u: 0.2, v: 0.2),
-            ])),
+            ]),
         ]
     )
 
@@ -1248,8 +1248,8 @@ import SwiftCAD
 
     let featureID = try #require(session.document.cadDocument.designGraph.order.last)
     let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
-        Issue.record("Automation must keep a direct B-spline surface feature.")
+    guard case let .surfaceTrim(trimFeature) = feature.operation else {
+        Issue.record("Automation must create a Surface Trim feature.")
         return
     }
     let updatedSummary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
@@ -1258,8 +1258,7 @@ import SwiftCAD
     #expect(result.commandName == "setSurfaceTrimLoops")
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(2))
-    #expect(surfaceFeature.outerTrimDomain == nil)
-    #expect(surfaceFeature.trimLoops == [trimLoop])
+    #expect(trimFeature.loops == [trimLoop])
     #expect(updatedTrimLoop.edges.count == 3)
     #expect(updatedTrimLoop.selectionReferences.count == 3)
 }
@@ -1277,21 +1276,21 @@ import SwiftCAD
     )
     let summary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
-    let trimLoop = BSplineSurfaceTrimLoop(
+    let trimLoop = SurfaceTrimLoop(
         role: .outer,
-        edges: [
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+        parameterCurves: [
+            .polyline([
                 SurfaceParameter(u: 0.2, v: 0.2),
                 SurfaceParameter(u: 0.8, v: 0.25),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.8, v: 0.25),
                 SurfaceParameter(u: 0.45, v: 0.8),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.45, v: 0.8),
                 SurfaceParameter(u: 0.2, v: 0.2),
-            ])),
+            ]),
         ]
     )
     _ = try runner.execute(
@@ -1315,20 +1314,20 @@ import SwiftCAD
 
     let featureID = try #require(session.document.cadDocument.designGraph.order.last)
     let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
-        Issue.record("Automation must keep a direct B-spline surface feature.")
+    guard case let .surfaceTrim(trimFeature) = feature.operation else {
+        Issue.record("Automation must update the Surface Trim feature.")
         return
     }
-    let movedLoop = try #require(surfaceFeature.trimLoops.first)
+    let movedLoop = try #require(trimFeature.loops.first)
     #expect(result.message == "Surface trim endpoint moved.")
     #expect(result.commandName == "moveSurfaceTrimEndpoint")
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(3))
-    #expect(try movedLoop.edges[0].startParameter().isApproximatelyEqual(
+    #expect(try movedLoop.parameterCurves[0].startParameter(tolerance: .standard).isApproximatelyEqual(
         to: SurfaceParameter(u: 0.25, v: 0.3),
         tolerance: 1.0e-12
     ))
-    #expect(try movedLoop.edges[2].endParameter().isApproximatelyEqual(
+    #expect(try movedLoop.parameterCurves[2].endParameter(tolerance: .standard).isApproximatelyEqual(
         to: SurfaceParameter(u: 0.25, v: 0.3),
         tolerance: 1.0e-12
     ))
@@ -1347,10 +1346,10 @@ import SwiftCAD
     )
     let summary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
-    let trimLoop = BSplineSurfaceTrimLoop(
+    let trimLoop = SurfaceTrimLoop(
         role: .outer,
-        edges: [
-            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+        parameterCurves: [
+            .bSpline(BSplineCurve2D(
                 degree: 2,
                 knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
                 controlPoints: [
@@ -1358,15 +1357,15 @@ import SwiftCAD
                     Point2D(x: 0.52, y: 0.42),
                     Point2D(x: 0.8, y: 0.25),
                 ]
-            ))),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            )),
+            .polyline([
                 SurfaceParameter(u: 0.8, v: 0.25),
                 SurfaceParameter(u: 0.45, v: 0.8),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.45, v: 0.8),
                 SurfaceParameter(u: 0.2, v: 0.2),
-            ])),
+            ]),
         ]
     )
     _ = try runner.execute(
@@ -1390,12 +1389,12 @@ import SwiftCAD
 
     let featureID = try #require(session.document.cadDocument.designGraph.order.last)
     let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
-        Issue.record("Automation must keep a direct B-spline surface feature.")
+    guard case let .surfaceTrim(trimFeature) = feature.operation else {
+        Issue.record("Automation must update the Surface Trim feature.")
         return
     }
-    let movedLoop = try #require(surfaceFeature.trimLoops.first)
-    guard case .bSpline(let movedCurve) = movedLoop.edges[0].parameterCurve else {
+    let movedLoop = try #require(trimFeature.loops.first)
+    guard case .bSpline(let movedCurve) = movedLoop.parameterCurves[0] else {
         Issue.record("Automation must keep the authored B-spline trim curve.")
         return
     }
@@ -1416,9 +1415,9 @@ import SwiftCAD
         in: session
     )
     let weightedFeature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(weightedSurfaceFeature) = weightedFeature.operation,
-          let weightedLoop = weightedSurfaceFeature.trimLoops.first,
-          case .bSpline(let weightedCurve) = weightedLoop.edges[0].parameterCurve else {
+    guard case let .surfaceTrim(weightedTrimFeature) = weightedFeature.operation,
+          let weightedLoop = weightedTrimFeature.loops.first,
+          case .bSpline(let weightedCurve) = weightedLoop.parameterCurves[0] else {
         Issue.record("Automation must keep the weighted authored B-spline trim curve.")
         return
     }
@@ -1436,9 +1435,9 @@ import SwiftCAD
         in: session
     )
     let refinedFeature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(refinedSurfaceFeature) = refinedFeature.operation,
-          let refinedLoop = refinedSurfaceFeature.trimLoops.first,
-          case .bSpline(let refinedCurve) = refinedLoop.edges[0].parameterCurve else {
+    guard case let .surfaceTrim(refinedTrimFeature) = refinedFeature.operation,
+          let refinedLoop = refinedTrimFeature.loops.first,
+          case .bSpline(let refinedCurve) = refinedLoop.parameterCurves[0] else {
         Issue.record("Automation must keep the refined authored B-spline trim curve.")
         return
     }
@@ -1458,9 +1457,9 @@ import SwiftCAD
         in: session
     )
     let retimedFeature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(retimedSurfaceFeature) = retimedFeature.operation,
-          let retimedLoop = retimedSurfaceFeature.trimLoops.first,
-          case .bSpline(let retimedCurve) = retimedLoop.edges[0].parameterCurve else {
+    guard case let .surfaceTrim(retimedTrimFeature) = retimedFeature.operation,
+          let retimedLoop = retimedTrimFeature.loops.first,
+          case .bSpline(let retimedCurve) = retimedLoop.parameterCurves[0] else {
         Issue.record("Automation must keep the retimed authored B-spline trim curve.")
         return
     }
@@ -1479,9 +1478,9 @@ import SwiftCAD
         in: session
     )
     let saturatedFeature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(saturatedSurfaceFeature) = saturatedFeature.operation,
-          let saturatedLoop = saturatedSurfaceFeature.trimLoops.first,
-          case .bSpline(let saturatedCurve) = saturatedLoop.edges[0].parameterCurve else {
+    guard case let .surfaceTrim(saturatedTrimFeature) = saturatedFeature.operation,
+          let saturatedLoop = saturatedTrimFeature.loops.first,
+          case .bSpline(let saturatedCurve) = saturatedLoop.parameterCurves[0] else {
         Issue.record("Automation must keep the saturated authored B-spline trim curve.")
         return
     }
@@ -1878,7 +1877,7 @@ import SwiftCAD
     #expect(result.generation == DocumentGeneration(2))
     #expect(body.kind == .sheet)
     #expect(afterTopology.counts.faceCount == 5)
-    #expect(afterTopology.entries.contains { $0.persistentName == startFaceEntry.persistentName } == false)
+    #expect(afterTopology.entries.contains { $0.stableReference == startFaceEntry.stableReference } == false)
     #expect(session.evaluationStatus == .valid)
 }
 
@@ -3140,14 +3139,24 @@ import SwiftCAD
         .lineEnd(setup.secondLineID)
     )))
     #expect(sketch.constraints.contains(.splineEndpointTangent(
-        spline: source.entityID,
-        endpoint: .start,
-        line: setup.firstLineID
+        SketchSplineLineTangencyConstraint(
+            splineEndpoint: SketchSplineEndpointReference(
+                splineID: source.entityID,
+                endpoint: .start
+            ),
+            line: setup.firstLineID,
+            orientation: .aligned
+        )
     )))
     #expect(sketch.constraints.contains(.splineEndpointTangent(
-        spline: source.entityID,
-        endpoint: .end,
-        line: setup.secondLineID
+        SketchSplineLineTangencyConstraint(
+            splineEndpoint: SketchSplineEndpointReference(
+                splineID: source.entityID,
+                endpoint: .end
+            ),
+            line: setup.secondLineID,
+            orientation: .aligned
+        )
     )))
     #expect(controlPoints.count == 7)
     #expect(nearlyEqualAutomation(controlPoints[0].x, 0.0025))
@@ -3871,7 +3880,11 @@ import SwiftCAD
     let result = try runner.execute(
         .addSketchConstraint(
             featureID: setup.featureID,
-            constraint: .tangent(setup.lineID, setup.circleID)
+            constraint: .tangent(.lineCircular(
+                line: setup.lineID,
+                circular: setup.circleID,
+                side: .left
+            ))
         ),
         in: session
     )
@@ -3883,7 +3896,11 @@ import SwiftCAD
     #expect(result.message == "Sketch constraint added to \(setup.featureID.description).")
     #expect(result.commandName == "addSketchConstraint")
     #expect(result.didMutate)
-    #expect(sketch.constraints == [.tangent(setup.lineID, setup.circleID)])
+    #expect(sketch.constraints == [.tangent(.lineCircular(
+        line: setup.lineID,
+        circular: setup.circleID,
+        side: .left
+    ))])
     #expect(abs(center.x - 0.005) < 1.0e-12)
     #expect(abs(center.y - radius) < 1.0e-12)
     #expect(abs(radius - 0.002) < 1.0e-12)

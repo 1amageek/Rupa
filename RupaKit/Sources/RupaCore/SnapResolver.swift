@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import CADModeling
 import RupaCoreTypes
 
 public enum SnapCandidateKind: String, Codable, Equatable, Hashable, Sendable {
@@ -98,7 +99,7 @@ public struct SnapTopologyReference: Codable, Equatable, Sendable {
     public var sceneNodeID: SceneNodeID
     public var component: SelectionComponent
     public var kind: TopologySummaryResult.Entry.Kind
-    public var persistentName: String
+    public var stableReference: StableSubshapeReference
     public var referenceID: String
     public var worldPoint: TopologySummaryResult.Entry.Point?
 
@@ -106,14 +107,14 @@ public struct SnapTopologyReference: Codable, Equatable, Sendable {
         sceneNodeID: SceneNodeID,
         component: SelectionComponent,
         kind: TopologySummaryResult.Entry.Kind,
-        persistentName: String,
+        stableReference: StableSubshapeReference,
         referenceID: String,
         worldPoint: TopologySummaryResult.Entry.Point? = nil
     ) {
         self.sceneNodeID = sceneNodeID
         self.component = component
         self.kind = kind
-        self.persistentName = persistentName
+        self.stableReference = stableReference
         self.referenceID = referenceID
         self.worldPoint = worldPoint
     }
@@ -682,6 +683,7 @@ public struct SnapResolver: Sendable {
         )
         candidates += try surfaceTrimCandidates(
             in: document,
+            topology: topology,
             sceneNodeIDsByFeatureID: sceneNodeIDsByFeatureID,
             constructionPlane: constructionPlane
         )
@@ -707,7 +709,7 @@ public struct SnapResolver: Sendable {
         constructionPlane: SketchPlaneCoordinateSystem?
     ) throws -> [PrioritizedSnapCandidate] {
         let resolvedParameters = try ParameterResolver().resolve(document.cadDocument.parameters)
-        let extractor = SketchProfileExtractor()
+        let extractor = SketchProfileExtractor(tolerance: document.modelingSettings.tolerance)
         var candidates: [PrioritizedSnapCandidate] = []
 
         for featureID in document.cadDocument.designGraph.order {
@@ -730,7 +732,7 @@ public struct SnapResolver: Sendable {
             } catch is UnitError {
                 continue
             }
-            let regionAnalyzer = ProfileRegionAnalyzer()
+            let regionAnalyzer = ProfileRegionAnalyzer(tolerance: document.modelingSettings.tolerance)
             for (profileIndex, profile) in profiles.enumerated() {
                 let region: ProfileRegionSummary
                 do {
@@ -786,23 +788,29 @@ public struct SnapResolver: Sendable {
 
     private func surfaceTrimCandidates(
         in document: DesignDocument,
+        topology: TopologySnapshot?,
         sceneNodeIDsByFeatureID: [FeatureID: SceneNodeID],
         constructionPlane: SketchPlaneCoordinateSystem?
     ) throws -> [PrioritizedSnapCandidate] {
+        let currentTopology = if let topology {
+            topology
+        } else {
+            try TopologySnapshotService().snapshot(document: document)
+        }
         var candidates: [PrioritizedSnapCandidate] = []
         for featureID in document.cadDocument.designGraph.order {
             guard let feature = document.cadDocument.designGraph.nodes[featureID],
-                  case let .bSplineSurface(surfaceFeature) = feature.operation,
-                  surfaceFeature.trimLoops.isEmpty == false else {
+                  case let .surfaceTrim(trimFeature) = feature.operation,
+                  let sourceFeature = document.cadDocument.designGraph.nodes[trimFeature.target.featureID],
+                  case let .bSplineSurface(surfaceFeature) = sourceFeature.operation,
+                  let faceEntry = currentTopology.entries.first(where: {
+                      $0.kind == .face && $0.stableReference.subshapeID.featureID == featureID
+                  }) else {
                 continue
             }
-            let surfaceReference = SurfaceReference(faceName: PersistentName(components: [
-                .feature(featureID),
-                .generated("bSplineSurface"),
-                .subshape("patch:0:face"),
-            ]))
-            for (loopIndex, trimLoop) in surfaceFeature.trimLoops.enumerated() {
-                for (edgeIndex, edge) in trimLoop.edges.enumerated() {
+            let surfaceReference = SurfaceReference(subshape: faceEntry.stableReference)
+            for (loopIndex, trimLoop) in trimFeature.loops.enumerated() {
+                for (edgeIndex, parameterCurve) in trimLoop.parameterCurves.enumerated() {
                     let trimReference = SurfaceTrimReference(
                         surface: surfaceReference,
                         loopIndex: loopIndex,
@@ -812,26 +820,32 @@ public struct SnapResolver: Sendable {
                     if let startCandidate = try surfaceTrimEndpointCandidate(
                         selectionReference: selectionReference,
                         endpoint: .start,
-                        parameter: edge.startParameter(),
+                        parameter: try parameterCurve.startParameter(
+                            tolerance: document.modelingSettings.tolerance
+                        ),
                         surface: surfaceFeature.surface,
                         featureID: featureID,
                         sceneNodeID: sceneNodeIDsByFeatureID[featureID],
-                        constructionPlane: constructionPlane
+                        constructionPlane: constructionPlane,
+                        tolerance: document.modelingSettings.tolerance
                     ) {
                         candidates.append(startCandidate)
                     }
                     if let endCandidate = try surfaceTrimEndpointCandidate(
                         selectionReference: selectionReference,
                         endpoint: .end,
-                        parameter: edge.endParameter(),
+                        parameter: try parameterCurve.endParameter(
+                            tolerance: document.modelingSettings.tolerance
+                        ),
                         surface: surfaceFeature.surface,
                         featureID: featureID,
                         sceneNodeID: sceneNodeIDsByFeatureID[featureID],
-                        constructionPlane: constructionPlane
+                        constructionPlane: constructionPlane,
+                        tolerance: document.modelingSettings.tolerance
                     ) {
                         candidates.append(endCandidate)
                     }
-                    for controlPoint in surfaceTrimControlPointParameters(edge.parameterCurve) {
+                    for controlPoint in surfaceTrimControlPointParameters(parameterCurve) {
                         if let candidate = try surfaceTrimControlPointCandidate(
                             selectionReference: selectionReference,
                             controlPointIndex: controlPoint.index,
@@ -839,7 +853,8 @@ public struct SnapResolver: Sendable {
                             surface: surfaceFeature.surface,
                             featureID: featureID,
                             sceneNodeID: sceneNodeIDsByFeatureID[featureID],
-                            constructionPlane: constructionPlane
+                            constructionPlane: constructionPlane,
+                            tolerance: document.modelingSettings.tolerance
                         ) {
                             candidates.append(candidate)
                         }
@@ -854,7 +869,15 @@ public struct SnapResolver: Sendable {
         _ curve: SurfaceParameterCurve
     ) -> [(index: Int, parameter: SurfaceParameter)] {
         switch curve {
-        case .constantU, .constantV:
+        case .affine,
+             .constantU,
+             .constantV,
+             .harmonic,
+             .sphericalGreatCircle,
+             .certifiedImplicit,
+             .certifiedAnalyticImplicit,
+             .certifiedAnalyticPair,
+             .projectedAnalytic:
             return []
         case let .polyline(points):
             guard points.count > 2 else {
@@ -1005,7 +1028,9 @@ public struct SnapResolver: Sendable {
             guard let point = entry.start else {
                 return []
             }
-            if PolySplineSurfaceVertexTarget.canParsePersistentName(entry.persistentName) {
+            if PolySplineSurfaceVertexTarget.canParse(
+                subshapeID: entry.stableReference.subshapeID
+            ) {
                 return [
                     topologyCandidate(
                         kind: .surfaceControlVertex,
@@ -1702,7 +1727,7 @@ public struct SnapResolver: Sendable {
             sceneNodeID: target.sceneNodeID,
             component: target.component,
             kind: entry.kind,
-            persistentName: entry.persistentName,
+            stableReference: entry.stableReference,
             referenceID: entry.referenceID,
             worldPoint: point
         )
@@ -1711,7 +1736,7 @@ public struct SnapResolver: Sendable {
             sortKey: [
                 "topology",
                 entry.kind.rawValue,
-                entry.persistentName,
+                stableSubshapeKey(entry.stableReference.subshapeID),
                 sortSuffix,
                 kind.rawValue,
             ].joined(separator: ":"),
@@ -1723,6 +1748,10 @@ public struct SnapResolver: Sendable {
                 topologySource: topologyReference
             )
         )
+    }
+
+    private func stableSubshapeKey(_ subshapeID: SubshapeID) -> String {
+        "feature:\(subshapeID.featureID.description)/role:\(subshapeID.role)/ordinal:\(subshapeID.ordinal)"
     }
 
     private func surfaceFrameCandidate(
@@ -1778,7 +1807,8 @@ public struct SnapResolver: Sendable {
         surface: BSplineSurface3D,
         featureID: FeatureID,
         sceneNodeID: SceneNodeID?,
-        constructionPlane: SketchPlaneCoordinateSystem?
+        constructionPlane: SketchPlaneCoordinateSystem?,
+        tolerance: ModelingTolerance
     ) throws -> PrioritizedSnapCandidate? {
         try surfaceTrimCandidate(
             kind: .surfaceTrimEndpoint,
@@ -1791,7 +1821,8 @@ public struct SnapResolver: Sendable {
             surface: surface,
             featureID: featureID,
             sceneNodeID: sceneNodeID,
-            constructionPlane: constructionPlane
+            constructionPlane: constructionPlane,
+            tolerance: tolerance
         )
     }
 
@@ -1802,7 +1833,8 @@ public struct SnapResolver: Sendable {
         surface: BSplineSurface3D,
         featureID: FeatureID,
         sceneNodeID: SceneNodeID?,
-        constructionPlane: SketchPlaneCoordinateSystem?
+        constructionPlane: SketchPlaneCoordinateSystem?,
+        tolerance: ModelingTolerance
     ) throws -> PrioritizedSnapCandidate? {
         try surfaceTrimCandidate(
             kind: .surfaceTrimControlPoint,
@@ -1815,7 +1847,8 @@ public struct SnapResolver: Sendable {
             surface: surface,
             featureID: featureID,
             sceneNodeID: sceneNodeID,
-            constructionPlane: constructionPlane
+            constructionPlane: constructionPlane,
+            tolerance: tolerance
         )
     }
 
@@ -1830,12 +1863,17 @@ public struct SnapResolver: Sendable {
         surface: BSplineSurface3D,
         featureID: FeatureID,
         sceneNodeID: SceneNodeID?,
-        constructionPlane: SketchPlaneCoordinateSystem?
+        constructionPlane: SketchPlaneCoordinateSystem?,
+        tolerance: ModelingTolerance
     ) throws -> PrioritizedSnapCandidate? {
         guard parameter.u.isFinite, parameter.v.isFinite else {
             return nil
         }
-        let geometry = try surface.differentialGeometry(atU: parameter.u, v: parameter.v)
+        let geometry = try surface.differentialGeometry(
+            atU: parameter.u,
+            v: parameter.v,
+            tolerance: tolerance
+        )
         let worldPoint = geometry.position
         guard isFinite(worldPoint),
               let uAxis = normalized(geometry.tangentU),

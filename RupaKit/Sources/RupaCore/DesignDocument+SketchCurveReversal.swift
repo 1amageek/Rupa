@@ -114,37 +114,42 @@ extension DesignDocument {
                     entity: entityID,
                     index: reversedSplineControlPointIndex(index, controlPointCount: count)
                 )
-            case .splineEndpointTangent(let splineID, let endpoint, let lineID):
-                guard splineID == entityID else {
+            case .splineEndpointTangent(let tangency):
+                guard tangency.splineEndpoint.splineID == entityID else {
                     return constraint
                 }
-                return .splineEndpointTangent(
-                    spline: splineID,
-                    endpoint: reversedSplineEndpoint(endpoint),
-                    line: lineID
-                )
-            case .tangentSplineEndpoints(let first, let second):
-                return .tangentSplineEndpoints(
+                return .splineEndpointTangent(SketchSplineLineTangencyConstraint(
+                    splineEndpoint: SketchSplineEndpointReference(
+                        splineID: tangency.splineEndpoint.splineID,
+                        endpoint: reversedSplineEndpoint(tangency.splineEndpoint.endpoint)
+                    ),
+                    line: tangency.line,
+                    orientation: reversedTangentOrientation(tangency.orientation)
+                ))
+            case .tangentSplineEndpoints(let tangency):
+                return .tangentSplineEndpoints(SketchSplineEndpointTangencyConstraint(
                     first: rewriteSplineEndpointReferenceAfterCurveReverse(
-                        first,
+                        tangency.first,
                         entityID: entityID
                     ),
                     second: rewriteSplineEndpointReferenceAfterCurveReverse(
-                        second,
+                        tangency.second,
                         entityID: entityID
-                    )
-                )
-            case .smoothSplineEndpoints(let first, let second):
-                return .smoothSplineEndpoints(
+                    ),
+                    orientation: reversedPairTangentOrientation(tangency, entityID: entityID)
+                ))
+            case .smoothSplineEndpoints(let tangency):
+                return .smoothSplineEndpoints(SketchSplineEndpointTangencyConstraint(
                     first: rewriteSplineEndpointReferenceAfterCurveReverse(
-                        first,
+                        tangency.first,
                         entityID: entityID
                     ),
                     second: rewriteSplineEndpointReferenceAfterCurveReverse(
-                        second,
+                        tangency.second,
                         entityID: entityID
-                    )
-                )
+                    ),
+                    orientation: reversedPairTangentOrientation(tangency, entityID: entityID)
+                ))
             case .horizontal,
                  .vertical,
                  .parallel,
@@ -156,6 +161,24 @@ extension DesignDocument {
                 return constraint
             }
         }
+    }
+
+    private func reversedPairTangentOrientation(
+        _ tangency: SketchSplineEndpointTangencyConstraint,
+        entityID: SketchEntityID
+    ) -> SketchTangentOrientation {
+        let reversedCount = [tangency.first, tangency.second]
+            .filter { $0.splineID == entityID }
+            .count
+        return reversedCount == 1
+            ? reversedTangentOrientation(tangency.orientation)
+            : tangency.orientation
+    }
+
+    private func reversedTangentOrientation(
+        _ orientation: SketchTangentOrientation
+    ) -> SketchTangentOrientation {
+        orientation == .aligned ? .opposed : .aligned
     }
 
     private func dimensionsAfterSketchCurveReverse(

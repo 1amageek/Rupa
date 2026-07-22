@@ -278,10 +278,11 @@ private func twoSplineCurveAnalysisDocument() throws -> (
             .splineControlPoint(entity: firstSplineID, index: 3),
             .splineControlPoint(entity: secondSplineID, index: 0)
         ),
-        .smoothSplineEndpoints(
+        .smoothSplineEndpoints(SketchSplineEndpointTangencyConstraint(
             first: SketchSplineEndpointReference(splineID: firstSplineID, endpoint: .end),
-            second: SketchSplineEndpointReference(splineID: secondSplineID, endpoint: .start)
-        ),
+            second: SketchSplineEndpointReference(splineID: secondSplineID, endpoint: .start),
+            orientation: .aligned
+        )),
     ]
     feature.operation = .sketch(sketch)
     document.cadDocument.designGraph.nodes[featureID] = feature

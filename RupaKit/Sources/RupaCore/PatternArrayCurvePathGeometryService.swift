@@ -1,4 +1,5 @@
 import SwiftCAD
+import CADModeling
 import RupaCoreTypes
 
 public struct PatternArrayCurvePathGeometryService: Sendable {

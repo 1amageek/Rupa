@@ -1,7 +1,14 @@
 import SwiftCAD
+import CADModeling
 import RupaCoreTypes
 
 struct PolySplineSurfaceControlPointEditingService: Sendable {
+    private let tolerance: ModelingTolerance
+
+    init(tolerance: ModelingTolerance) {
+        self.tolerance = tolerance
+    }
+
     func updatedPolySpline(
         moving target: PolySplineSurfaceControlPointEditTarget,
         by delta: Vector3D,
@@ -20,7 +27,7 @@ struct PolySplineSurfaceControlPointEditingService: Sendable {
             weight: currentWeight
         )
         upsert(override, in: &updatedPolySpline)
-        try updatedPolySpline.validate()
+        try updatedPolySpline.validate(tolerance: tolerance)
         return updatedPolySpline
     }
 
@@ -40,7 +47,7 @@ struct PolySplineSurfaceControlPointEditingService: Sendable {
             weight: weight
         )
         upsert(override, in: &updatedPolySpline)
-        try updatedPolySpline.validate()
+        try updatedPolySpline.validate(tolerance: tolerance)
         return updatedPolySpline
     }
 
@@ -235,7 +242,8 @@ struct PolySplineSurfaceControlPointEditingService: Sendable {
         try target.address.validate()
         let analysis = PolySplineMeshAnalyzer().analyze(
             mesh: polySpline.sourceMesh,
-            options: polySpline.options
+            options: polySpline.options,
+            tolerance: tolerance
         )
         guard analysis.result.isSupported else {
             throw EditorError(

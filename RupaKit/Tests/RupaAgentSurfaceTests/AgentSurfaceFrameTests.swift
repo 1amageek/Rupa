@@ -320,7 +320,7 @@ import SwiftCAD
             sessionID: sessionID,
             queries: [
                 SurfaceFrameQuery(
-                    facePersistentName: faceEntry.persistentName,
+                    faceStableReference: faceEntry.stableReference,
                     u: 0.5,
                     v: 0.5
                 ),
@@ -343,7 +343,8 @@ import SwiftCAD
     }
     #expect(frames.frames.count == 3)
     let frame = try #require(frames.frames.first)
-    #expect(frame.facePersistentNames.contains(faceEntry.persistentName))
+    let faceIdentityKey = agentSurfaceFrameStableSubshapeKey(faceEntry.stableReference)
+    #expect(frame.facePersistentNames.contains(faceIdentityKey))
     #expect(abs(surfaceVectorLength(frame.uAxis) - 1.0) <= 1.0e-8)
     #expect(abs(surfaceVectorLength(frame.vAxis) - 1.0) <= 1.0e-8)
     #expect(abs(surfaceVectorLength(frame.normal) - 1.0) <= 1.0e-8)
@@ -352,13 +353,20 @@ import SwiftCAD
     #expect(abs(frame.normalCurvatureU) <= 1.0e-8)
     #expect(abs(frame.normalCurvatureV) <= 1.0e-8)
     let faceSelectionFrame = try #require(frames.frames.dropFirst().first)
-    #expect(faceSelectionFrame.facePersistentNames.contains(faceEntry.persistentName))
+    #expect(faceSelectionFrame.facePersistentNames.contains(faceIdentityKey))
     #expect(abs(faceSelectionFrame.u - 0.25) <= 1.0e-12)
     #expect(abs(faceSelectionFrame.v - 0.75) <= 1.0e-12)
     let controlPointFrame = try #require(frames.frames.dropFirst(2).first)
-    #expect(controlPointFrame.facePersistentNames.contains(faceEntry.persistentName))
+    #expect(controlPointFrame.facePersistentNames.contains(faceIdentityKey))
     #expect(abs(controlPointFrame.u - (2.0 / 3.0)) <= 1.0e-12)
     #expect(abs(controlPointFrame.v - (1.0 / 3.0)) <= 1.0e-12)
     #expect(session.generation == generation)
     #expect(session.isDirty == dirty)
+}
+
+private func agentSurfaceFrameStableSubshapeKey(
+    _ reference: StableSubshapeReference
+) -> String {
+    let id = reference.subshapeID
+    return "feature:\(id.featureID.description)/role:\(id.role)/ordinal:\(id.ordinal)"
 }

@@ -117,7 +117,7 @@ public struct ObjectDimensionSnapshotService: Sendable {
         guard case .face(let componentID) = target.component else {
             return false
         }
-        return componentID.generatedTopologyPersistentName != nil
+        return componentID.isStableTopology
     }
 
     private func dimensionTargets(

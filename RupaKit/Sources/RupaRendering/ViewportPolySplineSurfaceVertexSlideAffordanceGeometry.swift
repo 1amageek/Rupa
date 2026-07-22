@@ -1,6 +1,7 @@
 import CoreGraphics
 import RupaCore
 import RupaViewportScene
+import SwiftCAD
 
 struct ViewportPolySplineSurfaceVertexSlideInput: Equatable {
     var target: PolySplineSurfaceVertexTarget
@@ -217,6 +218,7 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
         topologyVertices: [ViewportBodyTopology.Vertex],
         direction: PolySplineSurfaceVertexSlideDirection,
         distanceMeters: Double,
+        tolerance: ModelingTolerance,
         sampleSegmentCount: Int = 8
     ) -> [ViewportPolySplineSurfaceVertexSlidePreviewSurface]? {
         guard selectedVertices.isEmpty == false else {
@@ -284,8 +286,16 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
                       patchID: patch.patchID,
                       pointsByRole: movedPointsByRole
                   ),
-                  let originalMesh = surfaceMesh(corners: originalCorners, sampleSegmentCount: sampleSegmentCount),
-                  let movedMesh = surfaceMesh(corners: movedCorners, sampleSegmentCount: sampleSegmentCount) else {
+                  let originalMesh = surfaceMesh(
+                      corners: originalCorners,
+                      sampleSegmentCount: sampleSegmentCount,
+                      tolerance: tolerance
+                  ),
+                  let movedMesh = surfaceMesh(
+                      corners: movedCorners,
+                      sampleSegmentCount: sampleSegmentCount,
+                      tolerance: tolerance
+                  ) else {
                 return nil
             }
             let transform = transformsByPatch[patch] ?? .identity
@@ -369,7 +379,8 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
 
     private static func surfaceMesh(
         corners: (bottomLeft: Point3D, bottomRight: Point3D, topRight: Point3D, topLeft: Point3D),
-        sampleSegmentCount: Int
+        sampleSegmentCount: Int,
+        tolerance: ModelingTolerance
     ) -> ViewportBodyMesh? {
         let segmentCount = max(sampleSegmentCount, 1)
         let surface = BSplineSurface3D.cubicBezierPatch(
@@ -385,7 +396,7 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
                 let v = Double(vIndex) / Double(segmentCount)
                 for uIndex in 0...segmentCount {
                     let u = Double(uIndex) / Double(segmentCount)
-                    positions.append(try surface.point(u: u, v: v))
+                    positions.append(try surface.point(u: u, v: v, tolerance: tolerance))
                 }
             }
         } catch {

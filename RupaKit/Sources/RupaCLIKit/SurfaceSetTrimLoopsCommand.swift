@@ -18,10 +18,10 @@ public struct SurfaceSetTrimLoopsCommand: ParsableCommand {
     @Option(help: "JSON file containing one SelectionReference object.")
     public var referenceFile: String?
 
-    @Option(help: "BSplineSurfaceTrimLoop JSON object. Repeat for multiple loops.")
+    @Option(help: "SurfaceTrimLoop JSON object. Repeat for multiple loops.")
     public var trimLoop: [String] = []
 
-    @Option(help: "JSON file containing one BSplineSurfaceTrimLoop object or an array.")
+    @Option(help: "JSON file containing one SurfaceTrimLoop object or an array.")
     public var trimLoopsFile: String?
 
     @Flag(help: "Clear authored trim loops and return to the full rectangular surface domain.")
@@ -60,12 +60,12 @@ public struct SurfaceSetTrimLoopsCommand: ParsableCommand {
             filePath: referenceFile,
             valueName: "SelectionReference"
         )
-        let loops: [BSplineSurfaceTrimLoop] = try CLISelectionInputParser.decodeSelectionInput(
+        let loops: [SurfaceTrimLoop] = try CLISelectionInputParser.decodeSelectionInput(
             inlinePayloads: trimLoop,
             filePath: trimLoopsFile,
             clear: clear,
-            valueName: "BSplineSurfaceTrimLoop",
-            arrayName: "BSplineSurfaceTrimLoop"
+            valueName: "SurfaceTrimLoop",
+            arrayName: "SurfaceTrimLoop"
         )
 
         try CLIExitCode.run {

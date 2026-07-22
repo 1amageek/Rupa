@@ -31,8 +31,8 @@ extension DesignDocument {
         for dimension: SelectionDimension,
         objectRegistry: ObjectTypeRegistry
     ) throws -> SelectionDimensionObjectFaceDistanceContext? {
-        guard case .topology(let firstName) = dimension.first,
-              case .topology(let secondName) = dimension.second else {
+        guard case .subshape(let firstReference) = dimension.first,
+              case .subshape(let secondReference) = dimension.second else {
             return nil
         }
         let topology = try TopologySnapshotService().snapshot(
@@ -41,12 +41,12 @@ extension DesignDocument {
         )
         guard
             let firstTarget = try generatedFaceTargetIfPresent(
-                for: firstName,
+                for: firstReference,
                 in: topology,
                 owner: "Selection face-distance application"
             ),
             let secondTarget = try generatedFaceTargetIfPresent(
-                for: secondName,
+                for: secondReference,
                 in: topology,
                 owner: "Selection face-distance application"
             )
@@ -73,12 +73,13 @@ extension DesignDocument {
     }
 
     func generatedFaceTargetIfPresent(
-        for name: PersistentName,
+        for reference: StableSubshapeReference,
         in topology: TopologySnapshot,
         owner: String
     ) throws -> SelectionTarget? {
-        let persistentName = persistentNameString(name)
-        guard let entry = topology.entries.first(where: { $0.persistentName == persistentName }) else {
+        guard let entry = topology.entries.first(where: {
+            $0.stableReference == reference
+        }) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "\(owner) generated topology target was not found in the current topology."

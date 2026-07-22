@@ -68,11 +68,15 @@ public struct TopologyMaterialBinding: Codable, Hashable, Identifiable, Sendable
         self.process = process
     }
 
-    public var persistentName: String? {
+    public func stableReference() throws -> StableSubshapeReference {
         guard case .face(let componentID) = target.component else {
-            return nil
+            throw DocumentValidationError.invalidProductMetadata(
+                "Topology material binding must target a stable face."
+            )
         }
-        return componentID.generatedTopologyPersistentName
+        return try componentID.stableTopologyReference(
+            operationName: "Topology material binding"
+        )
     }
 
     public func validate(metadata: ProductMetadata) throws {
@@ -81,11 +85,7 @@ public struct TopologyMaterialBinding: Codable, Hashable, Identifiable, Sendable
                 "Topology material binding target references a missing scene node."
             )
         }
-        guard persistentName != nil else {
-            throw DocumentValidationError.invalidProductMetadata(
-                "Topology material binding must target a generated face."
-            )
-        }
+        _ = try stableReference()
         if let materialID,
            metadata.materialLibrary.materials[materialID] == nil {
             throw DocumentValidationError.invalidProductMetadata(

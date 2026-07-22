@@ -396,9 +396,11 @@ extension DesignDocument {
             case .g1:
                 return [
                     .splineEndpointTangent(
-                        spline: bridgeID,
-                        endpoint: bridgeEndpoint,
-                        line: lineID
+                        SketchSplineLineTangencyConstraint(
+                            splineEndpoint: bridgeReference,
+                            line: lineID,
+                            orientation: .aligned
+                        )
                     ),
                 ]
             case .g2, .g3:
@@ -414,15 +416,21 @@ extension DesignDocument {
             case .g1:
                 return [
                     .tangentSplineEndpoints(
-                        first: bridgeReference,
-                        second: sourceReference
+                        SketchSplineEndpointTangencyConstraint(
+                            first: bridgeReference,
+                            second: sourceReference,
+                            orientation: .aligned
+                        )
                     ),
                 ]
             case .g2:
                 return [
                     .smoothSplineEndpoints(
-                        first: bridgeReference,
-                        second: sourceReference
+                        SketchSplineEndpointTangencyConstraint(
+                            first: bridgeReference,
+                            second: sourceReference,
+                            orientation: .aligned
+                        )
                     ),
                 ]
             case .g3:

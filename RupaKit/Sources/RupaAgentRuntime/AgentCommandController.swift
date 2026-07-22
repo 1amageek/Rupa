@@ -382,7 +382,8 @@ public final class AgentCommandController: AgentClientProtocol {
                 return .polySplineMeshAnalysis(
                     PolySplineMeshAnalysisService().analyze(
                         sourceMesh: sourceMesh,
-                        options: options
+                        options: options,
+                        tolerance: session.document.modelingSettings.tolerance
                     )
                 )
             case let .sketchEntitySummary(sessionID, expectedGeneration):
@@ -460,7 +461,8 @@ public final class AgentCommandController: AgentClientProtocol {
                         path: path,
                         guides: guides,
                         targets: targets,
-                        options: options
+                        options: options,
+                        tolerance: session.document.modelingSettings.tolerance
                     )
                 )
             case let .booleanEvaluationPlan(
@@ -479,7 +481,8 @@ public final class AgentCommandController: AgentClientProtocol {
                         targets: targets,
                         tool: tool,
                         operation: operation,
-                        keepTools: keepTools
+                        keepTools: keepTools,
+                        tolerance: session.document.modelingSettings.tolerance
                     )
                 )
             case let .objectDimensionSummary(sessionID, targets, expectedGeneration):
@@ -512,7 +515,10 @@ public final class AgentCommandController: AgentClientProtocol {
                 let session = try registry.session(id: sessionID)
                 try session.store.requireGeneration(expectedGeneration)
                 return .surfaceAnalysis(
-                    try SurfaceAnalysisService(options: options).analyze(
+                    try SurfaceAnalysisService(
+                        tolerance: session.document.modelingSettings.tolerance,
+                        options: options
+                    ).analyze(
                         document: session.document,
                         displayUnit: session.workspaceState.displayUnit,
                         objectRegistry: session.objectRegistry,
@@ -524,7 +530,9 @@ public final class AgentCommandController: AgentClientProtocol {
                 let session = try registry.session(id: sessionID)
                 try session.store.requireGeneration(expectedGeneration)
                 return .surfaceFrames(
-                    try SurfaceFrameService().resolve(
+                    try SurfaceFrameService(
+                        tolerance: session.document.modelingSettings.tolerance
+                    ).resolve(
                         document: session.document,
                         queries: queries,
                         displayUnit: session.workspaceState.displayUnit,
@@ -537,7 +545,9 @@ public final class AgentCommandController: AgentClientProtocol {
                 let session = try registry.session(id: sessionID)
                 try session.store.requireGeneration(expectedGeneration)
                 return .surfaceContinuitySummary(
-                    try SurfaceContinuityService().summarize(
+                    try SurfaceContinuityService(
+                        tolerance: session.document.modelingSettings.tolerance
+                    ).summarize(
                         document: session.document,
                         displayUnit: session.workspaceState.displayUnit,
                         objectRegistry: session.objectRegistry,

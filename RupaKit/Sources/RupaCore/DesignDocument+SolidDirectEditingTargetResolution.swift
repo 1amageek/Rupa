@@ -13,7 +13,7 @@ extension DesignDocument {
                 message: "Face offset requires a face selection target."
             )
         }
-        if componentID.generatedTopologyPersistentName != nil {
+        if componentID.isStableTopology {
             let bodyFace = try GeneratedTopologySelectionResolver().bodyFace(
                 for: target,
                 in: self,
@@ -75,7 +75,7 @@ extension DesignDocument {
                 message: "\(operationName) requires edge selection targets."
             )
         }
-        if componentID.generatedTopologyPersistentName != nil {
+        if componentID.isStableTopology {
             let cornerEdge = try GeneratedTopologySelectionResolver().cornerEdge(
                 for: target,
                 in: self,
@@ -124,7 +124,7 @@ extension DesignDocument {
                 message: "Vertex move requires a vertex selection target."
             )
         }
-        if componentID.generatedTopologyPersistentName != nil {
+        if componentID.isStableTopology {
             let cornerVertex = try GeneratedTopologySelectionResolver().cornerVertex(
                 for: target,
                 in: self,
