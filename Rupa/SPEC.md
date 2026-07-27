@@ -1388,6 +1388,12 @@ The package-level socket listener supports start, stop, stale socket replacement
 | `agent.status` | Return server status, socket path, and session count. |
 | `agent.cadInteractionQualityAssessment` | Return the static CAD interaction quality assessment without requiring a session. |
 | `sessions.list` | Return open document session summaries. |
+| `document.create` | Create an Agent-owned document session, optionally at a new non-overwriting file path. |
+| `document.open` | Load and register a document package unless that normalized path is already open. |
+| `document.close` | Close a generation-matched session, requiring explicit discard for unsaved changes. |
+| `document.reset` | Reset a generation-matched document through the undoable command stack. |
+| `history.undo` | Undo the latest source mutation and advance document generation. |
+| `history.redo` | Redo the latest reverted source mutation and advance document generation. |
 | `command.apply` | Apply one automation command to an open session. |
 | `parameter.setExpression` | Parse and apply a typed parameter expression to an open session. |
 | `document.parameters` | Return all document parameters and diagnostics. |
@@ -1604,7 +1610,7 @@ Initial error code families:
 | `document.openInApp` | File mode requested direct mutation of an open document. |
 | `document.generationMismatch` | Expected generation does not match current generation. |
 | `document.loadFailed` | The document could not be loaded. |
-| `document.saveFailed` | The document could not be saved atomically. |
+| `document.saveFailed` | The document could not be saved or exclusively created at a new path. |
 | `command.invalid` | The command payload is invalid. |
 | `command.failed` | The command was valid but failed during application. |
 | `reference.unresolved` | A document object reference could not be resolved. |

@@ -1,0 +1,12 @@
+{
+  "jsonrpc": "2.0",
+  "id": "document.reset-1",
+  "method": "document.reset",
+  "params": {
+    "sessionID": "00000000-0000-0000-0000-000000000001",
+    "name": "Reset Document",
+    "expectedGeneration": {
+      "value": 2
+    }
+  }
+}

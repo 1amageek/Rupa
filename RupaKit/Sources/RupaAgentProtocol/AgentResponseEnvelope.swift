@@ -164,6 +164,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             try container.encode(value, forKey: .result)
         case .sessions(let value):
             try container.encode(value, forKey: .result)
+        case .sessionOperation(let value):
+            try container.encode(value, forKey: .result)
         case .cadInteractionQualityAssessment(let value):
             try container.encode(value, forKey: .result)
         case .command(let value):
@@ -252,6 +254,15 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
         case "sessions.list":
             return .sessions(
                 try container.decode([WorkspaceSessionSummary].self, forKey: .result)
+            )
+        case "document.create",
+             "document.open",
+             "document.close",
+             "document.reset",
+             "history.undo",
+             "history.redo":
+            return .sessionOperation(
+                try container.decode(AgentSessionOperationResult.self, forKey: .result)
             )
         case "agent.cadInteractionQualityAssessment":
             return .cadInteractionQualityAssessment(
@@ -371,6 +382,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             "agent.status"
         case .sessions:
             "sessions.list"
+        case .sessionOperation(let value):
+            sessionOperationMethodName(for: value.operation)
         case .cadInteractionQualityAssessment:
             "agent.cadInteractionQualityAssessment"
         case .command:
@@ -439,7 +452,10 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
     }
 
     private static func isCompatible(result: AgentResponse, with method: String) -> Bool {
-        switch (method, result) {
+        if case .sessionOperation(let value) = result {
+            return method == sessionOperationMethodName(for: value.operation)
+        }
+        return switch (method, result) {
         case ("agent.capabilities", .capabilities),
              ("agent.capabilityRegistry", .capabilityRegistry),
              ("agent.status", .status),
@@ -482,6 +498,25 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             true
         default:
             false
+        }
+    }
+
+    private static func sessionOperationMethodName(
+        for operation: AgentSessionOperationResult.Operation
+    ) -> String {
+        switch operation {
+        case .create:
+            "document.create"
+        case .open:
+            "document.open"
+        case .close:
+            "document.close"
+        case .reset:
+            "document.reset"
+        case .undo:
+            "history.undo"
+        case .redo:
+            "history.redo"
         }
     }
 }

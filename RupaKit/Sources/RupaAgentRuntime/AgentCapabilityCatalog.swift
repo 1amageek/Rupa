@@ -2171,6 +2171,67 @@ enum AgentCapabilityCatalog {
             failureMode: "Rejects stale generations and references incompatible with the current document."
         ),
         capability(
+            "createDocument",
+            category: .persistence,
+            summary: "Create and register a new document session, optionally persisting it to a new package path.",
+            access: .agentRequest,
+            stateEffect: .workspaceMutation,
+            requiresSession: false,
+            requiresExpectedSourceGeneration: false,
+            requiresExpectedWorkspaceRevision: false,
+            targets: [.document],
+            failureMode: "Rejects empty names, duplicate open paths, existing output paths, and save failures before registering the session."
+        ),
+        capability(
+            "openDocument",
+            category: .persistence,
+            summary: "Load a document package and register a clean Agent session for it.",
+            access: .agentRequest,
+            stateEffect: .workspaceMutation,
+            requiresSession: false,
+            requiresExpectedSourceGeneration: false,
+            requiresExpectedWorkspaceRevision: false,
+            targets: [.document],
+            failureMode: "Rejects empty paths, duplicate open documents, and invalid or unreadable document packages."
+        ),
+        capability(
+            "closeDocument",
+            category: .persistence,
+            summary: "Close an Agent document session after validating its current generation and dirty-state policy.",
+            access: .agentRequest,
+            stateEffect: .workspaceMutation,
+            requiresExpectedWorkspaceRevision: false,
+            targets: [.document],
+            failureMode: "Rejects missing sessions, stale generations, and dirty sessions unless unsaved changes are explicitly discarded."
+        ),
+        capability(
+            "resetDocument",
+            category: .document,
+            summary: "Reset the current document to an empty named document through the undoable command pipeline.",
+            access: .agentRequest,
+            stateEffect: .sourceMutation,
+            targets: [.document],
+            failureMode: "Rejects empty names and stale generations; the completed reset remains undoable."
+        ),
+        capability(
+            "undo",
+            category: .document,
+            summary: "Undo the latest source mutation in the selected document session.",
+            access: .agentRequest,
+            stateEffect: .sourceMutation,
+            targets: [.document],
+            failureMode: "Rejects stale generations and sessions with no undo history."
+        ),
+        capability(
+            "redo",
+            category: .document,
+            summary: "Redo the latest reverted source mutation in the selected document session.",
+            access: .agentRequest,
+            stateEffect: .sourceMutation,
+            targets: [.document],
+            failureMode: "Rejects stale generations and sessions with no redo history."
+        ),
+        capability(
             "saveDocument",
             category: .persistence,
             summary: "Persist the open document back to its registered path and mark the session clean.",
@@ -2219,6 +2280,7 @@ enum AgentCapabilityCatalog {
         stateEffect: AutomationCommandEffect,
         requiresSession: Bool = true,
         requiresExpectedSourceGeneration: Bool = true,
+        requiresExpectedWorkspaceRevision: Bool? = nil,
         discovery: [AgentCapabilityDescriptor.Discovery] = [],
         targets: [AgentCapabilityDescriptor.Target] = [],
         failureMode: String,
@@ -2232,7 +2294,8 @@ enum AgentCapabilityCatalog {
             stateEffect: stateEffect,
             requiresSession: requiresSession,
             requiresExpectedSourceGeneration: requiresExpectedSourceGeneration,
-            requiresExpectedWorkspaceRevision: stateEffect == .workspaceMutation,
+            requiresExpectedWorkspaceRevision: requiresExpectedWorkspaceRevision
+                ?? (stateEffect == .workspaceMutation),
             discovery: discovery,
             targets: targets,
             failureMode: failureMode,

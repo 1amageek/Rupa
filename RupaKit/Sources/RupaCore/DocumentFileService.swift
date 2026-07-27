@@ -20,6 +20,18 @@ public struct DocumentFileService: Sendable {
         }
     }
 
+    public func create(_ document: DesignDocument, at url: URL) throws {
+        do {
+            let data = try packageStore.packageData(for: document)
+            try data.write(to: url, options: .withoutOverwriting)
+        } catch {
+            throw EditorError(
+                code: .documentSaveFailed,
+                message: error.localizedDescription
+            )
+        }
+    }
+
     public func save(_ document: DesignDocument, to url: URL) throws {
         do {
             try packageStore.save(document, to: url)

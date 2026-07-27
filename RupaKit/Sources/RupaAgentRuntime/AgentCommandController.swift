@@ -82,6 +82,111 @@ public final class AgentCommandController: AgentClientProtocol {
                 )
             case .sessions:
                 return .sessions(registry.summaries())
+            case let .createDocument(name, outputPath):
+                let documentName = try normalizedDocumentName(name)
+                let outputURL = try outputPath.map(documentURL(for:))
+                if let outputURL {
+                    try requireAvailableDocumentURL(outputURL, rejectsExistingFile: true)
+                }
+                let session = EditorSession(document: .empty(named: documentName))
+                if let outputURL {
+                    try fileService.create(session.document, at: outputURL)
+                    session.markClean()
+                }
+                let sessionID = try registry.registerNew(session: session, path: outputURL)
+                return .sessionOperation(
+                    try sessionOperationResult(
+                        operation: .create,
+                        sessionID: sessionID,
+                        session: session
+                    )
+                )
+            case let .openDocument(path):
+                let url = try documentURL(for: path)
+                try requireAvailableDocumentURL(url, rejectsExistingFile: false)
+                let session = EditorSession(document: try fileService.load(from: url))
+                session.markClean()
+                let sessionID = try registry.registerNew(session: session, path: url)
+                return .sessionOperation(
+                    try sessionOperationResult(
+                        operation: .open,
+                        sessionID: sessionID,
+                        session: session
+                    )
+                )
+            case let .closeDocument(sessionID, expectedGeneration, discardUnsavedChanges):
+                let session = try registry.session(id: sessionID)
+                try requireExpectedGeneration(
+                    expectedGeneration,
+                    operation: "Document close",
+                    session: session
+                )
+                guard !session.isDirty || discardUnsavedChanges else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "Document close requires discardUnsavedChanges for a dirty session."
+                    )
+                }
+                let result = try sessionOperationResult(
+                    operation: .close,
+                    sessionID: sessionID,
+                    session: session
+                )
+                registry.unregister(id: sessionID)
+                return .sessionOperation(result)
+            case let .resetDocument(sessionID, name, expectedGeneration):
+                let session = try registry.session(id: sessionID)
+                let generation = try requireExpectedGeneration(
+                    expectedGeneration,
+                    operation: "Document reset",
+                    session: session
+                )
+                let commandResult = try session.execute(
+                    .resetDocument(name: try normalizedDocumentName(name)),
+                    expectedGeneration: generation
+                )
+                session.activateTool(.select)
+                session.clearSelection()
+                return .sessionOperation(
+                    try sessionOperationResult(
+                        operation: .reset,
+                        sessionID: sessionID,
+                        session: session,
+                        commandName: commandResult.commandName
+                    )
+                )
+            case let .undo(sessionID, expectedGeneration):
+                let session = try registry.session(id: sessionID)
+                try requireExpectedGeneration(
+                    expectedGeneration,
+                    operation: "Undo",
+                    session: session
+                )
+                let commandResult = try session.undo()
+                return .sessionOperation(
+                    try sessionOperationResult(
+                        operation: .undo,
+                        sessionID: sessionID,
+                        session: session,
+                        commandName: commandResult.commandName
+                    )
+                )
+            case let .redo(sessionID, expectedGeneration):
+                let session = try registry.session(id: sessionID)
+                try requireExpectedGeneration(
+                    expectedGeneration,
+                    operation: "Redo",
+                    session: session
+                )
+                let commandResult = try session.redo()
+                return .sessionOperation(
+                    try sessionOperationResult(
+                        operation: .redo,
+                        sessionID: sessionID,
+                        session: session,
+                        commandName: commandResult.commandName
+                    )
+                )
             case .cadInteractionQualityAssessment:
                 return .cadInteractionQualityAssessment(
                     CADInteractionQualityAssessmentService().assess()
@@ -659,6 +764,78 @@ public final class AgentCommandController: AgentClientProtocol {
             }
             try session.workspaceState.requireRevision(expectedWorkspaceRevision)
         }
+    }
+
+    @discardableResult
+    private func requireExpectedGeneration(
+        _ expectedGeneration: DocumentGeneration?,
+        operation: String,
+        session: EditorSession
+    ) throws -> DocumentGeneration {
+        guard let expectedGeneration else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(operation) requires an expected source generation."
+            )
+        }
+        try session.store.requireGeneration(expectedGeneration)
+        return expectedGeneration
+    }
+
+    private func normalizedDocumentName(_ name: String) throws -> String {
+        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedName.isEmpty else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Document name must not be empty."
+            )
+        }
+        return normalizedName
+    }
+
+    private func documentURL(for path: String) throws -> URL {
+        let normalizedPath = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedPath.isEmpty else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Document path must not be empty."
+            )
+        }
+        let expandedPath = (normalizedPath as NSString).expandingTildeInPath
+        return URL(fileURLWithPath: expandedPath).standardizedFileURL
+    }
+
+    private func requireAvailableDocumentURL(
+        _ url: URL,
+        rejectsExistingFile: Bool
+    ) throws {
+        if let existingID = registry.registeredSessionID(for: url) {
+            throw EditorError(
+                code: .documentOpenInApp,
+                message: "Document \(url.path) is already open in session \(existingID.uuidString)."
+            )
+        }
+        guard !rejectsExistingFile || !FileManager.default.fileExists(atPath: url.path) else {
+            throw EditorError(
+                code: .documentSaveFailed,
+                message: "Document create will not overwrite the existing path \(url.path)."
+            )
+        }
+    }
+
+    private func sessionOperationResult(
+        operation: AgentSessionOperationResult.Operation,
+        sessionID: UUID,
+        session: EditorSession,
+        commandName: String? = nil
+    ) throws -> AgentSessionOperationResult {
+        AgentSessionOperationResult(
+            operation: operation,
+            session: try registry.summary(id: sessionID),
+            commandName: commandName,
+            canUndo: session.commandStack.canUndo,
+            canRedo: session.commandStack.canRedo
+        )
     }
 
     private func requireBatchPreconditions(

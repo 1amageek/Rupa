@@ -1,0 +1,9 @@
+{
+  "jsonrpc": "2.0",
+  "id": "document.create-1",
+  "method": "document.create",
+  "params": {
+    "name": "Agent Created",
+    "outputPath": "/tmp/Agent Created.rupa"
+  }
+}

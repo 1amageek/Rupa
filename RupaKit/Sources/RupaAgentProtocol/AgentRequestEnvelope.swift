@@ -72,6 +72,31 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
              .sessions,
              .cadInteractionQualityAssessment:
             try container.encode(EmptyParams(), forKey: .params)
+        case let .createDocument(name, outputPath):
+            try container.encode(
+                CreateDocumentParams(name: name, outputPath: outputPath),
+                forKey: .params
+            )
+        case let .openDocument(path):
+            try container.encode(OpenDocumentParams(path: path), forKey: .params)
+        case let .closeDocument(sessionID, expectedGeneration, discardUnsavedChanges):
+            try container.encode(
+                CloseDocumentParams(
+                    sessionID: sessionID,
+                    expectedGeneration: expectedGeneration,
+                    discardUnsavedChanges: discardUnsavedChanges
+                ),
+                forKey: .params
+            )
+        case let .resetDocument(sessionID, name, expectedGeneration):
+            try container.encode(
+                ResetDocumentParams(
+                    sessionID: sessionID,
+                    name: name,
+                    expectedGeneration: expectedGeneration
+                ),
+                forKey: .params
+            )
         case let .execute(sessionID, command, expectedGeneration, expectedWorkspaceRevision):
             try container.encode(
                 ExecuteParams(
@@ -189,6 +214,8 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                 forKey: .params
             )
         case let .evaluate(sessionID, expectedGeneration),
+             let .undo(sessionID, expectedGeneration),
+             let .redo(sessionID, expectedGeneration),
              let .measure(sessionID, expectedGeneration),
              let .constructionPlaneSummary(sessionID, expectedGeneration),
              let .designDisplaySnapshot(sessionID, expectedGeneration),
@@ -349,6 +376,32 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
         case "sessions.list":
             try decodeEmptyParams(from: container, method: method)
             return .sessions
+        case "document.create":
+            let payload = try decodeParams(CreateDocumentParams.self, from: container, method: method)
+            return .createDocument(name: payload.name, outputPath: payload.outputPath)
+        case "document.open":
+            let payload = try decodeParams(OpenDocumentParams.self, from: container, method: method)
+            return .openDocument(path: payload.path)
+        case "document.close":
+            let payload = try decodeParams(CloseDocumentParams.self, from: container, method: method)
+            return .closeDocument(
+                sessionID: payload.sessionID,
+                expectedGeneration: payload.expectedGeneration,
+                discardUnsavedChanges: payload.discardUnsavedChanges
+            )
+        case "document.reset":
+            let payload = try decodeParams(ResetDocumentParams.self, from: container, method: method)
+            return .resetDocument(
+                sessionID: payload.sessionID,
+                name: payload.name,
+                expectedGeneration: payload.expectedGeneration
+            )
+        case "history.undo":
+            let payload = try decodeParams(SessionGenerationParams.self, from: container, method: method)
+            return .undo(sessionID: payload.sessionID, expectedGeneration: payload.expectedGeneration)
+        case "history.redo":
+            let payload = try decodeParams(SessionGenerationParams.self, from: container, method: method)
+            return .redo(sessionID: payload.sessionID, expectedGeneration: payload.expectedGeneration)
         case "agent.cadInteractionQualityAssessment":
             try decodeEmptyParams(from: container, method: method)
             return .cadInteractionQualityAssessment
@@ -687,6 +740,39 @@ private struct SessionGenerationParams: AgentRequestParameterPayload, Equatable 
     static let allowedKeys: Set<String> = ["sessionID", "expectedGeneration"]
 
     var sessionID: UUID
+    var expectedGeneration: DocumentGeneration?
+}
+
+private struct CreateDocumentParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = ["name", "outputPath"]
+
+    var name: String
+    var outputPath: String?
+}
+
+private struct OpenDocumentParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = ["path"]
+
+    var path: String
+}
+
+private struct CloseDocumentParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = [
+        "sessionID",
+        "expectedGeneration",
+        "discardUnsavedChanges",
+    ]
+
+    var sessionID: UUID
+    var expectedGeneration: DocumentGeneration?
+    var discardUnsavedChanges: Bool
+}
+
+private struct ResetDocumentParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = ["sessionID", "name", "expectedGeneration"]
+
+    var sessionID: UUID
+    var name: String
     var expectedGeneration: DocumentGeneration?
 }
 

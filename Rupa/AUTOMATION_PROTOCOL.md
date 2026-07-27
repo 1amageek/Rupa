@@ -141,6 +141,10 @@ fixtures pass.
 |---|---|
 | `EmptyParams` | none |
 | `SessionGenerationParams` | `sessionID`, `expectedGeneration?` |
+| `CreateDocumentParams` | `name`, `outputPath?` |
+| `OpenDocumentParams` | `path` |
+| `CloseDocumentParams` | `sessionID`, `expectedGeneration?`, `discardUnsavedChanges` |
+| `ResetDocumentParams` | `sessionID`, `name`, `expectedGeneration?` |
 | `ExecuteParams` | `sessionID`, `command`, `expectedGeneration?` |
 | `ExecuteBatchParams` | `sessionID`, `batch` |
 | `SetParameterExpressionParams` | `sessionID`, `name`, `expression`, `kind`, `defaults`, `expectedGeneration?` |
@@ -162,6 +166,12 @@ fixtures pass.
 | `agent.status` | `EmptyParams` | `AgentStatus` | No |
 | `agent.cadInteractionQualityAssessment` | `EmptyParams` | `CADInteractionQualityAssessmentResult` | No |
 | `sessions.list` | `EmptyParams` | `[WorkspaceSessionSummary]` | No |
+| `document.create` | `CreateDocumentParams` | `AgentSessionOperationResult` | Creates a session and optionally a new file |
+| `document.open` | `OpenDocumentParams` | `AgentSessionOperationResult` | Creates a session from a file |
+| `document.close` | `CloseDocumentParams` | `AgentSessionOperationResult` | Removes a session |
+| `document.reset` | `ResetDocumentParams` | `AgentSessionOperationResult` | Yes; undoable |
+| `history.undo` | `SessionGenerationParams` | `AgentSessionOperationResult` | Yes |
+| `history.redo` | `SessionGenerationParams` | `AgentSessionOperationResult` | Yes |
 | `command.apply` | `ExecuteParams` | `AutomationResult` | Depends on command |
 | `command.applyBatch` | `ExecuteBatchParams` | `AgentBatchResult` | Depends on the validated homogeneous batch effect |
 | `parameter.setExpression` | `SetParameterExpressionParams` | `AutomationResult` | Yes |
@@ -191,6 +201,10 @@ fixtures pass.
 | `selection.selectReferences` | `SelectionReferencesParams` | `SelectionStateResult` | No |
 | `document.save` | `SessionGenerationParams` | `SaveResult` | Persists file state |
 | `document.export` | `ExportParams` | `ExportResult` | Writes export artifact unless `dryRun` is true |
+
+`document.close`, `document.reset`, `history.undo`, and `history.redo` reject a
+missing `expectedGeneration` even though the shared decoded field is optional.
+Closing a dirty session also requires `discardUnsavedChanges: true`.
 
 ## Representative Fixtures
 

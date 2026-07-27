@@ -9,6 +9,26 @@ public enum AgentRequest: Codable, Equatable, Sendable {
     case capabilityRegistry
     case status
     case sessions
+    case createDocument(name: String, outputPath: String?)
+    case openDocument(path: String)
+    case closeDocument(
+        sessionID: UUID,
+        expectedGeneration: DocumentGeneration?,
+        discardUnsavedChanges: Bool
+    )
+    case resetDocument(
+        sessionID: UUID,
+        name: String,
+        expectedGeneration: DocumentGeneration?
+    )
+    case undo(
+        sessionID: UUID,
+        expectedGeneration: DocumentGeneration?
+    )
+    case redo(
+        sessionID: UUID,
+        expectedGeneration: DocumentGeneration?
+    )
     case cadInteractionQualityAssessment
     case execute(
         sessionID: UUID,
@@ -215,6 +235,7 @@ public enum AgentResponse: Codable, Equatable, Sendable {
     case capabilityRegistry([CapabilityDescriptor])
     case status(AgentStatus)
     case sessions([WorkspaceSessionSummary])
+    case sessionOperation(AgentSessionOperationResult)
     case cadInteractionQualityAssessment(CADInteractionQualityAssessmentResult)
     case command(AutomationResult)
     case batch(AgentBatchResult)
@@ -260,6 +281,18 @@ public extension AgentRequest {
             "agent.status"
         case .sessions:
             "sessions.list"
+        case .createDocument:
+            "document.create"
+        case .openDocument:
+            "document.open"
+        case .closeDocument:
+            "document.close"
+        case .resetDocument:
+            "document.reset"
+        case .undo:
+            "history.undo"
+        case .redo:
+            "history.redo"
         case .cadInteractionQualityAssessment:
             "agent.cadInteractionQualityAssessment"
         case .execute:

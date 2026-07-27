@@ -1,0 +1,11 @@
+{
+  "jsonrpc": "2.0",
+  "id": "history.redo-1",
+  "method": "history.redo",
+  "params": {
+    "sessionID": "00000000-0000-0000-0000-000000000001",
+    "expectedGeneration": {
+      "value": 3
+    }
+  }
+}

@@ -107,6 +107,100 @@ struct AgentSocketListenerTests {
         }
     }
 
+    @Test(.timeLimit(.minutes(1))) func routesDocumentLifecycleAndHistoryThroughClient() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
+        let documentURL = temporaryDirectory.appendingPathComponent("Socket Lifecycle.rupa")
+
+        try await withRunningListener(
+            controller: AgentCommandController(),
+            socketURL: socketURL
+        ) { _, client in
+            let createResult = try requireSessionOperation(
+                await client.send(
+                    .createDocument(name: "Socket Lifecycle", outputPath: documentURL.path)
+                ),
+                operation: .create
+            )
+            let sessionID = createResult.session.id
+
+            guard case .command = try await client.send(
+                .execute(
+                    sessionID: sessionID,
+                    command: .renameDocument(name: "Socket Renamed"),
+                    expectedGeneration: DocumentGeneration(0)
+                )
+            ) else {
+                Issue.record("Expected socket rename command result.")
+                return
+            }
+
+            let undoResult = try requireSessionOperation(
+                await client.send(
+                    .undo(
+                        sessionID: sessionID,
+                        expectedGeneration: DocumentGeneration(1)
+                    )
+                ),
+                operation: .undo
+            )
+            #expect(undoResult.session.displayName == "Socket Lifecycle")
+
+            let redoResult = try requireSessionOperation(
+                await client.send(
+                    .redo(
+                        sessionID: sessionID,
+                        expectedGeneration: DocumentGeneration(2)
+                    )
+                ),
+                operation: .redo
+            )
+            #expect(redoResult.session.displayName == "Socket Renamed")
+
+            let resetResult = try requireSessionOperation(
+                await client.send(
+                    .resetDocument(
+                        sessionID: sessionID,
+                        name: "Socket Reset",
+                        expectedGeneration: DocumentGeneration(3)
+                    )
+                ),
+                operation: .reset
+            )
+            #expect(resetResult.session.displayName == "Socket Reset")
+
+            guard case .save = try await client.send(
+                .save(
+                    sessionID: sessionID,
+                    expectedGeneration: DocumentGeneration(4)
+                )
+            ) else {
+                Issue.record("Expected socket save result.")
+                return
+            }
+
+            _ = try requireSessionOperation(
+                await client.send(
+                    .closeDocument(
+                        sessionID: sessionID,
+                        expectedGeneration: DocumentGeneration(4),
+                        discardUnsavedChanges: false
+                    )
+                ),
+                operation: .close
+            )
+            let openResult = try requireSessionOperation(
+                await client.send(.openDocument(path: documentURL.path)),
+                operation: .open
+            )
+            #expect(openResult.session.displayName == "Socket Reset")
+            #expect(openResult.session.id != sessionID)
+        }
+    }
+
     @Test(.timeLimit(.minutes(1))) func stopRemovesSocketAndRejectsClient() async throws {
         let temporaryDirectory = try makeTemporaryDirectory()
         defer {
@@ -241,6 +335,21 @@ struct AgentSocketListenerTests {
     ) async throws -> AgentResponse {
         let client = AgentClient(socketPath: socketPath)
         return try await client.send(request)
+    }
+
+    private func requireSessionOperation(
+        _ response: AgentResponse,
+        operation: AgentSessionOperationResult.Operation
+    ) throws -> AgentSessionOperationResult {
+        guard case .sessionOperation(let result) = response else {
+            Issue.record("Expected session operation result for \(operation.rawValue).")
+            throw EditorError(
+                code: .commandFailed,
+                message: "Expected session operation result."
+            )
+        }
+        #expect(result.operation == operation)
+        return result
     }
 
     private func makeTemporaryDirectory() throws -> URL {

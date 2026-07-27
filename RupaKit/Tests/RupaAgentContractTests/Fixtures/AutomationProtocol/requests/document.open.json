@@ -1,0 +1,8 @@
+{
+  "jsonrpc": "2.0",
+  "id": "document.open-1",
+  "method": "document.open",
+  "params": {
+    "path": "/tmp/Agent Created.rupa"
+  }
+}
