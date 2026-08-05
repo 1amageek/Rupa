@@ -475,7 +475,7 @@ import Testing
         .offsetCurve(
             target: target,
             distance: .length(2.0, .millimeter),
-            options: OffsetCurveOptions(gapFill: .linear),
+            options: OffsetCurveOptions(),
             vertexHandle: nil
         )
     )
@@ -531,7 +531,6 @@ import Testing
             target: target,
             distance: .length(2.0, .millimeter),
             options: OffsetCurveOptions(
-                gapFill: .linear,
                 supportTarget: supportFaceTarget
             ),
             vertexHandle: nil
@@ -589,7 +588,7 @@ import Testing
         .offsetCurve(
             target: edgeTarget,
             distance: .length(2.0, .millimeter),
-            options: OffsetCurveOptions(gapFill: .linear),
+            options: OffsetCurveOptions(),
             vertexHandle: nil
         )
     )
@@ -601,20 +600,15 @@ import Testing
         return
     }
     guard case .face(let supportComponentID) = supportFaceTarget.component,
-          let supportPersistentNameString = supportComponentID.generatedTopologyPersistentName else {
+          let supportSubshapeID = supportComponentID.generatedTopologySubshapeID else {
         Issue.record("Support target must be a generated topology face target.")
         return
     }
-    let expectedSupportPersistentName = try GeneratedTopologyPersistentNameParser().parse(
-        supportPersistentNameString,
-        operationName: "Offset Edge"
-    )
 
     #expect(result.commandName == "offsetCurve")
     #expect(result.didMutate)
     #expect(edgeOffset.target == EdgeOffsetTargetReference(featureID: bodyFeatureID))
-    #expect(edgeOffset.supportFacePersistentName == expectedSupportPersistentName)
-    #expect(edgeOffset.gapFill == .linear)
+    #expect(edgeOffset.supportFace.subshapeID == supportSubshapeID)
     #expect(session.selection.selectedTargets == [supportFaceTarget, edgeTarget])
     #expect(session.evaluationStatus == .valid)
 }
@@ -651,7 +645,7 @@ import Testing
         .offsetCurve(
             target: edgeTarget,
             distance: .length(2.0, .millimeter),
-            options: OffsetCurveOptions(gapFill: .linear),
+            options: OffsetCurveOptions(),
             vertexHandle: nil
         )
     )
@@ -662,16 +656,12 @@ import Testing
         Issue.record("Single selected cap edge Offset Curve must create an EdgeOffset feature.")
         return
     }
-    let expectedSupportPersistentName = try GeneratedTopologyPersistentNameParser().parse(
-        supportFaceEntry.persistentName,
-        operationName: "Offset Edge"
-    )
+    let expectedSupportFace = try #require(supportFaceEntry.stableReference)
 
     #expect(result.commandName == "offsetCurve")
     #expect(result.didMutate)
     #expect(edgeOffset.target == EdgeOffsetTargetReference(featureID: bodyFeatureID))
-    #expect(edgeOffset.supportFacePersistentName == expectedSupportPersistentName)
-    #expect(edgeOffset.gapFill == .linear)
+    #expect(edgeOffset.supportFace == expectedSupportFace)
     #expect(session.selection.selectedTargets == [edgeTarget])
     #expect(session.evaluationStatus == .valid)
 }
@@ -1016,17 +1006,15 @@ import Testing
             name: "Measured Curved Sweep Path",
             plane: .yz,
             center: SketchPoint(
-                x: .length(0.0, .millimeter),
+                x: .length(60.0, .millimeter),
                 y: .length(0.0, .millimeter)
             ),
             radius: .length(60.0, .millimeter),
-            // Start the arc at 90 degrees so the path start sits directly
-            // above the profile-plane origin: swept sections stay anchored to
-            // the path start, so the origin-centered profile keeps its drawn
-            // position (the former 0-degree start began 60 mm off-plane and
-            // relied on the old recentering behavior).
-            startAngle: .angle(90.0, .degree),
-            endAngle: .angle(180.0, .degree)
+            // The exact circular path-normal sweep requires the path start to
+            // lie on the section plane, so the arc starts at the profile
+            // origin and curves away from the plane.
+            startAngle: .angle(180.0, .degree),
+            endAngle: .angle(270.0, .degree)
         )
     )
     let pathID = try #require(session.document.cadDocument.designGraph.order.last)
@@ -1089,34 +1077,25 @@ import Testing
         )
     )
     let pathID = try #require(session.document.cadDocument.designGraph.order.last)
-    _ = try session.execute(
-        .createSweep(
-            name: "Measured Twisted Scaled Sweep",
-            sections: [.profile(ProfileReference(featureID: profileID))],
-            path: SweepPathReference(featureID: pathID),
-            guides: [],
-            targets: [],
-            options: SweepOptions(
-                twistAngle: .angle(90.0, .degree),
-                endScale: .constant(.scalar(0.5))
+    do {
+        _ = try session.execute(
+            .createSweep(
+                name: "Measured Twisted Scaled Sweep",
+                sections: [.profile(ProfileReference(featureID: profileID))],
+                path: SweepPathReference(featureID: pathID),
+                guides: [],
+                targets: [],
+                options: SweepOptions(
+                    twistAngle: .angle(90.0, .degree),
+                    endScale: .constant(.scalar(0.5))
+                )
             )
         )
-    )
-
-    let result = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
-    #expect(result.diagnostics.map(\.message) == [])
-    let solid = try #require(result.solids.first)
-    let pathLength = try linearDimensionMeters(.sweepPathLength, in: solid)
-    let surfaceArea = try #require(solid.surfaceAreaSquareMeters)
-
-    #expect(result.counts.sketches == 2)
-    #expect(result.counts.profiles == 1)
-    #expect(result.counts.solids == 1)
-    #expect(abs(pathLength - 0.02) < 1.0e-12)
-    #expect(solid.volumeCubicMeters > 0.0)
-    #expect(solid.volumeCubicMeters < 0.00000016)
-    #expect(surfaceArea > 0.0)
-    #expect(result.diagnostics.isEmpty)
+        Issue.record("Exact kernel must reject sweep twist without an exact rotational section law.")
+    } catch let error as EditorError {
+        #expect(error.code == .evaluationFailed)
+        #expect(error.message.contains("sweepTwistUnavailable"))
+    }
 }
 
 @MainActor
@@ -1245,32 +1224,25 @@ import Testing
         )
     )
     let rightGuideID = try #require(session.document.cadDocument.designGraph.order.last)
-    _ = try session.execute(
-        .createSweep(
-            name: "Measured Multiple Point Guided Sweep",
-            sections: [.profile(ProfileReference(featureID: profileID))],
-            path: SweepPathReference(featureID: pathID),
-            guides: [
-                SweepGuideReference(featureID: topGuideID),
-                SweepGuideReference(featureID: rightGuideID),
-            ],
-            targets: [],
-            options: SweepOptions(guideMethod: .point)
+    do {
+        _ = try session.execute(
+            .createSweep(
+                name: "Measured Multiple Point Guided Sweep",
+                sections: [.profile(ProfileReference(featureID: profileID))],
+                path: SweepPathReference(featureID: pathID),
+                guides: [
+                    SweepGuideReference(featureID: topGuideID),
+                    SweepGuideReference(featureID: rightGuideID),
+                ],
+                targets: [],
+                options: SweepOptions(guideMethod: .point)
+            )
         )
-    )
-
-    let result = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
-    let solid = try #require(result.solids.first)
-    let pathLength = try linearDimensionMeters(.sweepPathLength, in: solid)
-    let surfaceArea = try #require(solid.surfaceAreaSquareMeters)
-
-    #expect(result.counts.sketches == 4)
-    #expect(result.counts.profiles == 1)
-    #expect(result.counts.solids == 1)
-    #expect(abs(pathLength - 0.02) < 1.0e-12)
-    #expect(solid.volumeCubicMeters > 0.00000016)
-    #expect(surfaceArea > 0.0)
-    #expect(result.diagnostics.isEmpty)
+        Issue.record("Exact kernel must reject multi-guide sweeps without exact guide-solved surfaces.")
+    } catch let error as EditorError {
+        #expect(error.code == .evaluationFailed)
+        #expect(error.message.contains("sweepGuideConstraintUnavailable"))
+    }
 }
 
 @MainActor
@@ -1893,7 +1865,10 @@ import Testing
         inputs: [FeatureInput(featureID: sourceSectionID, role: .curve)],
         outputs: [FeatureOutput(role: .curve)]
     )
-    try document.cadDocument.appendFeature(generatedSection)
+    try document.cadDocument.appendFeature(
+        generatedSection,
+        tolerance: document.modelingSettings.tolerance
+    )
     let generatedNodeID = try document.productMetadata.appendSceneNodeToFirstRoot(
         name: "Generated Offset Section",
         reference: .feature(generatedSectionID)
@@ -2247,9 +2222,11 @@ import Testing
     #expect(session.selectedTool == .select)
     #expect(session.selectedSceneNode?.reference == .body(faceKnifeFeatureID))
     #expect(session.polygonToolState.cutsFaces)
-    #expect(faceKnifeFaces.count == 7)
+    #expect(faceKnifeFaces.count == 2)
+    #expect(faceKnifeFaces.contains { $0.generatedRole == "faceKnife.centerFace" })
+    #expect(faceKnifeFaces.contains { $0.generatedRole == "faceKnife.ringFace" })
     #expect(faceKnifeFaces.contains {
-        $0.generatedRole == "faceKnife" && $0.subshapeRole == "centerFace"
+        $0.generatedRole == "faceKnife.centerFace"
     })
     #expect(session.evaluationStatus == .valid)
 }
@@ -3332,7 +3309,11 @@ import Testing
     let result = try session.execute(
         .addSketchConstraint(
             featureID: setup.featureID,
-            constraint: .tangent(setup.lineID, setup.circleID)
+            constraint: .tangent(.lineCircular(
+                line: setup.lineID,
+                circular: setup.circleID,
+                side: .left
+            ))
         )
     )
 
@@ -3343,7 +3324,11 @@ import Testing
     #expect(result.commandName == "addSketchConstraint")
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(1))
-    #expect(sketch.constraints == [.tangent(setup.lineID, setup.circleID)])
+    #expect(sketch.constraints == [.tangent(.lineCircular(
+        line: setup.lineID,
+        circular: setup.circleID,
+        side: .left
+    ))])
     #expect(abs(center.x - 0.005) < 1.0e-12)
     #expect(abs(center.y - radius) < 1.0e-12)
     #expect(abs(radius - 0.002) < 1.0e-12)
@@ -3560,20 +3545,15 @@ import Testing
     let rootID = try #require(metadata.rootSceneNodeIDs.first)
     metadata.sceneNodes[rootID]?.reference = .feature(FeatureID())
 
-    let result = try session.execute(.replaceProductMetadata(metadata))
-
-    guard case .failed(let message) = session.evaluationStatus else {
-        #expect(Bool(false))
-        return
+    do {
+        _ = try session.execute(.replaceProductMetadata(metadata))
+        Issue.record("Invalid product metadata must fail the transaction atomically.")
+    } catch let error as EditorError {
+        #expect(error.code == .evaluationFailed)
+        #expect(error.message.contains("existing CAD feature"))
     }
-    #expect(result.didMutate)
-    #expect(result.generation == DocumentGeneration(1))
-    #expect(message.contains("existing CAD feature"))
-    #expect(session.diagnostics.first?.severity == .error)
-    #expect(session.renderInvalidation == RenderInvalidation(
-        generation: DocumentGeneration(1),
-        reason: .evaluationFailed
-    ))
+    #expect(session.generation == DocumentGeneration(0))
+    #expect(!session.commandStack.canUndo)
 }
 
 @MainActor
@@ -3812,24 +3792,21 @@ import Testing
 @Test func parameterKindMismatchPublishesDiagnostics() async throws {
     let session = EditorSession()
 
-    _ = try session.execute(
-        .upsertParameter(
-            name: "bad",
-            expression: .constant(.length(1.0, unit: .meter)),
-            kind: .angle
+    do {
+        _ = try session.execute(
+            .upsertParameter(
+                name: "bad",
+                expression: .constant(.length(1.0, unit: .meter)),
+                kind: .angle
+            )
         )
-    )
-
-    guard case .failed(let message) = session.evaluationStatus else {
-        #expect(Bool(false))
-        return
+        Issue.record("Parameter kind mismatch must fail the transaction atomically.")
+    } catch let error as EditorError {
+        #expect(error.code == .evaluationFailed)
+        #expect(error.message.contains("kindMismatch"))
     }
-    #expect(message.contains("kindMismatch"))
-    #expect(session.diagnostics.first?.severity == .error)
-    #expect(session.renderInvalidation == RenderInvalidation(
-        generation: DocumentGeneration(1),
-        reason: .evaluationFailed
-    ))
+    #expect(session.generation == DocumentGeneration(0))
+    #expect(!session.commandStack.canUndo)
 }
 
 @MainActor
@@ -5533,23 +5510,29 @@ import Testing
     )
 
     var document = session.document
+    let cloneTopology = try TopologySnapshotService().snapshot(document: session.document)
+    let cloneStartFace = try #require(cloneTopology.entries.first {
+        $0.kind == .face
+            && $0.sourceFeatureID == firstCloneBodyFeatureID.description
+            && $0.generatedRole == "startFace"
+    })
+    let cloneStartFaceReference = try #require(cloneStartFace.stableReference)
     let dependentFeatureID = FeatureID()
     let dependentFeature = FeatureNode(
         id: dependentFeatureID,
         name: "Downstream Output Dependent",
         operation: .faceLoopOffset(FaceLoopOffsetFeature(
             target: FaceLoopOffsetTargetReference(featureID: firstCloneBodyFeatureID),
-            facePersistentName: PersistentName(components: [
-                .feature(firstCloneBodyFeatureID),
-                .generated("extrude"),
-                .subshape("startFace"),
-            ]),
+            face: cloneStartFaceReference,
             distance: .length(1.0, .millimeter)
         )),
         inputs: [FeatureInput(featureID: firstCloneBodyFeatureID, role: .target)],
         outputs: [FeatureOutput(role: .body)]
     )
-    try document.cadDocument.appendFeature(dependentFeature)
+    try document.cadDocument.appendFeature(
+        dependentFeature,
+        tolerance: document.modelingSettings.tolerance
+    )
     let summary = PatternArraySummaryService().summarize(
         document: document,
         generation: session.generation,
@@ -5739,15 +5722,16 @@ import Testing
     secondSource.outputInstanceIDs = [firstOutputInstanceID]
     metadata.patternArrays[secondSource.id] = secondSource
 
-    let result = try session.execute(.replaceProductMetadata(metadata))
-
-    guard case .failed(let message) = session.evaluationStatus else {
-        #expect(Bool(false))
-        return
+    let generationBeforeInvalidReplace = session.generation
+    do {
+        _ = try session.execute(.replaceProductMetadata(metadata))
+        Issue.record("Conflicting pattern ownership must fail the transaction atomically.")
+    } catch let error as EditorError {
+        #expect(error.code == .evaluationFailed)
+        #expect(error.message.contains("owned by exactly one pattern source"))
     }
-    #expect(result.didMutate)
-    #expect(message.contains("owned by exactly one pattern source"))
-    #expect(session.diagnostics.first?.severity == .error)
+    #expect(session.generation == generationBeforeInvalidReplace)
+    #expect(session.evaluationStatus == .valid)
 }
 
 @MainActor
@@ -5802,15 +5786,16 @@ import Testing
     metadata.sceneNodes[secondSource.rootSceneNodeID]?.childIDs = [firstOutputSceneNodeID]
     metadata.patternArrays[secondSource.id] = secondSource
 
-    let result = try session.execute(.replaceProductMetadata(metadata))
-
-    guard case .failed(let message) = session.evaluationStatus else {
-        #expect(Bool(false))
-        return
+    let generationBeforeInvalidReplace = session.generation
+    do {
+        _ = try session.execute(.replaceProductMetadata(metadata))
+        Issue.record("Conflicting pattern ownership must fail the transaction atomically.")
+    } catch let error as EditorError {
+        #expect(error.code == .evaluationFailed)
+        #expect(error.message.contains("output scene nodes must be owned by exactly one pattern source"))
     }
-    #expect(result.didMutate)
-    #expect(message.contains("output scene nodes must be owned by exactly one pattern source"))
-    #expect(session.diagnostics.first?.severity == .error)
+    #expect(session.generation == generationBeforeInvalidReplace)
+    #expect(session.evaluationStatus == .valid)
 }
 
 @MainActor
@@ -5863,15 +5848,16 @@ import Testing
     secondSource.outputFeatureIDs = firstSource.outputFeatureIDs
     metadata.patternArrays[secondSource.id] = secondSource
 
-    let result = try session.execute(.replaceProductMetadata(metadata))
-
-    guard case .failed(let message) = session.evaluationStatus else {
-        #expect(Bool(false))
-        return
+    let generationBeforeInvalidReplace = session.generation
+    do {
+        _ = try session.execute(.replaceProductMetadata(metadata))
+        Issue.record("Conflicting pattern ownership must fail the transaction atomically.")
+    } catch let error as EditorError {
+        #expect(error.code == .evaluationFailed)
+        #expect(error.message.contains("output features must be owned by exactly one pattern source"))
     }
-    #expect(result.didMutate)
-    #expect(message.contains("output features must be owned by exactly one pattern source"))
-    #expect(session.diagnostics.first?.severity == .error)
+    #expect(session.generation == generationBeforeInvalidReplace)
+    #expect(session.evaluationStatus == .valid)
 }
 
 @MainActor

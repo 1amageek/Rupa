@@ -191,7 +191,7 @@ public struct SurfaceAnalysisResult: Codable, Equatable, Sendable {
 
     public struct FaceAnalysis: Codable, Equatable, Sendable {
         public var faceID: String
-        public var facePersistentNames: [String]
+        public var faceSubshapeIDs: [String]
         public var edgePersistentNames: [String]
         public var trimBoundaries: [TrimBoundary]
         public var sourceFeatureID: String?
@@ -214,7 +214,7 @@ public struct SurfaceAnalysisResult: Codable, Equatable, Sendable {
 
         public init(
             faceID: String,
-            facePersistentNames: [String] = [],
+            faceSubshapeIDs: [String] = [],
             edgePersistentNames: [String] = [],
             trimBoundaries: [TrimBoundary] = [],
             sourceFeatureID: String? = nil,
@@ -236,7 +236,7 @@ public struct SurfaceAnalysisResult: Codable, Equatable, Sendable {
             maxAbsGaussianCurvature: Double
         ) {
             self.faceID = faceID
-            self.facePersistentNames = facePersistentNames
+            self.faceSubshapeIDs = faceSubshapeIDs
             self.edgePersistentNames = edgePersistentNames
             self.trimBoundaries = trimBoundaries
             self.sourceFeatureID = sourceFeatureID

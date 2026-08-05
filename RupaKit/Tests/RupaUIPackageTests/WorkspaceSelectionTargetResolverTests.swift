@@ -67,9 +67,9 @@ import Testing
         Issue.record("Expected a vertex component.")
         return
     }
-    #expect(faceComponentID.generatedTopologyPersistentName != nil)
-    #expect(edgeComponentID.generatedTopologyPersistentName != nil)
-    #expect(vertexComponentID.generatedTopologyPersistentName != nil)
+    #expect(faceComponentID.generatedTopologySubshapeID != nil)
+    #expect(edgeComponentID.generatedTopologySubshapeID != nil)
+    #expect(vertexComponentID.generatedTopologySubshapeID != nil)
 }
 
 @Test func workspaceSelectionTargetResolverDeduplicatesObjectTargetsThroughSceneRows() {

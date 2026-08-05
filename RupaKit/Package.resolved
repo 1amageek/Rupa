@@ -1,5 +1,5 @@
 {
-  "originHash" : "29def6bacea52441b412d2be44cc24fc5e09b11721f71aaffb669b792f1c1841",
+  "originHash" : "2aa61a1ced700f28f0bd9b9da2031c5a7888e010bb64a13230c92fde8725892f",
   "pins" : [
     {
       "identity" : "mac-component",
@@ -26,6 +26,14 @@
       "state" : {
         "revision" : "fea17c02d767f46b23070fdfdacc28a03a39232a",
         "version" : "1.5.1"
+      }
+    },
+    {
+      "identity" : "swift-openusd",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/1amageek/swift-OpenUSD.git",
+      "state" : {
+        "revision" : "2c943c75ef9c0c32974663b13441a0972bec7d3e"
       }
     }
   ],

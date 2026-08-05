@@ -11,7 +11,7 @@ struct ObjectDimensionSourceResolver: Sendable {
         case .object, .face(_):
             break
         case .edge(let componentID):
-            guard componentID.generatedTopologyPersistentName != nil else {
+            guard componentID.generatedTopologySubshapeID != nil else {
                 throw EditorError(
                     code: .commandInvalid,
                     message: "Object dimension requires an object, face, or generated extrusion depth edge target."
@@ -114,17 +114,19 @@ struct ObjectDimensionSourceResolver: Sendable {
         guard case .edge(let componentID) = target.component else {
             return
         }
-        guard let persistentName = componentID.generatedTopologyPersistentName else {
+        guard let subshapeID = componentID.generatedTopologySubshapeID else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Object dimension requires a generated extrusion depth edge target."
             )
         }
+        let identity = GeneratedSubshapeIdentity.string(for: subshapeID)
+        let sceneNodeDescription = target.sceneNodeID.description
         let topology = try TopologySnapshotService().snapshot(document: document)
-        guard let entry = topology.entries.first(where: {
-            $0.kind == .edge &&
-                $0.sceneNodeID == target.sceneNodeID.description &&
-                $0.persistentName == persistentName
+        guard let entry = topology.entries.first(where: { entry in
+            entry.kind == .edge &&
+                entry.sceneNodeID == sceneNodeDescription &&
+                entry.subshapeID == identity
         }) else {
             throw EditorError(
                 code: .referenceUnresolved,

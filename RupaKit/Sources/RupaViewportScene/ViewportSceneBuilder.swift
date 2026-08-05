@@ -110,7 +110,7 @@ public struct ViewportSceneBuilder {
                     depthMeters: extrudeSnapshot.depthMeters,
                     direction: extrudeSnapshot.direction,
                     bodyID: bodyDisplaySnapshots[featureID]?.bodyID,
-                    persistentName: bodyDisplaySnapshots[featureID]?.persistentName,
+                    subshapeID: bodyDisplaySnapshots[featureID]?.subshapeID,
                     declaredObjectTypeID: object?.typeID,
                     declaredProperties: object?.properties ?? ObjectPropertySet()
                 )
@@ -152,7 +152,7 @@ public struct ViewportSceneBuilder {
                         depthMeters: sweepSnapshot.depthMeters,
                         direction: sweepSnapshot.direction,
                         bodyID: bodyDisplaySnapshots[featureID]?.bodyID,
-                        persistentName: bodyDisplaySnapshots[featureID]?.persistentName,
+                        subshapeID: bodyDisplaySnapshots[featureID]?.subshapeID,
                         declaredObjectTypeID: object?.typeID,
                         declaredProperties: object?.properties ?? ObjectPropertySet()
                     )
@@ -313,6 +313,32 @@ public struct ViewportSceneBuilder {
                 return nil
             case .curveTrim:
                 return nil
+            case .curveExtend, .curveMatch:
+                return nil
+            case .surfaceTrim(let surfaceTrim):
+                return evaluatedMeshBodyItem(
+                    featureID: featureID,
+                    sourceFeatureID: surfaceTrim.target.featureID,
+                    document: document,
+                    surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
+                    surfaceTrimEndpointDisplaysByFeatureID: surfaceTrimEndpointDisplaysByFeatureID,
+                    surfaceTrimControlPointDisplaysByFeatureID: surfaceTrimControlPointDisplaysByFeatureID,
+                    surfaceTrimKnotDisplaysByFeatureID: surfaceTrimKnotDisplaysByFeatureID,
+                    surfaceTrimSpanDisplaysByFeatureID: surfaceTrimSpanDisplaysByFeatureID,
+                    surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
+                    bodyDisplaySnapshots: bodyDisplaySnapshots
+                )
+            case .primitive, .patchSurface, .faceOffset, .faceMove, .edgeMove, .vertexMove,
+                 .linearPattern, .radialPattern, .gridPattern, .curveDrivenPattern,
+                 .chamfer, .fillet, .g2Blend, .setbackCorner, .shell, .thicken,
+                 .bridgeSurface, .surfaceOffset, .surfaceExtend, .surfaceMatch:
+                return evaluatedMeshBodyItem(
+                    featureID: featureID,
+                    sourceFeatureID: nil,
+                    document: document,
+                    surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
+                    bodyDisplaySnapshots: bodyDisplaySnapshots
+                )
             }
         }
         let resolvedBaseItems = baseItems.map { item in
@@ -880,8 +906,11 @@ public struct ViewportSceneBuilder {
                 var displays: [ViewportSurfaceControlPointDisplay] = []
                 for patch in source.patches {
                     for controlPoint in patch.controlPoints where controlPoint.isPointDisplayVisible {
+                        guard let selectionReference = controlPoint.selectionReference else {
+                            continue
+                        }
                         displays.append(ViewportSurfaceControlPointDisplay(
-                            selectionReference: controlPoint.selectionReference,
+                            selectionReference: selectionReference,
                             point: Point3D(
                                 x: controlPoint.point.x,
                                 y: controlPoint.point.y,
@@ -906,29 +935,25 @@ public struct ViewportSceneBuilder {
     private func surfaceTrimEndpointDisplaysByFeatureID(
         in document: DesignDocument
     ) -> [FeatureID: [ViewportSurfaceTrimEndpointDisplay]] {
+        let tolerance = document.modelingSettings.tolerance
         var displaysByFeatureID: [FeatureID: [ViewportSurfaceTrimEndpointDisplay]] = [:]
-        for featureID in document.cadDocument.designGraph.order {
-            guard let feature = document.cadDocument.designGraph.nodes[featureID],
-                  case let .bSplineSurface(surfaceFeature) = feature.operation,
-                  surfaceFeature.trimLoops.isEmpty == false else {
-                continue
-            }
+        for (featureID, trimFeature, surfaceFeature) in authoredSurfaceTrims(in: document) {
             do {
-                let surfaceReference = SurfaceReference(faceName: PersistentName(components: [
-                    .feature(featureID),
-                    .generated("bSplineSurface"),
-                    .subshape("patch:0:face"),
-                ]))
+                let surfaceReference = SurfaceReference(subshape: trimFeature.target.face)
                 var displays: [ViewportSurfaceTrimEndpointDisplay] = []
-                for (loopIndex, trimLoop) in surfaceFeature.trimLoops.enumerated() {
-                    for (edgeIndex, edge) in trimLoop.edges.enumerated() {
+                for (loopIndex, trimLoop) in trimFeature.loops.enumerated() {
+                    for (edgeIndex, parameterCurve) in trimLoop.parameterCurves.enumerated() {
                         let selectionReference = SelectionReference.surface(.trim(SurfaceTrimReference(
                             surface: surfaceReference,
                             loopIndex: loopIndex,
                             edgeIndex: edgeIndex
                         )))
-                        let start = try edge.startParameter()
-                        let startGeometry = try surfaceFeature.surface.differentialGeometry(atU: start.u, v: start.v)
+                        let start = try parameterCurve.startParameter(tolerance: tolerance)
+                        let startGeometry = try surfaceFeature.surface.differentialGeometry(
+                            atU: start.u,
+                            v: start.v,
+                            tolerance: tolerance
+                        )
                         displays.append(ViewportSurfaceTrimEndpointDisplay(
                             selectionReference: selectionReference,
                             endpoint: .start,
@@ -938,8 +963,12 @@ public struct ViewportSceneBuilder {
                             tangentU: startGeometry.tangentU,
                             tangentV: startGeometry.tangentV
                         ))
-                        let end = try edge.endParameter()
-                        let endGeometry = try surfaceFeature.surface.differentialGeometry(atU: end.u, v: end.v)
+                        let end = try parameterCurve.endParameter(tolerance: tolerance)
+                        let endGeometry = try surfaceFeature.surface.differentialGeometry(
+                            atU: end.u,
+                            v: end.v,
+                            tolerance: tolerance
+                        )
                         displays.append(ViewportSurfaceTrimEndpointDisplay(
                             selectionReference: selectionReference,
                             endpoint: .end,
@@ -961,34 +990,47 @@ public struct ViewportSceneBuilder {
         return displaysByFeatureID
     }
 
+    /// Authored trim features paired with their target B-spline surface.
+    /// Display maps are keyed by the trim feature ID because the trim node
+    /// owns the visible body once it supersedes its target surface.
+    private func authoredSurfaceTrims(
+        in document: DesignDocument
+    ) -> [(featureID: FeatureID, trim: SurfaceTrimFeature, surface: BSplineSurfaceFeature)] {
+        var trims: [(featureID: FeatureID, trim: SurfaceTrimFeature, surface: BSplineSurfaceFeature)] = []
+        for featureID in document.cadDocument.designGraph.order {
+            guard let feature = document.cadDocument.designGraph.nodes[featureID],
+                  case let .surfaceTrim(trimFeature) = feature.operation,
+                  trimFeature.loops.isEmpty == false,
+                  let surfaceNode = document.cadDocument.designGraph.nodes[trimFeature.target.featureID],
+                  case let .bSplineSurface(surfaceFeature) = surfaceNode.operation else {
+                continue
+            }
+            trims.append((featureID, trimFeature, surfaceFeature))
+        }
+        return trims
+    }
+
     private func surfaceTrimControlPointDisplaysByFeatureID(
         in document: DesignDocument
     ) -> [FeatureID: [ViewportSurfaceTrimControlPointDisplay]] {
+        let tolerance = document.modelingSettings.tolerance
         var displaysByFeatureID: [FeatureID: [ViewportSurfaceTrimControlPointDisplay]] = [:]
-        for featureID in document.cadDocument.designGraph.order {
-            guard let feature = document.cadDocument.designGraph.nodes[featureID],
-                  case let .bSplineSurface(surfaceFeature) = feature.operation,
-                  surfaceFeature.trimLoops.isEmpty == false else {
-                continue
-            }
+        for (featureID, trimFeature, surfaceFeature) in authoredSurfaceTrims(in: document) {
             do {
-                let surfaceReference = SurfaceReference(faceName: PersistentName(components: [
-                    .feature(featureID),
-                    .generated("bSplineSurface"),
-                    .subshape("patch:0:face"),
-                ]))
+                let surfaceReference = SurfaceReference(subshape: trimFeature.target.face)
                 var displays: [ViewportSurfaceTrimControlPointDisplay] = []
-                for (loopIndex, trimLoop) in surfaceFeature.trimLoops.enumerated() {
-                    for (edgeIndex, edge) in trimLoop.edges.enumerated() {
+                for (loopIndex, trimLoop) in trimFeature.loops.enumerated() {
+                    for (edgeIndex, parameterCurve) in trimLoop.parameterCurves.enumerated() {
                         let selectionReference = SelectionReference.surface(.trim(SurfaceTrimReference(
                             surface: surfaceReference,
                             loopIndex: loopIndex,
                             edgeIndex: edgeIndex
                         )))
-                        for controlPoint in surfaceTrimControlPointParameters(edge.parameterCurve) {
+                        for controlPoint in surfaceTrimControlPointParameters(parameterCurve) {
                             let geometry = try surfaceFeature.surface.differentialGeometry(
                                 atU: controlPoint.parameter.u,
-                                v: controlPoint.parameter.v
+                                v: controlPoint.parameter.v,
+                                tolerance: tolerance
                             )
                             displays.append(ViewportSurfaceTrimControlPointDisplay(
                                 selectionReference: selectionReference,
@@ -1033,20 +1075,26 @@ public struct ViewportSceneBuilder {
                 let point = curve.controlPoints[index]
                 return (index, SurfaceParameter(u: point.x, v: point.y))
             }
+        case .affine, .harmonic, .sphericalGreatCircle,
+             .certifiedImplicit, .certifiedAnalyticImplicit, .certifiedAnalyticPair,
+             .projectedAnalytic, .periodicTranslation:
+            return []
         }
     }
 
     private func surfaceKnotDisplaysByFeatureID(
         in document: DesignDocument
     ) -> [FeatureID: [ViewportSurfaceKnotDisplay]] {
+        let tolerance = document.modelingSettings.tolerance
+        let patchFaceReferences = bSplineSurfacePatchFaceReferences(in: document)
         var displaysByFeatureID: [FeatureID: [ViewportSurfaceKnotDisplay]] = [:]
         for featureID in document.cadDocument.designGraph.order {
             guard let feature = document.cadDocument.designGraph.nodes[featureID],
-                  case let .bSplineSurface(surfaceFeature) = feature.operation else {
+                  case let .bSplineSurface(surfaceFeature) = feature.operation,
+                  let surfaceReference = patchFaceReferences[featureID] else {
                 continue
             }
             do {
-                let surfaceReference = directBSplineSurfaceReference(featureID: featureID)
                 let surface = surfaceFeature.surface
                 let uDomain = try activeDomain(knots: surface.uKnots, degree: surface.uDegree)
                 let vDomain = try activeDomain(knots: surface.vKnots, degree: surface.vDegree)
@@ -1058,6 +1106,7 @@ public struct ViewportSceneBuilder {
                     degree: surface.uDegree,
                     surface: surface,
                     surfaceReference: surfaceReference,
+                    tolerance: tolerance,
                     crossParameter: vMiddle
                 )
                 let vDisplays = try surfaceKnotDisplays(
@@ -1066,6 +1115,7 @@ public struct ViewportSceneBuilder {
                     degree: surface.vDegree,
                     surface: surface,
                     surfaceReference: surfaceReference,
+                    tolerance: tolerance,
                     crossParameter: uMiddle
                 )
                 let displays = uDisplays + vDisplays
@@ -1082,14 +1132,16 @@ public struct ViewportSceneBuilder {
     private func surfaceSpanDisplaysByFeatureID(
         in document: DesignDocument
     ) -> [FeatureID: [ViewportSurfaceSpanDisplay]] {
+        let tolerance = document.modelingSettings.tolerance
+        let patchFaceReferences = bSplineSurfacePatchFaceReferences(in: document)
         var displaysByFeatureID: [FeatureID: [ViewportSurfaceSpanDisplay]] = [:]
         for featureID in document.cadDocument.designGraph.order {
             guard let feature = document.cadDocument.designGraph.nodes[featureID],
-                  case let .bSplineSurface(surfaceFeature) = feature.operation else {
+                  case let .bSplineSurface(surfaceFeature) = feature.operation,
+                  let surfaceReference = patchFaceReferences[featureID] else {
                 continue
             }
             do {
-                let surfaceReference = directBSplineSurfaceReference(featureID: featureID)
                 let surface = surfaceFeature.surface
                 let uDomain = try activeDomain(knots: surface.uKnots, degree: surface.uDegree)
                 let vDomain = try activeDomain(knots: surface.vKnots, degree: surface.vDegree)
@@ -1101,6 +1153,7 @@ public struct ViewportSceneBuilder {
                     degree: surface.uDegree,
                     surface: surface,
                     surfaceReference: surfaceReference,
+                    tolerance: tolerance,
                     crossParameter: vMiddle
                 )
                 let vDisplays = try surfaceSpanDisplays(
@@ -1109,6 +1162,7 @@ public struct ViewportSceneBuilder {
                     degree: surface.vDegree,
                     surface: surface,
                     surfaceReference: surfaceReference,
+                    tolerance: tolerance,
                     crossParameter: uMiddle
                 )
                 let displays = uDisplays + vDisplays
@@ -1128,6 +1182,7 @@ public struct ViewportSceneBuilder {
         degree: Int,
         surface: BSplineSurface3D,
         surfaceReference: SurfaceReference,
+        tolerance: ModelingTolerance,
         crossParameter: Double
     ) throws -> [ViewportSurfaceKnotDisplay] {
         let domain = try activeDomain(knots: knots, degree: degree)
@@ -1140,7 +1195,7 @@ public struct ViewportSceneBuilder {
             }
             let u = direction == .u ? value : crossParameter
             let v = direction == .u ? crossParameter : value
-            let geometry = try surface.differentialGeometry(atU: u, v: v)
+            let geometry = try surface.differentialGeometry(atU: u, v: v, tolerance: tolerance)
             displays.append(ViewportSurfaceKnotDisplay(
                 selectionReference: .surface(.knot(SurfaceKnotReference(
                     surface: surfaceReference,
@@ -1164,6 +1219,7 @@ public struct ViewportSceneBuilder {
         degree: Int,
         surface: BSplineSurface3D,
         surfaceReference: SurfaceReference,
+        tolerance: ModelingTolerance,
         crossParameter: Double
     ) throws -> [ViewportSurfaceSpanDisplay] {
         let lowerIndex = degree
@@ -1182,7 +1238,7 @@ public struct ViewportSceneBuilder {
             let value = (lowerBound + upperBound) * 0.5
             let u = direction == .u ? value : crossParameter
             let v = direction == .u ? crossParameter : value
-            let geometry = try surface.differentialGeometry(atU: u, v: v)
+            let geometry = try surface.differentialGeometry(atU: u, v: v, tolerance: tolerance)
             displays.append(ViewportSurfaceSpanDisplay(
                 selectionReference: .surface(.span(SurfaceSpanReference(
                     surface: surfaceReference,
@@ -1201,12 +1257,28 @@ public struct ViewportSceneBuilder {
         return displays
     }
 
-    private func directBSplineSurfaceReference(featureID: FeatureID) -> SurfaceReference {
-        SurfaceReference(faceName: PersistentName(components: [
-            .feature(featureID),
-            .generated("bSplineSurface"),
-            .subshape("patch:0:face"),
-        ]))
+    /// Resolves the stable patch-face reference for every B-spline surface
+    /// feature from one topology snapshot. Surfaces whose evaluation fails
+    /// are absent from the result, matching the overlay skip-on-error policy.
+    private func bSplineSurfacePatchFaceReferences(
+        in document: DesignDocument
+    ) -> [FeatureID: SurfaceReference] {
+        do {
+            let topology = try TopologySnapshotService().snapshot(document: document)
+            var references: [FeatureID: SurfaceReference] = [:]
+            for entry in topology.entries {
+                guard entry.kind == .face,
+                      let subshapeID = GeneratedSubshapeIdentity.subshapeID(from: entry.subshapeID),
+                      GeneratedSubshapeRoles.isBSplineSurfacePatchFace(subshapeID),
+                      let stableReference = entry.stableReference else {
+                    continue
+                }
+                references[subshapeID.featureID] = SurfaceReference(subshape: stableReference)
+            }
+            return references
+        } catch {
+            return [:]
+        }
     }
 
     private func activeDomain(
@@ -1229,31 +1301,24 @@ public struct ViewportSceneBuilder {
     private func surfaceTrimKnotDisplaysByFeatureID(
         in document: DesignDocument
     ) -> [FeatureID: [ViewportSurfaceTrimKnotDisplay]] {
+        let tolerance = document.modelingSettings.tolerance
         var displaysByFeatureID: [FeatureID: [ViewportSurfaceTrimKnotDisplay]] = [:]
-        for featureID in document.cadDocument.designGraph.order {
-            guard let feature = document.cadDocument.designGraph.nodes[featureID],
-                  case let .bSplineSurface(surfaceFeature) = feature.operation,
-                  surfaceFeature.trimLoops.isEmpty == false else {
-                continue
-            }
+        for (featureID, trimFeature, surfaceFeature) in authoredSurfaceTrims(in: document) {
             do {
-                let surfaceReference = SurfaceReference(faceName: PersistentName(components: [
-                    .feature(featureID),
-                    .generated("bSplineSurface"),
-                    .subshape("patch:0:face"),
-                ]))
+                let surfaceReference = SurfaceReference(subshape: trimFeature.target.face)
                 var displays: [ViewportSurfaceTrimKnotDisplay] = []
-                for (loopIndex, trimLoop) in surfaceFeature.trimLoops.enumerated() {
-                    for (edgeIndex, edge) in trimLoop.edges.enumerated() {
+                for (loopIndex, trimLoop) in trimFeature.loops.enumerated() {
+                    for (edgeIndex, parameterCurve) in trimLoop.parameterCurves.enumerated() {
                         let trimReference = SurfaceTrimReference(
                             surface: surfaceReference,
                             loopIndex: loopIndex,
                             edgeIndex: edgeIndex
                         )
-                        for knot in surfaceTrimKnotParameters(edge.parameterCurve) {
+                        for knot in surfaceTrimKnotParameters(parameterCurve, tolerance: tolerance) {
                             let geometry = try surfaceFeature.surface.differentialGeometry(
                                 atU: knot.parameter.u,
-                                v: knot.parameter.v
+                                v: knot.parameter.v,
+                                tolerance: tolerance
                             )
                             displays.append(ViewportSurfaceTrimKnotDisplay(
                                 selectionReference: .surface(.trimKnot(SurfaceTrimKnotReference(
@@ -1282,31 +1347,24 @@ public struct ViewportSceneBuilder {
     private func surfaceTrimSpanDisplaysByFeatureID(
         in document: DesignDocument
     ) -> [FeatureID: [ViewportSurfaceTrimSpanDisplay]] {
+        let tolerance = document.modelingSettings.tolerance
         var displaysByFeatureID: [FeatureID: [ViewportSurfaceTrimSpanDisplay]] = [:]
-        for featureID in document.cadDocument.designGraph.order {
-            guard let feature = document.cadDocument.designGraph.nodes[featureID],
-                  case let .bSplineSurface(surfaceFeature) = feature.operation,
-                  surfaceFeature.trimLoops.isEmpty == false else {
-                continue
-            }
+        for (featureID, trimFeature, surfaceFeature) in authoredSurfaceTrims(in: document) {
             do {
-                let surfaceReference = SurfaceReference(faceName: PersistentName(components: [
-                    .feature(featureID),
-                    .generated("bSplineSurface"),
-                    .subshape("patch:0:face"),
-                ]))
+                let surfaceReference = SurfaceReference(subshape: trimFeature.target.face)
                 var displays: [ViewportSurfaceTrimSpanDisplay] = []
-                for (loopIndex, trimLoop) in surfaceFeature.trimLoops.enumerated() {
-                    for (edgeIndex, edge) in trimLoop.edges.enumerated() {
+                for (loopIndex, trimLoop) in trimFeature.loops.enumerated() {
+                    for (edgeIndex, parameterCurve) in trimLoop.parameterCurves.enumerated() {
                         let trimReference = SurfaceTrimReference(
                             surface: surfaceReference,
                             loopIndex: loopIndex,
                             edgeIndex: edgeIndex
                         )
-                        for span in surfaceTrimSpanParameters(edge.parameterCurve) {
+                        for span in surfaceTrimSpanParameters(parameterCurve, tolerance: tolerance) {
                             let geometry = try surfaceFeature.surface.differentialGeometry(
                                 atU: span.parameter.u,
-                                v: span.parameter.v
+                                v: span.parameter.v,
+                                tolerance: tolerance
                             )
                             displays.append(ViewportSurfaceTrimSpanDisplay(
                                 selectionReference: .surface(.trimSpan(SurfaceTrimSpanReference(
@@ -1334,7 +1392,8 @@ public struct ViewportSceneBuilder {
     }
 
     private func surfaceTrimKnotParameters(
-        _ curve: SurfaceParameterCurve
+        _ curve: SurfaceParameterCurve,
+        tolerance: ModelingTolerance
     ) -> [(index: Int, value: Double, parameter: SurfaceParameter)] {
         guard case let .bSpline(bSpline) = curve else {
             return []
@@ -1352,7 +1411,7 @@ public struct ViewportSceneBuilder {
             let value = bSpline.knots[index]
             guard value > lowerBound,
                   value < upperBound,
-                  let point = surfaceTrimPoint(bSpline, at: value) else {
+                  let point = surfaceTrimPoint(bSpline, at: value, tolerance: tolerance) else {
                 continue
             }
             parameters.append((index, value, SurfaceParameter(u: point.x, v: point.y)))
@@ -1361,7 +1420,8 @@ public struct ViewportSceneBuilder {
     }
 
     private func surfaceTrimSpanParameters(
-        _ curve: SurfaceParameterCurve
+        _ curve: SurfaceParameterCurve,
+        tolerance: ModelingTolerance
     ) -> [(index: Int, lowerBound: Double, upperBound: Double, parameter: SurfaceParameter)] {
         guard case let .bSpline(bSpline) = curve else {
             return []
@@ -1379,7 +1439,7 @@ public struct ViewportSceneBuilder {
                 continue
             }
             let parameterValue = (lowerBound + upperBound) * 0.5
-            guard let point = surfaceTrimPoint(bSpline, at: parameterValue) else {
+            guard let point = surfaceTrimPoint(bSpline, at: parameterValue, tolerance: tolerance) else {
                 continue
             }
             result.append((
@@ -1394,10 +1454,11 @@ public struct ViewportSceneBuilder {
 
     private func surfaceTrimPoint(
         _ bSpline: BSplineCurve2D,
-        at parameter: Double
+        at parameter: Double,
+        tolerance: ModelingTolerance
     ) -> Point2D? {
         do {
-            return try bSpline.point(at: parameter)
+            return try bSpline.point(at: parameter, tolerance: tolerance)
         } catch {
             return nil
         }
@@ -1443,7 +1504,7 @@ public struct ViewportSceneBuilder {
                         normal: vector3D(frame.normal),
                         u: frame.u,
                         v: frame.v,
-                        facePersistentNames: frame.facePersistentNames
+                        faceSubshapeIDs: frame.faceSubshapeIDs
                     )
                 )
             }
@@ -1527,7 +1588,7 @@ public struct ViewportSceneBuilder {
         )
         let component = ViewportBodyComponent(
             bodyID: snapshot.bodyID,
-            persistentName: snapshot.persistentName,
+            subshapeID: snapshot.subshapeID,
             typeID: resolvedTypeID,
             properties: properties,
             sizeXMeters: max(snapshot.bounds.maxX - snapshot.bounds.minX, 1.0e-9),
@@ -1571,13 +1632,14 @@ public struct ViewportSceneBuilder {
             return nil
         }
 
+        let tolerance = document.modelingSettings.tolerance
         let positions: [Point3D]
         do {
             positions = [
-                try surfaceFeature.surface.point(u: uBounds.lower, v: vBounds.lower),
-                try surfaceFeature.surface.point(u: uBounds.upper, v: vBounds.lower),
-                try surfaceFeature.surface.point(u: uBounds.upper, v: vBounds.upper),
-                try surfaceFeature.surface.point(u: uBounds.lower, v: vBounds.upper),
+                try surfaceFeature.surface.point(u: uBounds.lower, v: vBounds.lower, tolerance: tolerance),
+                try surfaceFeature.surface.point(u: uBounds.upper, v: vBounds.lower, tolerance: tolerance),
+                try surfaceFeature.surface.point(u: uBounds.upper, v: vBounds.upper, tolerance: tolerance),
+                try surfaceFeature.surface.point(u: uBounds.lower, v: vBounds.upper, tolerance: tolerance),
             ]
         } catch {
             return nil
@@ -1590,7 +1652,7 @@ public struct ViewportSceneBuilder {
         return BodyDisplaySnapshot(
             featureID: featureID,
             bodyID: nil,
-            persistentName: nil,
+            subshapeID: nil,
             bounds: BodyDisplaySnapshot.Bounds(
                 minX: bounds.minX,
                 minY: bounds.minY,
@@ -1623,7 +1685,7 @@ public struct ViewportSceneBuilder {
         depthMeters: Double,
         direction: ExtrudeDirection,
         bodyID: String?,
-        persistentName: String?,
+        subshapeID: String?,
         declaredObjectTypeID: ObjectTypeID?,
         declaredProperties: ObjectPropertySet
     ) -> ViewportBodyComponent {
@@ -1646,7 +1708,7 @@ public struct ViewportSceneBuilder {
         if let cylinder {
             return ViewportBodyComponent(
                 bodyID: bodyID,
-                persistentName: persistentName,
+                subshapeID: subshapeID,
                 typeID: resolvedTypeID,
                 properties: properties,
                 sizeXMeters: Double(bounds.width),
@@ -1659,7 +1721,7 @@ public struct ViewportSceneBuilder {
         }
         return ViewportBodyComponent(
             bodyID: bodyID,
-            persistentName: persistentName,
+            subshapeID: subshapeID,
             typeID: resolvedTypeID,
             properties: properties,
             sizeXMeters: Double(bounds.width),

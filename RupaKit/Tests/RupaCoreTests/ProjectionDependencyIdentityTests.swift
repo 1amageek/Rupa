@@ -249,7 +249,7 @@ func projectionDependencyIdentityTracksOnlyReferencedSceneMaterialBindings() thr
     let sourceBinding = TopologyMaterialBinding(
         target: SelectionTarget(
             sceneNodeID: sourceSceneNodeID,
-            component: .face(.generatedTopology("feature:source/generated:front"))
+            component: .face(.generatedTopology(generatedTopologyTestSubshapeID("feature:source/generated:front")))
         ),
         materialID: sourceMaterial.id,
         process: TopologyMaterialBinding.Process(
@@ -260,7 +260,7 @@ func projectionDependencyIdentityTracksOnlyReferencedSceneMaterialBindings() thr
     let unrelatedBinding = TopologyMaterialBinding(
         target: SelectionTarget(
             sceneNodeID: unrelatedSceneNodeID,
-            component: .face(.generatedTopology("feature:unrelated/generated:front"))
+            component: .face(.generatedTopology(generatedTopologyTestSubshapeID("feature:unrelated/generated:front")))
         ),
         materialID: unrelatedMaterial.id,
         process: TopologyMaterialBinding.Process(
@@ -499,5 +499,18 @@ private func projectionDependencyMaterial(named name: String) -> Material {
         metallic: 0.0,
         roughness: 0.4,
         opacity: 1.0
+    )
+}
+
+
+/// Shared feature identity so equal role strings map to equal subshape IDs
+/// within this file's tests.
+private let generatedTopologyTestFeatureID = FeatureID()
+
+private func generatedTopologyTestSubshapeID(_ role: String) -> SubshapeID {
+    SubshapeID(
+        featureID: generatedTopologyTestFeatureID,
+        role: role,
+        ordinal: 0
     )
 }

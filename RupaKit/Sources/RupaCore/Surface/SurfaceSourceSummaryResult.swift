@@ -328,7 +328,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
         public var point: Point
         public var generatedVertexPersistentName: String
         public var selectionComponentID: String
-        public var selectionReference: SelectionReference
+        public var selectionReference: SelectionReference?
         public var isPointDisplayVisible: Bool
 
         public init(
@@ -338,7 +338,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             point: Point,
             generatedVertexPersistentName: String,
             selectionComponentID: String,
-            selectionReference: SelectionReference,
+            selectionReference: SelectionReference?,
             isPointDisplayVisible: Bool = false
         ) {
             self.id = id
@@ -360,7 +360,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
         public var weight: Double
         public var isBoundary: Bool
         public var isEditable: Bool
-        public var selectionReference: SelectionReference
+        public var selectionReference: SelectionReference?
         public var isPointDisplayVisible: Bool
 
         public init(
@@ -371,7 +371,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             weight: Double,
             isBoundary: Bool,
             isEditable: Bool,
-            selectionReference: SelectionReference,
+            selectionReference: SelectionReference?,
             isPointDisplayVisible: Bool = false
         ) {
             self.id = id
@@ -616,7 +616,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
 
     public struct Patch: Codable, Equatable, Sendable {
         public var patchID: Int
-        public var facePersistentName: String?
+        public var faceSubshapeID: String?
         public var faceSelectionComponentID: String?
         public var faceSelectionReference: SelectionReference?
         public var uDomain: ParameterRange
@@ -630,7 +630,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
 
         public init(
             patchID: Int,
-            facePersistentName: String?,
+            faceSubshapeID: String?,
             faceSelectionComponentID: String?,
             faceSelectionReference: SelectionReference?,
             uDomain: ParameterRange,
@@ -643,7 +643,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             parameterAddresses: [ParameterAddress]
         ) {
             self.patchID = patchID
-            self.facePersistentName = facePersistentName
+            self.faceSubshapeID = faceSubshapeID
             self.faceSelectionComponentID = faceSelectionComponentID
             self.faceSelectionReference = faceSelectionReference
             self.uDomain = uDomain

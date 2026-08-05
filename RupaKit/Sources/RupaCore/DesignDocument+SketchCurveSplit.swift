@@ -153,8 +153,15 @@ extension DesignDocument {
             if first == entityID || second == entityID {
                 throw sketchCurveSplitUnsupportedConstraint("equal-length constraints")
             }
-        case .tangent(let first, let second):
-            if first == entityID || second == entityID {
+        case .tangent(let tangency):
+            let references: Bool
+            switch tangency {
+            case .lineCircular(let line, let circular, _):
+                references = line == entityID || circular == entityID
+            case .circularCircular(let first, let second, _):
+                references = first == entityID || second == entityID
+            }
+            if references {
                 throw sketchCurveSplitUnsupportedConstraint("curve tangent constraints")
             }
         case .concentric(let first, let second),
@@ -166,21 +173,21 @@ extension DesignDocument {
             if id == entityID {
                 throw sketchCurveSplitUnsupportedConstraint("internal spline smooth constraints")
             }
-        case .splineEndpointTangent(_, _, let lineID):
+        case .splineEndpointTangent(let lineTangency):
             // Splitting the referenced tangent LINE cannot be rewritten without
             // knowing which fragment the spline endpoint touches; the previous
             // silent pass-through left the constraint on the retained line even
             // when the attachment migrated to the new entity, so later
             // constraint-driven edits enforced tangency against the wrong
             // segment. Splitting the SPLINE side remains supported.
-            if lineID == entityID {
+            if lineTangency.line == entityID {
                 throw sketchCurveSplitUnsupportedConstraint("spline endpoint tangent line references")
             }
             return
-        case .tangentSplineEndpoints(let first, let second),
-             .smoothSplineEndpoints(let first, let second):
-            try validateSplineEndpointReferenceCanSplit(first, entityID: entityID, entity: entity)
-            try validateSplineEndpointReferenceCanSplit(second, entityID: entityID, entity: entity)
+        case .tangentSplineEndpoints(let pair),
+             .smoothSplineEndpoints(let pair):
+            try validateSplineEndpointReferenceCanSplit(pair.first, entityID: entityID, entity: entity)
+            try validateSplineEndpointReferenceCanSplit(pair.second, entityID: entityID, entity: entity)
         }
     }
 
@@ -292,27 +299,32 @@ extension DesignDocument {
                           case .line = split.retainedEntity {
                     updated.append(.perpendicular(first, split.newEntityID))
                 }
-            case .splineEndpointTangent(let splineID, let endpoint, let lineID):
-                if splineID == split.originalEntityID,
-                   endpoint == .end {
-                    updated.append(.splineEndpointTangent(
-                        spline: split.newEntityID,
-                        endpoint: .end,
-                        line: lineID
-                    ))
+            case .splineEndpointTangent(let lineTangency):
+                if lineTangency.splineEndpoint.splineID == split.originalEntityID,
+                   lineTangency.splineEndpoint.endpoint == .end {
+                    updated.append(.splineEndpointTangent(SketchSplineLineTangencyConstraint(
+                        splineEndpoint: SketchSplineEndpointReference(
+                            splineID: split.newEntityID,
+                            endpoint: .end
+                        ),
+                        line: lineTangency.line,
+                        orientation: lineTangency.orientation
+                    )))
                 } else {
                     updated.append(constraint)
                 }
-            case .tangentSplineEndpoints(let first, let second):
-                updated.append(.tangentSplineEndpoints(
-                    first: rewriteSplineEndpointReferenceAfterCurveSplit(first, split: split),
-                    second: rewriteSplineEndpointReferenceAfterCurveSplit(second, split: split)
-                ))
-            case .smoothSplineEndpoints(let first, let second):
-                updated.append(.smoothSplineEndpoints(
-                    first: rewriteSplineEndpointReferenceAfterCurveSplit(first, split: split),
-                    second: rewriteSplineEndpointReferenceAfterCurveSplit(second, split: split)
-                ))
+            case .tangentSplineEndpoints(let pair):
+                updated.append(.tangentSplineEndpoints(SketchSplineEndpointTangencyConstraint(
+                    first: rewriteSplineEndpointReferenceAfterCurveSplit(pair.first, split: split),
+                    second: rewriteSplineEndpointReferenceAfterCurveSplit(pair.second, split: split),
+                    orientation: pair.orientation
+                )))
+            case .smoothSplineEndpoints(let pair):
+                updated.append(.smoothSplineEndpoints(SketchSplineEndpointTangencyConstraint(
+                    first: rewriteSplineEndpointReferenceAfterCurveSplit(pair.first, split: split),
+                    second: rewriteSplineEndpointReferenceAfterCurveSplit(pair.second, split: split),
+                    orientation: pair.orientation
+                )))
             case .equalLength,
                  .tangent,
                  .concentric,

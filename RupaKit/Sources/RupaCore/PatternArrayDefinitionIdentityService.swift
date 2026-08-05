@@ -372,38 +372,8 @@ private struct PatternArrayDefinitionFeatureInputIdentity: Encodable {
 
 private struct PatternArrayDefinitionFeatureOutputIdentity: Encodable {
     var role: FeaturePort
-    var persistentName: PatternArrayDefinitionPersistentNameIdentity?
 
     init(output: FeatureOutput) {
         role = output.role
-        persistentName = output.persistentName.map(PatternArrayDefinitionPersistentNameIdentity.init(name:))
-    }
-}
-
-private struct PatternArrayDefinitionPersistentNameIdentity: Encodable {
-    var components: [PatternArrayDefinitionPersistentNameComponentIdentity]
-
-    init(name: PersistentName) {
-        components = name.components.map(PatternArrayDefinitionPersistentNameComponentIdentity.init(component:))
-    }
-}
-
-private enum PatternArrayDefinitionPersistentNameComponentIdentity: Encodable {
-    case feature(FeatureID)
-    case generated(String)
-    case subshape(String)
-    case index(Int)
-
-    init(component: NameComponent) {
-        switch component {
-        case .feature(let featureID):
-            self = .feature(featureID)
-        case .generated(let value):
-            self = .generated(value)
-        case .subshape(let value):
-            self = .subshape(value)
-        case .index(let index):
-            self = .index(index)
-        }
     }
 }

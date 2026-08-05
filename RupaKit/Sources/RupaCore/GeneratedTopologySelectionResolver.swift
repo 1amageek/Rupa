@@ -167,19 +167,20 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         operationName: String = "Generated topology face"
     ) throws -> BodyFace {
         guard case .face(let componentID) = target.component,
-              let persistentName = componentID.generatedTopologyPersistentName else {
+              let subshapeID = componentID.generatedTopologySubshapeID else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(operationName) requires a generated topology face target."
             )
         }
+        let identity = GeneratedSubshapeIdentity.string(for: subshapeID)
         let resolvedSceneNodeID = try resolvedBodySceneNodeID(
             for: target.sceneNodeID,
-            preferredFeatureID: sourceFeatureID(in: persistentName, operationName: operationName),
+            preferredFeatureID: subshapeID.featureID,
             in: document,
             operationName: operationName
         )
-        guard let entry = topology.entries.first(where: { $0.persistentName == persistentName }) else {
+        guard let entry = topology.entries.first(where: { $0.subshapeID == identity }) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "\(operationName) generated topology target was not found in the current evaluation."
@@ -215,15 +216,16 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         operationName: String = "Generated topology edge"
     ) throws -> BodyCornerEdge {
         guard case .edge(let componentID) = target.component,
-              let persistentName = componentID.generatedTopologyPersistentName else {
+              let subshapeID = componentID.generatedTopologySubshapeID else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(operationName) requires a generated topology edge target."
             )
         }
+        let identity = GeneratedSubshapeIdentity.string(for: subshapeID)
         let resolvedSceneNodeID = try resolvedBodySceneNodeID(
             for: target.sceneNodeID,
-            preferredFeatureID: sourceFeatureID(in: persistentName, operationName: operationName),
+            preferredFeatureID: subshapeID.featureID,
             in: document,
             operationName: operationName
         )
@@ -236,7 +238,7 @@ public struct GeneratedTopologySelectionResolver: Sendable {
             document: document,
             objectRegistry: objectRegistry
         )
-        guard let entry = topology.entries.first(where: { $0.persistentName == persistentName }) else {
+        guard let entry = topology.entries.first(where: { $0.subshapeID == identity }) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "\(operationName) generated topology target was not found in the current evaluation."
@@ -257,15 +259,16 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         operationName: String = "Generated topology vertex"
     ) throws -> BodyCornerVertex {
         guard case .vertex(let componentID) = target.component,
-              let persistentName = componentID.generatedTopologyPersistentName else {
+              let subshapeID = componentID.generatedTopologySubshapeID else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(operationName) requires a generated topology vertex target."
             )
         }
+        let identity = GeneratedSubshapeIdentity.string(for: subshapeID)
         let resolvedSceneNodeID = try resolvedBodySceneNodeID(
             for: target.sceneNodeID,
-            preferredFeatureID: sourceFeatureID(in: persistentName, operationName: operationName),
+            preferredFeatureID: subshapeID.featureID,
             in: document,
             operationName: operationName
         )
@@ -278,7 +281,7 @@ public struct GeneratedTopologySelectionResolver: Sendable {
             document: document,
             objectRegistry: objectRegistry
         )
-        guard let entry = topology.entries.first(where: { $0.persistentName == persistentName }) else {
+        guard let entry = topology.entries.first(where: { $0.subshapeID == identity }) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "\(operationName) generated topology target was not found in the current evaluation."
@@ -450,22 +453,6 @@ public struct GeneratedTopologySelectionResolver: Sendable {
             )
         }
         return resolvedSceneNodeID
-    }
-
-    private func sourceFeatureID(
-        in persistentNameString: String,
-        operationName: String
-    ) throws -> FeatureID? {
-        let persistentName = try GeneratedTopologyPersistentNameParser().parse(
-            persistentNameString,
-            operationName: operationName
-        )
-        for component in persistentName.components {
-            if case .feature(let featureID) = component {
-                return featureID
-            }
-        }
-        return nil
     }
 
     private func rectangleExtrudeContext(

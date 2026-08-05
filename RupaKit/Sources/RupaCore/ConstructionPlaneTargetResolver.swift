@@ -80,7 +80,11 @@ public struct ConstructionPlaneTargetResolver: Sendable {
                     topology: topology
                 )
             }
-            return try pointPlane(from: points, viewNormal: viewNormal)
+            return try pointPlane(
+                from: points,
+                viewNormal: viewNormal,
+                tolerance: document.modelingSettings.tolerance
+            )
         }
         let faceTargets = uniqueTargets.filter { target in
             if case .face = target.component {
@@ -102,7 +106,8 @@ public struct ConstructionPlaneTargetResolver: Sendable {
             return try perpendicularPlane(
                 faceTarget: faceTarget,
                 edgeTarget: edgeTarget,
-                topology: topology
+                topology: topology,
+                tolerance: document.modelingSettings.tolerance
             )
         }
 
@@ -113,7 +118,7 @@ public struct ConstructionPlaneTargetResolver: Sendable {
                 topology: topology
             )
         }
-        return try midplane(from: planeReferences)
+        return try midplane(from: planeReferences, tolerance: document.modelingSettings.tolerance)
     }
 
     private func isPointTarget(_ target: SelectionTarget) -> Bool {
@@ -138,14 +143,16 @@ public struct ConstructionPlaneTargetResolver: Sendable {
         return try plane(
             origin: reference.origin,
             normal: reference.normal,
-            operationName: "Face-aligned construction plane"
+            operationName: "Face-aligned construction plane",
+            tolerance: document.modelingSettings.tolerance
         )
     }
 
     func planarGeneratedFacePlane(
         alignedTo target: SelectionTarget,
         topology: TopologySnapshot,
-        operationName: String
+        operationName: String,
+        tolerance: ModelingTolerance
     ) throws -> SketchPlane {
         let reference = try faceReference(
             alignedTo: target,
@@ -156,7 +163,8 @@ public struct ConstructionPlaneTargetResolver: Sendable {
         return try plane(
             origin: reference.origin,
             normal: reference.normal,
-            operationName: operationName
+            operationName: operationName,
+            tolerance: tolerance
         )
     }
 
@@ -253,7 +261,8 @@ public struct ConstructionPlaneTargetResolver: Sendable {
     private func perpendicularPlane(
         faceTarget: SelectionTarget,
         edgeTarget: SelectionTarget,
-        topology: TopologySnapshot
+        topology: TopologySnapshot,
+        tolerance: ModelingTolerance
     ) throws -> SketchPlane {
         let face = try faceReference(alignedTo: faceTarget, topology: topology)
         let edge = try edgeReference(for: edgeTarget, topology: topology)
@@ -261,7 +270,8 @@ public struct ConstructionPlaneTargetResolver: Sendable {
         return try plane(
             origin: edge.center,
             normal: normal,
-            operationName: "Face-edge perpendicular construction plane"
+            operationName: "Face-edge perpendicular construction plane",
+            tolerance: tolerance
         )
     }
 
@@ -491,7 +501,8 @@ public struct ConstructionPlaneTargetResolver: Sendable {
 
     private func pointPlane(
         from points: [Point3D],
-        viewNormal: Vector3D?
+        viewNormal: Vector3D?,
+        tolerance: ModelingTolerance
     ) throws -> SketchPlane {
         guard points.count >= 2 else {
             throw EditorError(
@@ -500,20 +511,22 @@ public struct ConstructionPlaneTargetResolver: Sendable {
             )
         }
         if points.count == 2 {
-            return try twoPointPlane(from: points, viewNormal: viewNormal)
+            return try twoPointPlane(from: points, viewNormal: viewNormal, tolerance: tolerance)
         }
         let normal = try nonCollinearNormal(from: points)
         let origin = points.count == 3 ? points[0] : averagePoint(points)
         return try plane(
             origin: origin,
             normal: normal,
-            operationName: "Point-based construction plane"
+            operationName: "Point-based construction plane",
+            tolerance: tolerance
         )
     }
 
     private func twoPointPlane(
         from points: [Point3D],
-        viewNormal: Vector3D?
+        viewNormal: Vector3D?,
+        tolerance: ModelingTolerance
     ) throws -> SketchPlane {
         guard let viewNormal else {
             throw EditorError(
@@ -528,7 +541,8 @@ public struct ConstructionPlaneTargetResolver: Sendable {
         return try plane(
             origin: averagePoint(points),
             normal: normal,
-            operationName: "Two-point construction plane"
+            operationName: "Two-point construction plane",
+            tolerance: tolerance
         )
     }
 
@@ -635,7 +649,9 @@ public struct ConstructionPlaneTargetResolver: Sendable {
             )
         }
         let resolvedParameters = try ParameterResolver().resolve(document.cadDocument.parameters)
-        let profiles = try SketchProfileExtractor().extractProfiles(
+        let profiles = try SketchProfileExtractor(
+            tolerance: document.modelingSettings.tolerance
+        ).extractProfiles(
             from: sketch,
             sourceFeatureID: reference.featureID,
             parameters: resolvedParameters
@@ -649,7 +665,7 @@ public struct ConstructionPlaneTargetResolver: Sendable {
         let profile = profiles[reference.profileIndex]
         let summary: ProfileRegionSummary
         do {
-            summary = try ProfileRegionAnalyzer().summary(for: profile)
+            summary = try ProfileRegionAnalyzer(tolerance: document.modelingSettings.tolerance).summary(for: profile)
         } catch {
             throw EditorError(
                 code: .commandInvalid,
@@ -661,7 +677,8 @@ public struct ConstructionPlaneTargetResolver: Sendable {
         return try plane(
             origin: origin,
             normal: coordinateSystem.normal,
-            operationName: "Region-aligned construction plane"
+            operationName: "Region-aligned construction plane",
+            tolerance: document.modelingSettings.tolerance
         )
     }
 
@@ -703,7 +720,8 @@ public struct ConstructionPlaneTargetResolver: Sendable {
         return try plane(
             origin: reference.origin,
             normal: reference.normal,
-            operationName: "Saved construction plane"
+            operationName: "Saved construction plane",
+            tolerance: document.modelingSettings.tolerance
         )
     }
 
@@ -763,7 +781,9 @@ public struct ConstructionPlaneTargetResolver: Sendable {
             )
         }
         let resolvedParameters = try ParameterResolver().resolve(document.cadDocument.parameters)
-        let profiles = try SketchProfileExtractor().extractProfiles(
+        let profiles = try SketchProfileExtractor(
+            tolerance: document.modelingSettings.tolerance
+        ).extractProfiles(
             from: sketch,
             sourceFeatureID: reference.featureID,
             parameters: resolvedParameters
@@ -777,7 +797,7 @@ public struct ConstructionPlaneTargetResolver: Sendable {
         let profile = profiles[reference.profileIndex]
         let summary: ProfileRegionSummary
         do {
-            summary = try ProfileRegionAnalyzer().summary(for: profile)
+            summary = try ProfileRegionAnalyzer(tolerance: document.modelingSettings.tolerance).summary(for: profile)
         } catch {
             throw EditorError(
                 code: .commandInvalid,
@@ -791,7 +811,10 @@ public struct ConstructionPlaneTargetResolver: Sendable {
         )
     }
 
-    private func midplane(from references: [PlaneReference]) throws -> SketchPlane {
+    private func midplane(
+        from references: [PlaneReference],
+        tolerance: ModelingTolerance
+    ) throws -> SketchPlane {
         guard references.count >= 2 else {
             throw EditorError(
                 code: .commandInvalid,
@@ -829,7 +852,8 @@ public struct ConstructionPlaneTargetResolver: Sendable {
                 z: originSum.z / count
             ),
             normal: baseNormal,
-            operationName: "Midplane construction plane"
+            operationName: "Midplane construction plane",
+            tolerance: tolerance
         )
     }
 
@@ -864,7 +888,8 @@ public struct ConstructionPlaneTargetResolver: Sendable {
     private func plane(
         origin: Point3D,
         normal: Vector3D,
-        operationName: String
+        operationName: String,
+        tolerance: ModelingTolerance
     ) throws -> SketchPlane {
         let unitNormal = try normal.normalized(tolerance: 1.0e-12)
         let plane = Plane3D(
@@ -872,7 +897,7 @@ public struct ConstructionPlaneTargetResolver: Sendable {
             normal: unitNormal
         )
         do {
-            try plane.validate()
+            try plane.validate(tolerance: tolerance)
         } catch {
             throw EditorError(
                 code: .commandInvalid,

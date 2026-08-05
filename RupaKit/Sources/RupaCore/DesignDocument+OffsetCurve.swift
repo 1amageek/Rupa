@@ -265,13 +265,20 @@ extension DesignDocument {
                 message: "\(operationName) currently supports a positive inward distance."
             )
         }
+        guard options.gapFill == .round else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(operationName) supports only the default round gap behavior in the exact kernel contract."
+            )
+        }
         guard case .face(let componentID) = target.component,
-              let persistentNameString = componentID.generatedTopologyPersistentName else {
+              let faceSubshapeID = componentID.generatedTopologySubshapeID else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(operationName) requires a generated topology face target."
             )
         }
+        let faceIdentity = GeneratedSubshapeIdentity.string(for: faceSubshapeID)
         let resolvedTarget = try editableBodyTargetResolution(
             for: target,
             operationName: operationName
@@ -290,7 +297,7 @@ extension DesignDocument {
             document: self,
             objectRegistry: objectRegistry
         )
-        guard let entry = topology.entries.first(where: { $0.persistentName == persistentNameString }) else {
+        guard let entry = topology.entries.first(where: { $0.subshapeID == faceIdentity }) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "\(operationName) generated topology face was not found in the current evaluation."
@@ -304,10 +311,12 @@ extension DesignDocument {
             )
         }
 
-        let facePersistentName = try GeneratedTopologyPersistentNameParser().parse(
-            persistentNameString,
-            operationName: operationName
-        )
+        guard let faceReference = entry.stableReference else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(operationName) generated topology face has no stable subshape reference."
+            )
+        }
         let featureID = FeatureID()
         let featureName = "\(sceneNode.name) Face Loop Offset"
         let feature = FeatureNode(
@@ -316,9 +325,8 @@ extension DesignDocument {
             operation: .faceLoopOffset(
                 FaceLoopOffsetFeature(
                     target: FaceLoopOffsetTargetReference(featureID: targetFeatureID),
-                    facePersistentName: facePersistentName,
-                    distance: distance,
-                    gapFill: options.gapFill.faceLoopOffsetGapFill
+                    face: faceReference,
+                    distance: distance
                 )
             ),
             inputs: [FeatureInput(featureID: targetFeatureID, role: .target)],
@@ -348,7 +356,7 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         )
-        try cadDocument.validate()
+        try cadDocument.validate(tolerance: modelingSettings.tolerance)
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         didCommit = true
         return featureID
@@ -376,13 +384,20 @@ extension DesignDocument {
                 message: "\(operationName) currently supports a positive inward distance."
             )
         }
+        guard options.gapFill == .round else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(operationName) supports only the default round gap behavior in the exact kernel contract."
+            )
+        }
         guard case .edge(let edgeComponentID) = target.component,
-              let edgePersistentNameString = edgeComponentID.generatedTopologyPersistentName else {
+              let edgeSubshapeID = edgeComponentID.generatedTopologySubshapeID else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(operationName) requires a generated topology edge target."
             )
         }
+        let edgeIdentity = GeneratedSubshapeIdentity.string(for: edgeSubshapeID)
         guard let supportTarget = options.supportTarget else {
             throw EditorError(
                 code: .commandInvalid,
@@ -390,12 +405,13 @@ extension DesignDocument {
             )
         }
         guard case .face(let supportFaceComponentID) = supportTarget.component,
-              let supportFacePersistentNameString = supportFaceComponentID.generatedTopologyPersistentName else {
+              let supportFaceSubshapeID = supportFaceComponentID.generatedTopologySubshapeID else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(operationName) requires a generated topology support face target."
             )
         }
+        let supportFaceIdentity = GeneratedSubshapeIdentity.string(for: supportFaceSubshapeID)
         let resolvedTarget = try editableBodyTargetResolution(
             for: target,
             operationName: operationName
@@ -429,7 +445,7 @@ extension DesignDocument {
             objectRegistry: objectRegistry,
             failurePrefix: "\(operationName) requires current generated topology"
         )
-        guard let edgeEntry = topology.entries.first(where: { $0.persistentName == edgePersistentNameString }) else {
+        guard let edgeEntry = topology.entries.first(where: { $0.subshapeID == edgeIdentity }) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "\(operationName) generated topology edge was not found in the current evaluation."
@@ -442,7 +458,7 @@ extension DesignDocument {
                 message: "\(operationName) target must reference an edge on the selected body."
             )
         }
-        guard let supportFaceEntry = topology.entries.first(where: { $0.persistentName == supportFacePersistentNameString }) else {
+        guard let supportFaceEntry = topology.entries.first(where: { $0.subshapeID == supportFaceIdentity }) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "\(operationName) generated topology support face was not found in the current evaluation."
@@ -464,14 +480,18 @@ extension DesignDocument {
             operationName: operationName
         )
 
-        let edgePersistentName = try GeneratedTopologyPersistentNameParser().parse(
-            edgePersistentNameString,
-            operationName: operationName
-        )
-        let supportFacePersistentName = try GeneratedTopologyPersistentNameParser().parse(
-            supportFacePersistentNameString,
-            operationName: operationName
-        )
+        guard let edgeReference = edgeEntry.stableReference else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(operationName) generated topology edge has no stable subshape reference."
+            )
+        }
+        guard let supportFaceReference = supportFaceEntry.stableReference else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(operationName) generated topology support face has no stable subshape reference."
+            )
+        }
         let featureID = FeatureID()
         let featureName = "\(sceneNode.name) Edge Offset"
         let feature = FeatureNode(
@@ -480,11 +500,10 @@ extension DesignDocument {
             operation: .edgeOffset(
                 EdgeOffsetFeature(
                     target: EdgeOffsetTargetReference(featureID: targetFeatureID),
-                    edgePersistentName: edgePersistentName,
-                    supportFacePersistentName: supportFacePersistentName,
+                    edge: edgeReference,
+                    supportFace: supportFaceReference,
                     distance: distance,
-                    isSymmetric: options.isSymmetric,
-                    gapFill: options.gapFill.edgeOffsetGapFill
+                    isSymmetric: options.isSymmetric
                 )
             ),
             inputs: [FeatureInput(featureID: targetFeatureID, role: .target)],
@@ -514,7 +533,7 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         )
-        try cadDocument.validate()
+        try cadDocument.validate(tolerance: modelingSettings.tolerance)
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         didCommit = true
         return featureID
@@ -558,7 +577,7 @@ extension DesignDocument {
         let oppositeCandidates = try topology.entries.filter { entry in
             guard entry.kind == .face,
                   entry.sceneNodeID == edgeEntry.sceneNodeID,
-                  entry.persistentName != supportFaceEntry.persistentName else {
+                  entry.subshapeID != supportFaceEntry.subshapeID else {
                 return false
             }
             let candidateFaceID = try evaluatedFaceID(
@@ -585,11 +604,11 @@ extension DesignDocument {
         in evaluatedDocument: EvaluatedDocument,
         operationName: String
     ) throws -> EdgeID {
-        let persistentName = try GeneratedTopologyPersistentNameParser().parse(
-            entry.persistentName,
+        let subshapeID = try GeneratedSubshapeIdentity.requireSubshapeID(
+            from: entry.subshapeID,
             operationName: operationName
         )
-        guard case .edge(let edgeID) = evaluatedDocument.generatedNames[persistentName] else {
+        guard case .edge(let edgeID) = try? evaluatedDocument.subshapes.reference(for: subshapeID) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "\(operationName) evaluated topology edge was not found."
@@ -603,11 +622,11 @@ extension DesignDocument {
         in evaluatedDocument: EvaluatedDocument,
         operationName: String
     ) throws -> FaceID {
-        let persistentName = try GeneratedTopologyPersistentNameParser().parse(
-            entry.persistentName,
+        let subshapeID = try GeneratedSubshapeIdentity.requireSubshapeID(
+            from: entry.subshapeID,
             operationName: operationName
         )
-        guard case .face(let faceID) = evaluatedDocument.generatedNames[persistentName] else {
+        guard case .face(let faceID) = try? evaluatedDocument.subshapes.reference(for: subshapeID) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "\(operationName) evaluated topology face was not found."
@@ -619,7 +638,7 @@ extension DesignDocument {
     private func face(
         _ faceID: FaceID,
         containsBoundaryEdge edgeID: EdgeID,
-        in model: BRepModel
+        in model: CADBRepModel
     ) -> Bool {
         guard let face = model.faces[faceID] else {
             return false
@@ -719,26 +738,3 @@ extension DesignDocument {
     }
 }
 
-private extension OffsetCurveGapFill {
-    var faceLoopOffsetGapFill: FaceLoopOffsetGapFill {
-        switch self {
-        case .round:
-            .round
-        case .linear:
-            .linear
-        case .natural:
-            .natural
-        }
-    }
-
-    var edgeOffsetGapFill: EdgeOffsetGapFill {
-        switch self {
-        case .round:
-            .round
-        case .linear:
-            .linear
-        case .natural:
-            .natural
-        }
-    }
-}

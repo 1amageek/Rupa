@@ -39,16 +39,16 @@ import SwiftCAD
     #expect(adjacency.continuityLevel == "tangentPlane")
     #expect(adjacency.requiresCurvatureContinuitySolve == false)
     #expect(adjacency.sharedVertexIndices == [1, 4])
-    #expect(adjacency.sharedEdgePersistentName?.contains("subshape:patch:0:edge:uMax") == true)
+    #expect(adjacency.sharedEdgePersistentName?.contains("edge:source:1:4") == true)
 
     let patch = try #require(source.patches.first)
-    #expect(patch.facePersistentName?.contains("subshape:patch:0:face") == true)
+    #expect(patch.faceSubshapeID?.contains("patch:0:face") == true)
     #expect(patch.faceSelectionComponentID?.hasPrefix(SelectionComponentID.generatedTopologyPrefix) == true)
     guard case .surface(.whole(let faceReference)) = patch.faceSelectionReference else {
         Issue.record("Patch must expose a kernel surface selection reference.")
         return
     }
-    #expect(faceReference.faceName.components.count == 3)
+    #expect(faceReference.subshape.subshapeID.role.hasSuffix("patch:0:face"))
     #expect(patch.basis.kind == "cubicBezierBSpline")
     #expect(patch.basis.uDegree == 3)
     #expect(patch.basis.vDegree == 3)
@@ -140,7 +140,7 @@ import SwiftCAD
     let controlVertex = try #require(patch.controlVertices.first)
     #expect(controlVertex.role == "uMin:vMin")
     #expect(controlVertex.sourceVertexIndex == 0)
-    #expect(controlVertex.generatedVertexPersistentName.contains("subshape:patch:0:vertex:uMin:vMin"))
+    #expect(controlVertex.generatedVertexPersistentName.contains("vertex:source:0"))
     #expect(controlVertex.selectionComponentID.hasPrefix(SelectionComponentID.generatedTopologyPrefix))
     guard case .surface(.controlPoint(let controlPointReference)) = controlVertex.selectionReference else {
         Issue.record("Surface source control vertex must expose a kernel surface control-point reference.")
@@ -159,7 +159,7 @@ import SwiftCAD
     #expect(interiorReference.uIndex == 1)
     #expect(interiorReference.vIndex == 1)
     let measurement = try SelectionMeasurementService().measure(
-        query: CADAgentMeasurementQuery(kind: .point, first: controlVertex.selectionReference),
+        query: CADAgentMeasurementQuery(kind: .point, first: try #require(controlVertex.selectionReference)),
         document: document,
         displayUnit: .millimeter
     )
@@ -194,7 +194,7 @@ import SwiftCAD
     #expect(source.support.isSupported)
     #expect(source.support.candidateKind == "directBSplineSurface")
     let patch = try #require(source.patches.first)
-    #expect(patch.facePersistentName?.contains("generated:bSplineSurface/subshape:patch:0:face") == true)
+    #expect(patch.faceSubshapeID?.contains("bSplineSurface.patch:0:face") == true)
     #expect(patch.faceSelectionComponentID?.hasPrefix(SelectionComponentID.generatedTopologyPrefix) == true)
     #expect(patch.basis.kind == "bSplineSurface")
     #expect(patch.basis.uDegree == 3)
@@ -270,7 +270,7 @@ import SwiftCAD
     #expect(controlPointReference.uIndex == 1)
     #expect(controlPointReference.vIndex == 1)
     let measurement = try SelectionMeasurementService().measure(
-        query: CADAgentMeasurementQuery(kind: .point, first: weightedControlPoint.selectionReference),
+        query: CADAgentMeasurementQuery(kind: .point, first: try #require(weightedControlPoint.selectionReference)),
         document: document,
         displayUnit: .millimeter
     )
@@ -294,10 +294,10 @@ import SwiftCAD
     try document.setSurfaceTrimLoops(
         target: faceReference,
         trimLoops: [
-            BSplineSurfaceTrimLoop(
+            SurfaceTrimLoop(
                 role: .outer,
-                edges: [
-                    BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+                parameterCurves: [
+                    .bSpline(BSplineCurve2D(
                         degree: 2,
                         knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
                         controlPoints: [
@@ -306,15 +306,15 @@ import SwiftCAD
                             Point2D(x: 0.8, y: 0.25),
                         ],
                         weights: [1.0, 1.25, 1.0]
-                    ))),
-                    BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                    )),
+                    .polyline([
                         SurfaceParameter(u: 0.8, v: 0.25),
                         SurfaceParameter(u: 0.45, v: 0.8),
-                    ])),
-                    BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                    ]),
+                    .polyline([
                         SurfaceParameter(u: 0.45, v: 0.8),
                         SurfaceParameter(u: 0.2, v: 0.2),
-                    ])),
+                    ]),
                 ]
             ),
         ]
@@ -393,13 +393,14 @@ import SwiftCAD
     let sourceGeneration = session.generation
     let sourceUndoCount = session.commandStack.undoEntries.count
 
+    let interiorControlPointReference = try #require(interiorControlPoint.selectionReference)
     let displayResult = try #require(session.setSurfaceControlPointDisplay(
-        target: interiorControlPoint.selectionReference,
+        target: interiorControlPointReference,
         isVisible: true
     ))
     #expect(displayResult.commandName == "setSurfaceControlPointDisplay")
 
-    let displayID = try SurfaceControlPointDisplayID(selectionReference: interiorControlPoint.selectionReference)
+    let displayID = try SurfaceControlPointDisplayID(selectionReference: interiorControlPointReference)
     #expect(session.workspaceState.surfaceControlPointDisplays[displayID]?.isVisible == true)
     let visibleSummary = try surfaceSourceSummary(in: session)
     let visiblePatch = try #require(visibleSummary.sources.first?.patches.first)
@@ -409,7 +410,7 @@ import SwiftCAD
     #expect(visibleControlVertex.isPointDisplayVisible == false)
 
     let hiddenResult = try #require(session.setSurfaceControlPointDisplay(
-        target: interiorControlPoint.selectionReference,
+        target: interiorControlPointReference,
         isVisible: false
     ))
     #expect(hiddenResult.commandName == "setSurfaceControlPointDisplay")

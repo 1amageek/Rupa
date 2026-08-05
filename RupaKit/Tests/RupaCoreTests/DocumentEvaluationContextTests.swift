@@ -68,8 +68,13 @@ import SwiftCAD
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
     let currentEvaluation = try #require(session.currentEvaluation)
+    let tolerance = session.document.modelingSettings.tolerance
     let failingPipeline = CADPipeline(
-        evaluator: DocumentEvaluator(featureEvaluator: ContextFailingFeatureEvaluator())
+        tolerance: tolerance,
+        evaluator: DocumentEvaluator(
+            featureEvaluator: ContextFailingFeatureEvaluator(),
+            tolerance: tolerance
+        )
     )
 
     let meshSummary = try MeshSummaryService(pipeline: failingPipeline).summarize(
@@ -121,8 +126,13 @@ import SwiftCAD
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
     let currentEvaluation = try #require(session.currentEvaluation)
+    let tolerance = session.document.modelingSettings.tolerance
     let failingPipeline = CADPipeline(
-        evaluator: DocumentEvaluator(featureEvaluator: ContextFailingFeatureEvaluator())
+        tolerance: tolerance,
+        evaluator: DocumentEvaluator(
+            featureEvaluator: ContextFailingFeatureEvaluator(),
+            tolerance: tolerance
+        )
     )
 
     do {
@@ -147,8 +157,13 @@ import SwiftCAD
 
     let circleSession = EditorSession()
     _ = try #require(circleSession.createDefaultExtrudedCircle())
+    let tolerance = circleSession.document.modelingSettings.tolerance
     let failingPipeline = CADPipeline(
-        evaluator: DocumentEvaluator(featureEvaluator: ContextFailingFeatureEvaluator())
+        tolerance: tolerance,
+        evaluator: DocumentEvaluator(
+            featureEvaluator: ContextFailingFeatureEvaluator(),
+            tolerance: tolerance
+        )
     )
 
     do {
@@ -189,8 +204,13 @@ import SwiftCAD
     let session = EditorSession(document: document)
     session.store.evaluateCurrentDocument()
     let currentEvaluation = try #require(session.currentEvaluation)
+    let tolerance = session.document.modelingSettings.tolerance
     let failingPipeline = CADPipeline(
-        evaluator: DocumentEvaluator(featureEvaluator: ContextFailingFeatureEvaluator())
+        tolerance: tolerance,
+        evaluator: DocumentEvaluator(
+            featureEvaluator: ContextFailingFeatureEvaluator(),
+            tolerance: tolerance
+        )
     )
 
     let result = try MeasurementService(pipeline: failingPipeline).measure(
@@ -221,15 +241,20 @@ import SwiftCAD
         currentGeneration: session.generation
     )
     let faceEntry = try #require(topology.entries.first { $0.kind == .face })
+    let tolerance = session.document.modelingSettings.tolerance
     let failingPipeline = CADPipeline(
-        evaluator: DocumentEvaluator(featureEvaluator: ContextFailingFeatureEvaluator())
+        tolerance: tolerance,
+        evaluator: DocumentEvaluator(
+            featureEvaluator: ContextFailingFeatureEvaluator(),
+            tolerance: tolerance
+        )
     )
 
     let result = try SurfaceFrameService(pipeline: failingPipeline).resolve(
         document: session.document,
         queries: [
             SurfaceFrameQuery(
-                facePersistentName: faceEntry.persistentName,
+                faceSubshapeID: faceEntry.subshapeID,
                 u: 0.5,
                 v: 0.5
             ),
@@ -247,8 +272,13 @@ import SwiftCAD
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
     let currentEvaluation = try #require(session.currentEvaluation)
+    let tolerance = session.document.modelingSettings.tolerance
     let failingPipeline = CADPipeline(
-        evaluator: DocumentEvaluator(featureEvaluator: ContextFailingFeatureEvaluator())
+        tolerance: tolerance,
+        evaluator: DocumentEvaluator(
+            featureEvaluator: ContextFailingFeatureEvaluator(),
+            tolerance: tolerance
+        )
     )
 
     let result = try SelectionDimensionService(pipeline: failingPipeline).evaluate(
@@ -263,7 +293,7 @@ import SwiftCAD
 
 private struct ContextFailingFeatureEvaluator: FeatureEvaluating {
     func evaluate(feature _: FeatureNode, context _: EvaluationContext) throws -> EvaluationResult {
-        throw FeatureEvaluationError.unsupportedOperation("Injected evaluator should not be used.")
+        throw FeatureEvaluationError.invalidGraph("Injected evaluator should not be used.")
     }
 }
 

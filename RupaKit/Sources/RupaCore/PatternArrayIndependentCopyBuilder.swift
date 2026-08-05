@@ -8,7 +8,8 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
         transforms: [Transform3D],
         startingOutputIndex: Int = 0,
         metadata: inout ProductMetadata,
-        cadDocument: inout CADDocument
+        cadDocument: inout CADDocument,
+        tolerance: ModelingTolerance
     ) throws -> PatternArrayIndependentCopyBuildResult {
         let sourceFeatureIDs = try sourceFeatureClosure(
             for: definition,
@@ -61,7 +62,7 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
             outputSceneNodeIDs.append(outputNode.id)
         }
 
-        try updatedCADDocument.validate()
+        try updatedCADDocument.validate(tolerance: tolerance)
         cadDocument = updatedCADDocument
         return PatternArrayIndependentCopyBuildResult(
             outputSceneNodeIDs: outputSceneNodeIDs,

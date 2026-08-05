@@ -7,15 +7,15 @@ import Testing
     let sceneNodeID = SceneNodeID()
     let faceTarget = SelectionTarget(
         sceneNodeID: sceneNodeID,
-        component: .face(.generatedTopology("body:face:top"))
+        component: .face(.generatedTopology(generatedTopologyTestSubshapeID("body:face:top")))
     )
     let edgeTarget = SelectionTarget(
         sceneNodeID: sceneNodeID,
-        component: .edge(.generatedTopology("body:edge:top"))
+        component: .edge(.generatedTopology(generatedTopologyTestSubshapeID("body:edge:top")))
     )
     let vertexTarget = SelectionTarget(
         sceneNodeID: sceneNodeID,
-        component: .vertex(.generatedTopology("body:vertex:topLeft"))
+        component: .vertex(.generatedTopology(generatedTopologyTestSubshapeID("body:vertex:topLeft")))
     )
     let regionTarget = SelectionTarget(
         sceneNodeID: sceneNodeID,
@@ -59,11 +59,11 @@ import Testing
     let secondFace = SelectionTarget(sceneNodeID: sceneNodeID, component: .face(.bodyFaceBottom))
     let firstVertex = SelectionTarget(
         sceneNodeID: sceneNodeID,
-        component: .vertex(.generatedTopology("body:vertex:first"))
+        component: .vertex(.generatedTopology(generatedTopologyTestSubshapeID("body:vertex:first")))
     )
     let secondVertex = SelectionTarget(
         sceneNodeID: sceneNodeID,
-        component: .vertex(.generatedTopology("body:vertex:second"))
+        component: .vertex(.generatedTopology(generatedTopologyTestSubshapeID("body:vertex:second")))
     )
     let builder = WorkspaceTopologyEditInspectorStateBuilder(
         selection: SelectionModel(selectedTargets: [firstFace, secondFace, firstVertex, secondVertex]),
@@ -98,11 +98,11 @@ import Testing
     let sceneNodeID = SceneNodeID()
     let targetFace = SelectionTarget(
         sceneNodeID: sceneNodeID,
-        component: .face(.generatedTopology("body:face:side"))
+        component: .face(.generatedTopology(generatedTopologyTestSubshapeID("body:face:side")))
     )
     let neutralFace = SelectionTarget(
         sceneNodeID: sceneNodeID,
-        component: .face(.generatedTopology("body:face:bottom"))
+        component: .face(.generatedTopology(generatedTopologyTestSubshapeID("body:face:bottom")))
     )
     let builder = WorkspaceTopologyEditInspectorStateBuilder(
         selection: SelectionModel(selectedTargets: [targetFace, neutralFace]),
@@ -132,15 +132,15 @@ import Testing
     let sceneNodeID = SceneNodeID()
     let firstTargetFace = SelectionTarget(
         sceneNodeID: sceneNodeID,
-        component: .face(.generatedTopology("body:face:firstSide"))
+        component: .face(.generatedTopology(generatedTopologyTestSubshapeID("body:face:firstSide")))
     )
     let secondTargetFace = SelectionTarget(
         sceneNodeID: sceneNodeID,
-        component: .face(.generatedTopology("body:face:secondSide"))
+        component: .face(.generatedTopology(generatedTopologyTestSubshapeID("body:face:secondSide")))
     )
     let neutralFace = SelectionTarget(
         sceneNodeID: sceneNodeID,
-        component: .face(.generatedTopology("body:face:bottom"))
+        component: .face(.generatedTopology(generatedTopologyTestSubshapeID("body:face:bottom")))
     )
     let builder = WorkspaceTopologyEditInspectorStateBuilder(
         selection: SelectionModel(selectedTargets: [firstTargetFace, secondTargetFace, neutralFace]),
@@ -169,7 +169,7 @@ import Testing
     let sceneNodeID = SceneNodeID()
     let generatedEdge = SelectionTarget(
         sceneNodeID: sceneNodeID,
-        component: .edge(.generatedTopology("body:edge:generated"))
+        component: .edge(.generatedTopology(generatedTopologyTestSubshapeID("body:edge:generated")))
     )
     let semanticEdge = SelectionTarget(
         sceneNodeID: sceneNodeID,
@@ -188,4 +188,17 @@ import Testing
 
     #expect(builder.edgeTargets == [generatedEdge, semanticEdge])
     #expect(builder.generatedEdgeProjectionTargets(from: builder.edgeTargets) == [generatedEdge])
+}
+
+
+/// Shared feature identity so equal role strings map to equal subshape IDs
+/// within this file's tests.
+private let generatedTopologyTestFeatureID = FeatureID()
+
+private func generatedTopologyTestSubshapeID(_ role: String) -> SubshapeID {
+    SubshapeID(
+        featureID: generatedTopologyTestFeatureID,
+        role: role,
+        ordinal: 0
+    )
 }

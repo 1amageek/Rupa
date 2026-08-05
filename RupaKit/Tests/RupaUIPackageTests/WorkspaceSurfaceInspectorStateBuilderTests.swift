@@ -39,10 +39,11 @@ import Testing
         workspaceState: WorkspaceState()
     )
     let fullAnalysis = try #require(try objectBuilder.analysisResult(for: [fixture.sceneNode]).get())
-    let faceName = try #require(fullAnalysis.faces.first?.facePersistentNames.first)
+    let faceName = try #require(fullAnalysis.faces.first?.faceSubshapeIDs.first)
+    let faceSubshapeID = try #require(GeneratedSubshapeIdentity.subshapeID(from: faceName))
     let faceTarget = SelectionTarget(
         sceneNodeID: fixture.sceneNode.id,
-        component: .face(.generatedTopology(faceName))
+        component: .face(.generatedTopology(faceSubshapeID))
     )
     let faceBuilder = WorkspaceSurfaceInspectorStateBuilder(
         document: fixture.document,
@@ -59,7 +60,7 @@ import Testing
     #expect(faceBuilder.generatedTopologyPersistentNames() == [faceName])
     #expect(faceBuilder.showsContinuitySection(for: [fixture.sceneNode]))
     #expect(filteredAnalysis.bSplineFaceCount == 1)
-    #expect(filteredAnalysis.faces.first?.facePersistentNames.contains(faceName) == true)
+    #expect(filteredAnalysis.faces.first?.faceSubshapeIDs.contains(faceName) == true)
 }
 
 @Test func workspaceSurfaceInspectorStateBuilderResolvesControlPointSelection() throws {
@@ -69,7 +70,7 @@ import Testing
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     let builder = WorkspaceSurfaceInspectorStateBuilder(
         document: fixture.document,
-        selection: SelectionModel(selectedReferences: [controlPoint.selectionReference]),
+        selection: SelectionModel(selectedReferences: [try #require(controlPoint.selectionReference)]),
         currentEvaluation: nil,
         documentGeneration: DocumentGeneration(),
         objectRegistry: .builtIn,
@@ -79,8 +80,8 @@ import Testing
 
     let state = try #require(try builder.surfaceControlPointStateResult().get())
 
-    #expect(builder.surfaceControlPointReferences == [controlPoint.selectionReference])
-    #expect(state.selectedReferences == [controlPoint.selectionReference])
+    #expect(builder.surfaceControlPointReferences == [try #require(controlPoint.selectionReference)])
+    #expect(state.selectedReferences == [try #require(controlPoint.selectionReference)])
     #expect(state.canEditCoordinates)
     #expect(state.entries.first?.isEditable == true)
     #expect(state.entries.first?.isBoundary == false)
@@ -149,10 +150,11 @@ import Testing
     let firstFeatureEntry = try #require(objectState.entries.first { entry in
         entry.sourceID == firstFeatureID.description
     })
-    let faceName = try #require(firstFeatureEntry.facePersistentName)
+    let faceName = try #require(firstFeatureEntry.faceSubshapeID)
+    let faceSubshapeID = try #require(GeneratedSubshapeIdentity.subshapeID(from: faceName))
     let faceTarget = SelectionTarget(
         sceneNodeID: firstSceneNode.id,
-        component: .face(.generatedTopology(faceName))
+        component: .face(.generatedTopology(faceSubshapeID))
     )
     let faceBuilder = WorkspaceSurfaceInspectorStateBuilder(
         document: document,
@@ -170,7 +172,7 @@ import Testing
     #expect(faceState.patchCount == 1)
     #expect(faceState.spanCount > 0)
     #expect(faceState.knotCount > 0)
-    #expect(faceState.entries.allSatisfy { $0.facePersistentName == faceName })
+    #expect(faceState.entries.allSatisfy { $0.faceSubshapeID == faceName })
     #expect(faceState.entries.allSatisfy { $0.sourceID == firstFeatureID.description })
     #expect(faceState.entries.count < objectState.entries.count)
 }

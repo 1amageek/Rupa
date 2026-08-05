@@ -4,14 +4,12 @@ struct GeneratedBodyIdentityResolver: Sendable {
     struct Identity: Equatable, Sendable {
         var bodyID: BodyID
         var sourceFeatureID: FeatureID
-        var persistentName: String
+        var subshapeID: SubshapeID
     }
 
-    func bodyFeatureIDs(
-        in generatedNames: PersistentMap<PersistentName, TopologyReference>
-    ) -> [FeatureID] {
+    func bodyFeatureIDs(in subshapes: SubshapeIndex) -> [FeatureID] {
         var seen: Set<FeatureID> = []
-        return bodyIdentities(in: generatedNames).compactMap { identity in
+        return bodyIdentities(in: subshapes).compactMap { identity in
             guard seen.insert(identity.sourceFeatureID).inserted else {
                 return nil
             }
@@ -21,18 +19,18 @@ struct GeneratedBodyIdentityResolver: Sendable {
 
     func firstBodyIdentity(
         for featureID: FeatureID,
-        in generatedNames: PersistentMap<PersistentName, TopologyReference>
+        in subshapes: SubshapeIndex
     ) -> Identity? {
-        bodyIdentities(in: generatedNames).first {
+        bodyIdentities(in: subshapes).first {
             $0.sourceFeatureID == featureID
         }
     }
 
     func bodyIdentityByBodyID(
-        in generatedNames: PersistentMap<PersistentName, TopologyReference>
+        in subshapes: SubshapeIndex
     ) -> [BodyID: Identity] {
         var identitiesByBodyID: [BodyID: Identity] = [:]
-        for identity in bodyIdentities(in: generatedNames) {
+        for identity in bodyIdentities(in: subshapes) {
             if identitiesByBodyID[identity.bodyID] == nil {
                 identitiesByBodyID[identity.bodyID] = identity
             }
@@ -40,46 +38,20 @@ struct GeneratedBodyIdentityResolver: Sendable {
         return identitiesByBodyID
     }
 
-    func bodyIdentities(
-        in generatedNames: PersistentMap<PersistentName, TopologyReference>
-    ) -> [Identity] {
-        generatedNames
-            .sorted { persistentNameString($0.key) < persistentNameString($1.key) }
-            .compactMap { name, reference -> Identity? in
-                guard case .body(let bodyID) = reference,
-                      let sourceFeatureID = sourceFeatureID(name) else {
+    func bodyIdentities(in subshapes: SubshapeIndex) -> [Identity] {
+        subshapes.entries
+            .sorted {
+                GeneratedSubshapeIdentity.areInIncreasingOrder($0.key, $1.key)
+            }
+            .compactMap { subshapeID, reference -> Identity? in
+                guard case .body(let bodyID) = reference else {
                     return nil
                 }
                 return Identity(
                     bodyID: bodyID,
-                    sourceFeatureID: sourceFeatureID,
-                    persistentName: persistentNameString(name)
+                    sourceFeatureID: subshapeID.featureID,
+                    subshapeID: subshapeID
                 )
             }
-    }
-
-    func sourceFeatureID(_ name: PersistentName) -> FeatureID? {
-        for component in name.components {
-            if case .feature(let featureID) = component {
-                return featureID
-            }
-        }
-        return nil
-    }
-
-    func persistentNameString(_ name: PersistentName) -> String {
-        name.components.map { component in
-            switch component {
-            case .feature(let featureID):
-                return "feature:\(featureID.description)"
-            case .generated(let value):
-                return "generated:\(value)"
-            case .subshape(let value):
-                return "subshape:\(value)"
-            case .index(let index):
-                return "index:\(index)"
-            }
-        }
-        .joined(separator: "/")
     }
 }

@@ -20,7 +20,7 @@ public struct SurfaceContinuityService: Sendable {
         var isPlanar: Bool
         var surface: Surface3D
         var faceOrientation: Orientation
-        var orientedEdge: OrientedEdge
+        var orientedEdge: Coedge
     }
 
     private struct PersistentTopologyNames {
@@ -352,8 +352,8 @@ public struct SurfaceContinuityService: Sendable {
     ) -> PersistentTopologyNames {
         var faceNamesByID: [FaceID: String] = [:]
         var edgeNamesByID: [EdgeID: [String]] = [:]
-        for (name, reference) in evaluatedDocument.generatedNames {
-            let stringName = persistentNameString(name)
+        for (subshapeID, reference) in evaluatedDocument.subshapes.entries {
+            let stringName = GeneratedSubshapeIdentity.string(for: subshapeID)
             switch reference {
             case .body, .vertex:
                 continue
@@ -372,19 +372,4 @@ public struct SurfaceContinuityService: Sendable {
         )
     }
 
-    private func persistentNameString(_ name: PersistentName) -> String {
-        name.components.map { component in
-            switch component {
-            case .feature(let featureID):
-                return "feature:\(featureID.description)"
-            case .generated(let value):
-                return "generated:\(value)"
-            case .subshape(let value):
-                return "subshape:\(value)"
-            case .index(let index):
-                return "index:\(index)"
-            }
-        }
-        .joined(separator: "/")
-    }
 }

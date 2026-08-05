@@ -87,7 +87,7 @@ import Testing
             knotIndex: 1
         ))),
         SelectionReference.edge(.whole(EdgeReference(
-            edgeName: PersistentName(components: [.generated("edge")])
+            subshape: workspaceReferenceContextSummaryStableSubshape(role: "edge")
         )))
     ]
 
@@ -102,5 +102,16 @@ import Testing
 }
 
 private func workspaceReferenceContextSummarySurface() -> SurfaceReference {
-    SurfaceReference(faceName: PersistentName(components: [.generated("surface")]))
+    SurfaceReference(
+        subshape: workspaceReferenceContextSummaryStableSubshape(role: "surface.patch:0:face")
+    )
+}
+
+private func workspaceReferenceContextSummaryStableSubshape(
+    role: String
+) -> StableSubshapeReference {
+    StableSubshapeReference(
+        subshapeID: SubshapeID(featureID: FeatureID(), role: role, ordinal: 0),
+        geometrySignature: .vertex(point: Point3D(x: 0.0, y: 0.0, z: 0.0))
+    )
 }

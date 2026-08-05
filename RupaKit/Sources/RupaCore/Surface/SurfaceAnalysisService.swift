@@ -98,8 +98,8 @@ public struct SurfaceAnalysisService: Sendable {
             displayUnit: displayUnit,
             counts: counts(for: faces),
             faces: faces.sorted { lhs, rhs in
-                let lhsName = lhs.facePersistentNames.first ?? lhs.faceID
-                let rhsName = rhs.facePersistentNames.first ?? rhs.faceID
+                let lhsName = lhs.faceSubshapeIDs.first ?? lhs.faceID
+                let rhsName = rhs.faceSubshapeIDs.first ?? rhs.faceID
                 return lhsName < rhsName
             },
             diagnostics: diagnostics(
@@ -225,7 +225,7 @@ public struct SurfaceAnalysisService: Sendable {
 
         return SurfaceAnalysisResult.FaceAnalysis(
             faceID: faceID.description,
-            facePersistentNames: persistentNames.faceNamesByID[faceID] ?? [],
+            faceSubshapeIDs: persistentNames.faceNamesByID[faceID] ?? [],
             edgePersistentNames: edgePersistentNames(
                 for: face,
                 in: model,
@@ -382,10 +382,10 @@ public struct SurfaceAnalysisService: Sendable {
         in model: BRepModel
     ) throws -> Bool {
         guard let firstVertexID = orderedVertexIDs.first,
-              let lastOrientedEdge = loop.edges.last else {
+              let lastCoedge = loop.edges.last else {
             return false
         }
-        let lastVertexID = try orientedVertexIDs(for: lastOrientedEdge, in: model).end
+        let lastVertexID = try orientedVertexIDs(for: lastCoedge, in: model).end
         if firstVertexID == lastVertexID {
             return true
         }
@@ -400,7 +400,7 @@ public struct SurfaceAnalysisService: Sendable {
     }
 
     private func estimatedLength(
-        for orientedEdge: OrientedEdge,
+        for orientedEdge: Coedge,
         in model: BRepModel
     ) throws -> Double {
         let vertexIDs = try orientedVertexIDs(for: orientedEdge, in: model)
@@ -428,6 +428,8 @@ public struct SurfaceAnalysisService: Sendable {
                 edge: edge,
                 fallback: chordLength
             )
+        case .analytic, .implicit, .surfaceLift, .certifiedIntersection:
+            return chordLength
         }
     }
 
@@ -479,7 +481,7 @@ public struct SurfaceAnalysisService: Sendable {
     }
 
     private func orientedVertexIDs(
-        for orientedEdge: OrientedEdge,
+        for orientedEdge: Coedge,
         in model: BRepModel
     ) throws -> (start: VertexID, end: VertexID) {
         guard let edge = model.edges[orientedEdge.edgeID] else {
@@ -588,15 +590,15 @@ public struct SurfaceAnalysisService: Sendable {
         var faceNamesByID: [FaceID: [String]] = [:]
         var edgeNamesByID: [EdgeID: [String]] = [:]
         var sourceFeatureIDsByFaceID: [FaceID: FeatureID] = [:]
-        for (name, reference) in evaluatedDocument.generatedNames {
-            let stringName = persistentNameString(name)
+        for (subshapeID, reference) in evaluatedDocument.subshapes.entries {
+            let stringName = GeneratedSubshapeIdentity.string(for: subshapeID)
             switch reference {
             case .body, .vertex:
                 continue
             case .face(let faceID):
                 faceNamesByID[faceID, default: []].append(stringName)
                 if sourceFeatureIDsByFaceID[faceID] == nil {
-                    sourceFeatureIDsByFaceID[faceID] = sourceFeatureID(in: name)
+                    sourceFeatureIDsByFaceID[faceID] = subshapeID.featureID
                 }
             case .edge(let edgeID):
                 edgeNamesByID[edgeID, default: []].append(stringName)
@@ -626,31 +628,7 @@ public struct SurfaceAnalysisService: Sendable {
         return mapping
     }
 
-    private func sourceFeatureID(in name: PersistentName) -> FeatureID? {
-        for component in name.components {
-            guard case .feature(let featureID) = component else {
-                continue
-            }
-            return featureID
-        }
-        return nil
-    }
 
-    private func persistentNameString(_ name: PersistentName) -> String {
-        name.components.map { component in
-            switch component {
-            case .feature(let featureID):
-                return "feature:\(featureID.description)"
-            case .generated(let value):
-                return "generated:\(value)"
-            case .subshape(let value):
-                return "subshape:\(value)"
-            case .index(let index):
-                return "index:\(index)"
-            }
-        }
-        .joined(separator: "/")
-    }
 
     private func point(_ point: Point3D) -> SurfaceAnalysisResult.Point {
         SurfaceAnalysisResult.Point(

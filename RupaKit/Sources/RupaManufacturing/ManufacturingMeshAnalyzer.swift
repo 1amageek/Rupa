@@ -26,7 +26,8 @@ public struct ManufacturingMeshAnalyzer: Sendable {
                 bodyKind: bodyKind,
                 mesh: mesh,
                 meshArtifact: meshArtifact,
-                overhangThreshold: threshold
+                overhangThreshold: threshold,
+                modelingTolerance: meshArtifact.configuration.modelingTolerance
             )
             let bodyAnalysis = bodyOutput.analysis
             totalSurfaceArea += bodyAnalysis.surfaceAreaSquareMeters
@@ -143,9 +144,13 @@ public struct ManufacturingMeshAnalyzer: Sendable {
         bodyKind: String?,
         mesh: Mesh,
         meshArtifact: MeshArtifactReference,
-        overhangThreshold: Double
+        overhangThreshold: Double,
+        modelingTolerance: ModelingTolerance
     ) throws -> BodyAnalysisOutput {
-        let validationErrorMessage = meshValidationErrorMessage(mesh)
+        let validationErrorMessage = meshValidationErrorMessage(
+            mesh,
+            tolerance: modelingTolerance
+        )
         let minimumY = mesh.positions.map(\.y).min() ?? 0.0
         let meshSpan = finiteMeshSpan(mesh)
         let topologyTolerance = max(meshSpan * 1.0e-8, 1.0e-9)
@@ -287,9 +292,12 @@ public struct ManufacturingMeshAnalyzer: Sendable {
         )
     }
 
-    private func meshValidationErrorMessage(_ mesh: Mesh) -> String? {
+    private func meshValidationErrorMessage(
+        _ mesh: Mesh,
+        tolerance: ModelingTolerance
+    ) -> String? {
         do {
-            try mesh.validate()
+            try mesh.validate(tolerance: tolerance)
             return nil
         } catch {
             return String(describing: error)

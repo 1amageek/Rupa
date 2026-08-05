@@ -32,7 +32,7 @@ public struct BodyDisplaySnapshotService: Sendable {
         evaluatedDocument: EvaluatedDocument
     ) -> [FeatureID: BodyDisplaySnapshot] {
         var snapshots: [FeatureID: BodyDisplaySnapshot] = [:]
-        for featureID in identityResolver.bodyFeatureIDs(in: evaluatedDocument.generatedNames) {
+        for featureID in identityResolver.bodyFeatureIDs(in: evaluatedDocument.subshapes) {
             guard let snapshot = snapshot(
                 for: featureID,
                 in: evaluatedDocument
@@ -50,7 +50,7 @@ public struct BodyDisplaySnapshotService: Sendable {
     ) -> BodyDisplaySnapshot? {
         guard let identity = identityResolver.firstBodyIdentity(
             for: featureID,
-            in: evaluatedDocument.generatedNames
+            in: evaluatedDocument.subshapes
         ),
               let mesh = evaluatedDocument.meshes[identity.bodyID],
               let bounds = bodyBounds(mesh.positions) else {
@@ -60,7 +60,7 @@ public struct BodyDisplaySnapshotService: Sendable {
         return BodyDisplaySnapshot(
             featureID: featureID,
             bodyID: identity.bodyID.description,
-            persistentName: identity.persistentName,
+            subshapeID: GeneratedSubshapeIdentity.string(for: identity.subshapeID),
             bounds: bounds,
             mesh: BodyDisplaySnapshot.Mesh(
                 positions: mesh.positions,
@@ -82,15 +82,13 @@ public struct BodyDisplaySnapshotService: Sendable {
         var edges: [BodyDisplaySnapshot.Topology.Edge] = []
         var vertices: [BodyDisplaySnapshot.Topology.Vertex] = []
 
-        for (name, reference) in evaluatedDocument.generatedNames.sorted(by: {
-            identityResolver.persistentNameString($0.key) < identityResolver.persistentNameString($1.key)
+        for (subshapeID, reference) in evaluatedDocument.subshapes.entries.sorted(by: {
+            GeneratedSubshapeIdentity.areInIncreasingOrder($0.key, $1.key)
         }) {
-            guard identityResolver.sourceFeatureID(name) == featureID else {
+            guard subshapeID.featureID == featureID else {
                 continue
             }
-            let componentID = SelectionComponentID.generatedTopology(
-                identityResolver.persistentNameString(name)
-            )
+            let componentID = SelectionComponentID.generatedTopology(subshapeID)
             switch reference {
             case .body:
                 continue

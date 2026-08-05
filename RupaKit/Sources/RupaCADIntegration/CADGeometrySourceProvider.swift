@@ -11,7 +11,7 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
 
     public init(
         document: CADDocument,
-        evaluator: DocumentEvaluator = DocumentEvaluator()
+        evaluator: DocumentEvaluator
     ) {
         self.document = document
         self.evaluator = evaluator
@@ -86,18 +86,14 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
         }
 
         let featureID = FeatureID(uuid)
-        let bodyIDs = evaluatedDocument.generatedNames.materializedDictionary().compactMap {
-            name, reference -> BodyID? in
-            guard case .body(let bodyID) = reference else {
+        let bodyIDs = evaluatedDocument.subshapes.entries.compactMap {
+            entry -> BodyID? in
+            let (subshapeID, reference) = entry
+            guard subshapeID.featureID == featureID,
+                  case .body(let bodyID) = reference else {
                 return nil
             }
-            let belongsToFeature = name.components.contains { component in
-                guard case .feature(let candidate) = component else {
-                    return false
-                }
-                return candidate == featureID
-            }
-            return belongsToFeature ? bodyID : nil
+            return bodyID
         }
         let uniqueBodyIDs = Set(bodyIDs)
         guard uniqueBodyIDs.count == 1 else {

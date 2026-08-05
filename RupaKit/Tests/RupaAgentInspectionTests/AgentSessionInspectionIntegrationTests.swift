@@ -328,7 +328,6 @@ import SwiftCAD
                 target: edgeTarget,
                 distance: .length(2.0, .millimeter),
                 options: OffsetCurveOptions(
-                    gapFill: .linear,
                     supportTarget: supportFaceTarget
                 ),
                 vertexHandle: nil
@@ -407,7 +406,6 @@ import SwiftCAD
                 distance: .length(2.0, .millimeter),
                 options: OffsetCurveOptions(
                     isSymmetric: true,
-                    gapFill: .linear,
                     supportTarget: supportFaceTarget
                 ),
                 vertexHandle: nil
@@ -440,8 +438,7 @@ import SwiftCAD
     let generatedOffsetEdges = evaluatedTopology.entries.filter { entry in
         entry.kind == .edge &&
             entry.sourceFeatureID == offsetFeatureID.description &&
-            entry.generatedRole == "edgeOffset" &&
-            entry.subshapeRole == "offsetEdge"
+            entry.generatedRole == "edgeOffset.offsetEdge"
     }
 
     #expect(offsetResult.didMutate)
@@ -1241,7 +1238,7 @@ import SwiftCAD
     }
     let candidate = try #require(result.candidates.first { candidate in
         candidate.kind == .edgeMidpoint &&
-            candidate.topologySource?.persistentName == edge.persistentName
+            candidate.topologySource?.persistentName == edge.subshapeID
     })
     #expect(candidate.topologySource?.selectionTarget == edgeTarget)
     #expect(abs(candidate.point.x - midpoint.x) <= 1.0e-12)
@@ -1262,7 +1259,7 @@ import SwiftCAD
     let topology = try TopologySnapshotService().snapshot(document: session.document)
     let vertex = try #require(topology.entries.first { entry in
         entry.kind == .vertex
-            && PolySplineSurfaceVertexTarget.canParsePersistentName(entry.persistentName)
+            && GeneratedSubshapeIdentity.subshapeID(from: entry.subshapeID).map(PolySplineSurfaceVertexTarget.canParse(subshapeID:)) == true
             && entry.start != nil
             && entry.selectionTarget() != nil
     })
@@ -1291,7 +1288,7 @@ import SwiftCAD
     }
     let candidate = try #require(result.candidates.first { candidate in
         candidate.kind == .surfaceControlVertex
-            && candidate.topologySource?.persistentName == vertex.persistentName
+            && candidate.topologySource?.persistentName == vertex.subshapeID
     })
     #expect(result.selectedCandidate?.kind == .surfaceControlVertex)
     #expect(candidate.label == "Surface CV")
@@ -1341,7 +1338,7 @@ import SwiftCAD
             sessionID: sessionID,
             command: .setSurfaceTrimLoops(
                 target: faceReference,
-                trimLoops: [agentAuthoredBSplineSurfaceTrimLoop()]
+                trimLoops: [agentAuthoredSurfaceTrimLoop()]
             ),
             expectedGeneration: DocumentGeneration(1)
         )
@@ -1420,7 +1417,7 @@ import SwiftCAD
     #expect(result.selectedCandidate?.kind == .surfaceFrame)
     #expect(candidate.surfaceFrameSource?.query == query)
     #expect(candidate.surfaceFrameSource?.faceID.isEmpty == false)
-    #expect(candidate.surfaceFrameSource?.facePersistentNames == frame.facePersistentNames)
+    #expect(candidate.surfaceFrameSource?.faceSubshapeIDs == frame.faceSubshapeIDs)
     #expect(abs((candidate.surfaceFrameSource?.worldPoint.x ?? 0.0) - frame.position.x) <= 1.0e-12)
     #expect(abs((candidate.surfaceFrameSource?.worldPoint.y ?? 0.0) - frame.position.y) <= 1.0e-12)
     #expect(abs((candidate.surfaceFrameSource?.worldPoint.z ?? 0.0) - frame.position.z) <= 1.0e-12)

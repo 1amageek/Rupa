@@ -339,18 +339,18 @@ public struct CurveAnalysisService: Sendable {
                     requiredContinuity: .g0,
                     into: &pendingByPair
                 )
-            case let .tangentSplineEndpoints(first, second):
+            case let .tangentSplineEndpoints(constraint):
                 try mergeEndpointJoin(
-                    first: endpointSample(for: first, sketch: sketch, document: document),
-                    second: endpointSample(for: second, sketch: sketch, document: document),
+                    first: endpointSample(for: constraint.first, sketch: sketch, document: document),
+                    second: endpointSample(for: constraint.second, sketch: sketch, document: document),
                     constraintKind: "tangentSplineEndpoints",
                     requiredContinuity: .g1,
                     into: &pendingByPair
                 )
-            case let .smoothSplineEndpoints(first, second):
+            case let .smoothSplineEndpoints(constraint):
                 try mergeEndpointJoin(
-                    first: endpointSample(for: first, sketch: sketch, document: document),
-                    second: endpointSample(for: second, sketch: sketch, document: document),
+                    first: endpointSample(for: constraint.first, sketch: sketch, document: document),
+                    second: endpointSample(for: constraint.second, sketch: sketch, document: document),
                     constraintKind: "smoothSplineEndpoints",
                     requiredContinuity: .g2,
                     into: &pendingByPair

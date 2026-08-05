@@ -12,13 +12,13 @@ import RupaViewportScene
             id: "front-item",
             featureID: frontFeatureID,
             bodyID: "runtime-front",
-            persistentName: "persistent-front"
+            subshapeID: "persistent-front"
         ),
         viewportSectionClippingBodyItem(
             id: "intersecting-item",
             featureID: intersectingFeatureID,
             bodyID: nil,
-            persistentName: nil
+            subshapeID: nil
         ),
         viewportSectionClippingBodyItem(
             id: "untracked-item",
@@ -31,7 +31,7 @@ import RupaViewportScene
         bodies: [
             SectionAnalysisClippingPlan.Body(
                 bodyID: "analysis-front",
-                persistentName: "persistent-front",
+                subshapeID: "persistent-front",
                 name: nil,
                 classification: .inFront,
                 action: .visible
@@ -64,7 +64,7 @@ import RupaViewportScene
     #expect(plan.action(forSceneItemID: "untracked-item") == nil)
     #expect(plan.items.first { $0.sceneItemID == "front-item" }?.featureID == frontFeatureID)
     #expect(plan.items.first { $0.sceneItemID == "front-item" }?.bodyID == "analysis-front")
-    #expect(plan.items.first { $0.sceneItemID == "front-item" }?.persistentName == "persistent-front")
+    #expect(plan.items.first { $0.sceneItemID == "front-item" }?.subshapeID == "persistent-front")
     #expect(plan.items.first { $0.sceneItemID == "intersecting-item" }?.featureID == intersectingFeatureID)
     #expect(plan.unmappedBodyIDs == ["behind"])
 }
@@ -115,7 +115,7 @@ private func viewportSectionClippingBodyItem(
     id: String,
     featureID: FeatureID,
     bodyID: String?,
-    persistentName: String? = nil
+    subshapeID: String? = nil
 ) -> ViewportSceneItem {
     ViewportSceneItem(
         id: id,
@@ -124,7 +124,7 @@ private func viewportSectionClippingBodyItem(
         kind: .body(
             component: ViewportBodyComponent(
                 bodyID: bodyID,
-                persistentName: persistentName,
+                subshapeID: subshapeID,
                 sizeXMeters: 1.0,
                 sizeYMeters: 1.0,
                 sizeZMeters: 1.0,

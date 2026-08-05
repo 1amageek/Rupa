@@ -45,6 +45,11 @@
       "scope": "Typed mesh selection",
       "result": "passed",
       "totalTests": 2
+    },
+    {
+      "scope": "Agent session lifecycle, socket, and codec focused tests at Rupa eb98f02c (2026-08-05)",
+      "result": "passed",
+      "totalTests": 18
     }
   ]
 }

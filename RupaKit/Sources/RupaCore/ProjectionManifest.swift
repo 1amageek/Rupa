@@ -419,25 +419,14 @@ private func validateProjectionTopologyName(
     _ value: String,
     owningFeatureID: FeatureID
 ) throws {
-    let persistentName: PersistentName
-    do {
-        persistentName = try GeneratedTopologyPersistentNameParser().parse(
-            value,
-            operationName: "Projection manifest"
-        )
-    } catch {
+    guard let subshapeID = GeneratedSubshapeIdentity.subshapeID(from: value) else {
         throw DocumentValidationError.invalidProductMetadata(
-            "Projection topology references must use a valid persistent topology name."
+            "Projection topology references must use a valid subshape identity."
         )
     }
-    guard persistentName.components.contains(where: { component in
-        if case .feature(let featureID) = component {
-            return featureID == owningFeatureID
-        }
-        return false
-    }) else {
+    guard subshapeID.featureID == owningFeatureID else {
         throw DocumentValidationError.invalidProductMetadata(
-            "Projection topology persistent names must contain their owning CAD feature."
+            "Projection topology subshape identities must contain their owning CAD feature."
         )
     }
 }

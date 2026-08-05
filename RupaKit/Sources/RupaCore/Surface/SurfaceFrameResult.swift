@@ -2,7 +2,7 @@ import RupaCoreTypes
 public struct SurfaceFrameResult: Codable, Equatable, Sendable {
     public struct Frame: Codable, Equatable, Sendable {
         public var faceID: String
-        public var facePersistentNames: [String]
+        public var faceSubshapeIDs: [String]
         public var sourceFeatureID: String?
         public var sceneNodeID: String?
         public var u: Double
@@ -27,7 +27,7 @@ public struct SurfaceFrameResult: Codable, Equatable, Sendable {
 
         public init(
             faceID: String,
-            facePersistentNames: [String] = [],
+            faceSubshapeIDs: [String] = [],
             sourceFeatureID: String? = nil,
             sceneNodeID: String? = nil,
             u: Double,
@@ -51,7 +51,7 @@ public struct SurfaceFrameResult: Codable, Equatable, Sendable {
             maximumPrincipalDirection: SurfaceAnalysisResult.Vector
         ) {
             self.faceID = faceID
-            self.facePersistentNames = facePersistentNames
+            self.faceSubshapeIDs = faceSubshapeIDs
             self.sourceFeatureID = sourceFeatureID
             self.sceneNodeID = sceneNodeID
             self.u = u

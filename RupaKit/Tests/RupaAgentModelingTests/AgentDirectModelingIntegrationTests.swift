@@ -28,7 +28,7 @@ import SwiftCAD
     )
 
     guard case .command(let result) = response else {
-        #expect(Bool(false))
+        Issue.record("Unexpected agent response: \(response)")
         return
     }
     #expect(result.commandName == "offsetBodyFace")
@@ -71,7 +71,7 @@ import SwiftCAD
     )
 
     guard case .command(let result) = response else {
-        #expect(Bool(false))
+        Issue.record("Unexpected agent response: \(response)")
         return
     }
     #expect(result.commandName == "offsetBodyFace")
@@ -251,7 +251,7 @@ import SwiftCAD
     )
 
     guard case .command(let result) = response else {
-        #expect(Bool(false))
+        Issue.record("Unexpected agent response: \(response)")
         return
     }
     let faceKnifeFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
@@ -269,10 +269,16 @@ import SwiftCAD
     #expect(result.commandName == "createFaceKnife")
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(2))
-    #expect(faceKnifeFaces.count == 7)
+    // The exact kernel names only the split faces under the face-knife
+    // feature; the untouched box faces keep their extrude identities.
+    #expect(faceKnifeFaces.count == 2)
     #expect(faceKnifeFaces.contains {
-        $0.generatedRole == "faceKnife" && $0.subshapeRole == "centerFace"
+        $0.generatedRole == "faceKnife.centerFace"
     })
+    #expect(faceKnifeFaces.contains {
+        $0.generatedRole == "faceKnife.ringFace"
+    })
+    #expect(afterTopology.entries.filter { $0.kind == .face }.count == 7)
     #expect(session.evaluationStatus == .valid)
 }
 
@@ -307,7 +313,7 @@ import SwiftCAD
     )
 
     guard case .command(let result) = response else {
-        #expect(Bool(false))
+        Issue.record("Unexpected agent response: \(response)")
         return
     }
     let deleteFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
@@ -323,8 +329,7 @@ import SwiftCAD
     let carriedFaces = afterTopology.entries.filter {
         $0.kind == .face &&
             $0.sceneNodeID == deleteSceneNodeID.description &&
-            $0.generatedRole == "faceDelete" &&
-            $0.subshapeRole == "carriedFace"
+            $0.generatedRole == "face"
     }
 
     #expect(result.commandName == "deleteBodyFaces")
@@ -332,7 +337,7 @@ import SwiftCAD
     #expect(result.generation == DocumentGeneration(2))
     #expect(body.kind == .sheet)
     #expect(afterTopology.counts.faceCount == 5)
-    #expect(afterTopology.entries.contains { $0.persistentName == faceEntry.persistentName } == false)
+    #expect(afterTopology.entries.contains { $0.subshapeID == faceEntry.subshapeID } == false)
     #expect(carriedFaces.count == 5)
     #expect(session.evaluationStatus == .valid)
 }
@@ -376,7 +381,7 @@ import SwiftCAD
     )
 
     guard case .command(let result) = response else {
-        #expect(Bool(false))
+        Issue.record("Unexpected agent response: \(response)")
         return
     }
     let draftFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
@@ -392,7 +397,7 @@ import SwiftCAD
     let draftFaces = afterTopology.entries.filter {
         $0.kind == .face &&
             $0.sceneNodeID == draftSceneNodeID.description &&
-            $0.generatedRole == "faceDraft"
+            $0.generatedRole == "face"
     }
 
     #expect(result.commandName == "draftBodyFaces")
@@ -425,7 +430,7 @@ import SwiftCAD
         .filter { entry in
             entry.kind == .face && entry.generatedRole == "sideFace"
         }
-        .sorted { ($0.index ?? -1) < ($1.index ?? -1) }
+        .sorted { ($0.ordinal ?? -1) < ($1.ordinal ?? -1) }
     let firstTarget = try #require(targetEntries.first?.selectionTarget())
     let secondTarget = try #require(targetEntries.dropFirst().first?.selectionTarget())
     let neutralEntry = try #require(topology.entries.first { entry in
@@ -446,7 +451,7 @@ import SwiftCAD
     )
 
     guard case .command(let result) = response else {
-        #expect(Bool(false))
+        Issue.record("Unexpected agent response: \(response)")
         return
     }
     let draftFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
@@ -462,14 +467,14 @@ import SwiftCAD
     let draftFaces = afterTopology.entries.filter {
         $0.kind == .face &&
             $0.sceneNodeID == draftSceneNodeID.description &&
-            $0.generatedRole == "faceDraft"
+            $0.generatedRole == "face"
     }
 
     #expect(result.commandName == "draftBodyFaces")
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(2))
-    #expect(faceDraft.facePersistentNames.count == 2)
-    #expect(Set(faceDraft.facePersistentNames).count == 2)
+    #expect(faceDraft.faces.count == 2)
+    #expect(Set(faceDraft.faces).count == 2)
     #expect(body.kind == .solid)
     #expect(afterTopology.counts.faceCount == 6)
     #expect(draftFaces.count == 6)
@@ -515,7 +520,6 @@ import SwiftCAD
                 target: target,
                 distance: .length(1.0, .millimeter),
                 options: OffsetCurveOptions(
-                    gapFill: .linear,
                     supportTarget: supportFaceTarget
                 ),
                 vertexHandle: nil
@@ -525,7 +529,7 @@ import SwiftCAD
     )
 
     guard case .command(let result) = response else {
-        #expect(Bool(false))
+        Issue.record("Unexpected agent response: \(response)")
         return
     }
     let offsetFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
@@ -538,15 +542,13 @@ import SwiftCAD
     let generatedOffsetEdges = afterTopology.entries.filter {
         $0.kind == .edge &&
             $0.sourceFeatureID == offsetFeatureID.description &&
-            $0.generatedRole == "edgeOffset" &&
-            $0.subshapeRole == "offsetEdge"
+            $0.generatedRole == "edgeOffset.offsetEdge"
     }
 
     #expect(result.commandName == "offsetCurve")
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(2))
     #expect(edgeOffset.target == EdgeOffsetTargetReference(featureID: bodyFeatureID))
-    #expect(edgeOffset.gapFill == .linear)
     #expect(afterTopology.counts.faceCount == 7)
     #expect(afterTopology.counts.edgeCount == 15)
     #expect(afterTopology.counts.vertexCount == 10)
@@ -604,7 +606,7 @@ import SwiftCAD
             command: .offsetCurve(
                 target: edgeTarget,
                 distance: .length(1.0, .millimeter),
-                options: OffsetCurveOptions(gapFill: .linear),
+                options: OffsetCurveOptions(),
                 vertexHandle: nil
             ),
             expectedGeneration: DocumentGeneration(1)
@@ -612,7 +614,7 @@ import SwiftCAD
     )
 
     guard case .command(let result) = response else {
-        #expect(Bool(false))
+        Issue.record("Unexpected agent response: \(response)")
         return
     }
     let offsetFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
@@ -625,8 +627,7 @@ import SwiftCAD
     let generatedOffsetEdges = afterTopology.entries.filter {
         $0.kind == .edge &&
             $0.sourceFeatureID == offsetFeatureID.description &&
-            $0.generatedRole == "edgeOffset" &&
-            $0.subshapeRole == "offsetEdge"
+            $0.generatedRole == "edgeOffset.offsetEdge"
     }
 
     #expect(selectionResult.selectedTargets == [supportFaceTarget, edgeTarget])
@@ -634,7 +635,6 @@ import SwiftCAD
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(2))
     #expect(edgeOffset.target == EdgeOffsetTargetReference(featureID: bodyFeatureID))
-    #expect(edgeOffset.gapFill == .linear)
     #expect(generatedOffsetEdges.count == 1)
     #expect(session.evaluationStatus == .valid)
 }
@@ -688,7 +688,7 @@ import SwiftCAD
             command: .offsetCurve(
                 target: edgeTarget,
                 distance: .length(1.0, .millimeter),
-                options: OffsetCurveOptions(gapFill: .linear),
+                options: OffsetCurveOptions(),
                 vertexHandle: nil
             ),
             expectedGeneration: DocumentGeneration(1)
@@ -696,7 +696,7 @@ import SwiftCAD
     )
 
     guard case .command(let result) = response else {
-        #expect(Bool(false))
+        Issue.record("Unexpected agent response: \(response)")
         return
     }
     let offsetFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
@@ -709,8 +709,7 @@ import SwiftCAD
     let generatedOffsetEdges = afterTopology.entries.filter {
         $0.kind == .edge &&
             $0.sourceFeatureID == offsetFeatureID.description &&
-            $0.generatedRole == "edgeOffset" &&
-            $0.subshapeRole == "offsetEdge"
+            $0.generatedRole == "edgeOffset.offsetEdge"
     }
 
     #expect(selectionResult.selectedTargets == [edgeTarget])
@@ -718,11 +717,11 @@ import SwiftCAD
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(2))
     #expect(edgeOffset.target == EdgeOffsetTargetReference(featureID: bodyFeatureID))
-    #expect(edgeOffset.supportFacePersistentName.components == [
-        .feature(bodyFeatureID),
-        .generated(GeneratedSubshapeRole.startFace.rawValue),
-    ])
-    #expect(edgeOffset.gapFill == .linear)
+    #expect(edgeOffset.supportFace.subshapeID == SubshapeID(
+        featureID: bodyFeatureID,
+        role: GeneratedSubshapeRole.startFace.rawValue,
+        ordinal: 0
+    ))
     #expect(generatedOffsetEdges.count == 1)
     #expect(session.evaluationStatus == .valid)
 }
@@ -763,7 +762,7 @@ import SwiftCAD
     )
 
     guard case .command(let result) = response else {
-        #expect(Bool(false))
+        Issue.record("Unexpected agent response: \(response)")
         return
     }
     #expect(result.commandName == "offsetBodyFace")
@@ -796,7 +795,7 @@ import SwiftCAD
     )
 
     guard case .command(let result) = response else {
-        #expect(Bool(false))
+        Issue.record("Unexpected agent response: \(response)")
         return
     }
     #expect(result.commandName == "chamferBodyEdges")
@@ -829,7 +828,7 @@ import SwiftCAD
     )
 
     guard case .command(let result) = response else {
-        #expect(Bool(false))
+        Issue.record("Unexpected agent response: \(response)")
         return
     }
     #expect(result.commandName == "filletBodyEdges")
@@ -871,7 +870,7 @@ import SwiftCAD
     )
 
     guard case .command(let result) = response else {
-        #expect(Bool(false))
+        Issue.record("Unexpected agent response: \(response)")
         return
     }
     #expect(result.commandName == "filletBodyEdges")
@@ -915,7 +914,7 @@ import SwiftCAD
     )
 
     guard case .command(let result) = response else {
-        #expect(Bool(false))
+        Issue.record("Unexpected agent response: \(response)")
         return
     }
     #expect(result.commandName == "filletBodyEdges")
@@ -959,7 +958,7 @@ import SwiftCAD
     )
 
     guard case .command(let result) = response else {
-        #expect(Bool(false))
+        Issue.record("Unexpected agent response: \(response)")
         return
     }
     #expect(result.commandName == "filletBodyEdges")
@@ -1302,7 +1301,7 @@ import SwiftCAD
     )
 
     guard case .command(let result) = response else {
-        #expect(Bool(false))
+        Issue.record("Unexpected agent response: \(response)")
         return
     }
     #expect(result.commandName == "createExtrudedRectangleFromCorners")

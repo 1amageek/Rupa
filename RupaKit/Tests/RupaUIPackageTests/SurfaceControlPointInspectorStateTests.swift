@@ -17,8 +17,9 @@ import Testing
     )
     let patch = try #require(summary.sources.first?.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    let controlPointReference = try #require(controlPoint.selectionReference)
     let state = try #require(SurfaceControlPointInspectorState(
-        selectedReferences: [controlPoint.selectionReference],
+        selectedReferences: [controlPointReference],
         summaryResult: summary
     ))
 
@@ -38,8 +39,8 @@ import Testing
     #expect(state.weightTitle == "1")
     #expect(state.frameTitle == "u1 / v1")
     #expect(state.hasResolvedFrames == false)
-    #expect(state.frameMoveQuery == SurfaceFrameQuery(selectionReference: controlPoint.selectionReference))
-    #expect(state.selectedReferences == [controlPoint.selectionReference])
+    #expect(state.frameMoveQuery == SurfaceFrameQuery(selectionReference: controlPointReference))
+    #expect(state.selectedReferences == [controlPointReference])
 }
 
 @Test func surfaceControlPointInspectorStateReportsCornerControlVertexRole() async throws {
@@ -53,8 +54,9 @@ import Testing
     let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let corner = try #require(patch.controlPoints.first { $0.uIndex == 0 && $0.vIndex == 0 })
+    let cornerReference = try #require(corner.selectionReference)
     let state = try #require(SurfaceControlPointInspectorState(
-        selectedReferences: [corner.selectionReference],
+        selectedReferences: [cornerReference],
         summaryResult: summary
     ))
 
@@ -78,8 +80,9 @@ import Testing
     let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let boundary = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 0 })
+    let boundaryReference = try #require(boundary.selectionReference)
     let state = try #require(SurfaceControlPointInspectorState(
-        selectedReferences: [boundary.selectionReference],
+        selectedReferences: [boundaryReference],
         summaryResult: summary
     ))
 
@@ -103,8 +106,9 @@ import Testing
     let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let boundary = try #require(patch.controlPoints.first { $0.uIndex == 0 && $0.vIndex == 0 })
+    let boundaryReference = try #require(boundary.selectionReference)
     let state = try #require(SurfaceControlPointInspectorState(
-        selectedReferences: [boundary.selectionReference],
+        selectedReferences: [boundaryReference],
         summaryResult: summary
     ))
 
@@ -126,9 +130,10 @@ import Testing
     let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    let controlPointReference = try #require(controlPoint.selectionReference)
     let builder = WorkspaceSurfaceInspectorStateBuilder(
         document: document,
-        selection: SelectionModel(selectedReferences: [controlPoint.selectionReference]),
+        selection: SelectionModel(selectedReferences: [controlPointReference]),
         currentEvaluation: nil,
         documentGeneration: DocumentGeneration(),
         objectRegistry: .builtIn,
@@ -160,14 +165,15 @@ import Testing
     let initialSummary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let initialPatch = try #require(initialSummary.sources.first?.patches.first)
     let controlPoint = try #require(initialPatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    let controlPointReference = try #require(controlPoint.selectionReference)
     _ = try #require(session.setSurfaceControlPointDisplay(
-        target: controlPoint.selectionReference,
+        target: controlPointReference,
         isVisible: true
     ))
 
     let visibleSummary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
     let state = try #require(SurfaceControlPointInspectorState(
-        selectedReferences: [controlPoint.selectionReference],
+        selectedReferences: [controlPointReference],
         summaryResult: visibleSummary,
         surfaceControlPointDisplays: session.workspaceState.surfaceControlPointDisplays
     ))
@@ -195,8 +201,9 @@ import Testing
     ))
 
     let visibleSummary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .millimeter)
+    let controlPointReference = try #require(controlPoint.selectionReference)
     let state = try #require(SurfaceControlPointInspectorState(
-        selectedReferences: [controlPoint.selectionReference],
+        selectedReferences: [controlPointReference],
         summaryResult: visibleSummary,
         surfaceFrameDisplays: session.workspaceState.surfaceFrameDisplays
     ))

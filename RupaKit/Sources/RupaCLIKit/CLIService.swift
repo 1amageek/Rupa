@@ -2247,7 +2247,7 @@ public struct CLIService {
     public func setSurfaceTrimLoops(
         target: CLIDocumentTarget,
         reference: SelectionReference,
-        trimLoops: [BSplineSurfaceTrimLoop],
+        trimLoops: [SurfaceTrimLoop],
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,

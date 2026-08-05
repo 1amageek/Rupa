@@ -299,7 +299,7 @@ public indirect enum AutomationCommand: Codable, Equatable, Sendable {
     )
     case setSurfaceTrimLoops(
         target: SelectionReference,
-        trimLoops: [BSplineSurfaceTrimLoop]
+        trimLoops: [SurfaceTrimLoop]
     )
     case moveSurfaceTrimEndpoint(
         target: SelectionReference,

@@ -129,7 +129,7 @@ public enum ViewportSceneItemKind: Equatable {
 
 public struct ViewportBodyComponent: Equatable {
     public var bodyID: String?
-    public var persistentName: String?
+    public var subshapeID: String?
     public var typeID: ObjectTypeID?
     public var properties: ObjectPropertySet
     public var sizeXMeters: Double
@@ -151,7 +151,7 @@ public struct ViewportBodyComponent: Equatable {
 
     public init(
         bodyID: String? = nil,
-        persistentName: String? = nil,
+        subshapeID: String? = nil,
         typeID: ObjectTypeID? = nil,
         properties: ObjectPropertySet = ObjectPropertySet(),
         sizeXMeters: Double,
@@ -172,7 +172,7 @@ public struct ViewportBodyComponent: Equatable {
         surfaceFrameDisplays: [ViewportSurfaceFrameDisplay] = []
     ) {
         self.bodyID = bodyID
-        self.persistentName = persistentName
+        self.subshapeID = subshapeID
         self.typeID = typeID
         self.properties = properties
         self.sizeXMeters = sizeXMeters
@@ -395,7 +395,7 @@ public struct ViewportSurfaceFrameDisplay: Equatable, Sendable {
     public var normal: Vector3D
     public var u: Double
     public var v: Double
-    public var facePersistentNames: [String]
+    public var faceSubshapeIDs: [String]
 
     public init(
         id: SurfaceFrameDisplayID,
@@ -406,7 +406,7 @@ public struct ViewportSurfaceFrameDisplay: Equatable, Sendable {
         normal: Vector3D,
         u: Double,
         v: Double,
-        facePersistentNames: [String]
+        faceSubshapeIDs: [String]
     ) {
         self.id = id
         self.query = query
@@ -416,7 +416,7 @@ public struct ViewportSurfaceFrameDisplay: Equatable, Sendable {
         self.normal = normal
         self.u = u
         self.v = v
-        self.facePersistentNames = facePersistentNames
+        self.faceSubshapeIDs = faceSubshapeIDs
     }
 }
 

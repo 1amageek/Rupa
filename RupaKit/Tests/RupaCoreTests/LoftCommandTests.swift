@@ -168,11 +168,11 @@ import SwiftCAD
     )
     let feature = try #require(document.cadDocument.designGraph.nodes[loftID])
     let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
-    let vertexReference = try #require(evaluated.generatedNames[PersistentName(components: [
-        .feature(loftID),
-        .generated(GeneratedSubshapeRole.vertex.rawValue),
-        .index(0),
-    ])])
+    let vertexReference = try #require(evaluated.subshapes[SubshapeID(
+        featureID: loftID,
+        role: GeneratedSubshapeRole.vertex.rawValue,
+        ordinal: 0
+    )])
     guard case .loft(let loft) = feature.operation,
           case .vertex(let vertexID) = vertexReference,
           let vertex = evaluated.brep.vertices[vertexID] else {
@@ -932,12 +932,12 @@ private func firstSmoothConnectorCurve(
     in evaluated: EvaluatedDocument,
     loftID: FeatureID
 ) throws -> BSplineCurve3D {
-    let firstConnectorName = PersistentName(components: [
-        .feature(loftID),
-        .generated(GeneratedSubshapeRole.edge.rawValue),
-        .index(12),
-    ])
-    guard case .edge(let edgeID) = evaluated.generatedNames[firstConnectorName],
+    let firstConnectorID = SubshapeID(
+        featureID: loftID,
+        role: GeneratedSubshapeRole.edge.rawValue,
+        ordinal: 12
+    )
+    guard case .edge(let edgeID) = evaluated.subshapes[firstConnectorID],
           let edge = evaluated.brep.edges[edgeID],
           let curve = evaluated.brep.geometry.curves[edge.curveID]?.bSplineCurve else {
         throw EditorError(

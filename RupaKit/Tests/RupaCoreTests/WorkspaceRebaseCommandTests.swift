@@ -49,7 +49,7 @@ func workspaceOriginRebaseRejectsStandardPlaneNormalTranslationWithoutMutation()
     let document = try farFromOriginRectangleDocument()
     let session = EditorSession(document: document)
 
-    #expect(throws: FeatureEvaluationError.self) {
+    #expect(throws: KernelError.self) {
         try session.execute(.rebaseWorkspaceOrigin(
             translation: Vector3D(x: -1.0e12, y: -1.0e12, z: 5.0)
         ))
@@ -176,7 +176,7 @@ private func farFromOriginAlmostClosedRectangleDocument() throws -> DesignDocume
         name: "Remote Almost Closed Profile",
         operation: .sketch(sketch),
         outputs: [FeatureOutput(role: .profile)]
-    ))
+    ), tolerance: DocumentModelingSettings.standard.tolerance)
     try document.cadDocument.appendFeature(FeatureNode(
         id: extrudeFeatureID,
         name: "Remote Almost Closed Solid",
@@ -187,7 +187,7 @@ private func farFromOriginAlmostClosedRectangleDocument() throws -> DesignDocume
         )),
         inputs: [FeatureInput(featureID: sketchFeatureID, role: .profile)],
         outputs: [FeatureOutput(role: .body)]
-    ))
+    ), tolerance: DocumentModelingSettings.standard.tolerance)
     return document
 }
 

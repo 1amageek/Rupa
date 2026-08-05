@@ -54,7 +54,7 @@ public struct ViewportSurfaceContinuityOverlay: Equatable {
             return ViewportSurfaceContinuityOverlay()
         }
 
-        let selectedGeneratedNames = generatedTopologyPersistentNames(in: selection.selectedTargets)
+        let selectedGeneratedNames = generatedTopologySubshapeIDStrings(in: selection.selectedTargets)
         let selectedFeatureIDs = selectedBodyFeatureIDs(in: selection.selectedTargets, document: document)
         guard selectedGeneratedNames.isEmpty == false || selectedFeatureIDs.isEmpty == false else {
             return ViewportSurfaceContinuityOverlay()
@@ -95,7 +95,7 @@ public struct ViewportSurfaceContinuityOverlay: Equatable {
         })
     }
 
-    private static func generatedTopologyPersistentNames(
+    private static func generatedTopologySubshapeIDStrings(
         in targets: [SelectionTarget]
     ) -> Set<String> {
         var names = Set<String>()
@@ -104,10 +104,10 @@ public struct ViewportSurfaceContinuityOverlay: Equatable {
             case .object, .sketchEntity, .region, .constructionPlane:
                 continue
             case .face(let componentID), .edge(let componentID), .vertex(let componentID):
-                guard let persistentName = componentID.generatedTopologyPersistentName else {
+                guard let subshapeID = componentID.generatedTopologySubshapeID else {
                     continue
                 }
-                names.insert(persistentName)
+                names.insert(GeneratedSubshapeIdentity.string(for: subshapeID))
             }
         }
         return names
@@ -125,11 +125,12 @@ public struct ViewportSurfaceContinuityOverlay: Equatable {
                 continue
             }
             for edge in topology.edges {
-                guard let persistentName = edge.componentID.generatedTopologyPersistentName else {
+                guard let subshapeID = edge.componentID.generatedTopologySubshapeID else {
                     continue
                 }
-                result[persistentName] = EdgeRecord(
-                    persistentName: persistentName,
+                let subshapeIDString = GeneratedSubshapeIdentity.string(for: subshapeID)
+                result[subshapeIDString] = EdgeRecord(
+                    persistentName: subshapeIDString,
                     start: edge.start,
                     end: edge.end
                 )

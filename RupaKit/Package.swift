@@ -130,6 +130,8 @@ let package = Package(
             dependencies: [
                 "RupaCoreTypes",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
+                .product(name: "CADModeling", package: "swift-CAD"),
+                .product(name: "CADTopology", package: "swift-CAD"),
                 .product(name: "Collections", package: "swift-collections"),
             ]
         ),

@@ -4,7 +4,7 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
     public struct Item: Equatable, Identifiable {
         public var id: String
         public var faceID: String
-        public var facePersistentName: String?
+        public var faceSubshapeID: String?
         public var direction: SurfaceAnalysisResult.Direction
         public var position: Point3D
         public var normal: Vector3D
@@ -14,7 +14,7 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
         public init(
             id: String,
             faceID: String,
-            facePersistentName: String? = nil,
+            faceSubshapeID: String? = nil,
             direction: SurfaceAnalysisResult.Direction,
             position: Point3D,
             normal: Vector3D,
@@ -23,7 +23,7 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
         ) {
             self.id = id
             self.faceID = faceID
-            self.facePersistentName = facePersistentName
+            self.faceSubshapeID = faceSubshapeID
             self.direction = direction
             self.position = position
             self.normal = normal
@@ -35,7 +35,7 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
     public struct PrincipalDirectionItem: Equatable, Identifiable {
         public var id: String
         public var faceID: String
-        public var facePersistentName: String?
+        public var faceSubshapeID: String?
         public var position: Point3D
         public var minimumPrincipalDirection: Vector3D
         public var maximumPrincipalDirection: Vector3D
@@ -45,7 +45,7 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
         public init(
             id: String,
             faceID: String,
-            facePersistentName: String? = nil,
+            faceSubshapeID: String? = nil,
             position: Point3D,
             minimumPrincipalDirection: Vector3D,
             maximumPrincipalDirection: Vector3D,
@@ -54,7 +54,7 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
         ) {
             self.id = id
             self.faceID = faceID
-            self.facePersistentName = facePersistentName
+            self.faceSubshapeID = faceSubshapeID
             self.position = position
             self.minimumPrincipalDirection = minimumPrincipalDirection
             self.maximumPrincipalDirection = maximumPrincipalDirection
@@ -66,7 +66,7 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
     public struct BoundaryItem: Equatable, Identifiable {
         public var id: String
         public var faceID: String
-        public var facePersistentName: String?
+        public var faceSubshapeID: String?
         public var loopID: String
         public var role: SurfaceAnalysisResult.TrimBoundaryRole
         public var points: [Point3D]
@@ -75,7 +75,7 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
         public init(
             id: String,
             faceID: String,
-            facePersistentName: String? = nil,
+            faceSubshapeID: String? = nil,
             loopID: String,
             role: SurfaceAnalysisResult.TrimBoundaryRole,
             points: [Point3D],
@@ -83,7 +83,7 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
         ) {
             self.id = id
             self.faceID = faceID
-            self.facePersistentName = facePersistentName
+            self.faceSubshapeID = faceSubshapeID
             self.loopID = loopID
             self.role = role
             self.points = points
@@ -118,7 +118,7 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
             return ViewportSurfaceAnalysisOverlay()
         }
 
-        let selectedGeneratedNames = generatedTopologyPersistentNames(in: selection.selectedTargets)
+        let selectedGeneratedNames = generatedTopologySubshapeIDStrings(in: selection.selectedTargets)
         let selectedFeatureIDs = selectedBodyFeatureIDs(in: selection.selectedTargets, document: document)
         guard selectedGeneratedNames.isEmpty == false || selectedFeatureIDs.isEmpty == false else {
             return ViewportSurfaceAnalysisOverlay()
@@ -163,7 +163,7 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
         })
     }
 
-    private static func generatedTopologyPersistentNames(
+    private static func generatedTopologySubshapeIDStrings(
         in targets: [SelectionTarget]
     ) -> Set<String> {
         var names = Set<String>()
@@ -172,10 +172,10 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
             case .object, .sketchEntity, .region, .constructionPlane:
                 continue
             case .face(let componentID), .edge(let componentID), .vertex(let componentID):
-                guard let persistentName = componentID.generatedTopologyPersistentName else {
+                guard let subshapeID = componentID.generatedTopologySubshapeID else {
                     continue
                 }
-                names.insert(persistentName)
+                names.insert(GeneratedSubshapeIdentity.string(for: subshapeID))
             }
         }
         return names
@@ -193,7 +193,7 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
         guard selectedGeneratedNames.isEmpty == false else {
             return false
         }
-        if face.facePersistentNames.contains(where: { selectedGeneratedNames.contains($0) }) {
+        if face.faceSubshapeIDs.contains(where: { selectedGeneratedNames.contains($0) }) {
             return true
         }
         return face.edgePersistentNames.contains { selectedGeneratedNames.contains($0) }
@@ -206,7 +206,7 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
             Item(
                 id: "\(face.faceID):\(comb.direction.rawValue):\(index)",
                 faceID: face.faceID,
-                facePersistentName: face.facePersistentNames.first,
+                faceSubshapeID: face.faceSubshapeIDs.first,
                 direction: comb.direction,
                 position: Point3D(
                     x: comb.position.x,
@@ -231,7 +231,7 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
             PrincipalDirectionItem(
                 id: "\(face.faceID):principal:\(index)",
                 faceID: face.faceID,
-                facePersistentName: face.facePersistentNames.first,
+                faceSubshapeID: face.faceSubshapeIDs.first,
                 position: Point3D(
                     x: sample.position.x,
                     y: sample.position.y,
@@ -260,7 +260,7 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
             BoundaryItem(
                 id: "\(face.faceID):trim:\(boundary.loopID)",
                 faceID: face.faceID,
-                facePersistentName: face.facePersistentNames.first,
+                faceSubshapeID: face.faceSubshapeIDs.first,
                 loopID: boundary.loopID,
                 role: boundary.role,
                 points: boundary.points.map { point in

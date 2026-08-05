@@ -11,7 +11,7 @@ import RupaCore
     #expect(plan.retainedSide == .front)
     #expect(plan.action(for: "front") == .visible)
     #expect(plan.action(forSourceFeatureID: "feature-front") == .visible)
-    #expect(plan.action(forPersistentName: "persistent-front") == .visible)
+    #expect(plan.action(forSubshapeID: "persistent-front") == .visible)
     #expect(plan.action(for: "behind") == .hidden)
     #expect(plan.action(for: "touching") == .visible)
     #expect(plan.action(for: "coplanar") == .visible)
@@ -72,7 +72,7 @@ private func sectionAnalysisClippingBody(
     SectionAnalysisResult.Body(
         bodyID: id,
         sourceFeatureID: "feature-\(id)",
-        persistentName: "persistent-\(id)",
+        subshapeID: "persistent-\(id)",
         name: id,
         kind: nil,
         materialID: nil,

@@ -23,7 +23,7 @@ extension DesignDocument {
                 message: "Sketch geometry role must be sketchProfile or curve."
             )
         }
-        try sketch.validate()
+        try sketch.validate(tolerance: modelingSettings.tolerance)
         try sketch.validateExpressions(using: cadDocument.parameters)
         return try appendSketchFeature(
             name: trimmedName,

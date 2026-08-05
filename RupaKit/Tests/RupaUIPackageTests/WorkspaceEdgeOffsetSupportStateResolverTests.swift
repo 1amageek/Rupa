@@ -6,11 +6,11 @@ import Testing
     let sceneNodeID = SceneNodeID()
     let firstTarget = SelectionTarget(
         sceneNodeID: sceneNodeID,
-        component: .edge(.generatedTopology("edge:first"))
+        component: .edge(.generatedTopology(generatedTopologyTestSubshapeID("edge:first")))
     )
     let secondTarget = SelectionTarget(
         sceneNodeID: sceneNodeID,
-        component: .edge(.generatedTopology("edge:second"))
+        component: .edge(.generatedTopology(generatedTopologyTestSubshapeID("edge:second")))
     )
     let resolver = WorkspaceEdgeOffsetSupportStateResolver(
         document: .empty(),
@@ -43,7 +43,7 @@ import Testing
 @Test func workspaceEdgeOffsetSupportStateResolverMapsSupportTitles() {
     let target = SelectionTarget(
         sceneNodeID: SceneNodeID(),
-        component: .face(.generatedTopology("face:support"))
+        component: .face(.generatedTopology(generatedTopologyTestSubshapeID("face:support")))
     )
     let resolver = WorkspaceEdgeOffsetSupportStateResolver(
         document: .empty(),
@@ -61,4 +61,17 @@ import Testing
     #expect(resolver.supportTitle(for: .ambiguous("ambiguous")) == "Ambiguous")
     #expect(resolver.supportTitle(for: .unavailable("missing")) == "Missing")
     #expect(resolver.supportTitle(for: .notApplicable("unsupported")) == "Unsupported")
+}
+
+
+/// Shared feature identity so equal role strings map to equal subshape IDs
+/// within this file's tests.
+private let generatedTopologyTestFeatureID = FeatureID()
+
+private func generatedTopologyTestSubshapeID(_ role: String) -> SubshapeID {
+    SubshapeID(
+        featureID: generatedTopologyTestFeatureID,
+        role: role,
+        ordinal: 0
+    )
 }

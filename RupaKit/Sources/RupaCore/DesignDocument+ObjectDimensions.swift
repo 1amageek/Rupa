@@ -131,7 +131,7 @@ extension DesignDocument {
 
         var updatedCADDocument = cadDocument
         do {
-            try updatedCADDocument.replaceFeatures([profileFeature, feature])
+            try updatedCADDocument.replaceFeatures([profileFeature, feature], tolerance: modelingSettings.tolerance)
         } catch {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -191,7 +191,7 @@ extension DesignDocument {
 
         var updatedCADDocument = cadDocument
         do {
-            try updatedCADDocument.replaceFeatures([profileFeature, feature])
+            try updatedCADDocument.replaceFeatures([profileFeature, feature], tolerance: modelingSettings.tolerance)
         } catch {
             throw EditorError(
                 code: .referenceUnresolved,

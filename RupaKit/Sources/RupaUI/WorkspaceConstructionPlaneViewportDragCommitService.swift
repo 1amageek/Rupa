@@ -19,7 +19,8 @@ struct WorkspaceConstructionPlaneViewportDragCommitService: Sendable {
 
     func edit(
         for target: ViewportConstructionPlaneDragTarget,
-        entries: [ConstructionPlaneSummaryResult.Entry]
+        entries: [ConstructionPlaneSummaryResult.Entry],
+        tolerance: ModelingTolerance
     ) throws -> Edit? {
         guard let entry = entries.first(where: { plane in
             plane.id == target.constructionPlaneID && plane.sceneNodeID == target.sceneNodeID
@@ -31,13 +32,13 @@ struct WorkspaceConstructionPlaneViewportDragCommitService: Sendable {
         case .origin:
             return Edit(
                 entry: entry,
-                plane: try editBuilder.planeSettingOrigin(target.origin, on: entry.plane),
+                plane: try editBuilder.planeSettingOrigin(target.origin, on: entry.plane, tolerance: tolerance),
                 successMessage: "Updated construction plane \(entry.name) origin."
             )
         case .normal:
             return Edit(
                 entry: entry,
-                plane: try editBuilder.planeSettingNormal(target.normal, on: entry.plane),
+                plane: try editBuilder.planeSettingNormal(target.normal, on: entry.plane, tolerance: tolerance),
                 successMessage: "Updated construction plane \(entry.name) normal."
             )
         }

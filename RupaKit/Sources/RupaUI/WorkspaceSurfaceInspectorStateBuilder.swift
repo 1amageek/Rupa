@@ -189,10 +189,10 @@ struct WorkspaceSurfaceInspectorStateBuilder {
             case .face(let id), .edge(let id):
                 componentID = id
             }
-            guard let name = componentID?.generatedTopologyPersistentName else {
+            guard let subshapeID = componentID?.generatedTopologySubshapeID else {
                 continue
             }
-            names.insert(name)
+            names.insert(GeneratedSubshapeIdentity.string(for: subshapeID))
         }
         return names
     }
@@ -228,7 +228,7 @@ struct WorkspaceSurfaceInspectorStateBuilder {
             faces: faces.map { face in
                 InspectorSurfaceFaceAnalysis(
                     id: face.faceID,
-                    facePersistentNames: face.facePersistentNames,
+                    faceSubshapeIDs: face.faceSubshapeIDs,
                     uDegree: face.uDegree,
                     vDegree: face.vDegree,
                     uControlPointCount: face.uControlPointCount,
@@ -488,7 +488,7 @@ struct WorkspaceSurfaceInspectorStateBuilder {
         _ face: SurfaceAnalysisResult.FaceAnalysis,
         containsAny persistentNames: Set<String>
     ) -> Bool {
-        if face.facePersistentNames.contains(where: { persistentNames.contains($0) }) {
+        if face.faceSubshapeIDs.contains(where: { persistentNames.contains($0) }) {
             return true
         }
         return face.edgePersistentNames.contains { persistentNames.contains($0) }

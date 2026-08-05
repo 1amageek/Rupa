@@ -4,13 +4,14 @@ import Testing
 @testable import RupaCore
 
 @Test func polySplineSurfaceVertexEditingServiceResolvesBoundaryVertexSourceIndex() throws {
-    let service = PolySplineSurfaceVertexEditingService()
+    let service = PolySplineSurfaceVertexEditingService(
+        tolerance: DocumentModelingSettings.standard.tolerance
+    )
     let polySpline = PolySplineFeature(sourceMesh: polySplineEditingQuadMesh())
     let featureID = FeatureID()
     let target = PolySplineSurfaceVertexTarget(
         featureID: featureID,
-        patchID: 0,
-        boundaryRole: .uMaxVMin
+        sourceVertexIndex: 1
     )
 
     let sourceVertexIndex = try service.sourceVertexIndex(
@@ -23,13 +24,14 @@ import Testing
 }
 
 @Test func polySplineSurfaceVertexEditingServiceUsesPatchHullForSlideDirections() throws {
-    let service = PolySplineSurfaceVertexEditingService()
+    let service = PolySplineSurfaceVertexEditingService(
+        tolerance: DocumentModelingSettings.standard.tolerance
+    )
     let polySpline = PolySplineFeature(sourceMesh: polySplineEditingQuadMesh())
     let featureID = FeatureID()
     let target = PolySplineSurfaceVertexTarget(
         featureID: featureID,
-        patchID: 0,
-        boundaryRole: .uMaxVMin
+        sourceVertexIndex: 1
     )
 
     let positiveV = try service.slideUnitVector(

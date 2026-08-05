@@ -539,7 +539,7 @@ import SwiftCAD
         $0.kind == .edge &&
             $0.generatedRole == "edge" &&
             $0.curveKind == "line" &&
-            ($0.index ?? Int.max) < 4
+            ($0.ordinal ?? Int.max) < 4
     })
     let edgeTarget = try #require(capEdge.selectionTarget())
     let generation = session.generation

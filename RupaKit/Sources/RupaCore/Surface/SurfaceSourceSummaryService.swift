@@ -66,17 +66,22 @@ public struct SurfaceSourceSummaryService: Sendable {
                     sceneNodeID: sceneNodeIDsByFeatureID[featureID],
                     surfaceControlPointDisplays: surfaceControlPointDisplays,
                     surfaceFrameDisplays: surfaceFrameDisplays,
-                    topologyEntriesByPersistentName: topologyEntriesByPersistentName
+                    topologyEntriesByPersistentName: topologyEntriesByPersistentName,
+                    tolerance: document.modelingSettings.tolerance
                 ))
             case let .bSplineSurface(surfaceFeature):
+                let authoredTrim = document.existingSurfaceTrimOperation(for: featureID)
                 if let surfaceSource = try BSplineSurfaceSourceSummaryBuilder().source(
                     featureID: featureID,
                     feature: feature,
                     surfaceFeature: surfaceFeature,
+                    authoredTrimLoops: authoredTrim?.feature.loops ?? [],
+                    authoredTrimTargetFace: authoredTrim?.feature.target.face,
                     sceneNodeID: sceneNodeIDsByFeatureID[featureID],
                     surfaceControlPointDisplays: surfaceControlPointDisplays,
                     surfaceFrameDisplays: surfaceFrameDisplays,
-                    topologyEntriesByPersistentName: topologyEntriesByPersistentName
+                    topologyEntriesByPersistentName: topologyEntriesByPersistentName,
+                    tolerance: document.modelingSettings.tolerance
                 ) {
                     sources.append(surfaceSource)
                 }
@@ -105,11 +110,13 @@ public struct SurfaceSourceSummaryService: Sendable {
         sceneNodeID: SceneNodeID?,
         surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay],
         surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay],
-        topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry]
+        topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry],
+        tolerance: ModelingTolerance
     ) -> SurfaceSourceSummaryResult.Source {
         let analysis = PolySplineMeshAnalysisService().analyze(
             sourceMesh: polySpline.sourceMesh,
-            options: polySpline.options
+            options: polySpline.options,
+            tolerance: tolerance
         )
         let patchCandidates = selectedPatchCandidates(
             from: analysis,
@@ -179,25 +186,25 @@ public struct SurfaceSourceSummaryService: Sendable {
     ) -> PatchSummaryBuildResult {
         let patchID = patchCandidate.patchID
         let sourceMesh = polySpline.sourceMesh
-        let faceName = persistentName(
+        let faceSubshapeID = subshapeIdentity(
             featureID: featureID,
             subshape: "patch:\(patchID):face"
         )
-        let facePersistentName = persistentNameString(faceName)
-        let surfaceReference = SurfaceReference(faceName: faceName)
-        let faceSelectionComponentID = topologyEntriesByPersistentName[facePersistentName]?.selectionComponentID
-        let faceSelectionReference: SelectionReference? = topologyEntriesByPersistentName[facePersistentName] == nil
-            ? nil
-            : .surface(.whole(surfaceReference))
-        let edgePersistentNames = edgeRoles.map {
-            persistentNameString(persistentName(featureID: featureID, subshape: "patch:\(patchID):\($0.subshape)"))
+        let faceEntry = topologyEntriesByPersistentName[faceSubshapeID]
+        let faceSelectionComponentID = faceEntry?.selectionComponentID
+        let surfaceReference = faceEntry?.stableReference.map(SurfaceReference.init(subshape:))
+        let faceSelectionReference: SelectionReference? = surfaceReference.map {
+            .surface(.whole($0))
         }
-        .filter { topologyEntriesByPersistentName[$0] != nil }
-        let trimSelectionReferences = edgeRoles.enumerated().compactMap { index, role -> SelectionReference? in
-            let edgeName = persistentNameString(
-                persistentName(featureID: featureID, subshape: "patch:\(patchID):\(role.subshape)")
-            )
-            guard topologyEntriesByPersistentName[edgeName] != nil else {
+        let edgeIdentities = patchBoundaryEdgeIdentities(
+            featureID: featureID,
+            boundaryVertexIndices: patchCandidate.boundaryVertexIndices
+        )
+        let edgePersistentNames = edgeIdentities
+            .filter { topologyEntriesByPersistentName[$0] != nil }
+        let trimSelectionReferences = edgeIdentities.enumerated().compactMap { index, edgeIdentity -> SelectionReference? in
+            guard topologyEntriesByPersistentName[edgeIdentity] != nil,
+                  let surfaceReference else {
                 return nil
             }
             return .surface(.trim(SurfaceTrimReference(
@@ -224,6 +231,7 @@ public struct SurfaceSourceSummaryService: Sendable {
         let trimEdges = trimEdges(
             featureID: featureID,
             patchID: patchID,
+            boundaryVertexIndices: patchCandidate.boundaryVertexIndices,
             surfaceReference: surfaceReference,
             surface: patchSurface,
             topologyEntriesByPersistentName: topologyEntriesByPersistentName
@@ -237,7 +245,7 @@ public struct SurfaceSourceSummaryService: Sendable {
         )
         let basis = cubicBezierBasis(isRational: isRationalPatch(polySpline: polySpline, patchID: patchID))
         let frameSampleResult: SurfaceSourceFrameSampleBuilder.Result
-        if let patchSurface {
+        if let patchSurface, let surfaceReference {
             frameSampleResult = SurfaceSourceFrameSampleBuilder().buildSamples(
                 featureID: featureID,
                 patchID: patchID,
@@ -253,7 +261,7 @@ public struct SurfaceSourceSummaryService: Sendable {
 
         return PatchSummaryBuildResult(patch: SurfaceSourceSummaryResult.Patch(
             patchID: patchID,
-            facePersistentName: topologyEntriesByPersistentName[facePersistentName]?.persistentName,
+            faceSubshapeID: faceEntry?.subshapeID,
             faceSelectionComponentID: faceSelectionComponentID,
             faceSelectionReference: faceSelectionReference,
             uDomain: SurfaceSourceSummaryResult.ParameterRange(lowerBound: 0.0, upperBound: 1.0),
@@ -279,21 +287,29 @@ public struct SurfaceSourceSummaryService: Sendable {
     private func trimEdges(
         featureID: FeatureID,
         patchID: Int,
-        surfaceReference: SurfaceReference,
+        boundaryVertexIndices: [Int],
+        surfaceReference: SurfaceReference?,
         surface: BSplineSurface3D?,
         topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry]
     ) -> [SurfaceSourceSummaryResult.TrimLoop.Edge] {
-        BSplineSurfaceBoundarySide.allCases.enumerated().map { index, side in
-            let edgePersistentName = persistentNameString(
-                persistentName(featureID: featureID, subshape: "patch:\(patchID):edge:\(side.rawValue)")
-            )
+        let edgeIdentities = patchBoundaryEdgeIdentities(
+            featureID: featureID,
+            boundaryVertexIndices: boundaryVertexIndices
+        )
+        return BSplineSurfaceBoundarySide.allCases.enumerated().map { index, side in
+            let edgePersistentName = edgeIdentities.indices.contains(index)
+                ? edgeIdentities[index]
+                : ""
+
             let selectionReference: SelectionReference? = topologyEntriesByPersistentName[edgePersistentName] == nil
                 ? nil
-                : .surface(.trim(SurfaceTrimReference(
-                    surface: surfaceReference,
-                    loopIndex: 0,
-                    edgeIndex: index
-                )))
+                : surfaceReference.map {
+                    .surface(.trim(SurfaceTrimReference(
+                        surface: $0,
+                        loopIndex: 0,
+                        edgeIndex: index
+                    )))
+                }
             let parameters = trimEdgeParameters(side: side, surfaceReference: surfaceReference)
             return SurfaceSourceSummaryResult.TrimLoop.Edge(
                 index: index,
@@ -337,7 +353,7 @@ public struct SurfaceSourceSummaryService: Sendable {
 
     private func trimEdgeParameters(
         side: BSplineSurfaceBoundarySide,
-        surfaceReference: SurfaceReference
+        surfaceReference: SurfaceReference?
     ) -> (start: SurfaceSourceSummaryResult.ParameterAddress, end: SurfaceSourceSummaryResult.ParameterAddress) {
         switch side {
         case .vMin:
@@ -367,9 +383,12 @@ public struct SurfaceSourceSummaryService: Sendable {
         side: BSplineSurfaceBoundarySide,
         inwardOffset: Int,
         surface: BSplineSurface3D,
-        surfaceReference: SurfaceReference
+        surfaceReference: SurfaceReference?
     ) -> [SelectionReference] {
         guard inwardOffset < inwardControlPointCount(for: side, in: surface) else {
+            return []
+        }
+        guard let surfaceReference else {
             return []
         }
         return boundaryOrdinals(for: side, in: surface).map { ordinal in
@@ -427,7 +446,7 @@ public struct SurfaceSourceSummaryService: Sendable {
     private func surfaceControlPoints(
         featureID: FeatureID,
         patchID: Int,
-        surfaceReference: SurfaceReference,
+        surfaceReference: SurfaceReference?,
         surface: BSplineSurface3D?,
         surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay]
     ) -> [SurfaceSourceSummaryResult.ControlPoint] {
@@ -447,11 +466,13 @@ public struct SurfaceSourceSummaryService: Sendable {
                     : 1.0
                 let isBoundary = uIndex == 0 || uIndex == 3 || vIndex == 0 || vIndex == 3
                 let isCorner = (uIndex == 0 || uIndex == 3) && (vIndex == 0 || vIndex == 3)
-                let selectionReference = SelectionReference.surface(.controlPoint(SurfaceControlPointReference(
-                    surface: surfaceReference,
-                    uIndex: uIndex,
-                    vIndex: vIndex
-                )))
+                let selectionReference = surfaceReference.map {
+                    SelectionReference.surface(.controlPoint(SurfaceControlPointReference(
+                        surface: $0,
+                        uIndex: uIndex,
+                        vIndex: vIndex
+                    )))
+                }
                 result.append(SurfaceSourceSummaryResult.ControlPoint(
                     id: "feature:\(featureID.description)/patch:\(patchID)/surfaceControlPoint:u\(uIndex):v\(vIndex)",
                     uIndex: uIndex,
@@ -461,10 +482,12 @@ public struct SurfaceSourceSummaryService: Sendable {
                     isBoundary: isBoundary,
                     isEditable: isBoundary == false || isCorner,
                     selectionReference: selectionReference,
-                    isPointDisplayVisible: isSurfaceControlPointDisplayVisible(
-                        selectionReference,
-                        in: surfaceControlPointDisplays
-                    )
+                    isPointDisplayVisible: selectionReference.map {
+                        isSurfaceControlPointDisplayVisible(
+                            $0,
+                            in: surfaceControlPointDisplays
+                        )
+                    } ?? false
                 ))
             }
         }
@@ -513,27 +536,32 @@ public struct SurfaceSourceSummaryService: Sendable {
         featureID: FeatureID,
         patchID: Int,
         role: SurfaceVertexRole,
-        surfaceReference: SurfaceReference,
+        surfaceReference: SurfaceReference?,
         sourceVertexIndex: Int,
         sourceMesh: Mesh,
         surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay]
     ) -> SurfaceSourceSummaryResult.ControlVertex {
-        let generatedVertexName = persistentName(
+        let generatedVertexSubshapeID = SubshapeID(
             featureID: featureID,
-            subshape: "patch:\(patchID):\(role.subshape)"
+            role: "polySpline.vertex:source:\(sourceVertexIndex)",
+            ordinal: 0
         )
-        let generatedVertexPersistentName = persistentNameString(generatedVertexName)
+        let generatedVertexPersistentName = GeneratedSubshapeIdentity.string(
+            for: generatedVertexSubshapeID
+        )
         let point: Point3D
         if sourceMesh.positions.indices.contains(sourceVertexIndex) {
             point = sourceMesh.positions[sourceVertexIndex]
         } else {
             point = Point3D(x: 0.0, y: 0.0, z: 0.0)
         }
-        let selectionReference = SelectionReference.surface(.controlPoint(SurfaceControlPointReference(
-            surface: surfaceReference,
-            uIndex: role.uIndex,
-            vIndex: role.vIndex
-        )))
+        let selectionReference = surfaceReference.map {
+            SelectionReference.surface(.controlPoint(SurfaceControlPointReference(
+                surface: $0,
+                uIndex: role.uIndex,
+                vIndex: role.vIndex
+            )))
+        }
         return SurfaceSourceSummaryResult.ControlVertex(
             id: "feature:\(featureID.description)/patch:\(patchID)/cv:\(role.id)",
             role: role.id,
@@ -541,13 +569,15 @@ public struct SurfaceSourceSummaryService: Sendable {
             point: SurfaceSourceSummaryResult.Point(x: point.x, y: point.y, z: point.z),
             generatedVertexPersistentName: generatedVertexPersistentName,
             selectionComponentID: SelectionComponentID
-                .generatedTopology(generatedVertexPersistentName)
+                .generatedTopology(generatedVertexSubshapeID)
                 .rawValue,
             selectionReference: selectionReference,
-            isPointDisplayVisible: isSurfaceControlPointDisplayVisible(
-                selectionReference,
-                in: surfaceControlPointDisplays
-            )
+            isPointDisplayVisible: selectionReference.map {
+                isSurfaceControlPointDisplayVisible(
+                    $0,
+                    in: surfaceControlPointDisplays
+                )
+            } ?? false
         )
     }
 
@@ -618,11 +648,15 @@ public struct SurfaceSourceSummaryService: Sendable {
                   edgeRoles.indices.contains(index) else {
                 continue
             }
-            let candidateName = persistentName(
+            let sortedShared = sharedVertexSet.sorted()
+            guard sortedShared.count == 2 else {
+                continue
+            }
+            let candidateIdentity = subshapeIdentity(
                 featureID: featureID,
-                subshape: "patch:\(adjacency.firstCandidateID):\(edgeRoles[index].subshape)"
+                subshape: "edge:source:\(sortedShared[0]):\(sortedShared[1])"
             )
-            return topologyEntriesByPersistentName[persistentNameString(candidateName)]?.persistentName
+            return topologyEntriesByPersistentName[candidateIdentity]?.subshapeID
         }
         return nil
     }
@@ -747,7 +781,7 @@ public struct SurfaceSourceSummaryService: Sendable {
             currentEvaluation: currentEvaluation,
             currentGeneration: currentGeneration
         )
-        return Dictionary(uniqueKeysWithValues: summary.entries.map { ($0.persistentName, $0) })
+        return Dictionary(uniqueKeysWithValues: summary.entries.map { ($0.subshapeID, $0) })
     }
 
     private func sceneNodeIDsByFeatureID(in document: DesignDocument) -> [FeatureID: SceneNodeID] {
@@ -785,7 +819,7 @@ public struct SurfaceSourceSummaryService: Sendable {
 
     private func parameterAddress(
         id: String,
-        surfaceReference: SurfaceReference,
+        surfaceReference: SurfaceReference?,
         u: Double,
         v: Double
     ) -> SurfaceSourceSummaryResult.ParameterAddress {
@@ -793,40 +827,48 @@ public struct SurfaceSourceSummaryService: Sendable {
             id: id,
             u: u,
             v: v,
-            selectionReference: .surface(.parameter(SurfaceParameterReference(
-                surface: surfaceReference,
-                u: u,
-                v: v
-            )))
+            selectionReference: surfaceReference.map {
+                .surface(.parameter(SurfaceParameterReference(
+                    surface: $0,
+                    u: u,
+                    v: v
+                )))
+            }
         )
     }
 
-    private func persistentName(
+    private func subshapeIdentity(
         featureID: FeatureID,
         generatedRole: String = "polySpline",
         subshape: String
-    ) -> PersistentName {
-        PersistentName(components: [
-            .feature(featureID),
-            .generated(generatedRole),
-            .subshape(subshape),
-        ])
+    ) -> String {
+        GeneratedSubshapeIdentity.string(for: SubshapeID(
+            featureID: featureID,
+            role: "\(generatedRole).\(subshape)",
+            ordinal: 0
+        ))
     }
 
-    private func persistentNameString(_ name: PersistentName) -> String {
-        name.components.map { component in
-            switch component {
-            case .feature(let featureID):
-                return "feature:\(featureID.description)"
-            case .generated(let value):
-                return "generated:\(value)"
-            case .subshape(let value):
-                return "subshape:\(value)"
-            case .index(let index):
-                return "index:\(index)"
-            }
+    /// Patch boundary edges connect consecutive corner vertices; the kernel
+    /// names each edge by its sorted source-vertex index pair.
+    private func patchBoundaryEdgeIdentities(
+        featureID: FeatureID,
+        boundaryVertexIndices: [Int]
+    ) -> [String] {
+        guard boundaryVertexIndices.count == 4 else {
+            return []
         }
-        .joined(separator: "/")
+        return boundaryVertexIndices.indices.map { index in
+            let nextIndex = (index + 1) % boundaryVertexIndices.count
+            let pair = [
+                boundaryVertexIndices[index],
+                boundaryVertexIndices[nextIndex],
+            ].sorted()
+            return subshapeIdentity(
+                featureID: featureID,
+                subshape: "edge:source:\(pair[0]):\(pair[1])"
+            )
+        }
     }
 
     private func isRationalPatch(
@@ -905,65 +947,75 @@ public struct SurfaceSourceSummaryService: Sendable {
     }
 
     private func patchParameterAddresses(
-        surfaceReference: SurfaceReference
+        surfaceReference: SurfaceReference?
     ) -> [SurfaceSourceSummaryResult.ParameterAddress] {
         cornerParameterAddresses(surfaceReference: surfaceReference) + [
             SurfaceSourceSummaryResult.ParameterAddress(
                 id: "center",
                 u: 0.5,
                 v: 0.5,
-                selectionReference: .surface(.parameter(SurfaceParameterReference(
-                    surface: surfaceReference,
-                    u: 0.5,
-                    v: 0.5
-                )))
+                selectionReference: surfaceReference.map {
+                        .surface(.parameter(SurfaceParameterReference(
+                            surface: $0,
+                            u: 0.5,
+                            v: 0.5
+                        )))
+                    }
             ),
         ]
     }
 
     private func cornerParameterAddresses(
-        surfaceReference: SurfaceReference
+        surfaceReference: SurfaceReference?
     ) -> [SurfaceSourceSummaryResult.ParameterAddress] {
         [
             SurfaceSourceSummaryResult.ParameterAddress(
                 id: "uMin:vMin",
                 u: 0.0,
                 v: 0.0,
-                selectionReference: .surface(.parameter(SurfaceParameterReference(
-                    surface: surfaceReference,
-                    u: 0.0,
-                    v: 0.0
-                )))
+                selectionReference: surfaceReference.map {
+                        .surface(.parameter(SurfaceParameterReference(
+                            surface: $0,
+                            u: 0.0,
+                            v: 0.0
+                        )))
+                    }
             ),
             SurfaceSourceSummaryResult.ParameterAddress(
                 id: "uMax:vMin",
                 u: 1.0,
                 v: 0.0,
-                selectionReference: .surface(.parameter(SurfaceParameterReference(
-                    surface: surfaceReference,
-                    u: 1.0,
-                    v: 0.0
-                )))
+                selectionReference: surfaceReference.map {
+                        .surface(.parameter(SurfaceParameterReference(
+                            surface: $0,
+                            u: 1.0,
+                            v: 0.0
+                        )))
+                    }
             ),
             SurfaceSourceSummaryResult.ParameterAddress(
                 id: "uMax:vMax",
                 u: 1.0,
                 v: 1.0,
-                selectionReference: .surface(.parameter(SurfaceParameterReference(
-                    surface: surfaceReference,
-                    u: 1.0,
-                    v: 1.0
-                )))
+                selectionReference: surfaceReference.map {
+                        .surface(.parameter(SurfaceParameterReference(
+                            surface: $0,
+                            u: 1.0,
+                            v: 1.0
+                        )))
+                    }
             ),
             SurfaceSourceSummaryResult.ParameterAddress(
                 id: "uMin:vMax",
                 u: 0.0,
                 v: 1.0,
-                selectionReference: .surface(.parameter(SurfaceParameterReference(
-                    surface: surfaceReference,
-                    u: 0.0,
-                    v: 1.0
-                )))
+                selectionReference: surfaceReference.map {
+                        .surface(.parameter(SurfaceParameterReference(
+                            surface: $0,
+                            u: 0.0,
+                            v: 1.0
+                        )))
+                    }
             ),
         ]
     }

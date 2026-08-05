@@ -2,7 +2,7 @@ import SwiftCAD
 
 struct TopologyMaterialBindingResolver: Sendable {
     struct ResolvedBinding: Equatable, Sendable {
-        var persistentName: String
+        var subshapeID: String
         var bodyID: BodyID
         var faceID: FaceID
         var materialID: MaterialID?
@@ -13,18 +13,18 @@ struct TopologyMaterialBindingResolver: Sendable {
         evaluatedDocument: EvaluatedDocument,
         metadata: ProductMetadata
     ) -> [ResolvedBinding] {
-        let faceIDByPersistentName = faceIDMap(in: evaluatedDocument.generatedNames)
+        let faceIDBySubshapeID = faceIDMap(in: evaluatedDocument.subshapes)
         let bodyIDByFaceID = bodyIDMap(in: evaluatedDocument.brep)
         var bindings: [ResolvedBinding] = []
         for binding in metadata.topologyMaterialBindings.values.sorted(by: bindingSortKey) {
-            guard let persistentName = binding.persistentName,
-                  let faceID = faceIDByPersistentName[persistentName],
+            guard let subshapeID = binding.subshapeID,
+                  let faceID = faceIDBySubshapeID[subshapeID],
                   let bodyID = bodyIDByFaceID[faceID] else {
                 continue
             }
             bindings.append(
                 ResolvedBinding(
-                    persistentName: persistentName,
+                    subshapeID: subshapeID,
                     bodyID: bodyID,
                     faceID: faceID,
                     materialID: binding.materialID,
@@ -64,8 +64,8 @@ struct TopologyMaterialBindingResolver: Sendable {
         _ lhs: TopologyMaterialBinding,
         _ rhs: TopologyMaterialBinding
     ) -> Bool {
-        let leftName = lhs.persistentName ?? ""
-        let rightName = rhs.persistentName ?? ""
+        let leftName = lhs.subshapeID ?? ""
+        let rightName = rhs.subshapeID ?? ""
         if leftName == rightName {
             return lhs.id.rawValue.uuidString < rhs.id.rawValue.uuidString
         }
@@ -73,14 +73,14 @@ struct TopologyMaterialBindingResolver: Sendable {
     }
 
     private func faceIDMap(
-        in generatedNames: PersistentMap<PersistentName, TopologyReference>
+        in subshapes: SubshapeIndex
     ) -> [String: FaceID] {
         var result: [String: FaceID] = [:]
-        for (name, reference) in generatedNames {
+        for (subshapeID, reference) in subshapes.entries {
             guard case .face(let faceID) = reference else {
                 continue
             }
-            result[persistentNameString(name)] = faceID
+            result[GeneratedSubshapeIdentity.string(for: subshapeID)] = faceID
         }
         return result
     }
@@ -100,19 +100,4 @@ struct TopologyMaterialBindingResolver: Sendable {
         return result
     }
 
-    private func persistentNameString(_ name: PersistentName) -> String {
-        name.components.map { component in
-            switch component {
-            case .feature(let featureID):
-                return "feature:\(featureID.description)"
-            case .generated(let value):
-                return "generated:\(value)"
-            case .subshape(let value):
-                return "subshape:\(value)"
-            case .index(let index):
-                return "index:\(index)"
-            }
-        }
-        .joined(separator: "/")
-    }
 }

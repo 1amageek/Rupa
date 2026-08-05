@@ -9,17 +9,17 @@ func automationBatchResolvesHomogeneousEffects() async throws {
     #expect(try AutomationBatch(commands: []).validatedEffect() == .readOnly)
     #expect(
         try AutomationBatch(
-            commands: [.describeDocument, .validateDocument]
+            commands: [.validateDocument, .describeDocument]
         ).validatedEffect() == .readOnly
     )
     #expect(
         try AutomationBatch(
-            commands: [.describeDocument, .renameDocument(name: "Source")]
+            commands: [.renameDocument(name: "Source"), .describeDocument]
         ).validatedEffect() == .sourceMutation
     )
     #expect(
         try AutomationBatch(
-            commands: [.describeDocument, .setDisplayUnit(.meter)]
+            commands: [.setDisplayUnit(.meter), .describeDocument]
         ).validatedEffect() == .workspaceMutation
     )
 }
@@ -65,10 +65,10 @@ func automationWorkspaceBatchCommitsAtomicallyWithoutDirtyingSource() async thro
     let batch = AutomationBatch(
         commands: [
             .setDisplayUnit(.meter),
-            .describeDocument,
             .setViewportGridSettings(
                 ViewportGridSettings(visualSpacingMode: .fixed)
             ),
+            .describeDocument,
         ],
         expectedGeneration: DocumentGeneration(0),
         expectedWorkspaceRevision: WorkspaceRevision(0)
@@ -86,8 +86,8 @@ func automationWorkspaceBatchCommitsAtomicallyWithoutDirtyingSource() async thro
     #expect(execution.baseWorkspaceRevision == WorkspaceRevision(0))
     #expect(execution.proposedWorkspaceRevision == WorkspaceRevision(2))
     #expect(execution.didCommit)
-    #expect(execution.results.map(\.effect) == [.workspaceMutation, .readOnly, .workspaceMutation])
-    #expect(execution.results[1].message.contains("m display units"))
+    #expect(execution.results.map(\.effect) == [.workspaceMutation, .workspaceMutation, .readOnly])
+    #expect(execution.results[2].message.contains("m display units"))
     #expect(session.workspaceState.displayUnit == .meter)
     #expect(session.workspaceState.viewportGridSettings.visualSpacingMode == .fixed)
     #expect(session.workspaceState.revision == WorkspaceRevision(2))

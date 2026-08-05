@@ -185,6 +185,673 @@ public struct MeasurementService {
             }
         }
 
+        // Extracted per-operation bodies keep this frame small enough for
+        // 512 KB worker stacks in unoptimized builds.
+        func measureSketchCase(_ sketch: Sketch, node: FeatureNode, featureID: FeatureID) throws {
+            let sketchBounds = try boundsForSketch(
+                sketch,
+                parameters: document.cadDocument.parameters
+            )
+            let profile = try measureProfile(
+                featureID: featureID,
+                featureName: node.name,
+                sketch: sketch,
+                parameters: document.cadDocument.parameters
+            )
+            if let profile {
+                profileCache[featureID] = profile
+            }
+            if shouldMeasure(featureID) {
+                includeSketch(
+                    featureID: featureID,
+                    sketch: sketch,
+                    sketchBounds: sketchBounds,
+                    profile: profile
+                )
+            }
+        }
+
+        func measureExtrudeCase(_ extrude: ExtrudeFeature, node: FeatureNode, featureID: FeatureID) throws {
+            guard !isSupersededInDocumentScope(featureID) else {
+                return
+            }
+            guard shouldMeasure(featureID) else {
+                return
+            }
+            includedSourceFeatureIDs.insert(featureID)
+            guard let sourceNode = document.cadDocument.designGraph.nodes[extrude.profile.featureID],
+                  case .sketch(let sourceSketch) = sourceNode.operation else {
+                diagnostics.append(
+                    EditorDiagnostic(
+                        severity: .warning,
+                        message: "Measurement skipped an extrude feature with an unresolved profile reference."
+                    )
+                )
+                return
+            }
+            let sourceSketchBounds = try boundsForSketch(
+                sourceSketch,
+                parameters: document.cadDocument.parameters
+            )
+            let profile = try profileCache[extrude.profile.featureID] ?? measureProfile(
+                featureID: extrude.profile.featureID,
+                featureName: sourceNode.name,
+                sketch: sourceSketch,
+                parameters: document.cadDocument.parameters
+            )
+            guard let profile else {
+                diagnostics.append(
+                    EditorDiagnostic(
+                        severity: .warning,
+                        message: "Measurement skipped an extrude feature with an unsupported profile."
+                    )
+                )
+                return
+            }
+            profileCache[extrude.profile.featureID] = profile
+            includeSketch(
+                featureID: extrude.profile.featureID,
+                sketch: sourceSketch,
+                sketchBounds: sourceSketchBounds,
+                profile: profile
+            )
+            let solid = try measureSolid(
+                featureID: featureID,
+                featureName: node.name,
+                sourceFeatureID: extrude.profile.featureID,
+                sourceFeatureName: sourceNode.name,
+                profile: profile,
+                extrude: extrude,
+                parameters: document.cadDocument.parameters
+            )
+            counts.solids += 1
+            solids.append(solid)
+            totals.solidVolumeCubicMeters += solid.volumeCubicMeters
+            bounds.include(solid.bounds)
+        }
+
+        func measureRevolveCase(_ revolve: RevolveFeature, node: FeatureNode, featureID: FeatureID) throws {
+            guard !isSupersededInDocumentScope(featureID) else {
+                return
+            }
+            guard shouldMeasure(featureID) else {
+                return
+            }
+            includedSourceFeatureIDs.insert(featureID)
+            guard let sourceNode = document.cadDocument.designGraph.nodes[revolve.profile.featureID],
+                  case .sketch(let sourceSketch) = sourceNode.operation else {
+                diagnostics.append(
+                    EditorDiagnostic(
+                        severity: .warning,
+                        message: "Measurement skipped a revolve feature with an unresolved profile reference."
+                    )
+                )
+                return
+            }
+            let sourceSketchBounds = try boundsForSketch(
+                sourceSketch,
+                parameters: document.cadDocument.parameters
+            )
+            let profile = try profileCache[revolve.profile.featureID] ?? measureProfile(
+                featureID: revolve.profile.featureID,
+                featureName: sourceNode.name,
+                sketch: sourceSketch,
+                parameters: document.cadDocument.parameters
+            )
+            guard let profile else {
+                diagnostics.append(
+                    EditorDiagnostic(
+                        severity: .warning,
+                        message: "Measurement skipped a revolve feature with an unsupported profile."
+                    )
+                )
+                return
+            }
+            profileCache[revolve.profile.featureID] = profile
+            includeSketch(
+                featureID: revolve.profile.featureID,
+                sketch: sourceSketch,
+                sketchBounds: sourceSketchBounds,
+                profile: profile
+            )
+            var evaluatedSkipReason: String?
+            let solid = try measureEvaluatedSolid(
+                featureID: featureID,
+                featureName: node.name,
+                sourceFeatureID: revolve.profile.featureID,
+                sourceFeatureName: sourceNode.name,
+                evaluatedDocument: evaluatedDocument(),
+                unsupportedReason: &evaluatedSkipReason
+            )
+            guard let solid else {
+                let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
+                diagnostics.append(
+                    EditorDiagnostic(
+                        severity: .info,
+                        message: "Measurement skipped a revolve feature outside the supported solid evaluation subset.\(detail)"
+                    )
+                )
+                return
+            }
+            counts.solids += 1
+            solids.append(solid)
+            totals.solidVolumeCubicMeters += solid.volumeCubicMeters
+            bounds.include(solid.bounds)
+        }
+
+        func measureSweepCase(_ sweep: SweepFeature, node: FeatureNode, featureID: FeatureID) throws {
+            guard !isSupersededInDocumentScope(featureID) else {
+                return
+            }
+            guard shouldMeasure(featureID) else {
+                return
+            }
+            includedSourceFeatureIDs.insert(featureID)
+            guard let sectionReference = sweep.sections.first,
+                  let sourceNode = document.cadDocument.designGraph.nodes[sectionReference.featureID],
+                  let pathNode = document.cadDocument.designGraph.nodes[sweep.path.featureID] else {
+                diagnostics.append(
+                    EditorDiagnostic(
+                        severity: .warning,
+                        message: "Measurement skipped a sweep feature with unresolved section or path references."
+                    )
+                )
+                return
+            }
+            let pathSketch: Sketch?
+            if case .sketch(let sketch) = pathNode.operation {
+                pathSketch = sketch
+            } else {
+                pathSketch = nil
+            }
+            let pathLengthMeters = try pathLength(
+                featureID: sweep.path.featureID,
+                sketch: pathSketch,
+                parameters: document.cadDocument.parameters,
+                evaluatedDocument: pathSketch == nil ? evaluatedDocument() : nil
+            )
+            let measuredProfile: MeasuredProfile?
+            switch sectionReference {
+            case .profile(let profileReference):
+                guard case .sketch(let sourceSketch) = sourceNode.operation else {
+                    diagnostics.append(
+                        EditorDiagnostic(
+                            severity: .warning,
+                            message: "Measurement skipped a sweep feature with an unresolved profile section."
+                        )
+                    )
+                    return
+                }
+                let profile = try profileCache[profileReference.featureID] ?? measureProfile(
+                    featureID: profileReference.featureID,
+                    featureName: sourceNode.name,
+                    sketch: sourceSketch,
+                    parameters: document.cadDocument.parameters
+                )
+                guard let profile else {
+                    diagnostics.append(
+                        EditorDiagnostic(
+                            severity: .warning,
+                            message: "Measurement skipped a sweep feature with an unsupported profile section."
+                        )
+                    )
+                    return
+                }
+                profileCache[profileReference.featureID] = profile
+                measuredProfile = profile
+                includeSketch(
+                    featureID: profileReference.featureID,
+                    sketch: sourceSketch,
+                    sketchBounds: try boundsForSketch(
+                        sourceSketch,
+                        parameters: document.cadDocument.parameters
+                    ),
+                    profile: profile
+                )
+            case .curve:
+                measuredProfile = nil
+                try includeCurveSource(
+                    featureID: sectionReference.featureID,
+                    node: sourceNode
+                )
+            }
+            try includeCurveSource(
+                featureID: sweep.path.featureID,
+                node: pathNode
+            )
+            for guide in sweep.guides {
+                guard let guideNode = document.cadDocument.designGraph.nodes[guide.featureID] else {
+                    diagnostics.append(
+                        EditorDiagnostic(
+                            severity: .warning,
+                            message: "Measurement skipped a sweep guide with an unresolved curve reference."
+                        )
+                    )
+                    continue
+                }
+                try includeCurveSource(
+                    featureID: guide.featureID,
+                    node: guideNode
+                )
+            }
+            if sweep.options.resultKind == .sheet {
+                var evaluatedSweepSkipReason: String?
+                let sheet = try measureEvaluatedSweepSheet(
+                    featureID: featureID,
+                    featureName: node.name,
+                    sourceFeatureID: sectionReference.featureID,
+                    sourceFeatureName: sourceNode.name,
+                    sweep: sweep,
+                    pathLengthMeters: pathLengthMeters,
+                    parameters: document.cadDocument.parameters,
+                    evaluatedDocument: evaluatedDocument(),
+                    unsupportedReason: &evaluatedSweepSkipReason
+                )
+                guard let sheet else {
+                    let detail = evaluatedSweepSkipReason.map { " \($0)" } ?? ""
+                    diagnostics.append(
+                        EditorDiagnostic(
+                            severity: .info,
+                            message: "Measurement skipped a sweep sheet outside the supported evaluation subset.\(detail)"
+                        )
+                    )
+                    return
+                }
+                counts.sheets += 1
+                sheets.append(sheet)
+                totals.sheetAreaSquareMeters += sheet.surfaceAreaSquareMeters
+                bounds.include(sheet.bounds)
+                return
+            }
+            guard let profile = measuredProfile else {
+                diagnostics.append(
+                    EditorDiagnostic(
+                        severity: .warning,
+                        message: "Measurement skipped a solid sweep feature without a closed profile section."
+                    )
+                )
+                return
+            }
+            let straightSolid = try measureStraightSweepSolid(
+                featureID: featureID,
+                featureName: node.name,
+                sourceFeatureID: sectionReference.featureID,
+                sourceFeatureName: sourceNode.name,
+                profile: profile,
+                sweep: sweep,
+                pathSketch: pathSketch,
+                parameters: document.cadDocument.parameters
+            )
+            var evaluatedSweepSkipReason: String?
+            let measuredSolids = try straightSolid.map { [$0] } ?? measureEvaluatedSweepSolids(
+                    featureID: featureID,
+                    featureName: node.name,
+                    sourceFeatureID: sectionReference.featureID,
+                    sourceFeatureName: sourceNode.name,
+                    sweep: sweep,
+                    pathLengthMeters: pathLengthMeters,
+                    parameters: document.cadDocument.parameters,
+                    evaluatedDocument: evaluatedDocument(),
+                    unsupportedReason: &evaluatedSweepSkipReason
+                )
+            guard let measuredSolids, !measuredSolids.isEmpty else {
+                let detail = evaluatedSweepSkipReason.map { " \($0)" } ?? ""
+                diagnostics.append(
+                    EditorDiagnostic(
+                        severity: .info,
+                        message: "Measurement skipped a sweep feature outside the supported solid evaluation subset.\(detail)"
+                    )
+                )
+                return
+            }
+            for solid in measuredSolids {
+                counts.solids += 1
+                solids.append(solid)
+                totals.solidVolumeCubicMeters += solid.volumeCubicMeters
+                bounds.include(solid.bounds)
+            }
+        }
+
+        func measureLoftCase(_ loft: LoftFeature, node: FeatureNode, featureID: FeatureID) throws {
+            guard !isSupersededInDocumentScope(featureID) else {
+                return
+            }
+            guard shouldMeasure(featureID) else {
+                return
+            }
+            includedSourceFeatureIDs.insert(featureID)
+            for section in loft.sections {
+                guard let sourceNode = document.cadDocument.designGraph.nodes[section.featureID],
+                      case .sketch(let sourceSketch) = sourceNode.operation else {
+                    diagnostics.append(
+                        EditorDiagnostic(
+                            severity: .warning,
+                            message: "Measurement skipped a loft section with an unresolved profile reference."
+                        )
+                    )
+                    continue
+                }
+                let profile = try profileCache[section.featureID] ?? measureProfile(
+                    featureID: section.featureID,
+                    featureName: sourceNode.name,
+                    sketch: sourceSketch,
+                    parameters: document.cadDocument.parameters
+                )
+                profileCache[section.featureID] = profile
+                includeSketch(
+                    featureID: section.featureID,
+                    sketch: sourceSketch,
+                    sketchBounds: try boundsForSketch(
+                        sourceSketch,
+                        parameters: document.cadDocument.parameters
+                    ),
+                    profile: profile
+                )
+            }
+            let sourceFeatureID = loft.sections.first?.featureID ?? featureID
+            let sourceNode = document.cadDocument.designGraph.nodes[sourceFeatureID]
+            if loft.options.resultKind == .sheet {
+                var evaluatedSkipReason: String?
+                let sheet = try measureEvaluatedSheet(
+                    featureID: featureID,
+                    featureName: node.name,
+                    sourceFeatureID: sourceFeatureID,
+                    sourceFeatureName: sourceNode?.name,
+                    evaluatedDocument: evaluatedDocument(),
+                    unsupportedReason: &evaluatedSkipReason
+                )
+                guard let sheet else {
+                    let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
+                    diagnostics.append(
+                        EditorDiagnostic(
+                            severity: .info,
+                            message: "Measurement skipped a loft sheet outside the supported evaluation subset.\(detail)"
+                        )
+                    )
+                    return
+                }
+                counts.sheets += 1
+                sheets.append(sheet)
+                totals.sheetAreaSquareMeters += sheet.surfaceAreaSquareMeters
+                bounds.include(sheet.bounds)
+                return
+            }
+            var evaluatedSkipReason: String?
+            let solid = try measureEvaluatedSolid(
+                featureID: featureID,
+                featureName: node.name,
+                sourceFeatureID: sourceFeatureID,
+                sourceFeatureName: sourceNode?.name,
+                evaluatedDocument: evaluatedDocument(),
+                unsupportedReason: &evaluatedSkipReason
+            )
+            guard let solid else {
+                let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
+                diagnostics.append(
+                    EditorDiagnostic(
+                        severity: .info,
+                        message: "Measurement skipped a loft solid outside the supported evaluation subset.\(detail)"
+                    )
+                )
+                return
+            }
+            counts.solids += 1
+            solids.append(solid)
+            totals.solidVolumeCubicMeters += solid.volumeCubicMeters
+            bounds.include(solid.bounds)
+        }
+
+        func measureBooleanCase(_ boolean: BooleanFeature, node: FeatureNode, featureID: FeatureID) throws {
+            guard !isSupersededInDocumentScope(featureID) else {
+                return
+            }
+            guard shouldMeasure(featureID) else {
+                return
+            }
+            includedSourceFeatureIDs.insert(featureID)
+            let sourceFeatureID = boolean.targets.first?.featureID ?? boolean.tool.featureID
+            let sourceNode = document.cadDocument.designGraph.nodes[sourceFeatureID]
+            var evaluatedSkipReason: String?
+            let solid = try measureEvaluatedSolid(
+                featureID: featureID,
+                featureName: node.name,
+                sourceFeatureID: sourceFeatureID,
+                sourceFeatureName: sourceNode?.name,
+                evaluatedDocument: evaluatedDocument(),
+                unsupportedReason: &evaluatedSkipReason
+            )
+            guard let solid else {
+                let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
+                diagnostics.append(
+                    EditorDiagnostic(
+                        severity: .info,
+                        message: "Measurement skipped Boolean solid outside the supported evaluation subset.\(detail)"
+                    )
+                )
+                return
+            }
+            counts.solids += 1
+            solids.append(solid)
+            totals.solidVolumeCubicMeters += solid.volumeCubicMeters
+            bounds.include(solid.bounds)
+        }
+
+        func measurePolySplineCase(_ polySpline: PolySplineFeature, node: FeatureNode, featureID: FeatureID) throws {
+            guard !isSupersededInDocumentScope(featureID) else {
+                return
+            }
+            guard shouldMeasure(featureID) else {
+                return
+            }
+            includedSourceFeatureIDs.insert(featureID)
+            for point in polySpline.sourceMesh.positions {
+                bounds.include(point)
+            }
+            diagnostics.append(
+                EditorDiagnostic(
+                    severity: .info,
+                    message: "Measurement included PolySpline source bounds; B-spline sheet area and curvature measurement remain unsupported."
+                )
+            )
+        }
+
+        func measureBSplineSurfaceCase(_ surfaceFeature: BSplineSurfaceFeature, node: FeatureNode, featureID: FeatureID) throws {
+            guard !isSupersededInDocumentScope(featureID) else {
+                return
+            }
+            guard shouldMeasure(featureID) else {
+                return
+            }
+            includedSourceFeatureIDs.insert(featureID)
+            for row in surfaceFeature.surface.controlPoints {
+                for point in row {
+                    bounds.include(point)
+                }
+            }
+            diagnostics.append(
+                EditorDiagnostic(
+                    severity: .info,
+                    message: "Measurement included B-spline surface control-net bounds; exact sheet area and curvature measurement remain unsupported."
+                )
+            )
+        }
+
+        func measureFaceLoopOffsetCase(node: FeatureNode, featureID: FeatureID) throws {
+            guard !isSupersededInDocumentScope(featureID) else {
+                return
+            }
+            guard shouldMeasure(featureID) else {
+                return
+            }
+            includedSourceFeatureIDs.insert(featureID)
+            guard case .faceLoopOffset(let faceLoopOffset) = node.operation else {
+                return
+            }
+            let sourceNode = document.cadDocument.designGraph.nodes[faceLoopOffset.target.featureID]
+            var evaluatedSkipReason: String?
+            let solid = try measureEvaluatedSolid(
+                featureID: featureID,
+                featureName: node.name,
+                sourceFeatureID: faceLoopOffset.target.featureID,
+                sourceFeatureName: sourceNode?.name,
+                evaluatedDocument: evaluatedDocument(),
+                unsupportedReason: &evaluatedSkipReason
+            )
+            guard let solid else {
+                let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
+                diagnostics.append(
+                    EditorDiagnostic(
+                        severity: .info,
+                        message: "Measurement skipped Offset Face Loop direct-edit solid.\(detail)"
+                    )
+                )
+                return
+            }
+            counts.solids += 1
+            solids.append(solid)
+            totals.solidVolumeCubicMeters += solid.volumeCubicMeters
+            bounds.include(solid.bounds)
+        }
+
+        func measureEdgeOffsetCase(node: FeatureNode, featureID: FeatureID) throws {
+            guard !isSupersededInDocumentScope(featureID) else {
+                return
+            }
+            guard shouldMeasure(featureID) else {
+                return
+            }
+            includedSourceFeatureIDs.insert(featureID)
+            guard case .edgeOffset(let edgeOffset) = node.operation else {
+                return
+            }
+            let sourceNode = document.cadDocument.designGraph.nodes[edgeOffset.target.featureID]
+            var evaluatedSkipReason: String?
+            let solid = try measureEvaluatedSolid(
+                featureID: featureID,
+                featureName: node.name,
+                sourceFeatureID: edgeOffset.target.featureID,
+                sourceFeatureName: sourceNode?.name,
+                evaluatedDocument: evaluatedDocument(),
+                unsupportedReason: &evaluatedSkipReason
+            )
+            guard let solid else {
+                let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
+                diagnostics.append(
+                    EditorDiagnostic(
+                        severity: .info,
+                        message: "Measurement skipped Offset Edge direct-edit solid.\(detail)"
+                    )
+                )
+                return
+            }
+            counts.solids += 1
+            solids.append(solid)
+            totals.solidVolumeCubicMeters += solid.volumeCubicMeters
+            bounds.include(solid.bounds)
+        }
+
+        func measureFaceKnifeCase(_ faceKnife: FaceKnifeFeature, node: FeatureNode, featureID: FeatureID) throws {
+            guard !isSupersededInDocumentScope(featureID) else {
+                return
+            }
+            guard shouldMeasure(featureID) else {
+                return
+            }
+            includedSourceFeatureIDs.insert(featureID)
+            let sourceNode = document.cadDocument.designGraph.nodes[faceKnife.target.featureID]
+            var evaluatedSkipReason: String?
+            let solid = try measureEvaluatedSolid(
+                featureID: featureID,
+                featureName: node.name,
+                sourceFeatureID: faceKnife.target.featureID,
+                sourceFeatureName: sourceNode?.name,
+                evaluatedDocument: evaluatedDocument(),
+                unsupportedReason: &evaluatedSkipReason
+            )
+            guard let solid else {
+                let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
+                diagnostics.append(
+                    EditorDiagnostic(
+                        severity: .info,
+                        message: "Measurement skipped Face Knife direct-edit solid.\(detail)"
+                    )
+                )
+                return
+            }
+            counts.solids += 1
+            solids.append(solid)
+            totals.solidVolumeCubicMeters += solid.volumeCubicMeters
+            bounds.include(solid.bounds)
+        }
+
+        func measureFaceDraftCase(_ faceDraft: FaceDraftFeature, node: FeatureNode, featureID: FeatureID) throws {
+            guard !isSupersededInDocumentScope(featureID) else {
+                return
+            }
+            guard shouldMeasure(featureID) else {
+                return
+            }
+            includedSourceFeatureIDs.insert(featureID)
+            let sourceNode = document.cadDocument.designGraph.nodes[faceDraft.target.featureID]
+            var evaluatedSkipReason: String?
+            let solid = try measureEvaluatedSolid(
+                featureID: featureID,
+                featureName: node.name,
+                sourceFeatureID: faceDraft.target.featureID,
+                sourceFeatureName: sourceNode?.name,
+                evaluatedDocument: evaluatedDocument(),
+                unsupportedReason: &evaluatedSkipReason
+            )
+            guard let solid else {
+                let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
+                diagnostics.append(
+                    EditorDiagnostic(
+                        severity: .info,
+                        message: "Measurement skipped Draft Face direct-edit solid.\(detail)"
+                    )
+                )
+                return
+            }
+            counts.solids += 1
+            solids.append(solid)
+            totals.solidVolumeCubicMeters += solid.volumeCubicMeters
+            bounds.include(solid.bounds)
+        }
+
+        func measureFaceDeleteCase(_ faceDelete: FaceDeleteFeature, node: FeatureNode, featureID: FeatureID) throws {
+            guard !isSupersededInDocumentScope(featureID) else {
+                return
+            }
+            guard shouldMeasure(featureID) else {
+                return
+            }
+            includedSourceFeatureIDs.insert(featureID)
+            let sourceNode = document.cadDocument.designGraph.nodes[faceDelete.target.featureID]
+            var evaluatedSkipReason: String?
+            let sheet = try measureEvaluatedSheet(
+                featureID: featureID,
+                featureName: node.name,
+                sourceFeatureID: faceDelete.target.featureID,
+                sourceFeatureName: sourceNode?.name,
+                evaluatedDocument: evaluatedDocument(),
+                unsupportedReason: &evaluatedSkipReason
+            )
+            guard let sheet else {
+                let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
+                diagnostics.append(
+                    EditorDiagnostic(
+                        severity: .info,
+                        message: "Measurement skipped Face Delete direct-edit sheet.\(detail)"
+                    )
+                )
+                return
+            }
+            counts.sheets += 1
+            sheets.append(sheet)
+            totals.sheetAreaSquareMeters += sheet.surfaceAreaSquareMeters
+            bounds.include(sheet.bounds)
+        }
+
         for featureID in document.cadDocument.designGraph.order {
             guard let node = document.cadDocument.designGraph.nodes[featureID] else {
                 continue
@@ -195,644 +862,31 @@ public struct MeasurementService {
 
             switch node.operation {
             case .sketch(let sketch):
-                let sketchBounds = try boundsForSketch(
-                    sketch,
-                    parameters: document.cadDocument.parameters
-                )
-                let profile = try measureProfile(
-                    featureID: featureID,
-                    featureName: node.name,
-                    sketch: sketch,
-                    parameters: document.cadDocument.parameters
-                )
-                if let profile {
-                    profileCache[featureID] = profile
-                }
-                if shouldMeasure(featureID) {
-                    includeSketch(
-                        featureID: featureID,
-                        sketch: sketch,
-                        sketchBounds: sketchBounds,
-                        profile: profile
-                    )
-                }
+                try measureSketchCase(sketch, node: node, featureID: featureID)
             case .extrude(let extrude):
-                guard !isSupersededInDocumentScope(featureID) else {
-                    continue
-                }
-                guard shouldMeasure(featureID) else {
-                    continue
-                }
-                includedSourceFeatureIDs.insert(featureID)
-                guard let sourceNode = document.cadDocument.designGraph.nodes[extrude.profile.featureID],
-                      case .sketch(let sourceSketch) = sourceNode.operation else {
-                    diagnostics.append(
-                        EditorDiagnostic(
-                            severity: .warning,
-                            message: "Measurement skipped an extrude feature with an unresolved profile reference."
-                        )
-                    )
-                    continue
-                }
-                let sourceSketchBounds = try boundsForSketch(
-                    sourceSketch,
-                    parameters: document.cadDocument.parameters
-                )
-                let profile = try profileCache[extrude.profile.featureID] ?? measureProfile(
-                    featureID: extrude.profile.featureID,
-                    featureName: sourceNode.name,
-                    sketch: sourceSketch,
-                    parameters: document.cadDocument.parameters
-                )
-                guard let profile else {
-                    diagnostics.append(
-                        EditorDiagnostic(
-                            severity: .warning,
-                            message: "Measurement skipped an extrude feature with an unsupported profile."
-                        )
-                    )
-                    continue
-                }
-                profileCache[extrude.profile.featureID] = profile
-                includeSketch(
-                    featureID: extrude.profile.featureID,
-                    sketch: sourceSketch,
-                    sketchBounds: sourceSketchBounds,
-                    profile: profile
-                )
-                let solid = try measureSolid(
-                    featureID: featureID,
-                    featureName: node.name,
-                    sourceFeatureID: extrude.profile.featureID,
-                    sourceFeatureName: sourceNode.name,
-                    profile: profile,
-                    extrude: extrude,
-                    parameters: document.cadDocument.parameters
-                )
-                counts.solids += 1
-                solids.append(solid)
-                totals.solidVolumeCubicMeters += solid.volumeCubicMeters
-                bounds.include(solid.bounds)
+                try measureExtrudeCase(extrude, node: node, featureID: featureID)
             case .revolve(let revolve):
-                guard !isSupersededInDocumentScope(featureID) else {
-                    continue
-                }
-                guard shouldMeasure(featureID) else {
-                    continue
-                }
-                includedSourceFeatureIDs.insert(featureID)
-                guard let sourceNode = document.cadDocument.designGraph.nodes[revolve.profile.featureID],
-                      case .sketch(let sourceSketch) = sourceNode.operation else {
-                    diagnostics.append(
-                        EditorDiagnostic(
-                            severity: .warning,
-                            message: "Measurement skipped a revolve feature with an unresolved profile reference."
-                        )
-                    )
-                    continue
-                }
-                let sourceSketchBounds = try boundsForSketch(
-                    sourceSketch,
-                    parameters: document.cadDocument.parameters
-                )
-                let profile = try profileCache[revolve.profile.featureID] ?? measureProfile(
-                    featureID: revolve.profile.featureID,
-                    featureName: sourceNode.name,
-                    sketch: sourceSketch,
-                    parameters: document.cadDocument.parameters
-                )
-                guard let profile else {
-                    diagnostics.append(
-                        EditorDiagnostic(
-                            severity: .warning,
-                            message: "Measurement skipped a revolve feature with an unsupported profile."
-                        )
-                    )
-                    continue
-                }
-                profileCache[revolve.profile.featureID] = profile
-                includeSketch(
-                    featureID: revolve.profile.featureID,
-                    sketch: sourceSketch,
-                    sketchBounds: sourceSketchBounds,
-                    profile: profile
-                )
-                var evaluatedSkipReason: String?
-                let solid = try measureEvaluatedSolid(
-                    featureID: featureID,
-                    featureName: node.name,
-                    sourceFeatureID: revolve.profile.featureID,
-                    sourceFeatureName: sourceNode.name,
-                    evaluatedDocument: evaluatedDocument(),
-                    unsupportedReason: &evaluatedSkipReason
-                )
-                guard let solid else {
-                    let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
-                    diagnostics.append(
-                        EditorDiagnostic(
-                            severity: .info,
-                            message: "Measurement skipped a revolve feature outside the supported solid evaluation subset.\(detail)"
-                        )
-                    )
-                    continue
-                }
-                counts.solids += 1
-                solids.append(solid)
-                totals.solidVolumeCubicMeters += solid.volumeCubicMeters
-                bounds.include(solid.bounds)
+                try measureRevolveCase(revolve, node: node, featureID: featureID)
             case .sweep(let sweep):
-                guard !isSupersededInDocumentScope(featureID) else {
-                    continue
-                }
-                guard shouldMeasure(featureID) else {
-                    continue
-                }
-                includedSourceFeatureIDs.insert(featureID)
-                guard let sectionReference = sweep.sections.first,
-                      let sourceNode = document.cadDocument.designGraph.nodes[sectionReference.featureID],
-                      let pathNode = document.cadDocument.designGraph.nodes[sweep.path.featureID] else {
-                    diagnostics.append(
-                        EditorDiagnostic(
-                            severity: .warning,
-                            message: "Measurement skipped a sweep feature with unresolved section or path references."
-                        )
-                    )
-                    continue
-                }
-                let pathSketch: Sketch?
-                if case .sketch(let sketch) = pathNode.operation {
-                    pathSketch = sketch
-                } else {
-                    pathSketch = nil
-                }
-                let pathLengthMeters = try pathLength(
-                    featureID: sweep.path.featureID,
-                    sketch: pathSketch,
-                    parameters: document.cadDocument.parameters,
-                    evaluatedDocument: pathSketch == nil ? evaluatedDocument() : nil
-                )
-                let measuredProfile: MeasuredProfile?
-                switch sectionReference {
-                case .profile(let profileReference):
-                    guard case .sketch(let sourceSketch) = sourceNode.operation else {
-                        diagnostics.append(
-                            EditorDiagnostic(
-                                severity: .warning,
-                                message: "Measurement skipped a sweep feature with an unresolved profile section."
-                            )
-                        )
-                        continue
-                    }
-                    let profile = try profileCache[profileReference.featureID] ?? measureProfile(
-                        featureID: profileReference.featureID,
-                        featureName: sourceNode.name,
-                        sketch: sourceSketch,
-                        parameters: document.cadDocument.parameters
-                    )
-                    guard let profile else {
-                        diagnostics.append(
-                            EditorDiagnostic(
-                                severity: .warning,
-                                message: "Measurement skipped a sweep feature with an unsupported profile section."
-                            )
-                        )
-                        continue
-                    }
-                    profileCache[profileReference.featureID] = profile
-                    measuredProfile = profile
-                    includeSketch(
-                        featureID: profileReference.featureID,
-                        sketch: sourceSketch,
-                        sketchBounds: try boundsForSketch(
-                            sourceSketch,
-                            parameters: document.cadDocument.parameters
-                        ),
-                        profile: profile
-                    )
-                case .curve:
-                    measuredProfile = nil
-                    try includeCurveSource(
-                        featureID: sectionReference.featureID,
-                        node: sourceNode
-                    )
-                }
-                try includeCurveSource(
-                    featureID: sweep.path.featureID,
-                    node: pathNode
-                )
-                for guide in sweep.guides {
-                    guard let guideNode = document.cadDocument.designGraph.nodes[guide.featureID] else {
-                        diagnostics.append(
-                            EditorDiagnostic(
-                                severity: .warning,
-                                message: "Measurement skipped a sweep guide with an unresolved curve reference."
-                            )
-                        )
-                        continue
-                    }
-                    try includeCurveSource(
-                        featureID: guide.featureID,
-                        node: guideNode
-                    )
-                }
-                if sweep.options.resultKind == .sheet {
-                    var evaluatedSweepSkipReason: String?
-                    let sheet = try measureEvaluatedSweepSheet(
-                        featureID: featureID,
-                        featureName: node.name,
-                        sourceFeatureID: sectionReference.featureID,
-                        sourceFeatureName: sourceNode.name,
-                        sweep: sweep,
-                        pathLengthMeters: pathLengthMeters,
-                        parameters: document.cadDocument.parameters,
-                        evaluatedDocument: evaluatedDocument(),
-                        unsupportedReason: &evaluatedSweepSkipReason
-                    )
-                    guard let sheet else {
-                        let detail = evaluatedSweepSkipReason.map { " \($0)" } ?? ""
-                        diagnostics.append(
-                            EditorDiagnostic(
-                                severity: .info,
-                                message: "Measurement skipped a sweep sheet outside the supported evaluation subset.\(detail)"
-                            )
-                        )
-                        continue
-                    }
-                    counts.sheets += 1
-                    sheets.append(sheet)
-                    totals.sheetAreaSquareMeters += sheet.surfaceAreaSquareMeters
-                    bounds.include(sheet.bounds)
-                    continue
-                }
-                guard let profile = measuredProfile else {
-                    diagnostics.append(
-                        EditorDiagnostic(
-                            severity: .warning,
-                            message: "Measurement skipped a solid sweep feature without a closed profile section."
-                        )
-                    )
-                    continue
-                }
-                let straightSolid = try measureStraightSweepSolid(
-                    featureID: featureID,
-                    featureName: node.name,
-                    sourceFeatureID: sectionReference.featureID,
-                    sourceFeatureName: sourceNode.name,
-                    profile: profile,
-                    sweep: sweep,
-                    pathSketch: pathSketch,
-                    parameters: document.cadDocument.parameters
-                )
-                var evaluatedSweepSkipReason: String?
-                let measuredSolids = try straightSolid.map { [$0] } ?? measureEvaluatedSweepSolids(
-                        featureID: featureID,
-                        featureName: node.name,
-                        sourceFeatureID: sectionReference.featureID,
-                        sourceFeatureName: sourceNode.name,
-                        sweep: sweep,
-                        pathLengthMeters: pathLengthMeters,
-                        parameters: document.cadDocument.parameters,
-                        evaluatedDocument: evaluatedDocument(),
-                        unsupportedReason: &evaluatedSweepSkipReason
-                    )
-                guard let measuredSolids, !measuredSolids.isEmpty else {
-                    let detail = evaluatedSweepSkipReason.map { " \($0)" } ?? ""
-                    diagnostics.append(
-                        EditorDiagnostic(
-                            severity: .info,
-                            message: "Measurement skipped a sweep feature outside the supported solid evaluation subset.\(detail)"
-                        )
-                    )
-                    continue
-                }
-                for solid in measuredSolids {
-                    counts.solids += 1
-                    solids.append(solid)
-                    totals.solidVolumeCubicMeters += solid.volumeCubicMeters
-                    bounds.include(solid.bounds)
-                }
+                try measureSweepCase(sweep, node: node, featureID: featureID)
             case .loft(let loft):
-                guard !isSupersededInDocumentScope(featureID) else {
-                    continue
-                }
-                guard shouldMeasure(featureID) else {
-                    continue
-                }
-                includedSourceFeatureIDs.insert(featureID)
-                for section in loft.sections {
-                    guard let sourceNode = document.cadDocument.designGraph.nodes[section.featureID],
-                          case .sketch(let sourceSketch) = sourceNode.operation else {
-                        diagnostics.append(
-                            EditorDiagnostic(
-                                severity: .warning,
-                                message: "Measurement skipped a loft section with an unresolved profile reference."
-                            )
-                        )
-                        continue
-                    }
-                    let profile = try profileCache[section.featureID] ?? measureProfile(
-                        featureID: section.featureID,
-                        featureName: sourceNode.name,
-                        sketch: sourceSketch,
-                        parameters: document.cadDocument.parameters
-                    )
-                    profileCache[section.featureID] = profile
-                    includeSketch(
-                        featureID: section.featureID,
-                        sketch: sourceSketch,
-                        sketchBounds: try boundsForSketch(
-                            sourceSketch,
-                            parameters: document.cadDocument.parameters
-                        ),
-                        profile: profile
-                    )
-                }
-                let sourceFeatureID = loft.sections.first?.featureID ?? featureID
-                let sourceNode = document.cadDocument.designGraph.nodes[sourceFeatureID]
-                if loft.options.resultKind == .sheet {
-                    var evaluatedSkipReason: String?
-                    let sheet = try measureEvaluatedSheet(
-                        featureID: featureID,
-                        featureName: node.name,
-                        sourceFeatureID: sourceFeatureID,
-                        sourceFeatureName: sourceNode?.name,
-                        evaluatedDocument: evaluatedDocument(),
-                        unsupportedReason: &evaluatedSkipReason
-                    )
-                    guard let sheet else {
-                        let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
-                        diagnostics.append(
-                            EditorDiagnostic(
-                                severity: .info,
-                                message: "Measurement skipped a loft sheet outside the supported evaluation subset.\(detail)"
-                            )
-                        )
-                        continue
-                    }
-                    counts.sheets += 1
-                    sheets.append(sheet)
-                    totals.sheetAreaSquareMeters += sheet.surfaceAreaSquareMeters
-                    bounds.include(sheet.bounds)
-                    continue
-                }
-                var evaluatedSkipReason: String?
-                let solid = try measureEvaluatedSolid(
-                    featureID: featureID,
-                    featureName: node.name,
-                    sourceFeatureID: sourceFeatureID,
-                    sourceFeatureName: sourceNode?.name,
-                    evaluatedDocument: evaluatedDocument(),
-                    unsupportedReason: &evaluatedSkipReason
-                )
-                guard let solid else {
-                    let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
-                    diagnostics.append(
-                        EditorDiagnostic(
-                            severity: .info,
-                            message: "Measurement skipped a loft solid outside the supported evaluation subset.\(detail)"
-                        )
-                    )
-                    continue
-                }
-                counts.solids += 1
-                solids.append(solid)
-                totals.solidVolumeCubicMeters += solid.volumeCubicMeters
-                bounds.include(solid.bounds)
+                try measureLoftCase(loft, node: node, featureID: featureID)
             case .boolean(let boolean):
-                guard !isSupersededInDocumentScope(featureID) else {
-                    continue
-                }
-                guard shouldMeasure(featureID) else {
-                    continue
-                }
-                includedSourceFeatureIDs.insert(featureID)
-                let sourceFeatureID = boolean.targets.first?.featureID ?? boolean.tool.featureID
-                let sourceNode = document.cadDocument.designGraph.nodes[sourceFeatureID]
-                var evaluatedSkipReason: String?
-                let solid = try measureEvaluatedSolid(
-                    featureID: featureID,
-                    featureName: node.name,
-                    sourceFeatureID: sourceFeatureID,
-                    sourceFeatureName: sourceNode?.name,
-                    evaluatedDocument: evaluatedDocument(),
-                    unsupportedReason: &evaluatedSkipReason
-                )
-                guard let solid else {
-                    let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
-                    diagnostics.append(
-                        EditorDiagnostic(
-                            severity: .info,
-                            message: "Measurement skipped Boolean solid outside the supported evaluation subset.\(detail)"
-                        )
-                    )
-                    continue
-                }
-                counts.solids += 1
-                solids.append(solid)
-                totals.solidVolumeCubicMeters += solid.volumeCubicMeters
-                bounds.include(solid.bounds)
+                try measureBooleanCase(boolean, node: node, featureID: featureID)
             case .polySpline(let polySpline):
-                guard !isSupersededInDocumentScope(featureID) else {
-                    continue
-                }
-                guard shouldMeasure(featureID) else {
-                    continue
-                }
-                includedSourceFeatureIDs.insert(featureID)
-                for point in polySpline.sourceMesh.positions {
-                    bounds.include(point)
-                }
-                diagnostics.append(
-                    EditorDiagnostic(
-                        severity: .info,
-                        message: "Measurement included PolySpline source bounds; B-spline sheet area and curvature measurement remain unsupported."
-                    )
-                )
+                try measurePolySplineCase(polySpline, node: node, featureID: featureID)
             case .bSplineSurface(let surfaceFeature):
-                guard !isSupersededInDocumentScope(featureID) else {
-                    continue
-                }
-                guard shouldMeasure(featureID) else {
-                    continue
-                }
-                includedSourceFeatureIDs.insert(featureID)
-                for row in surfaceFeature.surface.controlPoints {
-                    for point in row {
-                        bounds.include(point)
-                    }
-                }
-                diagnostics.append(
-                    EditorDiagnostic(
-                        severity: .info,
-                        message: "Measurement included B-spline surface control-net bounds; exact sheet area and curvature measurement remain unsupported."
-                    )
-                )
+                try measureBSplineSurfaceCase(surfaceFeature, node: node, featureID: featureID)
             case .faceLoopOffset:
-                guard !isSupersededInDocumentScope(featureID) else {
-                    continue
-                }
-                guard shouldMeasure(featureID) else {
-                    continue
-                }
-                includedSourceFeatureIDs.insert(featureID)
-                guard case .faceLoopOffset(let faceLoopOffset) = node.operation else {
-                    continue
-                }
-                let sourceNode = document.cadDocument.designGraph.nodes[faceLoopOffset.target.featureID]
-                var evaluatedSkipReason: String?
-                let solid = try measureEvaluatedSolid(
-                    featureID: featureID,
-                    featureName: node.name,
-                    sourceFeatureID: faceLoopOffset.target.featureID,
-                    sourceFeatureName: sourceNode?.name,
-                    evaluatedDocument: evaluatedDocument(),
-                    unsupportedReason: &evaluatedSkipReason
-                )
-                guard let solid else {
-                    let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
-                    diagnostics.append(
-                        EditorDiagnostic(
-                            severity: .info,
-                            message: "Measurement skipped Offset Face Loop direct-edit solid.\(detail)"
-                        )
-                    )
-                    continue
-                }
-                counts.solids += 1
-                solids.append(solid)
-                totals.solidVolumeCubicMeters += solid.volumeCubicMeters
-                bounds.include(solid.bounds)
+                try measureFaceLoopOffsetCase(node: node, featureID: featureID)
             case .edgeOffset:
-                guard !isSupersededInDocumentScope(featureID) else {
-                    continue
-                }
-                guard shouldMeasure(featureID) else {
-                    continue
-                }
-                includedSourceFeatureIDs.insert(featureID)
-                guard case .edgeOffset(let edgeOffset) = node.operation else {
-                    continue
-                }
-                let sourceNode = document.cadDocument.designGraph.nodes[edgeOffset.target.featureID]
-                var evaluatedSkipReason: String?
-                let solid = try measureEvaluatedSolid(
-                    featureID: featureID,
-                    featureName: node.name,
-                    sourceFeatureID: edgeOffset.target.featureID,
-                    sourceFeatureName: sourceNode?.name,
-                    evaluatedDocument: evaluatedDocument(),
-                    unsupportedReason: &evaluatedSkipReason
-                )
-                guard let solid else {
-                    let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
-                    diagnostics.append(
-                        EditorDiagnostic(
-                            severity: .info,
-                            message: "Measurement skipped Offset Edge direct-edit solid.\(detail)"
-                        )
-                    )
-                    continue
-                }
-                counts.solids += 1
-                solids.append(solid)
-                totals.solidVolumeCubicMeters += solid.volumeCubicMeters
-                bounds.include(solid.bounds)
+                try measureEdgeOffsetCase(node: node, featureID: featureID)
             case .faceKnife(let faceKnife):
-                guard !isSupersededInDocumentScope(featureID) else {
-                    continue
-                }
-                guard shouldMeasure(featureID) else {
-                    continue
-                }
-                includedSourceFeatureIDs.insert(featureID)
-                let sourceNode = document.cadDocument.designGraph.nodes[faceKnife.target.featureID]
-                var evaluatedSkipReason: String?
-                let solid = try measureEvaluatedSolid(
-                    featureID: featureID,
-                    featureName: node.name,
-                    sourceFeatureID: faceKnife.target.featureID,
-                    sourceFeatureName: sourceNode?.name,
-                    evaluatedDocument: evaluatedDocument(),
-                    unsupportedReason: &evaluatedSkipReason
-                )
-                guard let solid else {
-                    let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
-                    diagnostics.append(
-                        EditorDiagnostic(
-                            severity: .info,
-                            message: "Measurement skipped Face Knife direct-edit solid.\(detail)"
-                        )
-                    )
-                    continue
-                }
-                counts.solids += 1
-                solids.append(solid)
-                totals.solidVolumeCubicMeters += solid.volumeCubicMeters
-                bounds.include(solid.bounds)
+                try measureFaceKnifeCase(faceKnife, node: node, featureID: featureID)
             case .faceDraft(let faceDraft):
-                guard !isSupersededInDocumentScope(featureID) else {
-                    continue
-                }
-                guard shouldMeasure(featureID) else {
-                    continue
-                }
-                includedSourceFeatureIDs.insert(featureID)
-                let sourceNode = document.cadDocument.designGraph.nodes[faceDraft.target.featureID]
-                var evaluatedSkipReason: String?
-                let solid = try measureEvaluatedSolid(
-                    featureID: featureID,
-                    featureName: node.name,
-                    sourceFeatureID: faceDraft.target.featureID,
-                    sourceFeatureName: sourceNode?.name,
-                    evaluatedDocument: evaluatedDocument(),
-                    unsupportedReason: &evaluatedSkipReason
-                )
-                guard let solid else {
-                    let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
-                    diagnostics.append(
-                        EditorDiagnostic(
-                            severity: .info,
-                            message: "Measurement skipped Draft Face direct-edit solid.\(detail)"
-                        )
-                    )
-                    continue
-                }
-                counts.solids += 1
-                solids.append(solid)
-                totals.solidVolumeCubicMeters += solid.volumeCubicMeters
-                bounds.include(solid.bounds)
+                try measureFaceDraftCase(faceDraft, node: node, featureID: featureID)
             case .faceDelete(let faceDelete):
-                guard !isSupersededInDocumentScope(featureID) else {
-                    continue
-                }
-                guard shouldMeasure(featureID) else {
-                    continue
-                }
-                includedSourceFeatureIDs.insert(featureID)
-                let sourceNode = document.cadDocument.designGraph.nodes[faceDelete.target.featureID]
-                var evaluatedSkipReason: String?
-                let sheet = try measureEvaluatedSheet(
-                    featureID: featureID,
-                    featureName: node.name,
-                    sourceFeatureID: faceDelete.target.featureID,
-                    sourceFeatureName: sourceNode?.name,
-                    evaluatedDocument: evaluatedDocument(),
-                    unsupportedReason: &evaluatedSkipReason
-                )
-                guard let sheet else {
-                    let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
-                    diagnostics.append(
-                        EditorDiagnostic(
-                            severity: .info,
-                            message: "Measurement skipped Face Delete direct-edit sheet.\(detail)"
-                        )
-                    )
-                    continue
-                }
-                counts.sheets += 1
-                sheets.append(sheet)
-                totals.sheetAreaSquareMeters += sheet.surfaceAreaSquareMeters
-                bounds.include(sheet.bounds)
+                try measureFaceDeleteCase(faceDelete, node: node, featureID: featureID)
             case .bridgeCurve:
                 continue
             case .curveEdit:
@@ -840,6 +894,30 @@ public struct MeasurementService {
             case .curveOffset:
                 continue
             case .curveTrim:
+                continue
+            case .primitive,
+                 .patchSurface,
+                 .faceOffset,
+                 .faceMove,
+                 .edgeMove,
+                 .vertexMove,
+                 .linearPattern,
+                 .radialPattern,
+                 .gridPattern,
+                 .curveDrivenPattern,
+                 .chamfer,
+                 .fillet,
+                 .g2Blend,
+                 .setbackCorner,
+                 .shell,
+                 .thicken,
+                 .bridgeSurface,
+                 .curveExtend,
+                 .curveMatch,
+                 .surfaceOffset,
+                 .surfaceTrim,
+                 .surfaceExtend,
+                 .surfaceMatch:
                 continue
             }
         }
@@ -1348,35 +1426,32 @@ public struct MeasurementService {
         for featureID: FeatureID,
         in evaluatedDocument: EvaluatedDocument
     ) -> EvaluatedBodyReference? {
-        let bodyName = evaluatedPrimaryBodyName(for: featureID)
-        guard case .body(let bodyID) = evaluatedDocument.generatedNames[bodyName] else {
+        let bodyIdentity = evaluatedPrimaryBodyIdentity(for: featureID)
+        guard case .body(let bodyID) = try? evaluatedDocument.subshapes.reference(for: bodyIdentity) else {
             return nil
         }
-        return EvaluatedBodyReference(persistentName: bodyName, bodyID: bodyID)
+        return EvaluatedBodyReference(subshapeID: bodyIdentity, bodyID: bodyID)
     }
 
     private func evaluatedBodyReferences(
         for featureID: FeatureID,
         in evaluatedDocument: EvaluatedDocument
     ) -> [EvaluatedBodyReference] {
-        let primaryName = evaluatedPrimaryBodyName(for: featureID)
-        let candidates: [EvaluatedBodyReference] = evaluatedDocument.generatedNames.compactMap { entry in
-            let name = entry.key
-            let reference = entry.value
-            guard name.components.first == .feature(featureID),
-                  case .body(let bodyID) = reference else {
+        let primaryIdentity = evaluatedPrimaryBodyIdentity(for: featureID)
+        let candidates: [EvaluatedBodyReference] = evaluatedDocument.subshapes.entries.compactMap { entry in
+            guard entry.key.featureID == featureID,
+                  case .body(let bodyID) = entry.value else {
                 return nil
             }
-            return EvaluatedBodyReference(persistentName: name, bodyID: bodyID)
+            return EvaluatedBodyReference(subshapeID: entry.key, bodyID: bodyID)
         }.sorted { lhs, rhs in
-            if lhs.persistentName == primaryName {
+            if lhs.subshapeID == primaryIdentity {
                 return true
             }
-            if rhs.persistentName == primaryName {
+            if rhs.subshapeID == primaryIdentity {
                 return false
             }
-            return evaluatedBodyReferenceSortKey(lhs.persistentName) <
-                evaluatedBodyReferenceSortKey(rhs.persistentName)
+            return GeneratedSubshapeIdentity.areInIncreasingOrder(lhs.subshapeID, rhs.subshapeID)
         }
         var includedBodyIDs: Set<BodyID> = []
         return candidates.filter { reference in
@@ -1384,27 +1459,14 @@ public struct MeasurementService {
         }
     }
 
-    private func evaluatedPrimaryBodyName(for featureID: FeatureID) -> PersistentName {
-        PersistentName(components: [
-            .feature(featureID),
-            .generated(GeneratedSubshapeRole.body.rawValue),
-        ])
+    private func evaluatedPrimaryBodyIdentity(for featureID: FeatureID) -> SubshapeID {
+        SubshapeID(
+            featureID: featureID,
+            role: GeneratedSubshapeRole.body.rawValue,
+            ordinal: 0
+        )
     }
 
-    private func evaluatedBodyReferenceSortKey(_ name: PersistentName) -> String {
-        name.components.map { component in
-            switch component {
-            case .feature(let featureID):
-                return "feature:\(featureID.description)"
-            case .generated(let value):
-                return "generated:\(value)"
-            case .subshape(let value):
-                return "subshape:\(value)"
-            case .index(let index):
-                return "index:\(index)"
-            }
-        }.joined(separator: "/")
-    }
 
     private func evaluatedMeshMeasurement(
         _ mesh: Mesh,
@@ -2060,7 +2122,7 @@ private struct EvaluatedMeshMeasurement {
 }
 
 private struct EvaluatedBodyReference {
-    var persistentName: PersistentName
+    var subshapeID: SubshapeID
     var bodyID: BodyID
 }
 

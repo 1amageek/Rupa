@@ -45,7 +45,7 @@ import Testing
     let draftFaces = afterTopology.entries.filter {
         $0.kind == .face &&
             $0.sceneNodeID == draftNodeID.description &&
-            $0.generatedRole == "faceDraft"
+            $0.generatedRole == "face"
     }
 
     #expect(result.commandName == "draftBodyFaces")
@@ -53,7 +53,7 @@ import Testing
     #expect(result.generation == DocumentGeneration(2))
     #expect(draftFeature.outputs == [FeatureOutput(role: .body)])
     #expect(faceDraft.target.featureID == bodyFeatureID)
-    #expect(faceDraft.facePersistentNames.count == 1)
+    #expect(faceDraft.faces.count == 1)
     #expect(body.kind == .solid)
     #expect(afterTopology.counts.faceCount == 6)
     #expect(draftFaces.count == 6)
@@ -77,7 +77,7 @@ import Testing
                 $0.sceneNodeID == bodySceneNodeID.description &&
                 $0.generatedRole == "sideFace"
         }
-        .sorted { ($0.index ?? -1) < ($1.index ?? -1) }
+        .sorted { ($0.ordinal ?? -1) < ($1.ordinal ?? -1) }
     let firstTarget = try #require(targetEntries.first?.selectionTarget())
     let secondTarget = try #require(targetEntries.dropFirst().first?.selectionTarget())
     let neutralEntry = try #require(topology.entries.first {
@@ -110,7 +110,7 @@ import Testing
     let draftFaces = afterTopology.entries.filter {
         $0.kind == .face &&
             $0.sceneNodeID == draftNodeID.description &&
-            $0.generatedRole == "faceDraft"
+            $0.generatedRole == "face"
     }
 
     #expect(result.commandName == "draftBodyFaces")
@@ -118,8 +118,8 @@ import Testing
     #expect(result.generation == DocumentGeneration(2))
     #expect(draftFeature.outputs == [FeatureOutput(role: .body)])
     #expect(faceDraft.target.featureID == bodyFeatureID)
-    #expect(faceDraft.facePersistentNames.count == 2)
-    #expect(Set(faceDraft.facePersistentNames).count == 2)
+    #expect(faceDraft.faces.count == 2)
+    #expect(Set(faceDraft.faces).count == 2)
     #expect(body.kind == .solid)
     #expect(afterTopology.counts.faceCount == 6)
     #expect(draftFaces.count == 6)

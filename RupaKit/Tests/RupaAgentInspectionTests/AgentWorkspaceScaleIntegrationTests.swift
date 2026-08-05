@@ -33,24 +33,27 @@ import Testing
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(0))
     #expect(result.workspaceRevision == WorkspaceRevision(1))
-    #expect(result.workspaceScale?.matchedPreset == .regionalPlanning)
-    #expect(result.workspaceScale?.displayUnit == .kilometer)
-    #expect(result.workspaceScale?.visibleSpanMeters == 1_000_000.0)
-    #expect(result.workspaceScale?.visibleSpanDisplayValue == 1_000.0)
-    #expect(result.workspaceInteractionScale?.operationStep.meters == 1_000.0)
-    #expect(result.workspaceInteractionScale?.operationStep.displayValue == 1.0)
-    #expect(result.workspaceInteractionScale?.operationStep.displayUnitSymbol == "km")
-    #expect(result.viewportGridScale?.visualSpacingMode == .adaptive)
-    #expect(result.viewportGridScale?.snapStep.meters == 1_000.0)
-    #expect(result.viewportGridScale?.snapStep.displayValue == 1.0)
-    #expect(result.viewportGridScale?.workspaceSpan.text == "1,000 km")
-    #expect(result.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
-    #expect(result.workspaceScalePresetOptions?.contains { option in
+    #expect(result.workspaceScale == nil)
+    #expect(result.message.contains("Regional Planning"))
+
+    let context = try agentWorkspaceContext(server: server, sessionID: sessionID, expectedGeneration: session.generation)
+    #expect(context.workspaceScale?.matchedPreset == .regionalPlanning)
+    #expect(context.workspaceScale?.displayUnit == .kilometer)
+    #expect(context.workspaceScale?.visibleSpanMeters == 1_000_000.0)
+    #expect(context.workspaceScale?.visibleSpanDisplayValue == 1_000.0)
+    #expect(context.workspaceInteractionScale?.operationStep.meters == 1_000.0)
+    #expect(context.workspaceInteractionScale?.operationStep.displayValue == 1.0)
+    #expect(context.workspaceInteractionScale?.operationStep.displayUnitSymbol == "km")
+    #expect(context.viewportGridScale?.visualSpacingMode == .adaptive)
+    #expect(context.viewportGridScale?.snapStep.meters == 1_000.0)
+    #expect(context.viewportGridScale?.snapStep.displayValue == 1.0)
+    #expect(context.viewportGridScale?.workspaceSpan.text == "1,000 km")
+    #expect(context.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
+    #expect(context.workspaceScalePresetOptions?.contains { option in
         option.preset == .regionalPlanning
             && option.visibleSpanTitle == "1,000 km"
             && option.comfortableModelSpanTitle == "10 km to 800 km"
     } == true)
-    #expect(result.message.contains("Regional Planning"))
     #expect(decodedResponse == response)
     #expect(try AgentDocumentSourceState(document: session.document) == sourceState)
     #expect(
@@ -87,16 +90,19 @@ import Testing
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(0))
     #expect(result.workspaceRevision == WorkspaceRevision(1))
-    #expect(result.workspaceScale?.matchedPreset == .urbanPlanning)
-    #expect(result.workspaceScale?.displayUnit == .kilometer)
-    #expect(result.workspaceScale?.visibleSpanMeters == 25_000.0)
-    #expect(result.workspaceScale?.visibleSpanDisplayValue == 25.0)
-    #expect(result.workspaceInteractionScale?.operationStep.meters == 10.0)
-    #expect(result.workspaceInteractionScale?.operationStep.displayUnitSymbol == "m")
-    #expect(result.viewportGridScale?.snapStep.meters == 10.0)
-    #expect(result.viewportGridScale?.workspaceSpan.text == "25 km")
-    #expect(result.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
+    #expect(result.workspaceScale == nil)
     #expect(result.message.contains("Urban Planning"))
+
+    let context = try agentWorkspaceContext(server: server, sessionID: sessionID, expectedGeneration: session.generation)
+    #expect(context.workspaceScale?.matchedPreset == .urbanPlanning)
+    #expect(context.workspaceScale?.displayUnit == .kilometer)
+    #expect(context.workspaceScale?.visibleSpanMeters == 25_000.0)
+    #expect(context.workspaceScale?.visibleSpanDisplayValue == 25.0)
+    #expect(context.workspaceInteractionScale?.operationStep.meters == 10.0)
+    #expect(context.workspaceInteractionScale?.operationStep.displayUnitSymbol == "m")
+    #expect(context.viewportGridScale?.snapStep.meters == 10.0)
+    #expect(context.viewportGridScale?.workspaceSpan.text == "25 km")
+    #expect(context.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
     #expect(decodedResponse == response)
     #expect(try AgentDocumentSourceState(document: session.document) == sourceState)
     #expect(
@@ -131,11 +137,13 @@ import Testing
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(0))
     #expect(result.workspaceRevision == WorkspaceRevision(1))
-    #expect(result.viewportGridSettings == settings)
-    #expect(result.viewportGridScale?.visualSpacingMode == .fixed)
-    #expect(result.viewportGridScale?.snapStep.meters == session.workspaceState.ruler.minorTickMeters)
-    #expect(result.viewportGridScale?.workspaceSpan.meters == session.workspaceState.ruler.visibleSpanMeters)
     #expect(session.workspaceState.viewportGridSettings == settings)
+
+    let context = try agentWorkspaceContext(server: server, sessionID: sessionID, expectedGeneration: session.generation)
+    #expect(context.viewportGridSettings == settings)
+    #expect(context.viewportGridScale?.visualSpacingMode == .fixed)
+    #expect(context.viewportGridScale?.snapStep.meters == session.workspaceState.ruler.minorTickMeters)
+    #expect(context.viewportGridScale?.workspaceSpan.meters == session.workspaceState.ruler.visibleSpanMeters)
 }
 
 @MainActor
@@ -227,15 +235,18 @@ import Testing
     #expect(result.commandName == "createExtrudedRectangleFromCorners")
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(1))
-    #expect(result.workspaceBounds?.sizeX == 25_000.0)
-    #expect(result.workspaceBounds?.sizeY == 10_000.0)
-    #expect(result.workspaceBounds?.sizeZ == 100.0)
-    #expect(result.workspaceBounds?.maximumSpan == 25_000.0)
-    #expect(result.workspaceScaleRecommendation?.reason == .modelExceedsComfortableSpan)
-    #expect(result.workspaceScaleRecommendation?.recommendedPreset == .sitePlanning)
-    #expect(result.workspaceScaleRecommendation?.recommendedScale.displayUnit == .kilometer)
-    #expect(result.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
+    #expect(result.workspaceBounds == nil)
     #expect(decodedResponse == response)
+
+    let context = try agentWorkspaceContext(server: server, sessionID: sessionID, expectedGeneration: session.generation)
+    #expect(context.workspaceBounds?.sizeX == 25_000.0)
+    #expect(context.workspaceBounds?.sizeY == 10_000.0)
+    #expect(context.workspaceBounds?.sizeZ == 100.0)
+    #expect(context.workspaceBounds?.maximumSpan == 25_000.0)
+    #expect(context.workspaceScaleRecommendation?.reason == .modelExceedsComfortableSpan)
+    #expect(context.workspaceScaleRecommendation?.recommendedPreset == .sitePlanning)
+    #expect(context.workspaceScaleRecommendation?.recommendedScale.displayUnit == .kilometer)
+    #expect(context.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
 }
 
 @MainActor
@@ -264,16 +275,19 @@ import Testing
 
     #expect(result.commandName == "setRulerConfiguration")
     #expect(result.didMutate)
-    #expect(result.workspaceScale?.matchedPreset == .sitePlanning)
-    #expect(result.workspaceScale?.displayUnit == .kilometer)
-    #expect(result.workspaceScale?.visibleSpanDisplayValue == 100.0)
-    #expect(result.viewportGridScale?.snapStep.meters == 100.0)
-    #expect(result.viewportGridScale?.snapStep.displayValue == 0.1)
-    #expect(result.viewportGridScale?.workspaceSpan.text == "100 km")
-    #expect(result.workspaceBounds?.maximumSpan == 25_000.0)
-    #expect(result.workspaceScaleRecommendation == nil)
-    #expect(result.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
+    #expect(result.workspaceScale == nil)
     #expect(result.message.contains("Workspace scale fitted to Site Planning"))
+
+    let context = try agentWorkspaceContext(server: server, sessionID: sessionID, expectedGeneration: session.generation)
+    #expect(context.workspaceScale?.matchedPreset == .sitePlanning)
+    #expect(context.workspaceScale?.displayUnit == .kilometer)
+    #expect(context.workspaceScale?.visibleSpanDisplayValue == 100.0)
+    #expect(context.viewportGridScale?.snapStep.meters == 100.0)
+    #expect(context.viewportGridScale?.snapStep.displayValue == 0.1)
+    #expect(context.viewportGridScale?.workspaceSpan.text == "100 km")
+    #expect(context.workspaceBounds?.maximumSpan == 25_000.0)
+    #expect(context.workspaceScaleRecommendation == nil)
+    #expect(context.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
     #expect(result.generation == DocumentGeneration(0))
     #expect(result.workspaceRevision == WorkspaceRevision(1))
     #expect(try AgentDocumentSourceState(document: session.document) == sourceState)
@@ -310,15 +324,18 @@ import Testing
 
     #expect(result.commandName == "setRulerConfiguration")
     #expect(result.didMutate)
-    #expect(result.workspaceScale?.matchedPreset == .urbanPlanning)
-    #expect(result.workspaceScale?.displayUnit == .kilometer)
-    #expect(result.workspaceScale?.visibleSpanDisplayValue == 25.0)
-    #expect(result.viewportGridScale?.snapStep.meters == 10.0)
-    #expect(result.viewportGridScale?.workspaceSpan.text == "25 km")
-    #expect(result.workspaceBounds?.maximumSpan == 5_000.0)
-    #expect(result.workspaceScaleRecommendation == nil)
-    #expect(result.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
+    #expect(result.workspaceScale == nil)
     #expect(result.message.contains("Workspace scale fitted to Urban Planning"))
+
+    let context = try agentWorkspaceContext(server: server, sessionID: sessionID, expectedGeneration: session.generation)
+    #expect(context.workspaceScale?.matchedPreset == .urbanPlanning)
+    #expect(context.workspaceScale?.displayUnit == .kilometer)
+    #expect(context.workspaceScale?.visibleSpanDisplayValue == 25.0)
+    #expect(context.viewportGridScale?.snapStep.meters == 10.0)
+    #expect(context.viewportGridScale?.workspaceSpan.text == "25 km")
+    #expect(context.workspaceBounds?.maximumSpan == 5_000.0)
+    #expect(context.workspaceScaleRecommendation == nil)
+    #expect(context.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
     #expect(result.generation == DocumentGeneration(0))
     #expect(result.workspaceRevision == WorkspaceRevision(1))
     #expect(try AgentDocumentSourceState(document: session.document) == sourceState)
@@ -370,6 +387,34 @@ import Testing
     #expect(snapshot.workspaceInteractionScale.operationStep.displayValue == 1.0)
     #expect(snapshot.workspaceInteractionScale.operationStep.displayUnitSymbol == "mm")
     #expect(decodedResponse == response)
+}
+
+
+/// Rich workspace context is attached only to a trailing describeDocument
+/// request under the incremental agent transaction contract.
+@MainActor
+private func agentWorkspaceContext(
+    server: AgentCommandController,
+    sessionID: UUID,
+    expectedGeneration: DocumentGeneration
+) throws -> AutomationResult {
+    let response = server.handle(
+        .executeBatch(
+            sessionID: sessionID,
+            batch: AutomationBatch(
+                commands: [.describeDocument],
+                expectedGeneration: expectedGeneration
+            )
+        )
+    )
+    guard case .batch(let batchResult) = response,
+          let context = batchResult.results.last else {
+        throw EditorError(
+            code: .commandFailed,
+            message: "Agent workspace context request must return a batch result."
+        )
+    }
+    return context
 }
 
 private struct AgentDocumentSourceState: Equatable {

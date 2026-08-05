@@ -692,7 +692,7 @@ private func viewportSceneSnapshotTestKey(
 }
 
 @Test func viewportFaceSurfacePointResolverRestoresPointInsideProjectedFace() throws {
-    let componentID = SelectionComponentID.generatedTopology("feature:body:subshape:test:face:front")
+    let componentID = SelectionComponentID.generatedTopology(generatedTopologyTestSubshapeID("feature:body:subshape:test:face:front"))
     let face = ViewportBodyTopology.Face(
         componentID: componentID,
         points: [
@@ -756,8 +756,7 @@ private func viewportSceneSnapshotTestKey(
     #expect(overlay.items.count == 1)
     #expect(item.continuity == .g2)
     #expect(item.requiresCurvatureContinuitySolve == false)
-    #expect(item.edgePersistentName.contains("subshape:patch:0:edge:uMax")
-        || item.edgePersistentName.contains("subshape:patch:2:edge:uMin"))
+    #expect(item.edgePersistentName.contains("/polySpline.edge:source:"))
     #expect(abs(item.start.x - 0.01) <= 1.0e-12)
     #expect(abs(item.end.x - 0.01) <= 1.0e-12)
 }
@@ -785,7 +784,9 @@ private func viewportSceneSnapshotTestKey(
     try selection.selectTarget(
         SelectionTarget(
             sceneNodeID: surfaceNodeID,
-            component: .face(.generatedTopology(faceName))
+            component: .face(.generatedTopology(
+                try #require(GeneratedSubshapeIdentity.subshapeID(from: faceName))
+            ))
         ),
         in: document
     )
@@ -850,12 +851,14 @@ private func viewportSceneSnapshotTestKey(
     let analysis = try SurfaceAnalysisService(options: SurfaceAnalysisOptions(sampleDensity: .low))
         .analyze(document: document, displayUnit: .millimeter)
     let face = try #require(analysis.faces.first)
-    let faceName = try #require(face.facePersistentNames.first)
+    let faceName = try #require(face.faceSubshapeIDs.first)
     var selection = SelectionModel()
     try selection.selectTarget(
         SelectionTarget(
             sceneNodeID: surfaceNodeID,
-            component: .face(.generatedTopology(faceName))
+            component: .face(.generatedTopology(
+                try #require(GeneratedSubshapeIdentity.subshapeID(from: faceName))
+            ))
         ),
         in: document
     )
@@ -982,7 +985,7 @@ private func viewportSceneSnapshotTestKey(
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     _ = try workspaceState.apply(
         .setSurfaceControlPointDisplay(
-            target: controlPoint.selectionReference,
+            target: try #require(controlPoint.selectionReference),
             isVisible: true
         ),
         document: document
@@ -1022,7 +1025,7 @@ private func viewportSceneSnapshotTestKey(
 
     _ = try workspaceState.apply(
         .setSurfaceControlPointDisplay(
-            target: controlPoint.selectionReference,
+            target: try #require(controlPoint.selectionReference),
             isVisible: false
         ),
         document: document
@@ -1051,30 +1054,35 @@ private func viewportSceneSnapshotTestKey(
         displayUnit: .millimeter
     )
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
-    let trimLoop = BSplineSurfaceTrimLoop(
+    let trimLoop = SurfaceTrimLoop(
         role: .outer,
-        edges: [
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+        parameterCurves: [
+            .polyline([
                 SurfaceParameter(u: 0.2, v: 0.2),
                 SurfaceParameter(u: 0.8, v: 0.25),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.8, v: 0.25),
                 SurfaceParameter(u: 0.45, v: 0.8),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.45, v: 0.8),
                 SurfaceParameter(u: 0.2, v: 0.2),
-            ])),
+            ]),
         ]
     )
     try document.setSurfaceTrimLoops(target: faceReference, trimLoops: [trimLoop])
+    // The authored trim node owns the visible body, so its scene item
+    // carries the trim displays.
+    let trimFeatureID = try #require(
+        document.existingSurfaceTrimOperation(for: featureID)?.node.id
+    )
 
     let scene = ViewportSceneBuilder().build(
         document: document,
         ruler: .standard(for: .millimeter)
     )
-    let body = try #require(scene.items.first { $0.featureID == featureID })
+    let body = try #require(scene.items.first { $0.featureID == trimFeatureID })
     guard case .body(let component) = body.kind else {
         Issue.record("Expected a B-spline surface body scene item.")
         return
@@ -1113,10 +1121,10 @@ private func viewportSceneSnapshotTestKey(
         displayUnit: .millimeter
     )
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
-    let trimLoop = BSplineSurfaceTrimLoop(
+    let trimLoop = SurfaceTrimLoop(
         role: .outer,
-        edges: [
-            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+        parameterCurves: [
+            .bSpline(BSplineCurve2D(
                 degree: 2,
                 knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
                 controlPoints: [
@@ -1124,24 +1132,29 @@ private func viewportSceneSnapshotTestKey(
                     Point2D(x: 0.52, y: 0.42),
                     Point2D(x: 0.8, y: 0.25),
                 ]
-            ))),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            )),
+            .polyline([
                 SurfaceParameter(u: 0.8, v: 0.25),
                 SurfaceParameter(u: 0.45, v: 0.8),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.45, v: 0.8),
                 SurfaceParameter(u: 0.2, v: 0.2),
-            ])),
+            ]),
         ]
     )
     try document.setSurfaceTrimLoops(target: faceReference, trimLoops: [trimLoop])
+    // The authored trim node owns the visible body, so its scene item
+    // carries the trim displays.
+    let trimFeatureID = try #require(
+        document.existingSurfaceTrimOperation(for: featureID)?.node.id
+    )
 
     let scene = ViewportSceneBuilder().build(
         document: document,
         ruler: .standard(for: .millimeter)
     )
-    let body = try #require(scene.items.first { $0.featureID == featureID })
+    let body = try #require(scene.items.first { $0.featureID == trimFeatureID })
     guard case .body(let component) = body.kind else {
         Issue.record("Expected a B-spline surface body scene item.")
         return
@@ -1168,10 +1181,10 @@ private func viewportSceneSnapshotTestKey(
         displayUnit: .millimeter
     )
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
-    let trimLoop = BSplineSurfaceTrimLoop(
+    let trimLoop = SurfaceTrimLoop(
         role: .outer,
-        edges: [
-            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+        parameterCurves: [
+            .bSpline(BSplineCurve2D(
                 degree: 2,
                 knots: [0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0],
                 controlPoints: [
@@ -1180,24 +1193,29 @@ private func viewportSceneSnapshotTestKey(
                     Point2D(x: 0.62, y: 0.38),
                     Point2D(x: 0.8, y: 0.25),
                 ]
-            ))),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            )),
+            .polyline([
                 SurfaceParameter(u: 0.8, v: 0.25),
                 SurfaceParameter(u: 0.45, v: 0.8),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.45, v: 0.8),
                 SurfaceParameter(u: 0.2, v: 0.2),
-            ])),
+            ]),
         ]
     )
     try document.setSurfaceTrimLoops(target: faceReference, trimLoops: [trimLoop])
+    // The authored trim node owns the visible body, so its scene item
+    // carries the trim displays.
+    let trimFeatureID = try #require(
+        document.existingSurfaceTrimOperation(for: featureID)?.node.id
+    )
 
     let scene = ViewportSceneBuilder().build(
         document: document,
         ruler: .standard(for: .millimeter)
     )
-    let body = try #require(scene.items.first { $0.featureID == featureID })
+    let body = try #require(scene.items.first { $0.featureID == trimFeatureID })
     guard case .body(let component) = body.kind else {
         Issue.record("Expected a B-spline surface body scene item.")
         return
@@ -1434,7 +1452,7 @@ private func viewportSceneSnapshotTestKey(
 }
 
 @MainActor
-@Test func viewportSceneBuilderCreatesMeshBodyItemForTwistedScaledStraightPathSweep() async throws {
+@Test func viewportSceneBuilderShowsNoBodyItemForRejectedTwistedScaledStraightPathSweep() async throws {
     var document = DesignDocument.empty()
     let profileID = try document.createRectangleSketch(
         name: "Viewport Twisted Sweep Profile",
@@ -1455,37 +1473,36 @@ private func viewportSceneSnapshotTestKey(
         )
     )
     let session = EditorSession(document: document)
-    let result = try session.execute(.createSweep(
-        name: "Viewport Twisted Scaled Sweep",
-        sections: [.profile(ProfileReference(featureID: profileID))],
-        path: SweepPathReference(featureID: pathID),
-        guides: [],
-        targets: [],
-        options: SweepOptions(
-            twistAngle: .angle(90.0, .degree),
-            endScale: .constant(.scalar(0.5))
-        )
-    ))
+    // The exact kernel rejects twisted sweeps, so the transaction rolls back
+    // and the viewport keeps showing only the source sketches.
+    var caught: EditorError?
+    do {
+        _ = try session.execute(.createSweep(
+            name: "Viewport Twisted Scaled Sweep",
+            sections: [.profile(ProfileReference(featureID: profileID))],
+            path: SweepPathReference(featureID: pathID),
+            guides: [],
+            targets: [],
+            options: SweepOptions(
+                twistAngle: .angle(90.0, .degree),
+                endScale: .constant(.scalar(0.5))
+            )
+        ))
+    } catch let error as EditorError {
+        caught = error
+    }
+
+    #expect(caught?.code == .evaluationFailed)
+    #expect(caught?.message.contains("sweepTwistUnavailable") == true)
+    #expect(session.document.cadDocument.designGraph.order == [profileID, pathID])
 
     let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
-    let bodyItem = try #require(scene.items.first { item in
+    #expect(scene.items.allSatisfy { item in
         if case .body = item.kind {
-            return true
+            return false
         }
-        return false
+        return true
     })
-    guard case .body(let component) = bodyItem.kind else {
-        Issue.record("Expected a twisted sweep body scene item.")
-        return
-    }
-    let mesh = try #require(component.mesh)
-
-    #expect(result.commandName == "createSweep")
-    #expect(session.evaluationStatus == .valid)
-    #expect(mesh.positions.count > 0)
-    #expect(mesh.indices.count > 0)
-    #expect(mesh.indices.count % 3 == 0)
-    #expect(bodyItem.sourceFeatureID == profileID)
 }
 
 @MainActor
@@ -1685,9 +1702,11 @@ private func viewportSceneSnapshotTestKey(
     #expect(bodyItem.sourceFeatureID == setup.profileID)
     #expect(mesh.positions.count > 8)
     #expect(mesh.indices.count > 36)
-    #expect(topology.faces.count > 6)
-    #expect(topology.edges.count > 12)
-    #expect(topology.vertices.count > 8)
+    // The exact circular sweep of a rectangular profile is a closed box-like
+    // solid: start + end + four side faces.
+    #expect(topology.faces.count == 6)
+    #expect(topology.edges.count == 12)
+    #expect(topology.vertices.count == 8)
     #expect(component.sizeYMeters > 0.05)
     #expect(component.sizeZMeters > 0.05)
 }
@@ -1771,7 +1790,7 @@ private func viewportSceneSnapshotTestKey(
     }
     let topology = try #require(component.topology)
     let vertex = try #require(topology.vertices.first { vertex in
-        vertex.componentID.generatedTopologyPersistentName?.contains("generated:polySpline") == true
+        vertex.componentID.generatedTopologySubshapeID?.role.hasPrefix("polySpline.") == true
     })
     let layout = try #require(ViewportLayout(
         scene: scene,
@@ -2271,15 +2290,9 @@ private func viewportSceneSnapshotTestKey(
 
 @Test func viewportIdentityPickIndexBuildsDecodableGeneratedTopologyRecords() throws {
     let scene = viewportGeneratedTopologyScene()
-    let faceComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:test:face:front"
-    )
-    let edgeComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:test:edge:frontBottom"
-    )
-    let vertexComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:test:vertex:frontBottomLeft"
-    )
+    let faceComponentID = SelectionComponentID.generatedTopology(generatedTopologyTestSubshapeID("feature:body:subshape:test:face:front"))
+    let edgeComponentID = SelectionComponentID.generatedTopology(generatedTopologyTestSubshapeID("feature:body:subshape:test:edge:frontBottom"))
+    let vertexComponentID = SelectionComponentID.generatedTopology(generatedTopologyTestSubshapeID("feature:body:subshape:test:vertex:frontBottomLeft"))
 
     let index = ViewportIdentityPickIndexBuilder().build(scene: scene)
     let faceRecord = try #require(index.records.first {
@@ -2309,15 +2322,9 @@ private func viewportSceneSnapshotTestKey(
             size: CGSize(width: 800.0, height: 600.0)
         )
     )
-    let faceComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:test:face:front"
-    )
-    let edgeComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:test:edge:frontBottom"
-    )
-    let vertexComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:test:vertex:frontBottomLeft"
-    )
+    let faceComponentID = SelectionComponentID.generatedTopology(generatedTopologyTestSubshapeID("feature:body:subshape:test:face:front"))
+    let edgeComponentID = SelectionComponentID.generatedTopology(generatedTopologyTestSubshapeID("feature:body:subshape:test:edge:frontBottom"))
+    let vertexComponentID = SelectionComponentID.generatedTopology(generatedTopologyTestSubshapeID("feature:body:subshape:test:vertex:frontBottomLeft"))
 
     let plan = ViewportIdentityPickRenderPlanBuilder().build(scene: scene, layout: layout)
     let faceItem = try #require(plan.drawItems.first {
@@ -2545,9 +2552,7 @@ private func viewportSceneSnapshotTestKey(
         )
     )
     let vertexPoint = Point3D(x: -0.010, y: 0.0, z: -0.010)
-    let vertexComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:test:vertex:frontBottomLeft"
-    )
+    let vertexComponentID = SelectionComponentID.generatedTopology(generatedTopologyTestSubshapeID("feature:body:subshape:test:vertex:frontBottomLeft"))
 
     let hit = ViewportHitTester().hitTest(
         point: layout.project(vertexPoint),
@@ -2619,15 +2624,9 @@ private func viewportSceneSnapshotTestKey(
             size: CGSize(width: 800.0, height: 600.0)
         )
     )
-    let faceComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:test:face:front"
-    )
-    let edgeComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:test:edge:frontBottom"
-    )
-    let vertexComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:test:vertex:frontBottomLeft"
-    )
+    let faceComponentID = SelectionComponentID.generatedTopology(generatedTopologyTestSubshapeID("feature:body:subshape:test:face:front"))
+    let edgeComponentID = SelectionComponentID.generatedTopology(generatedTopologyTestSubshapeID("feature:body:subshape:test:edge:frontBottom"))
+    let vertexComponentID = SelectionComponentID.generatedTopology(generatedTopologyTestSubshapeID("feature:body:subshape:test:vertex:frontBottomLeft"))
 
     let hits = ViewportSelectionRectangleHitTester().hits(
         in: CGRect(x: 0.0, y: 0.0, width: 800.0, height: 600.0),
@@ -4453,14 +4452,15 @@ private func makeCurvedSweepViewportSession() throws -> (
         name: "Viewport Curved Sweep Path",
         plane: .yz,
         center: SketchPoint(
-            x: .length(0.0, .millimeter),
+            x: .length(60.0, .millimeter),
             y: .length(0.0, .millimeter)
         ),
         radius: .length(60.0, .millimeter),
-        // 90-180 degrees keeps the path start directly above the profile-plane
-        // origin under the anchored placement semantics.
-        startAngle: .angle(90.0, .degree),
-        endAngle: .angle(180.0, .degree)
+        // The exact circular path-normal sweep requires the path start to lie
+        // on the section plane, so the arc starts at the profile origin and
+        // curves away from the plane.
+        startAngle: .angle(180.0, .degree),
+        endAngle: .angle(270.0, .degree)
     )
     let session = EditorSession(document: document)
     let result = try session.execute(.createSweep(
@@ -4554,15 +4554,9 @@ private func generatedFaceCandidatePoints(
 
 private func viewportGeneratedTopologyScene() -> ViewportScene {
     let featureID = FeatureID()
-    let faceComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:test:face:front"
-    )
-    let edgeComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:test:edge:frontBottom"
-    )
-    let vertexComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:test:vertex:frontBottomLeft"
-    )
+    let faceComponentID = SelectionComponentID.generatedTopology(generatedTopologyTestSubshapeID("feature:body:subshape:test:face:front"))
+    let edgeComponentID = SelectionComponentID.generatedTopology(generatedTopologyTestSubshapeID("feature:body:subshape:test:edge:frontBottom"))
+    let vertexComponentID = SelectionComponentID.generatedTopology(generatedTopologyTestSubshapeID("feature:body:subshape:test:vertex:frontBottomLeft"))
     let frontBottomLeft = Point3D(x: -0.010, y: 0.0, z: -0.010)
     let frontBottomRight = Point3D(x: 0.010, y: 0.0, z: -0.010)
     let frontTopRight = Point3D(x: 0.010, y: 0.0, z: 0.010)
@@ -4627,9 +4621,7 @@ private func denseGeneratedTopologyScene(columns: Int, rows: Int) -> ViewportSce
             let z0 = Double(row) * cellSize - zOffset
             let z1 = z0 + cellSize
             faces.append(ViewportBodyTopology.Face(
-                componentID: SelectionComponentID.generatedTopology(
-                    "feature:body:subshape:dense:face:\(row):\(column)"
-                ),
+                componentID: SelectionComponentID.generatedTopology(generatedTopologyTestSubshapeID("feature:body:subshape:dense:face:\(row):\(column)")),
                 points: [
                     Point3D(x: x0, y: 0.0, z: z0),
                     Point3D(x: x1, y: 0.0, z: z0),
@@ -4686,12 +4678,8 @@ private func overlappingGeneratedFaceScene() throws -> OverlappingGeneratedFaceS
     let centers = try overlappingDepthCenters(basis: basis)
     let farFeatureID = FeatureID()
     let nearFeatureID = FeatureID()
-    let farFaceComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:test:face:far"
-    )
-    let nearFaceComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:test:face:near"
-    )
+    let farFaceComponentID = SelectionComponentID.generatedTopology(generatedTopologyTestSubshapeID("feature:body:subshape:test:face:far"))
+    let nearFaceComponentID = SelectionComponentID.generatedTopology(generatedTopologyTestSubshapeID("feature:body:subshape:test:face:near"))
     let farFace = ViewportBodyTopology.Face(
         componentID: farFaceComponentID,
         points: screenPlaneFacePoints(center: centers.far, basis: basis)
@@ -4721,24 +4709,12 @@ private func overlappingGeneratedFaceScene() throws -> OverlappingGeneratedFaceS
 private func overlappingGeneratedPrimitiveComponent() throws -> OverlappingGeneratedPrimitiveComponent {
     let basis = ViewportProjectionBasis.isometric
     let centers = try overlappingDepthCenters(basis: basis)
-    let farVertexComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:test:vertex:far"
-    )
-    let nearVertexComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:test:vertex:near"
-    )
-    let farEdgeComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:test:edge:far"
-    )
-    let nearEdgeComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:test:edge:near"
-    )
-    let farFaceComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:test:face:far"
-    )
-    let nearFaceComponentID = SelectionComponentID.generatedTopology(
-        "feature:body:subshape:test:face:near"
-    )
+    let farVertexComponentID = SelectionComponentID.generatedTopology(generatedTopologyTestSubshapeID("feature:body:subshape:test:vertex:far"))
+    let nearVertexComponentID = SelectionComponentID.generatedTopology(generatedTopologyTestSubshapeID("feature:body:subshape:test:vertex:near"))
+    let farEdgeComponentID = SelectionComponentID.generatedTopology(generatedTopologyTestSubshapeID("feature:body:subshape:test:edge:far"))
+    let nearEdgeComponentID = SelectionComponentID.generatedTopology(generatedTopologyTestSubshapeID("feature:body:subshape:test:edge:near"))
+    let farFaceComponentID = SelectionComponentID.generatedTopology(generatedTopologyTestSubshapeID("feature:body:subshape:test:face:far"))
+    let nearFaceComponentID = SelectionComponentID.generatedTopology(generatedTopologyTestSubshapeID("feature:body:subshape:test:face:near"))
     let farFacePoints = screenPlaneFacePoints(center: centers.far, basis: basis)
     let nearFacePoints = screenPlaneFacePoints(center: centers.near, basis: basis)
     let farEdge = screenPlaneEdgePoints(center: centers.far, basis: basis)
@@ -5101,4 +5077,17 @@ private func pointIsApproximatelyEqual(
     tolerance: CGFloat = 1.0e-9
 ) -> Bool {
     abs(lhs.x - rhs.x) <= tolerance && abs(lhs.y - rhs.y) <= tolerance
+}
+
+
+/// Shared feature identity so equal role strings map to equal subshape IDs
+/// within this file's tests.
+private let generatedTopologyTestFeatureID = FeatureID()
+
+private func generatedTopologyTestSubshapeID(_ role: String) -> SubshapeID {
+    SubshapeID(
+        featureID: generatedTopologyTestFeatureID,
+        role: role,
+        ordinal: 0
+    )
 }

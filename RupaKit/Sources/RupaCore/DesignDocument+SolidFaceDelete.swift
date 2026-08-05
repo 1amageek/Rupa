@@ -22,24 +22,24 @@ extension DesignDocument {
             document: self,
             objectRegistry: objectRegistry
         )
-        let entriesByPersistentName = Dictionary(
-            uniqueKeysWithValues: topology.entries.map { ($0.persistentName, $0) }
+        let entriesBySubshapeID = Dictionary(
+            uniqueKeysWithValues: topology.entries.map { ($0.subshapeID, $0) }
         )
-        let parser = GeneratedTopologyPersistentNameParser()
         var targetFeatureID: FeatureID?
         var targetSceneNodeID: SceneNodeID?
-        var facePersistentNames: [PersistentName] = []
-        var seenPersistentNames: Set<String> = []
+        var faceReferences: [StableSubshapeReference] = []
+        var seenIdentities: Set<String> = []
 
         for target in targets {
             guard case .face(let componentID) = target.component,
-                  let persistentNameString = componentID.generatedTopologyPersistentName else {
+                  let subshapeID = componentID.generatedTopologySubshapeID else {
                 throw EditorError(
                     code: .commandInvalid,
                     message: "\(operationName) requires generated topology face targets."
                 )
             }
-            guard seenPersistentNames.insert(persistentNameString).inserted else {
+            let identity = GeneratedSubshapeIdentity.string(for: subshapeID)
+            guard seenIdentities.insert(identity).inserted else {
                 throw EditorError(
                     code: .commandInvalid,
                     message: "\(operationName) face targets must be unique."
@@ -70,7 +70,7 @@ extension DesignDocument {
                 }
             }
 
-            guard let entry = entriesByPersistentName[persistentNameString] else {
+            guard let entry = entriesBySubshapeID[identity] else {
                 throw EditorError(
                     code: .referenceUnresolved,
                     message: "\(operationName) generated topology face was not found in the current evaluation."
@@ -83,7 +83,13 @@ extension DesignDocument {
                     message: "\(operationName) targets must reference faces on the selected body."
                 )
             }
-            facePersistentNames.append(try parser.parse(persistentNameString, operationName: operationName))
+            guard let stableReference = entry.stableReference else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "\(operationName) generated topology face has no stable subshape reference."
+                )
+            }
+            faceReferences.append(stableReference)
         }
 
         guard let targetFeatureID else {
@@ -102,7 +108,7 @@ extension DesignDocument {
 
         let faceDelete = FaceDeleteFeature(
             target: FaceDeleteTargetReference(featureID: targetFeatureID),
-            facePersistentNames: facePersistentNames
+            faces: faceReferences
         )
         try faceDelete.validate()
 
@@ -138,7 +144,7 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         )
-        try cadDocument.validate()
+        try cadDocument.validate(tolerance: modelingSettings.tolerance)
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         didCommit = true
         return featureID

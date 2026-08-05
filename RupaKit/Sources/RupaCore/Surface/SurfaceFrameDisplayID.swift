@@ -17,14 +17,14 @@ public struct SurfaceFrameDisplayID: Codable, Hashable, RawRepresentable, Sendab
         let hasFaceID = query.faceID.map {
             !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         } ?? false
-        let hasPersistentName = query.facePersistentName.map {
+        let hasPersistentName = query.faceSubshapeID.map {
             !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         } ?? false
         let hasSelectionReference = query.selectionReference != nil
         guard [hasFaceID, hasPersistentName, hasSelectionReference].filter({ $0 }).count == 1 else {
             throw EditorError(
                 code: .referenceUnresolved,
-                message: "Surface frame display queries require exactly one faceID, facePersistentName, or selectionReference."
+                message: "Surface frame display queries require exactly one faceID, faceSubshapeID, or selectionReference."
             )
         }
 
@@ -39,10 +39,10 @@ public struct SurfaceFrameDisplayID: Codable, Hashable, RawRepresentable, Sendab
             let uv = try explicitUVComponents(query)
             return ["surfaceFrame", "faceID", trimmed, uv.u, uv.v].joined(separator: "/")
         }
-        if let facePersistentName = query.facePersistentName {
-            let trimmed = facePersistentName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let faceSubshapeID = query.faceSubshapeID {
+            let trimmed = faceSubshapeID.trimmingCharacters(in: .whitespacesAndNewlines)
             let uv = try explicitUVComponents(query)
-            return ["surfaceFrame", "facePersistentName", trimmed, uv.u, uv.v].joined(separator: "/")
+            return ["surfaceFrame", "faceSubshapeID", trimmed, uv.u, uv.v].joined(separator: "/")
         }
         guard let selectionReference = query.selectionReference else {
             throw EditorError(
@@ -59,18 +59,24 @@ public struct SurfaceFrameDisplayID: Codable, Hashable, RawRepresentable, Sendab
             )
         }
         switch selectionReference {
-        case .topology(let name):
+        case .subshape(let reference):
             let uv = try explicitUVComponents(query)
-            return ["surfaceFrame", "topology", persistentNameString(name), uv.u, uv.v].joined(separator: "/")
+            return [
+                "surfaceFrame",
+                "topology",
+                GeneratedSubshapeIdentity.string(for: reference.subshapeID),
+                uv.u,
+                uv.v,
+            ].joined(separator: "/")
         case .surface(.whole(let reference)):
             let uv = try explicitUVComponents(query)
-            return ["surfaceFrame", "surface", persistentNameString(reference.faceName), uv.u, uv.v].joined(separator: "/")
+            return ["surfaceFrame", "surface", GeneratedSubshapeIdentity.string(for: reference.subshape.subshapeID), uv.u, uv.v].joined(separator: "/")
         case .surface(.parameter(let reference)):
             try rejectExplicitUV(query)
             return [
                 "surfaceFrame",
                 "surfaceParameter",
-                persistentNameString(reference.surface.faceName),
+                GeneratedSubshapeIdentity.string(for: reference.surface.subshape.subshapeID),
                 parameterComponent("u", reference.u),
                 parameterComponent("v", reference.v),
             ].joined(separator: "/")
@@ -79,7 +85,7 @@ public struct SurfaceFrameDisplayID: Codable, Hashable, RawRepresentable, Sendab
             return [
                 "surfaceFrame",
                 "surfaceControlPoint",
-                persistentNameString(reference.surface.faceName),
+                GeneratedSubshapeIdentity.string(for: reference.surface.subshape.subshapeID),
                 "uIndex:\(reference.uIndex)",
                 "vIndex:\(reference.vIndex)",
             ].joined(separator: "/")
@@ -88,7 +94,7 @@ public struct SurfaceFrameDisplayID: Codable, Hashable, RawRepresentable, Sendab
             return [
                 "surfaceFrame",
                 "surfaceTrimSpan",
-                persistentNameString(reference.trim.surface.faceName),
+                GeneratedSubshapeIdentity.string(for: reference.trim.surface.subshape.subshapeID),
                 "loop:\(reference.trim.loopIndex)",
                 "edge:\(reference.trim.edgeIndex)",
                 "span:\(reference.spanIndex)",
@@ -98,7 +104,7 @@ public struct SurfaceFrameDisplayID: Codable, Hashable, RawRepresentable, Sendab
             return [
                 "surfaceFrame",
                 "surfaceTrimKnot",
-                persistentNameString(reference.trim.surface.faceName),
+                GeneratedSubshapeIdentity.string(for: reference.trim.surface.subshape.subshapeID),
                 "loop:\(reference.trim.loopIndex)",
                 "edge:\(reference.trim.edgeIndex)",
                 "knot:\(reference.knotIndex)",
@@ -148,19 +154,4 @@ public struct SurfaceFrameDisplayID: Codable, Hashable, RawRepresentable, Sendab
         "\(axis)Bits:\(value.bitPattern)"
     }
 
-    private static func persistentNameString(_ name: PersistentName) -> String {
-        name.components.map { component in
-            switch component {
-            case .feature(let featureID):
-                return "feature:\(featureID.description)"
-            case .generated(let value):
-                return "generated:\(value)"
-            case .subshape(let value):
-                return "subshape:\(value)"
-            case .index(let index):
-                return "index:\(index)"
-            }
-        }
-        .joined(separator: "/")
-    }
 }

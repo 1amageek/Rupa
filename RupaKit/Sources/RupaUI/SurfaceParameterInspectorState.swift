@@ -25,7 +25,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
         var sourceName: String
         var sourceKind: String
         var patchID: Int
-        var facePersistentName: String?
+        var faceSubshapeID: String?
         var basisKind: String
         var direction: SurfaceParameterDirection
         var directionDegree: Int?
@@ -653,7 +653,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                 sourceName: source.name,
                 sourceKind: source.kind,
                 patchID: patch.patchID,
-                facePersistentName: patch.facePersistentName,
+                faceSubshapeID: patch.faceSubshapeID,
                 basisKind: "trim p-curve",
                 direction: .u,
                 directionDegree: degree,
@@ -696,7 +696,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                 sourceName: source.name,
                 sourceKind: source.kind,
                 patchID: patch.patchID,
-                facePersistentName: patch.facePersistentName,
+                faceSubshapeID: patch.faceSubshapeID,
                 basisKind: "trim p-curve",
                 direction: .u,
                 directionDegree: degree,
@@ -738,7 +738,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                 sourceName: source.name,
                 sourceKind: source.kind,
                 patchID: patch.patchID,
-                facePersistentName: patch.facePersistentName,
+                faceSubshapeID: patch.faceSubshapeID,
                 basisKind: patch.basis.kind,
                 direction: .u,
                 directionDegree: nil,
@@ -780,7 +780,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                 sourceName: source.name,
                 sourceKind: source.kind,
                 patchID: patch.patchID,
-                facePersistentName: patch.facePersistentName,
+                faceSubshapeID: patch.faceSubshapeID,
                 basisKind: patch.basis.kind,
                 direction: .u,
                 directionDegree: nil,
@@ -829,7 +829,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                 sourceName: source.name,
                 sourceKind: source.kind,
                 patchID: patch.patchID,
-                facePersistentName: patch.facePersistentName,
+                faceSubshapeID: patch.faceSubshapeID,
                 basisKind: patch.basis.kind,
                 direction: direction,
                 directionDegree: degree,
@@ -871,7 +871,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                 sourceName: source.name,
                 sourceKind: source.kind,
                 patchID: patch.patchID,
-                facePersistentName: patch.facePersistentName,
+                faceSubshapeID: patch.faceSubshapeID,
                 basisKind: patch.basis.kind,
                 direction: direction,
                 directionDegree: degree,

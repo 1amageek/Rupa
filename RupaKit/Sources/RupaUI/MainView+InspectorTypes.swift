@@ -202,7 +202,7 @@ struct InspectorSurfaceAnalysis: Equatable {
 
 struct InspectorSurfaceFaceAnalysis: Identifiable, Equatable {
     var id: String
-    var facePersistentNames: [String]
+    var faceSubshapeIDs: [String]
     var uDegree: Int
     var vDegree: Int
     var uControlPointCount: Int

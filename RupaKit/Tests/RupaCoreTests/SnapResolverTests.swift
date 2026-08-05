@@ -1044,7 +1044,7 @@ import Testing
 
     let candidate = try #require(result.candidates.first { candidate in
         candidate.kind == .edgeMidpoint &&
-            candidate.topologySource?.persistentName == edge.persistentName
+            candidate.topologySource?.persistentName == edge.subshapeID
     })
     let selectedTopologyWorldPoint = try #require(result.selectedTopologyWorldPoint)
     let selectedWorldPoint = try #require(result.selectedWorldPoint)
@@ -1090,7 +1090,7 @@ import Testing
 
     let candidate = try #require(result.candidates.first { candidate in
         candidate.kind == .edgeMidpoint &&
-            candidate.topologySource?.persistentName == edge.persistentName
+            candidate.topologySource?.persistentName == edge.subshapeID
     })
     #expect(abs(candidate.point.x - expected.x) <= 1.0e-12)
     #expect(abs(candidate.point.y - expected.y) <= 1.0e-12)
@@ -1126,7 +1126,7 @@ import Testing
 
     let candidate = try #require(result.candidates.first { candidate in
         candidate.kind == .faceCenter &&
-            candidate.topologySource?.persistentName == face.persistentName
+            candidate.topologySource?.persistentName == face.subshapeID
     })
     #expect(candidate.label == "Face Center")
     #expect(candidate.source == nil)
@@ -1156,7 +1156,7 @@ import Testing
                     sceneNodeID: target.sceneNodeID,
                     component: target.component,
                     kind: edge.kind,
-                    persistentName: edge.persistentName,
+                    subshapeID: edge.subshapeID,
                     referenceID: edge.referenceID,
                     role: .center
                 ),
@@ -1188,7 +1188,7 @@ import Testing
             candidate.measurementSource?.anchorIndex == 0
     })
     #expect(candidate.measurementSource?.anchorKind == .topologyReference)
-    #expect(candidate.measurementSource?.topologyReference?.persistentName == edge.persistentName)
+    #expect(candidate.measurementSource?.topologyReference?.subshapeID == edge.subshapeID)
     #expect(candidate.measurementSource?.topologyReference?.referenceID == edge.referenceID)
     #expect(candidate.measurementSource?.topologyReference?.component == target.component)
     #expect(abs(candidate.point.x - midpoint.x) <= 1.0e-12)
@@ -1231,7 +1231,7 @@ import Testing
                 .topologyEdgeParameter(
                     sceneNodeID: target.sceneNodeID,
                     component: target.component,
-                    persistentName: edge.persistentName,
+                    subshapeID: edge.subshapeID,
                     referenceID: edge.referenceID,
                     parameter: parameter,
                     role: .point
@@ -1260,7 +1260,7 @@ import Testing
             candidate.measurementSource?.anchorIndex == 0
     })
     #expect(candidate.measurementSource?.anchorKind == .topologyEdgeParameter)
-    #expect(candidate.measurementSource?.topologyEdgeParameter?.persistentName == edge.persistentName)
+    #expect(candidate.measurementSource?.topologyEdgeParameter?.subshapeID == edge.subshapeID)
     #expect(candidate.measurementSource?.topologyEdgeParameter?.referenceID == edge.referenceID)
     #expect(candidate.measurementSource?.topologyEdgeParameter?.component == target.component)
     #expect(candidate.measurementSource?.topologyEdgeParameter?.parameter == parameter)
@@ -1308,7 +1308,7 @@ import Testing
                 .topologyEdgeParameter(
                     sceneNodeID: target.sceneNodeID,
                     component: target.component,
-                    persistentName: edge.persistentName,
+                    subshapeID: edge.subshapeID,
                     referenceID: edge.referenceID,
                     parameter: parameter,
                     role: .point
@@ -1337,7 +1337,7 @@ import Testing
             candidate.measurementSource?.anchorIndex == 0
     })
     #expect(candidate.measurementSource?.anchorKind == .topologyEdgeParameter)
-    #expect(candidate.measurementSource?.topologyEdgeParameter?.persistentName == edge.persistentName)
+    #expect(candidate.measurementSource?.topologyEdgeParameter?.subshapeID == edge.subshapeID)
     #expect(candidate.measurementSource?.topologyEdgeParameter?.referenceID == edge.referenceID)
     #expect(candidate.measurementSource?.topologyEdgeParameter?.component == target.component)
     #expect(candidate.measurementSource?.topologyEdgeParameter?.parameter == parameter)
@@ -1357,7 +1357,7 @@ import Testing
     let topology = try TopologySnapshotService().snapshot(document: document)
     let surfaceVertex = try #require(topology.entries.first { entry in
         entry.kind == .vertex
-            && PolySplineSurfaceVertexTarget.canParsePersistentName(entry.persistentName)
+            && GeneratedSubshapeIdentity.subshapeID(from: entry.subshapeID).map(PolySplineSurfaceVertexTarget.canParse(subshapeID:)) == true
             && entry.start != nil
             && entry.selectionTarget() != nil
     })
@@ -1379,7 +1379,7 @@ import Testing
 
     let candidate = try #require(result.candidates.first { candidate in
         candidate.kind == .surfaceControlVertex
-            && candidate.topologySource?.persistentName == surfaceVertex.persistentName
+            && candidate.topologySource?.persistentName == surfaceVertex.subshapeID
     })
     #expect(result.selectedCandidate?.kind == .surfaceControlVertex)
     #expect(candidate.label == "Surface CV")
@@ -1450,7 +1450,7 @@ import Testing
     #expect(candidate.label == "Surface Frame")
     #expect(surfaceFrameSource.query == query)
     #expect(surfaceFrameSource.faceID.isEmpty == false)
-    #expect(surfaceFrameSource.facePersistentNames == frame.facePersistentNames)
+    #expect(surfaceFrameSource.faceSubshapeIDs == frame.faceSubshapeIDs)
     #expect(surfaceFrameSource.u == frame.u)
     #expect(surfaceFrameSource.v == frame.v)
     #expect(abs(surfaceFrameSource.worldPoint.x - frame.position.x) <= 1.0e-12)
@@ -1539,7 +1539,7 @@ import Testing
     let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let trimEdge = try #require(summary.sources.first?.patches.first?.trimLoops.first?.edges.first)
     let selectionReference = try #require(trimEdge.selectionReference)
-    let expected = try surface.differentialGeometry(atU: 0.2, v: 0.2).position
+    let expected = try surface.differentialGeometry(atU: 0.2, v: 0.2, tolerance: document.modelingSettings.tolerance).position
 
     let result = try SnapResolver().resolve(
         point: Point2D(x: expected.x + 0.00001, y: expected.y + 0.00001),
@@ -1591,7 +1591,7 @@ import Testing
     let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let trimEdge = try #require(summary.sources.first?.patches.first?.trimLoops.first?.edges.first)
     let selectionReference = try #require(trimEdge.selectionReference)
-    let expected = try surface.differentialGeometry(atU: 0.52, v: 0.42).position
+    let expected = try surface.differentialGeometry(atU: 0.52, v: 0.42, tolerance: document.modelingSettings.tolerance).position
 
     let result = try SnapResolver().resolve(
         point: Point2D(x: expected.x + 0.00001, y: expected.y + 0.00001),
@@ -1646,7 +1646,7 @@ import Testing
         target: faceReference,
         trimLoops: [snapResolverAuthoredTrimLoop()]
     )
-    let expected = try surface.differentialGeometry(atU: 0.52, v: 0.42).position
+    let expected = try surface.differentialGeometry(atU: 0.52, v: 0.42, tolerance: document.modelingSettings.tolerance).position
 
     let result = try SnapResolver().resolve(
         point: Point2D(x: expected.y + 0.00001, y: expected.z + 0.00001),
@@ -1768,11 +1768,11 @@ private func snapResolverDirectBSplineSurface(topRightZ: Double = 0.0) -> BSplin
     )
 }
 
-private func snapResolverAuthoredTrimLoop() -> BSplineSurfaceTrimLoop {
-    BSplineSurfaceTrimLoop(
+private func snapResolverAuthoredTrimLoop() -> SurfaceTrimLoop {
+    SurfaceTrimLoop(
         role: .outer,
-        edges: [
-            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+        parameterCurves: [
+            .bSpline(BSplineCurve2D(
                 degree: 2,
                 knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
                 controlPoints: [
@@ -1780,15 +1780,15 @@ private func snapResolverAuthoredTrimLoop() -> BSplineSurfaceTrimLoop {
                     Point2D(x: 0.52, y: 0.42),
                     Point2D(x: 0.8, y: 0.25),
                 ]
-            ))),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            )),
+            .polyline([
                 SurfaceParameter(u: 0.8, v: 0.25),
                 SurfaceParameter(u: 0.45, v: 0.8),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.45, v: 0.8),
                 SurfaceParameter(u: 0.2, v: 0.2),
-            ])),
+            ]),
         ]
     )
 }

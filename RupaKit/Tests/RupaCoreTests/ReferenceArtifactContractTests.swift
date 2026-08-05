@@ -173,12 +173,12 @@ func artifactIdentitySeparatesComputationConfigurationFromOutputContent() throws
         for: [BodyID(): triangleMesh(offset: 0.0)]
     )
     let standard = try MeshArtifactConfiguration(
-        kernelVersion: SchemaVersion(major: 1, minor: 0, patch: 0),
+        kernelVersion: .current,
         modelingTolerance: .standard,
         tessellationOptions: .standard
     )
     let refined = try MeshArtifactConfiguration(
-        kernelVersion: SchemaVersion(major: 1, minor: 0, patch: 0),
+        kernelVersion: .current,
         modelingTolerance: .standard,
         tessellationOptions: TessellationOptions(
             linearTolerance: TessellationOptions.standard.linearTolerance * 0.5,

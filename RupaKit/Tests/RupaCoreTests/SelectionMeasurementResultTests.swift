@@ -66,7 +66,11 @@ import Testing
         point: Point3D.origin,
         tangent: .unitY
     )
-    let rawAngle = try SelectionAngleMeasurement(first: first, second: second)
+    let rawAngle = try SelectionAngleMeasurement(
+        first: first,
+        second: second,
+        tolerance: DocumentModelingSettings.standard.tolerance
+    )
 
     let result = SelectionMeasurementResult(
         rawValue: .angle(rawAngle),
@@ -111,9 +115,12 @@ import Testing
 }
 
 private func selectionMeasurementResultReference(_ suffix: String) -> SelectionReference {
-    .topology(PersistentName(components: [
-        .feature(FeatureID(UUID())),
-        .generated("selectionMeasurementResult"),
-        .subshape(suffix),
-    ]))
+    .subshape(StableSubshapeReference(
+        subshapeID: SubshapeID(
+            featureID: FeatureID(UUID()),
+            role: "selectionMeasurementResult.\(suffix)",
+            ordinal: 0
+        ),
+        geometrySignature: .vertex(point: Point3D(x: 0.0, y: 0.0, z: 0.0))
+    ))
 }

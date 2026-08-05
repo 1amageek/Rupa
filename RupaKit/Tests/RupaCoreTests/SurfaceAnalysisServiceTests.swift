@@ -46,8 +46,8 @@ import SwiftCAD
     #expect(abs(sample.maximumPrincipalCurvature) <= 1.0e-8)
     #expect(abs(vectorLength(sample.minimumPrincipalDirection) - 1.0) <= 1.0e-8)
     #expect(abs(vectorLength(sample.maximumPrincipalDirection) - 1.0) <= 1.0e-8)
-    #expect(firstFace.facePersistentNames.contains { $0.contains("subshape:patch") })
-    #expect(firstFace.edgePersistentNames.contains { $0.contains("subshape:patch") })
+    #expect(firstFace.faceSubshapeIDs.contains { $0.contains("patch") })
+    #expect(firstFace.edgePersistentNames.contains { $0.contains("edge:source") })
     #expect(firstFace.trimBoundaries.count == 1)
     let trimBoundary = try #require(firstFace.trimBoundaries.first)
     #expect(trimBoundary.role == .outer)
@@ -56,7 +56,7 @@ import SwiftCAD
     #expect(trimBoundary.points.count == 4)
     #expect(trimBoundary.isClosed)
     #expect(trimBoundary.estimatedLength > 0.0)
-    #expect(trimBoundary.edgePersistentNames.contains { $0.contains("subshape:patch") })
+    #expect(trimBoundary.edgePersistentNames.contains { $0.contains("edge:source") })
     #expect(trimBoundary.points.contains { abs($0.x - 0.0) <= 1.0e-12 && abs($0.y - 0.0) <= 1.0e-12 })
     #expect(!result.diagnostics.contains { $0.severity == .warning })
 }
@@ -109,7 +109,7 @@ import SwiftCAD
         document: document,
         queries: [
             SurfaceFrameQuery(
-                facePersistentName: faceEntry.persistentName,
+                faceSubshapeID: faceEntry.subshapeID,
                 u: 0.5,
                 v: 0.5
             ),
@@ -119,7 +119,7 @@ import SwiftCAD
 
     #expect(result.frames.count == 1)
     let frame = try #require(result.frames.first)
-    #expect(frame.facePersistentNames.contains(faceEntry.persistentName))
+    #expect(frame.faceSubshapeIDs.contains(faceEntry.subshapeID))
     #expect(frame.u == 0.5)
     #expect(frame.v == 0.5)
     #expect(frame.uDomain.lowerBound == 0.0)
@@ -147,7 +147,7 @@ import SwiftCAD
     let source = try #require(surfaceSummary.sources.first)
     let patch = try #require(source.patches.first)
     let faceSelectionReference = try #require(patch.faceSelectionReference)
-    let facePersistentName = try #require(patch.facePersistentName)
+    let facePersistentName = try #require(patch.faceSubshapeID)
 
     let result = try SurfaceFrameService().resolve(
         document: document,
@@ -162,7 +162,7 @@ import SwiftCAD
     )
 
     let frame = try #require(result.frames.first)
-    #expect(frame.facePersistentNames.contains(facePersistentName))
+    #expect(frame.faceSubshapeIDs.contains(facePersistentName))
     #expect(abs(frame.u - 0.25) <= 1.0e-12)
     #expect(abs(frame.v - 0.75) <= 1.0e-12)
     #expect(abs(vectorLength(frame.uAxis) - 1.0) <= 1.0e-8)
@@ -180,7 +180,7 @@ import SwiftCAD
     let surfaceSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let source = try #require(surfaceSummary.sources.first)
     let patch = try #require(source.patches.first)
-    let facePersistentName = try #require(patch.facePersistentName)
+    let facePersistentName = try #require(patch.faceSubshapeID)
     let surfaceReference = try #require(patch.faceSelectionReference)
     guard case .surface(.whole(let wholeSurfaceReference)) = surfaceReference else {
         Issue.record("Expected a whole surface selection reference.")
@@ -202,7 +202,7 @@ import SwiftCAD
     )
 
     let frame = try #require(result.frames.first)
-    #expect(frame.facePersistentNames.contains(facePersistentName))
+    #expect(frame.faceSubshapeIDs.contains(facePersistentName))
     #expect(abs(frame.u - 0.25) <= 1.0e-12)
     #expect(abs(frame.v - 0.75) <= 1.0e-12)
     #expect(abs(vectorLength(frame.normal) - 1.0) <= 1.0e-8)
@@ -218,7 +218,7 @@ import SwiftCAD
     let surfaceSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let source = try #require(surfaceSummary.sources.first)
     let patch = try #require(source.patches.first)
-    let facePersistentName = try #require(patch.facePersistentName)
+    let facePersistentName = try #require(patch.faceSubshapeID)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 2 && $0.vIndex == 1 })
 
     let result = try SurfaceFrameService().resolve(
@@ -230,7 +230,7 @@ import SwiftCAD
     )
 
     let frame = try #require(result.frames.first)
-    #expect(frame.facePersistentNames.contains(facePersistentName))
+    #expect(frame.faceSubshapeIDs.contains(facePersistentName))
     #expect(abs(frame.u - (2.0 / 3.0)) <= 1.0e-12)
     #expect(abs(frame.v - (1.0 / 3.0)) <= 1.0e-12)
     #expect(abs(vectorLength(frame.uAxis) - 1.0) <= 1.0e-8)
@@ -387,11 +387,11 @@ private func surfaceAnalysisDirectBSplineSurface() -> BSplineSurface3D {
     )
 }
 
-private func surfaceAnalysisAuthoredTrimLoop() -> BSplineSurfaceTrimLoop {
-    BSplineSurfaceTrimLoop(
+private func surfaceAnalysisAuthoredTrimLoop() -> SurfaceTrimLoop {
+    SurfaceTrimLoop(
         role: .outer,
-        edges: [
-            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+        parameterCurves: [
+            .bSpline(BSplineCurve2D(
                 degree: 2,
                 knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
                 controlPoints: [
@@ -399,15 +399,15 @@ private func surfaceAnalysisAuthoredTrimLoop() -> BSplineSurfaceTrimLoop {
                     Point2D(x: 0.52, y: 0.42),
                     Point2D(x: 0.8, y: 0.25),
                 ]
-            ))),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            )),
+            .polyline([
                 SurfaceParameter(u: 0.8, v: 0.25),
                 SurfaceParameter(u: 0.45, v: 0.8),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.45, v: 0.8),
                 SurfaceParameter(u: 0.2, v: 0.2),
-            ])),
+            ]),
         ]
     )
 }

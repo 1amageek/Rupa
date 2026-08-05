@@ -44,7 +44,8 @@ struct PatternArrayDocumentSynchronizer {
         for sourceID: PatternArraySourceID,
         previousSource: PatternArraySource? = nil,
         metadata: inout ProductMetadata,
-        cadDocument: inout CADDocument
+        cadDocument: inout CADDocument,
+        tolerance: ModelingTolerance
     ) throws {
         guard var source = metadata.patternArrays[sourceID] else {
             throw EditorError(
@@ -122,7 +123,8 @@ struct PatternArrayDocumentSynchronizer {
                     definition: definition,
                     transforms: transforms,
                     metadata: &metadata,
-                    cadDocument: &cadDocument
+                    cadDocument: &cadDocument,
+                    tolerance: tolerance
                 )
             } else {
                 try requireNoExternalFeatureDependents(
@@ -140,7 +142,8 @@ struct PatternArrayDocumentSynchronizer {
                     definition: definition,
                     transforms: transforms,
                     metadata: &metadata,
-                    cadDocument: &cadDocument
+                    cadDocument: &cadDocument,
+                    tolerance: tolerance
                 )
                 source.outputSceneNodeIDs = result.outputSceneNodeIDs
                 source.outputFeatureIDs = result.outputFeatureIDs
@@ -187,7 +190,8 @@ struct PatternArrayDocumentSynchronizer {
         definition: ComponentDefinition,
         transforms: [Transform3D],
         metadata: inout ProductMetadata,
-        cadDocument: inout CADDocument
+        cadDocument: inout CADDocument,
+        tolerance: ModelingTolerance
     ) throws {
         let builder = PatternArrayIndependentCopyBuilder()
         let reusedCount = min(source.outputSceneNodeIDs.count, transforms.count)
@@ -268,7 +272,8 @@ struct PatternArrayDocumentSynchronizer {
                 transforms: appendedTransforms,
                 startingOutputIndex: reusedCount,
                 metadata: &metadata,
-                cadDocument: &cadDocument
+                cadDocument: &cadDocument,
+                tolerance: tolerance
             )
         }
 
@@ -385,7 +390,8 @@ struct PatternArrayDocumentSynchronizer {
     func materializedOutputsForExplode(
         source: PatternArraySource,
         metadata: inout ProductMetadata,
-        cadDocument: inout CADDocument
+        cadDocument: inout CADDocument,
+        tolerance: ModelingTolerance
     ) throws -> PatternArrayExplodeResult {
         guard var rootNode = metadata.sceneNodes[source.rootSceneNodeID] else {
             throw EditorError(
@@ -420,7 +426,8 @@ struct PatternArrayDocumentSynchronizer {
                 definition: definition,
                 transforms: transforms,
                 metadata: &metadata,
-                cadDocument: &cadDocument
+                cadDocument: &cadDocument,
+                tolerance: tolerance
             )
             rootNode.childIDs = result.outputSceneNodeIDs
             metadata.sceneNodes[source.rootSceneNodeID] = rootNode

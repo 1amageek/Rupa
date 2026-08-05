@@ -37,22 +37,19 @@ extension DesignDocument {
             document: self,
             objectRegistry: objectRegistry
         )
-        let entriesByPersistentName = Dictionary(
-            uniqueKeysWithValues: topology.entries.map { ($0.persistentName, $0) }
+        let entriesBySubshapeID = Dictionary(
+            uniqueKeysWithValues: topology.entries.map { ($0.subshapeID, $0) }
         )
-        let parser = GeneratedTopologyPersistentNameParser()
         let targetResolutions = try targets.map { target in
             try generatedFaceDraftTarget(
                 target,
-                entriesByPersistentName: entriesByPersistentName,
-                parser: parser,
+                entriesBySubshapeID: entriesBySubshapeID,
                 operationName: operationName
             )
         }
         let neutralResolution = try generatedFaceDraftTarget(
             neutralTarget,
-            entriesByPersistentName: entriesByPersistentName,
-            parser: parser,
+            entriesBySubshapeID: entriesBySubshapeID,
             operationName: operationName
         )
         guard targetResolutions.allSatisfy({ $0.featureID == neutralResolution.featureID }) else {
@@ -67,14 +64,14 @@ extension DesignDocument {
                 message: "\(operationName) target and neutral faces must belong to one scene body."
             )
         }
-        let targetPersistentNames = targetResolutions.map(\.persistentName)
-        guard Set(targetPersistentNames).count == targetPersistentNames.count else {
+        let targetFaces = targetResolutions.map(\.face)
+        guard Set(targetFaces.map(\.subshapeID)).count == targetFaces.count else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(operationName) target faces must be distinct."
             )
         }
-        guard targetPersistentNames.contains(neutralResolution.persistentName) == false else {
+        guard targetFaces.map(\.subshapeID).contains(neutralResolution.face.subshapeID) == false else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(operationName) target face and neutral face must be distinct."
@@ -90,8 +87,8 @@ extension DesignDocument {
 
         let faceDraft = FaceDraftFeature(
             target: FaceDraftTargetReference(featureID: neutralResolution.featureID),
-            facePersistentNames: targetPersistentNames,
-            neutralFacePersistentName: neutralResolution.persistentName,
+            faces: targetFaces,
+            neutralFace: neutralResolution.face,
             angle: angle
         )
         try faceDraft.validate()
@@ -128,7 +125,7 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         )
-        try cadDocument.validate()
+        try cadDocument.validate(tolerance: modelingSettings.tolerance)
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         didCommit = true
         return featureID
@@ -137,17 +134,16 @@ extension DesignDocument {
     private struct FaceDraftTargetResolution {
         var sceneNodeID: SceneNodeID
         var featureID: FeatureID
-        var persistentName: PersistentName
+        var face: StableSubshapeReference
     }
 
     private func generatedFaceDraftTarget(
         _ target: SelectionTarget,
-        entriesByPersistentName: [String: TopologySummaryResult.Entry],
-        parser: GeneratedTopologyPersistentNameParser,
+        entriesBySubshapeID: [String: TopologySummaryResult.Entry],
         operationName: String
     ) throws -> FaceDraftTargetResolution {
         guard case .face(let componentID) = target.component,
-              let persistentNameString = componentID.generatedTopologyPersistentName else {
+              let subshapeID = componentID.generatedTopologySubshapeID else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(operationName) requires generated topology face targets."
@@ -157,7 +153,7 @@ extension DesignDocument {
             for: target,
             operationName: operationName
         )
-        guard let entry = entriesByPersistentName[persistentNameString] else {
+        guard let entry = entriesBySubshapeID[GeneratedSubshapeIdentity.string(for: subshapeID)] else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "\(operationName) generated topology face was not found in the current evaluation."
@@ -170,10 +166,16 @@ extension DesignDocument {
                 message: "\(operationName) targets must reference faces on the selected body."
             )
         }
+        guard let stableReference = entry.stableReference else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(operationName) generated topology face has no stable subshape reference."
+            )
+        }
         return FaceDraftTargetResolution(
             sceneNodeID: resolvedTarget.sceneNodeID,
             featureID: resolvedTarget.featureID,
-            persistentName: try parser.parse(persistentNameString, operationName: operationName)
+            face: stableReference
         )
     }
 }

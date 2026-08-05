@@ -56,13 +56,13 @@ import SwiftCAD
         Issue.record("Agent topology summary must expose vertex selection targets.")
         return
     }
-    #expect(vertexComponentID.generatedTopologyPersistentName == vertexEntry.persistentName)
+    #expect(vertexComponentID.generatedTopologySubshapeID.map(GeneratedSubshapeIdentity.string(for:)) == vertexEntry.subshapeID)
     #expect(session.generation == DocumentGeneration(1))
     #expect(session.commandStack.canUndo)
 }
 
 @MainActor
-@Test func agentSummarizesCellUnionBooleanTopologyWithoutMutation() async throws {
+@Test func agentSummarizesSweepBooleanTopologyWithoutMutation() async throws {
     var document = DesignDocument.empty()
     let targetProfileID = try document.createRectangleSketchFromCorners(
         name: "Agent Cell Union Boolean Target Profile",
@@ -131,18 +131,15 @@ import SwiftCAD
     }
     let face = try #require(topologySummary.entries.first {
         $0.kind == .face
-            && $0.generatedRole == "sideFace"
-            && $0.subshapeRole == "cellUnion:component:0:face:maxX:x:maxX:y:minY-y1:z:minZ-maxZ"
+            && $0.generatedRole == "sideFace.orthogonal:component:0:face:maximumX:plane:1:region:0"
     })
     let edge = try #require(topologySummary.entries.first {
         $0.kind == .edge
-            && $0.generatedRole == "edge"
-            && $0.subshapeRole == "cellUnion:component:0:zEdge:x:x1:y:y1:z:minZ-maxZ"
+            && $0.generatedRole == "edge.orthogonal:component:0:face:maximumX:plane:1:region:0:loop:0:edge:0"
     })
     let vertex = try #require(topologySummary.entries.first {
         $0.kind == .vertex
-            && $0.generatedRole == "vertex"
-            && $0.subshapeRole == "cellUnion:component:0:vertex:x:x1:y:y1:z:maxZ"
+            && $0.generatedRole == "vertex.orthogonal:component:0:face:maximumX:plane:1:region:0:loop:0:edge:0:end"
     })
     #expect(face.selectionTarget() != nil)
     #expect(edge.selectionTarget() != nil)
@@ -268,7 +265,7 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
     let response = server.handle(
         .selectReferences(
             sessionID: sessionID,
-            references: [controlPoint.selectionReference],
+            references: [try #require(controlPoint.selectionReference)],
             expectedGeneration: generation
         )
     )
@@ -278,8 +275,8 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
         return
     }
     #expect(result.selectedTargets.isEmpty)
-    #expect(result.selectedReferences == [controlPoint.selectionReference])
-    #expect(session.selection.selectedReferences == [controlPoint.selectionReference])
+    #expect(result.selectedReferences == [try #require(controlPoint.selectionReference)])
+    #expect(session.selection.selectedReferences == [try #require(controlPoint.selectionReference)])
     #expect(result.generation == generation)
     #expect(session.generation == generation)
     #expect(result.dirty == dirty)

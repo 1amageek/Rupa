@@ -503,14 +503,14 @@ struct WorkspaceSurfaceInspectorView: View {
     }
 
     private func surfaceAdjacencyEdgeSummary(_ adjacency: InspectorSurfaceAdjacency) -> String {
-        let names = adjacency.edgePersistentNames.map(surfacePersistentNameTail)
+        let names = adjacency.edgePersistentNames.map(surfaceSubshapeIDTail)
         return valueSummary(names.isEmpty ? [shortID(adjacency.id)] : names)
     }
 
     private func surfaceAdjacencyFaceSummary(_ adjacency: InspectorSurfaceAdjacency) -> String {
         valueSummary([
-            surfacePersistentNameTail(adjacency.firstFacePersistentName),
-            surfacePersistentNameTail(adjacency.secondFacePersistentName),
+            surfaceSubshapeIDTail(adjacency.firstFacePersistentName),
+            surfaceSubshapeIDTail(adjacency.secondFacePersistentName),
         ])
     }
 
@@ -523,7 +523,7 @@ struct WorkspaceSurfaceInspectorView: View {
     }
 
     private func surfaceAnalysisFaceSummary(_ face: InspectorSurfaceFaceAnalysis) -> String {
-        let names = face.facePersistentNames.map(surfacePersistentNameTail)
+        let names = face.faceSubshapeIDs.map(surfaceSubshapeIDTail)
         return valueSummary(names.isEmpty ? [shortID(face.id)] : names)
     }
 
@@ -592,7 +592,7 @@ struct WorkspaceSurfaceInspectorView: View {
         return parts.joined(separator: ", ")
     }
 
-    private func surfacePersistentNameTail(_ name: String?) -> String {
+    private func surfaceSubshapeIDTail(_ name: String?) -> String {
         guard let name, name.isEmpty == false else {
             return "Unknown"
         }

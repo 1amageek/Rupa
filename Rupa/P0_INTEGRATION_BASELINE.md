@@ -35,6 +35,7 @@ The tuple has the following executed evidence:
 | Full RupaKit package build | Passed |
 | Generated topology selection round trip | 1 passed, 0 failed |
 | Typed mesh selection tests | 2 passed, 0 failed |
+| Agent session lifecycle, socket, and codec focused tests at Rupa `eb98f02c` (2026-08-05, clean worktree reproduction of the tuple) | 18 passed, 0 failed |
 
 This evidence establishes a recoverable integration baseline. It does not claim
 that every RupaKit or historical Swift-CAD test is green.

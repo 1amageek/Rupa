@@ -30,7 +30,7 @@ struct SurfaceBasisInspectorState: Equatable, Sendable {
         var sourceID: String
         var sourceName: String
         var patchID: Int
-        var facePersistentName: String?
+        var faceSubshapeID: String?
         var direction: SurfaceParameterDirection
         var kind: Kind
         var index: Int
@@ -154,10 +154,10 @@ struct SurfaceBasisInspectorState: Equatable, Sendable {
     ) -> [SurfaceSourceSummaryResult.Patch] {
         if !selectedFacePersistentNames.isEmpty {
             return source.patches.filter { patch in
-                guard let facePersistentName = patch.facePersistentName else {
+                guard let faceSubshapeID = patch.faceSubshapeID else {
                     return false
                 }
-                return selectedFacePersistentNames.contains(facePersistentName)
+                return selectedFacePersistentNames.contains(faceSubshapeID)
             }
         }
 
@@ -184,7 +184,7 @@ struct SurfaceBasisInspectorState: Equatable, Sendable {
                 sourceID: source.featureID,
                 sourceName: source.name,
                 patchID: patch.patchID,
-                facePersistentName: patch.facePersistentName,
+                faceSubshapeID: patch.faceSubshapeID,
                 direction: direction,
                 kind: .span,
                 index: span.index,
@@ -211,7 +211,7 @@ struct SurfaceBasisInspectorState: Equatable, Sendable {
                 sourceID: source.featureID,
                 sourceName: source.name,
                 patchID: patch.patchID,
-                facePersistentName: patch.facePersistentName,
+                faceSubshapeID: patch.faceSubshapeID,
                 direction: direction,
                 kind: .knot,
                 index: knot.index,

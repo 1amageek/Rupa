@@ -10,7 +10,7 @@ import Testing
     let edgeTarget = SelectionTarget(sceneNodeID: sceneNodeID, component: .edge(.bodyEdgeRightTop))
     let vertexTarget = SelectionTarget(
         sceneNodeID: sceneNodeID,
-        component: .vertex(.generatedTopology("body:vertex:first"))
+        component: .vertex(.generatedTopology(generatedTopologyTestSubshapeID("body:vertex:first")))
     )
     let sketchTarget = SelectionTarget(
         sceneNodeID: sceneNodeID,
@@ -39,7 +39,7 @@ import Testing
     let semanticEdgeTarget = SelectionTarget(sceneNodeID: sceneNodeID, component: .edge(.bodyEdgeRightTop))
     let generatedEdgeTarget = SelectionTarget(
         sceneNodeID: sceneNodeID,
-        component: .edge(.generatedTopology("body:edge:generated"))
+        component: .edge(.generatedTopology(generatedTopologyTestSubshapeID("body:edge:generated")))
     )
     let sketchTarget = SelectionTarget(
         sceneNodeID: sceneNodeID,
@@ -57,7 +57,7 @@ import Testing
     let sceneNodeID = SceneNodeID()
     let generatedEdgeTarget = SelectionTarget(
         sceneNodeID: sceneNodeID,
-        component: .edge(.generatedTopology("body:edge:generated"))
+        component: .edge(.generatedTopology(generatedTopologyTestSubshapeID("body:edge:generated")))
     )
     let semanticEdgeTarget = SelectionTarget(sceneNodeID: sceneNodeID, component: .edge(.bodyEdgeRightTop))
     let classification = WorkspaceSelectionTargetClassification(
@@ -67,4 +67,17 @@ import Testing
     #expect(classification.edgeTargets == [generatedEdgeTarget, generatedEdgeTarget, semanticEdgeTarget])
     #expect(classification.generatedEdgeTargets == [generatedEdgeTarget])
     #expect(classification.generatedEdgeTargets(from: classification.edgeTargets) == [generatedEdgeTarget])
+}
+
+
+/// Shared feature identity so equal role strings map to equal subshape IDs
+/// within this file's tests.
+private let generatedTopologyTestFeatureID = FeatureID()
+
+private func generatedTopologyTestSubshapeID(_ role: String) -> SubshapeID {
+    SubshapeID(
+        featureID: generatedTopologyTestFeatureID,
+        role: role,
+        ordinal: 0
+    )
 }

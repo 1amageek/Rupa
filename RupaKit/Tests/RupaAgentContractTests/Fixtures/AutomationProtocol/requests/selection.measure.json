@@ -1,26 +1,448 @@
 {
-  "jsonrpc": "2.0",
   "id": "selection.measure-1",
+  "jsonrpc": "2.0",
   "method": "selection.measure",
   "params": {
-    "sessionID": "00000000-0000-0000-0000-000000000001",
-    "query": {
-      "kind": "point",
-      "first": {
-        "kind": "topology",
-        "topology": {
-          "components": [
-            {
-              "kind": "generated",
-              "value": "fixture"
-            }
-          ]
-        }
-      }
-    },
     "expectedGeneration": {
       "value": 2
-    }
+    },
+    "query": {
+      "first": {
+        "kind": "subshape",
+        "subshape": {
+          "geometrySignature": {
+            "face": {
+              "loops": [
+                {
+                  "coedges": [
+                    {
+                      "edge": {
+                        "curve": {
+                          "bSpline": {
+                            "controlPoints": [
+                              {
+                                "x": 0,
+                                "y": 0,
+                                "z": 0
+                              },
+                              {
+                                "x": 0,
+                                "y": 0.004,
+                                "z": 0
+                              },
+                              {
+                                "x": 0,
+                                "y": 0.008,
+                                "z": 0
+                              },
+                              {
+                                "x": 0,
+                                "y": 0.012,
+                                "z": 0
+                              }
+                            ],
+                            "degree": 3,
+                            "knots": [
+                              0,
+                              0,
+                              0,
+                              0,
+                              1,
+                              1,
+                              1,
+                              1
+                            ],
+                            "weights": [
+                              1,
+                              1,
+                              1,
+                              1
+                            ]
+                          },
+                          "kind": "bSpline"
+                        },
+                        "endParameter": 1,
+                        "endPoint": {
+                          "x": 0,
+                          "y": 0.012,
+                          "z": 0
+                        },
+                        "startParameter": 0,
+                        "startPoint": {
+                          "x": 0,
+                          "y": 0,
+                          "z": 0
+                        }
+                      },
+                      "orientation": "forward",
+                      "surfaceParameterCurve": {
+                        "kind": "constantV",
+                        "uEnd": 1,
+                        "uStart": 0,
+                        "v": 0
+                      }
+                    },
+                    {
+                      "edge": {
+                        "curve": {
+                          "bSpline": {
+                            "controlPoints": [
+                              {
+                                "x": 0,
+                                "y": 0.012,
+                                "z": 0
+                              },
+                              {
+                                "x": 0.004,
+                                "y": 0.012,
+                                "z": 0
+                              },
+                              {
+                                "x": 0.008,
+                                "y": 0.012,
+                                "z": 0
+                              },
+                              {
+                                "x": 0.012,
+                                "y": 0.012,
+                                "z": 0
+                              }
+                            ],
+                            "degree": 3,
+                            "knots": [
+                              0,
+                              0,
+                              0,
+                              0,
+                              1,
+                              1,
+                              1,
+                              1
+                            ],
+                            "weights": [
+                              1,
+                              1,
+                              1,
+                              1
+                            ]
+                          },
+                          "kind": "bSpline"
+                        },
+                        "endParameter": 1,
+                        "endPoint": {
+                          "x": 0.012,
+                          "y": 0.012,
+                          "z": 0
+                        },
+                        "startParameter": 0,
+                        "startPoint": {
+                          "x": 0,
+                          "y": 0.012,
+                          "z": 0
+                        }
+                      },
+                      "orientation": "forward",
+                      "surfaceParameterCurve": {
+                        "kind": "constantU",
+                        "u": 1,
+                        "vEnd": 1,
+                        "vStart": 0
+                      }
+                    },
+                    {
+                      "edge": {
+                        "curve": {
+                          "bSpline": {
+                            "controlPoints": [
+                              {
+                                "x": 0.012,
+                                "y": 0,
+                                "z": 0
+                              },
+                              {
+                                "x": 0.012,
+                                "y": 0.004,
+                                "z": 0
+                              },
+                              {
+                                "x": 0.012,
+                                "y": 0.008,
+                                "z": 0
+                              },
+                              {
+                                "x": 0.012,
+                                "y": 0.012,
+                                "z": 0
+                              }
+                            ],
+                            "degree": 3,
+                            "knots": [
+                              0,
+                              0,
+                              0,
+                              0,
+                              1,
+                              1,
+                              1,
+                              1
+                            ],
+                            "weights": [
+                              1,
+                              1,
+                              1,
+                              1
+                            ]
+                          },
+                          "kind": "bSpline"
+                        },
+                        "endParameter": 0,
+                        "endPoint": {
+                          "x": 0.012,
+                          "y": 0,
+                          "z": 0
+                        },
+                        "startParameter": 1,
+                        "startPoint": {
+                          "x": 0.012,
+                          "y": 0.012,
+                          "z": 0
+                        }
+                      },
+                      "orientation": "forward",
+                      "surfaceParameterCurve": {
+                        "kind": "constantV",
+                        "uEnd": 0,
+                        "uStart": 1,
+                        "v": 1
+                      }
+                    },
+                    {
+                      "edge": {
+                        "curve": {
+                          "bSpline": {
+                            "controlPoints": [
+                              {
+                                "x": 0,
+                                "y": 0,
+                                "z": 0
+                              },
+                              {
+                                "x": 0.004,
+                                "y": 0,
+                                "z": 0
+                              },
+                              {
+                                "x": 0.008,
+                                "y": 0,
+                                "z": 0
+                              },
+                              {
+                                "x": 0.012,
+                                "y": 0,
+                                "z": 0
+                              }
+                            ],
+                            "degree": 3,
+                            "knots": [
+                              0,
+                              0,
+                              0,
+                              0,
+                              1,
+                              1,
+                              1,
+                              1
+                            ],
+                            "weights": [
+                              1,
+                              1,
+                              1,
+                              1
+                            ]
+                          },
+                          "kind": "bSpline"
+                        },
+                        "endParameter": 0,
+                        "endPoint": {
+                          "x": 0,
+                          "y": 0,
+                          "z": 0
+                        },
+                        "startParameter": 1,
+                        "startPoint": {
+                          "x": 0.012,
+                          "y": 0,
+                          "z": 0
+                        }
+                      },
+                      "orientation": "forward",
+                      "surfaceParameterCurve": {
+                        "kind": "constantU",
+                        "u": 0,
+                        "vEnd": 0,
+                        "vStart": 1
+                      }
+                    }
+                  ],
+                  "role": "outer"
+                }
+              ],
+              "orientation": "forward",
+              "surface": {
+                "bSpline": {
+                  "controlPoints": [
+                    [
+                      {
+                        "x": 0,
+                        "y": 0,
+                        "z": 0
+                      },
+                      {
+                        "x": 0,
+                        "y": 0.004,
+                        "z": 0
+                      },
+                      {
+                        "x": 0,
+                        "y": 0.008,
+                        "z": 0
+                      },
+                      {
+                        "x": 0,
+                        "y": 0.012,
+                        "z": 0
+                      }
+                    ],
+                    [
+                      {
+                        "x": 0.004,
+                        "y": 0,
+                        "z": 0
+                      },
+                      {
+                        "x": 0.004,
+                        "y": 0.004,
+                        "z": 0
+                      },
+                      {
+                        "x": 0.004,
+                        "y": 0.008,
+                        "z": 0
+                      },
+                      {
+                        "x": 0.004,
+                        "y": 0.012,
+                        "z": 0
+                      }
+                    ],
+                    [
+                      {
+                        "x": 0.008,
+                        "y": 0,
+                        "z": 0
+                      },
+                      {
+                        "x": 0.008,
+                        "y": 0.004,
+                        "z": 0
+                      },
+                      {
+                        "x": 0.008,
+                        "y": 0.008,
+                        "z": 0
+                      },
+                      {
+                        "x": 0.008,
+                        "y": 0.012,
+                        "z": 0
+                      }
+                    ],
+                    [
+                      {
+                        "x": 0.012,
+                        "y": 0,
+                        "z": 0
+                      },
+                      {
+                        "x": 0.012,
+                        "y": 0.004,
+                        "z": 0
+                      },
+                      {
+                        "x": 0.012,
+                        "y": 0.008,
+                        "z": 0
+                      },
+                      {
+                        "x": 0.012,
+                        "y": 0.012,
+                        "z": 0
+                      }
+                    ]
+                  ],
+                  "uDegree": 3,
+                  "uKnots": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    1,
+                    1,
+                    1,
+                    1
+                  ],
+                  "vDegree": 3,
+                  "vKnots": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    1,
+                    1,
+                    1,
+                    1
+                  ],
+                  "weights": [
+                    [
+                      1,
+                      1,
+                      1,
+                      1
+                    ],
+                    [
+                      1,
+                      1,
+                      1,
+                      1
+                    ],
+                    [
+                      1,
+                      1,
+                      1,
+                      1
+                    ],
+                    [
+                      1,
+                      1,
+                      1,
+                      1
+                    ]
+                  ]
+                },
+                "kind": "bSpline"
+              }
+            },
+            "kind": "face"
+          },
+          "subshapeID": {
+            "featureID": "00000000-0000-0000-0000-000000000101",
+            "ordinal": 0,
+            "role": "bSplineSurface.patch:0:face"
+          }
+        }
+      },
+      "kind": "point"
+    },
+    "sessionID": "00000000-0000-0000-0000-000000000001"
   }
 }
-

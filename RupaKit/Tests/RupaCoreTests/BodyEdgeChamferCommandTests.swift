@@ -885,20 +885,32 @@ private func appendDistanceDimensionToFirstProfileLine(
     let extrude = try chamferExtrudeFeature(for: featureID, in: document)
     guard var profileFeature = document.cadDocument.designGraph.nodes[extrude.profile.featureID],
           case var .sketch(sketch) = profileFeature.operation,
-          let lineID = sketch.entities.first(where: { _, entity in
-              if case .line = entity {
-                  return true
+          let (lineID, line) = sketch.entities.compactMap({ id, entity -> (SketchEntityID, SketchLine)? in
+              if case .line(let line) = entity {
+                  return (id, line)
               }
-              return false
-          })?.key else {
+              return nil
+          }).first else {
         Issue.record("Dimension setup requires a profile line.")
         return
     }
+    // The exact solver treats dimensions as hard constraints, so the fixture
+    // dimension must match the line's current resolved length instead of
+    // introducing an unsatisfiable value.
+    func meters(_ expression: CADExpression) throws -> Double {
+        try document.cadDocument.parameters.resolvedValue(for: expression).value
+    }
+    let startX = try meters(line.start.x)
+    let startY = try meters(line.start.y)
+    let endX = try meters(line.end.x)
+    let endY = try meters(line.end.y)
+    let lineLengthMeters = ((endX - startX) * (endX - startX)
+        + (endY - startY) * (endY - startY)).squareRoot()
     sketch.dimensions.append(
         .distance(
             from: .lineStart(lineID),
             to: .lineEnd(lineID),
-            value: .length(1.0, .millimeter)
+            value: .length(lineLengthMeters, .meter)
         )
     )
     profileFeature.operation = .sketch(sketch)

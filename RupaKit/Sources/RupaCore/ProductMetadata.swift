@@ -894,6 +894,46 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         case spline(SketchSplineEndpointReference)
     }
 
+    /// Joined-curve constraints are rebuilt without a parameter table, so the
+    /// tangency side is derived only from literal sketch coordinates. Returning
+    /// nil keeps the existing "no persisted constraint" contract for
+    /// unsupported joined-continuity shapes.
+    private func literalLineCircularSide(
+        lineID: SketchEntityID,
+        circularID: SketchEntityID,
+        in sketch: Sketch
+    ) -> SketchTangencyConstraint.LineSide? {
+        func literal(_ expression: CADExpression) -> Double? {
+            guard case .constant(let quantity) = expression else {
+                return nil
+            }
+            return quantity.value
+        }
+        guard case .line(let line)? = sketch.entities[lineID] else {
+            return nil
+        }
+        let center: SketchPoint?
+        switch sketch.entities[circularID] {
+        case .circle(let circle):
+            center = circle.center
+        case .arc(let arc):
+            center = arc.center
+        default:
+            center = nil
+        }
+        guard let center,
+              let startX = literal(line.start.x),
+              let startY = literal(line.start.y),
+              let endX = literal(line.end.x),
+              let endY = literal(line.end.y),
+              let centerX = literal(center.x),
+              let centerY = literal(center.y) else {
+            return nil
+        }
+        let cross = (endX - startX) * (centerY - startY) - (endY - startY) * (centerX - startX)
+        return cross >= 0.0 ? .left : .right
+    }
+
     private func joinedCurveGroupContinuityConstraint(
         _ source: JoinedCurveGroupSource,
         in sketch: Sketch
@@ -913,19 +953,35 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
             return nil
         case .g1:
             switch (first, second) {
-            case (.line(let lineID), .arc(let arcID)):
-                return .tangent(lineID, arcID)
-            case (.arc(let arcID), .line(let lineID)):
-                return .tangent(lineID, arcID)
+            case (.line(let lineID), .arc(let arcID)),
+                 (.arc(let arcID), .line(let lineID)):
+                guard let side = literalLineCircularSide(
+                    lineID: lineID,
+                    circularID: arcID,
+                    in: sketch
+                ) else {
+                    return nil
+                }
+                return .tangent(.lineCircular(
+                    line: lineID,
+                    circular: arcID,
+                    side: side
+                ))
             case (.spline(let endpoint), .line(let lineID)),
                  (.line(let lineID), .spline(let endpoint)):
-                return .splineEndpointTangent(
-                    spline: endpoint.splineID,
-                    endpoint: endpoint.endpoint,
-                    line: lineID
-                )
+                return .splineEndpointTangent(SketchSplineLineTangencyConstraint(
+                    splineEndpoint: endpoint,
+                    line: lineID,
+                    orientation: .aligned
+                ))
             case (.spline(let firstEndpoint), .spline(let secondEndpoint)):
-                return .tangentSplineEndpoints(first: firstEndpoint, second: secondEndpoint)
+                return .tangentSplineEndpoints(SketchSplineEndpointTangencyConstraint(
+                    first: firstEndpoint,
+                    second: secondEndpoint,
+                    orientation: firstEndpoint.endpoint == secondEndpoint.endpoint
+                        ? .opposed
+                        : .aligned
+                ))
             case (.line, .line),
                  (.arc, .arc),
                  (.arc, .spline),
@@ -935,7 +991,13 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         case .g2:
             switch (first, second) {
             case (.spline(let firstEndpoint), .spline(let secondEndpoint)):
-                return .smoothSplineEndpoints(first: firstEndpoint, second: secondEndpoint)
+                return .smoothSplineEndpoints(SketchSplineEndpointTangencyConstraint(
+                    first: firstEndpoint,
+                    second: secondEndpoint,
+                    orientation: firstEndpoint.endpoint == secondEndpoint.endpoint
+                        ? .opposed
+                        : .aligned
+                ))
             case (.line, _),
                  (.arc, _),
                  (.spline, .line),
@@ -987,23 +1049,42 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         _ expected: SketchConstraint
     ) -> Bool {
         switch (constraint, expected) {
-        case let (.tangent(first, second), .tangent(expectedFirst, expectedSecond)):
-            return (first == expectedFirst && second == expectedSecond) ||
-                (first == expectedSecond && second == expectedFirst)
+        case let (.tangent(tangency), .tangent(expectedTangency)):
+            return tangencyMatches(tangency, expectedTangency)
         case let (
-            .splineEndpointTangent(splineID, endpoint, lineID),
-            .splineEndpointTangent(expectedSplineID, expectedEndpoint, expectedLineID)
+            .splineEndpointTangent(lineTangency),
+            .splineEndpointTangent(expectedLineTangency)
         ):
-            return splineID == expectedSplineID &&
-                endpoint == expectedEndpoint &&
-                lineID == expectedLineID
+            return lineTangency.splineEndpoint == expectedLineTangency.splineEndpoint &&
+                lineTangency.line == expectedLineTangency.line
         case let (
-            .tangentSplineEndpoints(first, second),
-            .tangentSplineEndpoints(expectedFirst, expectedSecond)
+            .tangentSplineEndpoints(pair),
+            .tangentSplineEndpoints(expectedPair)
         ),
         let (
-            .smoothSplineEndpoints(first, second),
-            .smoothSplineEndpoints(expectedFirst, expectedSecond)
+            .smoothSplineEndpoints(pair),
+            .smoothSplineEndpoints(expectedPair)
+        ):
+            return (pair.first == expectedPair.first && pair.second == expectedPair.second) ||
+                (pair.first == expectedPair.second && pair.second == expectedPair.first)
+        default:
+            return false
+        }
+    }
+
+    private func tangencyMatches(
+        _ lhs: SketchTangencyConstraint,
+        _ rhs: SketchTangencyConstraint
+    ) -> Bool {
+        switch (lhs, rhs) {
+        case let (
+            .lineCircular(line, circular, _),
+            .lineCircular(expectedLine, expectedCircular, _)
+        ):
+            return line == expectedLine && circular == expectedCircular
+        case let (
+            .circularCircular(first, second, _),
+            .circularCircular(expectedFirst, expectedSecond, _)
         ):
             return (first == expectedFirst && second == expectedSecond) ||
                 (first == expectedSecond && second == expectedFirst)

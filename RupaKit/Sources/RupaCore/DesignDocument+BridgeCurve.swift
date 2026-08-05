@@ -394,12 +394,18 @@ extension DesignDocument {
             case .g0:
                 return []
             case .g1:
+                guard let sourceEndpoint = lineEndpoint(of: source.reference) else {
+                    return []
+                }
                 return [
-                    .splineEndpointTangent(
-                        spline: bridgeID,
-                        endpoint: bridgeEndpoint,
-                        line: lineID
-                    ),
+                    .splineEndpointTangent(SketchSplineLineTangencyConstraint(
+                        splineEndpoint: bridgeReference,
+                        line: lineID,
+                        orientation: tangentOrientation(
+                            bridgeEndpoint: bridgeEndpoint,
+                            sourceEndpoint: sourceEndpoint
+                        )
+                    )),
                 ]
             case .g2, .g3:
                 return []
@@ -413,23 +419,52 @@ extension DesignDocument {
                 return []
             case .g1:
                 return [
-                    .tangentSplineEndpoints(
+                    .tangentSplineEndpoints(SketchSplineEndpointTangencyConstraint(
                         first: bridgeReference,
-                        second: sourceReference
-                    ),
+                        second: sourceReference,
+                        orientation: tangentOrientation(
+                            bridgeEndpoint: bridgeEndpoint,
+                            sourceEndpoint: sourceReference.endpoint
+                        )
+                    )),
                 ]
             case .g2:
                 return [
-                    .smoothSplineEndpoints(
+                    .smoothSplineEndpoints(SketchSplineEndpointTangencyConstraint(
                         first: bridgeReference,
-                        second: sourceReference
-                    ),
+                        second: sourceReference,
+                        orientation: tangentOrientation(
+                            bridgeEndpoint: bridgeEndpoint,
+                            sourceEndpoint: sourceReference.endpoint
+                        )
+                    )),
                 ]
             case .g3:
                 return []
             }
         case .arc:
             return []
+        }
+    }
+
+    /// Parameter-direction tangents are parallel with the same sign exactly
+    /// when one curve ends where the other starts, so joints between equal
+    /// endpoint kinds are opposed.
+    private func tangentOrientation(
+        bridgeEndpoint: SketchSplineEndpoint,
+        sourceEndpoint: SketchSplineEndpoint
+    ) -> SketchTangentOrientation {
+        bridgeEndpoint == sourceEndpoint ? .opposed : .aligned
+    }
+
+    private func lineEndpoint(of reference: SketchReference) -> SketchSplineEndpoint? {
+        switch reference {
+        case .lineStart:
+            return .start
+        case .lineEnd:
+            return .end
+        default:
+            return nil
         }
     }
 

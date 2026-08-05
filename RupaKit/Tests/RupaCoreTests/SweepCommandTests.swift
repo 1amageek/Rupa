@@ -132,15 +132,18 @@ import SwiftCAD
         options: SweepOptions(cornerStyle: .mitre)
     )
     let feature = try #require(document.cadDocument.designGraph.nodes[sweepID])
-    let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
 
     guard case .sweep(let sweep) = feature.operation else {
         Issue.record("Expected a sweep feature.")
         return
     }
     #expect(sweep.path == SweepPathReference(featureID: pathID))
-    #expect(evaluated.brep.vertices.count > 8)
-    #expect(evaluated.brep.faces.count > 6)
+    do {
+        _ = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
+        Issue.record("Exact kernel must reject multi-entity path-normal sweeps without an exact moving-frame surface.")
+    } catch let error as KernelError {
+        #expect(error.code == .sweepPathNormalUnavailable)
+    }
     try document.validate()
 }
 
@@ -157,20 +160,18 @@ import SwiftCAD
         sketch: connectedLineArcPathSketch(),
         geometryRole: .curve
     )
-    let sweepID = try document.createSweep(
+    _ = try document.createSweep(
         name: "Connected Line Arc Sweep",
         sections: [.profile(ProfileReference(featureID: profileID))],
         path: SweepPathReference(featureID: pathID),
         options: SweepOptions(cornerStyle: .mitre)
     )
-    let result = try MeasurementService().measure(document: document, ruler: RulerConfiguration.standard(for: .millimeter))
-    let solid = try #require(result.solids.first)
-    let pathLength = try #require(solid.linearDimensions.first { $0.kind == .sweepPathLength })
-    let expectedPathLength = 0.010 + 0.060 * Double.pi / 2.0
-
-    #expect(solid.featureID == sweepID.description)
-    #expect(abs(pathLength.meters - expectedPathLength) < 1.0e-12)
-    #expect(result.diagnostics.isEmpty)
+    do {
+        _ = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
+        Issue.record("Exact kernel must reject multi-entity path-normal sweeps without an exact moving-frame surface.")
+    } catch let error as KernelError {
+        #expect(error.code == .sweepPathNormalUnavailable)
+    }
     try document.validate()
 }
 
@@ -189,20 +190,18 @@ import SwiftCAD
     )
     let originalOrder = document.cadDocument.designGraph.order
 
+    _ = try document.createSweep(
+        name: "Round Multi-Path Sweep",
+        sections: [.profile(ProfileReference(featureID: profileID))],
+        path: SweepPathReference(featureID: pathID),
+        options: SweepOptions(cornerStyle: .round)
+    )
     do {
-        _ = try document.createSweep(
-            name: "Round Multi-Path Sweep",
-            sections: [.profile(ProfileReference(featureID: profileID))],
-            path: SweepPathReference(featureID: pathID),
-            options: SweepOptions(cornerStyle: .round)
-        )
-        Issue.record("Round multi-curve sweep paths must be rejected until blend topology is implemented.")
-    } catch let error as EditorError {
-        #expect(error.message.contains("Round sweep corner style requires curved corner-transition topology"))
-    } catch {
-        Issue.record("Expected EditorError for round multi-curve sweep path, got \(error).")
+        _ = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
+        Issue.record("Exact kernel must reject round-corner multi-entity sweep paths without blend topology.")
+    } catch let error as KernelError {
+        #expect(error.code == .unsupportedCapability)
     }
-    #expect(document.cadDocument.designGraph.order == originalOrder)
 }
 
 @Test func createSweepRejectsUnsupportedEvaluationOptionsBeforeMutation() throws {
@@ -337,19 +336,18 @@ import SwiftCAD
     )
     let originalOrder = document.cadDocument.designGraph.order
 
+    _ = try document.createSweep(
+        name: "Profile Plane Parallel Sweep",
+        sections: [.profile(ProfileReference(featureID: profileID))],
+        path: SweepPathReference(featureID: pathID),
+        options: SweepOptions(alignment: .parallel)
+    )
     do {
-        _ = try document.createSweep(
-            name: "Profile Plane Parallel Sweep",
-            sections: [.profile(ProfileReference(featureID: profileID))],
-            path: SweepPathReference(featureID: pathID),
-            options: SweepOptions(alignment: .parallel)
-        )
-        Issue.record("Sweep command must reject profile-plane parallel solid sweeps.")
-    } catch let error as EditorError {
-        #expect(error.code == .commandInvalid)
-        #expect(error.message.contains("nonzero profile-normal component"))
+        _ = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
+        Issue.record("Exact kernel must reject profile-plane degenerate parallel sweeps.")
+    } catch let error as KernelError {
+        #expect(error.code == .sweepProfilePlaneDegenerate)
     }
-    #expect(document.cadDocument.designGraph.order == originalOrder)
 }
 
 @Test func createSweepAcceptsObliqueParallelAlignmentWithEndScaleThroughEvaluationGate() throws {
@@ -1027,7 +1025,10 @@ private func sweepBooleanMeasureDocument(
         inputs: [FeatureInput(featureID: sourceSectionID, role: .curve)],
         outputs: [FeatureOutput(role: .curve)]
     )
-    try document.cadDocument.appendFeature(generatedSection)
+    try document.cadDocument.appendFeature(
+        generatedSection,
+        tolerance: document.modelingSettings.tolerance
+    )
     let pathID = try document.createLineSketch(
         name: "Generated Curve Section Sweep Path",
         plane: .yz,
@@ -1102,7 +1103,10 @@ private func sweepBooleanMeasureDocument(
         inputs: [FeatureInput(featureID: sourcePathID, role: .curve)],
         outputs: [FeatureOutput(role: .curve)]
     )
-    try document.cadDocument.appendFeature(generatedPath)
+    try document.cadDocument.appendFeature(
+        generatedPath,
+        tolerance: document.modelingSettings.tolerance
+    )
 
     let sweepID = try document.createSweep(
         name: "Generated Curve Path Sweep",
@@ -1142,14 +1146,15 @@ private func sweepBooleanMeasureDocument(
         name: "Generated Sweep Source Arc Path",
         plane: .yz,
         center: SketchPoint(
-            x: .length(0.0, .millimeter),
+            x: .length(60.0, .millimeter),
             y: .length(0.0, .millimeter)
         ),
         radius: .length(60.0, .millimeter),
-        // 90-180 degrees keeps the offset path's start directly above the
-        // profile-plane origin under the anchored placement semantics.
-        startAngle: .angle(90.0, .degree),
-        endAngle: .angle(180.0, .degree)
+        // The exact circular path-normal sweep requires the path start to lie
+        // on the section plane, so the source arc starts at the profile
+        // origin and curves away from the plane.
+        startAngle: .angle(180.0, .degree),
+        endAngle: .angle(270.0, .degree)
     )
     let generatedPathID = FeatureID()
     let generatedPath = FeatureNode(
@@ -1158,13 +1163,15 @@ private func sweepBooleanMeasureDocument(
         operation: .curveOffset(CurveOffsetFeature(
             source: CurveOutputReference(featureID: sourcePathID),
             distance: .length(1.0, .millimeter),
-            planeNormal: .unitX,
-            sampleCount: 4
+            planeNormal: .unitX
         )),
         inputs: [FeatureInput(featureID: sourcePathID, role: .curve)],
         outputs: [FeatureOutput(role: .curve)]
     )
-    try document.cadDocument.appendFeature(generatedPath)
+    try document.cadDocument.appendFeature(
+        generatedPath,
+        tolerance: document.modelingSettings.tolerance
+    )
 
     let sweepID = try document.createSweep(
         name: "Generated Sparse Offset Arc Sweep",
@@ -1187,7 +1194,10 @@ private func sweepBooleanMeasureDocument(
 
     #expect(solid.featureID == sweepID.description)
     #expect(abs(pathLength.meters - expectedPathLength) < 1.0e-12)
-    #expect(abs(sparsePolylineLength - expectedPathLength) > 0.0005)
+    // The evaluated display polyline (33 samples) cannot reproduce the exact
+    // arc length at the measured 1.0e-12 precision, so the exact match above
+    // proves the measurement uses the exact circular geometry.
+    #expect(abs(sparsePolylineLength - expectedPathLength) > 1.0e-9)
     #expect(result.diagnostics.isEmpty)
     try document.validate()
 }

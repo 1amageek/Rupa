@@ -35,8 +35,7 @@ import SwiftCAD
     let carriedFaces = afterTopology.entries.filter {
         $0.kind == .face &&
             $0.sceneNodeID == deleteSceneNodeID.description &&
-            $0.generatedRole == "faceDelete" &&
-            $0.subshapeRole == "carriedFace"
+            $0.generatedRole == "face"
     }
 
     #expect(result.commandName == "deleteBodyFaces")
@@ -44,10 +43,10 @@ import SwiftCAD
     #expect(result.generation == DocumentGeneration(2))
     #expect(deleteFeature.outputs == [FeatureOutput(role: .sheet)])
     #expect(faceDelete.target.featureID == bodyFeatureID)
-    #expect(faceDelete.facePersistentNames.count == 1)
+    #expect(faceDelete.faces.count == 1)
     #expect(body.kind == .sheet)
     #expect(afterTopology.counts.faceCount == 5)
-    #expect(afterTopology.entries.contains { $0.persistentName == faceEntry.persistentName } == false)
+    #expect(afterTopology.entries.contains { $0.subshapeID == faceEntry.subshapeID } == false)
     #expect(carriedFaces.count == 5)
     #expect(measurement.counts.sheets == 1)
     #expect(measurement.sheets.first?.featureID == deleteFeatureID.description)

@@ -277,7 +277,7 @@ public struct SelectionModel: Codable, Equatable, Sendable {
             try validateSurfaceTrimKnotReference(trimKnotReference, in: document)
         case .sketchPoint(let point):
             try validateSketchPointReference(point, in: document)
-        case .topology, .edge, .curve, .surface(_):
+        case .subshape, .edge, .curve, .surface(_):
             throw EditorError(
                 code: .commandInvalid,
                 message: "Selection reference is not selectable in the viewport yet."
@@ -520,24 +520,7 @@ public struct SelectionModel: Codable, Equatable, Sendable {
         case .object, .sketchEntity, .region, .constructionPlane:
             componentID = nil
         }
-        guard let persistentName = componentID?.generatedTopologyPersistentName else {
-            return nil
-        }
-        let parsedName: PersistentName
-        do {
-            parsedName = try GeneratedTopologyPersistentNameParser().parse(
-                persistentName,
-                operationName: "Selection"
-            )
-        } catch {
-            return nil
-        }
-        for component in parsedName.components {
-            if case .feature(let featureID) = component {
-                return featureID
-            }
-        }
-        return nil
+        return componentID?.generatedTopologySubshapeID?.featureID
     }
 
     private func validateSurfaceTrimReference(
@@ -553,7 +536,7 @@ public struct SelectionModel: Codable, Equatable, Sendable {
             )
         }
         let featureID = try sourceOwnedDirectBSplineSurfaceFeatureID(
-            from: reference.surface.faceName,
+            from: reference.surface.subshape,
             owner: "Selection surface trim reference"
         )
         guard let feature = document.cadDocument.designGraph.nodes[featureID],
@@ -563,12 +546,12 @@ public struct SelectionModel: Codable, Equatable, Sendable {
                 message: "Selection surface trim reference could not resolve its direct B-spline surface feature."
             )
         }
-        let trimLoops = try surfaceFeature.resolvedTrimLoops()
-        guard trimLoops.indices.contains(reference.loopIndex),
-              trimLoops[reference.loopIndex].edges.indices.contains(reference.edgeIndex) else {
+        _ = surfaceFeature
+        guard reference.loopIndex == 0,
+              (0..<4).contains(reference.edgeIndex) else {
             throw EditorError(
                 code: .referenceUnresolved,
-                message: "Selection surface trim reference points to a missing trim edge."
+                message: "Selection surface trim reference points to a missing rectangular boundary edge."
             )
         }
     }
@@ -585,22 +568,16 @@ public struct SelectionModel: Codable, Equatable, Sendable {
                 message: "Selection surface trim span reference is invalid: \(error)."
             )
         }
-        let curve = try surfaceTrimParameterCurve(
+        let basis = try surfaceBoundaryKnotBasis(
             for: reference.trim,
             in: document,
             owner: "Selection surface trim span reference"
         )
-        guard case let .bSpline(bSpline) = curve else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Selection surface trim span reference requires a B-spline trim p-curve."
-            )
-        }
-        let spanCount = bSplineNonDegenerateSpanCount(knots: bSpline.knots, degree: bSpline.degree)
+        let spanCount = bSplineNonDegenerateSpanCount(knots: basis.knots, degree: basis.degree)
         guard reference.spanIndex < spanCount else {
             throw EditorError(
                 code: .referenceUnresolved,
-                message: "Selection surface trim span reference points to a missing trim p-curve span."
+                message: "Selection surface trim span reference points to a missing boundary span."
             )
         }
     }
@@ -617,44 +594,37 @@ public struct SelectionModel: Codable, Equatable, Sendable {
                 message: "Selection surface trim knot reference is invalid: \(error)."
             )
         }
-        let curve = try surfaceTrimParameterCurve(
+        let basis = try surfaceBoundaryKnotBasis(
             for: reference.trim,
             in: document,
             owner: "Selection surface trim knot reference"
         )
-        guard case let .bSpline(bSpline) = curve else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Selection surface trim knot reference requires a B-spline trim p-curve."
-            )
-        }
-        guard bSpline.knots.indices.contains(reference.knotIndex) else {
+        guard basis.knots.indices.contains(reference.knotIndex) else {
             throw EditorError(
                 code: .referenceUnresolved,
-                message: "Selection surface trim knot reference points to a missing trim p-curve knot."
+                message: "Selection surface trim knot reference points to a missing boundary knot."
             )
         }
     }
 
-    private func surfaceTrimParameterCurve(
+    /// Rectangular boundary edges follow the kernel's outer-loop order:
+    /// 0 = vMin (u direction), 1 = uMax (v direction), 2 = vMax (u direction),
+    /// 3 = uMin (v direction).
+    private func surfaceBoundaryKnotBasis(
         for reference: SurfaceTrimReference,
         in document: DesignDocument,
         owner: String
-    ) throws -> SurfaceParameterCurve {
+    ) throws -> (knots: [Double], degree: Int) {
         try validateSurfaceTrimReference(reference, in: document)
-        let featureID = try sourceOwnedDirectBSplineSurfaceFeatureID(
-            from: reference.surface.faceName,
+        let surface = try directBSplineSurface(
+            for: reference.surface,
+            in: document,
             owner: owner
         )
-        guard let feature = document.cadDocument.designGraph.nodes[featureID],
-              case let .bSplineSurface(surfaceFeature) = feature.operation else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "\(owner) could not resolve its direct B-spline surface feature."
-            )
+        if reference.edgeIndex.isMultiple(of: 2) {
+            return (surface.uKnots, surface.uDegree)
         }
-        let trimLoops = try surfaceFeature.resolvedTrimLoops()
-        return trimLoops[reference.loopIndex].edges[reference.edgeIndex].parameterCurve
+        return (surface.vKnots, surface.vDegree)
     }
 
     private func bSplineNonDegenerateSpanCount(knots: [Double], degree: Int) -> Int {
@@ -676,7 +646,7 @@ public struct SelectionModel: Codable, Equatable, Sendable {
         owner: String
     ) throws -> BSplineSurface3D {
         let featureID = try sourceOwnedDirectBSplineSurfaceFeatureID(
-            from: reference.faceName,
+            from: reference.subshape,
             owner: owner
         )
         guard let feature = document.cadDocument.designGraph.nodes[featureID],
@@ -732,46 +702,16 @@ public struct SelectionModel: Codable, Equatable, Sendable {
     }
 
     private func sourceOwnedDirectBSplineSurfaceFeatureID(
-        from name: PersistentName,
+        from subshape: StableSubshapeReference,
         owner: String
     ) throws -> FeatureID {
-        var featureID: FeatureID?
-        var generatedRole: String?
-        var subshape: String?
-        for component in name.components {
-            switch component {
-            case .feature(let id):
-                featureID = id
-            case .generated(let value):
-                generatedRole = value
-            case .subshape(let value):
-                subshape = value
-            case .index:
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "\(owner) requires a source-owned direct B-spline surface face reference."
-                )
-            }
-        }
-        guard let featureID,
-              generatedRole == "bSplineSurface",
-              let subshape else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) requires a source-owned direct B-spline surface face reference."
-            )
-        }
-        let parts = subshape.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
-        guard parts.count == 3,
-              parts[0] == "patch",
-              parts[1] == "0",
-              parts[2] == "face" else {
+        guard GeneratedSubshapeRoles.isBSplineSurfacePatchFace(subshape.subshapeID) else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(owner) requires a source-owned direct B-spline surface patch face reference."
             )
         }
-        return featureID
+        return subshape.subshapeID.featureID
     }
 
     private func isSketchComponent(
@@ -819,7 +759,9 @@ public struct SelectionModel: Codable, Equatable, Sendable {
     ) -> Bool {
         do {
             let resolvedParameters = try ParameterResolver().resolve(document.cadDocument.parameters)
-            let profiles = try SketchProfileExtractor().extractProfiles(
+            let profiles = try SketchProfileExtractor(
+                tolerance: document.modelingSettings.tolerance
+            ).extractProfiles(
                 from: sketch,
                 sourceFeatureID: sourceFeatureID,
                 parameters: resolvedParameters

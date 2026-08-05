@@ -16,8 +16,10 @@ public extension SelectionComponentID {
     static let sketchControlPointPrefix = "sketchControlPoint:"
     static let profileRegionPrefix = "profileRegion:"
 
-    static func generatedTopology(_ persistentName: String) -> SelectionComponentID {
-        SelectionComponentID(rawValue: "\(generatedTopologyPrefix)\(persistentName)")
+    static func generatedTopology(_ subshapeID: SubshapeID) -> SelectionComponentID {
+        SelectionComponentID(
+            rawValue: "\(generatedTopologyPrefix)\(GeneratedSubshapeIdentity.string(for: subshapeID))"
+        )
     }
 
     static func sketchEntity(featureID: FeatureID, entityID: SketchEntityID) -> SelectionComponentID {
@@ -48,13 +50,12 @@ public extension SelectionComponentID {
         SelectionComponentID(rawValue: "\(profileRegionPrefix)\(featureID.description):\(profileIndex)")
     }
 
-    var generatedTopologyPersistentName: String? {
+    var generatedTopologySubshapeID: SubshapeID? {
         guard rawValue.hasPrefix(Self.generatedTopologyPrefix) else {
             return nil
         }
         let start = rawValue.index(rawValue.startIndex, offsetBy: Self.generatedTopologyPrefix.count)
-        let persistentName = String(rawValue[start...])
-        return persistentName.isEmpty ? nil : persistentName
+        return GeneratedSubshapeIdentity.subshapeID(from: String(rawValue[start...]))
     }
 
     var sketchEntityReference: (featureID: FeatureID, entityID: SketchEntityID)? {

@@ -39,8 +39,20 @@ public struct CLISketchConstraintTypedOptions: ParsableArguments {
     @Option(help: "Spline endpoint for spline endpoint tangent constraints.")
     public var endpoint: CLISketchSplineEndpointArgument?
 
-    @Option(help: "Line entity ID for spline endpoint tangent constraints.")
+    @Option(help: "Line entity ID for spline endpoint tangent or line-circular tangent constraints.")
     public var lineID: String?
+
+    @Option(help: "Circular entity ID for line-circular tangent constraints.")
+    public var circularID: String?
+
+    @Option(help: "Contact side of the line for line-circular tangent constraints.")
+    public var tangencySide: CLISketchTangencySideArgument?
+
+    @Option(help: "Contact arrangement for circular-circular tangent constraints.")
+    public var circularContact: CLISketchCircularContactArgument?
+
+    @Option(help: "Tangent orientation for spline tangency constraints.")
+    public var orientation: CLISketchTangentOrientationArgument?
 
     @Option(help: "First spline entity ID for endpoint-to-endpoint constraints.")
     public var firstSplineID: String?
@@ -105,7 +117,32 @@ public struct CLISketchConstraintTypedOptions: ParsableArguments {
         case .equalLength:
             return try twoEntityConstraint(kind) { .equalLength($0, $1) }
         case .tangent:
-            return try twoEntityConstraint(kind) { .tangent($0, $1) }
+            if providedFields.contains(.lineID) || providedFields.contains(.circularID) {
+                try rejectUnexpectedFields(
+                    allowing: [.kind, .lineID, .circularID, .tangencySide],
+                    for: kind
+                )
+                guard let tangencySide else {
+                    throw ValidationError("Provide --tangency-side for line-circular tangent constraints.")
+                }
+                return .tangent(.lineCircular(
+                    line: try sketchEntityID(lineID, optionName: "--line-id"),
+                    circular: try sketchEntityID(circularID, optionName: "--circular-id"),
+                    side: tangencySide.side
+                ))
+            }
+            try rejectUnexpectedFields(
+                allowing: [.kind, .firstID, .secondID, .circularContact],
+                for: kind
+            )
+            guard let circularContact else {
+                throw ValidationError("Provide --circular-contact for circular-circular tangent constraints.")
+            }
+            return .tangent(.circularCircular(
+                first: try sketchEntityID(firstID, optionName: "--first-id"),
+                second: try sketchEntityID(secondID, optionName: "--second-id"),
+                contact: circularContact.contact
+            ))
         case .concentric:
             return try twoEntityConstraint(kind) { .concentric($0, $1) }
         case .equalRadius:
@@ -120,19 +157,40 @@ public struct CLISketchConstraintTypedOptions: ParsableArguments {
                 index: controlPointIndex
             )
         case .splineEndpointTangent:
-            try rejectUnexpectedFields(allowing: [.kind, .splineID, .endpoint, .lineID], for: kind)
+            try rejectUnexpectedFields(
+                allowing: [.kind, .splineID, .endpoint, .lineID, .orientation],
+                for: kind
+            )
             guard let endpoint else {
                 throw ValidationError("Provide --endpoint for splineEndpointTangent.")
             }
-            return .splineEndpointTangent(
-                spline: try sketchEntityID(splineID, optionName: "--spline-id"),
-                endpoint: endpoint.endpoint,
-                line: try sketchEntityID(lineID, optionName: "--line-id")
-            )
+            guard let orientation else {
+                throw ValidationError("Provide --orientation for splineEndpointTangent.")
+            }
+            return .splineEndpointTangent(SketchSplineLineTangencyConstraint(
+                splineEndpoint: SketchSplineEndpointReference(
+                    splineID: try sketchEntityID(splineID, optionName: "--spline-id"),
+                    endpoint: endpoint.endpoint
+                ),
+                line: try sketchEntityID(lineID, optionName: "--line-id"),
+                orientation: orientation.orientation
+            ))
         case .tangentSplineEndpoints:
-            return try twoEndpointConstraint(kind) { .tangentSplineEndpoints(first: $0, second: $1) }
+            return try twoEndpointConstraint(kind) {
+                .tangentSplineEndpoints(SketchSplineEndpointTangencyConstraint(
+                    first: $0,
+                    second: $1,
+                    orientation: $2
+                ))
+            }
         case .smoothSplineEndpoints:
-            return try twoEndpointConstraint(kind) { .smoothSplineEndpoints(first: $0, second: $1) }
+            return try twoEndpointConstraint(kind) {
+                .smoothSplineEndpoints(SketchSplineEndpointTangencyConstraint(
+                    first: $0,
+                    second: $1,
+                    orientation: $2
+                ))
+            }
         case .fixed:
             try rejectUnexpectedFields(allowing: [.kind, .entityID, .referenceKind, .controlPointIndex], for: kind)
             return .fixed(
@@ -160,6 +218,10 @@ public struct CLISketchConstraintTypedOptions: ParsableArguments {
         case splineID = "--spline-id"
         case endpoint = "--endpoint"
         case lineID = "--line-id"
+        case circularID = "--circular-id"
+        case tangencySide = "--tangency-side"
+        case circularContact = "--circular-contact"
+        case orientation = "--orientation"
         case firstSplineID = "--first-spline-id"
         case secondSplineID = "--second-spline-id"
         case firstEndpoint = "--first-endpoint"
@@ -181,6 +243,10 @@ public struct CLISketchConstraintTypedOptions: ParsableArguments {
         if splineID != nil { fields.insert(.splineID) }
         if endpoint != nil { fields.insert(.endpoint) }
         if lineID != nil { fields.insert(.lineID) }
+        if circularID != nil { fields.insert(.circularID) }
+        if tangencySide != nil { fields.insert(.tangencySide) }
+        if circularContact != nil { fields.insert(.circularContact) }
+        if orientation != nil { fields.insert(.orientation) }
         if firstSplineID != nil { fields.insert(.firstSplineID) }
         if secondSplineID != nil { fields.insert(.secondSplineID) }
         if firstEndpoint != nil { fields.insert(.firstEndpoint) }
@@ -201,10 +267,14 @@ public struct CLISketchConstraintTypedOptions: ParsableArguments {
 
     private func twoEndpointConstraint(
         _ kind: CLISketchConstraintKind,
-        build: (SketchSplineEndpointReference, SketchSplineEndpointReference) -> SketchConstraint
+        build: (
+            SketchSplineEndpointReference,
+            SketchSplineEndpointReference,
+            SketchTangentOrientation
+        ) -> SketchConstraint
     ) throws -> SketchConstraint {
         try rejectUnexpectedFields(
-            allowing: [.kind, .firstSplineID, .firstEndpoint, .secondSplineID, .secondEndpoint],
+            allowing: [.kind, .firstSplineID, .firstEndpoint, .secondSplineID, .secondEndpoint, .orientation],
             for: kind
         )
         guard let firstEndpoint else {
@@ -212,6 +282,9 @@ public struct CLISketchConstraintTypedOptions: ParsableArguments {
         }
         guard let secondEndpoint else {
             throw ValidationError("Provide --second-endpoint for \(kind.rawValue).")
+        }
+        guard let orientation else {
+            throw ValidationError("Provide --orientation for \(kind.rawValue).")
         }
         return build(
             SketchSplineEndpointReference(
@@ -221,7 +294,8 @@ public struct CLISketchConstraintTypedOptions: ParsableArguments {
             SketchSplineEndpointReference(
                 splineID: try sketchEntityID(secondSplineID, optionName: "--second-spline-id"),
                 endpoint: secondEndpoint.endpoint
-            )
+            ),
+            orientation.orientation
         )
     }
 

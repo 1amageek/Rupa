@@ -76,7 +76,7 @@ public struct MeshSnapshotService: Sendable {
             let faceBindings = faceBindingsByBodyID[bodyID] ?? []
             let faceBindingSummaries = faceBindings.map { binding in
                 MeshSummaryResult.FaceMaterialBinding(
-                    persistentName: binding.persistentName,
+                    persistentName: binding.subshapeID,
                     faceID: binding.faceID.description,
                     materialID: binding.materialID?.description,
                     processNamespace: binding.process?.namespace,

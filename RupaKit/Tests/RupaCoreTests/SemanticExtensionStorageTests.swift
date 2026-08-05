@@ -405,7 +405,11 @@ func semanticProjectionValidationRejectsTopologyNameWithDifferentOwner() throws 
             topologyReferences: [
                 ProjectionManifest.TopologyReference(
                     semanticEntityID: "wall",
-                    persistentName: "feature:\(namedFeatureID.description)/generated:front",
+                    persistentName: GeneratedSubshapeIdentity.string(for: SubshapeID(
+                        featureID: namedFeatureID,
+                        role: "front",
+                        ordinal: 0
+                    )),
                     role: .face,
                     owningFeatureID: declaredOwnerID
                 ),
@@ -465,7 +469,7 @@ private func topologyMaterialBindingFixture(
         id: bindingID,
         target: SelectionTarget(
             sceneNodeID: sceneNodeID,
-            component: .face(.generatedTopology("feature:box/generated:front"))
+            component: .face(.generatedTopology(generatedTopologyTestSubshapeID("feature:box/generated:front")))
         ),
         materialID: material.id,
         process: TopologyMaterialBinding.Process(
@@ -506,5 +510,18 @@ private func semanticProjectionBox(
         height: .length(10.0, .millimeter),
         depth: .length(10.0, .millimeter),
         direction: .normal
+    )
+}
+
+
+/// Shared feature identity so equal role strings map to equal subshape IDs
+/// within this file's tests.
+private let generatedTopologyTestFeatureID = FeatureID()
+
+private func generatedTopologyTestSubshapeID(_ role: String) -> SubshapeID {
+    SubshapeID(
+        featureID: generatedTopologyTestFeatureID,
+        role: role,
+        ordinal: 0
     )
 }

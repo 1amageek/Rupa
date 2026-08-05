@@ -71,8 +71,11 @@ public struct AutomationRunner: Sendable {
              .setCurveCurvatureDisplay,
              .setPointDisplay,
              .setSurfaceControlPointDisplay:
-            try executeDocumentCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeDocumentCommand(command, in: session)
 
+            }
+            return try run()
         case .createSketch,
              .createLineSketch,
              .createCircleSketch,
@@ -123,8 +126,11 @@ public struct AutomationRunner: Sendable {
              .splitSketchCurve,
              .trimSketchCurveSegment,
              .cutSketchCurve:
-            try executeSketchCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeSketchCommand(command, in: session)
 
+            }
+            return try run()
         case .extrudeProfile,
              .setExtrudeDistance,
              .setCubeDimensions,
@@ -159,7 +165,10 @@ public struct AutomationRunner: Sendable {
              .createExtrudedRectangleFromCorners,
              .createExtrudedCircle,
              .validateDocument:
-            try executeModelingCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeModelingCommand(command, in: session)
+            }
+            return try run()
         }
     }
 
@@ -180,8 +189,11 @@ public struct AutomationRunner: Sendable {
              .removeSavedView,
              .generateDrawingProjection,
              .generateDrawingProjectionFromView:
-            try executeWorkspaceCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeWorkspaceCommand(command, in: session)
 
+            }
+            return try run()
         case .rebaseWorkspaceOrigin,
              .appendFeatureGraph,
              .renameDocument,
@@ -200,8 +212,11 @@ public struct AutomationRunner: Sendable {
              .setComponentInstanceVisibility,
              .setComponentInstanceLock,
              .setComponentInstanceTransform:
-            try executeDocumentSourceCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeDocumentSourceCommand(command, in: session)
 
+            }
+            return try run()
         case .createSectionPlane,
              .analyzeSection,
              .describeConstructionPlanes,
@@ -215,10 +230,16 @@ public struct AutomationRunner: Sendable {
              .setCurveCurvatureDisplay,
              .setPointDisplay,
              .setSurfaceControlPointDisplay:
-            try executeConstructionCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeConstructionCommand(command, in: session)
 
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -228,103 +249,169 @@ public struct AutomationRunner: Sendable {
     ) throws -> AutomationResult {
         switch command {
         case .describeDocument:
-            let scale = WorkspaceScaleSnapshot(ruler: session.workspaceState.ruler)
-            return workspaceAutomationResult(
-                message: "Document uses \(session.workspaceState.displayUnit.symbol) display units. \(scale.summary)",
-                in: session
-            )
-        case .setDisplayUnit(let unit):
-            let result = try session.execute(WorkspaceCommand.setDisplayUnit(unit))
-            let scale = WorkspaceScaleSnapshot(ruler: session.workspaceState.ruler)
-            return workspaceAutomationResult(
-                message: "Display unit changed to \(unit.symbol). \(scale.summary)",
-                commandResult: result,
-                in: session
-            )
-        case .setRulerConfiguration(let configuration):
-            let normalized = try normalizedRulerConfiguration(for: configuration)
-            let result = try session.execute(WorkspaceCommand.setRulerConfiguration(normalized))
-            let scale = WorkspaceScaleSnapshot(ruler: session.workspaceState.ruler)
-            return workspaceAutomationResult(
-                message: "Ruler configuration changed. \(scale.summary)",
-                commandResult: result,
-                in: session
-            )
-        case .setWorkspaceScalePreset(let preset):
-            let configuration = preset.rulerConfiguration.normalizedForWorkspaceScale()
-            let result = try session.execute(WorkspaceCommand.setRulerConfiguration(configuration))
-            let scale = WorkspaceScaleSnapshot(ruler: session.workspaceState.ruler)
-            return workspaceAutomationResult(
-                message: "Workspace scale preset changed to \(preset.title). \(scale.summary)",
-                commandResult: result,
-                in: session
-            )
+            func run() throws -> AutomationResult {
+                let scale = WorkspaceScaleSnapshot(ruler: session.workspaceState.ruler)
+                return workspaceAutomationResult(
+                    message: "Document uses \(session.workspaceState.displayUnit.symbol) display units. \(scale.summary)",
+                    in: session
+                )
+            }
+            return try run()
+        case .setDisplayUnit:
+            func run() throws -> AutomationResult {
+                guard case .setDisplayUnit(let unit) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(WorkspaceCommand.setDisplayUnit(unit))
+                let scale = WorkspaceScaleSnapshot(ruler: session.workspaceState.ruler)
+                return workspaceAutomationResult(
+                    message: "Display unit changed to \(unit.symbol). \(scale.summary)",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .setRulerConfiguration:
+            func run() throws -> AutomationResult {
+                guard case .setRulerConfiguration(let configuration) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let normalized = try normalizedRulerConfiguration(for: configuration)
+                let result = try session.execute(WorkspaceCommand.setRulerConfiguration(normalized))
+                let scale = WorkspaceScaleSnapshot(ruler: session.workspaceState.ruler)
+                return workspaceAutomationResult(
+                    message: "Ruler configuration changed. \(scale.summary)",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .setWorkspaceScalePreset:
+            func run() throws -> AutomationResult {
+                guard case .setWorkspaceScalePreset(let preset) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let configuration = preset.rulerConfiguration.normalizedForWorkspaceScale()
+                let result = try session.execute(WorkspaceCommand.setRulerConfiguration(configuration))
+                let scale = WorkspaceScaleSnapshot(ruler: session.workspaceState.ruler)
+                return workspaceAutomationResult(
+                    message: "Workspace scale preset changed to \(preset.title). \(scale.summary)",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
         case .fitWorkspaceScaleToModel:
-            return try fitWorkspaceScaleToModel(in: session)
-        case .setViewportGridSettings(let settings):
-            let result = try session.execute(WorkspaceCommand.setViewportGridSettings(settings))
-            return workspaceAutomationResult(
-                message: "Viewport grid settings changed. \(settings.summary)",
-                commandResult: result,
-                in: session
-            )
+            func run() throws -> AutomationResult {
+                return try fitWorkspaceScaleToModel(in: session)
+            }
+            return try run()
+        case .setViewportGridSettings:
+            func run() throws -> AutomationResult {
+                guard case .setViewportGridSettings(let settings) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(WorkspaceCommand.setViewportGridSettings(settings))
+                return workspaceAutomationResult(
+                    message: "Viewport grid settings changed. \(settings.summary)",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
         case .describeSavedViews:
-            let savedViews = sortedSavedViews(in: session)
-            var result = workspaceAutomationResult(
-                message: "\(savedViews.count) saved view(s).",
-                in: session
-            )
-            result.savedViews = savedViews
-            return result
-        case .createSavedView(let savedView):
-            let result = try session.execute(.createSavedView(savedView))
-            let createdName = session.document.productMetadata.savedViews[savedView.id]?.name ?? savedView.name
-            return commandAutomationResult(
-                message: "Saved view \(createdName) created.",
-                commandResult: result,
-                savedViewID: savedView.id,
-                in: session
-            )
-        case .updateSavedView(let savedView):
-            let result = try session.execute(.updateSavedView(savedView))
-            let updatedName = session.document.productMetadata.savedViews[savedView.id]?.name ?? savedView.name
-            return commandAutomationResult(
-                message: "Saved view \(updatedName) updated.",
-                commandResult: result,
-                savedViewID: savedView.id,
-                in: session
-            )
-        case .removeSavedView(let id):
-            let removedName = session.document.productMetadata.savedViews[id]?.name ?? id.description
-            let result = try session.execute(.removeSavedView(id: id))
-            return commandAutomationResult(
-                message: "Saved view \(removedName) removed.",
-                commandResult: result,
-                savedViewID: id,
-                in: session
-            )
-        case .generateDrawingProjection(let query):
-            let result = try DrawingProjectionService().generate(
-                document: session.document,
-                query: query,
-                objectRegistry: session.objectRegistry,
-                currentEvaluation: session.currentEvaluation,
-                currentGeneration: session.generation
-            )
-            return drawingProjectionAutomationResult(result, in: session)
-        case .generateDrawingProjectionFromView(let savedView, let toleranceMeters, let maximumStrokeCount):
-            let result = try DrawingProjectionService().generate(
-                document: session.document,
-                savedView: savedView,
-                toleranceMeters: toleranceMeters,
-                maximumStrokeCount: maximumStrokeCount,
-                objectRegistry: session.objectRegistry,
-                currentEvaluation: session.currentEvaluation,
-                currentGeneration: session.generation
-            )
-            return drawingProjectionAutomationResult(result, in: session)
+            func run() throws -> AutomationResult {
+                let savedViews = sortedSavedViews(in: session)
+                var result = workspaceAutomationResult(
+                    message: "\(savedViews.count) saved view(s).",
+                    in: session
+                )
+                result.savedViews = savedViews
+                return result
+            }
+            return try run()
+        case .createSavedView:
+            func run() throws -> AutomationResult {
+                guard case .createSavedView(let savedView) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(.createSavedView(savedView))
+                let createdName = session.document.productMetadata.savedViews[savedView.id]?.name ?? savedView.name
+                return commandAutomationResult(
+                    message: "Saved view \(createdName) created.",
+                    commandResult: result,
+                    savedViewID: savedView.id,
+                    in: session
+                )
+            }
+            return try run()
+        case .updateSavedView:
+            func run() throws -> AutomationResult {
+                guard case .updateSavedView(let savedView) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(.updateSavedView(savedView))
+                let updatedName = session.document.productMetadata.savedViews[savedView.id]?.name ?? savedView.name
+                return commandAutomationResult(
+                    message: "Saved view \(updatedName) updated.",
+                    commandResult: result,
+                    savedViewID: savedView.id,
+                    in: session
+                )
+            }
+            return try run()
+        case .removeSavedView:
+            func run() throws -> AutomationResult {
+                guard case .removeSavedView(let id) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let removedName = session.document.productMetadata.savedViews[id]?.name ?? id.description
+                let result = try session.execute(.removeSavedView(id: id))
+                return commandAutomationResult(
+                    message: "Saved view \(removedName) removed.",
+                    commandResult: result,
+                    savedViewID: id,
+                    in: session
+                )
+            }
+            return try run()
+        case .generateDrawingProjection:
+            func run() throws -> AutomationResult {
+                guard case .generateDrawingProjection(let query) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try DrawingProjectionService().generate(
+                    document: session.document,
+                    query: query,
+                    objectRegistry: session.objectRegistry,
+                    currentEvaluation: session.currentEvaluation,
+                    currentGeneration: session.generation
+                )
+                return drawingProjectionAutomationResult(result, in: session)
+            }
+            return try run()
+        case .generateDrawingProjectionFromView:
+            func run() throws -> AutomationResult {
+                guard case .generateDrawingProjectionFromView(let savedView, let toleranceMeters, let maximumStrokeCount) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try DrawingProjectionService().generate(
+                    document: session.document,
+                    savedView: savedView,
+                    toleranceMeters: toleranceMeters,
+                    maximumStrokeCount: maximumStrokeCount,
+                    objectRegistry: session.objectRegistry,
+                    currentEvaluation: session.currentEvaluation,
+                    currentGeneration: session.generation
+                )
+                return drawingProjectionAutomationResult(result, in: session)
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -337,26 +424,41 @@ public struct AutomationRunner: Sendable {
              .appendFeatureGraph,
              .renameDocument,
              .setFeatureSuppression:
-            try executeSourceGraphCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeSourceGraphCommand(command, in: session)
+            }
+            return try run()
         case .upsertParameter,
              .renameParameter,
              .deleteParameter:
-            try executeParameterCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeParameterCommand(command, in: session)
+            }
+            return try run()
         case .createComponentDefinition,
              .createComponentInstance,
              .createPatternArray,
              .updatePatternArray,
              .explodePatternArray:
-            try executeComponentCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeComponentCommand(command, in: session)
+            }
+            return try run()
         case .setSceneNodeVisibility,
              .setSceneNodeLock,
              .setSceneNodeTransform,
              .setComponentInstanceVisibility,
              .setComponentInstanceLock,
              .setComponentInstanceTransform:
-            try executeSceneStateCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeSceneStateCommand(command, in: session)
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -365,41 +467,68 @@ public struct AutomationRunner: Sendable {
         in session: EditorSession
     ) throws -> AutomationResult {
         switch command {
-        case .rebaseWorkspaceOrigin(let translation):
-            let result = try session.execute(.rebaseWorkspaceOrigin(translation: translation))
-            return workspaceAutomationResult(
-                message: "Workspace origin rebased by (\(translation.x), \(translation.y), \(translation.z)) m.",
-                commandResult: result,
-                in: session
-            )
-        case .appendFeatureGraph(let transaction):
-            let result = try session.execute(.appendFeatureGraph(transaction))
-            return commandAutomationResult(
-                message: "Appended \(transaction.features.count) source features in one graph transaction.",
-                commandResult: result,
-                in: session
-            )
-        case .renameDocument(let name):
-            let result = try session.execute(.renameDocument(name: name))
-            return commandAutomationResult(
-                message: "Document renamed to \(name).",
-                commandResult: result,
-                in: session
-            )
-        case .setFeatureSuppression(let featureID, let isSuppressed):
-            let result = try session.execute(
-                .setFeatureSuppression(
-                    featureID: featureID,
-                    isSuppressed: isSuppressed
+        case .rebaseWorkspaceOrigin:
+            func run() throws -> AutomationResult {
+                guard case .rebaseWorkspaceOrigin(let translation) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(.rebaseWorkspaceOrigin(translation: translation))
+                return workspaceAutomationResult(
+                    message: "Workspace origin rebased by (\(translation.x), \(translation.y), \(translation.z)) m.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Feature \(featureID.description) \(isSuppressed ? "suppressed" : "unsuppressed").",
-                commandResult: result,
-                in: session
-            )
+            }
+            return try run()
+        case .appendFeatureGraph:
+            func run() throws -> AutomationResult {
+                guard case .appendFeatureGraph(let transaction) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(.appendFeatureGraph(transaction))
+                return commandAutomationResult(
+                    message: "Appended \(transaction.features.count) source features in one graph transaction.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .renameDocument:
+            func run() throws -> AutomationResult {
+                guard case .renameDocument(let name) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(.renameDocument(name: name))
+                return commandAutomationResult(
+                    message: "Document renamed to \(name).",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .setFeatureSuppression:
+            func run() throws -> AutomationResult {
+                guard case .setFeatureSuppression(let featureID, let isSuppressed) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .setFeatureSuppression(
+                        featureID: featureID,
+                        isSuppressed: isSuppressed
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Feature \(featureID.description) \(isSuppressed ? "suppressed" : "unsuppressed").",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -408,40 +537,61 @@ public struct AutomationRunner: Sendable {
         in session: EditorSession
     ) throws -> AutomationResult {
         switch command {
-        case .upsertParameter(let name, let expression, let kind):
-            let result = try session.execute(
-                .upsertParameter(
-                    name: name,
-                    expression: expression,
-                    kind: kind
+        case .upsertParameter:
+            func run() throws -> AutomationResult {
+                guard case .upsertParameter(let name, let expression, let kind) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .upsertParameter(
+                        name: name,
+                        expression: expression,
+                        kind: kind
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Parameter \(name) updated.",
-                commandResult: result,
-                in: session
-            )
-        case .renameParameter(let currentName, let newName):
-            let result = try session.execute(
-                .renameParameter(
-                    currentName: currentName,
-                    newName: newName
+                return commandAutomationResult(
+                    message: "Parameter \(name) updated.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Parameter \(currentName) renamed to \(newName).",
-                commandResult: result,
-                in: session
-            )
-        case .deleteParameter(let name):
-            let result = try session.execute(.deleteParameter(name: name))
-            return commandAutomationResult(
-                message: "Parameter \(name) deleted.",
-                commandResult: result,
-                in: session
-            )
+            }
+            return try run()
+        case .renameParameter:
+            func run() throws -> AutomationResult {
+                guard case .renameParameter(let currentName, let newName) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .renameParameter(
+                        currentName: currentName,
+                        newName: newName
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Parameter \(currentName) renamed to \(newName).",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .deleteParameter:
+            func run() throws -> AutomationResult {
+                guard case .deleteParameter(let name) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(.deleteParameter(name: name))
+                return commandAutomationResult(
+                    message: "Parameter \(name) deleted.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -450,69 +600,102 @@ public struct AutomationRunner: Sendable {
         in session: EditorSession
     ) throws -> AutomationResult {
         switch command {
-        case .createComponentDefinition(let name, let rootSceneNodeIDs):
-            let result = try session.execute(
-                .createComponentDefinition(
-                    name: name,
-                    rootSceneNodeIDs: rootSceneNodeIDs
+        case .createComponentDefinition:
+            func run() throws -> AutomationResult {
+                guard case .createComponentDefinition(let name, let rootSceneNodeIDs) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .createComponentDefinition(
+                        name: name,
+                        rootSceneNodeIDs: rootSceneNodeIDs
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Component definition \(name) created.",
-                commandResult: result,
-                in: session
-            )
-        case .createComponentInstance(let name, let definitionID, let localTransform):
-            let result = try session.execute(
-                .createComponentInstance(
-                    name: name,
-                    definitionID: definitionID,
-                    localTransform: localTransform
+                return commandAutomationResult(
+                    message: "Component definition \(name) created.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Component instance \(name) created.",
-                commandResult: result,
-                in: session
-            )
-        case .createPatternArray(let name, let definitionID, let distribution, let outputMode):
-            let result = try session.execute(
-                .createPatternArray(
-                    name: name,
-                    definitionID: definitionID,
-                    distribution: distribution,
-                    outputMode: outputMode
+            }
+            return try run()
+        case .createComponentInstance:
+            func run() throws -> AutomationResult {
+                guard case .createComponentInstance(let name, let definitionID, let localTransform) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .createComponentInstance(
+                        name: name,
+                        definitionID: definitionID,
+                        localTransform: localTransform
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Pattern array \(name) created.",
-                commandResult: result,
-                in: session
-            )
-        case .updatePatternArray(let id, let name, let definitionID, let distribution, let outputMode):
-            let result = try session.execute(
-                .updatePatternArray(
-                    id: id,
-                    name: name,
-                    definitionID: definitionID,
-                    distribution: distribution,
-                    outputMode: outputMode
+                return commandAutomationResult(
+                    message: "Component instance \(name) created.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Pattern array updated.",
-                commandResult: result,
-                in: session
-            )
-        case .explodePatternArray(let id):
-            let result = try session.execute(.explodePatternArray(id: id))
-            return commandAutomationResult(
-                message: "Pattern array exploded.",
-                commandResult: result,
-                in: session
-            )
+            }
+            return try run()
+        case .createPatternArray:
+            func run() throws -> AutomationResult {
+                guard case .createPatternArray(let name, let definitionID, let distribution, let outputMode) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .createPatternArray(
+                        name: name,
+                        definitionID: definitionID,
+                        distribution: distribution,
+                        outputMode: outputMode
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Pattern array \(name) created.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .updatePatternArray:
+            func run() throws -> AutomationResult {
+                guard case .updatePatternArray(let id, let name, let definitionID, let distribution, let outputMode) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .updatePatternArray(
+                        id: id,
+                        name: name,
+                        definitionID: definitionID,
+                        distribution: distribution,
+                        outputMode: outputMode
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Pattern array updated.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .explodePatternArray:
+            func run() throws -> AutomationResult {
+                guard case .explodePatternArray(let id) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(.explodePatternArray(id: id))
+                return commandAutomationResult(
+                    message: "Pattern array exploded.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -521,68 +704,107 @@ public struct AutomationRunner: Sendable {
         in session: EditorSession
     ) throws -> AutomationResult {
         switch command {
-        case .setSceneNodeVisibility(let id, let isVisible):
-            let result = try session.execute(
-                .setSceneNodeVisibility(id: id, isVisible: isVisible)
-            )
-            return commandAutomationResult(
-                message: "Scene node visibility updated.",
-                commandResult: result,
-                in: session
-            )
-        case .setSceneNodeLock(let id, let isLocked):
-            let result = try session.execute(
-                .setSceneNodeLock(id: id, isLocked: isLocked)
-            )
-            return commandAutomationResult(
-                message: "Scene node lock updated.",
-                commandResult: result,
-                in: session
-            )
-        case .setSceneNodeTransform(let id, let localTransform):
-            let result = try session.execute(
-                .setSceneNodeTransform(
-                    id: id,
-                    localTransform: localTransform
+        case .setSceneNodeVisibility:
+            func run() throws -> AutomationResult {
+                guard case .setSceneNodeVisibility(let id, let isVisible) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .setSceneNodeVisibility(id: id, isVisible: isVisible)
                 )
-            )
-            return commandAutomationResult(
-                message: "Scene node transform updated.",
-                commandResult: result,
-                in: session
-            )
-        case .setComponentInstanceVisibility(let id, let isVisible):
-            let result = try session.execute(
-                .setComponentInstanceVisibility(id: id, isVisible: isVisible)
-            )
-            return commandAutomationResult(
-                message: "Component instance visibility updated.",
-                commandResult: result,
-                in: session
-            )
-        case .setComponentInstanceLock(let id, let isLocked):
-            let result = try session.execute(
-                .setComponentInstanceLock(id: id, isLocked: isLocked)
-            )
-            return commandAutomationResult(
-                message: "Component instance lock updated.",
-                commandResult: result,
-                in: session
-            )
-        case .setComponentInstanceTransform(let id, let localTransform):
-            let result = try session.execute(
-                .setComponentInstanceTransform(
-                    id: id,
-                    localTransform: localTransform
+                return commandAutomationResult(
+                    message: "Scene node visibility updated.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Component instance transform updated.",
-                commandResult: result,
-                in: session
-            )
+            }
+            return try run()
+        case .setSceneNodeLock:
+            func run() throws -> AutomationResult {
+                guard case .setSceneNodeLock(let id, let isLocked) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .setSceneNodeLock(id: id, isLocked: isLocked)
+                )
+                return commandAutomationResult(
+                    message: "Scene node lock updated.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .setSceneNodeTransform:
+            func run() throws -> AutomationResult {
+                guard case .setSceneNodeTransform(let id, let localTransform) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .setSceneNodeTransform(
+                        id: id,
+                        localTransform: localTransform
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Scene node transform updated.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .setComponentInstanceVisibility:
+            func run() throws -> AutomationResult {
+                guard case .setComponentInstanceVisibility(let id, let isVisible) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .setComponentInstanceVisibility(id: id, isVisible: isVisible)
+                )
+                return commandAutomationResult(
+                    message: "Component instance visibility updated.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .setComponentInstanceLock:
+            func run() throws -> AutomationResult {
+                guard case .setComponentInstanceLock(let id, let isLocked) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .setComponentInstanceLock(id: id, isLocked: isLocked)
+                )
+                return commandAutomationResult(
+                    message: "Component instance lock updated.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .setComponentInstanceTransform:
+            func run() throws -> AutomationResult {
+                guard case .setComponentInstanceTransform(let id, let localTransform) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .setComponentInstanceTransform(
+                        id: id,
+                        localTransform: localTransform
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Component instance transform updated.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -593,7 +815,10 @@ public struct AutomationRunner: Sendable {
         switch command {
         case .createSectionPlane,
              .analyzeSection:
-            try executeSectionCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeSectionCommand(command, in: session)
+            }
+            return try run()
         case .describeConstructionPlanes,
              .createConstructionPlane,
              .createConstructionPlaneFromTarget,
@@ -602,13 +827,22 @@ public struct AutomationRunner: Sendable {
              .setActiveConstructionPlane,
              .renameConstructionPlane,
              .setConstructionPlane:
-            try executeConstructionPlaneCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeConstructionPlaneCommand(command, in: session)
+            }
+            return try run()
         case .setCurveCurvatureDisplay,
              .setPointDisplay,
              .setSurfaceControlPointDisplay:
-            try executeAnalysisDisplayCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeAnalysisDisplayCommand(command, in: session)
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -617,30 +851,45 @@ public struct AutomationRunner: Sendable {
         in session: EditorSession
     ) throws -> AutomationResult {
         switch command {
-        case .createSectionPlane(let name):
-            let result = try session.execute(.createSectionPlane(name: name))
-            return commandAutomationResult(
-                message: "Section plane \(name) created.",
-                commandResult: result,
-                in: session
-            )
-        case .analyzeSection(let query):
-            let result = try SectionAnalysisService().analyze(
-                document: session.document,
-                query: query,
-                activeConstructionPlaneID: session.workspaceState.activeConstructionPlaneID,
-                displayUnit: session.workspaceState.displayUnit,
-                objectRegistry: session.objectRegistry,
-                currentEvaluation: session.currentEvaluation,
-                currentGeneration: session.generation
-            )
-            return sectionAnalysisAutomationResult(
-                result,
-                clipping: query.clipping,
-                in: session
-            )
+        case .createSectionPlane:
+            func run() throws -> AutomationResult {
+                guard case .createSectionPlane(let name) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(.createSectionPlane(name: name))
+                return commandAutomationResult(
+                    message: "Section plane \(name) created.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .analyzeSection:
+            func run() throws -> AutomationResult {
+                guard case .analyzeSection(let query) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try SectionAnalysisService().analyze(
+                    document: session.document,
+                    query: query,
+                    activeConstructionPlaneID: session.workspaceState.activeConstructionPlaneID,
+                    displayUnit: session.workspaceState.displayUnit,
+                    objectRegistry: session.objectRegistry,
+                    currentEvaluation: session.currentEvaluation,
+                    currentGeneration: session.generation
+                )
+                return sectionAnalysisAutomationResult(
+                    result,
+                    clipping: query.clipping,
+                    in: session
+                )
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -650,92 +899,140 @@ public struct AutomationRunner: Sendable {
     ) throws -> AutomationResult {
         switch command {
         case .describeConstructionPlanes:
-            let summary = ConstructionPlaneSummaryService().summarize(
-                document: session.document,
-                activePlaneID: session.workspaceState.activeConstructionPlaneID
-            )
-            let activeName = summary.planes.first { $0.isActive }?.name ?? "none"
-            return AutomationResult(
-                message: "\(summary.planes.count) construction plane(s). Active: \(activeName).",
-                generation: session.generation,
-                diagnostics: session.diagnostics
-            )
-        case .createConstructionPlane(let name, let plane):
-            let result = try session.execute(
-                .createConstructionPlane(
-                    name: name,
-                    plane: plane
+            func run() throws -> AutomationResult {
+                let summary = ConstructionPlaneSummaryService().summarize(
+                    document: session.document,
+                    activePlaneID: session.workspaceState.activeConstructionPlaneID
                 )
-            )
-            return commandAutomationResult(
-                message: "Construction plane \(name) created.",
-                commandResult: result,
-                in: session
-            )
-        case .createConstructionPlaneFromTarget(let name, let target):
-            let result = try session.execute(
-                .createConstructionPlaneFromTarget(
-                    name: name,
-                    target: target
+                let activeName = summary.planes.first { $0.isActive }?.name ?? "none"
+                return AutomationResult(
+                    message: "\(summary.planes.count) construction plane(s). Active: \(activeName).",
+                    generation: session.generation,
+                    diagnostics: session.diagnostics
                 )
-            )
-            return commandAutomationResult(
-                message: "Construction plane \(name) created from target \(target.component).",
-                commandResult: result,
-                in: session
-            )
-        case .createConstructionPlaneFromTargets(let name, let targets, let viewNormal):
-            let result = try session.execute(
-                .createConstructionPlaneFromTargets(
-                    name: name,
-                    targets: targets,
-                    viewNormal: viewNormal
+            }
+            return try run()
+        case .createConstructionPlane:
+            func run() throws -> AutomationResult {
+                guard case .createConstructionPlane(let name, let plane) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .createConstructionPlane(
+                        name: name,
+                        plane: plane
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Construction plane \(name) created from \(targets.count) targets.",
-                commandResult: result,
-                in: session
-            )
-        case .createViewAlignedConstructionPlane(let name, let origin, let viewNormal):
-            let result = try session.execute(
-                .createViewAlignedConstructionPlane(
-                    name: name,
-                    origin: origin,
-                    viewNormal: viewNormal
+                return commandAutomationResult(
+                    message: "Construction plane \(name) created.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "View-aligned construction plane \(name) created.",
-                commandResult: result,
-                in: session
-            )
-        case .setActiveConstructionPlane(let id):
-            let result = try session.execute(WorkspaceCommand.setActiveConstructionPlane(id))
-            let activeName = session.activeConstructionPlane?.name ?? "none"
-            return workspaceAutomationResult(
-                message: "Active construction plane set to \(activeName).",
-                commandResult: result,
-                in: session
-            )
-        case .renameConstructionPlane(let id, let name):
-            let result = try session.execute(.renameConstructionPlane(id: id, name: name))
-            let renamedName = session.document.productMetadata.constructionPlanes[id]?.name ?? name
-            return commandAutomationResult(
-                message: "Construction plane renamed to \(renamedName).",
-                commandResult: result,
-                in: session
-            )
-        case .setConstructionPlane(let id, let plane):
-            let result = try session.execute(.setConstructionPlane(id: id, plane: plane))
-            let editedName = session.document.productMetadata.constructionPlanes[id]?.name ?? id.description
-            return commandAutomationResult(
-                message: "Construction plane \(editedName) updated.",
-                commandResult: result,
-                in: session
-            )
+            }
+            return try run()
+        case .createConstructionPlaneFromTarget:
+            func run() throws -> AutomationResult {
+                guard case .createConstructionPlaneFromTarget(let name, let target) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .createConstructionPlaneFromTarget(
+                        name: name,
+                        target: target
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Construction plane \(name) created from target \(target.component).",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .createConstructionPlaneFromTargets:
+            func run() throws -> AutomationResult {
+                guard case .createConstructionPlaneFromTargets(let name, let targets, let viewNormal) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .createConstructionPlaneFromTargets(
+                        name: name,
+                        targets: targets,
+                        viewNormal: viewNormal
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Construction plane \(name) created from \(targets.count) targets.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .createViewAlignedConstructionPlane:
+            func run() throws -> AutomationResult {
+                guard case .createViewAlignedConstructionPlane(let name, let origin, let viewNormal) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .createViewAlignedConstructionPlane(
+                        name: name,
+                        origin: origin,
+                        viewNormal: viewNormal
+                    )
+                )
+                return commandAutomationResult(
+                    message: "View-aligned construction plane \(name) created.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .setActiveConstructionPlane:
+            func run() throws -> AutomationResult {
+                guard case .setActiveConstructionPlane(let id) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(WorkspaceCommand.setActiveConstructionPlane(id))
+                let activeName = session.activeConstructionPlane?.name ?? "none"
+                return workspaceAutomationResult(
+                    message: "Active construction plane set to \(activeName).",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .renameConstructionPlane:
+            func run() throws -> AutomationResult {
+                guard case .renameConstructionPlane(let id, let name) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(.renameConstructionPlane(id: id, name: name))
+                let renamedName = session.document.productMetadata.constructionPlanes[id]?.name ?? name
+                return commandAutomationResult(
+                    message: "Construction plane renamed to \(renamedName).",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .setConstructionPlane:
+            func run() throws -> AutomationResult {
+                guard case .setConstructionPlane(let id, let plane) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(.setConstructionPlane(id: id, plane: plane))
+                let editedName = session.document.productMetadata.constructionPlanes[id]?.name ?? id.description
+                return commandAutomationResult(
+                    message: "Construction plane \(editedName) updated.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -744,46 +1041,67 @@ public struct AutomationRunner: Sendable {
         in session: EditorSession
     ) throws -> AutomationResult {
         switch command {
-        case .setCurveCurvatureDisplay(let target, let isVisible, let combScale):
-            let result = try session.execute(
-                WorkspaceCommand.setCurveCurvatureDisplay(
-                    target: target,
-                    isVisible: isVisible,
-                    combScale: combScale
+        case .setCurveCurvatureDisplay:
+            func run() throws -> AutomationResult {
+                guard case .setCurveCurvatureDisplay(let target, let isVisible, let combScale) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    WorkspaceCommand.setCurveCurvatureDisplay(
+                        target: target,
+                        isVisible: isVisible,
+                        combScale: combScale
+                    )
                 )
-            )
-            let visibility = isVisible.map { $0 ? "enabled" : "disabled" } ?? "toggled"
-            let scale = combScale.map { " at comb scale \($0)" } ?? ""
-            return workspaceAutomationResult(
-                message: "Curve curvature display \(visibility)\(scale).",
-                commandResult: result,
-                in: session
-            )
-        case .setPointDisplay(let target, let isVisible):
-            let result = try session.execute(
-                WorkspaceCommand.setPointDisplay(target: target, isVisible: isVisible)
-            )
-            let visibility = isVisible.map { $0 ? "visible" : "hidden" } ?? "toggled"
-            return workspaceAutomationResult(
-                message: "Point display \(visibility).",
-                commandResult: result,
-                in: session
-            )
-        case .setSurfaceControlPointDisplay(let target, let isVisible):
-            let result = try session.execute(
-                WorkspaceCommand.setSurfaceControlPointDisplay(
-                    target: target,
-                    isVisible: isVisible
+                let visibility = isVisible.map { $0 ? "enabled" : "disabled" } ?? "toggled"
+                let scale = combScale.map { " at comb scale \($0)" } ?? ""
+                return workspaceAutomationResult(
+                    message: "Curve curvature display \(visibility)\(scale).",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            let visibility = isVisible.map { $0 ? "visible" : "hidden" } ?? "toggled"
-            return workspaceAutomationResult(
-                message: "Surface control point display \(visibility).",
-                commandResult: result,
-                in: session
-            )
+            }
+            return try run()
+        case .setPointDisplay:
+            func run() throws -> AutomationResult {
+                guard case .setPointDisplay(let target, let isVisible) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    WorkspaceCommand.setPointDisplay(target: target, isVisible: isVisible)
+                )
+                let visibility = isVisible.map { $0 ? "visible" : "hidden" } ?? "toggled"
+                return workspaceAutomationResult(
+                    message: "Point display \(visibility).",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .setSurfaceControlPointDisplay:
+            func run() throws -> AutomationResult {
+                guard case .setSurfaceControlPointDisplay(let target, let isVisible) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    WorkspaceCommand.setSurfaceControlPointDisplay(
+                        target: target,
+                        isVisible: isVisible
+                    )
+                )
+                let visibility = isVisible.map { $0 ? "visible" : "hidden" } ?? "toggled"
+                return workspaceAutomationResult(
+                    message: "Surface control point display \(visibility).",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -799,12 +1117,18 @@ public struct AutomationRunner: Sendable {
              .createSplineSketch,
              .createRectangleSketch,
              .createPolygonSketch:
-            try executeSketchCreationCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeSketchCreationCommand(command, in: session)
+            }
+            return try run()
         case .createFaceKnife,
              .projectSketchCurvesToConstructionPlane,
              .projectCurvesToGeneratedFace,
              .projectBodyOutlinesToConstructionPlane:
-            try executeSketchProjectionCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeSketchProjectionCommand(command, in: session)
+            }
+            return try run()
         case .setObjectDimension,
              .addSelectionDimension,
              .setSelectionDimensionTarget,
@@ -812,17 +1136,29 @@ public struct AutomationRunner: Sendable {
              .removeSelectionDimension,
              .addSketchConstraint,
              .removeSketchConstraint:
-            try executeSketchConstraintCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeSketchConstraintCommand(command, in: session)
+            }
+            return try run()
         case .createBridgeCurve,
              .setBridgeCurveParameters:
-            try executeBridgeCurveCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeBridgeCurveCommand(command, in: session)
+            }
+            return try run()
         case .offsetCurve,
              .offsetRegions,
              .offsetSketchVertex:
-            try executeSketchOffsetCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeSketchOffsetCommand(command, in: session)
+            }
+            return try run()
         case .applySketchCornerTreatment,
              .createSlotSketch:
-            try executeSketchCornerCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeSketchCornerCommand(command, in: session)
+            }
+            return try run()
         case .offsetBodyFace,
              .deleteBodyFaces,
              .draftBodyFaces,
@@ -830,7 +1166,10 @@ public struct AutomationRunner: Sendable {
              .filletBodyEdges,
              .moveBodyEdge,
              .moveBodyVertex:
-            try executeDirectBodyEditCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeDirectBodyEditCommand(command, in: session)
+            }
+            return try run()
         case .moveSketchEntityPoint,
              .moveSketchSplineControlPoint,
              .alignSketchVertex,
@@ -839,7 +1178,10 @@ public struct AutomationRunner: Sendable {
              .setSketchCircleParameters,
              .setSketchArcParameters,
              .setSketchEntityDimension:
-            try executeSketchControlPointCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeSketchControlPointCommand(command, in: session)
+            }
+            return try run()
         case .convertSketchLineToArc,
              .convertSketchLineToSpline,
              .reverseSketchCurve,
@@ -850,9 +1192,15 @@ public struct AutomationRunner: Sendable {
              .splitSketchCurve,
              .trimSketchCurveSegment,
              .cutSketchCurve:
-            try executeSketchCurveTransformationCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeSketchCurveTransformationCommand(command, in: session)
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -861,126 +1209,162 @@ public struct AutomationRunner: Sendable {
         in session: EditorSession
     ) throws -> AutomationResult {
         switch command {
-        case .createSketch(let name, let sketch, let geometryRole):
-            let result = try session.execute(
-                .createSketch(
-                    name: name,
-                    sketch: sketch,
-                    geometryRole: geometryRole
+        case .createSketch:
+            func run() throws -> AutomationResult {
+                guard case .createSketch(let name, let sketch, let geometryRole) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .createSketch(
+                        name: name,
+                        sketch: sketch,
+                        geometryRole: geometryRole
+                    )
                 )
-            )
-            let entityLabel = sketch.entities.count == 1 ? "entity" : "entities"
-            return commandAutomationResult(
-                message: "Sketch \(name) created with \(sketch.entities.count) \(entityLabel).",
-                commandResult: result,
-                in: session
-            )
-        case .createLineSketch(let name, let plane, let start, let end):
-            let resolvedPlane = try session.resolveSketchPlane(plane)
-            let result = try session.execute(
-                .createLineSketch(
-                    name: name,
-                    plane: resolvedPlane,
-                    start: start,
-                    end: end
+                let entityLabel = sketch.entities.count == 1 ? "entity" : "entities"
+                return commandAutomationResult(
+                    message: "Sketch \(name) created with \(sketch.entities.count) \(entityLabel).",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Line sketch \(name) created.",
-                commandResult: result,
-                in: session
-            )
-        case .createCircleSketch(let name, let plane, let center, let radius):
-            let resolvedPlane = try session.resolveSketchPlane(plane)
-            let result = try session.execute(
-                .createCircleSketch(
-                    name: name,
-                    plane: resolvedPlane,
-                    center: center,
-                    radius: radius
+            }
+            return try run()
+        case .createLineSketch:
+            func run() throws -> AutomationResult {
+                guard case .createLineSketch(let name, let plane, let start, let end) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let resolvedPlane = try session.resolveSketchPlane(plane)
+                let result = try session.execute(
+                    .createLineSketch(
+                        name: name,
+                        plane: resolvedPlane,
+                        start: start,
+                        end: end
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Circle sketch \(name) created.",
-                commandResult: result,
-                in: session
-            )
-        case .createArcSketch(let name, let plane, let center, let radius, let startAngle, let endAngle):
-            let resolvedPlane = try session.resolveSketchPlane(plane)
-            let result = try session.execute(
-                .createArcSketch(
-                    name: name,
-                    plane: resolvedPlane,
-                    center: center,
-                    radius: radius,
-                    startAngle: startAngle,
-                    endAngle: endAngle
+                return commandAutomationResult(
+                    message: "Line sketch \(name) created.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Arc sketch \(name) created.",
-                commandResult: result,
-                in: session
-            )
-        case .createSplineSketch(let name, let plane, let spline):
-            let resolvedPlane = try session.resolveSketchPlane(plane)
-            let result = try session.execute(
-                .createSplineSketch(
-                    name: name,
-                    plane: resolvedPlane,
-                    spline: spline
+            }
+            return try run()
+        case .createCircleSketch:
+            func run() throws -> AutomationResult {
+                guard case .createCircleSketch(let name, let plane, let center, let radius) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let resolvedPlane = try session.resolveSketchPlane(plane)
+                let result = try session.execute(
+                    .createCircleSketch(
+                        name: name,
+                        plane: resolvedPlane,
+                        center: center,
+                        radius: radius
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Spline sketch \(name) created.",
-                commandResult: result,
-                in: session
-            )
-        case .createRectangleSketch(let name, let plane, let width, let height):
-            let resolvedPlane = try session.resolveSketchPlane(plane)
-            let result = try session.execute(
-                .createRectangleSketch(
-                    name: name,
-                    plane: resolvedPlane,
-                    width: width,
-                    height: height
+                return commandAutomationResult(
+                    message: "Circle sketch \(name) created.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Rectangle sketch \(name) created.",
-                commandResult: result,
-                in: session
-            )
-        case .createPolygonSketch(
-            let name,
-            let plane,
-            let center,
-            let radius,
-            let sides,
-            let sizingMode,
-            let inclinationMode,
-            let rotationAngle
-        ):
-            let resolvedPlane = try session.resolveSketchPlane(plane)
-            let result = try session.execute(
-                .createPolygonSketch(
-                    name: name,
-                    plane: resolvedPlane,
-                    center: center,
-                    radius: radius,
-                    sides: sides,
-                    sizingMode: sizingMode,
-                    inclinationMode: inclinationMode,
-                    rotationAngle: rotationAngle
+            }
+            return try run()
+        case .createArcSketch:
+            func run() throws -> AutomationResult {
+                guard case .createArcSketch(let name, let plane, let center, let radius, let startAngle, let endAngle) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let resolvedPlane = try session.resolveSketchPlane(plane)
+                let result = try session.execute(
+                    .createArcSketch(
+                        name: name,
+                        plane: resolvedPlane,
+                        center: center,
+                        radius: radius,
+                        startAngle: startAngle,
+                        endAngle: endAngle
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Polygon sketch \(name) created.",
-                commandResult: result,
-                in: session
-            )
+                return commandAutomationResult(
+                    message: "Arc sketch \(name) created.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .createSplineSketch:
+            func run() throws -> AutomationResult {
+                guard case .createSplineSketch(let name, let plane, let spline) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let resolvedPlane = try session.resolveSketchPlane(plane)
+                let result = try session.execute(
+                    .createSplineSketch(
+                        name: name,
+                        plane: resolvedPlane,
+                        spline: spline
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Spline sketch \(name) created.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .createRectangleSketch:
+            func run() throws -> AutomationResult {
+                guard case .createRectangleSketch(let name, let plane, let width, let height) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let resolvedPlane = try session.resolveSketchPlane(plane)
+                let result = try session.execute(
+                    .createRectangleSketch(
+                        name: name,
+                        plane: resolvedPlane,
+                        width: width,
+                        height: height
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Rectangle sketch \(name) created.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .createPolygonSketch:
+            func run() throws -> AutomationResult {
+                guard case .createPolygonSketch( let name, let plane, let center, let radius, let sides, let sizingMode, let inclinationMode, let rotationAngle ) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let resolvedPlane = try session.resolveSketchPlane(plane)
+                let result = try session.execute(
+                    .createPolygonSketch(
+                        name: name,
+                        plane: resolvedPlane,
+                        center: center,
+                        radius: radius,
+                        sides: sides,
+                        sizingMode: sizingMode,
+                        inclinationMode: inclinationMode,
+                        rotationAngle: rotationAngle
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Polygon sketch \(name) created.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -989,62 +1373,89 @@ public struct AutomationRunner: Sendable {
         in session: EditorSession
     ) throws -> AutomationResult {
         switch command {
-        case .createFaceKnife(let name, let target, let loop):
-            let result = try session.execute(
-                .createFaceKnife(
-                    name: name,
-                    target: target,
-                    loop: loop
+        case .createFaceKnife:
+            func run() throws -> AutomationResult {
+                guard case .createFaceKnife(let name, let target, let loop) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .createFaceKnife(
+                        name: name,
+                        target: target,
+                        loop: loop
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Face Knife \(name) applied.",
-                commandResult: result,
-                in: session
-            )
-        case .projectSketchCurvesToConstructionPlane(let targets, let plane, let name):
-            let resolvedPlane = try session.resolveSketchPlane(plane)
-            let result = try session.execute(
-                .projectSketchCurvesToConstructionPlane(
-                    targets: targets,
-                    plane: resolvedPlane,
-                    name: name
+                return commandAutomationResult(
+                    message: "Face Knife \(name) applied.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Sketch curves projected.",
-                commandResult: result,
-                in: session
-            )
-        case .projectCurvesToGeneratedFace(let targets, let face, let name):
-            let result = try session.execute(
-                .projectCurvesToGeneratedFace(
-                    targets: targets,
-                    face: face,
-                    name: name
+            }
+            return try run()
+        case .projectSketchCurvesToConstructionPlane:
+            func run() throws -> AutomationResult {
+                guard case .projectSketchCurvesToConstructionPlane(let targets, let plane, let name) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let resolvedPlane = try session.resolveSketchPlane(plane)
+                let result = try session.execute(
+                    .projectSketchCurvesToConstructionPlane(
+                        targets: targets,
+                        plane: resolvedPlane,
+                        name: name
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Curves projected to generated face.",
-                commandResult: result,
-                in: session
-            )
-        case .projectBodyOutlinesToConstructionPlane(let targets, let plane, let name):
-            let resolvedPlane = try session.resolveSketchPlane(plane)
-            let result = try session.execute(
-                .projectBodyOutlinesToConstructionPlane(
-                    targets: targets,
-                    plane: resolvedPlane,
-                    name: name
+                return commandAutomationResult(
+                    message: "Sketch curves projected.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Body outlines projected.",
-                commandResult: result,
-                in: session
-            )
+            }
+            return try run()
+        case .projectCurvesToGeneratedFace:
+            func run() throws -> AutomationResult {
+                guard case .projectCurvesToGeneratedFace(let targets, let face, let name) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .projectCurvesToGeneratedFace(
+                        targets: targets,
+                        face: face,
+                        name: name
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Curves projected to generated face.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .projectBodyOutlinesToConstructionPlane:
+            func run() throws -> AutomationResult {
+                guard case .projectBodyOutlinesToConstructionPlane(let targets, let plane, let name) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let resolvedPlane = try session.resolveSketchPlane(plane)
+                let result = try session.execute(
+                    .projectBodyOutlinesToConstructionPlane(
+                        targets: targets,
+                        plane: resolvedPlane,
+                        name: name
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Body outlines projected.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -1053,86 +1464,131 @@ public struct AutomationRunner: Sendable {
         in session: EditorSession
     ) throws -> AutomationResult {
         switch command {
-        case .setObjectDimension(let target, let kind, let value):
-            let result = try session.execute(
-                .setObjectDimension(
-                    target: target,
-                    kind: kind,
-                    value: value
+        case .setObjectDimension:
+            func run() throws -> AutomationResult {
+                guard case .setObjectDimension(let target, let kind, let value) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .setObjectDimension(
+                        target: target,
+                        kind: kind,
+                        value: value
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Object dimension updated.",
-                commandResult: result,
-                in: session
-            )
-        case .addSelectionDimension(let name, let kind, let first, let second, let target):
-            let result = try session.execute(
-                .addSelectionDimension(
-                    name: name,
-                    kind: kind,
-                    first: first,
-                    second: second,
-                    target: target
+                return commandAutomationResult(
+                    message: "Object dimension updated.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Selection dimension added.",
-                commandResult: result,
-                in: session
-            )
-        case .setSelectionDimensionTarget(let id, let target):
-            let result = try session.execute(
-                .setSelectionDimensionTarget(
-                    id: id,
-                    target: target
+            }
+            return try run()
+        case .addSelectionDimension:
+            func run() throws -> AutomationResult {
+                guard case .addSelectionDimension(let name, let kind, let first, let second, let target) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .addSelectionDimension(
+                        name: name,
+                        kind: kind,
+                        first: first,
+                        second: second,
+                        target: target
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Selection dimension target updated.",
-                commandResult: result,
-                in: session
-            )
-        case .applySelectionDimensionTarget(let id):
-            let result = try session.execute(.applySelectionDimensionTarget(id: id))
-            return commandAutomationResult(
-                message: "Selection dimension target applied.",
-                commandResult: result,
-                in: session
-            )
-        case .removeSelectionDimension(let id):
-            let result = try session.execute(.removeSelectionDimension(id: id))
-            return commandAutomationResult(
-                message: "Selection dimension removed.",
-                commandResult: result,
-                in: session
-            )
-        case .addSketchConstraint(let featureID, let constraint):
-            let result = try session.execute(
-                .addSketchConstraint(
-                    featureID: featureID,
-                    constraint: constraint
+                return commandAutomationResult(
+                    message: "Selection dimension added.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Sketch constraint added to \(featureID.description).",
-                commandResult: result,
-                in: session
-            )
-        case .removeSketchConstraint(let featureID, let constraint):
-            let result = try session.execute(
-                .removeSketchConstraint(
-                    featureID: featureID,
-                    constraint: constraint
+            }
+            return try run()
+        case .setSelectionDimensionTarget:
+            func run() throws -> AutomationResult {
+                guard case .setSelectionDimensionTarget(let id, let target) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .setSelectionDimensionTarget(
+                        id: id,
+                        target: target
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Sketch constraint removed from \(featureID.description).",
-                commandResult: result,
-                in: session
-            )
+                return commandAutomationResult(
+                    message: "Selection dimension target updated.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .applySelectionDimensionTarget:
+            func run() throws -> AutomationResult {
+                guard case .applySelectionDimensionTarget(let id) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(.applySelectionDimensionTarget(id: id))
+                return commandAutomationResult(
+                    message: "Selection dimension target applied.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .removeSelectionDimension:
+            func run() throws -> AutomationResult {
+                guard case .removeSelectionDimension(let id) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(.removeSelectionDimension(id: id))
+                return commandAutomationResult(
+                    message: "Selection dimension removed.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .addSketchConstraint:
+            func run() throws -> AutomationResult {
+                guard case .addSketchConstraint(let featureID, let constraint) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .addSketchConstraint(
+                        featureID: featureID,
+                        constraint: constraint
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Sketch constraint added to \(featureID.description).",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .removeSketchConstraint:
+            func run() throws -> AutomationResult {
+                guard case .removeSketchConstraint(let featureID, let constraint) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .removeSketchConstraint(
+                        featureID: featureID,
+                        constraint: constraint
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Sketch constraint removed from \(featureID.description).",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -1141,38 +1597,53 @@ public struct AutomationRunner: Sendable {
         in session: EditorSession
     ) throws -> AutomationResult {
         switch command {
-        case .createBridgeCurve(let featureID, let firstEndpoint, let secondEndpoint, let continuity, let trimsSourceCurves):
-            let result = try session.execute(
-                .createBridgeCurve(
-                    featureID: featureID,
-                    firstEndpoint: firstEndpoint,
-                    secondEndpoint: secondEndpoint,
-                    continuity: continuity,
-                    trimsSourceCurves: trimsSourceCurves
+        case .createBridgeCurve:
+            func run() throws -> AutomationResult {
+                guard case .createBridgeCurve(let featureID, let firstEndpoint, let secondEndpoint, let continuity, let trimsSourceCurves) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .createBridgeCurve(
+                        featureID: featureID,
+                        firstEndpoint: firstEndpoint,
+                        secondEndpoint: secondEndpoint,
+                        continuity: continuity,
+                        trimsSourceCurves: trimsSourceCurves
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Bridge curve created in sketch \(featureID.description).",
-                commandResult: result,
-                in: session
-            )
-        case .setBridgeCurveParameters(let sourceID, let firstEndpoint, let secondEndpoint, let continuity, let trimsSourceCurves):
-            let result = try session.execute(
-                .setBridgeCurveParameters(
-                    sourceID: sourceID,
-                    firstEndpoint: firstEndpoint,
-                    secondEndpoint: secondEndpoint,
-                    continuity: continuity,
-                    trimsSourceCurves: trimsSourceCurves
+                return commandAutomationResult(
+                    message: "Bridge curve created in sketch \(featureID.description).",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Bridge curve \(sourceID.description) updated.",
-                commandResult: result,
-                in: session
-            )
+            }
+            return try run()
+        case .setBridgeCurveParameters:
+            func run() throws -> AutomationResult {
+                guard case .setBridgeCurveParameters(let sourceID, let firstEndpoint, let secondEndpoint, let continuity, let trimsSourceCurves) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .setBridgeCurveParameters(
+                        sourceID: sourceID,
+                        firstEndpoint: firstEndpoint,
+                        secondEndpoint: secondEndpoint,
+                        continuity: continuity,
+                        trimsSourceCurves: trimsSourceCurves
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Bridge curve \(sourceID.description) updated.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -1181,57 +1652,78 @@ public struct AutomationRunner: Sendable {
         in session: EditorSession
     ) throws -> AutomationResult {
         switch command {
-        case .offsetCurve(let target, let distance, let options, let vertexHandle):
-            let result = try session.execute(
-                .offsetCurve(
-                    target: target,
-                    distance: distance,
-                    options: options,
-                    vertexHandle: vertexHandle
+        case .offsetCurve:
+            func run() throws -> AutomationResult {
+                guard case .offsetCurve(let target, let distance, let options, let vertexHandle) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .offsetCurve(
+                        target: target,
+                        distance: distance,
+                        options: options,
+                        vertexHandle: vertexHandle
+                    )
                 )
-            )
-            let message: String
-            if options.mode == .slot {
-                message = "Slot sketch profile created."
-            } else if vertexHandle == nil {
-                message = "Sketch curve offset created."
-            } else {
-                message = "Sketch vertex offset created."
+                let message: String
+                if options.mode == .slot {
+                    message = "Slot sketch profile created."
+                } else if vertexHandle == nil {
+                    message = "Sketch curve offset created."
+                } else {
+                    message = "Sketch vertex offset created."
+                }
+                return commandAutomationResult(
+                    message: message,
+                    commandResult: result,
+                    in: session
+                )
             }
-            return commandAutomationResult(
-                message: message,
-                commandResult: result,
-                in: session
-            )
-        case .offsetRegions(let targets, let distance, let options, let combinesRegions):
-            let result = try session.execute(
-                .offsetRegions(
-                    targets: targets,
-                    distance: distance,
-                    options: options,
-                    combinesRegions: combinesRegions
+            return try run()
+        case .offsetRegions:
+            func run() throws -> AutomationResult {
+                guard case .offsetRegions(let targets, let distance, let options, let combinesRegions) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .offsetRegions(
+                        targets: targets,
+                        distance: distance,
+                        options: options,
+                        combinesRegions: combinesRegions
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: combinesRegions ? "Combined sketch regions offset created." : "Sketch regions offset created.",
-                commandResult: result,
-                in: session
-            )
-        case .offsetSketchVertex(let target, let handle, let distance):
-            let result = try session.execute(
-                .offsetSketchVertex(
-                    target: target,
-                    handle: handle,
-                    distance: distance
+                return commandAutomationResult(
+                    message: combinesRegions ? "Combined sketch regions offset created." : "Sketch regions offset created.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Sketch vertex offset created.",
-                commandResult: result,
-                in: session
-            )
+            }
+            return try run()
+        case .offsetSketchVertex:
+            func run() throws -> AutomationResult {
+                guard case .offsetSketchVertex(let target, let handle, let distance) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .offsetSketchVertex(
+                        target: target,
+                        handle: handle,
+                        distance: distance
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Sketch vertex offset created.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -1240,34 +1732,49 @@ public struct AutomationRunner: Sendable {
         in session: EditorSession
     ) throws -> AutomationResult {
         switch command {
-        case .applySketchCornerTreatment(let target, let adjacentTarget, let distance, let treatment):
-            let result = try session.execute(
-                .applySketchCornerTreatment(
-                    target: target,
-                    adjacentTarget: adjacentTarget,
-                    distance: distance,
-                    treatment: treatment
+        case .applySketchCornerTreatment:
+            func run() throws -> AutomationResult {
+                guard case .applySketchCornerTreatment(let target, let adjacentTarget, let distance, let treatment) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .applySketchCornerTreatment(
+                        target: target,
+                        adjacentTarget: adjacentTarget,
+                        distance: distance,
+                        treatment: treatment
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: sketchCornerTreatmentAutomationMessage(treatment),
-                commandResult: result,
-                in: session
-            )
-        case .createSlotSketch(let target, let width):
-            let result = try session.execute(
-                .createSlotSketch(
-                    target: target,
-                    width: width
+                return commandAutomationResult(
+                    message: sketchCornerTreatmentAutomationMessage(treatment),
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Slot sketch profile created.",
-                commandResult: result,
-                in: session
-            )
+            }
+            return try run()
+        case .createSlotSketch:
+            func run() throws -> AutomationResult {
+                guard case .createSlotSketch(let target, let width) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .createSlotSketch(
+                        target: target,
+                        width: width
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Slot sketch profile created.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -1276,93 +1783,138 @@ public struct AutomationRunner: Sendable {
         in session: EditorSession
     ) throws -> AutomationResult {
         switch command {
-        case .offsetBodyFace(let target, let distance):
-            let result = try session.execute(
-                .offsetBodyFace(
-                    target: target,
-                    distance: distance
+        case .offsetBodyFace:
+            func run() throws -> AutomationResult {
+                guard case .offsetBodyFace(let target, let distance) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .offsetBodyFace(
+                        target: target,
+                        distance: distance
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Body face offset applied.",
-                commandResult: result,
-                in: session
-            )
-        case .deleteBodyFaces(let targets):
-            let result = try session.execute(
-                .deleteBodyFaces(targets: targets)
-            )
-            return commandAutomationResult(
-                message: "Body face deletion applied.",
-                commandResult: result,
-                in: session
-            )
-        case .draftBodyFaces(let targets, let neutralTarget, let angle):
-            let result = try session.execute(
-                .draftBodyFaces(
-                    targets: targets,
-                    neutralTarget: neutralTarget,
-                    angle: angle
+                return commandAutomationResult(
+                    message: "Body face offset applied.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Body face draft applied.",
-                commandResult: result,
-                in: session
-            )
-        case .chamferBodyEdges(let targets, let distance):
-            let result = try session.execute(
-                .chamferBodyEdges(
-                    targets: targets,
-                    distance: distance
+            }
+            return try run()
+        case .deleteBodyFaces:
+            func run() throws -> AutomationResult {
+                guard case .deleteBodyFaces(let targets) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .deleteBodyFaces(targets: targets)
                 )
-            )
-            return commandAutomationResult(
-                message: "Body edge chamfer applied.",
-                commandResult: result,
-                in: session
-            )
-        case .filletBodyEdges(let targets, let radius, let segmentCount):
-            let result = try session.execute(
-                .filletBodyEdges(
-                    targets: targets,
-                    radius: radius,
-                    segmentCount: segmentCount
+                return commandAutomationResult(
+                    message: "Body face deletion applied.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Body edge fillet applied.",
-                commandResult: result,
-                in: session
-            )
-        case .moveBodyEdge(let target, let deltaX, let deltaY):
-            let result = try session.execute(
-                .moveBodyEdge(
-                    target: target,
-                    deltaX: deltaX,
-                    deltaY: deltaY
+            }
+            return try run()
+        case .draftBodyFaces:
+            func run() throws -> AutomationResult {
+                guard case .draftBodyFaces(let targets, let neutralTarget, let angle) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .draftBodyFaces(
+                        targets: targets,
+                        neutralTarget: neutralTarget,
+                        angle: angle
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Body edge moved.",
-                commandResult: result,
-                in: session
-            )
-        case .moveBodyVertex(let target, let deltaX, let deltaY):
-            let result = try session.execute(
-                .moveBodyVertex(
-                    target: target,
-                    deltaX: deltaX,
-                    deltaY: deltaY
+                return commandAutomationResult(
+                    message: "Body face draft applied.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Body vertex moved.",
-                commandResult: result,
-                in: session
-            )
+            }
+            return try run()
+        case .chamferBodyEdges:
+            func run() throws -> AutomationResult {
+                guard case .chamferBodyEdges(let targets, let distance) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .chamferBodyEdges(
+                        targets: targets,
+                        distance: distance
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Body edge chamfer applied.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .filletBodyEdges:
+            func run() throws -> AutomationResult {
+                guard case .filletBodyEdges(let targets, let radius, let segmentCount) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .filletBodyEdges(
+                        targets: targets,
+                        radius: radius,
+                        segmentCount: segmentCount
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Body edge fillet applied.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .moveBodyEdge:
+            func run() throws -> AutomationResult {
+                guard case .moveBodyEdge(let target, let deltaX, let deltaY) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .moveBodyEdge(
+                        target: target,
+                        deltaX: deltaX,
+                        deltaY: deltaY
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Body edge moved.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .moveBodyVertex:
+            func run() throws -> AutomationResult {
+                guard case .moveBodyVertex(let target, let deltaX, let deltaY) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .moveBodyVertex(
+                        target: target,
+                        deltaX: deltaX,
+                        deltaY: deltaY
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Body vertex moved.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -1371,116 +1923,167 @@ public struct AutomationRunner: Sendable {
         in session: EditorSession
     ) throws -> AutomationResult {
         switch command {
-        case .moveSketchEntityPoint(let target, let handle, let deltaX, let deltaY):
-            let result = try session.execute(
-                .moveSketchEntityPoint(
-                    target: target,
-                    handle: handle,
-                    deltaX: deltaX,
-                    deltaY: deltaY
+        case .moveSketchEntityPoint:
+            func run() throws -> AutomationResult {
+                guard case .moveSketchEntityPoint(let target, let handle, let deltaX, let deltaY) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .moveSketchEntityPoint(
+                        target: target,
+                        handle: handle,
+                        deltaX: deltaX,
+                        deltaY: deltaY
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Sketch entity point moved.",
-                commandResult: result,
-                in: session
-            )
-        case .moveSketchSplineControlPoint(let target, let controlPointIndex, let deltaX, let deltaY):
-            let result = try session.execute(
-                .moveSketchSplineControlPoint(
-                    target: target,
-                    controlPointIndex: controlPointIndex,
-                    deltaX: deltaX,
-                    deltaY: deltaY
+                return commandAutomationResult(
+                    message: "Sketch entity point moved.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Sketch spline control point moved.",
-                commandResult: result,
-                in: session
-            )
-        case .alignSketchVertex(let target, let reference, let options):
-            let result = try session.execute(
-                .alignSketchVertex(
-                    target: target,
-                    reference: reference,
-                    options: options
+            }
+            return try run()
+        case .moveSketchSplineControlPoint:
+            func run() throws -> AutomationResult {
+                guard case .moveSketchSplineControlPoint(let target, let controlPointIndex, let deltaX, let deltaY) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .moveSketchSplineControlPoint(
+                        target: target,
+                        controlPointIndex: controlPointIndex,
+                        deltaX: deltaX,
+                        deltaY: deltaY
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Sketch vertex aligned.",
-                commandResult: result,
-                in: session
-            )
-        case .slideSketchSplineControlPoints(let target, let controlPointIndexes, let direction, let distance):
-            let result = try session.execute(
-                .slideSketchSplineControlPoints(
-                    target: target,
-                    controlPointIndexes: controlPointIndexes,
-                    direction: direction,
-                    distance: distance
+                return commandAutomationResult(
+                    message: "Sketch spline control point moved.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Sketch spline control points slid.",
-                commandResult: result,
-                in: session
-            )
-        case .insertSketchSplineControlPoint(let target, let fraction):
-            let result = try session.execute(
-                .insertSketchSplineControlPoint(
-                    target: target,
-                    fraction: fraction
+            }
+            return try run()
+        case .alignSketchVertex:
+            func run() throws -> AutomationResult {
+                guard case .alignSketchVertex(let target, let reference, let options) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .alignSketchVertex(
+                        target: target,
+                        reference: reference,
+                        options: options
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Sketch spline control point inserted.",
-                commandResult: result,
-                in: session
-            )
-        case .setSketchCircleParameters(let target, let center, let radius):
-            let result = try session.execute(
-                .setSketchCircleParameters(
-                    target: target,
-                    center: center,
-                    radius: radius
+                return commandAutomationResult(
+                    message: "Sketch vertex aligned.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Sketch circle parameters updated.",
-                commandResult: result,
-                in: session
-            )
-        case .setSketchArcParameters(let target, let center, let radius, let startAngle, let endAngle):
-            let result = try session.execute(
-                .setSketchArcParameters(
-                    target: target,
-                    center: center,
-                    radius: radius,
-                    startAngle: startAngle,
-                    endAngle: endAngle
+            }
+            return try run()
+        case .slideSketchSplineControlPoints:
+            func run() throws -> AutomationResult {
+                guard case .slideSketchSplineControlPoints(let target, let controlPointIndexes, let direction, let distance) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .slideSketchSplineControlPoints(
+                        target: target,
+                        controlPointIndexes: controlPointIndexes,
+                        direction: direction,
+                        distance: distance
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Sketch arc parameters updated.",
-                commandResult: result,
-                in: session
-            )
-        case .setSketchEntityDimension(let target, let kind, let value):
-            let result = try session.execute(
-                .setSketchEntityDimension(
-                    target: target,
-                    kind: kind,
-                    value: value
+                return commandAutomationResult(
+                    message: "Sketch spline control points slid.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Sketch entity dimension updated.",
-                commandResult: result,
-                in: session
-            )
+            }
+            return try run()
+        case .insertSketchSplineControlPoint:
+            func run() throws -> AutomationResult {
+                guard case .insertSketchSplineControlPoint(let target, let fraction) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .insertSketchSplineControlPoint(
+                        target: target,
+                        fraction: fraction
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Sketch spline control point inserted.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .setSketchCircleParameters:
+            func run() throws -> AutomationResult {
+                guard case .setSketchCircleParameters(let target, let center, let radius) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .setSketchCircleParameters(
+                        target: target,
+                        center: center,
+                        radius: radius
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Sketch circle parameters updated.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .setSketchArcParameters:
+            func run() throws -> AutomationResult {
+                guard case .setSketchArcParameters(let target, let center, let radius, let startAngle, let endAngle) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .setSketchArcParameters(
+                        target: target,
+                        center: center,
+                        radius: radius,
+                        startAngle: startAngle,
+                        endAngle: endAngle
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Sketch arc parameters updated.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .setSketchEntityDimension:
+            func run() throws -> AutomationResult {
+                guard case .setSketchEntityDimension(let target, let kind, let value) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .setSketchEntityDimension(
+                        target: target,
+                        kind: kind,
+                        value: value
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Sketch entity dimension updated.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -1489,119 +2092,182 @@ public struct AutomationRunner: Sendable {
         in session: EditorSession
     ) throws -> AutomationResult {
         switch command {
-        case .convertSketchLineToArc(let target, let sagitta):
-            let result = try session.execute(
-                .convertSketchLineToArc(
-                    target: target,
-                    sagitta: sagitta
+        case .convertSketchLineToArc:
+            func run() throws -> AutomationResult {
+                guard case .convertSketchLineToArc(let target, let sagitta) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .convertSketchLineToArc(
+                        target: target,
+                        sagitta: sagitta
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Sketch line converted to an arc.",
-                commandResult: result,
-                in: session
-            )
-        case .convertSketchLineToSpline(let target):
-            let result = try session.execute(
-                .convertSketchLineToSpline(target: target)
-            )
-            return commandAutomationResult(
-                message: "Sketch line converted to a spline.",
-                commandResult: result,
-                in: session
-            )
-        case .reverseSketchCurve(let target):
-            let result = try session.execute(
-                .reverseSketchCurve(target: target)
-            )
-            return commandAutomationResult(
-                message: "Sketch curve direction reversed.",
-                commandResult: result,
-                in: session
-            )
-        case .rebuildSketchCurve(let target, let options):
-            let result = try session.execute(
-                .rebuildSketchCurve(
-                    target: target,
-                    options: options
+                return commandAutomationResult(
+                    message: "Sketch line converted to an arc.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Sketch curve rebuilt.",
-                commandResult: result,
-                in: session
-            )
-        case .extendSketchCurve(let target, let distance, let shape):
-            let result = try session.execute(
-                .extendSketchCurve(
-                    target: target,
-                    distance: distance,
-                    shape: shape
+            }
+            return try run()
+        case .convertSketchLineToSpline:
+            func run() throws -> AutomationResult {
+                guard case .convertSketchLineToSpline(let target) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .convertSketchLineToSpline(target: target)
                 )
-            )
-            return commandAutomationResult(
-                message: "Sketch curve extended.",
-                commandResult: result,
-                in: session
-            )
-        case .joinSketchCurves(let target, let adjacentTarget, let continuity):
-            let result = try session.execute(
-                .joinSketchCurves(
-                    target: target,
-                    adjacentTarget: adjacentTarget,
-                    continuity: continuity
+                return commandAutomationResult(
+                    message: "Sketch line converted to a spline.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Sketch curves joined.",
-                commandResult: result,
-                in: session
-            )
-        case .unjoinSketchCurve(let target):
-            let result = try session.execute(
-                .unjoinSketchCurve(target: target)
-            )
-            return commandAutomationResult(
-                message: "Sketch curve unjoined.",
-                commandResult: result,
-                in: session
-            )
-        case .splitSketchCurve(let target, let fraction):
-            let result = try session.execute(
-                .splitSketchCurve(
-                    target: target,
-                    fraction: fraction
+            }
+            return try run()
+        case .reverseSketchCurve:
+            func run() throws -> AutomationResult {
+                guard case .reverseSketchCurve(let target) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .reverseSketchCurve(target: target)
                 )
-            )
-            return commandAutomationResult(
-                message: "Sketch curve segment split.",
-                commandResult: result,
-                in: session
-            )
-        case .trimSketchCurveSegment(let target):
-            let result = try session.execute(
-                .trimSketchCurveSegment(target: target)
-            )
-            return commandAutomationResult(
-                message: "Sketch curve segment trimmed.",
-                commandResult: result,
-                in: session
-            )
-        case .cutSketchCurve(let target, let cutter, let options):
-            let result = try session.execute(
-                .cutSketchCurve(
-                    target: target,
-                    cutter: cutter,
-                    options: options
+                return commandAutomationResult(
+                    message: "Sketch curve direction reversed.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Cut Curve applied.",
-                commandResult: result,
-                in: session
-            )
+            }
+            return try run()
+        case .rebuildSketchCurve:
+            func run() throws -> AutomationResult {
+                guard case .rebuildSketchCurve(let target, let options) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .rebuildSketchCurve(
+                        target: target,
+                        options: options
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Sketch curve rebuilt.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .extendSketchCurve:
+            func run() throws -> AutomationResult {
+                guard case .extendSketchCurve(let target, let distance, let shape) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .extendSketchCurve(
+                        target: target,
+                        distance: distance,
+                        shape: shape
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Sketch curve extended.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .joinSketchCurves:
+            func run() throws -> AutomationResult {
+                guard case .joinSketchCurves(let target, let adjacentTarget, let continuity) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .joinSketchCurves(
+                        target: target,
+                        adjacentTarget: adjacentTarget,
+                        continuity: continuity
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Sketch curves joined.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .unjoinSketchCurve:
+            func run() throws -> AutomationResult {
+                guard case .unjoinSketchCurve(let target) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .unjoinSketchCurve(target: target)
+                )
+                return commandAutomationResult(
+                    message: "Sketch curve unjoined.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .splitSketchCurve:
+            func run() throws -> AutomationResult {
+                guard case .splitSketchCurve(let target, let fraction) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .splitSketchCurve(
+                        target: target,
+                        fraction: fraction
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Sketch curve segment split.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .trimSketchCurveSegment:
+            func run() throws -> AutomationResult {
+                guard case .trimSketchCurveSegment(let target) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .trimSketchCurveSegment(target: target)
+                )
+                return commandAutomationResult(
+                    message: "Sketch curve segment trimmed.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .cutSketchCurve:
+            func run() throws -> AutomationResult {
+                guard case .cutSketchCurve(let target, let cutter, let options) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .cutSketchCurve(
+                        target: target,
+                        cutter: cutter,
+                        options: options
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Cut Curve applied.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -1620,7 +2286,10 @@ public struct AutomationRunner: Sendable {
              .createBoolean,
              .createPolySplineSurface,
              .createBSplineSurface:
-            try executeFeatureModelingCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeFeatureModelingCommand(command, in: session)
+            }
+            return try run()
         case .setSurfaceFrameDisplay,
              .movePolySplineSurfaceVertex,
              .moveSurfaceControlPoint,
@@ -1630,7 +2299,10 @@ public struct AutomationRunner: Sendable {
              .insertSurfaceKnot,
              .splitSurfaceSpan,
              .setSurfaceKnotMultiplicity:
-            try executeSurfaceControlCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeSurfaceControlCommand(command, in: session)
+            }
+            return try run()
         case .setSurfaceTrimDomain,
              .setSurfaceTrimLoops,
              .moveSurfaceTrimEndpoint,
@@ -1639,18 +2311,30 @@ public struct AutomationRunner: Sendable {
              .insertSurfaceTrimKnot,
              .setSurfaceTrimKnotValue,
              .setSurfaceTrimKnotMultiplicity:
-            try executeSurfaceTrimCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeSurfaceTrimCommand(command, in: session)
+            }
+            return try run()
         case .matchSurfaceBoundaryContinuity,
              .slidePolySplineSurfaceVertices,
              .slideSurfaceControlPoints:
-            try executeSurfaceContinuityCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executeSurfaceContinuityCommand(command, in: session)
+            }
+            return try run()
         case .createExtrudedRectangle,
              .createExtrudedRectangleFromCorners,
              .createExtrudedCircle,
              .validateDocument:
-            try executePrimitiveModelingCommand(command, in: session)
+            func run() throws -> AutomationResult {
+                try executePrimitiveModelingCommand(command, in: session)
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -1659,145 +2343,208 @@ public struct AutomationRunner: Sendable {
         in session: EditorSession
     ) throws -> AutomationResult {
         switch command {
-        case .extrudeProfile(let name, let profile, let distance, let direction):
-            let result = try session.execute(
-                .extrudeProfile(
-                    name: name,
-                    profile: profile,
-                    distance: distance,
-                    direction: direction
+        case .extrudeProfile:
+            func run() throws -> AutomationResult {
+                guard case .extrudeProfile(let name, let profile, let distance, let direction) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .extrudeProfile(
+                        name: name,
+                        profile: profile,
+                        distance: distance,
+                        direction: direction
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Profile extrude \(name) created.",
-                commandResult: result,
-                in: session
-            )
-        case .setExtrudeDistance(let featureID, let distance):
-            let result = try session.execute(
-                .setExtrudeDistance(
-                    featureID: featureID,
-                    distance: distance
+                return commandAutomationResult(
+                    message: "Profile extrude \(name) created.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Extrude distance updated.",
-                commandResult: result,
-                in: session
-            )
-        case .setCubeDimensions(let featureID, let sizeX, let sizeY, let sizeZ):
-            let result = try session.execute(
-                .setCubeDimensions(
-                    featureID: featureID,
-                    sizeX: sizeX,
-                    sizeY: sizeY,
-                    sizeZ: sizeZ
+            }
+            return try run()
+        case .setExtrudeDistance:
+            func run() throws -> AutomationResult {
+                guard case .setExtrudeDistance(let featureID, let distance) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .setExtrudeDistance(
+                        featureID: featureID,
+                        distance: distance
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Cube dimensions updated.",
-                commandResult: result,
-                in: session
-            )
-        case .setCylinderDimensions(let featureID, let radius, let sizeY):
-            let result = try session.execute(
-                .setCylinderDimensions(
-                    featureID: featureID,
-                    radius: radius,
-                    sizeY: sizeY
+                return commandAutomationResult(
+                    message: "Extrude distance updated.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Cylinder dimensions updated.",
-                commandResult: result,
-                in: session
-            )
-        case .createRevolve(let name, let profile, let axis, let angle):
-            let result = try session.execute(
-                .createRevolve(
-                    name: name,
-                    profile: profile,
-                    axis: axis,
-                    angle: angle
+            }
+            return try run()
+        case .setCubeDimensions:
+            func run() throws -> AutomationResult {
+                guard case .setCubeDimensions(let featureID, let sizeX, let sizeY, let sizeZ) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .setCubeDimensions(
+                        featureID: featureID,
+                        sizeX: sizeX,
+                        sizeY: sizeY,
+                        sizeZ: sizeZ
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Revolve \(name) source created.",
-                commandResult: result,
-                in: session
-            )
-        case .createSweep(let name, let sections, let path, let guides, let targets, let options):
-            let result = try session.execute(
-                .createSweep(
-                    name: name,
-                    sections: sections,
-                    path: path,
-                    guides: guides,
-                    targets: targets,
-                    options: options
+                return commandAutomationResult(
+                    message: "Cube dimensions updated.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Sweep \(name) source created.",
-                commandResult: result,
-                in: session
-            )
-        case .createLoft(let name, let sections, let guides, let options):
-            let result = try session.execute(
-                .createLoft(
-                    name: name,
-                    sections: sections,
-                    guides: guides,
-                    options: options
+            }
+            return try run()
+        case .setCylinderDimensions:
+            func run() throws -> AutomationResult {
+                guard case .setCylinderDimensions(let featureID, let radius, let sizeY) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .setCylinderDimensions(
+                        featureID: featureID,
+                        radius: radius,
+                        sizeY: sizeY
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Loft \(name) source created.",
-                commandResult: result,
-                in: session
-            )
-        case .createBoolean(let name, let targets, let tool, let operation, let keepTools):
-            let result = try session.execute(
-                .createBoolean(
-                    name: name,
-                    targets: targets,
-                    tool: tool,
-                    operation: operation,
-                    keepTools: keepTools
+                return commandAutomationResult(
+                    message: "Cylinder dimensions updated.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Boolean \(name) source created.",
-                commandResult: result,
-                in: session
-            )
-        case .createPolySplineSurface(let name, let sourceMesh, let options):
-            let result = try session.execute(
-                .createPolySplineSurface(
-                    name: name,
-                    sourceMesh: sourceMesh,
-                    options: options
+            }
+            return try run()
+        case .createRevolve:
+            func run() throws -> AutomationResult {
+                guard case .createRevolve(let name, let profile, let axis, let angle) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .createRevolve(
+                        name: name,
+                        profile: profile,
+                        axis: axis,
+                        angle: angle
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "PolySpline surface \(name) created.",
-                commandResult: result,
-                in: session
-            )
-        case .createBSplineSurface(let name, let surface):
-            let result = try session.execute(
-                .createBSplineSurface(
-                    name: name,
-                    surface: surface
+                return commandAutomationResult(
+                    message: "Revolve \(name) source created.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "B-spline surface \(name) created.",
-                commandResult: result,
-                in: session
-            )
+            }
+            return try run()
+        case .createSweep:
+            func run() throws -> AutomationResult {
+                guard case .createSweep(let name, let sections, let path, let guides, let targets, let options) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .createSweep(
+                        name: name,
+                        sections: sections,
+                        path: path,
+                        guides: guides,
+                        targets: targets,
+                        options: options
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Sweep \(name) source created.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .createLoft:
+            func run() throws -> AutomationResult {
+                guard case .createLoft(let name, let sections, let guides, let options) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .createLoft(
+                        name: name,
+                        sections: sections,
+                        guides: guides,
+                        options: options
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Loft \(name) source created.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .createBoolean:
+            func run() throws -> AutomationResult {
+                guard case .createBoolean(let name, let targets, let tool, let operation, let keepTools) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .createBoolean(
+                        name: name,
+                        targets: targets,
+                        tool: tool,
+                        operation: operation,
+                        keepTools: keepTools
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Boolean \(name) source created.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .createPolySplineSurface:
+            func run() throws -> AutomationResult {
+                guard case .createPolySplineSurface(let name, let sourceMesh, let options) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .createPolySplineSurface(
+                        name: name,
+                        sourceMesh: sourceMesh,
+                        options: options
+                    )
+                )
+                return commandAutomationResult(
+                    message: "PolySpline surface \(name) created.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .createBSplineSurface:
+            func run() throws -> AutomationResult {
+                guard case .createBSplineSurface(let name, let surface) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .createBSplineSurface(
+                        name: name,
+                        surface: surface
+                    )
+                )
+                return commandAutomationResult(
+                    message: "B-spline surface \(name) created.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -1806,115 +2553,166 @@ public struct AutomationRunner: Sendable {
         in session: EditorSession
     ) throws -> AutomationResult {
         switch command {
-        case .setSurfaceFrameDisplay(let query, let isVisible):
-            let result = try session.execute(
-                WorkspaceCommand.setSurfaceFrameDisplay(
-                    query: query,
-                    isVisible: isVisible
+        case .setSurfaceFrameDisplay:
+            func run() throws -> AutomationResult {
+                guard case .setSurfaceFrameDisplay(let query, let isVisible) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    WorkspaceCommand.setSurfaceFrameDisplay(
+                        query: query,
+                        isVisible: isVisible
+                    )
                 )
-            )
-            let visibility = isVisible.map { $0 ? "visible" : "hidden" } ?? "toggled"
-            return workspaceAutomationResult(
-                message: "Surface frame display \(visibility).",
-                commandResult: result,
-                in: session
-            )
-        case .movePolySplineSurfaceVertex(let target, let deltaX, let deltaY, let deltaZ):
-            let result = try session.execute(
-                .movePolySplineSurfaceVertex(
-                    target: target,
-                    deltaX: deltaX,
-                    deltaY: deltaY,
-                    deltaZ: deltaZ
+                let visibility = isVisible.map { $0 ? "visible" : "hidden" } ?? "toggled"
+                return workspaceAutomationResult(
+                    message: "Surface frame display \(visibility).",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "PolySpline surface vertex moved.",
-                commandResult: result,
-                in: session
-            )
-        case .moveSurfaceControlPoint(let target, let deltaX, let deltaY, let deltaZ):
-            let result = try session.execute(
-                .moveSurfaceControlPoint(
-                    target: target,
-                    deltaX: deltaX,
-                    deltaY: deltaY,
-                    deltaZ: deltaZ
+            }
+            return try run()
+        case .movePolySplineSurfaceVertex:
+            func run() throws -> AutomationResult {
+                guard case .movePolySplineSurfaceVertex(let target, let deltaX, let deltaY, let deltaZ) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .movePolySplineSurfaceVertex(
+                        target: target,
+                        deltaX: deltaX,
+                        deltaY: deltaY,
+                        deltaZ: deltaZ
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Surface control point moved.",
-                commandResult: result,
-                in: session
-            )
-        case .moveSurfaceControlPointsInFrame(
-            let targets,
-            let frame,
-            let uDistance,
-            let vDistance,
-            let normalDistance
-        ):
-            let result = try session.execute(
-                .moveSurfaceControlPointsInFrame(
-                    targets: targets,
-                    frame: frame,
-                    uDistance: uDistance,
-                    vDistance: vDistance,
-                    normalDistance: normalDistance
+                return commandAutomationResult(
+                    message: "PolySpline surface vertex moved.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Surface control points moved in frame.",
-                commandResult: result,
-                in: session
-            )
-        case .setSurfaceControlPointWeight(let target, let weight):
-            let result = try session.execute(
-                .setSurfaceControlPointWeight(target: target, weight: weight)
-            )
-            return commandAutomationResult(
-                message: "Surface control point weight updated.",
-                commandResult: result,
-                in: session
-            )
-        case .setSurfaceKnotValue(let target, let value):
-            let result = try session.execute(
-                .setSurfaceKnotValue(target: target, value: value)
-            )
-            return commandAutomationResult(
-                message: "Surface knot value updated.",
-                commandResult: result,
-                in: session
-            )
-        case .insertSurfaceKnot(let target, let value):
-            let result = try session.execute(
-                .insertSurfaceKnot(target: target, value: value)
-            )
-            return commandAutomationResult(
-                message: "Surface knot inserted.",
-                commandResult: result,
-                in: session
-            )
-        case .splitSurfaceSpan(let target, let fraction):
-            let result = try session.execute(
-                .splitSurfaceSpan(target: target, fraction: fraction)
-            )
-            return commandAutomationResult(
-                message: "Surface span split.",
-                commandResult: result,
-                in: session
-            )
-        case .setSurfaceKnotMultiplicity(let target, let multiplicity):
-            let result = try session.execute(
-                .setSurfaceKnotMultiplicity(target: target, multiplicity: multiplicity)
-            )
-            return commandAutomationResult(
-                message: "Surface knot multiplicity updated.",
-                commandResult: result,
-                in: session
-            )
+            }
+            return try run()
+        case .moveSurfaceControlPoint:
+            func run() throws -> AutomationResult {
+                guard case .moveSurfaceControlPoint(let target, let deltaX, let deltaY, let deltaZ) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .moveSurfaceControlPoint(
+                        target: target,
+                        deltaX: deltaX,
+                        deltaY: deltaY,
+                        deltaZ: deltaZ
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Surface control point moved.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .moveSurfaceControlPointsInFrame:
+            func run() throws -> AutomationResult {
+                guard case .moveSurfaceControlPointsInFrame( let targets, let frame, let uDistance, let vDistance, let normalDistance ) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .moveSurfaceControlPointsInFrame(
+                        targets: targets,
+                        frame: frame,
+                        uDistance: uDistance,
+                        vDistance: vDistance,
+                        normalDistance: normalDistance
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Surface control points moved in frame.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .setSurfaceControlPointWeight:
+            func run() throws -> AutomationResult {
+                guard case .setSurfaceControlPointWeight(let target, let weight) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .setSurfaceControlPointWeight(target: target, weight: weight)
+                )
+                return commandAutomationResult(
+                    message: "Surface control point weight updated.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .setSurfaceKnotValue:
+            func run() throws -> AutomationResult {
+                guard case .setSurfaceKnotValue(let target, let value) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .setSurfaceKnotValue(target: target, value: value)
+                )
+                return commandAutomationResult(
+                    message: "Surface knot value updated.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .insertSurfaceKnot:
+            func run() throws -> AutomationResult {
+                guard case .insertSurfaceKnot(let target, let value) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .insertSurfaceKnot(target: target, value: value)
+                )
+                return commandAutomationResult(
+                    message: "Surface knot inserted.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .splitSurfaceSpan:
+            func run() throws -> AutomationResult {
+                guard case .splitSurfaceSpan(let target, let fraction) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .splitSurfaceSpan(target: target, fraction: fraction)
+                )
+                return commandAutomationResult(
+                    message: "Surface span split.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .setSurfaceKnotMultiplicity:
+            func run() throws -> AutomationResult {
+                guard case .setSurfaceKnotMultiplicity(let target, let multiplicity) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .setSurfaceKnotMultiplicity(target: target, multiplicity: multiplicity)
+                )
+                return commandAutomationResult(
+                    message: "Surface knot multiplicity updated.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -1923,120 +2721,165 @@ public struct AutomationRunner: Sendable {
         in session: EditorSession
     ) throws -> AutomationResult {
         switch command {
-        case .setSurfaceTrimDomain(
-            let target,
-            let uLowerBound,
-            let uUpperBound,
-            let vLowerBound,
-            let vUpperBound
-        ):
-            let result = try session.execute(
-                .setSurfaceTrimDomain(
-                    target: target,
-                    uLowerBound: uLowerBound,
-                    uUpperBound: uUpperBound,
-                    vLowerBound: vLowerBound,
-                    vUpperBound: vUpperBound
+        case .setSurfaceTrimDomain:
+            func run() throws -> AutomationResult {
+                guard case .setSurfaceTrimDomain( let target, let uLowerBound, let uUpperBound, let vLowerBound, let vUpperBound ) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .setSurfaceTrimDomain(
+                        target: target,
+                        uLowerBound: uLowerBound,
+                        uUpperBound: uUpperBound,
+                        vLowerBound: vLowerBound,
+                        vUpperBound: vUpperBound
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Surface trim domain updated.",
-                commandResult: result,
-                in: session
-            )
-        case .setSurfaceTrimLoops(let target, let trimLoops):
-            let result = try session.execute(
-                .setSurfaceTrimLoops(
-                    target: target,
-                    trimLoops: trimLoops
+                return commandAutomationResult(
+                    message: "Surface trim domain updated.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Surface trim loops updated.",
-                commandResult: result,
-                in: session
-            )
-        case .moveSurfaceTrimEndpoint(let target, let endpoint, let u, let v):
-            let result = try session.execute(
-                .moveSurfaceTrimEndpoint(
-                    target: target,
-                    endpoint: endpoint,
-                    u: u,
-                    v: v
+            }
+            return try run()
+        case .setSurfaceTrimLoops:
+            func run() throws -> AutomationResult {
+                guard case .setSurfaceTrimLoops(let target, let trimLoops) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .setSurfaceTrimLoops(
+                        target: target,
+                        trimLoops: trimLoops
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Surface trim endpoint moved.",
-                commandResult: result,
-                in: session
-            )
-        case .moveSurfaceTrimControlPoint(let target, let controlPointIndex, let u, let v):
-            let result = try session.execute(
-                .moveSurfaceTrimControlPoint(
-                    target: target,
-                    controlPointIndex: controlPointIndex,
-                    u: u,
-                    v: v
+                return commandAutomationResult(
+                    message: "Surface trim loops updated.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Surface trim control point moved.",
-                commandResult: result,
-                in: session
-            )
-        case .setSurfaceTrimControlPointWeight(let target, let controlPointIndex, let weight):
-            let result = try session.execute(
-                .setSurfaceTrimControlPointWeight(
-                    target: target,
-                    controlPointIndex: controlPointIndex,
-                    weight: weight
+            }
+            return try run()
+        case .moveSurfaceTrimEndpoint:
+            func run() throws -> AutomationResult {
+                guard case .moveSurfaceTrimEndpoint(let target, let endpoint, let u, let v) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .moveSurfaceTrimEndpoint(
+                        target: target,
+                        endpoint: endpoint,
+                        u: u,
+                        v: v
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Surface trim control point weight updated.",
-                commandResult: result,
-                in: session
-            )
-        case .insertSurfaceTrimKnot(let target, let value):
-            let result = try session.execute(
-                .insertSurfaceTrimKnot(
-                    target: target,
-                    value: value
+                return commandAutomationResult(
+                    message: "Surface trim endpoint moved.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Surface trim p-curve knot inserted.",
-                commandResult: result,
-                in: session
-            )
-        case .setSurfaceTrimKnotValue(let target, let knotIndex, let value):
-            let result = try session.execute(
-                .setSurfaceTrimKnotValue(
-                    target: target,
-                    knotIndex: knotIndex,
-                    value: value
+            }
+            return try run()
+        case .moveSurfaceTrimControlPoint:
+            func run() throws -> AutomationResult {
+                guard case .moveSurfaceTrimControlPoint(let target, let controlPointIndex, let u, let v) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .moveSurfaceTrimControlPoint(
+                        target: target,
+                        controlPointIndex: controlPointIndex,
+                        u: u,
+                        v: v
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Surface trim p-curve knot value updated.",
-                commandResult: result,
-                in: session
-            )
-        case .setSurfaceTrimKnotMultiplicity(let target, let knotIndex, let multiplicity):
-            let result = try session.execute(
-                .setSurfaceTrimKnotMultiplicity(
-                    target: target,
-                    knotIndex: knotIndex,
-                    multiplicity: multiplicity
+                return commandAutomationResult(
+                    message: "Surface trim control point moved.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Surface trim p-curve knot multiplicity updated.",
-                commandResult: result,
-                in: session
-            )
+            }
+            return try run()
+        case .setSurfaceTrimControlPointWeight:
+            func run() throws -> AutomationResult {
+                guard case .setSurfaceTrimControlPointWeight(let target, let controlPointIndex, let weight) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .setSurfaceTrimControlPointWeight(
+                        target: target,
+                        controlPointIndex: controlPointIndex,
+                        weight: weight
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Surface trim control point weight updated.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .insertSurfaceTrimKnot:
+            func run() throws -> AutomationResult {
+                guard case .insertSurfaceTrimKnot(let target, let value) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .insertSurfaceTrimKnot(
+                        target: target,
+                        value: value
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Surface trim p-curve knot inserted.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .setSurfaceTrimKnotValue:
+            func run() throws -> AutomationResult {
+                guard case .setSurfaceTrimKnotValue(let target, let knotIndex, let value) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .setSurfaceTrimKnotValue(
+                        target: target,
+                        knotIndex: knotIndex,
+                        value: value
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Surface trim p-curve knot value updated.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .setSurfaceTrimKnotMultiplicity:
+            func run() throws -> AutomationResult {
+                guard case .setSurfaceTrimKnotMultiplicity(let target, let knotIndex, let multiplicity) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .setSurfaceTrimKnotMultiplicity(
+                        target: target,
+                        knotIndex: knotIndex,
+                        multiplicity: multiplicity
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Surface trim p-curve knot multiplicity updated.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -2045,55 +2888,70 @@ public struct AutomationRunner: Sendable {
         in session: EditorSession
     ) throws -> AutomationResult {
         switch command {
-        case .matchSurfaceBoundaryContinuity(
-            let target,
-            let reference,
-            let level,
-            let matchSide,
-            let referenceDirection
-        ):
-            let result = try session.execute(
-                .matchSurfaceBoundaryContinuity(
-                    target: target,
-                    reference: reference,
-                    level: level,
-                    matchSide: matchSide,
-                    referenceDirection: referenceDirection
+        case .matchSurfaceBoundaryContinuity:
+            func run() throws -> AutomationResult {
+                guard case .matchSurfaceBoundaryContinuity( let target, let reference, let level, let matchSide, let referenceDirection ) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .matchSurfaceBoundaryContinuity(
+                        target: target,
+                        reference: reference,
+                        level: level,
+                        matchSide: matchSide,
+                        referenceDirection: referenceDirection
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Surface boundary continuity matched.",
-                commandResult: result,
-                in: session
-            )
-        case .slidePolySplineSurfaceVertices(let targets, let direction, let distance):
-            let result = try session.execute(
-                .slidePolySplineSurfaceVertices(
-                    targets: targets,
-                    direction: direction,
-                    distance: distance
+                return commandAutomationResult(
+                    message: "Surface boundary continuity matched.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "PolySpline surface vertices slid.",
-                commandResult: result,
-                in: session
-            )
-        case .slideSurfaceControlPoints(let targets, let direction, let distance):
-            let result = try session.execute(
-                .slideSurfaceControlPoints(
-                    targets: targets,
-                    direction: direction,
-                    distance: distance
+            }
+            return try run()
+        case .slidePolySplineSurfaceVertices:
+            func run() throws -> AutomationResult {
+                guard case .slidePolySplineSurfaceVertices(let targets, let direction, let distance) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .slidePolySplineSurfaceVertices(
+                        targets: targets,
+                        direction: direction,
+                        distance: distance
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Surface control points slid.",
-                commandResult: result,
-                in: session
-            )
+                return commandAutomationResult(
+                    message: "PolySpline surface vertices slid.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .slideSurfaceControlPoints:
+            func run() throws -> AutomationResult {
+                guard case .slideSurfaceControlPoints(let targets, let direction, let distance) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let result = try session.execute(
+                    .slideSurfaceControlPoints(
+                        targets: targets,
+                        direction: direction,
+                        distance: distance
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Surface control points slid.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 
@@ -2102,73 +2960,90 @@ public struct AutomationRunner: Sendable {
         in session: EditorSession
     ) throws -> AutomationResult {
         switch command {
-        case .createExtrudedRectangle(let name, let plane, let width, let height, let depth, let direction):
-            let resolvedPlane = try session.resolveSketchPlane(plane)
-            let result = try session.execute(
-                .createExtrudedRectangle(
-                    name: name,
-                    plane: resolvedPlane,
-                    width: width,
-                    height: height,
-                    depth: depth,
-                    direction: direction
+        case .createExtrudedRectangle:
+            func run() throws -> AutomationResult {
+                guard case .createExtrudedRectangle(let name, let plane, let width, let height, let depth, let direction) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let resolvedPlane = try session.resolveSketchPlane(plane)
+                let result = try session.execute(
+                    .createExtrudedRectangle(
+                        name: name,
+                        plane: resolvedPlane,
+                        width: width,
+                        height: height,
+                        depth: depth,
+                        direction: direction
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Extruded rectangle \(name) created.",
-                commandResult: result,
-                in: session
-            )
-        case .createExtrudedRectangleFromCorners(
-            let name,
-            let plane,
-            let firstCorner,
-            let oppositeCorner,
-            let depth,
-            let direction
-        ):
-            let resolvedPlane = try session.resolveSketchPlane(plane)
-            let result = try session.execute(
-                .createExtrudedRectangleFromCorners(
-                    name: name,
-                    plane: resolvedPlane,
-                    firstCorner: firstCorner,
-                    oppositeCorner: oppositeCorner,
-                    depth: depth,
-                    direction: direction
+                return commandAutomationResult(
+                    message: "Extruded rectangle \(name) created.",
+                    commandResult: result,
+                    in: session
                 )
-            )
-            return commandAutomationResult(
-                message: "Extruded rectangle \(name) created.",
-                commandResult: result,
-                in: session
-            )
-        case .createExtrudedCircle(let name, let plane, let center, let radius, let depth, let direction):
-            let resolvedPlane = try session.resolveSketchPlane(plane)
-            let result = try session.execute(
-                .createExtrudedCircle(
-                    name: name,
-                    plane: resolvedPlane,
-                    center: center,
-                    radius: radius,
-                    depth: depth,
-                    direction: direction
+            }
+            return try run()
+        case .createExtrudedRectangleFromCorners:
+            func run() throws -> AutomationResult {
+                guard case .createExtrudedRectangleFromCorners( let name, let plane, let firstCorner, let oppositeCorner, let depth, let direction ) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let resolvedPlane = try session.resolveSketchPlane(plane)
+                let result = try session.execute(
+                    .createExtrudedRectangleFromCorners(
+                        name: name,
+                        plane: resolvedPlane,
+                        firstCorner: firstCorner,
+                        oppositeCorner: oppositeCorner,
+                        depth: depth,
+                        direction: direction
+                    )
                 )
-            )
-            return commandAutomationResult(
-                message: "Extruded circle \(name) created.",
-                commandResult: result,
-                in: session
-            )
+                return commandAutomationResult(
+                    message: "Extruded rectangle \(name) created.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
+        case .createExtrudedCircle:
+            func run() throws -> AutomationResult {
+                guard case .createExtrudedCircle(let name, let plane, let center, let radius, let depth, let direction) = command else {
+                    throw invalidExecutionDomainError()
+                }
+                let resolvedPlane = try session.resolveSketchPlane(plane)
+                let result = try session.execute(
+                    .createExtrudedCircle(
+                        name: name,
+                        plane: resolvedPlane,
+                        center: center,
+                        radius: radius,
+                        depth: depth,
+                        direction: direction
+                    )
+                )
+                return commandAutomationResult(
+                    message: "Extruded circle \(name) created.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
         case .validateDocument:
-            let result = try session.execute(.validateDocument)
-            return commandAutomationResult(
-                message: "Validation finished.",
-                commandResult: result,
-                in: session
-            )
+            func run() throws -> AutomationResult {
+                let result = try session.execute(.validateDocument)
+                return commandAutomationResult(
+                    message: "Validation finished.",
+                    commandResult: result,
+                    in: session
+                )
+            }
+            return try run()
         default:
-            throw invalidExecutionDomainError()
+            func run() throws -> AutomationResult {
+                throw invalidExecutionDomainError()
+            }
+            return try run()
         }
     }
 

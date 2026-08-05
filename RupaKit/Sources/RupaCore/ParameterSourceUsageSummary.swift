@@ -103,11 +103,19 @@ public struct ParameterSourceUsageService: Sendable {
              .boolean,
              .polySpline,
              .bSplineSurface,
+             .patchSurface,
+             .primitive,
              .faceKnife,
              .faceDelete,
              .bridgeCurve,
+             .bridgeSurface,
+             .curveDrivenPattern,
              .curveEdit,
-             .curveTrim:
+             .curveTrim,
+             .curveMatch,
+             .surfaceTrim,
+             .surfaceExtend,
+             .surfaceMatch:
             break
         case .faceLoopOffset(let feature):
             record(feature.distance, path: "faceLoopOffset.distance")
@@ -115,8 +123,39 @@ public struct ParameterSourceUsageService: Sendable {
             record(feature.distance, path: "edgeOffset.distance")
         case .faceDraft(let feature):
             record(feature.angle, path: "faceDraft.angle")
+        case .faceOffset(let feature):
+            record(feature.distance, path: "faceOffset.distance")
+        case .faceMove(let feature):
+            record(feature.translation.distance, path: "faceMove.translation.distance")
+        case .edgeMove(let feature):
+            record(feature.translation.distance, path: "edgeMove.translation.distance")
+        case .vertexMove(let feature):
+            record(feature.translation.distance, path: "vertexMove.translation.distance")
+        case .linearPattern(let feature):
+            record(feature.spacing, path: "linearPattern.spacing")
+        case .radialPattern(let feature):
+            record(feature.angularSpacing, path: "radialPattern.angularSpacing")
+        case .gridPattern(let feature):
+            record(feature.firstSpacing, path: "gridPattern.firstSpacing")
+            record(feature.secondSpacing, path: "gridPattern.secondSpacing")
+        case .chamfer(let feature):
+            record(feature.distance, path: "chamfer.distance")
+        case .fillet(let feature):
+            record(feature.radius, path: "fillet.radius")
+        case .g2Blend(let feature):
+            record(feature.distance, path: "g2Blend.distance")
+        case .setbackCorner(let feature):
+            record(feature.radius, path: "setbackCorner.radius")
+        case .shell(let feature):
+            record(feature.thickness, path: "shell.thickness")
+        case .thicken(let feature):
+            record(feature.thickness, path: "thicken.thickness")
         case .curveOffset(let feature):
             record(feature.distance, path: "curveOffset.distance")
+        case .curveExtend(let feature):
+            record(feature.distance, path: "curveExtend.distance")
+        case .surfaceOffset(let feature):
+            record(feature.distance, path: "surfaceOffset.distance")
         }
     }
 
@@ -235,6 +274,52 @@ public struct ParameterSourceUsageService: Sendable {
             "curveOffset"
         case .curveTrim:
             "curveTrim"
+        case .primitive:
+            "primitive"
+        case .patchSurface:
+            "patchSurface"
+        case .faceOffset:
+            "faceOffset"
+        case .faceMove:
+            "faceMove"
+        case .edgeMove:
+            "edgeMove"
+        case .vertexMove:
+            "vertexMove"
+        case .linearPattern:
+            "linearPattern"
+        case .radialPattern:
+            "radialPattern"
+        case .gridPattern:
+            "gridPattern"
+        case .curveDrivenPattern:
+            "curveDrivenPattern"
+        case .chamfer:
+            "chamfer"
+        case .fillet:
+            "fillet"
+        case .g2Blend:
+            "g2Blend"
+        case .setbackCorner:
+            "setbackCorner"
+        case .shell:
+            "shell"
+        case .thicken:
+            "thicken"
+        case .bridgeSurface:
+            "bridgeSurface"
+        case .curveExtend:
+            "curveExtend"
+        case .curveMatch:
+            "curveMatch"
+        case .surfaceOffset:
+            "surfaceOffset"
+        case .surfaceTrim:
+            "surfaceTrim"
+        case .surfaceExtend:
+            "surfaceExtend"
+        case .surfaceMatch:
+            "surfaceMatch"
         }
     }
 }

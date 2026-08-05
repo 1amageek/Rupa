@@ -79,18 +79,6 @@ extension DesignDocument {
         case .object, .sketchEntity, .region, .constructionPlane:
             componentID = nil
         }
-        guard let persistentName = componentID?.generatedTopologyPersistentName else {
-            return nil
-        }
-        let parsedName = try GeneratedTopologyPersistentNameParser().parse(
-            persistentName,
-            operationName: operationName
-        )
-        for component in parsedName.components {
-            if case .feature(let featureID) = component {
-                return featureID
-            }
-        }
-        return nil
+        return componentID?.generatedTopologySubshapeID?.featureID
     }
 }

@@ -602,15 +602,15 @@ import Testing
     let sceneNodeID = SceneNodeID()
     let faceAnchor = MeasurementAnchor.topologyReference(
         sceneNodeID: sceneNodeID,
-        component: .face(.generatedTopology("face-a")),
+        component: .face(.generatedTopology(generatedTopologyTestSubshapeID("face-a"))),
         kind: .face,
-        persistentName: "face-a"
+        subshapeID: "face-a"
     )
     let edgeAnchor = MeasurementAnchor.topologyReference(
         sceneNodeID: sceneNodeID,
-        component: .edge(.generatedTopology("edge-a")),
+        component: .edge(.generatedTopology(generatedTopologyTestSubshapeID("edge-a"))),
         kind: .edge,
-        persistentName: "edge-a"
+        subshapeID: "edge-a"
     )
     let worldPoint = MeasurementAnchor.worldPoint(
         Point3D(x: 0.0, y: 0.0, z: 0.0),
@@ -691,7 +691,7 @@ import Testing
                     sceneNodeID: faceTarget.sceneNodeID,
                     component: faceTarget.component,
                     kind: .face,
-                    persistentName: faceEntry.persistentName,
+                    subshapeID: faceEntry.subshapeID,
                     referenceID: faceEntry.referenceID
                 ),
             ]
@@ -707,7 +707,7 @@ import Testing
                     sceneNodeID: edgeTarget.sceneNodeID,
                     component: edgeTarget.component,
                     kind: .edge,
-                    persistentName: edgeEntry.persistentName,
+                    subshapeID: edgeEntry.subshapeID,
                     referenceID: edgeEntry.referenceID
                 ),
             ]
@@ -769,7 +769,7 @@ import Testing
                     sceneNodeID: edgeTarget.sceneNodeID,
                     component: edgeTarget.component,
                     kind: .edge,
-                    persistentName: edgeEntry.persistentName,
+                    subshapeID: edgeEntry.subshapeID,
                     referenceID: edgeEntry.referenceID
                 ),
             ]
@@ -1009,5 +1009,18 @@ private func drawingProjectionSketchPoint(
     SketchPoint(
         x: .length(x, .meter),
         y: .length(y, .meter)
+    )
+}
+
+
+/// Shared feature identity so equal role strings map to equal subshape IDs
+/// within this file's tests.
+private let generatedTopologyTestFeatureID = FeatureID()
+
+private func generatedTopologyTestSubshapeID(_ role: String) -> SubshapeID {
+    SubshapeID(
+        featureID: generatedTopologyTestFeatureID,
+        role: role,
+        ordinal: 0
     )
 }

@@ -210,9 +210,10 @@ import Testing
     let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let patch = try #require(summary.sources.first?.patches.first)
     let controlPoint = try #require(patch.controlPoints.first)
+    let controlPointReference = try #require(controlPoint.selectionReference)
 
     #expect(SurfaceParameterInspectorState(
-        selectedReferences: [controlPoint.selectionReference],
+        selectedReferences: [controlPointReference],
         summaryResult: summary
     ) == nil)
 }

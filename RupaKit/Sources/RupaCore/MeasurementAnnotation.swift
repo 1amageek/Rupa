@@ -167,7 +167,7 @@ public struct MeasurementAnchor: Codable, Hashable, Sendable {
         sceneNodeID: SceneNodeID,
         component: SelectionComponent,
         kind topologyKind: TopologySummaryResult.Entry.Kind,
-        persistentName: String,
+        subshapeID: String,
         referenceID: String? = nil,
         role: Role = .point
     ) -> MeasurementAnchor {
@@ -178,7 +178,7 @@ public struct MeasurementAnchor: Codable, Hashable, Sendable {
                 sceneNodeID: sceneNodeID,
                 component: component,
                 kind: topologyKind,
-                persistentName: persistentName,
+                subshapeID: subshapeID,
                 referenceID: referenceID
             )
         )
@@ -204,7 +204,7 @@ public struct MeasurementAnchor: Codable, Hashable, Sendable {
     public static func topologyEdgeParameter(
         sceneNodeID: SceneNodeID,
         component: SelectionComponent,
-        persistentName: String,
+        subshapeID: String,
         referenceID: String? = nil,
         parameter: Double,
         role: Role = .point
@@ -215,7 +215,7 @@ public struct MeasurementAnchor: Codable, Hashable, Sendable {
             topologyEdgeParameter: MeasurementTopologyEdgeAnchor(
                 sceneNodeID: sceneNodeID,
                 component: component,
-                persistentName: persistentName,
+                subshapeID: subshapeID,
                 referenceID: referenceID,
                 parameter: parameter
             )
@@ -335,25 +335,25 @@ public struct MeasurementTopologyAnchor: Codable, Hashable, Sendable {
     public var sceneNodeID: SceneNodeID
     public var component: SelectionComponent
     public var kind: TopologySummaryResult.Entry.Kind
-    public var persistentName: String
+    public var subshapeID: String
     public var referenceID: String?
 
     public init(
         sceneNodeID: SceneNodeID,
         component: SelectionComponent,
         kind: TopologySummaryResult.Entry.Kind,
-        persistentName: String,
+        subshapeID: String,
         referenceID: String? = nil
     ) {
         self.sceneNodeID = sceneNodeID
         self.component = component
         self.kind = kind
-        self.persistentName = persistentName
+        self.subshapeID = subshapeID
         self.referenceID = referenceID
     }
 
     public func validate() throws {
-        guard !persistentName.isEmpty else {
+        guard !subshapeID.isEmpty else {
             throw DocumentValidationError.invalidProductMetadata(
                 "Topology-reference measurement anchors require a persistent topology name."
             )
@@ -371,20 +371,20 @@ public struct MeasurementTopologyAnchor: Codable, Hashable, Sendable {
 public struct MeasurementTopologyEdgeAnchor: Codable, Hashable, Sendable {
     public var sceneNodeID: SceneNodeID
     public var component: SelectionComponent
-    public var persistentName: String
+    public var subshapeID: String
     public var referenceID: String?
     public var parameter: Double
 
     public init(
         sceneNodeID: SceneNodeID,
         component: SelectionComponent,
-        persistentName: String,
+        subshapeID: String,
         referenceID: String? = nil,
         parameter: Double
     ) {
         self.sceneNodeID = sceneNodeID
         self.component = component
-        self.persistentName = persistentName
+        self.subshapeID = subshapeID
         self.referenceID = referenceID
         self.parameter = parameter
     }
@@ -395,7 +395,7 @@ public struct MeasurementTopologyEdgeAnchor: Codable, Hashable, Sendable {
                 "Topology-edge-parameter measurement anchors require an edge selection component."
             )
         }
-        guard !persistentName.isEmpty else {
+        guard !subshapeID.isEmpty else {
             throw DocumentValidationError.invalidProductMetadata(
                 "Topology-edge-parameter measurement anchors require a persistent topology name."
             )

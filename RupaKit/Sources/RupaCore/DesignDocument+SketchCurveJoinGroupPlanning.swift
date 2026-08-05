@@ -509,19 +509,31 @@ extension DesignDocument {
             return nil
         case .g1:
             switch (firstEndpoint, secondEndpoint) {
-            case (.line(let lineID), .arc(let arcID)):
-                return .tangent(lineID, arcID)
-            case (.arc(let arcID), .line(let lineID)):
-                return .tangent(lineID, arcID)
+            case (.line(let lineID), .arc(let arcID)),
+                 (.arc(let arcID), .line(let lineID)):
+                let side = try lineCircularTangencySide(
+                    lineID: lineID,
+                    circularID: arcID,
+                    in: sketch
+                )
+                return .tangent(.lineCircular(
+                    line: lineID,
+                    circular: arcID,
+                    side: side
+                ))
             case (.spline(let splineEndpoint), .line(let lineID)),
                  (.line(let lineID), .spline(let splineEndpoint)):
-                return .splineEndpointTangent(
-                    spline: splineEndpoint.splineID,
-                    endpoint: splineEndpoint.endpoint,
-                    line: lineID
-                )
+                return .splineEndpointTangent(SketchSplineLineTangencyConstraint(
+                    splineEndpoint: splineEndpoint,
+                    line: lineID,
+                    orientation: .aligned
+                ))
             case (.spline(let first), .spline(let second)):
-                return .tangentSplineEndpoints(first: first, second: second)
+                return .tangentSplineEndpoints(SketchSplineEndpointTangencyConstraint(
+                    first: first,
+                    second: second,
+                    orientation: first.endpoint == second.endpoint ? .opposed : .aligned
+                ))
             case (.line, .line),
                  (.arc, .arc),
                  (.arc, .spline),
@@ -531,7 +543,11 @@ extension DesignDocument {
         case .g2:
             switch (firstEndpoint, secondEndpoint) {
             case (.spline(let first), .spline(let second)):
-                return .smoothSplineEndpoints(first: first, second: second)
+                return .smoothSplineEndpoints(SketchSplineEndpointTangencyConstraint(
+                    first: first,
+                    second: second,
+                    orientation: first.endpoint == second.endpoint ? .opposed : .aligned
+                ))
             case (.line, _),
                  (.arc, _),
                  (.spline, .line),
@@ -592,26 +608,38 @@ extension DesignDocument {
         continuityConstraint: SketchConstraint
     ) -> Bool {
         switch (constraint, continuityConstraint) {
-        case let (.tangent(first, second), .tangent(expectedFirst, expectedSecond)):
-            return (first == expectedFirst && second == expectedSecond) ||
-                (first == expectedSecond && second == expectedFirst)
+        case let (.tangent(tangency), .tangent(expectedTangency)):
+            switch (tangency, expectedTangency) {
+            case let (
+                .lineCircular(line, circular, _),
+                .lineCircular(expectedLine, expectedCircular, _)
+            ):
+                return line == expectedLine && circular == expectedCircular
+            case let (
+                .circularCircular(first, second, _),
+                .circularCircular(expectedFirst, expectedSecond, _)
+            ):
+                return (first == expectedFirst && second == expectedSecond) ||
+                    (first == expectedSecond && second == expectedFirst)
+            default:
+                return false
+            }
         case let (
-            .splineEndpointTangent(splineID, endpoint, lineID),
-            .splineEndpointTangent(expectedSplineID, expectedEndpoint, expectedLineID)
+            .splineEndpointTangent(lineTangency),
+            .splineEndpointTangent(expectedLineTangency)
         ):
-            return splineID == expectedSplineID &&
-                endpoint == expectedEndpoint &&
-                lineID == expectedLineID
+            return lineTangency.splineEndpoint == expectedLineTangency.splineEndpoint &&
+                lineTangency.line == expectedLineTangency.line
         case let (
-            .tangentSplineEndpoints(first, second),
-            .tangentSplineEndpoints(expectedFirst, expectedSecond)
+            .tangentSplineEndpoints(pair),
+            .tangentSplineEndpoints(expectedPair)
         ),
         let (
-            .smoothSplineEndpoints(first, second),
-            .smoothSplineEndpoints(expectedFirst, expectedSecond)
+            .smoothSplineEndpoints(pair),
+            .smoothSplineEndpoints(expectedPair)
         ):
-            return (first == expectedFirst && second == expectedSecond) ||
-                (first == expectedSecond && second == expectedFirst)
+            return (pair.first == expectedPair.first && pair.second == expectedPair.second) ||
+                (pair.first == expectedPair.second && pair.second == expectedPair.first)
         default:
             return false
         }

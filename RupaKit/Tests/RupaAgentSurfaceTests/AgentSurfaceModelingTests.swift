@@ -46,8 +46,7 @@ import SwiftCAD
     let face = try #require(topology.entries.first {
         $0.kind == .face
             && $0.surfaceKind == "bSpline"
-            && $0.generatedRole == "bSplineSurface"
-            && $0.subshapeRole == "patch:0:face"
+            && $0.generatedRole == "bSplineSurface.patch:0:face"
     })
     #expect(face.surfaceUDegree == 3)
     #expect(face.surfaceVDegree == 3)
@@ -124,7 +123,7 @@ import SwiftCAD
         .execute(
             sessionID: sessionID,
             command: .moveSurfaceControlPoint(
-                target: controlPoint.selectionReference,
+                target: try #require(controlPoint.selectionReference),
                 deltaX: .length(0.0, .millimeter),
                 deltaY: .length(0.0, .millimeter),
                 deltaZ: .length(1.0, .millimeter)
@@ -144,7 +143,7 @@ import SwiftCAD
         .execute(
             sessionID: sessionID,
             command: .setSurfaceControlPointWeight(
-                target: controlPoint.selectionReference,
+                target: try #require(controlPoint.selectionReference),
                 weight: .scalar(2.5)
             ),
             expectedGeneration: DocumentGeneration(2)
@@ -162,7 +161,7 @@ import SwiftCAD
         .execute(
             sessionID: sessionID,
             command: .slideSurfaceControlPoints(
-                targets: [controlPoint.selectionReference],
+                targets: [try #require(controlPoint.selectionReference)],
                 direction: .positiveU,
                 distance: .length(1.0, .millimeter)
             ),
@@ -266,7 +265,7 @@ import SwiftCAD
         .execute(
             sessionID: sessionID,
             command: .moveSurfaceControlPointsInFrame(
-                targets: [controlPoint.selectionReference],
+                targets: [try #require(controlPoint.selectionReference)],
                 frame: frameQuery,
                 uDistance: .length(1.0, .millimeter),
                 vDistance: .length(2.0, .millimeter),
@@ -749,21 +748,21 @@ import SwiftCAD
         return
     }
     let faceReference = try #require(initialSummary.sources.first?.patches.first?.faceSelectionReference)
-    let trimLoop = BSplineSurfaceTrimLoop(
+    let trimLoop = SurfaceTrimLoop(
         role: .outer,
-        edges: [
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+        parameterCurves: [
+            .polyline([
                 SurfaceParameter(u: 0.2, v: 0.2),
                 SurfaceParameter(u: 0.8, v: 0.25),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.8, v: 0.25),
                 SurfaceParameter(u: 0.45, v: 0.8),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+            ]),
+            .polyline([
                 SurfaceParameter(u: 0.45, v: 0.8),
                 SurfaceParameter(u: 0.2, v: 0.2),
-            ])),
+            ]),
         ]
     )
 
@@ -820,17 +819,18 @@ import SwiftCAD
     #expect(session.evaluationStatus == .valid)
 
     let featureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+    let trimFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let trimNode = try #require(session.document.cadDocument.designGraph.nodes[trimFeatureID])
+    guard case let .surfaceTrim(trimFeature) = trimNode.operation else {
         Issue.record("Agent trim endpoint edit must keep a direct B-spline surface feature.")
         return
     }
-    let movedLoop = try #require(surfaceFeature.trimLoops.first)
-    #expect(try movedLoop.edges[0].startParameter().isApproximatelyEqual(
+    let movedLoop = try #require(trimFeature.loops.first)
+    #expect(try movedLoop.parameterCurves[0].startParameter(tolerance: session.document.modelingSettings.tolerance).isApproximatelyEqual(
         to: SurfaceParameter(u: 0.25, v: 0.3),
         tolerance: 1.0e-12
     ))
-    #expect(try movedLoop.edges[2].endParameter().isApproximatelyEqual(
+    #expect(try movedLoop.parameterCurves[2].endParameter(tolerance: session.document.modelingSettings.tolerance).isApproximatelyEqual(
         to: SurfaceParameter(u: 0.25, v: 0.3),
         tolerance: 1.0e-12
     ))
@@ -870,7 +870,7 @@ import SwiftCAD
         return
     }
     let faceReference = try #require(initialSummary.sources.first?.patches.first?.faceSelectionReference)
-    let trimLoop = agentAuthoredBSplineSurfaceTrimLoop()
+    let trimLoop = agentAuthoredSurfaceTrimLoop()
 
     let setLoopsResponse = server.handle(
         .execute(
@@ -932,13 +932,14 @@ import SwiftCAD
     #expect(session.evaluationStatus == .valid)
 
     let featureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+    let trimFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let trimNode = try #require(session.document.cadDocument.designGraph.nodes[trimFeatureID])
+    guard case let .surfaceTrim(trimFeature) = trimNode.operation else {
         Issue.record("Agent trim control point edit must keep a direct B-spline surface feature.")
         return
     }
-    let movedLoop = try #require(surfaceFeature.trimLoops.first)
-    guard case .bSpline(let movedCurve) = movedLoop.edges[0].parameterCurve else {
+    let movedLoop = try #require(trimFeature.loops.first)
+    guard case .bSpline(let movedCurve) = movedLoop.parameterCurves[0] else {
         Issue.record("Agent must keep the authored B-spline trim p-curve.")
         return
     }
@@ -965,10 +966,10 @@ import SwiftCAD
     #expect(weightResult.didMutate)
     #expect(weightResult.generation == DocumentGeneration(4))
 
-    let weightedFeature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(weightedSurfaceFeature) = weightedFeature.operation,
-          let weightedLoop = weightedSurfaceFeature.trimLoops.first,
-          case .bSpline(let weightedCurve) = weightedLoop.edges[0].parameterCurve else {
+    let weightedFeature = try #require(session.document.cadDocument.designGraph.nodes[trimFeatureID])
+    guard case let .surfaceTrim(weightedTrimFeature) = weightedFeature.operation,
+          let weightedLoop = weightedTrimFeature.loops.first,
+          case .bSpline(let weightedCurve) = weightedLoop.parameterCurves[0] else {
         Issue.record("Agent trim weight edit must keep the authored B-spline trim p-curve.")
         return
     }
@@ -1013,10 +1014,10 @@ import SwiftCAD
     #expect(knotResult.didMutate)
     #expect(knotResult.generation == DocumentGeneration(5))
 
-    let refinedFeature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(refinedSurfaceFeature) = refinedFeature.operation,
-          let refinedLoop = refinedSurfaceFeature.trimLoops.first,
-          case .bSpline(let refinedCurve) = refinedLoop.edges[0].parameterCurve else {
+    let refinedFeature = try #require(session.document.cadDocument.designGraph.nodes[trimFeatureID])
+    guard case let .surfaceTrim(refinedTrimFeature) = refinedFeature.operation,
+          let refinedLoop = refinedTrimFeature.loops.first,
+          case .bSpline(let refinedCurve) = refinedLoop.parameterCurves[0] else {
         Issue.record("Agent trim knot insertion must keep the authored B-spline trim p-curve.")
         return
     }
@@ -1061,10 +1062,10 @@ import SwiftCAD
     #expect(knotMultiplicityResult.didMutate)
     #expect(knotMultiplicityResult.generation == DocumentGeneration(7))
 
-    let saturatedFeature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .bSplineSurface(saturatedSurfaceFeature) = saturatedFeature.operation,
-          let saturatedLoop = saturatedSurfaceFeature.trimLoops.first,
-          case .bSpline(let saturatedCurve) = saturatedLoop.edges[0].parameterCurve else {
+    let saturatedFeature = try #require(session.document.cadDocument.designGraph.nodes[trimFeatureID])
+    guard case let .surfaceTrim(saturatedTrimFeature) = saturatedFeature.operation,
+          let saturatedLoop = saturatedTrimFeature.loops.first,
+          case .bSpline(let saturatedCurve) = saturatedLoop.parameterCurves[0] else {
         Issue.record("Agent trim knot multiplicity must keep the authored B-spline trim p-curve.")
         return
     }
@@ -1111,7 +1112,7 @@ import SwiftCAD
             sessionID: sessionID,
             command: .setSurfaceTrimLoops(
                 target: faceReference,
-                trimLoops: [agentAuthoredBSplineSurfaceTrimLoop()]
+                trimLoops: [agentAuthoredSurfaceTrimLoop()]
             ),
             expectedGeneration: DocumentGeneration(1)
         )
@@ -1427,8 +1428,7 @@ import SwiftCAD
     let face = try #require(topology.entries.first {
         $0.kind == .face
             && $0.surfaceKind == "bSpline"
-            && $0.generatedRole == "polySpline"
-            && $0.subshapeRole == "patch:0:face"
+            && $0.generatedRole == "polySpline.patch:0:face"
     })
     #expect(face.surfaceUDegree == 3)
     #expect(face.surfaceVDegree == 3)
@@ -1437,12 +1437,12 @@ import SwiftCAD
     #expect(face.selectionTarget() != nil)
     #expect(topology.entries.contains {
         $0.kind == .edge
-            && $0.subshapeRole == "patch:0:edge:uMax"
+            && $0.generatedRole == "polySpline.edge:source:1:2"
             && $0.selectionTarget() != nil
     })
     #expect(topology.entries.contains {
         $0.kind == .vertex
-            && $0.subshapeRole == "patch:0:vertex:uMax:vMax"
+            && $0.generatedRole == "polySpline.vertex:source:2"
             && $0.selectionTarget() != nil
     })
 }
@@ -1482,7 +1482,7 @@ import SwiftCAD
     }
     let vertexEntry = try #require(topology.entries.first {
         $0.kind == .vertex
-            && $0.subshapeRole == "patch:0:vertex:uMax:vMax"
+            && $0.generatedRole == "polySpline.vertex:source:2"
     })
     let target = try #require(vertexEntry.selectionTarget())
 
@@ -1550,7 +1550,7 @@ import SwiftCAD
     }
     let vertexEntry = try #require(topology.entries.first {
         $0.kind == .vertex
-            && $0.subshapeRole == "patch:0:vertex:uMax:vMax"
+            && $0.generatedRole == "polySpline.vertex:source:2"
     })
     let target = try #require(vertexEntry.selectionTarget())
 
@@ -1623,7 +1623,7 @@ import SwiftCAD
         .execute(
             sessionID: sessionID,
             command: .moveSurfaceControlPoint(
-                target: controlVertex.selectionReference,
+                target: try #require(controlVertex.selectionReference),
                 deltaX: .length(0.0, .millimeter),
                 deltaY: .length(0.0, .millimeter),
                 deltaZ: .length(1.0, .millimeter)
@@ -1691,7 +1691,7 @@ import SwiftCAD
         .execute(
             sessionID: sessionID,
             command: .moveSurfaceControlPoint(
-                target: controlPoint.selectionReference,
+                target: try #require(controlPoint.selectionReference),
                 deltaX: .length(0.0, .millimeter),
                 deltaY: .length(0.0, .millimeter),
                 deltaZ: .length(1.0, .millimeter)
@@ -1762,7 +1762,7 @@ import SwiftCAD
         .execute(
             sessionID: sessionID,
             command: .setSurfaceControlPointWeight(
-                target: controlPoint.selectionReference,
+                target: try #require(controlPoint.selectionReference),
                 weight: .scalar(2.5)
             ),
             expectedGeneration: DocumentGeneration(1)
@@ -1842,7 +1842,7 @@ import SwiftCAD
     }
     let vertexEntry = try #require(topology.entries.first {
         $0.kind == .vertex
-            && $0.subshapeRole == "patch:0:vertex:uMax:vMin"
+            && $0.generatedRole == "polySpline.vertex:source:1"
     })
     let target = try #require(vertexEntry.selectionTarget())
 
@@ -1919,7 +1919,7 @@ import SwiftCAD
         .execute(
             sessionID: sessionID,
             command: .slideSurfaceControlPoints(
-                targets: [controlVertex.selectionReference],
+                targets: [try #require(controlVertex.selectionReference)],
                 direction: .positiveV,
                 distance: .length(1.0, .millimeter)
             ),
@@ -2106,7 +2106,7 @@ import SwiftCAD
     #expect(source.support.candidateKind == "quadPatchGraph")
     #expect(source.patches.map(\.patchID) == [0, 2])
     let patch = try #require(source.patches.first)
-    #expect(patch.facePersistentName?.contains("subshape:patch:0:face") == true)
+    #expect(patch.faceSubshapeID?.contains("/polySpline.patch:0:face/") == true)
     #expect(patch.faceSelectionComponentID?.hasPrefix(SelectionComponentID.generatedTopologyPrefix) == true)
     #expect(patch.basis.kind == "cubicBezierBSpline")
     #expect(patch.controlVertices.count == 4)
@@ -2117,7 +2117,7 @@ import SwiftCAD
     let measurementResponse = server.handle(
         .selectionMeasurement(
             sessionID: sessionID,
-            query: CADAgentMeasurementQuery(kind: .point, first: firstControlVertex.selectionReference),
+            query: CADAgentMeasurementQuery(kind: .point, first: try #require(firstControlVertex.selectionReference)),
             expectedGeneration: generation
         )
     )
@@ -2208,8 +2208,8 @@ import SwiftCAD
     #expect(analysis.counts.openTrimBoundaryCount == 0)
     #expect(analysis.counts.trimBoundaryEdgeCount == 8)
     let face = try #require(analysis.faces.first)
-    #expect(face.facePersistentNames.contains { $0.contains("subshape:patch") })
-    #expect(face.edgePersistentNames.contains { $0.contains("subshape:patch") })
+    #expect(face.faceSubshapeIDs.contains { $0.contains("/polySpline.patch:") })
+    #expect(face.edgePersistentNames.contains { $0.contains("/polySpline.edge:source:") })
     let trimBoundary = try #require(face.trimBoundaries.first)
     #expect(trimBoundary.role == .outer)
     #expect(trimBoundary.edgeCount == 4)
@@ -2277,8 +2277,7 @@ import SwiftCAD
     #expect(adjacency.requiresCurvatureContinuitySolve == false)
     let curvatureGap = try #require(adjacency.curvatureGap)
     #expect(curvatureGap <= 1.0e-6)
-    #expect(adjacency.edgePersistentNames.contains { $0.contains("subshape:patch:0:edge:uMax") })
-    #expect(adjacency.edgePersistentNames.contains { $0.contains("subshape:patch:2:edge:uMin") })
+    #expect(adjacency.edgePersistentNames.contains { $0.contains("/polySpline.edge:source:") })
     #expect(session.generation == generation)
     #expect(session.isDirty == dirty)
 }

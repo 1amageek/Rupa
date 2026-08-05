@@ -11,7 +11,7 @@ public struct SurfaceControlPointDisplayID: Codable, Hashable, RawRepresentable,
     public init(reference: SurfaceControlPointReference) {
         self.rawValue = [
             "surfaceControlPoint",
-            Self.persistentNameString(reference.surface.faceName),
+            GeneratedSubshapeIdentity.string(for: reference.surface.subshape.subshapeID),
             "u\(reference.uIndex)",
             "v\(reference.vIndex)",
         ].joined(separator: "/")
@@ -27,20 +27,5 @@ public struct SurfaceControlPointDisplayID: Codable, Hashable, RawRepresentable,
         self.init(reference: reference)
     }
 
-    private static func persistentNameString(_ name: PersistentName) -> String {
-        name.components.map { component in
-            switch component {
-            case .feature(let featureID):
-                return "feature:\(featureID.description)"
-            case .generated(let value):
-                return "generated:\(value)"
-            case .subshape(let value):
-                return "subshape:\(value)"
-            case .index(let index):
-                return "index:\(index)"
-            }
-        }
-        .joined(separator: "/")
-    }
 }
 

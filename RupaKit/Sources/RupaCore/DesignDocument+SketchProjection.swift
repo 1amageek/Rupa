@@ -13,12 +13,13 @@ extension DesignDocument {
         let operationName = "Face Knife"
         let trimmedName = try normalizedMetadataName(name, owner: operationName)
         guard case .face(let componentID) = target.component,
-              let persistentNameString = componentID.generatedTopologyPersistentName else {
+              let subshapeID = componentID.generatedTopologySubshapeID else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(operationName) requires a generated topology face target."
             )
         }
+        let identity = GeneratedSubshapeIdentity.string(for: subshapeID)
         let resolvedTarget = try editableBodyTargetResolution(
             for: target,
             operationName: operationName
@@ -37,7 +38,7 @@ extension DesignDocument {
             document: self,
             objectRegistry: objectRegistry
         )
-        guard let entry = topology.entries.first(where: { $0.persistentName == persistentNameString }) else {
+        guard let entry = topology.entries.first(where: { $0.subshapeID == identity }) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "\(operationName) generated topology face was not found in the current evaluation."
@@ -51,13 +52,15 @@ extension DesignDocument {
             )
         }
 
-        let facePersistentName = try GeneratedTopologyPersistentNameParser().parse(
-            persistentNameString,
-            operationName: operationName
-        )
+        guard let stableReference = entry.stableReference else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(operationName) generated topology face has no stable subshape reference."
+            )
+        }
         let faceKnife = FaceKnifeFeature(
             target: FaceKnifeTargetReference(featureID: targetFeatureID),
-            facePersistentName: facePersistentName,
+            face: stableReference,
             loop: loop
         )
         try faceKnife.validate()
@@ -94,7 +97,7 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         )
-        try cadDocument.validate()
+        try cadDocument.validate(tolerance: modelingSettings.tolerance)
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         didCommit = true
         return featureID
@@ -143,7 +146,8 @@ extension DesignDocument {
         let targetPlane = try ConstructionPlaneTargetResolver().planarGeneratedFacePlane(
             alignedTo: face,
             topology: evaluatedTopology,
-            operationName: operationName
+            operationName: operationName,
+            tolerance: modelingSettings.tolerance
         )
         return try appendProjectedCurveSketch(
             targets: targets,
@@ -199,7 +203,7 @@ extension DesignDocument {
             plane: targetPlane,
             entities: projectedEntities
         )
-        try projectedSketch.validate()
+        try projectedSketch.validate(tolerance: modelingSettings.tolerance)
         try projectedSketch.validateExpressions(using: cadDocument.parameters)
         let outputName = try normalizedMetadataName(
             name ?? defaultName(sourceNames),
@@ -308,7 +312,7 @@ extension DesignDocument {
             plane: plane,
             entities: projectedEntities
         )
-        try projectedSketch.validate()
+        try projectedSketch.validate(tolerance: modelingSettings.tolerance)
         try projectedSketch.validateExpressions(using: cadDocument.parameters)
         let outputName = try normalizedMetadataName(
             name ?? projectedOutlineName(from: sourceNames),

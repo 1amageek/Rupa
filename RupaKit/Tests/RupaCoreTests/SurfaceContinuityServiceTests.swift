@@ -30,10 +30,10 @@ import SwiftCAD
         adjacency.firstFacePersistentName,
         adjacency.secondFacePersistentName,
     ]
-    #expect(faceNames.contains { $0?.contains("subshape:patch:0:face") == true })
-    #expect(faceNames.contains { $0?.contains("subshape:patch:2:face") == true })
-    #expect(adjacency.edgePersistentNames.contains { $0.contains("subshape:patch:0:edge:uMax") })
-    #expect(adjacency.edgePersistentNames.contains { $0.contains("subshape:patch:2:edge:uMin") })
+    #expect(faceNames.contains { $0?.contains("patch:0:face") == true })
+    #expect(faceNames.contains { $0?.contains("patch:2:face") == true })
+    #expect(adjacency.edgePersistentNames.contains { $0.contains("edge:source:1:4") })
+    #expect(adjacency.edgePersistentNames.contains { $0.contains("edge:source:1:4") })
     #expect(!summary.diagnostics.contains { $0.severity == .warning })
 }
 

@@ -9,7 +9,10 @@ import Testing
 @Test(.timeLimit(.minutes(1)))
 func cadProviderRejectsNonCADReferencesBeforeEvaluation() throws {
     let provider = CADGeometrySourceProvider(
-        document: CADDocument(units: .meters)
+        document: CADDocument(units: .meters),
+        evaluator: DocumentEvaluator(
+            tolerance: DocumentModelingSettings.standard.tolerance
+        )
     )
     var error: CADIntegrationError?
 
@@ -28,7 +31,12 @@ func cadProviderRejectsNonCADReferencesBeforeEvaluation() throws {
 @Test(.timeLimit(.minutes(1)))
 func cadProviderRejectsReferencesForAnotherDocument() throws {
     let document = CADDocument(units: .meters)
-    let provider = CADGeometrySourceProvider(document: document)
+    let provider = CADGeometrySourceProvider(
+        document: document,
+        evaluator: DocumentEvaluator(
+            tolerance: DocumentModelingSettings.standard.tolerance
+        )
+    )
     var error: CADIntegrationError?
 
     do {
@@ -51,9 +59,15 @@ func cadProviderRejectsReferencesForAnotherDocument() throws {
 func cadProviderConvertsEvaluatedBodyMeshIntoUniversalGeometrySource() throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let evaluatedDocument = try DocumentEvaluator().evaluate(session.document.cadDocument)
+    let evaluator = DocumentEvaluator(
+        tolerance: session.document.modelingSettings.tolerance
+    )
+    let evaluatedDocument = try evaluator.evaluate(session.document.cadDocument)
     let bodyID = try #require(evaluatedDocument.meshes.keys.first)
-    let provider = CADGeometrySourceProvider(document: session.document.cadDocument)
+    let provider = CADGeometrySourceProvider(
+        document: session.document.cadDocument,
+        evaluator: evaluator
+    )
     let project = try ProjectSourceModel(id: "project.cad", name: "CAD")
 
     let result = try provider.evaluate(
@@ -75,7 +89,10 @@ func cadProviderConvertsEvaluatedBodyMeshIntoUniversalGeometrySource() throws {
 func cadProviderParticipatesInProjectEvaluationThroughProviderBoundary() throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let evaluatedDocument = try DocumentEvaluator().evaluate(session.document.cadDocument)
+    let evaluator = DocumentEvaluator(
+        tolerance: session.document.modelingSettings.tolerance
+    )
+    let evaluatedDocument = try evaluator.evaluate(session.document.cadDocument)
     let bodyID = try #require(evaluatedDocument.meshes.keys.first)
     let definition = ObjectDefinition(
         id: "cad.definition",
@@ -95,7 +112,12 @@ func cadProviderParticipatesInProjectEvaluationThroughProviderBoundary() throws 
         rootOccurrenceIDs: [occurrence.id]
     )
     let engine = ProjectEvaluationEngine(
-        providers: [CADGeometrySourceProvider(document: session.document.cadDocument)]
+        providers: [
+            CADGeometrySourceProvider(
+                document: session.document.cadDocument,
+                evaluator: evaluator
+            ),
+        ]
     )
 
     let snapshot = try engine.evaluate(project)

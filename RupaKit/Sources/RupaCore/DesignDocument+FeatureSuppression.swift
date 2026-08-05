@@ -18,7 +18,7 @@ public extension DesignDocument {
 
         var updatedCADDocument = cadDocument
         feature.isSuppressed = isSuppressed
-        try updatedCADDocument.replaceFeature(feature)
+        try updatedCADDocument.replaceFeature(feature, tolerance: modelingSettings.tolerance)
 
         var updatedDocument = self
         updatedDocument.cadDocument = updatedCADDocument

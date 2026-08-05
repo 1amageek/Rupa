@@ -3331,9 +3331,11 @@ public struct Viewport: View {
         let selectedInputs = polySplineSurfaceVertexSlideInputs(in: scene).filter { input in
             targetSet.contains(input.selectionTarget)
         }
+        let patchDescriptors = polySplinePatchDescriptorsByFeatureID()
         guard let previewVertices = ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.previewVertices(
             selectedVertices: selectedInputs,
             topologyVertices: polySplineSurfaceTopologyVertices(in: scene),
+            patches: patchDescriptors,
             direction: activePolySplineSurfaceVertexSlideDrag.target.direction,
             distanceMeters: activePolySplineSurfaceVertexSlideDrag.distanceMeters
         ) else {
@@ -3344,8 +3346,10 @@ public struct Viewport: View {
         if let previewSurfaces = ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.previewSurfaces(
             selectedVertices: selectedInputs,
             topologyVertices: polySplineSurfaceTopologyVertices(in: scene),
+            patches: patchDescriptors,
             direction: activePolySplineSurfaceVertexSlideDrag.target.direction,
-            distanceMeters: activePolySplineSurfaceVertexSlideDrag.distanceMeters
+            distanceMeters: activePolySplineSurfaceVertexSlideDrag.distanceMeters,
+            tolerance: document.modelingSettings.tolerance
         ) {
             for surface in previewSurfaces {
                 drawPolySplineSurfaceVertexSlidePreviewMesh(
@@ -3395,6 +3399,7 @@ public struct Viewport: View {
         guard let previewVertices = ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.previewControlPoints(
             selectedControlPoints: selectedInputs,
             topologyVertices: polySplineSurfaceTopologyVertices(in: scene),
+            patches: polySplinePatchDescriptorsByFeatureID(),
             direction: activeSurfaceControlPointSlideDrag.target.direction,
             distanceMeters: activeSurfaceControlPointSlideDrag.distanceMeters
         ) else {
@@ -4980,7 +4985,7 @@ public struct Viewport: View {
             case .object, .sketchEntity, .region, .constructionPlane:
                 continue
             case .face(let componentID):
-                guard componentID.generatedTopologyPersistentName != nil,
+                guard componentID.generatedTopologySubshapeID != nil,
                       let face = topology.faces.first(where: { $0.componentID == componentID }) else {
                     continue
                 }
@@ -4992,7 +4997,7 @@ public struct Viewport: View {
                     in: &context
                 )
             case .edge(let componentID):
-                guard componentID.generatedTopologyPersistentName != nil,
+                guard componentID.generatedTopologySubshapeID != nil,
                       let edge = topology.edges.first(where: { $0.componentID == componentID }) else {
                     continue
                 }
@@ -5004,7 +5009,7 @@ public struct Viewport: View {
                     in: &context
                 )
             case .vertex(let componentID):
-                guard componentID.generatedTopologyPersistentName != nil,
+                guard componentID.generatedTopologySubshapeID != nil,
                       let vertex = topology.vertices.first(where: { $0.componentID == componentID }) else {
                     continue
                 }
@@ -6058,7 +6063,8 @@ public struct Viewport: View {
         return ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.localDirection(
             for: parsedTarget,
             direction: localAxis.slideDirection,
-            topologyVertices: topologyVertices
+            topologyVertices: topologyVertices,
+            patches: polySplinePatchDescriptorsByFeatureID()
         )
     }
 
@@ -6097,19 +6103,19 @@ public struct Viewport: View {
                 return false
             }
             return bodyComponent.topology?.faces.contains { $0.componentID == componentID } == true
-                || componentID.generatedTopologyPersistentName == nil
+                || componentID.generatedTopologySubshapeID == nil
         case .edge(let componentID):
             guard case .body(let bodyComponent) = item.kind else {
                 return false
             }
             return bodyComponent.topology?.edges.contains { $0.componentID == componentID } == true
-                || componentID.generatedTopologyPersistentName == nil
+                || componentID.generatedTopologySubshapeID == nil
         case .vertex(let componentID):
             guard case .body(let bodyComponent) = item.kind else {
                 return false
             }
             return bodyComponent.topology?.vertices.contains { $0.componentID == componentID } == true
-                || componentID.generatedTopologyPersistentName == nil
+                || componentID.generatedTopologySubshapeID == nil
         case .sketchEntity(let componentID):
             guard case .sketch(let primitives) = item.kind else {
                 return false
@@ -6129,7 +6135,7 @@ public struct Viewport: View {
     ) -> Point3D? {
         guard let target = selection.primaryTarget,
               case .face(let componentID) = target.component,
-              componentID.generatedTopologyPersistentName != nil,
+              componentID.generatedTopologySubshapeID != nil,
               let item = sceneItem(for: target, in: scene),
               case .body(let component) = item.kind,
               let face = component.topology?.faces.first(where: { $0.componentID == componentID }) else {
@@ -9170,10 +9176,12 @@ public struct Viewport: View {
             return []
         }
         let topologyVertices = polySplineSurfaceTopologyVertices(in: scene)
+        let patchDescriptors = polySplinePatchDescriptorsByFeatureID()
         return PolySplineSurfaceVertexSlideDirection.allCases.compactMap { direction in
             guard let geometry = ViewportPolySplineSurfaceVertexSlideAffordanceGeometry(
                 selectedVertices: inputs,
                 topologyVertices: topologyVertices,
+                patches: patchDescriptors,
                 direction: direction,
                 layout: layout
             ) else {
@@ -9203,10 +9211,12 @@ public struct Viewport: View {
             return []
         }
         let topologyVertices = polySplineSurfaceTopologyVertices(in: scene)
+        let patchDescriptors = polySplinePatchDescriptorsByFeatureID()
         return PolySplineSurfaceVertexSlideDirection.allCases.compactMap { direction in
             guard let geometry = ViewportPolySplineSurfaceVertexSlideAffordanceGeometry(
                 selectedControlPoints: inputs,
                 topologyVertices: topologyVertices,
+                patches: patchDescriptors,
                 direction: direction,
                 layout: layout
             ) else {
@@ -9286,6 +9296,35 @@ public struct Viewport: View {
         }
     }
 
+    /// Patch corner tables derived from the current PolySpline source meshes.
+    /// Display affordances resolve patch context through this table because
+    /// vertex identities only carry the owning feature and source index.
+    private func polySplinePatchDescriptorsByFeatureID() -> [FeatureID: [ViewportPolySplinePatchDescriptor]] {
+        let tolerance = document.modelingSettings.tolerance
+        var descriptorsByFeatureID: [FeatureID: [ViewportPolySplinePatchDescriptor]] = [:]
+        for featureID in document.cadDocument.designGraph.order {
+            guard let feature = document.cadDocument.designGraph.nodes[featureID],
+                  case let .polySpline(polySpline) = feature.operation else {
+                continue
+            }
+            let analysis = PolySplineMeshAnalyzer().analyze(
+                mesh: polySpline.sourceMesh,
+                options: polySpline.options,
+                tolerance: tolerance
+            )
+            guard analysis.result.isSupported else {
+                continue
+            }
+            descriptorsByFeatureID[featureID] = analysis.supportedPatches.map { patch in
+                ViewportPolySplinePatchDescriptor(
+                    candidateID: patch.candidateID,
+                    cornerSourceVertexIndices: patch.boundaryVertexIndices
+                )
+            }
+        }
+        return descriptorsByFeatureID
+    }
+
     private func polySplineSurfaceVertexSlideInputs(
         in scene: ViewportScene
     ) -> [ViewportPolySplineSurfaceVertexSlideInput] {
@@ -9343,34 +9382,27 @@ public struct Viewport: View {
         guard case .surface(.controlPoint(let controlPoint)) = reference else {
             return nil
         }
-        var featureID: FeatureID?
-        var generatedRole: String?
-        var subshape: String?
-        for component in controlPoint.surface.faceName.components {
-            switch component {
-            case .feature(let id):
-                featureID = id
-            case .generated(let value):
-                generatedRole = value
-            case .subshape(let value):
-                subshape = value
-            case .index:
-                return nil
-            }
-        }
-        guard generatedRole == "polySpline",
-              let featureID,
-              let subshape else {
+        let subshapeID = controlPoint.surface.subshape.subshapeID
+        let roleParts = subshapeID.role.split(
+            separator: ".",
+            maxSplits: 1,
+            omittingEmptySubsequences: false
+        ).map(String.init)
+        guard roleParts.count == 2,
+              roleParts[0] == "polySpline" else {
             return nil
         }
-        let parts = subshape.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
+        let parts = roleParts[1].split(
+            separator: ":",
+            omittingEmptySubsequences: false
+        ).map(String.init)
         guard parts.count == 3,
               parts[0] == "patch",
               let patchID = Int(parts[1]),
               parts[2] == "face" else {
             return nil
         }
-        return (featureID, patchID)
+        return (subshapeID.featureID, patchID)
     }
 
     private func sketchEntityIDs(
@@ -9448,7 +9480,7 @@ public struct Viewport: View {
         case .bodyFaceSide:
             return .side
         default:
-            guard componentID.generatedTopologyPersistentName != nil else {
+            guard componentID.generatedTopologySubshapeID != nil else {
                 return nil
             }
             do {
@@ -9498,7 +9530,7 @@ public struct Viewport: View {
         case .bodyEdgeLeftTop:
             return .leftTop
         default:
-            guard componentID.generatedTopologyPersistentName != nil else {
+            guard componentID.generatedTopologySubshapeID != nil else {
                 return nil
             }
             do {
@@ -9532,7 +9564,7 @@ public struct Viewport: View {
         for componentID: SelectionComponentID,
         target: SelectionTarget
     ) -> ViewportBodyVertex? {
-        guard componentID.generatedTopologyPersistentName != nil else {
+        guard componentID.generatedTopologySubshapeID != nil else {
             return nil
         }
         do {

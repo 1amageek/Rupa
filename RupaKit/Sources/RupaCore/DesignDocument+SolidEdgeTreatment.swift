@@ -105,7 +105,7 @@ extension DesignDocument {
 
         var updatedCADDocument = cadDocument
         do {
-            try updatedCADDocument.replaceFeatures([profileFeature, feature])
+            try updatedCADDocument.replaceFeatures([profileFeature, feature], tolerance: modelingSettings.tolerance)
             try validateEditableBodyCandidate(
                 updatedCADDocument,
                 operationName: "Edge chamfer",
@@ -234,7 +234,7 @@ extension DesignDocument {
 
         var updatedCADDocument = cadDocument
         do {
-            try updatedCADDocument.replaceFeatures([profileFeature, feature])
+            try updatedCADDocument.replaceFeatures([profileFeature, feature], tolerance: modelingSettings.tolerance)
             try validateEditableBodyCandidate(
                 updatedCADDocument,
                 operationName: "Edge fillet",

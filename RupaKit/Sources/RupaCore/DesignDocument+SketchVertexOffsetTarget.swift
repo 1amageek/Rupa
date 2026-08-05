@@ -15,7 +15,7 @@ extension DesignDocument {
     ) throws -> GeneratedSketchVertexOffsetTarget {
         let operationName = "Generated vertex Offset Vertex"
         guard case .vertex(let componentID) = target.component,
-              let persistentName = componentID.generatedTopologyPersistentName else {
+              let subshapeID = componentID.generatedTopologySubshapeID else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(operationName) requires a generated topology vertex target."
@@ -46,7 +46,9 @@ extension DesignDocument {
             document: self,
             objectRegistry: objectRegistry
         )
-        guard let entry = topology.entries.first(where: { $0.persistentName == persistentName }) else {
+        guard let entry = topology.entries.first(where: {
+            $0.subshapeID == GeneratedSubshapeIdentity.string(for: subshapeID)
+        }) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "\(operationName) generated topology target was not found in the current evaluation."

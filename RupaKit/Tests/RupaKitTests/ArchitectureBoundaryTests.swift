@@ -79,15 +79,45 @@ func packageSourceImportsRespectArchitectureBoundaries() throws {
 func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throws {
     let graph = try packageManifestProductionTargetDependencies()
     let expectedGraph: [String: Set<String>] = [
-        "RupaKit": [
-            "RupaCore",
-            "RupaAutomation",
-            "RupaDomainFoundation",
+        "RupaCoreTypes": [],
+        "RupaCapabilities": [
+            "RupaCoreTypes",
+        ],
+        "RupaGeometry": [
+            "RupaCoreTypes",
+        ],
+        "RupaProjectModel": [
+            "RupaCoreTypes",
+            "RupaGeometry",
+        ],
+        "RupaEvaluation": [
+            "RupaCoreTypes",
+            "RupaGeometry",
+            "RupaProjectModel",
+        ],
+        "RupaProject": [
+            "RupaCoreTypes",
+            "RupaEvaluation",
+            "RupaProjectModel",
+        ],
+        "RupaCADIntegration": [
+            "RupaEvaluation",
+            "RupaGeometry",
+            "RupaProjectModel",
         ],
         "RupaCore": [
             "RupaCoreTypes",
         ],
-        "RupaCoreTypes": [],
+        "RupaKit": [
+            "RupaCore",
+            "RupaAutomation",
+            "RupaDomainFoundation",
+            "RupaCADIntegration",
+            "RupaEvaluation",
+            "RupaGeometry",
+            "RupaProjectModel",
+            "RupaViewportScene",
+        ],
         "RupaUI": [
             "RupaCore",
             "RupaDomainFoundation",
@@ -103,6 +133,9 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
         ],
         "RupaViewportScene": [
             "RupaCore",
+            "RupaEvaluation",
+            "RupaGeometry",
+            "RupaProjectModel",
         ],
         "RupaRendering": [
             "RupaCore",
@@ -117,6 +150,7 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
         "RupaDomainFoundation": [
             "RupaCore",
             "RupaAutomation",
+            "RupaCapabilities",
         ],
         "RupaManufacturing": [
             "RupaDomainFoundation",
@@ -126,11 +160,13 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
         "RupaAgentProtocol": [
             "RupaCore",
             "RupaAutomation",
+            "RupaCapabilities",
             "RupaDomainFoundation",
         ],
         "RupaAgentRuntime": [
             "RupaCore",
             "RupaAutomation",
+            "RupaCapabilities",
             "RupaDomainFoundation",
             "RupaAgentProtocol",
         ],
@@ -154,6 +190,12 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
         ],
         "RupaCLI": [
             "RupaCLIKit",
+        ],
+        "RupaPerformanceBenchmark": [
+            "RupaCore",
+            "RupaAutomation",
+            "RupaAgentProtocol",
+            "RupaAgentRuntime",
         ],
     ]
 

@@ -204,7 +204,9 @@ struct ManufacturingPrintabilityQuery: DomainCommandQuery {
                 ]),
             ])
         )
-        let sourceFingerprint = try document.cadDocument.sourceFingerprint()
+        let sourceFingerprint = try document.cadDocument.sourceFingerprint(
+            tolerance: document.modelingSettings.tolerance
+        )
         let sourceDependencies = try SourceDependencySetIdentity(
             dependencies: [
                 SourceDependencyIdentity(

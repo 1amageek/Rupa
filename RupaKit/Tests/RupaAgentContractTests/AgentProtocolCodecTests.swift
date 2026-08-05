@@ -692,6 +692,7 @@ import SwiftCAD
 @Test func agentProtocolRawJSONFixturesDecodeRepresentativeRequests() async throws {
     let codec = AgentMessageCodec()
     let sessionID = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000001"))
+    let surfaceReferenceJSON = try agentProtocolCodecSurfaceReferenceJSON()
     let requestFixtures: [(json: String, validate: (AgentRequestEnvelope) throws -> Void)] = [
         (
             """
@@ -746,24 +747,7 @@ import SwiftCAD
                       "surface": {
                         "kind": "span",
                         "span": {
-                          "surface": {
-                            "faceName": {
-                              "components": [
-                                {
-                                  "kind": "feature",
-                                  "featureID": "00000000-0000-0000-0000-000000000101"
-                                },
-                                {
-                                  "kind": "generated",
-                                  "value": "bSplineSurface"
-                                },
-                                {
-                                  "kind": "subshape",
-                                  "value": "patch:0:face"
-                                }
-                              ]
-                            }
-                          },
+                          "surface": \(surfaceReferenceJSON),
                           "direction": "u",
                           "spanIndex": 0
                         }
@@ -794,17 +778,8 @@ import SwiftCAD
                     #expect(Bool(false))
                     return
                 }
-                let expectedFeatureID = try #require(UUID(
-                    uuidString: "00000000-0000-0000-0000-000000000101"
-                ))
                 let expectedTarget = SelectionReference.surface(.span(SurfaceSpanReference(
-                    surface: SurfaceReference(
-                        faceName: PersistentName(components: [
-                            .feature(FeatureID(expectedFeatureID)),
-                            .generated("bSplineSurface"),
-                            .subshape("patch:0:face"),
-                        ])
-                    ),
+                    surface: agentProtocolCodecSurfaceReference(),
                     direction: .u,
                     spanIndex: 0
                 )))
@@ -1448,4 +1423,30 @@ private func agentDomainExecutionRegistry(
         ],
         commandLowerings: [lowering]
     )
+}
+
+
+/// Stable surface reference fixture shared between the raw JSON fixture and
+/// the expected decoded value.
+private func agentProtocolCodecSurfaceReference() -> SurfaceReference {
+    let featureUUID = UUID(uuidString: "00000000-0000-0000-0000-000000000101") ?? UUID()
+    return SurfaceReference(subshape: StableSubshapeReference(
+        subshapeID: SubshapeID(
+            featureID: FeatureID(featureUUID),
+            role: "bSplineSurface.patch:0:face",
+            ordinal: 0
+        ),
+        geometrySignature: .face(FaceGeometrySignature(
+            surface: .plane(Plane3D(origin: .origin, normal: .unitZ)),
+            orientation: .forward,
+            loops: []
+        ))
+    ))
+}
+
+private func agentProtocolCodecSurfaceReferenceJSON() throws -> String {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    let data = try encoder.encode(agentProtocolCodecSurfaceReference())
+    return String(decoding: data, as: UTF8.self)
 }

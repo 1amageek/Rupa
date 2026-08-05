@@ -87,7 +87,7 @@ extension DesignDocument {
             angle: angle,
             operation: .newBody
         )
-        try revolve.validate()
+        try revolve.validate(tolerance: modelingSettings.tolerance)
         guard let source = cadDocument.designGraph.nodes[profile.featureID],
               source.outputs.contains(where: { $0.role == .profile }) else {
             throw EditorError(
@@ -132,7 +132,7 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         )
-        try cadDocument.validate()
+        try cadDocument.validate(tolerance: modelingSettings.tolerance)
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         didCommitRevolve = true
         return featureID
@@ -221,7 +221,7 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         )
-        try cadDocument.validate()
+        try cadDocument.validate(tolerance: modelingSettings.tolerance)
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         didCommitSweep = true
         return featureID
@@ -287,7 +287,7 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         )
-        try cadDocument.validate()
+        try cadDocument.validate(tolerance: modelingSettings.tolerance)
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         didCommitLoft = true
         return featureID
@@ -358,7 +358,7 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         )
-        try cadDocument.validate()
+        try cadDocument.validate(tolerance: modelingSettings.tolerance)
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         didCommitBoolean = true
         return featureID

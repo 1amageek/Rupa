@@ -8,7 +8,7 @@ extension DesignDocument {
         process: TopologyMaterialBinding.Process? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws {
-        let persistentName = try topologyMaterialPersistentName(for: target)
+        let identity = try topologyMaterialSubshapeIdentity(for: target)
         guard productMetadata.sceneNodes[target.sceneNodeID] != nil else {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -38,7 +38,7 @@ extension DesignDocument {
         )
         guard topology.entries.contains(where: {
             $0.kind == .face
-                && $0.persistentName == persistentName
+                && $0.subshapeID == identity
                 && $0.sceneNodeID == target.sceneNodeID.description
         }) else {
             throw EditorError(
@@ -60,14 +60,14 @@ extension DesignDocument {
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
     }
 
-    private func topologyMaterialPersistentName(for target: SelectionTarget) throws -> String {
+    private func topologyMaterialSubshapeIdentity(for target: SelectionTarget) throws -> String {
         guard case .face(let componentID) = target.component,
-              let persistentName = componentID.generatedTopologyPersistentName else {
+              let subshapeID = componentID.generatedTopologySubshapeID else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Topology material binding requires a generated face target."
             )
         }
-        return persistentName
+        return GeneratedSubshapeIdentity.string(for: subshapeID)
     }
 }

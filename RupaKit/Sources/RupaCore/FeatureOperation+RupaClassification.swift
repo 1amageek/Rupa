@@ -37,6 +37,31 @@ extension FeatureOperation {
             return false
         case .curveTrim:
             return false
+        case .primitive,
+             .patchSurface,
+             .bridgeSurface,
+             .faceOffset,
+             .faceMove,
+             .edgeMove,
+             .vertexMove,
+             .linearPattern,
+             .radialPattern,
+             .gridPattern,
+             .curveDrivenPattern,
+             .chamfer,
+             .fillet,
+             .g2Blend,
+             .setbackCorner,
+             .shell,
+             .thicken,
+             .surfaceOffset,
+             .surfaceTrim,
+             .surfaceExtend,
+             .surfaceMatch:
+            return true
+        case .curveExtend,
+             .curveMatch:
+            return false
         }
     }
 
@@ -86,6 +111,44 @@ extension FeatureOperation {
         case .curveOffset:
             return []
         case .curveTrim:
+            return []
+        case .faceOffset(let feature):
+            return [feature.target.featureID]
+        case .faceMove(let feature):
+            return [feature.target.featureID]
+        case .edgeMove(let feature):
+            return [feature.target.featureID]
+        case .vertexMove(let feature):
+            return [feature.target.featureID]
+        case .chamfer(let feature):
+            return [feature.target.featureID]
+        case .fillet(let feature):
+            return [feature.target.featureID]
+        case .g2Blend(let feature):
+            return [feature.target.featureID]
+        case .setbackCorner(let feature):
+            return [feature.target.featureID]
+        case .shell(let feature):
+            return [feature.target.featureID]
+        case .thicken(let feature):
+            return [feature.target.featureID]
+        case .surfaceOffset(let feature):
+            return [feature.target.featureID]
+        case .surfaceTrim(let feature):
+            return [feature.target.featureID]
+        case .surfaceExtend(let feature):
+            return [feature.target.featureID]
+        case .surfaceMatch(let feature):
+            return [feature.source.featureID]
+        case .primitive,
+             .patchSurface,
+             .bridgeSurface,
+             .linearPattern,
+             .radialPattern,
+             .gridPattern,
+             .curveDrivenPattern,
+             .curveExtend,
+             .curveMatch:
             return []
         }
     }

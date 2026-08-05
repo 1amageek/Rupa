@@ -2955,7 +2955,7 @@ public struct MainView: View {
                 guard case .edge(let componentID) = target.component else {
                     return false
                 }
-                return componentID.generatedTopologyPersistentName != nil
+                return componentID.generatedTopologySubshapeID != nil
             }
             if !sketchEntityTargets.isEmpty {
                 let summary = try SketchDimensionSummaryService().summarize(
@@ -3187,7 +3187,8 @@ public struct MainView: View {
         do {
             let plane = try WorkspaceConstructionPlaneEditBuilder().planePreservingOrigin(
                 from: entry.plane,
-                viewNormal: viewNormal
+                viewNormal: viewNormal,
+                tolerance: session.document.modelingSettings.tolerance
             )
             let result = session.setConstructionPlane(id: entry.id, plane: plane)
             if result?.diagnostics.isEmpty == false || result == nil {
@@ -3247,7 +3248,8 @@ public struct MainView: View {
             let plane = try WorkspaceConstructionPlaneEditBuilder().planeSettingOriginComponent(
                 component,
                 value: value,
-                on: entry.plane
+                on: entry.plane,
+                tolerance: session.document.modelingSettings.tolerance
             )
             commitConstructionPlaneEdit(
                 entry,
@@ -3282,7 +3284,8 @@ public struct MainView: View {
             let plane = try WorkspaceConstructionPlaneEditBuilder().planeSettingNormalComponent(
                 component,
                 value: value,
-                on: entry.plane
+                on: entry.plane,
+                tolerance: session.document.modelingSettings.tolerance
             )
             commitConstructionPlaneEdit(
                 entry,
@@ -3789,7 +3792,8 @@ public struct MainView: View {
         do {
             guard let edit = try WorkspaceConstructionPlaneViewportDragCommitService().edit(
                 for: target,
-                entries: savedConstructionPlaneSummary.planes
+                entries: savedConstructionPlaneSummary.planes,
+                tolerance: session.document.modelingSettings.tolerance
             ) else {
                 return
             }
@@ -6933,17 +6937,56 @@ public struct MainView: View {
         endpoint: SketchSplineEndpoint,
         lineID: SketchEntityID
     ) {
+        guard let feature = session.document.cadDocument.designGraph.nodes[entity.sourceFeatureID],
+              case .sketch(let sketch) = feature.operation else {
+            session.reportToolStatus(
+                "Spline tangency requires an existing sketch feature.",
+                severity: .warning
+            )
+            return
+        }
+        let orientation: SketchTangentOrientation
+        do {
+            orientation = try session.document.splineLineTangentOrientation(
+                splineID: entity.entityID,
+                endpoint: endpoint,
+                lineID: lineID,
+                in: sketch
+            )
+        } catch let error as EditorError {
+            session.reportToolStatus(error.message, severity: .warning)
+            return
+        } catch {
+            session.reportToolStatus(
+                "Spline tangency could not resolve the current geometry.",
+                severity: .warning
+            )
+            return
+        }
         let result = session.addSketchConstraint(
             featureID: entity.sourceFeatureID,
-            constraint: .splineEndpointTangent(
-                spline: entity.entityID,
-                endpoint: endpoint,
-                line: lineID
-            )
+            constraint: .splineEndpointTangent(SketchSplineLineTangencyConstraint(
+                splineEndpoint: SketchSplineEndpointReference(
+                    splineID: entity.entityID,
+                    endpoint: endpoint
+                ),
+                line: lineID,
+                orientation: orientation
+            ))
         )
         if result?.diagnostics.isEmpty == false {
             isPreviewExpanded = true
         }
+    }
+
+    /// Joined endpoints of differing kinds flow in the same parameter
+    /// direction, so the tangent orientation is aligned exactly when the
+    /// endpoint kinds differ.
+    private func splineEndpointPairOrientation(
+        _ endpoint: SketchSplineEndpoint,
+        _ target: SketchSplineEndpointReference
+    ) -> SketchTangentOrientation {
+        endpoint == target.endpoint ? .opposed : .aligned
     }
 
     private func addTangentSplineEndpointsConstraint(
@@ -6953,13 +6996,14 @@ public struct MainView: View {
     ) {
         let result = session.addSketchConstraint(
             featureID: entity.sourceFeatureID,
-            constraint: .tangentSplineEndpoints(
+            constraint: .tangentSplineEndpoints(SketchSplineEndpointTangencyConstraint(
                 first: SketchSplineEndpointReference(
                     splineID: entity.entityID,
                     endpoint: endpoint
                 ),
-                second: target
-            )
+                second: target,
+                orientation: splineEndpointPairOrientation(endpoint, target)
+            ))
         )
         if result?.diagnostics.isEmpty == false {
             isPreviewExpanded = true
@@ -6973,13 +7017,14 @@ public struct MainView: View {
     ) {
         let result = session.addSketchConstraint(
             featureID: entity.sourceFeatureID,
-            constraint: .smoothSplineEndpoints(
+            constraint: .smoothSplineEndpoints(SketchSplineEndpointTangencyConstraint(
                 first: SketchSplineEndpointReference(
                     splineID: entity.entityID,
                     endpoint: endpoint
                 ),
-                second: target
-            )
+                second: target,
+                orientation: splineEndpointPairOrientation(endpoint, target)
+            ))
         )
         if result?.diagnostics.isEmpty == false {
             isPreviewExpanded = true

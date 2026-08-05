@@ -76,17 +76,16 @@ import SwiftCAD
         ),
         geometryRole: .sketchProfile
     )
-    let beforeOrder = document.cadDocument.designGraph.order
+    let revolveID = try document.createRevolve(
+        name: "Conical Revolve",
+        profile: ProfileReference(featureID: profileID),
+        axis: RevolveAxis(origin: .origin, direction: .unitY),
+        angle: .angle(180.0, .degree)
+    )
+    let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
 
-    #expect(throws: EditorError.self) {
-        _ = try document.createRevolve(
-            name: "Rejected Revolve",
-            profile: ProfileReference(featureID: profileID),
-            axis: RevolveAxis(origin: .origin, direction: .unitY),
-            angle: .angle(180.0, .degree)
-        )
-    }
-    #expect(document.cadDocument.designGraph.order == beforeOrder)
+    #expect(document.cadDocument.designGraph.order.last == revolveID)
+    #expect(evaluated.brep.bodies.count == 1)
     try document.validate()
 }
 
@@ -104,16 +103,17 @@ import SwiftCAD
             y: .length(12.0, .millimeter)
         )
     )
-    let beforeOrder = document.cadDocument.designGraph.order
+    _ = try document.createRevolve(
+        name: "Rejected Revolve",
+        profile: ProfileReference(featureID: profileID),
+        axis: RevolveAxis(origin: .origin, direction: .unitZ),
+        angle: .angle(180.0, .degree)
+    )
 
-    #expect(throws: EditorError.self) {
-        _ = try document.createRevolve(
-            name: "Rejected Revolve",
-            profile: ProfileReference(featureID: profileID),
-            axis: RevolveAxis(origin: .origin, direction: .unitZ),
-            angle: .angle(180.0, .degree)
-        )
+    do {
+        _ = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
+        Issue.record("Exact kernel must reject a revolve axis outside the profile plane.")
+    } catch let error as KernelError {
+        #expect(error.message.contains("Revolve axis direction must lie in the profile plane."))
     }
-    #expect(document.cadDocument.designGraph.order == beforeOrder)
-    try document.validate()
 }

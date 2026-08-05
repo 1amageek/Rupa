@@ -12,7 +12,7 @@ import Testing
         try polySplineSurfaceVertexSlideInput(
             featureID: featureID,
             sceneNodeID: sceneNodeID,
-            role: .uMinVMin,
+            cornerIndex: 0,
             point: Point3D(x: 0.0, y: 0.0, z: 0.0)
         )
     ]
@@ -21,6 +21,7 @@ import Testing
         ViewportPolySplineSurfaceVertexSlideAffordanceGeometry(
             selectedVertices: inputs,
             topologyVertices: topologyVertices,
+            patches: polySplineSurfaceVertexSlidePatches(featureID: featureID),
             direction: .positiveV,
             layout: layout
         )
@@ -40,7 +41,7 @@ import Testing
         try polySplineSurfaceVertexSlideInput(
             featureID: featureID,
             sceneNodeID: sceneNodeID,
-            role: .uMaxVMin,
+            cornerIndex: 1,
             point: Point3D(x: 0.004, y: 0.0, z: 0.0)
         )
     ]
@@ -49,6 +50,7 @@ import Testing
         ViewportPolySplineSurfaceVertexSlideAffordanceGeometry(
             selectedVertices: inputs,
             topologyVertices: topologyVertices,
+            patches: polySplineSurfaceVertexSlidePatches(featureID: featureID),
             direction: .negativeU,
             layout: layout
         )
@@ -68,7 +70,7 @@ import Testing
         try polySplineSurfaceVertexSlideInput(
             featureID: featureID,
             sceneNodeID: sceneNodeID,
-            role: .uMinVMin,
+            cornerIndex: 0,
             point: Point3D(x: 0.0, y: 0.0, z: 0.0)
         )
     ]
@@ -77,6 +79,7 @@ import Testing
         ViewportPolySplineSurfaceVertexSlideAffordanceGeometry(
             selectedVertices: inputs,
             topologyVertices: topologyVertices,
+            patches: polySplineSurfaceVertexSlidePatches(featureID: featureID),
             direction: .normal,
             layout: layout
         )
@@ -101,6 +104,7 @@ import Testing
         ViewportPolySplineSurfaceVertexSlideAffordanceGeometry(
             selectedControlPoints: [input],
             topologyVertices: topologyVertices,
+            patches: polySplineSurfaceVertexSlidePatches(featureID: featureID),
             direction: .positiveU,
             layout: layout
         )
@@ -112,6 +116,7 @@ import Testing
         ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.previewControlPoints(
             selectedControlPoints: [input],
             topologyVertices: topologyVertices,
+            patches: polySplineSurfaceVertexSlidePatches(featureID: featureID),
             direction: .positiveV,
             distanceMeters: 0.001
         )?.first
@@ -120,6 +125,7 @@ import Testing
         ViewportPolySplineSurfaceVertexSlideAffordanceGeometry(
             selectedControlPoints: [input],
             topologyVertices: topologyVertices,
+            patches: polySplineSurfaceVertexSlidePatches(featureID: featureID),
             direction: .normal,
             layout: layout
         )
@@ -147,7 +153,7 @@ import Testing
         try polySplineSurfaceVertexSlideInput(
             featureID: featureID,
             sceneNodeID: sceneNodeID,
-            role: .uMinVMin,
+            cornerIndex: 0,
             point: Point3D(x: 0.0, y: 0.0, z: 0.0),
             modelTransform: modelTransform
         )
@@ -157,6 +163,7 @@ import Testing
         ViewportPolySplineSurfaceVertexSlideAffordanceGeometry(
             selectedVertices: inputs,
             topologyVertices: topologyVertices,
+            patches: polySplineSurfaceVertexSlidePatches(featureID: featureID),
             direction: .positiveU,
             layout: layout
         )
@@ -185,7 +192,7 @@ import Testing
         try polySplineSurfaceVertexSlideInput(
             featureID: featureID,
             sceneNodeID: sceneNodeID,
-            role: .uMinVMin,
+            cornerIndex: 0,
             point: Point3D(x: 0.0, y: 0.0, z: 0.0),
             modelTransform: modelTransform
         )
@@ -196,6 +203,7 @@ import Testing
         ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.previewVertices(
             selectedVertices: inputs,
             topologyVertices: topologyVertices,
+            patches: polySplineSurfaceVertexSlidePatches(featureID: featureID),
             direction: .positiveU,
             distanceMeters: 0.001
         )?.first
@@ -204,8 +212,10 @@ import Testing
         ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.previewSurfaces(
             selectedVertices: inputs,
             topologyVertices: topologyVertices,
+            patches: polySplineSurfaceVertexSlidePatches(featureID: featureID),
             direction: .positiveU,
             distanceMeters: 0.001,
+            tolerance: DocumentModelingSettings.standard.tolerance,
             sampleSegmentCount: 1
         )?.first
     )
@@ -222,7 +232,7 @@ import Testing
     let input = try polySplineSurfaceVertexSlideInput(
         featureID: featureID,
         sceneNodeID: sceneNodeID,
-        role: .uMaxVMax,
+        cornerIndex: 2,
         point: Point3D(x: 0.004, y: 0.0, z: 0.004)
     )
     let topologyVertices = polySplineSurfaceVertexSlideTopologyVertices(featureID: featureID)
@@ -231,21 +241,24 @@ import Testing
         ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.localDirection(
             for: input.target,
             direction: .positiveU,
-            topologyVertices: topologyVertices
+            topologyVertices: topologyVertices,
+            patches: polySplineSurfaceVertexSlidePatches(featureID: featureID)
         )
     )
     let positiveV = try #require(
         ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.localDirection(
             for: input.target,
             direction: .positiveV,
-            topologyVertices: topologyVertices
+            topologyVertices: topologyVertices,
+            patches: polySplineSurfaceVertexSlidePatches(featureID: featureID)
         )
     )
     let normal = try #require(
         ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.localDirection(
             for: input.target,
             direction: .normal,
-            topologyVertices: topologyVertices
+            topologyVertices: topologyVertices,
+            patches: polySplineSurfaceVertexSlidePatches(featureID: featureID)
         )
     )
 
@@ -268,7 +281,7 @@ import Testing
         try polySplineSurfaceVertexSlideInput(
             featureID: featureID,
             sceneNodeID: sceneNodeID,
-            role: .uMinVMin,
+            cornerIndex: 0,
             point: Point3D(x: 0.0, y: 0.0, z: 0.0)
         )
     ]
@@ -277,6 +290,7 @@ import Testing
     let geometry = ViewportPolySplineSurfaceVertexSlideAffordanceGeometry(
         selectedVertices: inputs,
         topologyVertices: topologyVertices,
+        patches: polySplineSurfaceVertexSlidePatches(featureID: featureID),
         direction: .positiveU,
         layout: layout
     )
@@ -291,13 +305,13 @@ import Testing
         try polySplineSurfaceVertexSlideInput(
             featureID: featureID,
             sceneNodeID: sceneNodeID,
-            role: .uMinVMin,
+            cornerIndex: 0,
             point: Point3D(x: 0.000, y: 0.0, z: 0.000)
         ),
         try polySplineSurfaceVertexSlideInput(
             featureID: featureID,
             sceneNodeID: sceneNodeID,
-            role: .uMinVMax,
+            cornerIndex: 3,
             point: Point3D(x: 0.000, y: 0.0, z: 0.004)
         ),
     ]
@@ -305,6 +319,7 @@ import Testing
         ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.previewVertices(
             selectedVertices: inputs,
             topologyVertices: polySplineSurfaceVertexSlideTopologyVertices(featureID: featureID),
+            patches: polySplineSurfaceVertexSlidePatches(featureID: featureID),
             direction: .positiveU,
             distanceMeters: 0.001
         )
@@ -324,7 +339,7 @@ import Testing
         try polySplineSurfaceVertexSlideInput(
             featureID: featureID,
             sceneNodeID: sceneNodeID,
-            role: .uMinVMin,
+            cornerIndex: 0,
             point: Point3D(x: 0.000, y: 0.0, z: 0.000)
         )
     ]
@@ -332,8 +347,10 @@ import Testing
         ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.previewSurfaces(
             selectedVertices: inputs,
             topologyVertices: polySplineSurfaceVertexSlideTopologyVertices(featureID: featureID),
+            patches: polySplineSurfaceVertexSlidePatches(featureID: featureID),
             direction: .positiveU,
             distanceMeters: 0.001,
+            tolerance: DocumentModelingSettings.standard.tolerance,
             sampleSegmentCount: 2
         )
     )
@@ -361,13 +378,13 @@ private func polySplineSurfaceVertexSlideLayout() -> ViewportLayout {
 private func polySplineSurfaceVertexSlideInput(
     featureID: FeatureID,
     sceneNodeID: SceneNodeID,
-    role: PolySplineSurfaceVertexTarget.BoundaryRole,
+    cornerIndex: Int,
     point: Point3D,
     modelTransform: Transform3D = .identity
 ) throws -> ViewportPolySplineSurfaceVertexSlideInput {
     let componentID = polySplineSurfaceVertexSlideComponentID(
         featureID: featureID,
-        role: role
+        cornerIndex: cornerIndex
     )
     let target = try #require(PolySplineSurfaceVertexTarget.parse(componentID: componentID))
     return ViewportPolySplineSurfaceVertexSlideInput(
@@ -390,11 +407,18 @@ private func surfaceControlPointSlideInput(
 ) -> ViewportSurfaceControlPointSlideInput {
     ViewportSurfaceControlPointSlideInput(
         target: .surface(.controlPoint(SurfaceControlPointReference(
-            surface: SurfaceReference(faceName: PersistentName(components: [
-                .feature(featureID),
-                .generated("polySpline"),
-                .subshape("patch:0:face"),
-            ])),
+            surface: SurfaceReference(subshape: StableSubshapeReference(
+                subshapeID: SubshapeID(
+                    featureID: featureID,
+                    role: "polySpline.patch:0:face",
+                    ordinal: 0
+                ),
+                geometrySignature: .face(FaceGeometrySignature(
+                    surface: .plane(Plane3D(origin: .origin, normal: .unitY)),
+                    orientation: .forward,
+                    loops: []
+                ))
+            )),
             uIndex: uIndex,
             vIndex: vIndex
         ))),
@@ -421,15 +445,15 @@ private func polySplineSurfaceVertexSlideTopologyVertices(
     featureID: FeatureID
 ) -> [ViewportBodyTopology.Vertex] {
     [
-        (.uMinVMin, Point3D(x: 0.000, y: 0.0, z: 0.000)),
-        (.uMaxVMin, Point3D(x: 0.004, y: 0.0, z: 0.000)),
-        (.uMaxVMax, Point3D(x: 0.004, y: 0.0, z: 0.004)),
-        (.uMinVMax, Point3D(x: 0.000, y: 0.0, z: 0.004)),
-    ].map { role, point in
+        (0, Point3D(x: 0.000, y: 0.0, z: 0.000)),
+        (1, Point3D(x: 0.004, y: 0.0, z: 0.000)),
+        (2, Point3D(x: 0.004, y: 0.0, z: 0.004)),
+        (3, Point3D(x: 0.000, y: 0.0, z: 0.004)),
+    ].map { cornerIndex, point in
         ViewportBodyTopology.Vertex(
             componentID: polySplineSurfaceVertexSlideComponentID(
                 featureID: featureID,
-                role: role
+                cornerIndex: cornerIndex
             ),
             point: point
         )
@@ -438,9 +462,26 @@ private func polySplineSurfaceVertexSlideTopologyVertices(
 
 private func polySplineSurfaceVertexSlideComponentID(
     featureID: FeatureID,
-    role: PolySplineSurfaceVertexTarget.BoundaryRole
+    cornerIndex: Int
 ) -> SelectionComponentID {
-    SelectionComponentID.generatedTopology(
-        "feature:\(featureID.description)/generated:polySpline/subshape:patch:0:vertex:\(role.rawValue)"
-    )
+    SelectionComponentID.generatedTopology(SubshapeID(
+        featureID: featureID,
+        role: "polySpline.vertex:source:\(cornerIndex)",
+        ordinal: 0
+    ))
+}
+
+/// One supported patch whose corner source indices follow the analyzer
+/// boundary order (uMinVMin, uMaxVMin, uMaxVMax, uMinVMax).
+private func polySplineSurfaceVertexSlidePatches(
+    featureID: FeatureID
+) -> [FeatureID: [ViewportPolySplinePatchDescriptor]] {
+    [
+        featureID: [
+            ViewportPolySplinePatchDescriptor(
+                candidateID: 0,
+                cornerSourceVertexIndices: [0, 1, 2, 3]
+            ),
+        ],
+    ]
 }

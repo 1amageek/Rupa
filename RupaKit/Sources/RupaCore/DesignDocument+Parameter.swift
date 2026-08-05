@@ -42,7 +42,7 @@ extension DesignDocument {
         let previousProductMetadata = productMetadata
         var updatedCADDocument = cadDocument
         do {
-            try updatedCADDocument.deleteParameter(named: name)
+            try updatedCADDocument.deleteParameter(named: name, tolerance: modelingSettings.tolerance)
         } catch {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -81,7 +81,7 @@ extension DesignDocument {
         let previousProductMetadata = productMetadata
         var updatedCADDocument = cadDocument
         do {
-            try updatedCADDocument.renameParameter(named: currentName, to: newName)
+            try updatedCADDocument.renameParameter(named: currentName, to: newName, tolerance: modelingSettings.tolerance)
         } catch let error as ParameterError {
             throw EditorError(
                 code: .commandInvalid,

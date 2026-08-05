@@ -88,7 +88,7 @@ import Testing
     #expect(result.commandName == "offsetBodyFace")
     #expect(result.didMutate)
     #expect(session.generation == DocumentGeneration(2))
-    #expect(componentID.generatedTopologyPersistentName != nil)
+    #expect(componentID.generatedTopologySubshapeID != nil)
     #expect(nearlyEqual(afterBounds.maxX, beforeBounds.maxX + 0.002))
 }
 
@@ -147,7 +147,7 @@ import Testing
     #expect(result.commandName == "offsetBodyFace")
     #expect(result.didMutate)
     #expect(session.generation == DocumentGeneration(4))
-    #expect(componentID.generatedTopologyPersistentName != nil)
+    #expect(componentID.generatedTopologySubshapeID != nil)
     #expect(nearlyEqual(afterBounds.maxX, beforeBounds.maxX + 0.002))
     #expect(session.document.productMetadata.patternArrays[source.id] != nil)
 }

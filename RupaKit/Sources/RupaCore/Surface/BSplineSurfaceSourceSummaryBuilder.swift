@@ -3,6 +3,74 @@ import SwiftCAD
 struct BSplineSurfaceSourceSummaryBuilder: Sendable {
     private let boundaryProfileBuilder = BSplineSurfaceBoundaryProfileBuilder()
 
+    /// Unified per-edge trim view: authored loops come from the downstream
+    /// `surfaceTrim` feature, rectangular domains synthesize one outer loop of
+    /// constant-parameter boundary curves in the kernel's vMin/uMax/vMax/uMin
+    /// order.
+    private struct SummaryTrimEdge {
+        var parameterCurve: SurfaceParameterCurve
+        var role: String?
+
+        func startParameter(tolerance: ModelingTolerance) throws -> SurfaceParameter {
+            try parameterCurve.startParameter(tolerance: tolerance)
+        }
+
+        func endParameter(tolerance: ModelingTolerance) throws -> SurfaceParameter {
+            try parameterCurve.endParameter(tolerance: tolerance)
+        }
+    }
+
+    private struct SummaryTrimLoop {
+        var role: SurfaceTrimLoopRole
+        var edges: [SummaryTrimEdge]
+        var isRectangularBoundaryLoop: Bool
+    }
+
+    private func summaryTrimLoops(
+        authoredTrimLoops: [SurfaceTrimLoop],
+        trimDomain: SurfaceParameterDomain2D
+    ) -> [SummaryTrimLoop] {
+        guard authoredTrimLoops.isEmpty else {
+            return authoredTrimLoops.map { loop in
+                SummaryTrimLoop(
+                    role: loop.role,
+                    edges: loop.parameterCurves.map {
+                        SummaryTrimEdge(parameterCurve: $0, role: nil)
+                    },
+                    isRectangularBoundaryLoop: false
+                )
+            }
+        }
+        let uLower = trimDomain.uLowerBound
+        let uUpper = trimDomain.uUpperBound
+        let vLower = trimDomain.vLowerBound
+        let vUpper = trimDomain.vUpperBound
+        return [
+            SummaryTrimLoop(
+                role: .outer,
+                edges: [
+                    SummaryTrimEdge(
+                        parameterCurve: .constantV(v: vLower, uStart: uLower, uEnd: uUpper),
+                        role: BSplineSurfaceBoundarySide.vMin.rawValue
+                    ),
+                    SummaryTrimEdge(
+                        parameterCurve: .constantU(u: uUpper, vStart: vLower, vEnd: vUpper),
+                        role: BSplineSurfaceBoundarySide.uMax.rawValue
+                    ),
+                    SummaryTrimEdge(
+                        parameterCurve: .constantV(v: vUpper, uStart: uUpper, uEnd: uLower),
+                        role: BSplineSurfaceBoundarySide.vMax.rawValue
+                    ),
+                    SummaryTrimEdge(
+                        parameterCurve: .constantU(u: uLower, vStart: vUpper, vEnd: vLower),
+                        role: BSplineSurfaceBoundarySide.uMin.rawValue
+                    ),
+                ],
+                isRectangularBoundaryLoop: true
+            ),
+        ]
+    }
+
     private struct PatchBuildResult {
         var patch: SurfaceSourceSummaryResult.Patch
         var diagnostics: [SurfaceSourceSummaryResult.Diagnostic]
@@ -12,20 +80,24 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         featureID: FeatureID,
         feature: FeatureNode,
         surfaceFeature: BSplineSurfaceFeature,
+        authoredTrimLoops: [SurfaceTrimLoop],
+        authoredTrimTargetFace: StableSubshapeReference?,
         sceneNodeID: SceneNodeID?,
         surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay],
         surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay],
-        topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry]
+        topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry],
+        tolerance: ModelingTolerance
     ) throws -> SurfaceSourceSummaryResult.Source? {
         let surface = surfaceFeature.surface
-        let usesAuthoredTrimLoops = surfaceFeature.trimLoops.isEmpty == false
-        let trimDomain = usesAuthoredTrimLoops
-            ? try BSplineSurfaceTrimDomain.fullSurfaceDomain(for: surface)
-            : try surfaceFeature.resolvedOuterTrimDomain()
+        let usesAuthoredTrimLoops = authoredTrimLoops.isEmpty == false
+        let trimDomain = try surfaceFeature.resolvedParameterDomain(tolerance: tolerance)
         let trimsFullSurfaceDomain = usesAuthoredTrimLoops
             ? false
-            : try trimDomain.isFullSurfaceDomain(of: surface)
-        let sourceTrimLoops = try surfaceFeature.resolvedTrimLoops()
+            : surfaceFeature.parameterDomain == nil
+        let sourceTrimLoops = summaryTrimLoops(
+            authoredTrimLoops: authoredTrimLoops,
+            trimDomain: trimDomain
+        )
         let boundaryEdgeCount = sourceTrimLoops
             .filter { $0.role == .outer }
             .reduce(0) { partial, loop in partial + loop.edges.count }
@@ -37,12 +109,14 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
             surface: surface,
             sourceTrimLoops: sourceTrimLoops,
             usesAuthoredTrimLoops: usesAuthoredTrimLoops,
+            authoredTrimTargetFace: authoredTrimTargetFace,
             uBounds: (trimDomain.uLowerBound, trimDomain.uUpperBound),
             vBounds: (trimDomain.vLowerBound, trimDomain.vUpperBound),
             trimsFullSurfaceDomain: trimsFullSurfaceDomain,
             surfaceControlPointDisplays: surfaceControlPointDisplays,
             surfaceFrameDisplays: surfaceFrameDisplays,
-            topologyEntriesByPersistentName: topologyEntriesByPersistentName
+            topologyEntriesByPersistentName: topologyEntriesByPersistentName,
+            tolerance: tolerance
         )
         return SurfaceSourceSummaryResult.Source(
             featureID: featureID.description,
@@ -91,21 +165,33 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
     private func bSplinePatch(
         featureID: FeatureID,
         surface: BSplineSurface3D,
-        sourceTrimLoops: [BSplineSurfaceTrimLoop],
+        sourceTrimLoops: [SummaryTrimLoop],
         usesAuthoredTrimLoops: Bool,
+        authoredTrimTargetFace: StableSubshapeReference?,
         uBounds: (lower: Double, upper: Double),
         vBounds: (lower: Double, upper: Double),
         trimsFullSurfaceDomain: Bool,
         surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay],
         surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay],
-        topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry]
+        topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry],
+        tolerance: ModelingTolerance
     ) throws -> PatchBuildResult {
-        let faceName = persistentName(featureID: featureID, subshape: "patch:0:face")
-        let facePersistentName = persistentNameString(faceName)
-        let surfaceReference = SurfaceReference(faceName: faceName)
-        let faceSelectionReference: SelectionReference? = topologyEntriesByPersistentName[facePersistentName] == nil
-            ? nil
-            : .surface(.whole(surfaceReference))
+        let faceSubshapeID = subshapeIdentity(featureID: featureID, subshape: "patch:0:face")
+        let faceEntry = topologyEntriesByPersistentName[faceSubshapeID]
+        // An authored trim supersedes the source surface body, so its stable
+        // target face keeps the patch addressable when the surface feature no
+        // longer publishes the patch face itself.
+        let stableFaceReference = faceEntry?.stableReference ?? authoredTrimTargetFace
+        let surfaceReference = stableFaceReference.map(SurfaceReference.init(subshape:))
+        let faceSelectionReference: SelectionReference? = surfaceReference.map {
+            .surface(.whole($0))
+        }
+        let resolvedFaceSubshapeID = faceEntry?.subshapeID
+            ?? authoredTrimTargetFace.map { GeneratedSubshapeIdentity.string(for: $0.subshapeID) }
+        let resolvedFaceSelectionComponentID = faceEntry?.selectionComponentID
+            ?? authoredTrimTargetFace.map {
+                SelectionComponentID.generatedTopology($0.subshapeID).rawValue
+            }
         let trimLoops = try trimLoops(
             featureID: featureID,
             surface: surface,
@@ -115,23 +201,29 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
             uBounds: uBounds,
             vBounds: vBounds,
             trimsFullSurfaceDomain: trimsFullSurfaceDomain,
-            topologyEntriesByPersistentName: topologyEntriesByPersistentName
+            topologyEntriesByPersistentName: topologyEntriesByPersistentName,
+            tolerance: tolerance
         )
         let basis = basis(surface: surface, surfaceReference: surfaceReference)
-        let frameSampleResult = SurfaceSourceFrameSampleBuilder().buildSamples(
-            featureID: featureID,
-            patchID: 0,
-            surface: surface,
-            surfaceReference: surfaceReference,
-            uSpans: clippedSpans(basis.uSpans, to: uBounds),
-            vSpans: clippedSpans(basis.vSpans, to: vBounds),
-            surfaceFrameDisplays: surfaceFrameDisplays
-        )
+        let frameSampleResult: SurfaceSourceFrameSampleBuilder.Result
+        if let surfaceReference {
+            frameSampleResult = SurfaceSourceFrameSampleBuilder().buildSamples(
+                featureID: featureID,
+                patchID: 0,
+                surface: surface,
+                surfaceReference: surfaceReference,
+                uSpans: clippedSpans(basis.uSpans, to: uBounds),
+                vSpans: clippedSpans(basis.vSpans, to: vBounds),
+                surfaceFrameDisplays: surfaceFrameDisplays
+            )
+        } else {
+            frameSampleResult = SurfaceSourceFrameSampleBuilder.Result()
+        }
 
         return PatchBuildResult(patch: SurfaceSourceSummaryResult.Patch(
             patchID: 0,
-            facePersistentName: topologyEntriesByPersistentName[facePersistentName]?.persistentName,
-            faceSelectionComponentID: topologyEntriesByPersistentName[facePersistentName]?.selectionComponentID,
+            faceSubshapeID: resolvedFaceSubshapeID,
+            faceSelectionComponentID: resolvedFaceSelectionComponentID,
             faceSelectionReference: faceSelectionReference,
             uDomain: SurfaceSourceSummaryResult.ParameterRange(lowerBound: uBounds.lower, upperBound: uBounds.upper),
             vDomain: SurfaceSourceSummaryResult.ParameterRange(lowerBound: vBounds.lower, upperBound: vBounds.upper),
@@ -156,7 +248,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
     private func bSplineControlPoints(
         featureID: FeatureID,
         surface: BSplineSurface3D,
-        surfaceReference: SurfaceReference,
+        surfaceReference: SurfaceReference?,
         surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay]
     ) -> [SurfaceSourceSummaryResult.ControlPoint] {
         var result: [SurfaceSourceSummaryResult.ControlPoint] = []
@@ -172,11 +264,13 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                     || uIndex == surface.uControlPointCount - 1
                     || vIndex == 0
                     || vIndex == surface.vControlPointCount - 1
-                let selectionReference = SelectionReference.surface(.controlPoint(SurfaceControlPointReference(
-                    surface: surfaceReference,
-                    uIndex: uIndex,
-                    vIndex: vIndex
-                )))
+                let selectionReference = surfaceReference.map {
+                    SelectionReference.surface(.controlPoint(SurfaceControlPointReference(
+                        surface: $0,
+                        uIndex: uIndex,
+                        vIndex: vIndex
+                    )))
+                }
                 result.append(SurfaceSourceSummaryResult.ControlPoint(
                     id: "feature:\(featureID.description)/patch:0/surfaceControlPoint:u\(uIndex):v\(vIndex)",
                     uIndex: uIndex,
@@ -186,10 +280,12 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                     isBoundary: isBoundary,
                     isEditable: true,
                     selectionReference: selectionReference,
-                    isPointDisplayVisible: isSurfaceControlPointDisplayVisible(
-                        selectionReference,
-                        in: surfaceControlPointDisplays
-                    )
+                    isPointDisplayVisible: selectionReference.map {
+                        isSurfaceControlPointDisplayVisible(
+                            $0,
+                            in: surfaceControlPointDisplays
+                        )
+                    } ?? false
                 ))
             }
         }
@@ -199,13 +295,14 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
     private func trimLoops(
         featureID: FeatureID,
         surface: BSplineSurface3D,
-        surfaceReference: SurfaceReference,
-        sourceTrimLoops: [BSplineSurfaceTrimLoop],
+        surfaceReference: SurfaceReference?,
+        sourceTrimLoops: [SummaryTrimLoop],
         usesAuthoredTrimLoops: Bool,
         uBounds: (lower: Double, upper: Double),
         vBounds: (lower: Double, upper: Double),
         trimsFullSurfaceDomain: Bool,
-        topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry]
+        topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry],
+        tolerance: ModelingTolerance
     ) throws -> [SurfaceSourceSummaryResult.TrimLoop] {
         try sourceTrimLoops.enumerated().map { loopIndex, sourceLoop in
             let edges = try trimEdges(
@@ -218,7 +315,8 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                 uBounds: uBounds,
                 vBounds: vBounds,
                 trimsFullSurfaceDomain: trimsFullSurfaceDomain,
-                topologyEntriesByPersistentName: topologyEntriesByPersistentName
+                topologyEntriesByPersistentName: topologyEntriesByPersistentName,
+                tolerance: tolerance
             )
             return SurfaceSourceSummaryResult.TrimLoop(
                 role: sourceLoop.role.rawValue,
@@ -227,9 +325,20 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                     loopIndex: loopIndex,
                     surfaceReference: surfaceReference,
                     uBounds: uBounds,
-                    vBounds: vBounds
+                    vBounds: vBounds,
+                    tolerance: tolerance
                 ),
                 sourceVertexIndices: [],
+                // FIXME(INCOMPLETE_IMPLEMENTATION): The kernel names authored
+                // trim edges under the surfaceTrim feature with role "edge"
+                // and sewing-order ordinals, but this summary does not yet map
+                // loop parameter curves to those ordinals, so authored trim
+                // loops list no edge persistent names. Production callers
+                // reach this through surfaceSourceSummary for trimmed direct
+                // B-spline surfaces; they address authored trim edges through
+                // parameter-space selection references instead. Do not treat
+                // authored-trim edge naming as complete until this list
+                // matches the loop's parameter curve count in tests.
                 edgePersistentNames: edges.compactMap { edge in
                     guard let persistentName = edge.persistentName,
                           topologyEntriesByPersistentName[persistentName] != nil else {
@@ -246,14 +355,15 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
     private func trimEdges(
         featureID: FeatureID,
         surface: BSplineSurface3D,
-        surfaceReference: SurfaceReference,
-        sourceLoop: BSplineSurfaceTrimLoop,
+        surfaceReference: SurfaceReference?,
+        sourceLoop: SummaryTrimLoop,
         loopIndex: Int,
         usesAuthoredTrimLoops: Bool,
         uBounds: (lower: Double, upper: Double),
         vBounds: (lower: Double, upper: Double),
         trimsFullSurfaceDomain: Bool,
-        topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry]
+        topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry],
+        tolerance: ModelingTolerance
     ) throws -> [SurfaceSourceSummaryResult.TrimLoop.Edge] {
         try sourceLoop.edges.indices.map { index in
             let sourceEdge = sourceLoop.edges[index]
@@ -262,21 +372,27 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                 loopIndex: loopIndex,
                 edgeIndex: index
             )
-            let edgePersistentName = persistentNameString(
-                persistentName(featureID: featureID, subshape: subshape)
-            )
-            let selectionReference: SelectionReference? = topologyEntriesByPersistentName[edgePersistentName] == nil
+            // Authored trim edges live on the downstream surfaceTrim feature
+            // and are addressed in surface parameter space, so they carry no
+            // source-surface persistent name and need no live-topology gate.
+            let edgePersistentName = usesAuthoredTrimLoops
                 ? nil
-                : .surface(.trim(SurfaceTrimReference(
-                    surface: surfaceReference,
+                : subshapeIdentity(featureID: featureID, subshape: subshape)
+            let trimReference = surfaceReference.map {
+                SurfaceTrimReference(
+                    surface: $0,
                     loopIndex: loopIndex,
                     edgeIndex: index
-                )))
-            let trimReference = SurfaceTrimReference(
-                surface: surfaceReference,
-                loopIndex: loopIndex,
-                edgeIndex: index
-            )
+                )
+            }
+            let selectionReference: SelectionReference? = if usesAuthoredTrimLoops {
+                trimReference.map { .surface(.trim($0)) }
+            } else if let edgePersistentName,
+                      topologyEntriesByPersistentName[edgePersistentName] != nil {
+                trimReference.map { .surface(.trim($0)) }
+            } else {
+                nil
+            }
             let side = boundarySide(role: sourceEdge.role)
             let parameters = if let side, sourceLoop.isRectangularBoundaryLoop {
                 trimEdgeParameters(
@@ -290,7 +406,8 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                     sourceEdge: sourceEdge,
                     loopIndex: loopIndex,
                     edgeIndex: index,
-                    surfaceReference: surfaceReference
+                    surfaceReference: surfaceReference,
+                    tolerance: tolerance
                 )
             }
             let levels = supportedBoundaryContinuityLevels(
@@ -370,9 +487,16 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
 
     private func parameterCurveSummary(
         for curve: SurfaceParameterCurve,
-        trimReference: SurfaceTrimReference
+        trimReference: SurfaceTrimReference?
     ) -> SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurve {
         switch curve {
+        case .affine, .harmonic, .sphericalGreatCircle, .certifiedImplicit,
+             .certifiedAnalyticImplicit, .certifiedAnalyticPair,
+             .periodicTranslation, .projectedAnalytic:
+            return SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurve(
+                kind: "analytic",
+                unsupportedReason: "Analytic and certified trim p-curves are not editable source primitives."
+            )
         case .constantU:
             return SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurve(
                 kind: "constantU",
@@ -426,7 +550,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
     private func parameterCurveKnotVector(
         knots: [Double],
         degree: Int,
-        trimReference: SurfaceTrimReference
+        trimReference: SurfaceTrimReference?
     ) -> [SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurve.Knot] {
         let lowerBound = knots.indices.contains(degree) ? knots[degree] : knots.first
         let upperBoundIndex = knots.count - degree - 1
@@ -461,10 +585,12 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                     multiplicity: multiplicity,
                     degree: degree
                 ),
-                selectionReference: .surface(.trimKnot(SurfaceTrimKnotReference(
-                    trim: trimReference,
-                    knotIndex: index
-                )))
+                selectionReference: trimReference.map {
+                    .surface(.trimKnot(SurfaceTrimKnotReference(
+                        trim: $0,
+                        knotIndex: index
+                    )))
+                }
             )
         }
     }
@@ -490,7 +616,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
     private func parameterCurveSpans(
         knots: [Double],
         degree: Int,
-        trimReference: SurfaceTrimReference
+        trimReference: SurfaceTrimReference?
     ) -> [SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurve.Span] {
         let lowerIndex = degree
         let upperIndex = knots.count - degree - 1
@@ -513,10 +639,12 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                 startKnotIndex: index,
                 endKnotIndex: index + 1,
                 isInsertionSupported: true,
-                selectionReference: .surface(.trimSpan(SurfaceTrimSpanReference(
-                    trim: trimReference,
-                    spanIndex: spanIndex
-                )))
+                selectionReference: trimReference.map {
+                    .surface(.trimSpan(SurfaceTrimSpanReference(
+                        trim: $0,
+                        spanIndex: spanIndex
+                    )))
+                }
             ))
         }
         return result
@@ -526,10 +654,12 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         for curve: SurfaceParameterCurve,
         loopIndex: Int,
         edgeIndex: Int,
-        surfaceReference: SurfaceReference
+        surfaceReference: SurfaceReference?
     ) -> [SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurveControlPoint] {
         switch curve {
-        case .constantU, .constantV:
+        case .constantU, .constantV, .affine, .harmonic, .sphericalGreatCircle,
+             .certifiedImplicit, .certifiedAnalyticImplicit, .certifiedAnalyticPair,
+             .periodicTranslation, .projectedAnalytic:
             return []
         case .polyline(let points):
             return parameterCurveControlPoints(
@@ -553,7 +683,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         points: [SurfaceParameter],
         loopIndex: Int,
         edgeIndex: Int,
-        surfaceReference: SurfaceReference
+        surfaceReference: SurfaceReference?
     ) -> [SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurveControlPoint] {
         points.enumerated().map { index, point in
             parameterCurveControlPoint(
@@ -576,7 +706,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         weights: [Double],
         loopIndex: Int,
         edgeIndex: Int,
-        surfaceReference: SurfaceReference
+        surfaceReference: SurfaceReference?
     ) -> [SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurveControlPoint] {
         controlPoints.enumerated().map { index, point in
             let weight = weights.indices.contains(index) ? weights[index] : nil
@@ -607,7 +737,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         weightUnsupportedReason: String?,
         loopIndex: Int,
         edgeIndex: Int,
-        surfaceReference: SurfaceReference
+        surfaceReference: SurfaceReference?
     ) -> SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurveControlPoint {
         let isEndpoint = index == 0 || index == count - 1
         return SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurveControlPoint(
@@ -630,7 +760,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
     }
 
     private func trimEdgeSubshape(
-        sourceLoop: BSplineSurfaceTrimLoop,
+        sourceLoop: SummaryTrimLoop,
         loopIndex: Int,
         edgeIndex: Int
     ) -> String {
@@ -643,11 +773,12 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
     }
 
     private func trimLoopParameterAddresses(
-        sourceLoop: BSplineSurfaceTrimLoop,
+        sourceLoop: SummaryTrimLoop,
         loopIndex: Int,
-        surfaceReference: SurfaceReference,
+        surfaceReference: SurfaceReference?,
         uBounds: (lower: Double, upper: Double),
-        vBounds: (lower: Double, upper: Double)
+        vBounds: (lower: Double, upper: Double),
+        tolerance: ModelingTolerance
     ) throws -> [SurfaceSourceSummaryResult.ParameterAddress] {
         if loopIndex == 0, sourceLoop.isRectangularBoundaryLoop {
             return cornerParameterAddresses(
@@ -657,7 +788,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
             )
         }
         return try sourceLoop.edges.indices.map { edgeIndex in
-            let parameter = try sourceLoop.edges[edgeIndex].startParameter()
+            let parameter = try sourceLoop.edges[edgeIndex].startParameter(tolerance: tolerance)
             return parameterAddress(
                 id: "loop:\(loopIndex):edge:\(edgeIndex):start",
                 surfaceReference: surfaceReference,
@@ -668,13 +799,14 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
     }
 
     private func trimEdgeParameters(
-        sourceEdge: BSplineSurfaceTrimEdge,
+        sourceEdge: SummaryTrimEdge,
         loopIndex: Int,
         edgeIndex: Int,
-        surfaceReference: SurfaceReference
+        surfaceReference: SurfaceReference?,
+        tolerance: ModelingTolerance
     ) throws -> (start: SurfaceSourceSummaryResult.ParameterAddress, end: SurfaceSourceSummaryResult.ParameterAddress) {
-        let start = try sourceEdge.startParameter()
-        let end = try sourceEdge.endParameter()
+        let start = try sourceEdge.startParameter(tolerance: tolerance)
+        let end = try sourceEdge.endParameter(tolerance: tolerance)
         return (
             parameterAddress(
                 id: "loop:\(loopIndex):edge:\(edgeIndex):start",
@@ -718,7 +850,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
 
     private func trimEdgeParameters(
         side: BSplineSurfaceBoundarySide,
-        surfaceReference: SurfaceReference,
+        surfaceReference: SurfaceReference?,
         uBounds: (lower: Double, upper: Double),
         vBounds: (lower: Double, upper: Double)
     ) -> (start: SurfaceSourceSummaryResult.ParameterAddress, end: SurfaceSourceSummaryResult.ParameterAddress) {
@@ -750,9 +882,12 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         side: BSplineSurfaceBoundarySide,
         inwardOffset: Int,
         surface: BSplineSurface3D,
-        surfaceReference: SurfaceReference
+        surfaceReference: SurfaceReference?
     ) -> [SelectionReference] {
         guard inwardOffset < boundaryProfileBuilder.inwardControlPointCount(for: side, in: surface) else {
+            return []
+        }
+        guard let surfaceReference else {
             return []
         }
         return boundaryOrdinals(for: side, in: surface).map { ordinal in
@@ -849,7 +984,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
     }
 
     private func trimDomainDiagnostics(
-        trimDomain: BSplineSurfaceTrimDomain,
+        trimDomain: SurfaceParameterDomain2D,
         trimsFullSurfaceDomain: Bool,
         usesAuthoredTrimLoops: Bool
     ) -> [SurfaceSourceSummaryResult.Diagnostic] {
@@ -867,7 +1002,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
     }
 
     private func authoredTrimLoopDiagnostics(
-        sourceTrimLoops: [BSplineSurfaceTrimLoop],
+        sourceTrimLoops: [SummaryTrimLoop],
         usesAuthoredTrimLoops: Bool
     ) -> [SurfaceSourceSummaryResult.Diagnostic] {
         guard usesAuthoredTrimLoops else {
@@ -879,7 +1014,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         return [
             SurfaceSourceSummaryResult.Diagnostic(
                 severity: "info",
-                code: "directBSplineSurfaceTrimLoops",
+                code: "directSurfaceTrimLoops",
                 message: "Direct B-spline surface uses \(sourceTrimLoops.count) authored UV trim loop(s) with \(edgeCount) source p-curve edge(s)."
             ),
         ]
@@ -900,7 +1035,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
 
     private func basis(
         surface: BSplineSurface3D,
-        surfaceReference: SurfaceReference
+        surfaceReference: SurfaceReference?
     ) -> SurfaceSourceSummaryResult.Basis {
         let uSpans = spans(
             direction: .u,
@@ -946,7 +1081,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         direction: SurfaceParameterDirection,
         knots: [Double],
         degree: Int,
-        surfaceReference: SurfaceReference
+        surfaceReference: SurfaceReference?
     ) -> [SurfaceSourceSummaryResult.Basis.Knot] {
         let lowerBound = knots.first
         let upperBound = knots.last
@@ -966,11 +1101,13 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                 multiplicity: multiplicities[value] ?? 1,
                 isBoundary: isBoundary,
                 isEditable: isEditable,
-                selectionReference: .surface(.knot(SurfaceKnotReference(
-                    surface: surfaceReference,
-                    direction: direction,
-                    knotIndex: index
-                )))
+                selectionReference: surfaceReference.map {
+                    .surface(.knot(SurfaceKnotReference(
+                        surface: $0,
+                        direction: direction,
+                        knotIndex: index
+                    )))
+                }
             )
         }
     }
@@ -979,7 +1116,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         direction: SurfaceParameterDirection,
         knots: [Double],
         degree: Int,
-        surfaceReference: SurfaceReference
+        surfaceReference: SurfaceReference?
     ) -> [SurfaceSourceSummaryResult.Basis.Span] {
         let lowerIndex = degree
         let upperIndex = knots.count - degree - 1
@@ -1002,11 +1139,13 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                 startKnotIndex: index,
                 endKnotIndex: index + 1,
                 isEditable: true,
-                selectionReference: .surface(.span(SurfaceSpanReference(
-                    surface: surfaceReference,
-                    direction: direction,
-                    spanIndex: spanIndex
-                )))
+                selectionReference: surfaceReference.map {
+                    .surface(.span(SurfaceSpanReference(
+                        surface: $0,
+                        direction: direction,
+                        spanIndex: spanIndex
+                    )))
+                }
             ))
         }
         return result
@@ -1030,7 +1169,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
     }
 
     private func patchParameterAddresses(
-        surfaceReference: SurfaceReference,
+        surfaceReference: SurfaceReference?,
         uBounds: (lower: Double, upper: Double),
         vBounds: (lower: Double, upper: Double)
     ) -> [SurfaceSourceSummaryResult.ParameterAddress] {
@@ -1045,17 +1184,19 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                 id: "center",
                 u: centerU,
                 v: centerV,
-                selectionReference: .surface(.parameter(SurfaceParameterReference(
-                    surface: surfaceReference,
-                    u: centerU,
-                    v: centerV
-                )))
+                selectionReference: surfaceReference.map {
+                    .surface(.parameter(SurfaceParameterReference(
+                        surface: $0,
+                        u: centerU,
+                        v: centerV
+                    )))
+                }
             ),
         ]
     }
 
     private func cornerParameterAddresses(
-        surfaceReference: SurfaceReference,
+        surfaceReference: SurfaceReference?,
         uBounds: (lower: Double, upper: Double),
         vBounds: (lower: Double, upper: Double)
     ) -> [SurfaceSourceSummaryResult.ParameterAddress] {
@@ -1069,7 +1210,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
 
     private func parameterAddress(
         id: String,
-        surfaceReference: SurfaceReference,
+        surfaceReference: SurfaceReference?,
         u: Double,
         v: Double
     ) -> SurfaceSourceSummaryResult.ParameterAddress {
@@ -1077,35 +1218,21 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
             id: id,
             u: u,
             v: v,
-            selectionReference: .surface(.parameter(SurfaceParameterReference(
-                surface: surfaceReference,
-                u: u,
-                v: v
-            )))
+            selectionReference: surfaceReference.map {
+                .surface(.parameter(SurfaceParameterReference(
+                    surface: $0,
+                    u: u,
+                    v: v
+                )))
+            }
         )
     }
 
-    private func persistentName(featureID: FeatureID, subshape: String) -> PersistentName {
-        PersistentName(components: [
-            .feature(featureID),
-            .generated("bSplineSurface"),
-            .subshape(subshape),
-        ])
-    }
-
-    private func persistentNameString(_ name: PersistentName) -> String {
-        name.components.map { component in
-            switch component {
-            case .feature(let featureID):
-                return "feature:\(featureID.description)"
-            case .generated(let value):
-                return "generated:\(value)"
-            case .subshape(let value):
-                return "subshape:\(value)"
-            case .index(let index):
-                return "index:\(index)"
-            }
-        }
-        .joined(separator: "/")
+    private func subshapeIdentity(featureID: FeatureID, subshape: String) -> String {
+        GeneratedSubshapeIdentity.string(for: SubshapeID(
+            featureID: featureID,
+            role: "bSplineSurface.\(subshape)",
+            ordinal: 0
+        ))
     }
 }

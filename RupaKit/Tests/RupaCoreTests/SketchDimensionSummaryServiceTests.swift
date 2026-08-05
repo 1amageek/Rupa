@@ -152,7 +152,7 @@ import Testing
         $0.kind == .edge &&
             $0.generatedRole == "edge" &&
             $0.curveKind == "line" &&
-            ($0.index ?? Int.max) < 4
+            ($0.ordinal ?? Int.max) < 4
     })
     let target = try #require(capEdge.selectionTarget())
 
@@ -182,7 +182,7 @@ import Testing
         $0.kind == .edge &&
             $0.generatedRole == "edge" &&
             $0.curveKind == "circle" &&
-            ($0.index ?? Int.max) < 8
+            ($0.ordinal ?? Int.max) < 8
     })
     let target = try #require(capEdge.selectionTarget())
 

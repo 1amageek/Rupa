@@ -21,7 +21,7 @@ import SwiftCAD
     #expect(result.entries.filter { $0.kind == .face }.count == 6)
     #expect(result.entries.filter { $0.kind == .edge }.count == 12)
     #expect(result.entries.filter { $0.kind == .vertex }.count == 8)
-    #expect(result.entries.allSatisfy { $0.persistentName.isEmpty == false })
+    #expect(result.entries.allSatisfy { $0.subshapeID.isEmpty == false })
     #expect(result.entries.allSatisfy { $0.referenceID.isEmpty == false })
     #expect(result.entries.allSatisfy { $0.sourceFeatureID != nil })
     #expect(result.entries.allSatisfy { $0.sceneNodeID != nil })
@@ -50,21 +50,21 @@ import SwiftCAD
         Issue.record("Topology edge summary must create an edge selection target.")
         return
     }
-    #expect(componentID.generatedTopologyPersistentName == edgeEntry.persistentName)
+    #expect(componentID.generatedTopologySubshapeID.map(GeneratedSubshapeIdentity.string(for:)) == edgeEntry.subshapeID)
     let faceEntry = try #require(result.entries.first { $0.kind == .face })
     let faceTarget = try #require(faceEntry.selectionTarget())
     guard case .face(let faceComponentID) = faceTarget.component else {
         Issue.record("Topology face summary must create a face selection target.")
         return
     }
-    #expect(faceComponentID.generatedTopologyPersistentName == faceEntry.persistentName)
+    #expect(faceComponentID.generatedTopologySubshapeID.map(GeneratedSubshapeIdentity.string(for:)) == faceEntry.subshapeID)
     let vertexEntry = try #require(result.entries.first { $0.kind == .vertex })
     let vertexTarget = try #require(vertexEntry.selectionTarget())
     guard case .vertex(let vertexComponentID) = vertexTarget.component else {
         Issue.record("Topology vertex summary must create a vertex selection target.")
         return
     }
-    #expect(vertexComponentID.generatedTopologyPersistentName == vertexEntry.persistentName)
+    #expect(vertexComponentID.generatedTopologySubshapeID.map(GeneratedSubshapeIdentity.string(for:)) == vertexEntry.subshapeID)
 }
 
 @MainActor
@@ -213,27 +213,24 @@ import SwiftCAD
     )
 
     let result = try TopologySnapshotService().snapshot(document: session.document)
-    let ringVertex = try #require(result.entries.first {
+    let profileVertex = try #require(result.entries.first {
         $0.kind == .vertex
-            && $0.generatedRole == "vertex"
-            && $0.subshapeRole == "ringVertex:frame:0:profile:0"
+            && $0.generatedRole == "vertex.profile"
     })
-    let railEdge = try #require(result.entries.first {
+    let arcEdge = try #require(result.entries.first {
         $0.kind == .edge
-            && $0.generatedRole == "edge"
-            && $0.subshapeRole == "railEdge:span:0:profile:0"
+            && $0.generatedRole == "edge.arc"
     })
-    let sideTriangle = try #require(result.entries.first {
+    let sideFace = try #require(result.entries.first {
         $0.kind == .face
             && $0.generatedRole == "sideFace"
-            && $0.subshapeRole == "sideTriangle:span:0:profile:0:triangle:0"
     })
 
-    #expect(ringVertex.selectionTarget() != nil)
-    #expect(railEdge.selectionTarget() != nil)
-    #expect(sideTriangle.selectionTarget() != nil)
-    #expect(railEdge.persistentName.contains("subshape:railEdge:span:0:profile:0"))
-    #expect(sideTriangle.persistentName.contains("subshape:sideTriangle:span:0:profile:0:triangle:0"))
+    #expect(profileVertex.selectionTarget() != nil)
+    #expect(arcEdge.selectionTarget() != nil)
+    #expect(sideFace.selectionTarget() != nil)
+    #expect(arcEdge.subshapeID.contains("edge.arc"))
+    #expect(sideFace.subshapeID.contains("sideFace"))
 }
 
 @MainActor
@@ -257,8 +254,7 @@ import SwiftCAD
     let face = try #require(summary.entries.first {
         $0.kind == .face
             && $0.surfaceKind == "bSpline"
-            && $0.generatedRole == "polySpline"
-            && $0.subshapeRole == "patch:0:face"
+            && $0.generatedRole == "polySpline.patch:0:face"
     })
     #expect(face.surfaceUDegree == 3)
     #expect(face.surfaceVDegree == 3)
@@ -269,14 +265,12 @@ import SwiftCAD
     #expect(face.normal != nil)
     #expect(summary.entries.contains {
         $0.kind == .edge
-            && $0.generatedRole == "polySpline"
-            && $0.subshapeRole == "patch:0:edge:uMax"
+            && $0.generatedRole == "polySpline.edge:source:1:2"
             && $0.selectionTarget() != nil
     })
     #expect(summary.entries.contains {
         $0.kind == .vertex
-            && $0.generatedRole == "polySpline"
-            && $0.subshapeRole == "patch:0:vertex:uMax:vMax"
+            && $0.generatedRole == "polySpline.vertex:source:2"
             && $0.selectionTarget() != nil
     })
 }
@@ -325,25 +319,22 @@ import SwiftCAD
     let result = try TopologySnapshotService().snapshot(document: document)
     let boxFace = try #require(result.entries.first {
         $0.kind == .face
-            && $0.generatedRole == "sideFace"
-            && $0.subshapeRole == "box:0:face:maxX"
+            && ($0.generatedRole ?? "").hasPrefix("sideFace.orthogonal:component:0:face:maximumX:")
     })
     let boxEdge = try #require(result.entries.first {
         $0.kind == .edge
-            && $0.generatedRole == "edge"
-            && $0.subshapeRole == "box:0:zEdge:x:maxX:y:maxY"
+            && ($0.generatedRole ?? "").hasPrefix("edge.orthogonal:component:0:face:maximumX:")
     })
     let boxCorner = try #require(result.entries.first {
         $0.kind == .vertex
-            && $0.generatedRole == "vertex"
-            && $0.subshapeRole == "box:0:corner:maxX:maxY:maxZ"
+            && ($0.generatedRole ?? "").hasPrefix("vertex.orthogonal:component:0:face:maximumX:")
     })
 
     #expect(boxFace.selectionTarget() != nil)
     #expect(boxEdge.selectionTarget() != nil)
     #expect(boxCorner.selectionTarget() != nil)
-    #expect(boxFace.persistentName.contains("subshape:box:0:face:maxX"))
-    #expect(boxEdge.persistentName.contains("subshape:box:0:zEdge:x:maxX:y:maxY"))
+    #expect(boxFace.subshapeID.contains("orthogonal:component:0:face:maximumX"))
+    #expect(boxEdge.subshapeID.contains("orthogonal:component:0:face:maximumX"))
 }
 
 @MainActor
@@ -402,25 +393,22 @@ import SwiftCAD
     let result = try TopologySnapshotService().snapshot(document: document)
     let cellUnionFace = try #require(result.entries.first {
         $0.kind == .face
-            && $0.generatedRole == "sideFace"
-            && $0.subshapeRole == "cellUnion:component:0:face:maxX:x:maxX:y:minY-y1:z:minZ-maxZ"
+            && ($0.generatedRole ?? "").hasPrefix("sideFace.orthogonal:component:0:face:maximumX:")
     })
     let cellUnionEdge = try #require(result.entries.first {
         $0.kind == .edge
-            && $0.generatedRole == "edge"
-            && $0.subshapeRole == "cellUnion:component:0:zEdge:x:x1:y:y1:z:minZ-maxZ"
+            && ($0.generatedRole ?? "").hasPrefix("edge.orthogonal:component:0:face:maximumX:")
     })
     let cellUnionVertex = try #require(result.entries.first {
         $0.kind == .vertex
-            && $0.generatedRole == "vertex"
-            && $0.subshapeRole == "cellUnion:component:0:vertex:x:x1:y:y1:z:maxZ"
+            && ($0.generatedRole ?? "").hasPrefix("vertex.orthogonal:component:0:face:maximumX:")
     })
 
     #expect(cellUnionFace.selectionTarget() != nil)
     #expect(cellUnionEdge.selectionTarget() != nil)
     #expect(cellUnionVertex.selectionTarget() != nil)
-    #expect(cellUnionFace.persistentName.contains("subshape:cellUnion:component:0:face:maxX"))
-    #expect(cellUnionEdge.persistentName.contains("subshape:cellUnion:component:0:zEdge"))
+    #expect(cellUnionFace.subshapeID.contains("orthogonal:component:0:face:maximumX"))
+    #expect(cellUnionEdge.subshapeID.contains("orthogonal:component:0:face:maximumX"))
 }
 
 private func hasExpectedCylinderDefinition(_ entry: TopologySummaryResult.Entry) -> Bool {

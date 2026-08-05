@@ -7,7 +7,8 @@ import SwiftCAD
 @Test func constructionPlaneEditBuilderPreservesWorldOriginForStandardPlanes() throws {
     let updated = try WorkspaceConstructionPlaneEditBuilder().planePreservingOrigin(
         from: .xy,
-        viewNormal: Vector3D(x: 0.0, y: 4.0, z: 0.0)
+        viewNormal: Vector3D(x: 0.0, y: 4.0, z: 0.0),
+        tolerance: DocumentModelingSettings.standard.tolerance
     )
 
     guard case .plane(let plane) = updated else {
@@ -30,7 +31,8 @@ import SwiftCAD
 
     let updated = try WorkspaceConstructionPlaneEditBuilder().planePreservingOrigin(
         from: source,
-        viewNormal: Vector3D(x: 3.0, y: 0.0, z: 0.0)
+        viewNormal: Vector3D(x: 3.0, y: 0.0, z: 0.0),
+        tolerance: DocumentModelingSettings.standard.tolerance
     )
 
     guard case .plane(let plane) = updated else {
@@ -47,7 +49,8 @@ import SwiftCAD
     #expect(throws: EditorError.self) {
         _ = try WorkspaceConstructionPlaneEditBuilder().planePreservingOrigin(
             from: .xy,
-            viewNormal: Vector3D(x: 0.0, y: 0.0, z: 0.0)
+            viewNormal: Vector3D(x: 0.0, y: 0.0, z: 0.0),
+            tolerance: DocumentModelingSettings.standard.tolerance
         )
     }
 }
@@ -56,7 +59,8 @@ import SwiftCAD
     let updated = try WorkspaceConstructionPlaneEditBuilder().planeSettingOriginComponent(
         .y,
         value: 0.25,
-        on: .xy
+        on: .xy,
+        tolerance: DocumentModelingSettings.standard.tolerance
     )
 
     guard case .plane(let plane) = updated else {
@@ -78,7 +82,8 @@ import SwiftCAD
     let updated = try WorkspaceConstructionPlaneEditBuilder().planeSettingNormalComponent(
         .x,
         value: 1.0,
-        on: source
+        on: source,
+        tolerance: DocumentModelingSettings.standard.tolerance
     )
 
     guard case .plane(let plane) = updated else {
@@ -104,7 +109,8 @@ import SwiftCAD
         _ = try WorkspaceConstructionPlaneEditBuilder().planeSettingNormalComponent(
             .x,
             value: 0.0,
-            on: source
+            on: source,
+            tolerance: DocumentModelingSettings.standard.tolerance
         )
     }
 }

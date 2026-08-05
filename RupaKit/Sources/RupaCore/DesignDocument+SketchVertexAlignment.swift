@@ -420,20 +420,39 @@ extension DesignDocument {
             case (.line(let targetLineID), .line(let referenceLineID)):
                 return .parallel(referenceLineID, targetLineID)
             case (.line(let targetLineID), .circular(let referenceCircularID)):
-                return .tangent(referenceCircularID, targetLineID)
+                return .tangent(.lineCircular(
+                    line: targetLineID,
+                    circular: referenceCircularID,
+                    side: try lineCircularTangencySide(
+                        lineID: targetLineID,
+                        circularID: referenceCircularID,
+                        in: target.sketch
+                    )
+                ))
             case (.circular(let targetCircularID), .line(let referenceLineID)):
-                return .tangent(referenceLineID, targetCircularID)
+                return .tangent(.lineCircular(
+                    line: referenceLineID,
+                    circular: targetCircularID,
+                    side: try lineCircularTangencySide(
+                        lineID: referenceLineID,
+                        circularID: targetCircularID,
+                        in: target.sketch
+                    )
+                ))
             case (.spline(let targetEndpoint), .line(let referenceLineID)):
-                return .splineEndpointTangent(
-                    spline: targetEndpoint.splineID,
-                    endpoint: targetEndpoint.endpoint,
-                    line: referenceLineID
-                )
+                return .splineEndpointTangent(SketchSplineLineTangencyConstraint(
+                    splineEndpoint: targetEndpoint,
+                    line: referenceLineID,
+                    orientation: .aligned
+                ))
             case (.spline(let targetEndpoint), .spline(let referenceEndpoint)):
-                return .tangentSplineEndpoints(
+                return .tangentSplineEndpoints(SketchSplineEndpointTangencyConstraint(
                     first: referenceEndpoint,
-                    second: targetEndpoint
-                )
+                    second: targetEndpoint,
+                    orientation: referenceEndpoint.endpoint == targetEndpoint.endpoint
+                        ? .opposed
+                        : .aligned
+                ))
             case (.line, .spline),
                  (.circular, .circular),
                  (.circular, .spline),
@@ -451,10 +470,13 @@ extension DesignDocument {
             }
             switch (targetEndpoint, referenceEndpoint) {
             case (.spline(let targetEndpoint), .spline(let referenceEndpoint)):
-                return .smoothSplineEndpoints(
+                return .smoothSplineEndpoints(SketchSplineEndpointTangencyConstraint(
                     first: referenceEndpoint,
-                    second: targetEndpoint
-                )
+                    second: targetEndpoint,
+                    orientation: referenceEndpoint.endpoint == targetEndpoint.endpoint
+                        ? .opposed
+                        : .aligned
+                ))
             case (.line, _),
                  (.circular, _),
                  (.spline, .line),
@@ -464,6 +486,89 @@ extension DesignDocument {
                 )
             }
         }
+    }
+
+    /// The solver treats `.left` as the circle center lying on the positive
+    /// cross(direction, center - start) side, so the side is derived from the
+    /// currently resolved sketch geometry that the alignment just produced.
+    func lineCircularTangencySide(
+        lineID: SketchEntityID,
+        circularID: SketchEntityID,
+        in sketch: Sketch
+    ) throws -> SketchTangencyConstraint.LineSide {
+        let owner = "Sketch vertex alignment tangency"
+        guard case .line(let line)? = sketch.entities[lineID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) could not resolve the tangent line."
+            )
+        }
+        let center: SketchPoint
+        switch sketch.entities[circularID] {
+        case .circle(let circle):
+            center = circle.center
+        case .arc(let arc):
+            center = arc.center
+        default:
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) could not resolve the tangent circular entity."
+            )
+        }
+        let startX = try resolvedLengthValue(line.start.x, owner: owner)
+        let startY = try resolvedLengthValue(line.start.y, owner: owner)
+        let endX = try resolvedLengthValue(line.end.x, owner: owner)
+        let endY = try resolvedLengthValue(line.end.y, owner: owner)
+        let centerX = try resolvedLengthValue(center.x, owner: owner)
+        let centerY = try resolvedLengthValue(center.y, owner: owner)
+        let cross = (endX - startX) * (centerY - startY) - (endY - startY) * (centerX - startX)
+        return cross >= 0.0 ? .left : .right
+    }
+
+    /// The solver measures the directed angle between the spline endpoint
+    /// tangent (`P1 - P0` at start, `Pn-1 - Pn-2` at end) and the line
+    /// direction (`end - start`), so the orientation that preserves the
+    /// currently resolved geometry is derived from their dot product.
+    public func splineLineTangentOrientation(
+        splineID: SketchEntityID,
+        endpoint: SketchSplineEndpoint,
+        lineID: SketchEntityID,
+        in sketch: Sketch
+    ) throws -> SketchTangentOrientation {
+        let owner = "Spline endpoint tangency"
+        guard case .spline(let spline)? = sketch.entities[splineID],
+              spline.controlPoints.count >= 2 else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) could not resolve the spline endpoint tangent."
+            )
+        }
+        guard case .line(let line)? = sketch.entities[lineID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) could not resolve the tangent line."
+            )
+        }
+        let tangentStart: SketchPoint
+        let tangentEnd: SketchPoint
+        switch endpoint {
+        case .start:
+            tangentStart = spline.controlPoints[0]
+            tangentEnd = spline.controlPoints[1]
+        case .end:
+            tangentStart = spline.controlPoints[spline.controlPoints.count - 2]
+            tangentEnd = spline.controlPoints[spline.controlPoints.count - 1]
+        }
+        let tangentX = try resolvedLengthValue(tangentEnd.x, owner: owner)
+            - (try resolvedLengthValue(tangentStart.x, owner: owner))
+        let tangentY = try resolvedLengthValue(tangentEnd.y, owner: owner)
+            - (try resolvedLengthValue(tangentStart.y, owner: owner))
+        let lineX = try resolvedLengthValue(line.end.x, owner: owner)
+            - (try resolvedLengthValue(line.start.x, owner: owner))
+        let lineY = try resolvedLengthValue(line.end.y, owner: owner)
+            - (try resolvedLengthValue(line.start.y, owner: owner))
+        let dot = tangentX * lineX + tangentY * lineY
+        return dot >= 0.0 ? .aligned : .opposed
     }
 
     private func unsupportedSketchVertexAlignmentContinuity(_ reason: String) -> EditorError {
@@ -495,13 +600,27 @@ extension DesignDocument {
         case (.parallel(let firstA, let firstB), .parallel(let secondA, let secondB)),
              (.perpendicular(let firstA, let firstB), .perpendicular(let secondA, let secondB)),
              (.equalLength(let firstA, let firstB), .equalLength(let secondA, let secondB)),
-             (.tangent(let firstA, let firstB), .tangent(let secondA, let secondB)),
              (.concentric(let firstA, let firstB), .concentric(let secondA, let secondB)),
              (.equalRadius(let firstA, let firstB), .equalRadius(let secondA, let secondB)):
             return firstA == secondB && firstB == secondA
-        case (.tangentSplineEndpoints(let firstA, let firstB), .tangentSplineEndpoints(let secondA, let secondB)),
-             (.smoothSplineEndpoints(let firstA, let firstB), .smoothSplineEndpoints(let secondA, let secondB)):
-            return firstA == secondB && firstB == secondA
+        case (.tangent(let firstTangency), .tangent(let secondTangency)):
+            switch (firstTangency, secondTangency) {
+            case let (
+                .lineCircular(firstLine, firstCircular, _),
+                .lineCircular(secondLine, secondCircular, _)
+            ):
+                return firstLine == secondLine && firstCircular == secondCircular
+            case let (
+                .circularCircular(firstA, firstB, _),
+                .circularCircular(secondA, secondB, _)
+            ):
+                return firstA == secondB && firstB == secondA
+            default:
+                return false
+            }
+        case (.tangentSplineEndpoints(let firstPair), .tangentSplineEndpoints(let secondPair)),
+             (.smoothSplineEndpoints(let firstPair), .smoothSplineEndpoints(let secondPair)):
+            return firstPair.first == secondPair.second && firstPair.second == secondPair.first
         default:
             return false
         }

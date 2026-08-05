@@ -87,7 +87,7 @@ public struct EdgeOffsetSupportFaceResolver: Sendable {
         ) {
             return selectedSupportFace
         }
-        guard edgeComponentID.generatedTopologyPersistentName != nil else {
+        guard edgeComponentID.generatedTopologySubshapeID != nil else {
             return .unavailable("Offset Edge requires a generated topology edge target.")
         }
         return try inferredCapSupportFaceTarget(
@@ -109,7 +109,7 @@ public struct EdgeOffsetSupportFaceResolver: Sendable {
             guard target.sceneNodeID == edgeTarget.sceneNodeID,
                   target != edgeTarget,
                   case .face(let componentID) = target.component,
-                  componentID.generatedTopologyPersistentName != nil else {
+                  componentID.generatedTopologySubshapeID != nil else {
                 return false
             }
             return true
@@ -130,9 +130,11 @@ public struct EdgeOffsetSupportFaceResolver: Sendable {
         objectRegistry: ObjectTypeRegistry
     ) throws -> EdgeOffsetSupportFaceResolution {
         guard case .edge(let edgeComponentID) = edgeTarget.component,
-              let edgePersistentName = edgeComponentID.generatedTopologyPersistentName else {
+              let edgeSubshapeID = edgeComponentID.generatedTopologySubshapeID else {
             return .unavailable("Offset Edge requires a generated topology edge target.")
         }
+        let edgeIdentity = GeneratedSubshapeIdentity.string(for: edgeSubshapeID)
+        let sceneNodeDescription = edgeTarget.sceneNodeID.description
 
         let topology = try TopologySnapshotService().snapshot(
             document: document,
@@ -140,8 +142,8 @@ public struct EdgeOffsetSupportFaceResolver: Sendable {
         )
         guard let edgeEntry = topology.entries.first(where: { entry in
             entry.kind == .edge &&
-                entry.sceneNodeID == edgeTarget.sceneNodeID.description &&
-                entry.persistentName == edgePersistentName
+                entry.sceneNodeID == sceneNodeDescription &&
+                entry.subshapeID == edgeIdentity
         }) else {
             return .unavailable("Offset Edge generated topology edge was not found in the current evaluation.")
         }

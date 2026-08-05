@@ -53,14 +53,11 @@ import SwiftCAD
     #expect(boolean.keepTools == false)
     #expect(evaluated.brep.bodies.count == 1)
     #expect(evaluated.brep.faces.count == 6)
-    #expect(evaluated.generatedNames.keys.contains {
-        $0.components.contains(.feature(targetID))
+    #expect(evaluated.subshapes.entries.keys.contains {
+        $0.featureID == targetID
     } == false)
-    #expect(evaluated.generatedNames.keys.contains {
-        $0.components == [
-            .feature(booleanID),
-            .generated(GeneratedSubshapeRole.body.rawValue),
-        ]
+    #expect(evaluated.subshapes.entries.keys.contains {
+        $0.featureID == booleanID && $0.role == GeneratedSubshapeRole.body.rawValue
     })
     #expect(document.productMetadata.sceneNodes.values.contains {
         $0.reference == .body(booleanID)
@@ -97,18 +94,15 @@ import SwiftCAD
     let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
 
     #expect(evaluated.brep.bodies.count == 3)
-    #expect(evaluated.generatedNames.keys.contains {
-        $0.components.contains(.feature(targetID))
+    #expect(evaluated.subshapes.entries.keys.contains {
+        $0.featureID == targetID
     })
-    #expect(evaluated.generatedNames.keys.contains {
-        $0.components.contains(.feature(toolID))
-            && $0.components.contains(.subshape("tool"))
+    #expect(evaluated.subshapes.entries.keys.contains {
+        $0.featureID == toolID
+            && $0.role == GeneratedSubshapeRole.body.rawValue
     })
-    #expect(evaluated.generatedNames.keys.contains {
-        $0.components == [
-            .feature(booleanID),
-            .generated(GeneratedSubshapeRole.body.rawValue),
-        ]
+    #expect(evaluated.subshapes.entries.keys.contains {
+        $0.featureID == booleanID && $0.role == GeneratedSubshapeRole.body.rawValue
     })
 }
 
@@ -155,19 +149,16 @@ import SwiftCAD
 
     #expect(evaluated.brep.bodies.count == 1)
     #expect(evaluated.brep.faces.count > 6)
-    #expect(evaluated.generatedNames.keys.contains {
-        $0.components.contains(.feature(firstBooleanID))
+    #expect(evaluated.subshapes.entries.keys.contains {
+        $0.featureID == firstBooleanID
     } == false)
-    #expect(evaluated.generatedNames.keys.contains {
-        $0.components == [
-            .feature(secondBooleanID),
-            .generated(GeneratedSubshapeRole.body.rawValue),
-        ]
+    #expect(evaluated.subshapes.entries.keys.contains {
+        $0.featureID == secondBooleanID && $0.role == GeneratedSubshapeRole.body.rawValue
     })
-    #expect(evaluated.generatedNames.values.filter { $0.isBody }.count == 1)
-    #expect(evaluated.generatedNames.values.filter { $0.isFace }.count == evaluated.brep.faces.count)
-    #expect(evaluated.generatedNames.values.filter { $0.isEdge }.count == evaluated.brep.edges.count)
-    #expect(evaluated.generatedNames.values.filter { $0.isVertex }.count == evaluated.brep.vertices.count)
+    #expect(booleanReferenceCounts(evaluated).bodies == 1)
+    #expect(booleanReferenceCounts(evaluated).faces == evaluated.brep.faces.count)
+    #expect(booleanReferenceCounts(evaluated).edges == evaluated.brep.edges.count)
+    #expect(booleanReferenceCounts(evaluated).vertices == evaluated.brep.vertices.count)
     try document.validate()
 }
 
@@ -294,4 +285,27 @@ private extension TopologyReference {
         }
         return false
     }
+}
+
+
+private func booleanReferenceCounts(
+    _ evaluated: EvaluatedDocument
+) -> (bodies: Int, faces: Int, edges: Int, vertices: Int) {
+    var bodies = 0
+    var faces = 0
+    var edges = 0
+    var vertices = 0
+    for reference in evaluated.subshapes.entries.values {
+        switch reference {
+        case .body:
+            bodies += 1
+        case .face:
+            faces += 1
+        case .edge:
+            edges += 1
+        case .vertex:
+            vertices += 1
+        }
+    }
+    return (bodies, faces, edges, vertices)
 }

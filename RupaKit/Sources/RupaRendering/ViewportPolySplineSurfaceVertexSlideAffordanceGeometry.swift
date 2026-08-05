@@ -2,6 +2,14 @@ import CoreGraphics
 import RupaCore
 import RupaViewportScene
 
+/// Corner-ordered PolySpline patch derived from the current source-mesh
+/// analysis. `cornerSourceVertexIndices` follows the analyzer boundary order:
+/// uMinVMin, uMaxVMin, uMaxVMax, uMinVMax.
+struct ViewportPolySplinePatchDescriptor: Equatable {
+    var candidateID: Int
+    var cornerSourceVertexIndices: [Int]
+}
+
 struct ViewportPolySplineSurfaceVertexSlideInput: Equatable {
     var target: PolySplineSurfaceVertexTarget
     var selectionTarget: SelectionTarget
@@ -44,6 +52,7 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
     init?(
         selectedVertices: [ViewportPolySplineSurfaceVertexSlideInput],
         topologyVertices: [ViewportBodyTopology.Vertex],
+        patches: [FeatureID: [ViewportPolySplinePatchDescriptor]],
         direction: PolySplineSurfaceVertexSlideDirection,
         layout: ViewportLayout,
         viewportLength: CGFloat = 62.0
@@ -56,7 +65,8 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
             guard let direction = Self.slideDirection(
                 for: vertex.target,
                 direction: direction,
-                pointsByRole: pointsByRole
+                pointsByRole: pointsByRole,
+                patches: patches
             ) else {
                 return nil
             }
@@ -86,6 +96,7 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
     init?(
         selectedControlPoints: [ViewportSurfaceControlPointSlideInput],
         topologyVertices: [ViewportBodyTopology.Vertex],
+        patches: [FeatureID: [ViewportPolySplinePatchDescriptor]],
         direction: PolySplineSurfaceVertexSlideDirection,
         layout: ViewportLayout,
         viewportLength: CGFloat = 62.0
@@ -99,7 +110,8 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
                 featureID: controlPoint.featureID,
                 patchID: controlPoint.patchID,
                 direction: direction,
-                pointsByRole: pointsByRole
+                pointsByRole: pointsByRole,
+                patches: patches
             ) else {
                 return nil
             }
@@ -152,6 +164,7 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
     static func previewVertices(
         selectedVertices: [ViewportPolySplineSurfaceVertexSlideInput],
         topologyVertices: [ViewportBodyTopology.Vertex],
+        patches: [FeatureID: [ViewportPolySplinePatchDescriptor]],
         direction: PolySplineSurfaceVertexSlideDirection,
         distanceMeters: Double
     ) -> [ViewportPolySplineSurfaceVertexSlidePreviewVertex]? {
@@ -163,7 +176,8 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
             guard let direction = slideDirection(
                 for: vertex.target,
                 direction: direction,
-                pointsByRole: pointsByRole
+                pointsByRole: pointsByRole,
+                patches: patches
             ) else {
                 return nil
             }
@@ -183,6 +197,7 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
     static func previewControlPoints(
         selectedControlPoints: [ViewportSurfaceControlPointSlideInput],
         topologyVertices: [ViewportBodyTopology.Vertex],
+        patches: [FeatureID: [ViewportPolySplinePatchDescriptor]],
         direction: PolySplineSurfaceVertexSlideDirection,
         distanceMeters: Double
     ) -> [ViewportSurfaceControlPointSlidePreviewVertex]? {
@@ -195,7 +210,8 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
                 featureID: controlPoint.featureID,
                 patchID: controlPoint.patchID,
                 direction: direction,
-                pointsByRole: pointsByRole
+                pointsByRole: pointsByRole,
+                patches: patches
             ) else {
                 return nil
             }
@@ -215,8 +231,10 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
     static func previewSurfaces(
         selectedVertices: [ViewportPolySplineSurfaceVertexSlideInput],
         topologyVertices: [ViewportBodyTopology.Vertex],
+        patches: [FeatureID: [ViewportPolySplinePatchDescriptor]],
         direction: PolySplineSurfaceVertexSlideDirection,
         distanceMeters: Double,
+        tolerance: ModelingTolerance,
         sampleSegmentCount: Int = 8
     ) -> [ViewportPolySplineSurfaceVertexSlidePreviewSurface]? {
         guard selectedVertices.isEmpty == false else {
@@ -231,7 +249,8 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
             guard let direction = slideDirection(
                 for: vertex.target,
                 direction: direction,
-                pointsByRole: originalPointsByRole
+                pointsByRole: originalPointsByRole,
+                patches: patches
             ) else {
                 return nil
             }
@@ -254,9 +273,15 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
                     return nil
                 }
                 pendingMovedPoints[target] = movedPoint
-                let patch = PatchKey(featureID: target.featureID, patchID: target.patchID)
-                changedPatches.insert(patch)
-                transformsByPatch[patch] = movedVertex.modelTransform
+                for descriptor in patches[target.featureID] ?? []
+                where descriptor.cornerSourceVertexIndices.contains(target.sourceVertexIndex) {
+                    let patch = PatchKey(
+                        featureID: target.featureID,
+                        patchID: descriptor.candidateID
+                    )
+                    changedPatches.insert(patch)
+                    transformsByPatch[patch] = movedVertex.modelTransform
+                }
             }
         }
 
@@ -277,15 +302,25 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
             guard let originalCorners = patchCorners(
                 featureID: patch.featureID,
                 patchID: patch.patchID,
-                pointsByRole: originalPointsByRole
+                pointsByRole: originalPointsByRole,
+                patches: patches
             ),
                   let movedCorners = patchCorners(
                       featureID: patch.featureID,
                       patchID: patch.patchID,
-                      pointsByRole: movedPointsByRole
+                      pointsByRole: movedPointsByRole,
+                      patches: patches
                   ),
-                  let originalMesh = surfaceMesh(corners: originalCorners, sampleSegmentCount: sampleSegmentCount),
-                  let movedMesh = surfaceMesh(corners: movedCorners, sampleSegmentCount: sampleSegmentCount) else {
+                  let originalMesh = surfaceMesh(
+                      corners: originalCorners,
+                      sampleSegmentCount: sampleSegmentCount,
+                      tolerance: tolerance
+                  ),
+                  let movedMesh = surfaceMesh(
+                      corners: movedCorners,
+                      sampleSegmentCount: sampleSegmentCount,
+                      tolerance: tolerance
+                  ) else {
                 return nil
             }
             let transform = transformsByPatch[patch] ?? .identity
@@ -305,12 +340,14 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
     static func localDirection(
         for target: PolySplineSurfaceVertexTarget,
         direction: PolySplineSurfaceVertexSlideDirection,
-        topologyVertices: [ViewportBodyTopology.Vertex]
+        topologyVertices: [ViewportBodyTopology.Vertex],
+        patches: [FeatureID: [ViewportPolySplinePatchDescriptor]]
     ) -> Vector3D? {
         slideDirection(
             for: target,
             direction: direction,
-            pointsByRole: pointsByRole(in: topologyVertices)
+            pointsByRole: pointsByRole(in: topologyVertices),
+            patches: patches
         )
     }
 
@@ -336,40 +373,62 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
     private static func patchCorners(
         featureID: FeatureID,
         patchID: Int,
-        pointsByRole: [PolySplineSurfaceVertexTarget: Point3D]
+        pointsByRole: [PolySplineSurfaceVertexTarget: Point3D],
+        patches: [FeatureID: [ViewportPolySplinePatchDescriptor]]
     ) -> (bottomLeft: Point3D, bottomRight: Point3D, topRight: Point3D, topLeft: Point3D)? {
-        let uMinVMin = PolySplineSurfaceVertexTarget(
-            featureID: featureID,
-            patchID: patchID,
-            boundaryRole: .uMinVMin
-        )
-        let uMaxVMin = PolySplineSurfaceVertexTarget(
-            featureID: featureID,
-            patchID: patchID,
-            boundaryRole: .uMaxVMin
-        )
-        let uMaxVMax = PolySplineSurfaceVertexTarget(
-            featureID: featureID,
-            patchID: patchID,
-            boundaryRole: .uMaxVMax
-        )
-        let uMinVMax = PolySplineSurfaceVertexTarget(
-            featureID: featureID,
-            patchID: patchID,
-            boundaryRole: .uMinVMax
-        )
-        guard let bottomLeft = pointsByRole[uMinVMin],
-              let bottomRight = pointsByRole[uMaxVMin],
-              let topRight = pointsByRole[uMaxVMax],
-              let topLeft = pointsByRole[uMinVMax] else {
+        guard let descriptor = patches[featureID]?.first(where: { $0.candidateID == patchID }),
+              let corners = cornerPoints(
+                  featureID: featureID,
+                  descriptor: descriptor,
+                  pointsByRole: pointsByRole
+              ) else {
             return nil
         }
-        return (bottomLeft, bottomRight, topRight, topLeft)
+        return (corners[0], corners[1], corners[2], corners[3])
+    }
+
+    /// Corner positions in analyzer order (uMinVMin, uMaxVMin, uMaxVMax,
+    /// uMinVMax), resolved through the displayed source-vertex identities.
+    private static func cornerPoints(
+        featureID: FeatureID,
+        descriptor: ViewportPolySplinePatchDescriptor,
+        pointsByRole: [PolySplineSurfaceVertexTarget: Point3D]
+    ) -> [Point3D]? {
+        guard descriptor.cornerSourceVertexIndices.count == 4 else {
+            return nil
+        }
+        var points: [Point3D] = []
+        points.reserveCapacity(4)
+        for sourceVertexIndex in descriptor.cornerSourceVertexIndices {
+            let target = PolySplineSurfaceVertexTarget(
+                featureID: featureID,
+                sourceVertexIndex: sourceVertexIndex
+            )
+            guard let point = pointsByRole[target] else {
+                return nil
+            }
+            points.append(point)
+        }
+        return points
+    }
+
+    /// Shared corner vertices belong to more than one patch; the lowest
+    /// candidate ID keeps the derived patch context deterministic and matches
+    /// PolySplineSurfaceVertexEditingService.
+    private static func patchContaining(
+        sourceVertexIndex: Int,
+        featureID: FeatureID,
+        patches: [FeatureID: [ViewportPolySplinePatchDescriptor]]
+    ) -> ViewportPolySplinePatchDescriptor? {
+        patches[featureID]?
+            .filter { $0.cornerSourceVertexIndices.contains(sourceVertexIndex) }
+            .min { $0.candidateID < $1.candidateID }
     }
 
     private static func surfaceMesh(
         corners: (bottomLeft: Point3D, bottomRight: Point3D, topRight: Point3D, topLeft: Point3D),
-        sampleSegmentCount: Int
+        sampleSegmentCount: Int,
+        tolerance: ModelingTolerance
     ) -> ViewportBodyMesh? {
         let segmentCount = max(sampleSegmentCount, 1)
         let surface = BSplineSurface3D.cubicBezierPatch(
@@ -385,7 +444,7 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
                 let v = Double(vIndex) / Double(segmentCount)
                 for uIndex in 0...segmentCount {
                     let u = Double(uIndex) / Double(segmentCount)
-                    positions.append(try surface.point(u: u, v: v))
+                    positions.append(try surface.point(u: u, v: v, tolerance: tolerance))
                 }
             }
         } catch {
@@ -417,49 +476,39 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
     private static func slideDirection(
         for target: PolySplineSurfaceVertexTarget,
         direction: PolySplineSurfaceVertexSlideDirection,
-        pointsByRole: [PolySplineSurfaceVertexTarget: Point3D]
+        pointsByRole: [PolySplineSurfaceVertexTarget: Point3D],
+        patches: [FeatureID: [ViewportPolySplinePatchDescriptor]]
     ) -> Vector3D? {
-        let uMinVMin = PolySplineSurfaceVertexTarget(
+        guard let descriptor = patchContaining(
+            sourceVertexIndex: target.sourceVertexIndex,
             featureID: target.featureID,
-            patchID: target.patchID,
-            boundaryRole: .uMinVMin
-        )
-        let uMaxVMin = PolySplineSurfaceVertexTarget(
+            patches: patches
+        ),
+        let cornerIndex = descriptor.cornerSourceVertexIndices.firstIndex(
+            of: target.sourceVertexIndex
+        ),
+        let corners = cornerPoints(
             featureID: target.featureID,
-            patchID: target.patchID,
-            boundaryRole: .uMaxVMin
-        )
-        let uMaxVMax = PolySplineSurfaceVertexTarget(
-            featureID: target.featureID,
-            patchID: target.patchID,
-            boundaryRole: .uMaxVMax
-        )
-        let uMinVMax = PolySplineSurfaceVertexTarget(
-            featureID: target.featureID,
-            patchID: target.patchID,
-            boundaryRole: .uMinVMax
-        )
-        guard let pointUMinVMin = pointsByRole[uMinVMin],
-              let pointUMaxVMin = pointsByRole[uMaxVMin],
-              let pointUMaxVMax = pointsByRole[uMaxVMax],
-              let pointUMinVMax = pointsByRole[uMinVMax] else {
+            descriptor: descriptor,
+            pointsByRole: pointsByRole
+        ) else {
             return nil
         }
 
         let positiveURaw: Vector3D
-        switch target.boundaryRole {
-        case .uMinVMin, .uMaxVMin:
-            positiveURaw = vector(from: pointUMinVMin, to: pointUMaxVMin)
-        case .uMaxVMax, .uMinVMax:
-            positiveURaw = vector(from: pointUMinVMax, to: pointUMaxVMax)
+        switch cornerIndex {
+        case 0, 1:
+            positiveURaw = vector(from: corners[0], to: corners[1])
+        default:
+            positiveURaw = vector(from: corners[3], to: corners[2])
         }
 
         let positiveVRaw: Vector3D
-        switch target.boundaryRole {
-        case .uMinVMin, .uMinVMax:
-            positiveVRaw = vector(from: pointUMinVMin, to: pointUMinVMax)
-        case .uMaxVMin, .uMaxVMax:
-            positiveVRaw = vector(from: pointUMaxVMin, to: pointUMaxVMax)
+        switch cornerIndex {
+        case 0, 3:
+            positiveVRaw = vector(from: corners[0], to: corners[3])
+        default:
+            positiveVRaw = vector(from: corners[1], to: corners[2])
         }
 
         guard let positiveU = normalized(positiveURaw),
@@ -486,12 +535,14 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
         featureID: FeatureID,
         patchID: Int,
         direction: PolySplineSurfaceVertexSlideDirection,
-        pointsByRole: [PolySplineSurfaceVertexTarget: Point3D]
+        pointsByRole: [PolySplineSurfaceVertexTarget: Point3D],
+        patches: [FeatureID: [ViewportPolySplinePatchDescriptor]]
     ) -> Vector3D? {
         guard let corners = patchCorners(
             featureID: featureID,
             patchID: patchID,
-            pointsByRole: pointsByRole
+            pointsByRole: pointsByRole,
+            patches: patches
         ) else {
             return nil
         }

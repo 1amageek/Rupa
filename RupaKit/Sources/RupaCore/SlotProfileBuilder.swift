@@ -279,10 +279,26 @@ public struct SlotProfileBuilder: Sendable {
             .coincident(.lineEnd(lastRightLineID), .arcEnd(startCapID)),
             .coincident(.arcStart(startCapID), .lineStart(firstLeftLineID)),
             .equalRadius(endCapID, startCapID),
-            .tangent(lastLeftLineID, endCapID),
-            .tangent(endCapID, firstRightLineID),
-            .tangent(lastRightLineID, startCapID),
-            .tangent(startCapID, firstLeftLineID),
+        ])
+        // The cap centers sit on the source path midway between the two offset
+        // boundaries, so one numeric cross product fixes the solver's tangency
+        // side for every boundary line of the closed outline.
+        let boundaryDirection = Point2D(
+            x: resolvedLeftPoints[1].x - resolvedLeftPoints[0].x,
+            y: resolvedLeftPoints[1].y - resolvedLeftPoints[0].y
+        )
+        let pathStart = Point2D(
+            x: (resolvedLeftPoints[0].x + resolvedRightPoints[0].x) / 2.0,
+            y: (resolvedLeftPoints[0].y + resolvedRightPoints[0].y) / 2.0
+        )
+        let boundaryCross = boundaryDirection.x * (pathStart.y - resolvedLeftPoints[0].y)
+            - boundaryDirection.y * (pathStart.x - resolvedLeftPoints[0].x)
+        let tangencySide: SketchTangencyConstraint.LineSide = boundaryCross >= 0.0 ? .left : .right
+        constraints.append(contentsOf: [
+            .tangent(.lineCircular(line: lastLeftLineID, circular: endCapID, side: tangencySide)),
+            .tangent(.lineCircular(line: firstRightLineID, circular: endCapID, side: tangencySide)),
+            .tangent(.lineCircular(line: lastRightLineID, circular: startCapID, side: tangencySide)),
+            .tangent(.lineCircular(line: firstLeftLineID, circular: startCapID, side: tangencySide)),
         ])
         for pair in zip(leftLineIDs, rightLineIDs.reversed()) {
             constraints.append(.parallel(pair.0, pair.1))

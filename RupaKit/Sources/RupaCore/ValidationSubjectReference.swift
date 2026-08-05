@@ -14,7 +14,7 @@ public enum ValidationSubjectReference: Codable, Hashable, Sendable {
     case generatedTopology(
         documentID: DocumentID,
         owningFeatureID: FeatureID,
-        persistentName: String
+        subshapeID: String
     )
     case artifact(MaterializedArtifactReference)
     case meshBody(artifact: MeshArtifactReference, bodyID: BodyID)
@@ -27,7 +27,7 @@ public enum ValidationSubjectReference: Codable, Hashable, Sendable {
         case extensionID
         case entityID
         case owningFeatureID
-        case persistentName
+        case subshapeID
         case artifact
         case bodyID
     }
@@ -67,7 +67,7 @@ public enum ValidationSubjectReference: Codable, Hashable, Sendable {
             self = .generatedTopology(
                 documentID: try container.decode(DocumentID.self, forKey: .documentID),
                 owningFeatureID: try container.decode(FeatureID.self, forKey: .owningFeatureID),
-                persistentName: try container.decode(String.self, forKey: .persistentName)
+                subshapeID: try container.decode(String.self, forKey: .subshapeID)
             )
         case .artifact:
             self = .artifact(try container.decode(MaterializedArtifactReference.self, forKey: .artifact))
@@ -98,11 +98,11 @@ public enum ValidationSubjectReference: Codable, Hashable, Sendable {
             try container.encode(documentID, forKey: .documentID)
             try container.encode(extensionID, forKey: .extensionID)
             try container.encode(entityID, forKey: .entityID)
-        case .generatedTopology(let documentID, let owningFeatureID, let persistentName):
+        case .generatedTopology(let documentID, let owningFeatureID, let subshapeID):
             try container.encode(Kind.generatedTopology, forKey: .kind)
             try container.encode(documentID, forKey: .documentID)
             try container.encode(owningFeatureID, forKey: .owningFeatureID)
-            try container.encode(persistentName, forKey: .persistentName)
+            try container.encode(subshapeID, forKey: .subshapeID)
         case .artifact(let artifact):
             try container.encode(Kind.artifact, forKey: .kind)
             try container.encode(artifact, forKey: .artifact)
@@ -135,24 +135,13 @@ public enum ValidationSubjectReference: Codable, Hashable, Sendable {
             break
         case .semanticEntity(_, _, let entityID):
             try entityID.validate()
-        case .generatedTopology(_, let owningFeatureID, let persistentName):
-            let parsedName: PersistentName
-            do {
-                parsedName = try GeneratedTopologyPersistentNameParser().parse(
-                    persistentName,
-                    operationName: "Validation subject"
-                )
-            } catch {
-                throw invalidSubject("Validation topology subjects require a valid persistent name.")
+        case .generatedTopology(_, let owningFeatureID, let subshapeID):
+            guard let parsed = GeneratedSubshapeIdentity.subshapeID(from: subshapeID) else {
+                throw invalidSubject("Validation topology subjects require a valid subshape identity.")
             }
-            guard parsedName.components.contains(where: { component in
-                if case .feature(let featureID) = component {
-                    return featureID == owningFeatureID
-                }
-                return false
-            }) else {
+            guard parsed.featureID == owningFeatureID else {
                 throw invalidSubject(
-                    "Validation topology subjects must contain their owning feature in the persistent name."
+                    "Validation topology subjects must contain their owning feature in the subshape identity."
                 )
             }
         case .artifact(let artifact):

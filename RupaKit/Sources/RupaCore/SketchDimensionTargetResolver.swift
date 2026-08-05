@@ -93,7 +93,7 @@ public struct SketchDimensionTargetResolver: Sendable {
         topologyEntries: [TopologySummaryResult.Entry]
     ) throws -> ResolvedTarget {
         guard case .edge(let componentID) = target.component,
-              let persistentName = componentID.generatedTopologyPersistentName else {
+              let subshapeID = componentID.generatedTopologySubshapeID else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Sketch dimension summary requires generated body edge targets."
@@ -102,7 +102,7 @@ public struct SketchDimensionTargetResolver: Sendable {
         guard let edgeEntry = topologyEntries.first(where: {
             $0.kind == .edge &&
                 $0.sceneNodeID == target.sceneNodeID.description &&
-                $0.persistentName == persistentName
+                $0.subshapeID == GeneratedSubshapeIdentity.string(for: subshapeID)
         }) else {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -141,9 +141,16 @@ public struct SketchDimensionTargetResolver: Sendable {
               let entity = candidates.first,
               let entityUUID = UUID(uuidString: entity.entityID) else {
             if candidates.isEmpty {
+                let edgeDescription = [
+                    "curveKind=\(edgeEntry.curveKind ?? "nil")",
+                    "center=\(edgeEntry.curveCenter.map { "(\($0.x), \($0.y), \($0.z))" } ?? "nil")",
+                    "radius=\(edgeEntry.curveRadius.map(String.init(describing:)) ?? "nil")",
+                    "start=\(edgeEntry.start.map { "(\($0.x), \($0.y), \($0.z))" } ?? "nil")",
+                    "end=\(edgeEntry.end.map { "(\($0.x), \($0.y), \($0.z))" } ?? "nil")",
+                ].joined(separator: " ")
                 throw EditorError(
                     code: .referenceUnresolved,
-                    message: "Sketch dimension summary could not map the generated edge to an editable source sketch curve."
+                    message: "Sketch dimension summary could not map the generated edge to an editable source sketch curve (\(edgeDescription))."
                 )
             }
             throw EditorError(
@@ -270,6 +277,9 @@ public struct SketchDimensionTargetResolver: Sendable {
         ) && nearlyEqual(edgeRadius, entityRadius)
     }
 
+    /// The kernel may split one source arc into several generated edges, so a
+    /// generated edge maps to the source arc when it shares the circle and
+    /// both endpoints lie on the source arc's angular span.
     private func matchesArc(
         _ entity: SketchEntitySummaryResult.EntityEntry,
         edge: TopologySummaryResult.Entry,
@@ -282,16 +292,53 @@ public struct SketchDimensionTargetResolver: Sendable {
             edge: edge,
             coordinateSystem: coordinateSystem
         ),
-              let entityStart = entity.start,
-              let entityEnd = entity.end else {
+              let entityCenter = entity.center,
+              let entityRadius = entity.radius,
+              let startAngle = entity.startAngle,
+              let endAngle = entity.endAngle else {
             return false
         }
-        let sourceStart = Point2D(x: entityStart.x, y: entityStart.y)
-        let sourceEnd = Point2D(x: entityEnd.x, y: entityEnd.y)
-        return pointsMatch(start, sourceStart) &&
-            pointsMatch(end, sourceEnd) ||
-            pointsMatch(start, sourceEnd) &&
-            pointsMatch(end, sourceStart)
+        let center = Point2D(x: entityCenter.x, y: entityCenter.y)
+        return arcSpanContains(
+            start,
+            center: center,
+            radius: entityRadius,
+            startAngle: startAngle,
+            endAngle: endAngle
+        ) && arcSpanContains(
+            end,
+            center: center,
+            radius: entityRadius,
+            startAngle: startAngle,
+            endAngle: endAngle
+        )
+    }
+
+    private func arcSpanContains(
+        _ point: Point2D,
+        center: Point2D,
+        radius: Double,
+        startAngle: Double,
+        endAngle: Double
+    ) -> Bool {
+        let offsetX = point.x - center.x
+        let offsetY = point.y - center.y
+        guard nearlyEqual((offsetX * offsetX + offsetY * offsetY).squareRoot(), radius) else {
+            return false
+        }
+        let fullCircle = 2.0 * Double.pi
+        var span = (endAngle - startAngle).truncatingRemainder(dividingBy: fullCircle)
+        if span <= 0.0 {
+            span += fullCircle
+        }
+        var angleOffset = (atan2(offsetY, offsetX) - startAngle)
+            .truncatingRemainder(dividingBy: fullCircle)
+        if angleOffset < 0.0 {
+            angleOffset += fullCircle
+        }
+        let angularTolerance = tolerance / max(radius, tolerance)
+        return angleOffset <= span + angularTolerance
+            || angleOffset >= fullCircle - angularTolerance
     }
 
     private func point(_ point: TopologySummaryResult.Entry.Point) -> Point3D {

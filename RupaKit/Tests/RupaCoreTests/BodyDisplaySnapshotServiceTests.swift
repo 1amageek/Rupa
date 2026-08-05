@@ -45,8 +45,8 @@ import SwiftCAD
 
     #expect(snapshot.featureID == bodyFeatureID)
     #expect(snapshot.bodyID?.isEmpty == false)
-    #expect(snapshot.persistentName?.isEmpty == false)
-    #expect(snapshot.persistentName == documentSnapshot.persistentName)
+    #expect(snapshot.subshapeID?.isEmpty == false)
+    #expect(snapshot.subshapeID == documentSnapshot.subshapeID)
     #expect(snapshot.mesh == documentSnapshot.mesh)
     #expect(snapshot.bounds == documentSnapshot.bounds)
     #expect(snapshot.topology == documentSnapshot.topology)
@@ -58,9 +58,9 @@ import SwiftCAD
     #expect(snapshot.topology.faces.count == 6)
     #expect(snapshot.topology.edges.count == 12)
     #expect(snapshot.topology.vertices.count == 8)
-    #expect(snapshot.topology.faces.allSatisfy { $0.componentID.generatedTopologyPersistentName != nil })
-    #expect(snapshot.topology.edges.allSatisfy { $0.componentID.generatedTopologyPersistentName != nil })
-    #expect(snapshot.topology.vertices.allSatisfy { $0.componentID.generatedTopologyPersistentName != nil })
+    #expect(snapshot.topology.faces.allSatisfy { $0.componentID.generatedTopologySubshapeID != nil })
+    #expect(snapshot.topology.edges.allSatisfy { $0.componentID.generatedTopologySubshapeID != nil })
+    #expect(snapshot.topology.vertices.allSatisfy { $0.componentID.generatedTopologySubshapeID != nil })
 }
 
 @MainActor
@@ -70,9 +70,14 @@ import SwiftCAD
     let evaluatedDocument = try CADPipeline
         .modelingDefault(for: session.document)
         .evaluate(session.document.cadDocument)
+    let tolerance = session.document.modelingSettings.tolerance
     let service = BodyDisplaySnapshotService(
         pipeline: CADPipeline(
-            evaluator: DocumentEvaluator(featureEvaluator: FailingFeatureEvaluator())
+            tolerance: tolerance,
+            evaluator: DocumentEvaluator(
+                featureEvaluator: FailingFeatureEvaluator(),
+                tolerance: tolerance
+            )
         )
     )
 
@@ -92,6 +97,6 @@ import SwiftCAD
 
 private struct FailingFeatureEvaluator: FeatureEvaluating {
     func evaluate(feature _: FeatureNode, context _: EvaluationContext) throws -> EvaluationResult {
-        throw FeatureEvaluationError.unsupportedOperation("Injected evaluator should not be used.")
+        throw FeatureEvaluationError.invalidGraph("Injected evaluator should not be used.")
     }
 }

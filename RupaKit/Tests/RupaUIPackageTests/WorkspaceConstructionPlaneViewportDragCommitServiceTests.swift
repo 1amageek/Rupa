@@ -30,7 +30,8 @@ import Testing
     let edit = try #require(
         try WorkspaceConstructionPlaneViewportDragCommitService().edit(
             for: dragTarget,
-            entries: [entry]
+            entries: [entry],
+            tolerance: DocumentModelingSettings.standard.tolerance
         )
     )
     let result = session.setConstructionPlane(id: edit.entry.id, plane: edit.plane)
@@ -75,7 +76,8 @@ import Testing
     let edit = try #require(
         try WorkspaceConstructionPlaneViewportDragCommitService().edit(
             for: dragTarget,
-            entries: [entry]
+            entries: [entry],
+            tolerance: DocumentModelingSettings.standard.tolerance
         )
     )
     let result = session.setConstructionPlane(id: edit.entry.id, plane: edit.plane)
@@ -116,7 +118,8 @@ import Testing
 
     let edit = try WorkspaceConstructionPlaneViewportDragCommitService().edit(
         for: dragTarget,
-        entries: [entry]
+        entries: [entry],
+        tolerance: DocumentModelingSettings.standard.tolerance
     )
 
     #expect(edit == nil)

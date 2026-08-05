@@ -13,7 +13,7 @@ struct SurfaceControlPointInspectorState: Equatable, Sendable {
         var sourceName: String
         var sourceKind: String
         var patchID: Int
-        var facePersistentName: String?
+        var faceSubshapeID: String?
         var basisKind: String
         var uIndex: Int
         var vIndex: Int
@@ -302,17 +302,20 @@ struct SurfaceControlPointInspectorState: Equatable, Sendable {
                 )
 
                 for controlPoint in patch.controlPoints {
-                    entries[controlPoint.selectionReference] = Entry(
+                    guard let selectionReference = controlPoint.selectionReference else {
+                        continue
+                    }
+                    entries[selectionReference] = Entry(
                         id: controlPoint.id,
                         sourceFeatureID: source.featureID,
                         sourceName: source.name,
                         sourceKind: source.kind,
                         patchID: patch.patchID,
-                        facePersistentName: patch.facePersistentName,
+                        faceSubshapeID: patch.faceSubshapeID,
                         basisKind: patch.basis.kind,
                         uIndex: controlPoint.uIndex,
                         vIndex: controlPoint.vIndex,
-                        role: rolesByReference[controlPoint.selectionReference],
+                        role: rolesByReference[selectionReference],
                         point: controlPoint.point,
                         weight: controlPoint.weight,
                         isBoundary: controlPoint.isBoundary,
@@ -321,14 +324,14 @@ struct SurfaceControlPointInspectorState: Equatable, Sendable {
                             sourceKind: source.kind,
                             controlPoint: controlPoint
                         ),
-                        selectionReference: controlPoint.selectionReference,
+                        selectionReference: selectionReference,
                         isPointDisplayVisible: pointDisplayVisible(
-                            for: controlPoint.selectionReference,
+                            for: selectionReference,
                             surfaceControlPointDisplays: surfaceControlPointDisplays,
                             summaryVisibility: controlPoint.isPointDisplayVisible
                         ),
                         isFrameDisplayVisible: frameDisplayVisible(
-                            for: controlPoint.selectionReference,
+                            for: selectionReference,
                             surfaceFrameDisplays: surfaceFrameDisplays
                         ),
                         frameDetail: nil

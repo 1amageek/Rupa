@@ -39,6 +39,8 @@ struct CurvePatternPathSampler: Sendable {
             return nil
         }
         switch exactCurve {
+        case .analytic, .implicit, .surfaceLift, .certifiedIntersection:
+            return nil
         case .line(let line):
             guard case .closed(let start, let end) = curve.parameterDomain else {
                 return nil

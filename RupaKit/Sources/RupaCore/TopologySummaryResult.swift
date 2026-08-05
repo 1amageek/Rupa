@@ -51,14 +51,14 @@ public struct TopologySummaryResult: Codable, Equatable, Sendable {
             }
         }
 
-        public var persistentName: String
+        public var subshapeID: String
+        public var stableReference: StableSubshapeReference?
         public var kind: Kind
         public var referenceID: String
         public var sourceFeatureID: String?
         public var sceneNodeID: String?
         public var generatedRole: String?
-        public var subshapeRole: String?
-        public var index: Int?
+        public var ordinal: Int?
         public var selectionComponentID: String?
         public var curveKind: String?
         public var surfaceKind: String?
@@ -92,14 +92,14 @@ public struct TopologySummaryResult: Codable, Equatable, Sendable {
         public var shellCount: Int?
 
         public init(
-            persistentName: String,
+            subshapeID: String,
+            stableReference: StableSubshapeReference? = nil,
             kind: Kind,
             referenceID: String,
             sourceFeatureID: String? = nil,
             sceneNodeID: String? = nil,
             generatedRole: String? = nil,
-            subshapeRole: String? = nil,
-            index: Int? = nil,
+            ordinal: Int? = nil,
             selectionComponentID: String? = nil,
             curveKind: String? = nil,
             surfaceKind: String? = nil,
@@ -132,14 +132,14 @@ public struct TopologySummaryResult: Codable, Equatable, Sendable {
             edgeCount: Int? = nil,
             shellCount: Int? = nil
         ) {
-            self.persistentName = persistentName
+            self.subshapeID = subshapeID
+            self.stableReference = stableReference
             self.kind = kind
             self.referenceID = referenceID
             self.sourceFeatureID = sourceFeatureID
             self.sceneNodeID = sceneNodeID
             self.generatedRole = generatedRole
-            self.subshapeRole = subshapeRole
-            self.index = index
+            self.ordinal = ordinal
             self.selectionComponentID = selectionComponentID
             self.curveKind = curveKind
             self.surfaceKind = surfaceKind

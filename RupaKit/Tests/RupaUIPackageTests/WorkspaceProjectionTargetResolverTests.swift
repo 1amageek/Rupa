@@ -8,11 +8,11 @@ import Testing
     let fixture = try workspaceProjectionSketchFixture()
     let faceTarget = SelectionTarget(
         sceneNodeID: SceneNodeID(),
-        component: .face(.generatedTopology("body:face:target"))
+        component: .face(.generatedTopology(generatedTopologyTestSubshapeID("body:face:target")))
     )
     let generatedEdgeTarget = SelectionTarget(
         sceneNodeID: SceneNodeID(),
-        component: .edge(.generatedTopology("body:edge:generated"))
+        component: .edge(.generatedTopology(generatedTopologyTestSubshapeID("body:edge:generated")))
     )
     let resolver = WorkspaceProjectionTargetResolver(
         document: fixture.document,
@@ -61,7 +61,7 @@ import Testing
     let sceneNodeID = SceneNodeID()
     let generatedEdgeTarget = SelectionTarget(
         sceneNodeID: sceneNodeID,
-        component: .edge(.generatedTopology("body:edge:generated"))
+        component: .edge(.generatedTopology(generatedTopologyTestSubshapeID("body:edge:generated")))
     )
     let semanticEdgeTarget = SelectionTarget(sceneNodeID: sceneNodeID, component: .edge(.bodyEdgeRightTop))
     let resolver = WorkspaceProjectionTargetResolver(
@@ -129,5 +129,18 @@ private func projectionPointHandleSelectionTarget(
     return SelectionTarget(
         sceneNodeID: sourceTarget.sceneNodeID,
         component: .sketchEntity(SelectionComponentID(rawValue: pointHandle.selectionComponentID))
+    )
+}
+
+
+/// Shared feature identity so equal role strings map to equal subshape IDs
+/// within this file's tests.
+private let generatedTopologyTestFeatureID = FeatureID()
+
+private func generatedTopologyTestSubshapeID(_ role: String) -> SubshapeID {
+    SubshapeID(
+        featureID: generatedTopologyTestFeatureID,
+        role: role,
+        ordinal: 0
     )
 }

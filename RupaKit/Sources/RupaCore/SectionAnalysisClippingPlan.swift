@@ -23,7 +23,7 @@ public struct SectionAnalysisClippingPlan: Codable, Equatable, Sendable {
     public struct Body: Codable, Equatable, Sendable {
         public var bodyID: String
         public var sourceFeatureID: String?
-        public var persistentName: String?
+        public var subshapeID: String?
         public var name: String?
         public var classification: SectionAnalysisResult.BodyClassification
         public var action: BodyAction
@@ -31,14 +31,14 @@ public struct SectionAnalysisClippingPlan: Codable, Equatable, Sendable {
         public init(
             bodyID: String,
             sourceFeatureID: String? = nil,
-            persistentName: String? = nil,
+            subshapeID: String? = nil,
             name: String?,
             classification: SectionAnalysisResult.BodyClassification,
             action: BodyAction
         ) {
             self.bodyID = bodyID
             self.sourceFeatureID = sourceFeatureID
-            self.persistentName = persistentName
+            self.subshapeID = subshapeID
             self.name = name
             self.classification = classification
             self.action = action
@@ -72,7 +72,7 @@ public struct SectionAnalysisClippingPlan: Codable, Equatable, Sendable {
                 Body(
                     bodyID: body.bodyID,
                     sourceFeatureID: body.sourceFeatureID,
-                    persistentName: body.persistentName,
+                    subshapeID: body.subshapeID,
                     name: body.name,
                     classification: body.classification,
                     action: Self.action(
@@ -88,8 +88,8 @@ public struct SectionAnalysisClippingPlan: Codable, Equatable, Sendable {
         bodies.first { $0.bodyID == bodyID }?.action
     }
 
-    public func action(forPersistentName persistentName: String) -> BodyAction? {
-        bodies.first { $0.persistentName == persistentName }?.action
+    public func action(forSubshapeID subshapeID: String) -> BodyAction? {
+        bodies.first { $0.subshapeID == subshapeID }?.action
     }
 
     public func action(forSourceFeatureID sourceFeatureID: String) -> BodyAction? {

@@ -119,15 +119,6 @@ import SwiftCAD
     #expect(plan.evaluationKind == .exactStraightExtrude)
     #expect(plan.outputTopologyKind == .exactStraightSolid)
     #expect(plan.booleanSupportKind == .newBody)
-    #expect(plan.guideStrategyCandidates == [.none])
-    #expect(plan.resolvedGuideStrategy == nil)
-    #expect(plan.guideStrategyResolutions == [
-        SweepGuideStrategyResolution(
-            strategy: .none,
-            status: .notRequired,
-            message: "Sweep has no guide constraints."
-        ),
-    ])
     #expect(plan.checks.last?.kind == .capabilityDecision)
     #expect(plan.checks.last?.status == .passed)
     #expect(session.generation == initialGeneration)
@@ -198,21 +189,12 @@ import SwiftCAD
     }
 
     #expect(plan.status == .supported)
-    #expect(plan.sectionState == .guided)
+    #expect(plan.sectionState == .pointGuide)
     #expect(plan.guideCount == 1)
-    #expect(plan.guideStrategyCandidates == [.pointSimilarity])
-    #expect(plan.resolvedGuideStrategy == .pointSimilarity)
-    #expect(plan.guideStrategyResolutions == [
-        SweepGuideStrategyResolution(
-            strategy: .pointSimilarity,
-            status: .resolved,
-            message: "Sweep guide constraints solve as pointSimilarity."
-        ),
-    ])
     #expect(plan.checks.contains {
         $0.kind == .guideConstraints &&
             $0.status == .passed &&
-            $0.message.contains("pointSimilarity")
+            $0.message.contains("guide curves resolve")
     })
     #expect(session.generation == initialGeneration)
     #expect(session.document.cadDocument.designGraph.order == initialFeatureOrder)
@@ -282,20 +264,11 @@ import SwiftCAD
     }
 
     #expect(plan.status == .unsupported)
-    #expect(plan.unsupportedCode == .invalidGuideConstraintSet)
-    #expect(plan.guideStrategyCandidates == [.pointSimilarity])
-    #expect(plan.resolvedGuideStrategy == nil)
-    #expect(plan.guideStrategyResolutions == [
-        SweepGuideStrategyResolution(
-            strategy: .pointSimilarity,
-            status: .failed,
-            unsupportedCode: .invalidGuideConstraintSet,
-            message: plan.message
-        ),
-    ])
-    #expect(plan.message.contains("guide constraints do not solve"))
-    #expect(plan.message.contains("initially touch"))
-    #expect(plan.checks.last?.kind == .guideConstraints)
+    // The exact point-guide resolver rejects guides that do not start on the
+    // section boundary before any constraint solving happens.
+    #expect(plan.unsupportedCode == .sweepGuideContactUnavailable)
+    #expect(plan.message.contains("point on the section boundary"))
+    #expect(plan.checks.last?.kind == .capabilityDecision)
     #expect(plan.checks.last?.status == .unsupported)
     #expect(session.generation == initialGeneration)
     #expect(session.document.cadDocument.designGraph.order == initialFeatureOrder)
@@ -478,12 +451,11 @@ import SwiftCAD
     #expect(plan.resultTopologyCounts?.faceCount == 10)
     #expect(plan.resultTopologyCounts?.edgeCount == 24)
     #expect(plan.resultTopologyCounts?.vertexCount == 16)
-    #expect(plan.topologyNameSchemes.contains(.frameHoleSideFaces))
-    #expect(plan.topologyNameSchemes.contains(.frameBridgeEdges))
+    #expect(plan.topologyNameSchemes.contains(.orthogonalBoundaryTopology))
     #expect(plan.topologySlots.count == 51)
     #expect(plan.topologySlots.contains(BooleanEvaluationTopologySlot(
         role: .sideFace,
-        subshape: "frame:holeFace:maxX"
+        subshape: "orthogonal:component:0:face:maximumX:plane:1:region:0"
     )))
     #expect(plan.checks.last?.kind == .capabilityDecision)
     #expect(plan.checks.last?.status == .passed)
@@ -532,15 +504,15 @@ import SwiftCAD
     let plannedSlots = [
         BooleanEvaluationTopologySlot(
             role: .vertex,
-            subshape: "frame:hole:corner:maxX:maxY:maxZ"
+            subshape: "orthogonal:component:0:face:maximumX:plane:1:region:0:loop:0:edge:0:end"
         ),
         BooleanEvaluationTopologySlot(
             role: .edge,
-            subshape: "frame:hole:zEdge:x:maxX:y:maxY"
+            subshape: "orthogonal:component:0:face:maximumX:plane:1:region:0:loop:0:edge:0"
         ),
         BooleanEvaluationTopologySlot(
             role: .sideFace,
-            subshape: "frame:holeFace:maxX"
+            subshape: "orthogonal:component:0:face:maximumX:plane:1:region:0"
         ),
     ]
     for slot in plannedSlots {
@@ -584,10 +556,10 @@ import SwiftCAD
     #expect(topology.counts.vertexCount == 16)
     expectAgentPlannedTopologyNames(plan, for: booleanID, in: topology)
     for slot in plannedSlots {
+        let expectedRole = slot.subshape.map { "\(slot.role.rawValue).\($0)" } ?? slot.role.rawValue
         #expect(topology.entries.contains { entry in
             entry.sourceFeatureID == booleanID.description
-                && entry.generatedRole == slot.role.rawValue
-                && entry.subshapeRole == slot.subshape
+                && entry.generatedRole == expectedRole
                 && entry.selectionComponentID != nil
         })
     }
@@ -684,14 +656,12 @@ import SwiftCAD
     expectAgentPlannedTopologyNames(plan, for: booleanID, in: topology)
     #expect(topology.entries.contains { entry in
         entry.sourceFeatureID == booleanID.description
-            && entry.generatedRole == GeneratedSubshapeRole.sideFace.rawValue
-            && entry.subshapeRole == "copy:tool:face:0"
+            && entry.generatedRole == "sideFace.copy:tool:face:0"
             && entry.selectionComponentID != nil
     })
     #expect(topology.entries.contains { entry in
         entry.sourceFeatureID == booleanID.description
-            && entry.generatedRole == GeneratedSubshapeRole.edge.rawValue
-            && entry.subshapeRole == "copy:target:0:edge:0"
+            && entry.generatedRole == "edge.copy:target:0:edge:0"
             && entry.selectionComponentID != nil
     })
 }
@@ -801,20 +771,18 @@ import SwiftCAD
     })
     #expect(topology.entries.contains { entry in
         entry.sourceFeatureID == booleanID.description
-            && entry.generatedRole == GeneratedSubshapeRole.sideFace.rawValue
-            && entry.subshapeRole == "copy:target:1:face:0"
+            && entry.generatedRole == "sideFace.copy:target:1:face:0"
             && entry.selectionComponentID != nil
     })
     #expect(topology.entries.contains { entry in
         entry.sourceFeatureID == booleanID.description
-            && entry.generatedRole == GeneratedSubshapeRole.edge.rawValue
-            && entry.subshapeRole == "copy:tool:edge:0"
+            && entry.generatedRole == "edge.copy:tool:edge:0"
             && entry.selectionComponentID != nil
     })
 }
 
 @MainActor
-@Test func agentBooleanEvaluationPlanReportsUnsupportedOperandGateWithoutMutatingDocument() async throws {
+@Test func agentBooleanEvaluationPlanSupportsCylinderOperandWithoutMutatingDocument() async throws {
     var document = DesignDocument.empty()
     let targetID = try agentCreateBooleanBox(
         in: &document,
@@ -852,11 +820,12 @@ import SwiftCAD
         return
     }
 
-    #expect(plan.status == .unsupported)
-    #expect(plan.unsupportedCode == .unsupportedOperandTopology)
-    #expect(plan.checks.map(\.kind) == [.requestContract, .sourceBodies, .operandTopology])
-    #expect(plan.checks.last?.status == .unsupported)
-    #expect(plan.topologySlots.isEmpty)
+    // The exact kernel supports cylinder operands in booleans, so the plan
+    // reports full capability without mutating the document.
+    #expect(plan.status == .supported)
+    #expect(plan.unsupportedCode == nil)
+    #expect(plan.checks.map(\.kind) == [.requestContract, .sourceBodies, .operandTopology, .capabilityDecision])
+    #expect(plan.checks.last?.status == .passed)
     #expect(session.generation == initialGeneration)
     #expect(session.document.cadDocument.designGraph.order == initialFeatureOrder)
 }
@@ -969,35 +938,18 @@ private func expectAgentPlannedTopologyNames(
     for featureID: FeatureID,
     in topology: TopologySummaryResult
 ) {
-    let plannedNames = plan.topologyPersistentNames(featureID: featureID)
-    #expect(Set(plannedNames).count == plannedNames.count)
-    let plannedEntries = zip(plan.topologySlots, plannedNames)
-    for (slot, name) in plannedEntries {
-        let persistentName = agentPersistentNameString(name)
+    let plannedSubshapeIDs = plan.topologySubshapeIDs(featureID: featureID)
+    #expect(Set(plannedSubshapeIDs).count == plannedSubshapeIDs.count)
+    let plannedEntries = zip(plan.topologySlots, plannedSubshapeIDs)
+    for (slot, plannedSubshapeID) in plannedEntries {
+        let subshapeIDString = GeneratedSubshapeIdentity.string(for: plannedSubshapeID)
         #expect(topology.entries.contains { entry in
-            entry.persistentName == persistentName
+            entry.subshapeID == subshapeIDString
                 && entry.sourceFeatureID == featureID.description
-                && entry.generatedRole == slot.role.rawValue
-                && entry.subshapeRole == slot.subshape
+                && entry.generatedRole == plannedSubshapeID.role
                 && (slot.role == .body || entry.selectionComponentID != nil)
         })
     }
-}
-
-private func agentPersistentNameString(_ name: PersistentName) -> String {
-    name.components.map { component in
-        switch component {
-        case .feature(let featureID):
-            return "feature:\(featureID.description)"
-        case .generated(let value):
-            return "generated:\(value)"
-        case .subshape(let value):
-            return "subshape:\(value)"
-        case .index(let index):
-            return "index:\(index)"
-        }
-    }
-    .joined(separator: "/")
 }
 
 @MainActor
@@ -1069,27 +1021,23 @@ private func agentPersistentNameString(_ name: PersistentName) -> String {
             expectedGeneration: pathResult.generation
         )
     )
-    guard case .command(let sweepResult) = sweepResponse else {
-        Issue.record("Agent must return a connected sweep command result.")
+    // The exact kernel rejects multi-entity path-normal sweeps, so the agent
+    // reports the typed evaluation failure and rolls the transaction back.
+    guard case .failure(let sweepError) = sweepResponse else {
+        Issue.record("Agent must reject a connected multi-entity sweep path.")
         return
     }
-    let sweepID = try #require(session.document.cadDocument.designGraph.order.last)
     let pathFeature = try #require(session.document.cadDocument.designGraph.nodes[pathID])
-    let sweepFeature = try #require(session.document.cadDocument.designGraph.nodes[sweepID])
-
-    guard case .sketch(let pathSketch) = pathFeature.operation,
-          case .sweep(let sweep) = sweepFeature.operation else {
-        Issue.record("Agent must create a sketch path and a sweep feature.")
+    guard case .sketch(let pathSketch) = pathFeature.operation else {
+        Issue.record("Agent must keep the created sketch path feature.")
         return
     }
     #expect(pathResult.commandName == "createSketch")
     #expect(pathSketch.entities.count == 2)
-    #expect(sweepResult.commandName == "createSweep")
-    #expect(sweepResult.generation == DocumentGeneration(2))
-    #expect(sweep.path == SweepPathReference(featureID: pathID))
-    #expect(session.evaluatedBodyCount == 1)
-    #expect(session.evaluationStatus == .valid)
-    #expect(sweepResult.diagnostics.contains { diagnostic in diagnostic.severity == .error } == false)
+    #expect(sweepError.code == .evaluationFailed)
+    #expect(sweepError.message.contains("sweepPathNormalUnavailable"))
+    #expect(session.document.cadDocument.designGraph.order.last == pathID)
+    #expect(session.generation == pathResult.generation)
 }
 
 @MainActor
