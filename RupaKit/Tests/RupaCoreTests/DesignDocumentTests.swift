@@ -910,7 +910,18 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     #expect(trimmedPatch.vDomain.upperBound == 1.0)
     let summaryTrimLoop = try #require(trimmedPatch.trimLoops.first)
     #expect(summaryTrimLoop.edges.count == 3)
-    #expect(summaryTrimLoop.edgePersistentNames.isEmpty)
+    #expect(summaryTrimLoop.edgePersistentNames.count == 3)
+    #expect(summaryTrimLoop.edgePersistentNames == [
+        GeneratedSubshapeIdentity.string(for: SubshapeID(
+            featureID: trimOperation.node.id, role: "edge", ordinal: 0
+        )),
+        GeneratedSubshapeIdentity.string(for: SubshapeID(
+            featureID: trimOperation.node.id, role: "edge", ordinal: 1
+        )),
+        GeneratedSubshapeIdentity.string(for: SubshapeID(
+            featureID: trimOperation.node.id, role: "edge", ordinal: 2
+        )),
+    ])
     #expect(summaryTrimLoop.selectionReferences.count == 3)
     #expect(summaryTrimLoop.parameterAddresses.map(\.id) == [
         "loop:0:edge:0:start",

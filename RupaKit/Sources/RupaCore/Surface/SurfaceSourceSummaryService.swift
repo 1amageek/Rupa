@@ -77,6 +77,7 @@ public struct SurfaceSourceSummaryService: Sendable {
                     surfaceFeature: surfaceFeature,
                     authoredTrimLoops: authoredTrim?.feature.loops ?? [],
                     authoredTrimTargetFace: authoredTrim?.feature.target.face,
+                    authoredTrimFeatureID: authoredTrim?.node.id,
                     sceneNodeID: sceneNodeIDsByFeatureID[featureID],
                     surfaceControlPointDisplays: surfaceControlPointDisplays,
                     surfaceFrameDisplays: surfaceFrameDisplays,

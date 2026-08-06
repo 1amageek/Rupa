@@ -82,6 +82,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         surfaceFeature: BSplineSurfaceFeature,
         authoredTrimLoops: [SurfaceTrimLoop],
         authoredTrimTargetFace: StableSubshapeReference?,
+        authoredTrimFeatureID: FeatureID?,
         sceneNodeID: SceneNodeID?,
         surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay],
         surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay],
@@ -110,6 +111,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
             sourceTrimLoops: sourceTrimLoops,
             usesAuthoredTrimLoops: usesAuthoredTrimLoops,
             authoredTrimTargetFace: authoredTrimTargetFace,
+            authoredTrimFeatureID: authoredTrimFeatureID,
             uBounds: (trimDomain.uLowerBound, trimDomain.uUpperBound),
             vBounds: (trimDomain.vLowerBound, trimDomain.vUpperBound),
             trimsFullSurfaceDomain: trimsFullSurfaceDomain,
@@ -168,6 +170,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         sourceTrimLoops: [SummaryTrimLoop],
         usesAuthoredTrimLoops: Bool,
         authoredTrimTargetFace: StableSubshapeReference?,
+        authoredTrimFeatureID: FeatureID?,
         uBounds: (lower: Double, upper: Double),
         vBounds: (lower: Double, upper: Double),
         trimsFullSurfaceDomain: Bool,
@@ -194,6 +197,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
             }
         let trimLoops = try trimLoops(
             featureID: featureID,
+            authoredTrimFeatureID: authoredTrimFeatureID,
             surface: surface,
             surfaceReference: surfaceReference,
             sourceTrimLoops: sourceTrimLoops,
@@ -294,6 +298,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
 
     private func trimLoops(
         featureID: FeatureID,
+        authoredTrimFeatureID: FeatureID?,
         surface: BSplineSurface3D,
         surfaceReference: SurfaceReference?,
         sourceTrimLoops: [SummaryTrimLoop],
@@ -307,6 +312,8 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         try sourceTrimLoops.enumerated().map { loopIndex, sourceLoop in
             let edges = try trimEdges(
                 featureID: featureID,
+                authoredTrimFeatureID: authoredTrimFeatureID,
+                allSourceLoops: sourceTrimLoops,
                 surface: surface,
                 surfaceReference: surfaceReference,
                 sourceLoop: sourceLoop,
@@ -329,16 +336,9 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                     tolerance: tolerance
                 ),
                 sourceVertexIndices: [],
-                // FIXME(INCOMPLETE_IMPLEMENTATION): The kernel names authored
-                // trim edges under the surfaceTrim feature with role "edge"
-                // and sewing-order ordinals, but this summary does not yet map
-                // loop parameter curves to those ordinals, so authored trim
-                // loops list no edge persistent names. Production callers
-                // reach this through surfaceSourceSummary for trimmed direct
-                // B-spline surfaces; they address authored trim edges through
-                // parameter-space selection references instead. Do not treat
-                // authored-trim edge naming as complete until this list
-                // matches the loop's parameter curve count in tests.
+                // Authored trim edge names resolve to the surfaceTrim
+                // feature's generated "edge" subshapes in sewing traversal
+                // order; entries absent from the live topology are omitted.
                 edgePersistentNames: edges.compactMap { edge in
                     guard let persistentName = edge.persistentName,
                           topologyEntriesByPersistentName[persistentName] != nil else {
@@ -354,6 +354,8 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
 
     private func trimEdges(
         featureID: FeatureID,
+        authoredTrimFeatureID: FeatureID?,
+        allSourceLoops: [SummaryTrimLoop],
         surface: BSplineSurface3D,
         surfaceReference: SurfaceReference?,
         sourceLoop: SummaryTrimLoop,
@@ -372,12 +374,25 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                 loopIndex: loopIndex,
                 edgeIndex: index
             )
-            // Authored trim edges live on the downstream surfaceTrim feature
-            // and are addressed in surface parameter space, so they carry no
-            // source-surface persistent name and need no live-topology gate.
-            let edgePersistentName = usesAuthoredTrimLoops
-                ? nil
-                : subshapeIdentity(featureID: featureID, subshape: subshape)
+            // Authored trim edges live on the downstream surfaceTrim feature,
+            // which names them with role "edge" in sewing traversal order.
+            let edgePersistentName: String?
+            if usesAuthoredTrimLoops {
+                edgePersistentName = authoredTrimFeatureID.flatMap { trimFeatureID in
+                    let name = GeneratedSubshapeIdentity.string(for: SubshapeID(
+                        featureID: trimFeatureID,
+                        role: "edge",
+                        ordinal: authoredTrimEdgeOrdinal(
+                            loops: allSourceLoops,
+                            loopIndex: loopIndex,
+                            edgeIndex: index
+                        )
+                    ))
+                    return topologyEntriesByPersistentName[name] == nil ? nil : name
+                }
+            } else {
+                edgePersistentName = subshapeIdentity(featureID: featureID, subshape: subshape)
+            }
             let trimReference = surfaceReference.map {
                 SurfaceTrimReference(
                     surface: $0,
@@ -757,6 +772,33 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
             isWeightEditable: isWeightEditable,
             weightUnsupportedReason: weightUnsupportedReason
         )
+    }
+
+    /// Mirrors the kernel sewing traversal that assigns edge ordinals to an
+    /// authored surface trim: loops are ordered outer-first and then by their
+    /// sewing stable identifier, and edges keep loop order. Loop edges never
+    /// coincide within one trim, so ordinals accumulate without merging.
+    private func authoredTrimEdgeOrdinal(
+        loops: [SummaryTrimLoop],
+        loopIndex: Int,
+        edgeIndex: Int
+    ) -> Int {
+        let order = loops.indices.sorted { lhs, rhs in
+            let lhsOuter = loops[lhs].role == .outer
+            let rhsOuter = loops[rhs].role == .outer
+            if lhsOuter != rhsOuter {
+                return lhsOuter
+            }
+            return "surfaceTrim:loop:\(lhs)" < "surfaceTrim:loop:\(rhs)"
+        }
+        var ordinal = 0
+        for index in order {
+            if index == loopIndex {
+                return ordinal + edgeIndex
+            }
+            ordinal += loops[index].edges.count
+        }
+        return ordinal + edgeIndex
     }
 
     private func trimEdgeSubshape(
