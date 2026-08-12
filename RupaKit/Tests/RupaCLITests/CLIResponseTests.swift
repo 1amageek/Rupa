@@ -5692,7 +5692,11 @@ func cliExecutableSurfaceTrimLoopsCommandMutatesClosedDocumentAsJSON() async thr
     #expect(response.saved)
     #expect(trimOperation.feature.loops == [trimLoop])
     #expect(updatedTrimLoop.edges.count == 3)
-    #expect(updatedTrimLoop.edgePersistentNames.isEmpty)
+    // Authored trim edges carry stable kernel edge-ordinal names.
+    #expect(updatedTrimLoop.edgePersistentNames.count == 3)
+    #expect(updatedTrimLoop.edgePersistentNames.allSatisfy {
+        $0.contains("/edge/")
+    })
     #expect(updatedTrimLoop.selectionReferences.count == 3)
 }
 
