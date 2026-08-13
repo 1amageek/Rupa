@@ -107,7 +107,88 @@ struct PatternArrayFeatureIDRemapper: Sendable {
             return try remappedSurfaceExtendOperation(operation)
         case .surfaceMatch:
             return try remappedSurfaceMatchOperation(operation)
+        case .mirror:
+            return try remappedMirrorOperation(operation)
+        case .joinBodies:
+            return try remappedJoinBodiesOperation(operation)
+        case .unjoinBody:
+            return try remappedUnjoinBodyOperation(operation)
+        case .projectCurve:
+            return try remappedProjectCurveOperation(operation)
         }
+    }
+
+    @inline(never)
+    private func remappedMirrorOperation(
+        _ operation: FeatureOperation
+    ) throws -> FeatureOperation {
+        guard case let .mirror(feature) = operation else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Pattern array remapping dispatch expected a mirror operation."
+            )
+        }
+        return .mirror(MirrorFeature(
+            target: PatternTargetReference(
+                featureID: try remappedFeatureID(feature.target.featureID)
+            ),
+            planeOrigin: feature.planeOrigin,
+            planeNormal: feature.planeNormal
+        ))
+    }
+
+    @inline(never)
+    private func remappedJoinBodiesOperation(
+        _ operation: FeatureOperation
+    ) throws -> FeatureOperation {
+        guard case let .joinBodies(feature) = operation else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Pattern array remapping dispatch expected a joinBodies operation."
+            )
+        }
+        return .joinBodies(JoinBodiesFeature(
+            targets: try feature.targets.map { target in
+                PatternTargetReference(
+                    featureID: try remappedFeatureID(target.featureID)
+                )
+            }
+        ))
+    }
+
+    @inline(never)
+    private func remappedUnjoinBodyOperation(
+        _ operation: FeatureOperation
+    ) throws -> FeatureOperation {
+        guard case let .unjoinBody(feature) = operation else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Pattern array remapping dispatch expected a unjoinBody operation."
+            )
+        }
+        return .unjoinBody(UnjoinBodyFeature(
+            target: PatternTargetReference(
+                featureID: try remappedFeatureID(feature.target.featureID)
+            )
+        ))
+    }
+
+    @inline(never)
+    private func remappedProjectCurveOperation(
+        _ operation: FeatureOperation
+    ) throws -> FeatureOperation {
+        guard case let .projectCurve(feature) = operation else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Pattern array remapping dispatch expected a projectCurve operation."
+            )
+        }
+        return .projectCurve(ProjectCurveFeature(
+            source: try remappedCurveOutputReference(feature.source),
+            planeOrigin: feature.planeOrigin,
+            planeNormal: feature.planeNormal,
+            direction: feature.direction
+        ))
     }
 
     @inline(never)

@@ -531,6 +531,29 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                     value: String(describing: surfaceMatch.continuity).capitalized
                 ),
             ]
+        case .mirror(let mirror):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Mirror"),
+                WorkspaceInspectorTextRow(title: "Target", value: shortID(mirror.target.featureID)),
+            ]
+        case .joinBodies(let join):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Join Bodies"),
+                WorkspaceInspectorTextRow(
+                    title: "Targets",
+                    value: join.targets.map { shortID($0.featureID) }.joined(separator: ", ")
+                ),
+            ]
+        case .unjoinBody(let unjoin):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Unjoin Body"),
+                WorkspaceInspectorTextRow(title: "Target", value: shortID(unjoin.target.featureID)),
+            ]
+        case .projectCurve(let projectCurve):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Project Curve"),
+                WorkspaceInspectorTextRow(title: "Source", value: shortID(projectCurve.source.featureID)),
+            ]
         }
     }
 

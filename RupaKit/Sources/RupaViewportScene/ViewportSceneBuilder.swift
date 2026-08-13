@@ -313,7 +313,7 @@ public struct ViewportSceneBuilder {
                 return nil
             case .curveTrim:
                 return nil
-            case .curveExtend, .curveMatch:
+            case .curveExtend, .curveMatch, .projectCurve:
                 return nil
             case .surfaceTrim(let surfaceTrim):
                 return evaluatedMeshBodyItem(
@@ -331,7 +331,8 @@ public struct ViewportSceneBuilder {
             case .primitive, .patchSurface, .faceOffset, .faceMove, .edgeMove, .vertexMove,
                  .linearPattern, .radialPattern, .gridPattern, .curveDrivenPattern,
                  .chamfer, .fillet, .g2Blend, .setbackCorner, .shell, .thicken,
-                 .bridgeSurface, .surfaceOffset, .surfaceExtend, .surfaceMatch:
+                 .bridgeSurface, .surfaceOffset, .surfaceExtend, .surfaceMatch,
+                 .mirror, .joinBodies, .unjoinBody:
                 return evaluatedMeshBodyItem(
                     featureID: featureID,
                     sourceFeatureID: nil,

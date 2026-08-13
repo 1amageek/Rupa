@@ -160,18 +160,28 @@ import SwiftCAD
         sketch: connectedLineArcPathSketch(),
         geometryRole: .curve
     )
-    _ = try document.createSweep(
+    let sweepID = try document.createSweep(
         name: "Connected Line Arc Sweep",
         sections: [.profile(ProfileReference(featureID: profileID))],
         path: SweepPathReference(featureID: pathID),
         options: SweepOptions(cornerStyle: .mitre)
     )
-    do {
-        _ = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
-        Issue.record("Exact kernel must reject multi-entity path-normal sweeps without an exact moving-frame surface.")
-    } catch let error as KernelError {
-        #expect(error.code == .sweepPathNormalUnavailable)
-    }
+    // The section-interpolated B-spline sweep accepts curved path-normal
+    // paths; the measurement still reports the exact line-plus-arc path
+    // length, which no sampled polyline reproduces at this precision.
+    let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
+    #expect(evaluated.brep.bodies.count == 1)
+    let result = try MeasurementService().measure(
+        document: document,
+        ruler: RulerConfiguration.standard(for: .millimeter)
+    )
+    let solid = try #require(result.solids.first)
+    let pathLength = try #require(
+        solid.linearDimensions.first { $0.kind == .sweepPathLength }
+    )
+    let expectedPathLength = 0.06 * Double.pi / 2.0 + 0.01
+    #expect(solid.featureID == sweepID.description)
+    #expect(abs(pathLength.meters - expectedPathLength) < 1.0e-12)
     try document.validate()
 }
 

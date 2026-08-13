@@ -917,7 +917,11 @@ public struct MeasurementService {
                  .surfaceOffset,
                  .surfaceTrim,
                  .surfaceExtend,
-                 .surfaceMatch:
+                 .surfaceMatch,
+                 .mirror,
+                 .joinBodies,
+                 .unjoinBody,
+                 .projectCurve:
                 continue
             }
         }

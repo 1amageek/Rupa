@@ -5701,6 +5701,107 @@ func cliExecutableSurfaceTrimLoopsCommandMutatesClosedDocumentAsJSON() async thr
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliExecutableSurfaceTrimLoopsReversedOrientationNamesMatchEdgeGeometry() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let documentURL = temporaryDirectory.appendingPathComponent("process-surface-trim-loops-reversed.swcad")
+    var document = DesignDocument.empty(named: "Process Surface Trim Loops Reversed")
+    let sourceSurface = cliDirectBSplineSurfaceWithInteriorKnots()
+    let featureID = try document.createBSplineSurface(
+        name: "CLI Reversed Trim Loops B-spline Surface",
+        surface: sourceSurface
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
+    let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
+    // The same triangle as the forward test, wound clockwise: an outer loop
+    // with negative parameter area, which the kernel normalizes by
+    // reversing curve order and direction before naming edges.
+    let authoredCorners = [
+        SurfaceParameter(u: 0.2, v: 0.2),
+        SurfaceParameter(u: 0.45, v: 0.8),
+        SurfaceParameter(u: 0.8, v: 0.25),
+    ]
+    let trimLoop = SurfaceTrimLoop(
+        role: .outer,
+        parameterCurves: [
+            .polyline([authoredCorners[0], authoredCorners[1]]),
+            .polyline([authoredCorners[1], authoredCorners[2]]),
+            .polyline([authoredCorners[2], authoredCorners[0]]),
+        ]
+    )
+    let faceJSON = try encodedSelectionReference(faceReference)
+    let trimLoopJSON = try encodedSurfaceTrimLoop(trimLoop)
+    try DocumentFileService().save(document, to: documentURL)
+
+    let result = try await runCLI([
+        "surface",
+        "set-trim-loops",
+        documentURL.path,
+        "--reference",
+        faceJSON,
+        "--trim-loop",
+        trimLoopJSON,
+        "--mode",
+        "file",
+        "--json",
+    ])
+    #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+
+    let loaded = try DocumentFileService().load(from: documentURL)
+    let trimOperation = try #require(loaded.existingSurfaceTrimOperation(for: featureID))
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: loaded, displayUnit: .millimeter)
+    let updatedTrimLoop = try #require(updatedSummary.sources.first?.patches.first?.trimLoops.first)
+    #expect(updatedTrimLoop.edges.count == 3)
+    #expect(updatedTrimLoop.edgePersistentNames.count == 3)
+
+    // Every persistent name must resolve to the kernel edge whose geometry
+    // matches that authored edge: for a reversed loop the kernel ordinal of
+    // authored edge i is (count - 1 - i).
+    let evaluated = try CADPipeline(tolerance: .standard).evaluate(loaded.cadDocument)
+    let exactSurface = Surface3D.bSpline(sourceSurface)
+    let tolerance = ModelingTolerance.standard
+    for (index, edge) in updatedTrimLoop.edges.enumerated() {
+        let persistentName = try #require(edge.persistentName)
+        let ordinal = try #require(
+            persistentName.split(separator: "/").last.flatMap { Int($0) }
+        )
+        #expect(ordinal == updatedTrimLoop.edges.count - 1 - index)
+        let subshapeID = SubshapeID(
+            featureID: trimOperation.node.id,
+            role: "edge",
+            ordinal: ordinal
+        )
+        guard case let .edge(edgeID)? = evaluated.subshapes.entries[subshapeID],
+              let kernelEdge = evaluated.brep.edges[edgeID],
+              let kernelStart = evaluated.brep.vertices[kernelEdge.startVertexID]?.point,
+              let kernelEnd = evaluated.brep.vertices[kernelEdge.endVertexID]?.point else {
+            Issue.record("Persistent name \(persistentName) did not resolve to an evaluated edge.")
+            continue
+        }
+        let authoredStart = try exactSurface.point(
+            u: authoredCorners[index].u,
+            v: authoredCorners[index].v,
+            tolerance: tolerance
+        )
+        let authoredEnd = try exactSurface.point(
+            u: authoredCorners[(index + 1) % authoredCorners.count].u,
+            v: authoredCorners[(index + 1) % authoredCorners.count].v,
+            tolerance: tolerance
+        )
+        let matchesForward = kernelStart.isApproximatelyEqual(to: authoredStart, tolerance: tolerance.distance)
+            && kernelEnd.isApproximatelyEqual(to: authoredEnd, tolerance: tolerance.distance)
+        let matchesReversed = kernelStart.isApproximatelyEqual(to: authoredEnd, tolerance: tolerance.distance)
+            && kernelEnd.isApproximatelyEqual(to: authoredStart, tolerance: tolerance.distance)
+        #expect(
+            matchesForward || matchesReversed,
+            "Edge \(index) name \(persistentName) resolved to an edge whose geometry does not match the authored curve."
+        )
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliExecutableSurfaceTrimEndpointCommandMutatesClosedDocumentAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {

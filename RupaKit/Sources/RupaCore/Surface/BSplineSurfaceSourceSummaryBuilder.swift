@@ -1,3 +1,4 @@
+import CADModeling
 import SwiftCAD
 
 struct BSplineSurfaceSourceSummaryBuilder: Sendable {
@@ -99,6 +100,30 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
             authoredTrimLoops: authoredTrimLoops,
             trimDomain: trimDomain
         )
+        // The kernel stores trim edges in normalized traversal order: an
+        // authored loop wound against its role's orientation is reversed
+        // curve-by-curve, so kernel edge ordinals for such a loop run
+        // opposite to the authored edge indices. A verdict failure keeps
+        // every authored name unresolved rather than guessing.
+        let authoredLoopIsReversed: [Bool]? = usesAuthoredTrimLoops
+            ? {
+                let validator = ExactSurfaceTrimLoopValidator()
+                let bounds = RectangularSurfaceParameterBounds(
+                    lowerU: trimDomain.uLowerBound,
+                    upperU: trimDomain.uUpperBound,
+                    lowerV: trimDomain.vLowerBound,
+                    upperV: trimDomain.vUpperBound
+                )
+                return try? authoredTrimLoops.map { loop in
+                    try validator.normalizationReversesLoop(
+                        loop,
+                        on: .bSpline(surface),
+                        inside: bounds,
+                        tolerance: tolerance
+                    )
+                }
+            }()
+            : nil
         let boundaryEdgeCount = sourceTrimLoops
             .filter { $0.role == .outer }
             .reduce(0) { partial, loop in partial + loop.edges.count }
@@ -110,6 +135,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
             surface: surface,
             sourceTrimLoops: sourceTrimLoops,
             usesAuthoredTrimLoops: usesAuthoredTrimLoops,
+            authoredLoopIsReversed: authoredLoopIsReversed,
             authoredTrimTargetFace: authoredTrimTargetFace,
             authoredTrimFeatureID: authoredTrimFeatureID,
             uBounds: (trimDomain.uLowerBound, trimDomain.uUpperBound),
@@ -169,6 +195,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         surface: BSplineSurface3D,
         sourceTrimLoops: [SummaryTrimLoop],
         usesAuthoredTrimLoops: Bool,
+        authoredLoopIsReversed: [Bool]?,
         authoredTrimTargetFace: StableSubshapeReference?,
         authoredTrimFeatureID: FeatureID?,
         uBounds: (lower: Double, upper: Double),
@@ -202,6 +229,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
             surfaceReference: surfaceReference,
             sourceTrimLoops: sourceTrimLoops,
             usesAuthoredTrimLoops: usesAuthoredTrimLoops,
+            authoredLoopIsReversed: authoredLoopIsReversed,
             uBounds: uBounds,
             vBounds: vBounds,
             trimsFullSurfaceDomain: trimsFullSurfaceDomain,
@@ -303,6 +331,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         surfaceReference: SurfaceReference?,
         sourceTrimLoops: [SummaryTrimLoop],
         usesAuthoredTrimLoops: Bool,
+        authoredLoopIsReversed: [Bool]?,
         uBounds: (lower: Double, upper: Double),
         vBounds: (lower: Double, upper: Double),
         trimsFullSurfaceDomain: Bool,
@@ -319,6 +348,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                 sourceLoop: sourceLoop,
                 loopIndex: loopIndex,
                 usesAuthoredTrimLoops: usesAuthoredTrimLoops,
+                authoredLoopIsReversed: authoredLoopIsReversed,
                 uBounds: uBounds,
                 vBounds: vBounds,
                 trimsFullSurfaceDomain: trimsFullSurfaceDomain,
@@ -361,6 +391,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         sourceLoop: SummaryTrimLoop,
         loopIndex: Int,
         usesAuthoredTrimLoops: Bool,
+        authoredLoopIsReversed: [Bool]?,
         uBounds: (lower: Double, upper: Double),
         vBounds: (lower: Double, upper: Double),
         trimsFullSurfaceDomain: Bool,
@@ -378,14 +409,24 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
             // which names them with role "edge" in sewing traversal order.
             let edgePersistentName: String?
             if usesAuthoredTrimLoops {
-                edgePersistentName = authoredTrimFeatureID.flatMap { trimFeatureID in
+                // Kernel edge ordinals follow the normalized loop; a loop
+                // that normalization reversed maps authored edge i to the
+                // ordinal of edge (count - 1 - i). Without a verdict the
+                // name stays unresolved rather than guessing.
+                edgePersistentName = authoredTrimFeatureID.flatMap { trimFeatureID -> String? in
+                    guard let authoredLoopIsReversed,
+                          authoredLoopIsReversed.indices.contains(loopIndex) else {
+                        return nil
+                    }
                     let name = GeneratedSubshapeIdentity.string(for: SubshapeID(
                         featureID: trimFeatureID,
                         role: "edge",
                         ordinal: authoredTrimEdgeOrdinal(
                             loops: allSourceLoops,
                             loopIndex: loopIndex,
-                            edgeIndex: index
+                            edgeIndex: authoredLoopIsReversed[loopIndex]
+                                ? sourceLoop.edges.count - 1 - index
+                                : index
                         )
                     ))
                     return topologyEntriesByPersistentName[name] == nil ? nil : name

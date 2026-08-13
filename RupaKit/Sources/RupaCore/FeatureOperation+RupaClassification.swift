@@ -57,10 +57,14 @@ extension FeatureOperation {
              .surfaceOffset,
              .surfaceTrim,
              .surfaceExtend,
-             .surfaceMatch:
+             .surfaceMatch,
+             .mirror,
+             .joinBodies,
+             .unjoinBody:
             return true
         case .curveExtend,
-             .curveMatch:
+             .curveMatch,
+             .projectCurve:
             return false
         }
     }
@@ -140,6 +144,13 @@ extension FeatureOperation {
             return [feature.target.featureID]
         case .surfaceMatch(let feature):
             return [feature.source.featureID]
+        // Join absorbs its source bodies into the merged body and unjoin
+        // replaces its target with per-shell bodies, so their sources leave
+        // the measurable set like boolean operands.
+        case .joinBodies(let feature):
+            return Set(feature.targets.map(\.featureID))
+        case .unjoinBody(let feature):
+            return [feature.target.featureID]
         case .primitive,
              .patchSurface,
              .bridgeSurface,
@@ -148,7 +159,9 @@ extension FeatureOperation {
              .gridPattern,
              .curveDrivenPattern,
              .curveExtend,
-             .curveMatch:
+             .curveMatch,
+             .mirror,
+             .projectCurve:
             return []
         }
     }

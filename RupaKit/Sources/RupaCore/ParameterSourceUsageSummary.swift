@@ -115,7 +115,11 @@ public struct ParameterSourceUsageService: Sendable {
              .curveMatch,
              .surfaceTrim,
              .surfaceExtend,
-             .surfaceMatch:
+             .surfaceMatch,
+             .mirror,
+             .joinBodies,
+             .unjoinBody,
+             .projectCurve:
             break
         case .faceLoopOffset(let feature):
             record(feature.distance, path: "faceLoopOffset.distance")
@@ -320,6 +324,14 @@ public struct ParameterSourceUsageService: Sendable {
             "surfaceExtend"
         case .surfaceMatch:
             "surfaceMatch"
+        case .mirror:
+            "mirror"
+        case .joinBodies:
+            "joinBodies"
+        case .unjoinBody:
+            "unjoinBody"
+        case .projectCurve:
+            "projectCurve"
         }
     }
 }
