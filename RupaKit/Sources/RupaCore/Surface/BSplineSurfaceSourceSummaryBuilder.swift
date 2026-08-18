@@ -103,27 +103,29 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         // The kernel stores trim edges in normalized traversal order: an
         // authored loop wound against its role's orientation is reversed
         // curve-by-curve, so kernel edge ordinals for such a loop run
-        // opposite to the authored edge indices. A verdict failure keeps
-        // every authored name unresolved rather than guessing.
-        let authoredLoopIsReversed: [Bool]? = usesAuthoredTrimLoops
-            ? {
-                let validator = ExactSurfaceTrimLoopValidator()
-                let bounds = RectangularSurfaceParameterBounds(
-                    lowerU: trimDomain.uLowerBound,
-                    upperU: trimDomain.uUpperBound,
-                    lowerV: trimDomain.vLowerBound,
-                    upperV: trimDomain.vUpperBound
+        // opposite to the authored edge indices. The summary propagates a
+        // verdict failure because assigning names without it would associate
+        // authored curves with the wrong topology edges.
+        let authoredLoopIsReversed: [Bool]
+        if usesAuthoredTrimLoops {
+            let validator = ExactSurfaceTrimLoopValidator()
+            let bounds = RectangularSurfaceParameterBounds(
+                lowerU: trimDomain.uLowerBound,
+                upperU: trimDomain.uUpperBound,
+                lowerV: trimDomain.vLowerBound,
+                upperV: trimDomain.vUpperBound
+            )
+            authoredLoopIsReversed = try authoredTrimLoops.map { loop in
+                try validator.normalizationReversesLoop(
+                    loop,
+                    on: .bSpline(surface),
+                    inside: bounds,
+                    tolerance: tolerance
                 )
-                return try? authoredTrimLoops.map { loop in
-                    try validator.normalizationReversesLoop(
-                        loop,
-                        on: .bSpline(surface),
-                        inside: bounds,
-                        tolerance: tolerance
-                    )
-                }
-            }()
-            : nil
+            }
+        } else {
+            authoredLoopIsReversed = []
+        }
         let boundaryEdgeCount = sourceTrimLoops
             .filter { $0.role == .outer }
             .reduce(0) { partial, loop in partial + loop.edges.count }
@@ -195,7 +197,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         surface: BSplineSurface3D,
         sourceTrimLoops: [SummaryTrimLoop],
         usesAuthoredTrimLoops: Bool,
-        authoredLoopIsReversed: [Bool]?,
+        authoredLoopIsReversed: [Bool],
         authoredTrimTargetFace: StableSubshapeReference?,
         authoredTrimFeatureID: FeatureID?,
         uBounds: (lower: Double, upper: Double),
@@ -331,7 +333,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         surfaceReference: SurfaceReference?,
         sourceTrimLoops: [SummaryTrimLoop],
         usesAuthoredTrimLoops: Bool,
-        authoredLoopIsReversed: [Bool]?,
+        authoredLoopIsReversed: [Bool],
         uBounds: (lower: Double, upper: Double),
         vBounds: (lower: Double, upper: Double),
         trimsFullSurfaceDomain: Bool,
@@ -391,7 +393,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         sourceLoop: SummaryTrimLoop,
         loopIndex: Int,
         usesAuthoredTrimLoops: Bool,
-        authoredLoopIsReversed: [Bool]?,
+        authoredLoopIsReversed: [Bool],
         uBounds: (lower: Double, upper: Double),
         vBounds: (lower: Double, upper: Double),
         trimsFullSurfaceDomain: Bool,
@@ -411,22 +413,24 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
             if usesAuthoredTrimLoops {
                 // Kernel edge ordinals follow the normalized loop; a loop
                 // that normalization reversed maps authored edge i to the
-                // ordinal of edge (count - 1 - i). Without a verdict the
-                // name stays unresolved rather than guessing.
+                // ordinal of edge (count - 1 - i).
+                guard authoredLoopIsReversed.indices.contains(loopIndex) else {
+                    throw EditorError(
+                        code: .evaluationFailed,
+                        message: "Authored trim orientation results do not match the source loops."
+                    )
+                }
+                let normalizedEdgeIndex = authoredLoopIsReversed[loopIndex]
+                    ? sourceLoop.edges.count - 1 - index
+                    : index
                 edgePersistentName = authoredTrimFeatureID.flatMap { trimFeatureID -> String? in
-                    guard let authoredLoopIsReversed,
-                          authoredLoopIsReversed.indices.contains(loopIndex) else {
-                        return nil
-                    }
                     let name = GeneratedSubshapeIdentity.string(for: SubshapeID(
                         featureID: trimFeatureID,
                         role: "edge",
                         ordinal: authoredTrimEdgeOrdinal(
                             loops: allSourceLoops,
                             loopIndex: loopIndex,
-                            edgeIndex: authoredLoopIsReversed[loopIndex]
-                                ? sourceLoop.edges.count - 1 - index
-                                : index
+                            edgeIndex: normalizedEdgeIndex
                         )
                     ))
                     return topologyEntriesByPersistentName[name] == nil ? nil : name

@@ -51,10 +51,28 @@ public struct MeasurementResult: Codable, Equatable, Sendable {
         let volume = formatted(totals.solidVolumeCubicMeters, exponent: 3)
         let area = formatted(totals.profileAreaSquareMeters, exponent: 2)
         let sheetArea = formatted(totals.sheetAreaSquareMeters, exponent: 2)
+        let provenance = totalsProvenance
+        let profileAreaLabel = provenance.profileArea.isApproximate
+            ? "profile area (approximate)"
+            : "profile area"
+        let sheetAreaLabel = provenance.sheetArea.isApproximate
+            ? "sheet area (approximate)"
+            : "sheet area"
+        let solidVolumeLabel = provenance.solidVolume.isApproximate
+            ? "solid volume (approximate)"
+            : "solid volume"
         if let bounds {
-            return "\(title): \(counts.sourceFeatures) source features, \(counts.solids) solids, \(counts.sheets) sheets, \(area) \(displayUnit.symbol)^2 profile area, \(sheetArea) \(displayUnit.symbol)^2 sheet area, \(volume) \(displayUnit.symbol)^3 solid volume, \(bounds.formattedSize(in: displayUnit)) bounds."
+            return "\(title): \(counts.sourceFeatures) source features, \(counts.solids) solids, \(counts.sheets) sheets, \(area) \(displayUnit.symbol)^2 \(profileAreaLabel), \(sheetArea) \(displayUnit.symbol)^2 \(sheetAreaLabel), \(volume) \(displayUnit.symbol)^3 \(solidVolumeLabel), \(bounds.formattedSize(in: displayUnit)) bounds."
         }
-        return "\(title): \(counts.sourceFeatures) source features, \(counts.solids) solids, \(counts.sheets) sheets, \(area) \(displayUnit.symbol)^2 profile area, \(sheetArea) \(displayUnit.symbol)^2 sheet area, \(volume) \(displayUnit.symbol)^3 solid volume."
+        return "\(title): \(counts.sourceFeatures) source features, \(counts.solids) solids, \(counts.sheets) sheets, \(area) \(displayUnit.symbol)^2 \(profileAreaLabel), \(sheetArea) \(displayUnit.symbol)^2 \(sheetAreaLabel), \(volume) \(displayUnit.symbol)^3 \(solidVolumeLabel)."
+    }
+
+    public var totalsProvenance: TotalsProvenance {
+        TotalsProvenance(
+            profileArea: MeasurementProvenance(methods: profiles.map(\.areaMethod)),
+            sheetArea: MeasurementProvenance(methods: sheets.map(\.surfaceAreaMethod)),
+            solidVolume: MeasurementProvenance(methods: solids.map(\.volumeMethod))
+        )
     }
 
     private func formatted(_ metersValue: Double, exponent: Int) -> String {
@@ -183,6 +201,85 @@ public extension MeasurementResult {
         }
     }
 
+    enum MeasurementMethod: String, Codable, Equatable, Hashable, Sendable {
+        /// Closed-form evaluation from authored parametric inputs.
+        case analytic
+        /// Exact or certified evaluation from B-rep topology and geometry.
+        case exactBRep
+        /// Approximation computed from samples of an exact or authored curve.
+        case sampledCurve
+        /// Approximation computed from the evaluated display tessellation.
+        case tessellatedMesh
+        /// A persisted legacy value whose original method was not recorded.
+        case legacyUnspecified
+
+        public var isApproximate: Bool {
+            switch self {
+            case .analytic, .exactBRep:
+                false
+            case .sampledCurve, .tessellatedMesh, .legacyUnspecified:
+                true
+            }
+        }
+    }
+
+    struct MeasurementProvenance: Equatable, Sendable {
+        public let methods: [MeasurementMethod]
+
+        public init(methods: [MeasurementMethod]) {
+            self.methods = Array(Set(methods)).sorted { $0.rawValue < $1.rawValue }
+        }
+
+        public var isApproximate: Bool {
+            methods.contains { $0.isApproximate }
+        }
+    }
+
+    struct TotalsProvenance: Equatable, Sendable {
+        public let profileArea: MeasurementProvenance
+        public let sheetArea: MeasurementProvenance
+        public let solidVolume: MeasurementProvenance
+
+        public init(
+            profileArea: MeasurementProvenance,
+            sheetArea: MeasurementProvenance,
+            solidVolume: MeasurementProvenance
+        ) {
+            self.profileArea = profileArea
+            self.sheetArea = sheetArea
+            self.solidVolume = solidVolume
+        }
+    }
+
+    /// A measurement value and the provenance required to interpret it.
+    struct Measured<Value: Codable & Equatable & Sendable>: Codable, Equatable, Sendable {
+        public let value: Value
+        public let method: MeasurementMethod
+
+        public init(value: Value, method: MeasurementMethod) {
+            self.value = value
+            self.method = method
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case value
+            case method
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            try container.validateOnlyExpectedKeys([.value, .method], in: decoder)
+            value = try container.decode(Value.self, forKey: .value)
+            method = try container.decode(MeasurementMethod.self, forKey: .method)
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(value, forKey: .value)
+            try container.encode(method, forKey: .method)
+        }
+    }
+
     struct Totals: Codable, Equatable, Sendable {
         public var profileAreaSquareMeters: Double
         public var sheetAreaSquareMeters: Double
@@ -209,9 +306,40 @@ public extension MeasurementResult {
         public var featureID: String
         public var featureName: String?
         public var kind: Kind
-        public var areaSquareMeters: Double
-        public var bounds: Bounds
+        public var area: Measured<Double>
+        public var measuredBounds: Measured<Bounds>
 
+        public var areaSquareMeters: Double {
+            area.value
+        }
+
+        public var areaMethod: MeasurementMethod {
+            area.method
+        }
+
+        public var bounds: Bounds {
+            measuredBounds.value
+        }
+
+        public var boundsMethod: MeasurementMethod {
+            measuredBounds.method
+        }
+
+        public init(
+            featureID: String,
+            featureName: String?,
+            kind: Kind,
+            area: Measured<Double>,
+            bounds: Measured<Bounds>
+        ) {
+            self.featureID = featureID
+            self.featureName = featureName
+            self.kind = kind
+            self.area = area
+            self.measuredBounds = bounds
+        }
+
+        @available(*, deprecated, message: "Use measured values so each value and its provenance are supplied together.")
         public init(
             featureID: String,
             featureName: String?,
@@ -219,11 +347,68 @@ public extension MeasurementResult {
             areaSquareMeters: Double,
             bounds: Bounds
         ) {
-            self.featureID = featureID
-            self.featureName = featureName
-            self.kind = kind
-            self.areaSquareMeters = areaSquareMeters
-            self.bounds = bounds
+            self.init(
+                featureID: featureID,
+                featureName: featureName,
+                kind: kind,
+                area: Measured(value: areaSquareMeters, method: .legacyUnspecified),
+                bounds: Measured(value: bounds, method: .legacyUnspecified)
+            )
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case featureID
+            case featureName
+            case kind
+            case area
+            case measuredBounds
+            case areaSquareMeters
+            case bounds
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            try container.validateOnlyExpectedKeys(
+                [.featureID, .featureName, .kind, .area, .measuredBounds, .areaSquareMeters, .bounds],
+                in: decoder
+            )
+            let usesCanonicalMeasurements = container.contains(.area)
+                || container.contains(.measuredBounds)
+            let usesLegacyMeasurements = container.contains(.areaSquareMeters)
+                || container.contains(.bounds)
+            guard usesCanonicalMeasurements == false || usesLegacyMeasurements == false else {
+                throw DecodingError.dataCorrupted(
+                    DecodingError.Context(
+                        codingPath: decoder.codingPath,
+                        debugDescription: "Profile measurements cannot mix canonical measured values with legacy fields."
+                    )
+                )
+            }
+            featureID = try container.decode(String.self, forKey: .featureID)
+            featureName = try container.decodeIfPresent(String.self, forKey: .featureName)
+            kind = try container.decode(Kind.self, forKey: .kind)
+            if usesCanonicalMeasurements {
+                area = try container.decode(Measured<Double>.self, forKey: .area)
+                measuredBounds = try container.decode(Measured<Bounds>.self, forKey: .measuredBounds)
+            } else {
+                area = Measured(
+                    value: try container.decode(Double.self, forKey: .areaSquareMeters),
+                    method: .legacyUnspecified
+                )
+                measuredBounds = Measured(
+                    value: try container.decode(Bounds.self, forKey: .bounds),
+                    method: .legacyUnspecified
+                )
+            }
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(featureID, forKey: .featureID)
+            try container.encodeIfPresent(featureName, forKey: .featureName)
+            try container.encode(kind, forKey: .kind)
+            try container.encode(area, forKey: .area)
+            try container.encode(measuredBounds, forKey: .measuredBounds)
         }
     }
 
@@ -249,9 +434,33 @@ public extension MeasurementResult {
         public var sourceFeatureID: String
         public var sourceFeatureName: String?
         public var linearDimensions: [LinearDimension]
-        public var volumeCubicMeters: Double
-        public var surfaceAreaSquareMeters: Double?
-        public var bounds: Bounds
+        public var volume: Measured<Double>
+        public var surfaceArea: Measured<Double>?
+        public var measuredBounds: Measured<Bounds>
+
+        public var volumeCubicMeters: Double {
+            volume.value
+        }
+
+        public var volumeMethod: MeasurementMethod {
+            volume.method
+        }
+
+        public var surfaceAreaSquareMeters: Double? {
+            surfaceArea?.value
+        }
+
+        public var surfaceAreaMethod: MeasurementMethod? {
+            surfaceArea?.method
+        }
+
+        public var bounds: Bounds {
+            measuredBounds.value
+        }
+
+        public var boundsMethod: MeasurementMethod {
+            measuredBounds.method
+        }
 
         public init(
             featureID: String,
@@ -259,18 +468,162 @@ public extension MeasurementResult {
             sourceFeatureID: String,
             sourceFeatureName: String?,
             linearDimensions: [LinearDimension],
-            volumeCubicMeters: Double,
-            surfaceAreaSquareMeters: Double? = nil,
-            bounds: Bounds
+            volume: Measured<Double>,
+            surfaceArea: Measured<Double>? = nil,
+            bounds: Measured<Bounds>
         ) {
             self.featureID = featureID
             self.featureName = featureName
             self.sourceFeatureID = sourceFeatureID
             self.sourceFeatureName = sourceFeatureName
             self.linearDimensions = linearDimensions
-            self.volumeCubicMeters = volumeCubicMeters
-            self.surfaceAreaSquareMeters = surfaceAreaSquareMeters
-            self.bounds = bounds
+            self.volume = volume
+            self.surfaceArea = surfaceArea
+            self.measuredBounds = bounds
+        }
+
+        @available(*, deprecated, message: "Use measured values so each value and its provenance are supplied together.")
+        public init(
+            featureID: String,
+            featureName: String?,
+            sourceFeatureID: String,
+            sourceFeatureName: String?,
+            linearDimensions: [LinearDimension],
+            volumeCubicMeters: Double,
+            volumeMethod: MeasurementMethod = .legacyUnspecified,
+            surfaceAreaSquareMeters: Double? = nil,
+            surfaceAreaMethod: MeasurementMethod? = nil,
+            bounds: Bounds,
+            boundsMethod: MeasurementMethod = .legacyUnspecified
+        ) {
+            self.featureID = featureID
+            self.featureName = featureName
+            self.sourceFeatureID = sourceFeatureID
+            self.sourceFeatureName = sourceFeatureName
+            self.linearDimensions = linearDimensions
+            self.volume = Measured(value: volumeCubicMeters, method: volumeMethod)
+            self.surfaceArea = surfaceAreaSquareMeters.map {
+                Measured(value: $0, method: surfaceAreaMethod ?? .legacyUnspecified)
+            }
+            self.measuredBounds = Measured(value: bounds, method: boundsMethod)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case featureID
+            case featureName
+            case sourceFeatureID
+            case sourceFeatureName
+            case linearDimensions
+            case volume
+            case surfaceArea
+            case measuredBounds
+            case volumeCubicMeters
+            case volumeMethod
+            case surfaceAreaSquareMeters
+            case surfaceAreaMethod
+            case bounds
+            case boundsMethod
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            try container.validateOnlyExpectedKeys(
+                [
+                    .featureID,
+                    .featureName,
+                    .sourceFeatureID,
+                    .sourceFeatureName,
+                    .linearDimensions,
+                    .volume,
+                    .surfaceArea,
+                    .measuredBounds,
+                    .volumeCubicMeters,
+                    .volumeMethod,
+                    .surfaceAreaSquareMeters,
+                    .surfaceAreaMethod,
+                    .bounds,
+                    .boundsMethod,
+                ],
+                in: decoder
+            )
+            let usesCanonicalMeasurements = container.contains(.volume)
+                || container.contains(.surfaceArea)
+                || container.contains(.measuredBounds)
+            let usesLegacyMeasurements = container.contains(.volumeCubicMeters)
+                || container.contains(.volumeMethod)
+                || container.contains(.surfaceAreaSquareMeters)
+                || container.contains(.surfaceAreaMethod)
+                || container.contains(.bounds)
+                || container.contains(.boundsMethod)
+            guard usesCanonicalMeasurements == false || usesLegacyMeasurements == false else {
+                throw DecodingError.dataCorrupted(
+                    DecodingError.Context(
+                        codingPath: decoder.codingPath,
+                        debugDescription: "Solid measurements cannot mix canonical measured values with legacy parallel fields."
+                    )
+                )
+            }
+            featureID = try container.decode(String.self, forKey: .featureID)
+            featureName = try container.decodeIfPresent(String.self, forKey: .featureName)
+            sourceFeatureID = try container.decode(String.self, forKey: .sourceFeatureID)
+            sourceFeatureName = try container.decodeIfPresent(String.self, forKey: .sourceFeatureName)
+            linearDimensions = try container.decode([LinearDimension].self, forKey: .linearDimensions)
+            if usesCanonicalMeasurements {
+                volume = try container.decode(Measured<Double>.self, forKey: .volume)
+            } else {
+                volume = Measured(
+                    value: try container.decode(Double.self, forKey: .volumeCubicMeters),
+                    method: try container.decodeIfPresent(
+                        MeasurementMethod.self,
+                        forKey: .volumeMethod
+                    ) ?? .legacyUnspecified
+                )
+            }
+            if usesCanonicalMeasurements {
+                surfaceArea = try container.decodeIfPresent(
+                    Measured<Double>.self,
+                    forKey: .surfaceArea
+                )
+            } else if let value = try container.decodeIfPresent(
+                Double.self,
+                forKey: .surfaceAreaSquareMeters
+            ) {
+                surfaceArea = Measured(
+                    value: value,
+                    method: try container.decodeIfPresent(
+                        MeasurementMethod.self,
+                        forKey: .surfaceAreaMethod
+                    ) ?? .legacyUnspecified
+                )
+            } else {
+                surfaceArea = nil
+            }
+            if usesCanonicalMeasurements {
+                measuredBounds = try container.decode(
+                    Measured<Bounds>.self,
+                    forKey: .measuredBounds
+                )
+            } else {
+                measuredBounds = Measured(
+                    value: try container.decode(Bounds.self, forKey: .bounds),
+                    method: try container.decodeIfPresent(
+                        MeasurementMethod.self,
+                        forKey: .boundsMethod
+                    ) ?? .legacyUnspecified
+                )
+            }
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(featureID, forKey: .featureID)
+            try container.encodeIfPresent(featureName, forKey: .featureName)
+            try container.encode(sourceFeatureID, forKey: .sourceFeatureID)
+            try container.encodeIfPresent(sourceFeatureName, forKey: .sourceFeatureName)
+            try container.encode(linearDimensions, forKey: .linearDimensions)
+            try container.encode(volume, forKey: .volume)
+            try container.encodeIfPresent(surfaceArea, forKey: .surfaceArea)
+            try container.encode(measuredBounds, forKey: .measuredBounds)
         }
     }
 
@@ -294,9 +647,44 @@ public extension MeasurementResult {
         public var sourceFeatureID: String
         public var sourceFeatureName: String?
         public var linearDimensions: [LinearDimension]
-        public var surfaceAreaSquareMeters: Double
-        public var bounds: Bounds
+        public var surfaceArea: Measured<Double>
+        public var measuredBounds: Measured<Bounds>
 
+        public var surfaceAreaSquareMeters: Double {
+            surfaceArea.value
+        }
+
+        public var surfaceAreaMethod: MeasurementMethod {
+            surfaceArea.method
+        }
+
+        public var bounds: Bounds {
+            measuredBounds.value
+        }
+
+        public var boundsMethod: MeasurementMethod {
+            measuredBounds.method
+        }
+
+        public init(
+            featureID: String,
+            featureName: String?,
+            sourceFeatureID: String,
+            sourceFeatureName: String?,
+            linearDimensions: [LinearDimension],
+            surfaceArea: Measured<Double>,
+            bounds: Measured<Bounds>
+        ) {
+            self.featureID = featureID
+            self.featureName = featureName
+            self.sourceFeatureID = sourceFeatureID
+            self.sourceFeatureName = sourceFeatureName
+            self.linearDimensions = linearDimensions
+            self.surfaceArea = surfaceArea
+            self.measuredBounds = bounds
+        }
+
+        @available(*, deprecated, message: "Use measured values so each value and its provenance are supplied together.")
         public init(
             featureID: String,
             featureName: String?,
@@ -306,13 +694,86 @@ public extension MeasurementResult {
             surfaceAreaSquareMeters: Double,
             bounds: Bounds
         ) {
-            self.featureID = featureID
-            self.featureName = featureName
-            self.sourceFeatureID = sourceFeatureID
-            self.sourceFeatureName = sourceFeatureName
-            self.linearDimensions = linearDimensions
-            self.surfaceAreaSquareMeters = surfaceAreaSquareMeters
-            self.bounds = bounds
+            self.init(
+                featureID: featureID,
+                featureName: featureName,
+                sourceFeatureID: sourceFeatureID,
+                sourceFeatureName: sourceFeatureName,
+                linearDimensions: linearDimensions,
+                surfaceArea: Measured(value: surfaceAreaSquareMeters, method: .legacyUnspecified),
+                bounds: Measured(value: bounds, method: .legacyUnspecified)
+            )
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case featureID
+            case featureName
+            case sourceFeatureID
+            case sourceFeatureName
+            case linearDimensions
+            case surfaceArea
+            case measuredBounds
+            case surfaceAreaSquareMeters
+            case bounds
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            try container.validateOnlyExpectedKeys(
+                [
+                    .featureID,
+                    .featureName,
+                    .sourceFeatureID,
+                    .sourceFeatureName,
+                    .linearDimensions,
+                    .surfaceArea,
+                    .measuredBounds,
+                    .surfaceAreaSquareMeters,
+                    .bounds,
+                ],
+                in: decoder
+            )
+            let usesCanonicalMeasurements = container.contains(.surfaceArea)
+                || container.contains(.measuredBounds)
+            let usesLegacyMeasurements = container.contains(.surfaceAreaSquareMeters)
+                || container.contains(.bounds)
+            guard usesCanonicalMeasurements == false || usesLegacyMeasurements == false else {
+                throw DecodingError.dataCorrupted(
+                    DecodingError.Context(
+                        codingPath: decoder.codingPath,
+                        debugDescription: "Sheet measurements cannot mix canonical measured values with legacy fields."
+                    )
+                )
+            }
+            featureID = try container.decode(String.self, forKey: .featureID)
+            featureName = try container.decodeIfPresent(String.self, forKey: .featureName)
+            sourceFeatureID = try container.decode(String.self, forKey: .sourceFeatureID)
+            sourceFeatureName = try container.decodeIfPresent(String.self, forKey: .sourceFeatureName)
+            linearDimensions = try container.decode([LinearDimension].self, forKey: .linearDimensions)
+            if usesCanonicalMeasurements {
+                surfaceArea = try container.decode(Measured<Double>.self, forKey: .surfaceArea)
+                measuredBounds = try container.decode(Measured<Bounds>.self, forKey: .measuredBounds)
+            } else {
+                surfaceArea = Measured(
+                    value: try container.decode(Double.self, forKey: .surfaceAreaSquareMeters),
+                    method: .legacyUnspecified
+                )
+                measuredBounds = Measured(
+                    value: try container.decode(Bounds.self, forKey: .bounds),
+                    method: .legacyUnspecified
+                )
+            }
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(featureID, forKey: .featureID)
+            try container.encodeIfPresent(featureName, forKey: .featureName)
+            try container.encode(sourceFeatureID, forKey: .sourceFeatureID)
+            try container.encodeIfPresent(sourceFeatureName, forKey: .sourceFeatureName)
+            try container.encode(linearDimensions, forKey: .linearDimensions)
+            try container.encode(surfaceArea, forKey: .surfaceArea)
+            try container.encode(measuredBounds, forKey: .measuredBounds)
         }
     }
 }

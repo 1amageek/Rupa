@@ -601,6 +601,99 @@ private func viewportSceneSnapshotTestKey(
 }
 
 @MainActor
+@Test(.timeLimit(.minutes(1)))
+func viewportSceneBuilderEvaluatesDisplaysAndPicksKernelProjectedCurveWithoutCache() async throws {
+    var document = DesignDocument.empty()
+    let sourceFeatureID = try document.createLineSketch(
+        name: "Viewport projection source",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(10.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+    let projectedFeatureID = try document.createProjectedCurve(
+        name: "Viewport projected curve",
+        source: CurveOutputReference(featureID: sourceFeatureID),
+        planeOrigin: Point3D(x: 0.0, y: 0.0, z: 0.005),
+        planeNormal: .unitZ
+    )
+    let session = EditorSession(document: document)
+    let scene = ViewportSceneBuilder().build(
+        document: session.document,
+        ruler: session.workspaceState.ruler
+    )
+    let item = try #require(scene.items.first { $0.featureID == projectedFeatureID })
+    guard case let .curve(component) = item.kind else {
+        Issue.record("Projected curve must produce a viewport curve item.")
+        return
+    }
+    let segment = try #require(component.segments.first)
+    let points = segment.points
+    let expectedReference = CurveOutputReference(featureID: projectedFeatureID, curveIndex: 0)
+    #expect(segment.reference == expectedReference)
+    #expect(segment.curve.exactCurve != nil)
+    #expect(points.count >= 2)
+    #expect(points.allSatisfy { abs($0.z - 0.005) <= 1.0e-12 })
+    #expect(item.sceneNodeID != nil)
+
+    let layout = try #require(ViewportLayout(
+        scene: scene,
+        size: CGSize(width: 800.0, height: 600.0)
+    ))
+    let midpoint = Point3D(
+        x: (points[0].x + points[1].x) * 0.5,
+        y: (points[0].y + points[1].y) * 0.5,
+        z: (points[0].z + points[1].z) * 0.5
+    )
+    let projectedMidpoint = layout.project(midpoint, in: item)
+    let hit = ViewportHitTester().hitTest(
+        point: projectedMidpoint,
+        in: scene,
+        layout: layout,
+        selectionHitPolicy: .object
+    )
+    #expect(hit?.featureID == projectedFeatureID)
+    #expect(hit?.kind == .curve)
+    #expect(hit?.selectionReference == .curve(.whole(expectedReference)))
+    let rectangleHits = ViewportSelectionRectangleHitTester().hits(
+        in: CGRect(
+            x: projectedMidpoint.x - 4.0,
+            y: projectedMidpoint.y - 4.0,
+            width: 8.0,
+            height: 8.0
+        ),
+        scene: scene,
+        layout: layout,
+        selectionHitPolicy: .object
+    )
+    #expect(rectangleHits.contains {
+        $0.featureID == projectedFeatureID
+            && $0.kind == .curve
+            && $0.selectionReference == .curve(.whole(expectedReference))
+    })
+
+    let pickIndex = ViewportIdentityPickIndexBuilder(
+        selectionHitPolicy: .object
+    ).build(scene: scene)
+    #expect(pickIndex.records(for: projectedFeatureID).contains {
+        $0.geometry == .curve(expectedReference)
+            && $0.hit.selectionReference == .curve(.whole(expectedReference))
+    })
+    let renderPlan = ViewportIdentityPickRenderPlanBuilder().build(
+        scene: scene,
+        layout: layout,
+        index: pickIndex,
+        selectionHitPolicy: .object
+    )
+    #expect(renderPlan.drawItems.contains { $0.geometry == .curve(expectedReference) })
+}
+
+@MainActor
 @Test func viewportSceneBuilderUsesCurrentEvaluationContextWhenAvailable() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())

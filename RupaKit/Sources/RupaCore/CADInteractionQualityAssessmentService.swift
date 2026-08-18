@@ -568,6 +568,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                 CADInteractionQualityEvidence(
                     label: "Measurements, surface continuity, saved section planes, and non-mutating mesh section results",
                     sourceFiles: [
+                        "RupaKit/Sources/RupaCore/MeasurementResult.swift",
                         "RupaKit/Sources/RupaCore/MeasurementService.swift",
                         "RupaKit/Sources/RupaCore/MeasurementAnnotation.swift",
                         "RupaKit/Sources/RupaCore/SelectionDimensionService.swift",
@@ -594,6 +595,8 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     ],
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/CommandStackTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/ExpandedBodyOperationMeasurementTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/MeasurementResultFormattingTests.swift",
                         "RupaKit/Tests/RupaCoreTests/SelectionDimensionCommandTests.swift",
                         "RupaKit/Tests/RupaCoreTests/SurfaceContinuityServiceTests.swift",
                         "RupaKit/Tests/RupaCoreTests/SectionAnalysisServiceTests.swift",
@@ -610,6 +613,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     ],
                     notes: [
                         "Measurement summaries, selection dimensions, surface continuity summaries, and section-plane creation are Agent-readable.",
+                        "Solid volume readback uses analytic formulas or the exact body-scoped B-rep volume contract and never substitutes tessellated mesh volume; volume, surface-area, and bounds results carry explicit method provenance, with legacy payloads marked as unspecified.",
                         "SectionAnalysisService evaluates generated body meshes against sketch, construction, active construction, and section scene-node planes without mutating the document.",
                         "Automation and Agent command results now expose body-side classifications, intersecting triangle counts, bounded 3D plus in-plane section line segments, and reconstructed section contours.",
                         "Section analysis queries can offset the resolved source plane and flip front/behind classification; the result plane reflects the transformed origin and normal without mutating the section scene node, construction plane, or sketch plane source.",
@@ -976,6 +980,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     label: "Bridge source metadata and curve analysis",
                     sourceFiles: [
                         "RupaKit/Sources/RupaCore/BridgeCurveSource.swift",
+                        "RupaKit/Sources/RupaCore/DesignDocument+ProjectedCurve.swift",
                         "RupaKit/Sources/RupaCore/BridgeCurveEndpointSelectionResolver.swift",
                         "RupaKit/Sources/RupaCore/BridgeCurveEndpointHandleService.swift",
                         "RupaKit/Sources/RupaCore/BridgeCurveEndpointParameterProjectionService.swift",
@@ -983,18 +988,22 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaRendering/ViewportBridgeCurveEndpointAffordanceService.swift",
                         "RupaKit/Sources/RupaRendering/ViewportBridgeCurveEndpointDragTarget.swift",
                         "RupaKit/Sources/RupaRendering/ViewportCurveCurvatureComb.swift",
+                        "RupaKit/Sources/RupaViewportScene/ViewportSceneBuilder.swift",
                         "RupaKit/Sources/RupaUI/WorkspaceBridgeCurveInspectorView.swift",
                         "RupaKit/Sources/RupaUI/WorkspaceSketchEntityInspectorStateBuilder.swift",
                     ],
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/BridgeCurveCommandTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/ProjectedCurveCommandTests.swift",
                         "RupaKit/Tests/RupaCoreTests/CurveAnalysisServiceTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportBridgeCurveEndpointAffordanceServiceTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportCurveCurvatureCombTests.swift",
+                        "RupaKit/Tests/RupaRenderingTests/ViewportSceneTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/WorkspaceSketchEntityInspectorStateBuilderTests.swift",
                     ],
                     notes: [
                         "Bridge Curve endpoint selections now resolve from point-backed sketch selection targets into the same BridgeCurveEndpoint contract used by Core, Automation, Agent, and CLI.",
+                        "Kernel-generated bridge, edit, offset, trim, extend, match, and projected curves share one evaluated viewport curve representation with visible polylines, CPU and identity-buffer object picking, rectangle selection, scene transforms, and feature-scene-node resolution; Project Curve is authored through the same Core EditorCommand transaction path.",
                         "Selected Bridge Curve sources now expose projected viewport endpoint handles with tangent guide rendering, hover hit-testing, press-state isolation, exact line/arc/spline Value projection, and command-backed endpoint parameter drag commits through setBridgeCurveParameters.",
                         "Bridge Curve Inspector Show Curvature controls now target the generated bridge spline through the same CurveCurvatureDisplay contract used by generic source curves, while generic curve display controls are suppressed for bridge-generated spline selections to avoid duplicate ownership.",
                         "Bridge Curve Trim Side is now an endpoint-owned Core value that chooses the retained start-side or end-side source segment independently from Sense, so Sense only controls tangent direction and Agent/UI callers can operate the same explicit contract.",

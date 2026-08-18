@@ -45,6 +45,24 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
 
         for item in scene.items {
             switch item.kind {
+            case .curve(let component):
+                if selectionHitPolicy.allowsObjectHits {
+                    for segment in component.segments {
+                        guard let selectableBounds = selectionBounds(
+                            for: segment,
+                            item: item,
+                            layout: layout
+                        ), selectionRect.intersects(selectableBounds) else {
+                            continue
+                        }
+                        hits.append(ViewportHit(
+                            featureID: item.featureID,
+                            sceneNodeID: item.sceneNodeID,
+                            kind: .curve,
+                            selectionReference: segment.selectionReference
+                        ))
+                    }
+                }
             case .sketch(let primitives):
                 hits.append(contentsOf: sketchHits(
                     in: selectionRect,
@@ -334,6 +352,17 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
         layout: ViewportLayout
     ) -> CGRect? {
         switch item.kind {
+        case .curve(let component):
+            var bounds = CGRect.null
+            for segment in component.segments {
+                for point in segment.points {
+                    let projected = layout.project(point, in: item)
+                    bounds = bounds.union(pointRect(projected, radius: 2.0))
+                }
+            }
+            return bounds.isNull
+                ? nil
+                : bounds.insetBy(dx: -sketchPadding, dy: -sketchPadding)
         case .sketch(let primitives):
             let primitiveBounds = sketchSelectionBounds(primitives, layout: layout)
             if primitiveBounds.isNull {
@@ -346,6 +375,21 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
             }
             return projection.hitBounds.insetBy(dx: -bodyPadding, dy: -bodyPadding)
         }
+    }
+
+    private func selectionBounds(
+        for segment: ViewportCurveSegment,
+        item: ViewportSceneItem,
+        layout: ViewportLayout
+    ) -> CGRect? {
+        var bounds = CGRect.null
+        for point in segment.points {
+            let projected = layout.project(point, in: item)
+            bounds = bounds.union(pointRect(projected, radius: 2.0))
+        }
+        return bounds.isNull
+            ? nil
+            : bounds.insetBy(dx: -sketchPadding, dy: -sketchPadding)
     }
 
     private func sketchSelectionBounds(

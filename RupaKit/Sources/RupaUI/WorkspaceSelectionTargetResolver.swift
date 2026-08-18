@@ -70,6 +70,8 @@ struct WorkspaceSelectionTargetResolver {
             .sketch
         case .body:
             .body
+        case .curve:
+            .feature
         }
 
         for row in sceneBrowserRows {

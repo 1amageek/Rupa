@@ -1322,6 +1322,23 @@ public struct Viewport: View {
         }
 
         for item in scene.items {
+            if case .curve = item.kind {
+                drawCurve(
+                    item,
+                    in: &context,
+                    layout: layout,
+                    isSelected: isObjectItem(
+                        item,
+                        selectedByFeatureIDs: selectedObjectFeatureIDs,
+                        selectedBySceneNodeIDs: selectedObjectSceneNodeIDs
+                    ),
+                    isHovered: hoveredFeatureIDs.contains(item.featureID)
+                        || item.sceneNodeID.map(hoveredSceneNodeIDs.contains) == true
+                )
+            }
+        }
+
+        for item in scene.items {
             if case .sketch = item.kind,
                !suppressedSketchFeatureIDs.contains(item.featureID) {
                 drawSketchRegionHighlights(
@@ -4708,6 +4725,38 @@ public struct Viewport: View {
         )
     }
 
+    private func drawCurve(
+        _ item: ViewportSceneItem,
+        in context: inout GraphicsContext,
+        layout: ViewportLayout,
+        isSelected: Bool,
+        isHovered: Bool
+    ) {
+        guard case .curve(let component) = item.kind else {
+            return
+        }
+        let color = isSelected
+            ? ViewportTheme.selection
+            : (isHovered ? ViewportTheme.hover : ViewportTheme.curve)
+        let lineWidth: CGFloat = isSelected ? 3.0 : (isHovered ? 2.6 : 1.8)
+        for segment in component.segments where segment.points.count >= 2 {
+            var path = Path()
+            path.move(to: layout.project(segment.points[0], in: item))
+            for point in segment.points.dropFirst() {
+                path.addLine(to: layout.project(point, in: item))
+            }
+            context.stroke(
+                path,
+                with: .color(color),
+                style: StrokeStyle(
+                    lineWidth: lineWidth,
+                    lineCap: .round,
+                    lineJoin: .round
+                )
+            )
+        }
+    }
+
     private func drawBodyMesh(
         _ mesh: ViewportBodyMesh,
         item: ViewportSceneItem,
@@ -6340,6 +6389,8 @@ public struct Viewport: View {
                 continue
             }
             switch item.kind {
+            case .curve:
+                continue
             case .body:
                 guard selectedBodyItems.count <= 1 else {
                     continue

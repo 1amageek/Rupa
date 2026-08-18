@@ -78,7 +78,6 @@ public struct MeasurementService {
         var profiles: [MeasurementResult.Profile] = []
         var solids: [MeasurementResult.Solid] = []
         var sheets: [MeasurementResult.Sheet] = []
-        var totals = MeasurementResult.Totals()
         var bounds = BoundsAccumulator()
         var profileCache: [FeatureID: MeasuredProfile] = [:]
         var includedProfileFeatureIDs: Set<FeatureID> = []
@@ -137,7 +136,6 @@ public struct MeasurementService {
                 return
             }
             profiles.append(profile.result)
-            totals.profileAreaSquareMeters += profile.result.areaSquareMeters
             bounds.include(profile.result.bounds)
         }
 
@@ -255,18 +253,39 @@ public struct MeasurementService {
                 sketchBounds: sourceSketchBounds,
                 profile: profile
             )
-            let solid = try measureSolid(
-                featureID: featureID,
-                featureName: node.name,
-                sourceFeatureID: extrude.profile.featureID,
-                sourceFeatureName: sourceNode.name,
-                profile: profile,
-                extrude: extrude,
-                parameters: document.cadDocument.parameters
-            )
-            counts.solids += 1
+            var evaluatedSkipReason: String?
+            let solid: MeasurementResult.Solid?
+            if profile.result.kind == .curveLoop {
+                solid = try measureEvaluatedSolid(
+                    featureID: featureID,
+                    featureName: node.name,
+                    sourceFeatureID: extrude.profile.featureID,
+                    sourceFeatureName: sourceNode.name,
+                    evaluatedDocument: evaluatedDocument(),
+                    unsupportedReason: &evaluatedSkipReason
+                )
+            } else {
+                solid = try measureSolid(
+                    featureID: featureID,
+                    featureName: node.name,
+                    sourceFeatureID: extrude.profile.featureID,
+                    sourceFeatureName: sourceNode.name,
+                    profile: profile,
+                    extrude: extrude,
+                    parameters: document.cadDocument.parameters
+                )
+            }
+            guard let solid else {
+                let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
+                diagnostics.append(
+                    EditorDiagnostic(
+                        severity: .info,
+                        message: "Measurement skipped an extrude feature outside the supported exact solid evaluation subset.\(detail)"
+                    )
+                )
+                return
+            }
             solids.append(solid)
-            totals.solidVolumeCubicMeters += solid.volumeCubicMeters
             bounds.include(solid.bounds)
         }
 
@@ -333,9 +352,7 @@ public struct MeasurementService {
                 )
                 return
             }
-            counts.solids += 1
             solids.append(solid)
-            totals.solidVolumeCubicMeters += solid.volumeCubicMeters
             bounds.include(solid.bounds)
         }
 
@@ -457,9 +474,7 @@ public struct MeasurementService {
                     )
                     return
                 }
-                counts.sheets += 1
                 sheets.append(sheet)
-                totals.sheetAreaSquareMeters += sheet.surfaceAreaSquareMeters
                 bounds.include(sheet.bounds)
                 return
             }
@@ -505,9 +520,7 @@ public struct MeasurementService {
                 return
             }
             for solid in measuredSolids {
-                counts.solids += 1
                 solids.append(solid)
-                totals.solidVolumeCubicMeters += solid.volumeCubicMeters
                 bounds.include(solid.bounds)
             }
         }
@@ -570,9 +583,7 @@ public struct MeasurementService {
                     )
                     return
                 }
-                counts.sheets += 1
                 sheets.append(sheet)
-                totals.sheetAreaSquareMeters += sheet.surfaceAreaSquareMeters
                 bounds.include(sheet.bounds)
                 return
             }
@@ -595,9 +606,7 @@ public struct MeasurementService {
                 )
                 return
             }
-            counts.solids += 1
             solids.append(solid)
-            totals.solidVolumeCubicMeters += solid.volumeCubicMeters
             bounds.include(solid.bounds)
         }
 
@@ -630,9 +639,7 @@ public struct MeasurementService {
                 )
                 return
             }
-            counts.solids += 1
             solids.append(solid)
-            totals.solidVolumeCubicMeters += solid.volumeCubicMeters
             bounds.include(solid.bounds)
         }
 
@@ -707,9 +714,7 @@ public struct MeasurementService {
                 )
                 return
             }
-            counts.solids += 1
             solids.append(solid)
-            totals.solidVolumeCubicMeters += solid.volumeCubicMeters
             bounds.include(solid.bounds)
         }
 
@@ -744,9 +749,7 @@ public struct MeasurementService {
                 )
                 return
             }
-            counts.solids += 1
             solids.append(solid)
-            totals.solidVolumeCubicMeters += solid.volumeCubicMeters
             bounds.include(solid.bounds)
         }
 
@@ -778,9 +781,7 @@ public struct MeasurementService {
                 )
                 return
             }
-            counts.solids += 1
             solids.append(solid)
-            totals.solidVolumeCubicMeters += solid.volumeCubicMeters
             bounds.include(solid.bounds)
         }
 
@@ -812,9 +813,7 @@ public struct MeasurementService {
                 )
                 return
             }
-            counts.solids += 1
             solids.append(solid)
-            totals.solidVolumeCubicMeters += solid.volumeCubicMeters
             bounds.include(solid.bounds)
         }
 
@@ -846,10 +845,47 @@ public struct MeasurementService {
                 )
                 return
             }
-            counts.sheets += 1
             sheets.append(sheet)
-            totals.sheetAreaSquareMeters += sheet.surfaceAreaSquareMeters
             bounds.include(sheet.bounds)
+        }
+
+        func measureEvaluatedBodyOperationCase(
+            node: FeatureNode,
+            featureID: FeatureID,
+            sourceFeatureID: FeatureID,
+            operationName: String
+        ) throws {
+            guard !isSupersededInDocumentScope(featureID) else {
+                return
+            }
+            guard shouldMeasure(featureID) else {
+                return
+            }
+            includedSourceFeatureIDs.insert(featureID)
+            let sourceNode = document.cadDocument.designGraph.nodes[sourceFeatureID]
+            var evaluatedSkipReason: String?
+            let measuredSolids = try measureEvaluatedBodySolids(
+                featureID: featureID,
+                featureName: node.name,
+                sourceFeatureID: sourceFeatureID,
+                sourceFeatureName: sourceNode?.name,
+                evaluatedDocument: evaluatedDocument(),
+                unsupportedReason: &evaluatedSkipReason
+            )
+            guard let measuredSolids, !measuredSolids.isEmpty else {
+                let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
+                diagnostics.append(
+                    EditorDiagnostic(
+                        severity: .info,
+                        message: "Measurement skipped \(operationName) solid output.\(detail)"
+                    )
+                )
+                return
+            }
+            for solid in measuredSolids {
+                solids.append(solid)
+                bounds.include(solid.bounds)
+            }
         }
 
         for featureID in document.cadDocument.designGraph.order {
@@ -887,6 +923,33 @@ public struct MeasurementService {
                 try measureFaceDraftCase(faceDraft, node: node, featureID: featureID)
             case .faceDelete(let faceDelete):
                 try measureFaceDeleteCase(faceDelete, node: node, featureID: featureID)
+            case .mirror(let mirror):
+                try measureEvaluatedBodyOperationCase(
+                    node: node,
+                    featureID: featureID,
+                    sourceFeatureID: mirror.target.featureID,
+                    operationName: "Mirror"
+                )
+            case .joinBodies(let join):
+                guard let sourceFeatureID = join.targets.first?.featureID else {
+                    throw EditorError(
+                        code: .commandFailed,
+                        message: "Measurement found a Join Bodies feature without source bodies."
+                    )
+                }
+                try measureEvaluatedBodyOperationCase(
+                    node: node,
+                    featureID: featureID,
+                    sourceFeatureID: sourceFeatureID,
+                    operationName: "Join Bodies"
+                )
+            case .unjoinBody(let unjoin):
+                try measureEvaluatedBodyOperationCase(
+                    node: node,
+                    featureID: featureID,
+                    sourceFeatureID: unjoin.target.featureID,
+                    operationName: "Unjoin Body"
+                )
             case .bridgeCurve:
                 continue
             case .curveEdit:
@@ -918,9 +981,6 @@ public struct MeasurementService {
                  .surfaceTrim,
                  .surfaceExtend,
                  .surfaceMatch,
-                 .mirror,
-                 .joinBodies,
-                 .unjoinBody,
                  .projectCurve:
                 continue
             }
@@ -948,7 +1008,43 @@ public struct MeasurementService {
         }
 
         counts.profiles = profiles.count
+        counts.solids = solids.count
         counts.sheets = sheets.count
+        let totals = MeasurementResult.Totals(
+            profileAreaSquareMeters: profiles.reduce(0.0) {
+                $0 + $1.areaSquareMeters
+            },
+            sheetAreaSquareMeters: sheets.reduce(0.0) {
+                $0 + $1.surfaceAreaSquareMeters
+            },
+            solidVolumeCubicMeters: solids.reduce(0.0) {
+                $0 + $1.volumeCubicMeters
+            }
+        )
+        if profiles.contains(where: { $0.areaMethod == .sampledCurve }) {
+            diagnostics.append(EditorDiagnostic(
+                severity: .info,
+                message: "Profile area and bounds marked sampledCurve are approximations derived from curve samples."
+            ))
+        }
+        if sheets.contains(where: {
+            $0.surfaceAreaMethod == .tessellatedMesh
+                || $0.boundsMethod == .tessellatedMesh
+        }) {
+            diagnostics.append(EditorDiagnostic(
+                severity: .info,
+                message: "Sheet area and bounds marked tessellatedMesh are approximations derived from the display mesh."
+            ))
+        }
+        if solids.contains(where: { solid in
+            solid.surfaceAreaMethod == .tessellatedMesh
+                || solid.boundsMethod == .tessellatedMesh
+        }) {
+            diagnostics.append(EditorDiagnostic(
+                severity: .info,
+                message: "Solid volume uses analytic or exact B-rep evaluation; reported solid surface area and bounds marked tessellatedMesh are approximations derived from the display mesh."
+            ))
+        }
         let workspacePrecisionService = WorkspacePrecisionDiagnosticService()
         let workspacePrecision = workspacePrecisionService.report(
             for: bounds.bounds,
@@ -1015,8 +1111,8 @@ public struct MeasurementService {
                 featureID: featureID.description,
                 featureName: featureName,
                 kind: .circle,
-                areaSquareMeters: Double.pi * radius * radius,
-                bounds: bounds
+                area: .init(value: Double.pi * radius * radius, method: .analytic),
+                bounds: .init(value: bounds, method: .analytic)
             )
             return MeasuredProfile(
                 result: result,
@@ -1047,12 +1143,18 @@ public struct MeasurementService {
         guard let bounds = loopBounds.bounds else {
             return nil
         }
+        let profileKind: MeasurementResult.Profile.Kind = segments.contains {
+            $0.kind != .line
+        } ? .curveLoop : .lineLoop
+        let measurementMethod: MeasurementResult.MeasurementMethod = profileKind == .curveLoop
+            ? .sampledCurve
+            : .analytic
         let result = MeasurementResult.Profile(
             featureID: featureID.description,
             featureName: featureName,
-            kind: segments.contains { $0.kind != .line } ? .curveLoop : .lineLoop,
-            areaSquareMeters: area,
-            bounds: bounds
+            kind: profileKind,
+            area: .init(value: area, method: measurementMethod),
+            bounds: .init(value: bounds, method: measurementMethod)
         )
         return MeasuredProfile(
             result: result,
@@ -1117,8 +1219,11 @@ public struct MeasurementService {
                     meters: height
                 ),
             ],
-            volumeCubicMeters: profile.result.areaSquareMeters * height,
-            bounds: solidBounds
+            volume: .init(
+                value: profile.result.areaSquareMeters * height,
+                method: .analytic
+            ),
+            bounds: .init(value: solidBounds, method: .analytic)
         )
     }
 
@@ -1137,6 +1242,7 @@ public struct MeasurementService {
               sweep.options.resultKind == .solid,
               sweep.options.booleanOperation == .newBody,
               sweep.options.keepTools == false,
+              profile.result.kind != .curveLoop,
               let pathSketch else {
             return nil
         }
@@ -1192,8 +1298,11 @@ public struct MeasurementService {
                     meters: sweepDistance
                 ),
             ],
-            volumeCubicMeters: profile.result.areaSquareMeters * height,
-            bounds: solidBounds
+            volume: .init(
+                value: profile.result.areaSquareMeters * height,
+                method: .analytic
+            ),
+            bounds: .init(value: solidBounds, method: .analytic)
         )
     }
 
@@ -1242,12 +1351,14 @@ public struct MeasurementService {
                 unsupportedReason = "The evaluated document is missing a sweep generated body mesh."
                 return nil
             }
-            let meshMeasurement = try evaluatedMeshMeasurement(mesh, requiresClosedMesh: true)
-            let brepVolume = try evaluatedBRepVolume(
+            let meshMeasurement = try evaluatedMeshMeasurement(mesh)
+            guard let volumeCubicMeters = try evaluatedBRepVolume(
                 bodyID: bodyReference.bodyID,
-                in: evaluatedDocument.brep
-            )
-            let volumeCubicMeters = brepVolume ?? meshMeasurement.volumeCubicMeters
+                in: evaluatedDocument.brep,
+                unsupportedReason: &unsupportedReason
+            ) else {
+                return nil
+            }
             guard volumeCubicMeters > tolerance.distance * tolerance.distance * tolerance.distance else {
                 unsupportedReason = "An evaluated sweep solid volume is below tolerance."
                 return nil
@@ -1264,9 +1375,15 @@ public struct MeasurementService {
                             meters: pathLength * distanceFraction
                         ),
                     ],
-                    volumeCubicMeters: volumeCubicMeters,
-                    surfaceAreaSquareMeters: meshMeasurement.surfaceAreaSquareMeters,
-                    bounds: meshMeasurement.bounds
+                    volume: .init(value: volumeCubicMeters, method: .exactBRep),
+                    surfaceArea: .init(
+                        value: meshMeasurement.surfaceAreaSquareMeters,
+                        method: .tessellatedMesh
+                    ),
+                    bounds: .init(
+                        value: meshMeasurement.bounds,
+                        method: .tessellatedMesh
+                    )
                 )
             )
         }
@@ -1292,10 +1409,7 @@ public struct MeasurementService {
             unsupportedReason = "Evaluated geometry is unavailable."
             return nil
         }
-        guard let bodyID = evaluatedBodyID(for: featureID, in: evaluatedDocument) else {
-            unsupportedReason = "The evaluated document is missing the sweep generated body name."
-            return nil
-        }
+        let bodyID = try evaluatedBodyID(for: featureID, in: evaluatedDocument)
         guard let body = evaluatedDocument.brep.bodies[bodyID],
               body.kind == .sheet else {
             unsupportedReason = "The evaluated sweep body is not a sheet."
@@ -1331,8 +1445,11 @@ public struct MeasurementService {
                     meters: pathLength * distanceFraction
                 ),
             ],
-            surfaceAreaSquareMeters: meshMeasurement.surfaceAreaSquareMeters,
-            bounds: meshMeasurement.bounds
+            surfaceArea: .init(
+                value: meshMeasurement.surfaceAreaSquareMeters,
+                method: .tessellatedMesh
+            ),
+            bounds: .init(value: meshMeasurement.bounds, method: .tessellatedMesh)
         )
     }
 
@@ -1348,10 +1465,7 @@ public struct MeasurementService {
             unsupportedReason = "Evaluated geometry is unavailable."
             return nil
         }
-        guard let bodyID = evaluatedBodyID(for: featureID, in: evaluatedDocument) else {
-            unsupportedReason = "The evaluated document is missing the generated body name."
-            return nil
-        }
+        let bodyID = try evaluatedBodyID(for: featureID, in: evaluatedDocument)
         guard let body = evaluatedDocument.brep.bodies[bodyID],
               body.kind == .sheet else {
             unsupportedReason = "The evaluated body is not a sheet."
@@ -1372,8 +1486,11 @@ public struct MeasurementService {
             sourceFeatureID: sourceFeatureID.description,
             sourceFeatureName: sourceFeatureName,
             linearDimensions: [],
-            surfaceAreaSquareMeters: meshMeasurement.surfaceAreaSquareMeters,
-            bounds: meshMeasurement.bounds
+            surfaceArea: .init(
+                value: meshMeasurement.surfaceAreaSquareMeters,
+                method: .tessellatedMesh
+            ),
+            bounds: .init(value: meshMeasurement.bounds, method: .tessellatedMesh)
         )
     }
 
@@ -1389,17 +1506,19 @@ public struct MeasurementService {
             unsupportedReason = "Evaluated geometry is unavailable."
             return nil
         }
-        guard let bodyID = evaluatedBodyID(for: featureID, in: evaluatedDocument) else {
-            unsupportedReason = "The evaluated document is missing the generated body name."
-            return nil
-        }
+        let bodyID = try evaluatedBodyID(for: featureID, in: evaluatedDocument)
         guard let mesh = evaluatedDocument.meshes[bodyID] else {
             unsupportedReason = "The evaluated document is missing the generated body mesh."
             return nil
         }
-        let meshMeasurement = try evaluatedMeshMeasurement(mesh, requiresClosedMesh: true)
-        let brepVolume = try evaluatedBRepVolume(bodyID: bodyID, in: evaluatedDocument.brep)
-        let volumeCubicMeters = brepVolume ?? meshMeasurement.volumeCubicMeters
+        let meshMeasurement = try evaluatedMeshMeasurement(mesh)
+        guard let volumeCubicMeters = try evaluatedBRepVolume(
+            bodyID: bodyID,
+            in: evaluatedDocument.brep,
+            unsupportedReason: &unsupportedReason
+        ) else {
+            return nil
+        }
         guard volumeCubicMeters > tolerance.distance * tolerance.distance * tolerance.distance else {
             unsupportedReason = "The evaluated solid volume is below tolerance."
             return nil
@@ -1410,29 +1529,107 @@ public struct MeasurementService {
             sourceFeatureID: sourceFeatureID.description,
             sourceFeatureName: sourceFeatureName,
             linearDimensions: [],
-            volumeCubicMeters: volumeCubicMeters,
-            surfaceAreaSquareMeters: meshMeasurement.surfaceAreaSquareMeters,
-            bounds: meshMeasurement.bounds
+            volume: .init(value: volumeCubicMeters, method: .exactBRep),
+            surfaceArea: .init(
+                value: meshMeasurement.surfaceAreaSquareMeters,
+                method: .tessellatedMesh
+            ),
+            bounds: .init(
+                value: meshMeasurement.bounds,
+                method: .tessellatedMesh
+            )
         )
+    }
+
+    private func measureEvaluatedBodySolids(
+        featureID: FeatureID,
+        featureName: String?,
+        sourceFeatureID: FeatureID,
+        sourceFeatureName: String?,
+        evaluatedDocument: EvaluatedDocument?,
+        unsupportedReason: inout String?
+    ) throws -> [MeasurementResult.Solid]? {
+        guard let evaluatedDocument else {
+            unsupportedReason = "Evaluated geometry is unavailable."
+            return nil
+        }
+        let bodyReferences = evaluatedBodyReferences(
+            for: featureID,
+            in: evaluatedDocument
+        )
+        guard !bodyReferences.isEmpty else {
+            unsupportedReason = "The evaluated document is missing generated body names."
+            return nil
+        }
+        var solids: [MeasurementResult.Solid] = []
+        solids.reserveCapacity(bodyReferences.count)
+        for bodyReference in bodyReferences {
+            guard let body = evaluatedDocument.brep.bodies[bodyReference.bodyID],
+                  body.kind == .solid else {
+                unsupportedReason = "An evaluated body output is not a solid."
+                return nil
+            }
+            guard let mesh = evaluatedDocument.meshes[bodyReference.bodyID] else {
+                unsupportedReason = "The evaluated document is missing a generated body mesh."
+                return nil
+            }
+            let meshMeasurement = try evaluatedMeshMeasurement(mesh)
+            guard let volumeCubicMeters = try evaluatedBRepVolume(
+                bodyID: bodyReference.bodyID,
+                in: evaluatedDocument.brep,
+                unsupportedReason: &unsupportedReason
+            ) else {
+                return nil
+            }
+            guard volumeCubicMeters > tolerance.distance * tolerance.distance * tolerance.distance else {
+                unsupportedReason = "An evaluated solid volume is below tolerance."
+                return nil
+            }
+            solids.append(MeasurementResult.Solid(
+                featureID: featureID.description,
+                featureName: featureName,
+                sourceFeatureID: sourceFeatureID.description,
+                sourceFeatureName: sourceFeatureName,
+                linearDimensions: [],
+                volume: .init(value: volumeCubicMeters, method: .exactBRep),
+                surfaceArea: .init(
+                    value: meshMeasurement.surfaceAreaSquareMeters,
+                    method: .tessellatedMesh
+                ),
+                bounds: .init(
+                    value: meshMeasurement.bounds,
+                    method: .tessellatedMesh
+                )
+            ))
+        }
+        return solids
     }
 
     private func evaluatedBodyID(
         for featureID: FeatureID,
         in evaluatedDocument: EvaluatedDocument
-    ) -> BodyID? {
-        evaluatedPrimaryBodyReference(
+    ) throws -> BodyID {
+        try evaluatedPrimaryBodyReference(
             for: featureID,
             in: evaluatedDocument
-        )?.bodyID
+        ).bodyID
     }
 
     private func evaluatedPrimaryBodyReference(
         for featureID: FeatureID,
         in evaluatedDocument: EvaluatedDocument
-    ) -> EvaluatedBodyReference? {
+    ) throws -> EvaluatedBodyReference {
         let bodyIdentity = evaluatedPrimaryBodyIdentity(for: featureID)
-        guard case .body(let bodyID) = try? evaluatedDocument.subshapes.reference(for: bodyIdentity) else {
-            return nil
+        let topologyReference = try evaluatedDocument.subshapes.reference(for: bodyIdentity)
+        guard case .body(let bodyID) = topologyReference else {
+            throw KernelError(
+                phase: .evaluation,
+                code: .topologyFailure,
+                featureID: featureID,
+                subshapeID: bodyIdentity,
+                tolerance: nil,
+                message: "The generated body identity resolves to non-body topology."
+            )
         }
         return EvaluatedBodyReference(subshapeID: bodyIdentity, bodyID: bodyID)
     }
@@ -1472,10 +1669,7 @@ public struct MeasurementService {
     }
 
 
-    private func evaluatedMeshMeasurement(
-        _ mesh: Mesh,
-        requiresClosedMesh: Bool = false
-    ) throws -> EvaluatedMeshMeasurement {
+    private func evaluatedMeshMeasurement(_ mesh: Mesh) throws -> EvaluatedMeshMeasurement {
         guard !mesh.positions.isEmpty,
               !mesh.indices.isEmpty,
               mesh.indices.count.isMultiple(of: 3) else {
@@ -1491,7 +1685,6 @@ public struct MeasurementService {
         guard let measuredBounds = bounds.bounds else {
             return EvaluatedMeshMeasurement(
                 surfaceAreaSquareMeters: 0.0,
-                volumeCubicMeters: 0.0,
                 bounds: MeasurementResult.Bounds(
                     minX: 0.0,
                     minY: 0.0,
@@ -1504,13 +1697,6 @@ public struct MeasurementService {
         }
 
         var surfaceArea = 0.0
-        var signedVolume = 0.0
-        var orientedAreaSum = Vector3D(x: 0.0, y: 0.0, z: 0.0)
-        // Shared local origin so the divergence-theorem triple products stay exact
-        // when the mesh is far from the world origin (site-planning ~1e12, where
-        // absolute triple products ~1e36 cancel to noise). Total volume of a closed
-        // mesh is translation invariant, so one shared reference is exact.
-        let volumeOrigin = mesh.positions.first ?? Point3D(x: 0.0, y: 0.0, z: 0.0)
         var index = 0
         while index + 2 < mesh.indices.count {
             let firstIndex = Int(mesh.indices[index])
@@ -1529,138 +1715,26 @@ public struct MeasurementService {
             let third = mesh.positions[thirdIndex]
             let triangleNormal = (second - first).cross(third - first)
             surfaceArea += triangleNormal.length * 0.5
-            orientedAreaSum = orientedAreaSum + triangleNormal * 0.5
-            let firstRebased = vector(first, from: volumeOrigin)
-            let secondRebased = vector(second, from: volumeOrigin)
-            let thirdRebased = vector(third, from: volumeOrigin)
-            signedVolume += firstRebased.dot(secondRebased.cross(thirdRebased)) / 6.0
             index += 3
-        }
-
-        if requiresClosedMesh {
-            // A closed mesh's oriented triangle areas sum to zero regardless of
-            // discretization. A significant residual means part of the surface
-            // is wound inconsistently, so the divergence volume is meaningless;
-            // fail loudly instead of reporting a silently wrong number.
-            let residual = orientedAreaSum.length
-            guard residual <= max(surfaceArea * 1.0e-6, 1.0e-12) else {
-                throw EditorError(
-                    code: .commandFailed,
-                    message: "Measurement rejected an inconsistently oriented solid mesh (oriented-area residual \(residual))."
-                )
-            }
         }
 
         return EvaluatedMeshMeasurement(
             surfaceAreaSquareMeters: surfaceArea,
-            volumeCubicMeters: abs(signedVolume),
             bounds: measuredBounds
         )
     }
 
     private func evaluatedBRepVolume(
         bodyID: BodyID,
-        in model: BRepModel
+        in model: BRepModel,
+        unsupportedReason: inout String?
     ) throws -> Double? {
-        guard let body = model.bodies[bodyID] else {
-            throw EditorError(
-                code: .commandFailed,
-                message: "Measurement expected an evaluated B-rep body for the sweep feature."
-            )
-        }
-        guard body.kind == .solid else {
+        do {
+            return try model.volume(of: bodyID, tolerance: tolerance)
+        } catch let error as KernelError where error.code == .unsupportedCapability {
+            unsupportedReason = "Exact B-rep volume is unavailable: \(error.message)"
             return nil
         }
-
-        var signedVolume = 0.0
-        // Body-global shared origin so the divergence-theorem triple products stay
-        // exact far from the world origin. The same reference must be used across
-        // every face and shell for the fan sum to remain exact.
-        var volumeOrigin: Point3D?
-        for shellID in body.shellIDs {
-            guard let shell = model.shells[shellID] else {
-                throw EditorError(
-                    code: .commandFailed,
-                    message: "Measurement encountered a missing B-rep shell."
-                )
-            }
-            for faceID in shell.faceIDs {
-                guard let face = model.faces[faceID] else {
-                    throw EditorError(
-                        code: .commandFailed,
-                        message: "Measurement encountered a missing B-rep face."
-                    )
-                }
-                guard face.loops.count == 1,
-                      let loopID = face.loops.first,
-                      let loop = model.loops[loopID],
-                      loop.role == .outer,
-                      try isLineOnly(loop: loop, in: model) else {
-                    return nil
-                }
-                var points = try model.orderedPoints(for: loopID)
-                if (shell.orientation == .reversed) != (face.orientation == .reversed) {
-                    points.reverse()
-                }
-                let origin = volumeOrigin ?? points.first ?? Point3D(x: 0.0, y: 0.0, z: 0.0)
-                volumeOrigin = origin
-                signedVolume += try signedVolumeContribution(points, origin: origin)
-            }
-        }
-
-        let volume = abs(signedVolume)
-        guard volume.isFinite else {
-            return nil
-        }
-        return volume
-    }
-
-    private func isLineOnly(loop: Loop, in model: BRepModel) throws -> Bool {
-        for orientedEdge in loop.edges {
-            guard let edge = model.edges[orientedEdge.edgeID],
-                  let curve = model.geometry.curves[edge.curveID] else {
-                throw EditorError(
-                    code: .commandFailed,
-                    message: "Measurement encountered missing B-rep edge geometry."
-                )
-            }
-            guard case .line = curve else {
-                return false
-            }
-        }
-        return true
-    }
-
-    private func signedVolumeContribution(
-        _ points: [Point3D],
-        origin: Point3D
-    ) throws -> Double {
-        guard points.count >= 3 else {
-            throw EditorError(
-                code: .commandFailed,
-                message: "Measurement encountered a degenerate B-rep face."
-            )
-        }
-        let anchor = vector(points[0], from: origin)
-        var signedVolume = 0.0
-        for index in 1..<(points.count - 1) {
-            signedVolume += anchor.dot(
-                vector(points[index], from: origin).cross(vector(points[index + 1], from: origin))
-            ) / 6.0
-        }
-        return signedVolume
-    }
-
-    private func vector(_ point: Point3D) -> Vector3D {
-        Vector3D(x: point.x, y: point.y, z: point.z)
-    }
-
-    private func vector(_ point: Point3D, from origin: Point3D) -> Vector3D {
-        Vector3D(
-            x: point.x - origin.x,
-            y: point.y - origin.y,
-            z: point.z - origin.z
-        )
     }
 
     private func boundsForSketch(
@@ -2121,7 +2195,6 @@ private struct MeasuredProfile {
 
 private struct EvaluatedMeshMeasurement {
     var surfaceAreaSquareMeters: Double
-    var volumeCubicMeters: Double
     var bounds: MeasurementResult.Bounds
 }
 

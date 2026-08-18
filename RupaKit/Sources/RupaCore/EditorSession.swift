@@ -1928,6 +1928,25 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func createProjectedCurve(
+        name: String,
+        source: CurveOutputReference,
+        planeOrigin: Point3D,
+        planeNormal: Vector3D,
+        direction: Vector3D? = nil
+    ) -> CommandExecutionResult? {
+        perform(
+            .createProjectedCurve(
+                name: name,
+                source: source,
+                planeOrigin: planeOrigin,
+                planeNormal: planeNormal,
+                direction: direction
+            )
+        )
+    }
+
+    @discardableResult
     public func projectBodyOutlinesToConstructionPlane(
         targets: [SelectionTarget],
         plane: SketchPlane? = nil,

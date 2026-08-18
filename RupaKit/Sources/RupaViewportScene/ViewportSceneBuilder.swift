@@ -22,26 +22,15 @@ public struct ViewportSceneBuilder {
             document: document,
             ruler: ruler
         )
-        let bodyDisplaySnapshots: [FeatureID: BodyDisplaySnapshot]
-        if let evaluatedDocument = currentEvaluatedDocument(
+        let evaluatedDocument = resolvedEvaluatedDocument(
             for: document,
             currentEvaluation: currentEvaluation,
             documentGeneration: documentGeneration,
             evaluationCache: evaluationCache
-        ) {
-            bodyDisplaySnapshots = BodyDisplaySnapshotService().snapshots(
-                evaluatedDocument: evaluatedDocument
-            )
-        } else {
-            do {
-                bodyDisplaySnapshots = try BodyDisplaySnapshotService().snapshots(
-                    document: document,
-                    objectRegistry: objectRegistry
-                )
-            } catch {
-                bodyDisplaySnapshots = [:]
-            }
-        }
+        )
+        let bodyDisplaySnapshots = evaluatedDocument.map {
+            BodyDisplaySnapshotService().snapshots(evaluatedDocument: $0)
+        } ?? [:]
 
         let surfaceControlPointDisplaysByFeatureID = visibleSurfaceControlPointDisplaysByFeatureID(
             in: document,
@@ -305,16 +294,12 @@ public struct ViewportSceneBuilder {
                     surfaceTrimSpanDisplaysByFeatureID: surfaceTrimSpanDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
-            case .bridgeCurve:
-                return nil
-            case .curveEdit:
-                return nil
-            case .curveOffset:
-                return nil
-            case .curveTrim:
-                return nil
-            case .curveExtend, .curveMatch, .projectCurve:
-                return nil
+            case .bridgeCurve, .curveEdit, .curveOffset, .curveTrim,
+                 .curveExtend, .curveMatch, .projectCurve:
+                return evaluatedCurveItem(
+                    featureID: featureID,
+                    evaluatedDocument: evaluatedDocument
+                )
             case .surfaceTrim(let surfaceTrim):
                 return evaluatedMeshBodyItem(
                     featureID: featureID,
@@ -439,6 +424,8 @@ public struct ViewportSceneBuilder {
             .sketch
         case .body:
             .body
+        case .curve:
+            .feature
         }
         if let matchedNode = document.productMetadata.sceneNodes.first(where: { _, node in
             node.reference?.kind == referenceKind && node.reference?.featureID == featureID
@@ -597,8 +584,63 @@ public struct ViewportSceneBuilder {
             item.kind = .body(component: transformedBody.component)
             item.modelTransform = transform
             item.modelBounds = transformedBody.modelBounds
+        case .curve(let component):
+            let points = component.segments.flatMap(\.points).map {
+                transformedPoint($0, transform: transform)
+            }
+            guard let bounds = pointBounds(points) else {
+                break
+            }
+            item.modelTransform = transform
+            item.modelBounds = CGRect(
+                x: bounds.minX,
+                y: bounds.minZ,
+                width: max(bounds.maxX - bounds.minX, 1.0e-9),
+                height: max(bounds.maxZ - bounds.minZ, 1.0e-9)
+            )
+            item.kind = .curve(component: ViewportCurveComponent(
+                segments: component.segments,
+                yMinMeters: bounds.minY,
+                yMaxMeters: bounds.maxY
+            ))
         }
         return item
+    }
+
+    private func evaluatedCurveItem(
+        featureID: FeatureID,
+        evaluatedDocument: EvaluatedDocument?
+    ) -> ViewportSceneItem? {
+        guard let curves = evaluatedDocument?.curves[featureID] else {
+            return nil
+        }
+        let segments = curves.enumerated().compactMap { index, curve in
+            guard curve.points.count >= 2 else {
+                return nil
+            }
+            return ViewportCurveSegment(
+                reference: CurveOutputReference(featureID: featureID, curveIndex: index),
+                curve: curve
+            )
+        }
+        guard let bounds = pointBounds(segments.flatMap(\.points)) else {
+            return nil
+        }
+        return ViewportSceneItem(
+            id: featureID.description,
+            featureID: featureID,
+            modelBounds: CGRect(
+                x: bounds.minX,
+                y: bounds.minZ,
+                width: max(bounds.maxX - bounds.minX, 1.0e-9),
+                height: max(bounds.maxZ - bounds.minZ, 1.0e-9)
+            ),
+            kind: .curve(component: ViewportCurveComponent(
+                segments: segments,
+                yMinMeters: bounds.minY,
+                yMaxMeters: bounds.maxY
+            ))
+        )
     }
 
     private func transformedSketchPrimitive(
@@ -1550,6 +1592,31 @@ public struct ViewportSceneBuilder {
             return nil
         }
         return evaluationCache.evaluatedDocument
+    }
+
+    private func resolvedEvaluatedDocument(
+        for document: DesignDocument,
+        currentEvaluation: DocumentEvaluationContext?,
+        documentGeneration: DocumentGeneration?,
+        evaluationCache: EvaluatedDocumentCache?
+    ) -> EvaluatedDocument? {
+        if let current = currentEvaluatedDocument(
+            for: document,
+            currentEvaluation: currentEvaluation,
+            documentGeneration: documentGeneration,
+            evaluationCache: evaluationCache
+        ) {
+            return current
+        }
+        do {
+            return try DocumentEvaluationContextResolver().evaluatedDocument(
+                document: document,
+                objectRegistry: objectRegistry,
+                failurePrefix: "Document must evaluate successfully before viewport scene construction"
+            )
+        } catch {
+            return nil
+        }
     }
 
     private func evaluatedMeshBodyItem(

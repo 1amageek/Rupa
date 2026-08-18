@@ -5,6 +5,7 @@ import SwiftCAD
 public enum ViewportSelectableKind: String, Equatable, Sendable {
     case sketch
     case body
+    case curve
 }
 
 public enum ViewportBodyFace: String, CaseIterable, Hashable, Sendable {
@@ -116,6 +117,7 @@ public struct ViewportSketchRegion: Equatable, Sendable {
 public enum ViewportSceneItemKind: Equatable {
     case sketch(primitives: [ViewportSketchPrimitive])
     case body(component: ViewportBodyComponent)
+    case curve(component: ViewportCurveComponent)
 
     public var selectableKind: ViewportSelectableKind {
         switch self {
@@ -123,8 +125,49 @@ public enum ViewportSceneItemKind: Equatable {
             return .sketch
         case .body:
             return .body
+        case .curve:
+            return .curve
         }
     }
+}
+
+/// One evaluated curve output and its stable document-level identity.
+///
+/// `curve.points` is the display tessellation. `curve.exactCurve` and
+/// `curve.exactParameterDomain` remain the canonical geometry when available.
+public struct ViewportCurveSegment: Equatable, Sendable {
+    public var reference: CurveOutputReference
+    public var curve: EvaluatedCurve
+
+    public init(reference: CurveOutputReference, curve: EvaluatedCurve) {
+        self.reference = reference
+        self.curve = curve
+    }
+
+    public var points: [Point3D] {
+        curve.points
+    }
+
+    public var selectionReference: SelectionReference {
+        .curve(.whole(reference))
+    }
+}
+
+public struct ViewportCurveComponent: Equatable, Sendable {
+    public var segments: [ViewportCurveSegment]
+    public var yMinMeters: Double
+    public var yMaxMeters: Double
+
+    public init(
+        segments: [ViewportCurveSegment],
+        yMinMeters: Double,
+        yMaxMeters: Double
+    ) {
+        self.segments = segments
+        self.yMinMeters = yMinMeters
+        self.yMaxMeters = yMaxMeters
+    }
+
 }
 
 public struct ViewportBodyComponent: Equatable {
@@ -599,11 +642,17 @@ public struct ViewportScene: Equatable {
     public var verticalBounds: ClosedRange<Double>? {
         var bounds: ClosedRange<Double>?
         for item in items {
-            guard case .body(let component) = item.kind else {
+            let itemBounds: ClosedRange<Double>
+            switch item.kind {
+            case .body(let component):
+                itemBounds = min(component.yMinMeters, component.yMaxMeters)
+                    ... max(component.yMinMeters, component.yMaxMeters)
+            case .curve(let component):
+                itemBounds = min(component.yMinMeters, component.yMaxMeters)
+                    ... max(component.yMinMeters, component.yMaxMeters)
+            case .sketch:
                 continue
             }
-            let itemBounds = min(component.yMinMeters, component.yMaxMeters)
-                ... max(component.yMinMeters, component.yMaxMeters)
             if let currentBounds = bounds {
                 bounds = min(currentBounds.lowerBound, itemBounds.lowerBound)
                     ... max(currentBounds.upperBound, itemBounds.upperBound)
@@ -2731,6 +2780,25 @@ public struct ViewportHitTester {
         selectionHitPolicy: ViewportSelectionHitPolicy
     ) -> HitCandidate? {
         switch item.kind {
+        case .curve(let component):
+            guard selectionHitPolicy.allowsObjectHits,
+                  let curveHit = hitScoreForCurve(
+                      component,
+                      item: item,
+                      point: point,
+                      layout: layout
+                  ) else {
+                return nil
+            }
+            return HitCandidate(
+                hit: ViewportHit(
+                    featureID: item.featureID,
+                    sceneNodeID: item.sceneNodeID,
+                    kind: .curve,
+                    selectionReference: curveHit.segment.selectionReference
+                ),
+                score: curveHit.score
+            )
         case .sketch(let primitives):
             if (selectionHitPolicy.allowsObjectHits || selectionHitPolicy.allowsSketchEntityHits),
                let sketchHit = hitScoreForSketch(primitives, point: point, layout: layout) {
@@ -2933,6 +3001,31 @@ public struct ViewportHitTester {
             }
             return nil
         }
+    }
+
+    private func hitScoreForCurve(
+        _ component: ViewportCurveComponent,
+        item: ViewportSceneItem,
+        point: CGPoint,
+        layout: ViewportLayout
+    ) -> (segment: ViewportCurveSegment, score: CGFloat)? {
+        var bestHit: (segment: ViewportCurveSegment, score: CGFloat)?
+        for segment in component.segments {
+            guard segment.points.count >= 2 else { continue }
+            for index in 0..<(segment.points.count - 1) {
+                let distance = point.distanceToSegment(
+                    start: layout.project(segment.points[index], in: item),
+                    end: layout.project(segment.points[index + 1], in: item)
+                )
+                if bestHit.map({ distance < $0.score }) ?? true {
+                    bestHit = (segment, distance)
+                }
+            }
+        }
+        guard let bestHit, bestHit.score <= tolerance else {
+            return nil
+        }
+        return bestHit
     }
 
     private func hitSurfaceControlPointDisplay(

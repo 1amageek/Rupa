@@ -854,7 +854,7 @@ private struct ViewportIdentityBufferCommandEncoder {
             return 0.0
         case .sketchRegion, .generatedFace, .projectedBodyFace:
             return 10.0
-        case .sketchEntity, .generatedEdge, .projectedBodyEdge:
+        case .curve, .sketchEntity, .generatedEdge, .projectedBodyEdge:
             return 20.0
         case .sketchControlPoint,
              .generatedVertex,

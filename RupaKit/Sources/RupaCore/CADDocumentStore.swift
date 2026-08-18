@@ -1053,6 +1053,34 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .createProjectedCurve:
+            func run() throws {
+                guard case .createProjectedCurve(
+                    let name,
+                    let source,
+                    let planeOrigin,
+                    let planeNormal,
+                    let direction
+                ) = command else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "Command dispatch expected createProjectedCurve."
+                    )
+                }
+                var updatedDocument = document
+                try updatedDocument.createProjectedCurve(
+                    name: name,
+                    source: source,
+                    planeOrigin: planeOrigin,
+                    planeNormal: planeNormal,
+                    direction: direction,
+                    objectRegistry: objectRegistry
+                )
+                document = updatedDocument
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
+            try run()
         case .projectBodyOutlinesToConstructionPlane:
             func run() throws {
                 guard case .projectBodyOutlinesToConstructionPlane(let targets, let plane, let name) = command else {

@@ -98,6 +98,13 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
         face: SelectionTarget,
         name: String?
     )
+    case createProjectedCurve(
+        name: String,
+        source: CurveOutputReference,
+        planeOrigin: Point3D,
+        planeNormal: Vector3D,
+        direction: Vector3D?
+    )
     case projectBodyOutlinesToConstructionPlane(
         targets: [SelectionTarget],
         plane: SketchPlane,
@@ -487,6 +494,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "projectSketchCurvesToConstructionPlane"
         case .projectCurvesToGeneratedFace:
             "projectCurvesToGeneratedFace"
+        case .createProjectedCurve:
+            "createProjectedCurve"
         case .projectBodyOutlinesToConstructionPlane:
             "projectBodyOutlinesToConstructionPlane"
         case .addSketchConstraint:
@@ -686,6 +695,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .createFaceKnife,
              .projectSketchCurvesToConstructionPlane,
              .projectCurvesToGeneratedFace,
+             .createProjectedCurve,
              .projectBodyOutlinesToConstructionPlane,
              .addSketchConstraint,
              .removeSketchConstraint,

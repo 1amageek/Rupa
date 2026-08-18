@@ -38,6 +38,18 @@ struct WorkspaceObjectShapeInspectorStateBuilder {
         let size: InspectorVector3D
         let cylinder: InspectorCylinderShape?
         switch item.kind {
+        case .curve(let component):
+            sourceCenter = InspectorVector3D(
+                x: Double(item.modelBounds.midX),
+                y: (component.yMinMeters + component.yMaxMeters) / 2.0,
+                z: Double(item.modelBounds.midY)
+            )
+            size = InspectorVector3D(
+                x: Double(item.modelBounds.width),
+                y: component.yMaxMeters - component.yMinMeters,
+                z: Double(item.modelBounds.height)
+            )
+            cylinder = nil
         case .body(let component):
             sourceCenter = InspectorVector3D(
                 x: Double(item.modelBounds.midX),

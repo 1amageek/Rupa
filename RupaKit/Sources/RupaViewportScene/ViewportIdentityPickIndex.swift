@@ -22,6 +22,7 @@ public struct ViewportPickIdentity: RawRepresentable, Codable, Hashable, Compara
 }
 
 public enum ViewportIdentityPickGeometry: Hashable, Sendable {
+    case curve(CurveOutputReference)
     case sketchEntity(SketchEntityID)
     case sketchControlPoint(entityID: SketchEntityID, controlPointIndex: Int)
     case sketchRegion(SelectionComponentID)
@@ -161,6 +162,22 @@ public struct ViewportIdentityPickIndexBuilder: Sendable {
 
         for item in scene.items {
             switch item.kind {
+            case .curve(let component):
+                for segment in component.segments {
+                    appendRecord(
+                        featureID: item.featureID,
+                        geometry: .curve(segment.reference),
+                        hit: ViewportHit(
+                            featureID: item.featureID,
+                            sceneNodeID: item.sceneNodeID,
+                            kind: .curve,
+                            pickingBackend: .identityBuffer,
+                            selectionReference: segment.selectionReference
+                        ),
+                        allocator: &allocator,
+                        records: &records
+                    )
+                }
             case .sketch(let primitives):
                 appendSketchRecords(
                     item: item,

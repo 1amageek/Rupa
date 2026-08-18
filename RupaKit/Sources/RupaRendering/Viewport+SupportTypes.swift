@@ -20,6 +20,7 @@ enum ViewportTheme {
     static let selection = Color(red: 0.14, green: 0.66, blue: 0.95)
     static let hover = Color(red: 0.24, green: 0.88, blue: 0.82)
     static let sketch = Color(red: 0.34, green: 0.62, blue: 1.0)
+    static let curve = Color(red: 0.96, green: 0.72, blue: 0.24)
     static let dimensionLabelBackground = Color(red: 0.08, green: 0.09, blue: 0.10).opacity(0.90)
     static let dimensionLabelBackgroundHighlighted = Color(red: 0.11, green: 0.18, blue: 0.21).opacity(0.96)
     static let dimensionText = Color(red: 0.88, green: 0.94, blue: 0.98)

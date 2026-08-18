@@ -151,6 +151,11 @@ extension FeatureOperation {
             return Set(feature.targets.map(\.featureID))
         case .unjoinBody(let feature):
             return [feature.target.featureID]
+        // Mirror rebuilds the identity and reflected instances as one
+        // replacement body, so the source body is no longer independently
+        // measurable after evaluation.
+        case .mirror(let feature):
+            return [feature.target.featureID]
         case .primitive,
              .patchSurface,
              .bridgeSurface,
@@ -160,7 +165,6 @@ extension FeatureOperation {
              .curveDrivenPattern,
              .curveExtend,
              .curveMatch,
-             .mirror,
              .projectCurve:
             return []
         }

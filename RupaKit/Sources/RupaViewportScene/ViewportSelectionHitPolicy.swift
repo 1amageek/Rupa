@@ -35,7 +35,7 @@ public enum ViewportSelectionHitPolicy: Equatable, Sendable {
 
     public func allows(geometry: ViewportIdentityPickGeometry) -> Bool {
         switch geometry {
-        case .body:
+        case .body, .curve:
             return allowsObjectHits
         case .sketchEntity:
             return allowsObjectHits || allowsSketchEntityHits
@@ -79,14 +79,21 @@ public enum ViewportSelectionHitPolicy: Equatable, Sendable {
     }
 
     public func allows(hit: ViewportHit) -> Bool {
-        if hit.selectionReference != nil {
-            return allowsVertexHits
+        if let selectionReference = hit.selectionReference {
+            switch selectionReference {
+            case .curve:
+                return allowsObjectHits
+            case .subshape, .edge, .sketchPoint, .surface:
+                return allowsVertexHits
+            }
         }
         if let component = hit.selectionComponent {
             return allows(component: component)
         }
 
         switch hit.kind {
+        case .curve:
+            return allowsObjectHits
         case .body:
             if hit.bodyFace != nil {
                 return allowsFaceHits

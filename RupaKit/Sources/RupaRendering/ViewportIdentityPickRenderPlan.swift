@@ -148,6 +148,14 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
 
         for item in scene.items {
             switch item.kind {
+            case .curve(let component):
+                appendCurveDrawItems(
+                    item: item,
+                    component: component,
+                    layout: layout,
+                    index: pickIndex,
+                    drawItems: &drawItems
+                )
             case .sketch(let primitives):
                 appendSketchDrawItems(
                     item: item,
@@ -185,6 +193,13 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
 
         for item in scene.items {
             switch item.kind {
+            case .curve(let component):
+                estimateCurveDrawItems(
+                    item: item,
+                    component: component,
+                    index: pickIndex,
+                    estimate: &estimate
+                )
             case .sketch(let primitives):
                 estimateSketchDrawItems(
                     item: item,
@@ -204,6 +219,52 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
         }
 
         return estimate
+    }
+
+    private func appendCurveDrawItems(
+        item: ViewportSceneItem,
+        component: ViewportCurveComponent,
+        layout: ViewportLayout,
+        index: ViewportIdentityPickIndex,
+        drawItems: inout [ViewportIdentityPickDrawItem]
+    ) {
+        for segment in component.segments where segment.points.count >= 2 {
+            guard let record = record(
+                for: item,
+                geometry: .curve(segment.reference),
+                in: index
+            ) else {
+                continue
+            }
+            appendDrawItem(
+                record: record,
+                primitive: .polyline(
+                    points: segment.points.map { layout.project($0, in: item) },
+                    radius: curveRadius,
+                    isClosed: false
+                ),
+                depth: nil,
+                drawItems: &drawItems
+            )
+        }
+    }
+
+    private func estimateCurveDrawItems(
+        item: ViewportSceneItem,
+        component: ViewportCurveComponent,
+        index: ViewportIdentityPickIndex,
+        estimate: inout ViewportIdentityPickRenderPlanEstimate
+    ) {
+        for segment in component.segments where segment.points.count >= 2 {
+            guard record(
+                for: item,
+                geometry: .curve(segment.reference),
+                in: index
+            ) != nil else {
+                continue
+            }
+            estimate.appendDrawItem(encodedPointCount: segment.points.count)
+        }
     }
 
     private func appendSketchDrawItems(

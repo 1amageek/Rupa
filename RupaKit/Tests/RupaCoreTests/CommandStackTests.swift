@@ -449,6 +449,8 @@ import Testing
     #expect(result.counts.sketches == 1)
     #expect(result.counts.profiles == 1)
     #expect(result.counts.solids == 1)
+    #expect(result.solids.first?.volumeMethod == .analytic)
+    #expect(result.solids.first?.boundsMethod == .analytic)
     #expect(abs(result.totals.profileAreaSquareMeters - 0.0008) < 0.000_000_000_001)
     #expect(abs(result.totals.solidVolumeCubicMeters - 0.000008) < 0.000_000_000_001)
     #expect(abs(bounds.sizeX - 0.04) < 0.000_000_000_001)
@@ -896,6 +898,8 @@ import Testing
 
     #expect(result.profiles.first?.kind == .circle)
     #expect(result.counts.solids == 1)
+    #expect(result.solids.first?.volumeMethod == .analytic)
+    #expect(result.solids.first?.boundsMethod == .analytic)
     #expect(abs(result.totals.profileAreaSquareMeters - Double.pi * 0.0001) < 0.000_000_000_001)
     #expect(abs(result.totals.solidVolumeCubicMeters - Double.pi * 0.000002) < 0.000_000_000_001)
     #expect(abs(bounds.sizeX - 0.02) < 0.000_000_000_001)
@@ -925,12 +929,21 @@ import Testing
 
     let result = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
     let area = result.totals.profileAreaSquareMeters
+    let evaluatedDocument = try #require(session.currentEvaluation?.evaluatedDocument)
+    let bodyID = try #require(evaluatedDocument.brep.bodies.keys.first)
+    let exactVolume = try evaluatedDocument.brep.volume(
+        of: bodyID,
+        tolerance: session.document.modelingSettings.tolerance
+    )
 
     #expect(result.profiles.first?.kind == .curveLoop)
     #expect(result.counts.profiles == 1)
     #expect(result.counts.solids == 1)
+    #expect(result.solids.first?.volumeMethod == .exactBRep)
+    #expect(result.solids.first?.surfaceAreaMethod == .tessellatedMesh)
+    #expect(result.solids.first?.boundsMethod == .tessellatedMesh)
     #expect(abs(area - Double.pi * 0.0001) < 1.0e-7)
-    #expect(abs(result.totals.solidVolumeCubicMeters - area * 0.005) < 1.0e-12)
+    #expect(abs(result.totals.solidVolumeCubicMeters - exactVolume) < 1.0e-12)
 }
 
 @MainActor
