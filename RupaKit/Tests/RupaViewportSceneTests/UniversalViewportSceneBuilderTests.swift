@@ -11,7 +11,15 @@ func universalViewportScenePreservesEvaluatedIdentityAndBounds() throws {
     _ = try #require(session.createDefaultExtrudedRectangle())
     let bridge = DesignDocumentProjectBridge()
     let project = try bridge.sourceModel(for: session.document)
-    let snapshot = try bridge.evaluationEngine(for: session.document).evaluate(project)
+    let evaluator = try DefaultDesignDocumentProjectEvaluatorFactory()
+        .makeEvaluator(
+            for: session.document,
+            reusing: session.currentEvaluation
+        )
+    let snapshot = try evaluator.evaluate(
+        project,
+        sourceRevision: DocumentTransactionRevision(session.generation.value)
+    )
 
     let scene = try UniversalViewportSceneBuilder().build(
         from: snapshot,

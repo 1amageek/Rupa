@@ -24,7 +24,7 @@ func designDocumentBridgeProjectsSceneHierarchyAndCADReferences() throws {
         guard case .external(let providerID, let sourceID, let outputID) = reference else {
             return false
         }
-        return providerID == "cad"
+        return providerID == CADGeometrySourceProvider.identifier
             && sourceID == session.document.id.description
             && outputID != nil
     })
@@ -37,10 +37,19 @@ func designDocumentBridgeFeedsCADEvaluationThroughUniversalProjectModel() throws
 
     let bridge = DesignDocumentProjectBridge()
     let project = try bridge.sourceModel(for: session.document)
-    let snapshot = try bridge.evaluationEngine(for: session.document).evaluate(project)
+    let evaluator = try DefaultDesignDocumentProjectEvaluatorFactory()
+        .makeEvaluator(
+            for: session.document,
+            reusing: session.currentEvaluation
+        )
+    let snapshot = try evaluator.evaluate(
+        project,
+        sourceRevision: DocumentTransactionRevision(session.generation.value)
+    )
 
     #expect(snapshot.occurrences.values.contains { occurrence in
-        occurrence.reference.providerID == "cad" && occurrence.mesh.faceIDs.count > 0
+        occurrence.reference.providerID == CADGeometrySourceProvider.identifier
+            && occurrence.mesh.faceIDs.count > 0
     })
 }
 
@@ -51,11 +60,32 @@ func designDocumentProjectSnapshotBuilderCarriesSourceRevisionIntoViewport() asy
 
     let snapshot = try await DesignDocumentProjectSnapshotBuilder().build(
         document: session.document,
-        generation: session.generation
+        generation: session.generation,
+        currentEvaluation: session.currentEvaluation
     )
 
     #expect(snapshot.documentGeneration == session.generation)
     #expect(snapshot.sourceRevision == DocumentTransactionRevision(session.generation.value))
     #expect(snapshot.evaluation.id.sourceRevision == snapshot.sourceRevision)
     #expect(snapshot.viewport.snapshotID == snapshot.evaluation.id)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func designDocumentProjectSnapshotBuilderRejectsAStaleReusableEvaluation() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let currentEvaluation = try #require(session.currentEvaluation)
+    var error: DesignDocumentProjectBridgeError?
+
+    do {
+        _ = try await DesignDocumentProjectSnapshotBuilder().build(
+            document: session.document,
+            generation: try session.generation.advanced(),
+            currentEvaluation: currentEvaluation
+        )
+    } catch let caught as DesignDocumentProjectBridgeError {
+        error = caught
+    }
+
+    #expect(error?.code == .staleEvaluation)
 }

@@ -38,6 +38,39 @@ func meshSourceBuilderReusesSharedEdgesAcrossFaces() throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
+func meshSourceBuilderAddsTrianglesWithoutWeakeningValidation() throws {
+    var builder = MeshSourceBuilder(identity: "fixture.triangles")
+    try builder.reserveCapacity(vertexCount: 4, faceCount: 2, cornerCount: 6)
+    let v0 = try builder.addVertex(GeometryPoint3D(x: 0, y: 0, z: 0))
+    let v1 = try builder.addVertex(GeometryPoint3D(x: 1, y: 0, z: 0))
+    let v2 = try builder.addVertex(GeometryPoint3D(x: 1, y: 1, z: 0))
+    let v3 = try builder.addVertex(GeometryPoint3D(x: 0, y: 1, z: 0))
+    _ = try builder.addTriangle(v0, v1, v2)
+    _ = try builder.addTriangle(v0, v2, v3)
+    let source = try builder.build()
+
+    #expect(source.faceIDs.count == 2)
+    #expect(source.cornerIDs.count == 6)
+    #expect(source.edgeIDs.count == 5)
+
+    #expect(throws: MeshSourceError.self) {
+        _ = try builder.addTriangle(v0, v0, v1)
+    }
+    #expect(throws: MeshSourceError.self) {
+        _ = try builder.addTriangle(v0, v1, MeshVertexID(4))
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func meshSourceBuilderRejectsInvalidCapacityEstimates() {
+    var builder = MeshSourceBuilder(identity: "fixture.capacity")
+
+    #expect(throws: MeshSourceError.self) {
+        try builder.reserveCapacity(vertexCount: -1, faceCount: 0, cornerCount: 0)
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
 func meshSourceCodecRoundTripsAndRejectsInvalidPayloads() throws {
     var builder = MeshSourceBuilder(identity: "fixture.codec")
     let v0 = try builder.addVertex(GeometryPoint3D(x: 0, y: 0, z: 0))

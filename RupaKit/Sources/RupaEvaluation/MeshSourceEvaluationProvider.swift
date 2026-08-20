@@ -2,30 +2,37 @@ import RupaGeometry
 import RupaProjectModel
 
 public struct MeshSourceEvaluationProvider: GeometrySourceEvaluationProvider {
-    public let providerID = "mesh"
+    public static let identifier = GeometrySourceReference.meshProviderID
+    public let providerID = Self.identifier
 
     public init() {}
 
     public func evaluate(
-        reference: GeometrySourceReference,
+        _ request: GeometrySourceEvaluationRequest,
         in project: ProjectSourceModel
-    ) throws -> GeometryEvaluationResult {
-        guard case .mesh(let sourceID) = reference else {
-            throw EvaluationError(
-                code: .invalidResult,
-                message: "Mesh source provider received a non-mesh reference."
+    ) throws -> [GeometrySourceReference: GeometryEvaluationResult] {
+        var results: [GeometrySourceReference: GeometryEvaluationResult] = [:]
+        results.reserveCapacity(request.references.count)
+
+        for reference in request.references {
+            guard case .mesh(let sourceID) = reference else {
+                throw EvaluationError(
+                    code: .invalidResult,
+                    message: "Mesh source provider received a non-mesh reference."
+                )
+            }
+            guard let mesh = project.meshSources[sourceID] else {
+                throw EvaluationError(
+                    code: .sourceUnavailable,
+                    message: "Mesh source \(sourceID.rawValue) is not present in the project."
+                )
+            }
+            results[reference] = GeometryEvaluationResult(
+                reference: reference,
+                mesh: mesh,
+                localBounds: try mesh.bounds()
             )
         }
-        guard let mesh = project.meshSources[sourceID] else {
-            throw EvaluationError(
-                code: .sourceUnavailable,
-                message: "Mesh source \(sourceID.rawValue) is not present in the project."
-            )
-        }
-        return GeometryEvaluationResult(
-            reference: reference,
-            mesh: mesh,
-            localBounds: try mesh.bounds()
-        )
+        return results
     }
 }

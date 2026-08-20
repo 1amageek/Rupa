@@ -1,7 +1,6 @@
 import Foundation
 import RupaCADIntegration
 import RupaCore
-import RupaEvaluation
 import RupaGeometry
 import RupaProjectModel
 import SwiftCAD
@@ -31,7 +30,8 @@ public struct DesignDocumentProjectBridge: Sendable {
                 guard metadata.sceneNodes[childID] != nil else {
                     throw DesignDocumentProjectBridgeError(
                         code: .unknownChild,
-                        message: "Scene node \(parent.id.description) references an unknown child \(childID.description)."
+                        message: "Scene node \(parent.id.description) references unknown child "
+                            + "\(childID.description)."
                     )
                 }
                 guard parentByChild[childID] == nil else {
@@ -95,17 +95,6 @@ public struct DesignDocumentProjectBridge: Sendable {
         )
     }
 
-    public func evaluationEngine(for document: DesignDocument) -> ProjectEvaluationEngine {
-        ProjectEvaluationEngine(
-            providers: [
-                CADGeometrySourceProvider(
-                    document: document.cadDocument,
-                    evaluator: .modelingDefault(for: document)
-                ),
-            ]
-        )
-    }
-
     private func definitionID(for nodeID: SceneNodeID) -> ObjectDefinitionID {
         ObjectDefinitionID(rawValue: "object.\(nodeID.description)")
     }
@@ -129,7 +118,7 @@ public struct DesignDocumentProjectBridge: Sendable {
             )
         }
         return .external(
-            providerID: "cad",
+            providerID: CADGeometrySourceProvider.identifier,
             sourceID: documentID.description,
             outputID: featureID.description
         )

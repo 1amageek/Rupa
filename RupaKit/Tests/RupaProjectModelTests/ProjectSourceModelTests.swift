@@ -48,6 +48,24 @@ func projectSourceModelRejectsHierarchyCycles() throws {
     #expect(error?.code == .hierarchyCycle)
 }
 
+@Test(.timeLimit(.minutes(1)))
+func projectSourceModelRejectsExternalReferenceIDsWithSurroundingWhitespace() throws {
+    let reference = GeometrySourceReference.external(
+        providerID: " provider",
+        sourceID: "source",
+        outputID: "output"
+    )
+    var error: ProjectModelError?
+
+    do {
+        try reference.validate()
+    } catch let caught as ProjectModelError {
+        error = caught
+    }
+
+    #expect(error?.code == .invalidReference)
+}
+
 private func triangleSource() throws -> MeshSource {
     var builder = MeshSourceBuilder(identity: "mesh.triangle")
     let v0 = try builder.addVertex(GeometryPoint3D(x: 0, y: 0, z: 0))

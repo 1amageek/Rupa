@@ -6,11 +6,11 @@ public actor ProjectController {
     private var source: ProjectSourceModel
     private var sourceRevision: DocumentTransactionRevision
     private var evaluation: EvaluatedProjectSnapshot?
-    private let evaluator: ProjectEvaluationEngine
+    private let evaluator: any ProjectEvaluating
 
     public init(
         source: ProjectSourceModel,
-        evaluator: ProjectEvaluationEngine = ProjectEvaluationEngine()
+        evaluator: any ProjectEvaluating
     ) throws {
         do {
             try source.validate()

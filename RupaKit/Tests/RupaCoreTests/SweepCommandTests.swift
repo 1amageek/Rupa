@@ -147,7 +147,7 @@ import SwiftCAD
     try document.validate()
 }
 
-@Test func measureSweepUsesExactLengthForConnectedLineArcPathSketch() throws {
+@Test func createSweepRejectsConnectedLineArcPathWithoutExactMovingFrameSurface() throws {
     var document = DesignDocument.empty()
     let profileID = try document.createRectangleSketch(
         name: "Connected Line Arc Sweep Profile",
@@ -160,28 +160,18 @@ import SwiftCAD
         sketch: connectedLineArcPathSketch(),
         geometryRole: .curve
     )
-    let sweepID = try document.createSweep(
+    _ = try document.createSweep(
         name: "Connected Line Arc Sweep",
         sections: [.profile(ProfileReference(featureID: profileID))],
         path: SweepPathReference(featureID: pathID),
         options: SweepOptions(cornerStyle: .mitre)
     )
-    // The section-interpolated B-spline sweep accepts curved path-normal
-    // paths; the measurement still reports the exact line-plus-arc path
-    // length, which no sampled polyline reproduces at this precision.
-    let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
-    #expect(evaluated.brep.bodies.count == 1)
-    let result = try MeasurementService().measure(
-        document: document,
-        ruler: RulerConfiguration.standard(for: .millimeter)
-    )
-    let solid = try #require(result.solids.first)
-    let pathLength = try #require(
-        solid.linearDimensions.first { $0.kind == .sweepPathLength }
-    )
-    let expectedPathLength = 0.06 * Double.pi / 2.0 + 0.01
-    #expect(solid.featureID == sweepID.description)
-    #expect(abs(pathLength.meters - expectedPathLength) < 1.0e-12)
+    do {
+        _ = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
+        Issue.record("Exact kernel must reject general path-normal sweeps without an exact moving-frame surface.")
+    } catch let error as KernelError {
+        #expect(error.code == .sweepPathNormalUnavailable)
+    }
     try document.validate()
 }
 
@@ -198,8 +188,6 @@ import SwiftCAD
         sketch: connectedLinePathSketch(),
         geometryRole: .curve
     )
-    let originalOrder = document.cadDocument.designGraph.order
-
     _ = try document.createSweep(
         name: "Round Multi-Path Sweep",
         sections: [.profile(ProfileReference(featureID: profileID))],
@@ -344,8 +332,6 @@ import SwiftCAD
             y: .length(0.0, .millimeter)
         )
     )
-    let originalOrder = document.cadDocument.designGraph.order
-
     _ = try document.createSweep(
         name: "Profile Plane Parallel Sweep",
         sections: [.profile(ProfileReference(featureID: profileID))],
@@ -1001,7 +987,7 @@ private func sweepBooleanMeasureDocument(
 
     #expect(result.counts.sheets == 1)
     #expect(result.counts.solids == 0)
-    #expect(result.diagnostics.isEmpty)
+    #expect(result.diagnostics.map(\.code) == [.measurementTessellatedSheetApproximation])
     #expect(sheet.featureID == sweepID.description)
     #expect(sheet.sourceFeatureID == sectionID.description)
     #expect(sheet.surfaceAreaSquareMeters > 0.0)
@@ -1077,7 +1063,7 @@ private func sweepBooleanMeasureDocument(
     #expect(sheet.featureID == sweepID.description)
     #expect(sheet.sourceFeatureID == generatedSectionID.description)
     #expect(abs(sheet.surfaceAreaSquareMeters - 0.00008) < 1.0e-12)
-    #expect(result.diagnostics.isEmpty)
+    #expect(result.diagnostics.map(\.code) == [.measurementTessellatedSheetApproximation])
     try document.validate()
 }
 
@@ -1140,7 +1126,7 @@ private func sweepBooleanMeasureDocument(
     #expect(solid.sourceFeatureID == profileID.description)
     #expect(abs(pathLength.meters - 0.020) < 1.0e-12)
     #expect(abs(solid.volumeCubicMeters - 0.00000016) < 1.0e-12)
-    #expect(result.diagnostics.isEmpty)
+    #expect(result.diagnostics.map(\.code) == [.measurementTessellatedSolidApproximation])
     try document.validate()
 }
 
@@ -1208,7 +1194,7 @@ private func sweepBooleanMeasureDocument(
     // arc length at the measured 1.0e-12 precision, so the exact match above
     // proves the measurement uses the exact circular geometry.
     #expect(abs(sparsePolylineLength - expectedPathLength) > 1.0e-9)
-    #expect(result.diagnostics.isEmpty)
+    #expect(result.diagnostics.map(\.code) == [.measurementTessellatedSolidApproximation])
     try document.validate()
 }
 

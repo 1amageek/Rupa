@@ -21,7 +21,7 @@ struct AgentSocketListenerTests {
         let session = EditorSession()
         bridge.register(session: session, id: sessionID)
         let listener = AgentSocketListener(
-            mainActorBridge: bridge,
+            handler: bridge,
             socketPath: socketPath
         )
 
@@ -208,7 +208,7 @@ struct AgentSocketListenerTests {
         }
         let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
         let listener = AgentSocketListener(
-            controller: AgentCommandController(),
+            handler: AgentCommandHandler(),
             socketPath: AgentSocketPath(socketURL.path)
         )
         let client = AgentClient(socketPath: AgentSocketPath(socketURL.path))
@@ -281,6 +281,110 @@ struct AgentSocketListenerTests {
         }
     }
 
+    @Test(.timeLimit(.minutes(1))) func halfOpenClientDoesNotBlockAnotherRequest() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
+        let listener = AgentSocketListener(
+            handler: AgentCommandHandler(),
+            socketPath: AgentSocketPath(socketURL.path)
+        )
+        let client = AgentClient(socketPath: AgentSocketPath(socketURL.path))
+
+        try await listener.start()
+        let halfOpenDescriptor = try connectedDescriptor(to: socketURL)
+        do {
+            try await waitForActiveConnection(in: listener)
+            let response = try await client.send(.status)
+            guard case .status(let status) = response else {
+                Issue.record("Expected a status response while another client is half-open.")
+                Darwin.close(halfOpenDescriptor)
+                await listener.stop()
+                return
+            }
+            #expect(status.running)
+            Darwin.close(halfOpenDescriptor)
+            await listener.stop()
+        } catch {
+            Darwin.close(halfOpenDescriptor)
+            await listener.stop()
+            throw error
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1))) func stopTerminatesHalfOpenConnections() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
+        let listener = AgentSocketListener(
+            handler: AgentCommandHandler(),
+            socketPath: AgentSocketPath(socketURL.path)
+        )
+
+        try await listener.start()
+        let halfOpenDescriptor = try connectedDescriptor(to: socketURL)
+        do {
+            try await waitForActiveConnection(in: listener)
+            await listener.stop()
+            #expect(!(await listener.isRunning))
+            #expect(await listener.activeConnectionCount == 0)
+            Darwin.close(halfOpenDescriptor)
+        } catch {
+            Darwin.close(halfOpenDescriptor)
+            await listener.stop()
+            throw error
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1))) func rejectsOversizedFrameAndContinuesServing() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
+
+        try await withRunningListener(
+            controller: AgentCommandController(),
+            socketURL: socketURL
+        ) { _, client in
+            let descriptor = try connectedDescriptor(to: socketURL)
+            defer {
+                Darwin.close(descriptor)
+            }
+            let oversizedLength = UInt64(AgentSocketIO.maximumFrameByteCount + 1)
+            try writeRaw(
+                Data([
+                    UInt8(truncatingIfNeeded: oversizedLength >> 56),
+                    UInt8(truncatingIfNeeded: oversizedLength >> 48),
+                    UInt8(truncatingIfNeeded: oversizedLength >> 40),
+                    UInt8(truncatingIfNeeded: oversizedLength >> 32),
+                    UInt8(truncatingIfNeeded: oversizedLength >> 24),
+                    UInt8(truncatingIfNeeded: oversizedLength >> 16),
+                    UInt8(truncatingIfNeeded: oversizedLength >> 8),
+                    UInt8(truncatingIfNeeded: oversizedLength),
+                ]),
+                to: descriptor
+            )
+            let failureData = try AgentSocketIO.readFrame(from: descriptor)
+            let failure = try AgentMessageCodec().decodeResponse(from: failureData)
+            guard case .failure(let error) = failure else {
+                Issue.record("Expected an oversized frame failure.")
+                return
+            }
+            #expect(error.code == .commandInvalid)
+
+            guard case .status(let status) = try await client.send(.status) else {
+                Issue.record("Expected the listener to survive an oversized frame.")
+                return
+            }
+            #expect(status.running)
+        }
+    }
+
     private func withRunningListener<T>(
         controller: sending AgentCommandController,
         socketURL: URL,
@@ -288,7 +392,7 @@ struct AgentSocketListenerTests {
     ) async throws -> T {
         let socketPath = AgentSocketPath(socketURL.path)
         let listener = AgentSocketListener(
-            controller: controller,
+            handler: AgentCommandHandler(controller: controller),
             socketPath: socketPath
         )
         let client = AgentClient(socketPath: socketPath)
@@ -305,6 +409,16 @@ struct AgentSocketListenerTests {
     }
 
     private func sendRaw(_ data: Data, to socketURL: URL) throws -> Data {
+        let descriptor = try connectedDescriptor(to: socketURL)
+        defer {
+            Darwin.close(descriptor)
+        }
+
+        try AgentSocketIO.writeFrame(data, to: descriptor)
+        return try AgentSocketIO.readFrame(from: descriptor)
+    }
+
+    private func connectedDescriptor(to socketURL: URL) throws -> Int32 {
         let descriptor = Darwin.socket(AF_UNIX, SOCK_STREAM, 0)
         guard descriptor >= 0 else {
             throw EditorError(
@@ -312,21 +426,62 @@ struct AgentSocketListenerTests {
                 message: "Failed to create test socket. errno=\(errno)"
             )
         }
-        defer {
+        do {
+            try AgentSocketIO.configure(descriptor)
+            try AgentSocketAddress.withUnixAddress(path: socketURL.path) { address, length in
+                guard Darwin.connect(descriptor, address, length) == 0 else {
+                    throw EditorError(
+                        code: .agentConnectionFailed,
+                        message: "Failed to connect test socket. errno=\(errno)"
+                    )
+                }
+            }
+            return descriptor
+        } catch {
             Darwin.close(descriptor)
+            throw error
         }
+    }
 
-        try AgentSocketAddress.withUnixAddress(path: socketURL.path) { address, length in
-            guard Darwin.connect(descriptor, address, length) == 0 else {
-                throw EditorError(
-                    code: .agentConnectionFailed,
-                    message: "Failed to connect test socket. errno=\(errno)"
+    private func waitForActiveConnection(
+        in listener: AgentSocketListener
+    ) async throws {
+        for _ in 0..<200 {
+            if await listener.activeConnectionCount > 0 {
+                return
+            }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        throw EditorError(
+            code: .agentConnectionFailed,
+            message: "Listener did not accept the test connection."
+        )
+    }
+
+    private func writeRaw(_ data: Data, to descriptor: Int32) throws {
+        try data.withUnsafeBytes { buffer in
+            guard let baseAddress = buffer.baseAddress else {
+                return
+            }
+            var offset = 0
+            while offset < data.count {
+                let written = Darwin.write(
+                    descriptor,
+                    baseAddress.advanced(by: offset),
+                    data.count - offset
                 )
+                if written > 0 {
+                    offset += written
+                } else if written == -1 && errno == EINTR {
+                    continue
+                } else {
+                    throw EditorError(
+                        code: .agentConnectionFailed,
+                        message: "Failed to write raw test frame. errno=\(errno)"
+                    )
+                }
             }
         }
-        try AgentSocketIO.writeAll(data, to: descriptor)
-        Darwin.shutdown(descriptor, SHUT_WR)
-        return try AgentSocketIO.readAll(from: descriptor)
     }
 
     private func sendThroughClient(

@@ -15,37 +15,102 @@ compatibility layer must not be introduced.
 
 ```mermaid
 flowchart LR
-    Core[RupaCore] --> CoreTypes[RupaCoreTypes]
-    Automation --> Core[RupaCore]
-    AgentProtocol[RupaAgentProtocol] --> Core
-    AgentProtocol --> Automation[RupaAutomation]
-    AgentRuntime[RupaAgentRuntime] --> AgentProtocol
-    AgentRuntime --> Automation
-    AgentTransport[RupaAgentTransport] --> AgentProtocol
-    AgentTransport --> AgentRuntime
+    Capabilities[RupaCapabilities] --> CoreTypes[RupaCoreTypes]
+    Geometry[RupaGeometry] --> CoreTypes
+    ProjectModel[RupaProjectModel] --> CoreTypes
+    ProjectModel --> Geometry
+    Evaluation[RupaEvaluation] --> CoreTypes
+    Evaluation --> Geometry
+    Evaluation --> ProjectModel
+    Project[RupaProject] --> CoreTypes
+    Project --> Evaluation
+    Project --> ProjectModel
+    Core[RupaCore] --> CoreTypes
+    Core --> SwiftCAD[SwiftCAD]
+    CADIntegration[RupaCADIntegration] --> CoreTypes
+    CADIntegration --> Evaluation
+    CADIntegration --> Geometry
+    CADIntegration --> ProjectModel
+    CADIntegration --> SwiftCAD
+    Automation[RupaAutomation] --> Core
+    Automation --> CoreTypes
+    Domain[RupaDomainFoundation] --> Core
+    Domain --> CoreTypes
+    Domain --> Automation
+    Domain --> Capabilities
     ViewportScene[RupaViewportScene] --> Core
-    Rendering[RupaRendering] --> ViewportScene
-    UI[RupaUI] --> Rendering
+    ViewportScene --> CoreTypes
+    ViewportScene --> Evaluation
+    ViewportScene --> Geometry
+    ViewportScene --> ProjectModel
+    ViewportScene --> SwiftCAD
+    Rendering[RupaRendering] --> Core
+    Rendering --> ViewportScene
+    Rendering --> SwiftCAD
+    UI[RupaUI] --> Core
+    UI --> Domain
+    UI --> Preview[RupaPreview]
+    UI --> Rendering
+    UI --> ViewportScene
+    UI --> SwiftCAD
+    Kit[RupaKit] --> Core
+    Kit --> CoreTypes
+    Kit --> Automation
+    Kit --> Domain
+    Kit --> CADIntegration
+    Kit --> Evaluation
+    Kit --> Geometry
+    Kit --> ProjectModel
+    Kit --> ViewportScene
+    Kit --> SwiftCAD
+    AgentProtocol[RupaAgentProtocol] --> Core
+    AgentProtocol --> CoreTypes
+    AgentProtocol --> Automation
+    AgentProtocol --> Domain
+    AgentProtocol --> Capabilities
+    AgentRuntime[RupaAgentRuntime] --> Core
+    AgentRuntime --> CoreTypes
+    AgentRuntime --> AgentProtocol
+    AgentRuntime --> Automation
+    AgentRuntime --> Capabilities
+    AgentRuntime --> Domain
+    AgentTransport[RupaAgentTransport] --> CoreTypes
+    AgentTransport --> AgentProtocol
     AgentUI[RupaAgentUI] --> UI
+    AgentUI --> Core
+    AgentUI --> Domain
     AgentUI --> AgentRuntime
     AgentUI --> AgentTransport
-    CLI[RupaCLIKit] --> AgentProtocol
+    Agent[RupaAgent] --> AgentProtocol
+    Agent --> AgentRuntime
+    Agent --> AgentTransport
+    Preview --> Core
+    Manufacturing[RupaManufacturing] --> Core
+    Manufacturing --> Automation
+    Manufacturing --> Domain
+    Manufacturing --> SwiftCAD
+    CLI[RupaCLIKit] --> Core
+    CLI --> AgentProtocol
     CLI --> AgentRuntime
     CLI --> AgentTransport
     CLI --> Automation
-    Rendering --> Core
-    Core --> SwiftCAD[SwiftCAD]
+    CLI --> Domain
+    CLI --> SwiftCAD
 ```
 
 | Area | Owns | Must not own |
 |---|---|---|
 | `RupaCoreTypes` | Shared foundation DTOs such as errors, diagnostics, document generation, display units, and save result | CAD feature evaluation, SwiftCAD document mutation, UI state |
+| `RupaProjectModel` | Immutable universal project source, object definitions, occurrences, and geometry source references | Evaluation providers, editor history, concrete CAD types |
+| `RupaEvaluation` | Provider registry, de-duplicated provider batch planning, source-result contract validation, occurrence transforms, and immutable evaluated snapshots | Concrete CAD algorithms, editor session mutation, rendering state |
+| `RupaCADIntegration` | CAD source resolution, Swift-CAD evaluator construction, source-revision-aware incremental reuse, lossless supported-attribute conversion, and conversion into universal immutable geometry results | Universal project ownership, occurrence transforms, editor session lifetime, silent fidelity fallback |
+| `RupaProject` | Ordered project source staging, revision-conflict checks, evaluation publication, and commit results through `ProjectEvaluating` | Concrete provider construction, CAD semantics, viewport projection |
 | `RupaCore` | Document state, CAD commands, validation, domain services | UI state, transport protocol, CLI parsing |
 | `RupaCore/Surface` | Surface analysis, PolySpline editing, UVN frame and source summaries | Viewport drawing or Agent request routing |
 | `RupaAutomation` | Stable command vocabulary and command execution bridge | Agent protocol envelopes or view-specific state |
-| `RupaAgentProtocol` | Agent-facing request/response schema, envelopes, codec, capabilities, and protocol summaries | Workspace registry, socket IO, CAD mutation logic |
+| `RupaAgentProtocol` | Agent-facing request/response schema, envelopes, codec, request-handler and socket-service ports, capabilities, and protocol summaries | Workspace registry, socket IO, CAD mutation logic |
 | `RupaAgentRuntime` | Workspace registry, main-actor bridge, and request handling through Automation/Core | Unix socket IO, SwiftUI workspace layout |
-| `RupaAgentTransport` | Unix socket listener/client and socket path/address utilities | Agent command semantics or CAD mutation logic |
+| `RupaAgentTransport` | Bounded framed Unix socket IO, listener/client connection ownership, deadlines, and socket path/address utilities | Agent command semantics or CAD mutation logic |
 | `RupaAgent` | Compatibility facade that re-exports protocol, runtime, and transport | New implementation ownership |
 | `RupaViewportScene` | Viewport scene data model, scene construction, projection basis, hit policy, identity pick index, and viewport transform utilities | SwiftUI view layout, Metal drawing backend |
 | `RupaRendering` | SwiftUI viewport, drawing backend, interaction geometry, and rendering affordance services | Persistent document mutation |
@@ -58,8 +123,14 @@ flowchart LR
 | Rule | Reason |
 |---|---|
 | `RupaCoreTypes` is below `RupaCore`; it must stay free of SwiftCAD mutation and UI/Agent dependencies. | Sketch, Surface, Automation, Agent, and CLI need stable shared DTOs without pulling modeling services. |
+| `RupaEvaluation` groups unique geometry references by provider before evaluation and validates an exact result for every requested reference. | Provider work is source-scoped; occurrence count, hierarchy, and transforms must not multiply CAD or mesh evaluation. |
+| Geometry provider IDs are registered once through `GeometrySourceEvaluationProviderRegistry`; duplicate or malformed IDs fail explicitly. | Composition ambiguity must not be resolved by last-writer-wins replacement. |
+| `RupaCADIntegration` owns `CADGeometrySourceResolving`, `CADDocumentEvaluating`, `DefaultCADDocumentEvaluator`, and `CADDocumentEvaluationCache`; one provider resolves every referenced CAD document, evaluates each source once, and atomically publishes cache entries only after all requested sources convert successfully. | Swift-CAD construction, multi-document routing, fidelity policy, and cache transaction semantics stay inside the CAD adapter instead of leaking into project composition or generic evaluation. |
+| `RupaProject` depends on `ProjectEvaluating`, not `ProjectEvaluationEngine`. | Project orchestration owns ordered staging and publication, while `RupaEvaluation` owns the concrete evaluation algorithm. |
+| `DesignDocumentProjectBridge` projects source only; `DefaultDesignDocumentProjectEvaluatorFactory` owns provider registration and the lifetime of the CAD evaluation cache behind `DesignDocumentProjectEvaluatorFactory`. | Source mapping must not own evaluator construction, while cache lifetime must outlive one snapshot build. |
 | `RupaAgentProtocol` must not depend on `RupaAgentRuntime` or `RupaAgentTransport`. | Tooling can encode/decode requests without loading workspace registries or socket code. |
-| `RupaAgentTransport` may depend on runtime, but runtime must not depend on transport. | In-process controllers and tests should run without Unix socket ownership. |
+| `RupaAgentTransport` depends only on `RupaAgentProtocol` and `RupaCoreTypes`; runtime handlers implement the protocol-owned request port. | Socket ownership remains independent from workspace registries and command execution. |
+| Agent transport messages use an unsigned 64-bit network-order length prefix, a 16 MiB payload limit, and total monotonic IO deadlines; the listener tracks bounded concurrent connections and shuts them down before awaiting handler ownership during stop. | Message boundaries do not depend on peer EOF, malformed or stalled peers cannot allocate unbounded memory, and listener shutdown converges for half-open connections. |
 | `RupaUI` depends on `WorkspaceAgentSessionPublishing`, not concrete `AgentHost`. | The CAD workspace can publish UI-owned sessions without depending on Agent server lifecycle details. |
 | `RupaRendering` consumes `RupaViewportScene`; scene construction must remain SwiftUI-free. | Viewport scene, projection, and hit policy can be tested without UI composition. |
 
@@ -84,6 +155,8 @@ flowchart LR
 | Batch response context | `RupaAutomation` | Mutation results are compact command receipts. Workspace measurement context is generated only when `describeDocument` is the final batch command. |
 | Validated source capability | `ValidatedDesignDocument` and `ValidatedCADDocument` | Full validation produces an immutable capability. Graph-stable feature edits may derive a new capability only when inputs, outputs, and suppression are unchanged and the edited operation and expressions validate locally. The evaluation cache carries the capability so Core does not repeat whole-document validation. |
 | Incremental exact evaluation | `SwiftCAD.DocumentEvaluationEngine` | A changed feature invalidates its dependency closure. Unchanged profiles, curves, BRep deltas, generated names, and meshes are reused; rebuilt feature results are validated before deterministic delta merge. |
+| Universal CAD evaluation reuse | `CADDocumentEvaluationCache` owned by `DefaultDesignDocumentProjectEvaluatorFactory` | A matching `DocumentEvaluationContext` seeds the current revision so migration does not evaluate the same CAD source twice. An exact revision returns the cached immutable evaluation without invoking Swift-CAD; a later revision receives it for incremental execution. Equal revisions with different source fingerprints fail as `sourceRevisionConflict`, stale contexts fail explicitly, and an older completion cannot replace a newer cache entry. A multi-source provider request stages all entries and validates conflicts before one atomic publication. Mutex sections contain only in-memory lookup/publication; validation, evaluation, fingerprinting, and mesh conversion run outside the lock. |
+| Temporary CAD-first editor route | `RupaCore.EvaluationScheduler` and `EvaluatedDocumentCache` | This remains the authoritative current editor evaluation until the universal source transaction milestone T01 replaces `DesignDocument` publication. New universal consumers must use `DesignDocumentProjectSnapshotBuilder` and seed from `DocumentEvaluationContext`; they must not add another direct `DocumentEvaluator` route. The deletion gate is a revision-checked universal commit with equivalent CAD command, undo, failure, and viewport behavior. |
 
 ## Surface M3 Status
 

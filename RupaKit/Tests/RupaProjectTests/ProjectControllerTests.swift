@@ -1,4 +1,5 @@
 import RupaCoreTypes
+import RupaEvaluation
 import RupaGeometry
 import RupaProject
 import RupaProjectModel
@@ -7,7 +8,10 @@ import Testing
 @Test(.timeLimit(.minutes(1)))
 func projectControllerEvaluatesBeforePublishingAStagedSource() async throws {
     let initial = try ProjectSourceModel(id: "project.controller", name: "Controller")
-    let controller = try ProjectController(source: initial)
+    let controller = try ProjectController(
+        source: initial,
+        evaluator: ProjectEvaluationEngine()
+    )
 
     let result = try await controller.commit { source in
         let mesh = try triangleSource()
@@ -48,7 +52,10 @@ func projectControllerDoesNotPublishWhenEvaluationFails() async throws {
         occurrences: [occurrence.id: occurrence],
         rootOccurrenceIDs: [occurrence.id]
     )
-    let controller = try ProjectController(source: initial)
+    let controller = try ProjectController(
+        source: initial,
+        evaluator: FailingProjectEvaluator()
+    )
     var error: ProjectControllerError?
 
     do {
@@ -69,4 +76,16 @@ private func triangleSource() throws -> MeshSource {
     let v2 = try builder.addVertex(GeometryPoint3D(x: 0, y: 1, z: 0))
     _ = try builder.addFace(vertexIDs: [v0, v1, v2])
     return try builder.build()
+}
+
+private struct FailingProjectEvaluator: ProjectEvaluating {
+    func evaluate(
+        _: ProjectSourceModel,
+        sourceRevision _: DocumentTransactionRevision
+    ) throws -> EvaluatedProjectSnapshot {
+        throw EvaluationError(
+            code: .sourceUnavailable,
+            message: "Fixture evaluation failed."
+        )
+    }
 }

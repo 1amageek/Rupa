@@ -2,6 +2,9 @@ import Foundation
 
 public struct EvaluationError: Error, Equatable, LocalizedError, Sendable {
     public enum Code: String, Equatable, Sendable {
+        case invalidRequest
+        case invalidProvider
+        case duplicateProvider
         case providerNotRegistered
         case sourceUnavailable
         case hierarchyCycle

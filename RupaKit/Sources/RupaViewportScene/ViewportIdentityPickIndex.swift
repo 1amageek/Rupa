@@ -1,4 +1,5 @@
 import RupaCore
+import SwiftCAD
 
 public struct ViewportPickIdentity: RawRepresentable, Codable, Hashable, Comparable, Sendable {
     public static let backgroundRawValue: UInt32 = 0

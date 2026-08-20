@@ -34,7 +34,7 @@ public final class AgentHost: WorkspaceAgentSessionPublishing {
             )
         )
         self.listener = AgentSocketListener(
-            mainActorBridge: bridge,
+            handler: bridge,
             socketPath: socketPath
         )
         self.state = .stopped

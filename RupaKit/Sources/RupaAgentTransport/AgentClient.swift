@@ -1,9 +1,13 @@
 import Darwin
 import Foundation
 import RupaAgentProtocol
-import RupaCore
+import RupaCoreTypes
 
 public final class AgentClient: AgentClientProtocol {
+    private struct ConnectionEstablishmentError: Error, Sendable {
+        let editorError: EditorError
+    }
+
     private static let asynchronousConnectionAttemptLimit = 100
     private static let asynchronousConnectionRetryDelay = Duration.milliseconds(20)
 
@@ -14,11 +18,15 @@ public final class AgentClient: AgentClientProtocol {
     }
 
     public func send(_ request: AgentRequest) throws -> AgentResponse {
-        try Self.sendOnce(
-            request,
-            socketPath: socketPath,
-            codec: AgentMessageCodec()
-        )
+        do {
+            return try Self.sendOnce(
+                request,
+                socketPath: socketPath,
+                codec: AgentMessageCodec()
+            )
+        } catch let error as ConnectionEstablishmentError {
+            throw error.editorError
+        }
     }
 
     public func send(_ request: AgentRequest) async throws -> AgentResponse {
@@ -30,8 +38,8 @@ public final class AgentClient: AgentClientProtocol {
                     request,
                     socketPath: socketPath
                 )
-            } catch let error as EditorError {
-                lastError = error
+            } catch let error as ConnectionEstablishmentError {
+                lastError = error.editorError
                 guard attempt + 1 < Self.asynchronousConnectionAttemptLimit else {
                     break
                 }
@@ -70,10 +78,9 @@ public final class AgentClient: AgentClientProtocol {
 
         let requestID = UUID().uuidString
         let requestData = try codec.encode(request, id: requestID)
-        try AgentSocketIO.writeAll(requestData, to: descriptor)
-        Darwin.shutdown(descriptor, SHUT_WR)
+        try AgentSocketIO.writeFrame(requestData, to: descriptor)
 
-        let responseData = try AgentSocketIO.readAll(from: descriptor)
+        let responseData = try AgentSocketIO.readFrame(from: descriptor)
         return try codec.decodeResponse(
             from: responseData,
             expectedID: requestID,
@@ -91,8 +98,12 @@ public final class AgentClient: AgentClientProtocol {
         }
 
         do {
+            try AgentSocketIO.configure(descriptor)
             try connect(descriptor, socketPath: socketPath)
             return descriptor
+        } catch let error as EditorError where error.code == .agentConnectionFailed {
+            Darwin.close(descriptor)
+            throw ConnectionEstablishmentError(editorError: error)
         } catch {
             Darwin.close(descriptor)
             throw error

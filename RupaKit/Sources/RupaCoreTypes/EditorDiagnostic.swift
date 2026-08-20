@@ -8,6 +8,9 @@ public struct EditorDiagnostic: Codable, Equatable, Identifiable, Sendable {
     }
 
     public enum Code: String, Codable, Sendable {
+        case measurementSampledProfileApproximation
+        case measurementTessellatedSheetApproximation
+        case measurementTessellatedSolidApproximation
         case workspacePrecisionNotice
         case workspacePrecisionWarning
         case workspaceScaleRecommendation

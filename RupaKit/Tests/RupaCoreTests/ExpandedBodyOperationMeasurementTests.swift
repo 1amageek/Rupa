@@ -24,7 +24,10 @@ struct ExpandedBodyOperationMeasurementTests {
             ruler: .standard(for: .millimeter)
         )
 
-        #expect(result.counts.solids == 1)
+        #expect(
+            result.counts.solids == 1,
+            "Measurement diagnostics: \(result.diagnostics)"
+        )
         #expect(result.solids.first?.featureID == mirrorID.description)
         #expect(result.solids.first?.volumeMethod == .exactBRep)
         #expect(result.solids.first?.surfaceAreaMethod == .tessellatedMesh)

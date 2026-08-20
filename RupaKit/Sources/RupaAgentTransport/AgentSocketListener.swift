@@ -1,29 +1,31 @@
 import Darwin
 import Foundation
 import RupaAgentProtocol
-import RupaAgentRuntime
-import RupaCore
+import RupaCoreTypes
 
 public actor AgentSocketListener {
+    private struct ActiveConnection: Sendable {
+        let descriptor: Int32
+        let task: Task<Void, Never>
+    }
+
+    private static let maximumConcurrentConnectionCount = 32
+
     private let socketPath: AgentSocketPath
     private let service: AgentSocketService
     private var listenDescriptor: Int32?
     private var acceptTask: Task<Void, Never>?
+    private var activeConnections: [UInt64: ActiveConnection] = [:]
+    private var nextConnectionID: UInt64 = 0
+    private var isStopping = false
+    private var stoppingTasks: [Task<Void, Never>] = []
 
     public init(
-        controller: sending AgentCommandController,
+        handler: any AgentSocketServing,
         socketPath: AgentSocketPath = AgentSocketPath()
     ) {
         self.socketPath = socketPath
-        self.service = AgentSocketService(controller: controller)
-    }
-
-    public init(
-        mainActorBridge: MainActorAgentBridge,
-        socketPath: AgentSocketPath = AgentSocketPath()
-    ) {
-        self.socketPath = socketPath
-        self.service = AgentSocketService(mainActorBridge: mainActorBridge)
+        self.service = AgentSocketService(handler: handler)
     }
 
     public var path: String {
@@ -31,10 +33,20 @@ public actor AgentSocketListener {
     }
 
     public var isRunning: Bool {
-        listenDescriptor != nil
+        listenDescriptor != nil && !isStopping
+    }
+
+    var activeConnectionCount: Int {
+        activeConnections.count
     }
 
     public func start() async throws {
+        guard !isStopping else {
+            throw EditorError(
+                code: .agentUnavailable,
+                message: "Rupa agent listener is still stopping."
+            )
+        }
         guard listenDescriptor == nil else {
             return
         }
@@ -69,11 +81,10 @@ public actor AgentSocketListener {
 
             listenDescriptor = descriptor
             await service.setSocketPath(socketPath.value)
-            let socketService = service
             acceptTask = Task.detached {
                 await Self.runAcceptLoop(
                     descriptor: descriptor,
-                    service: socketService
+                    listener: self
                 )
             }
         } catch {
@@ -84,19 +95,48 @@ public actor AgentSocketListener {
     }
 
     public func stop() async {
+        if isStopping {
+            let tasks = stoppingTasks
+            for task in tasks {
+                await task.value
+            }
+            return
+        }
+        guard listenDescriptor != nil
+                || acceptTask != nil
+                || !activeConnections.isEmpty else {
+            removeSocketFile()
+            await service.setSocketPath(nil)
+            return
+        }
+
+        isStopping = true
         let descriptor = listenDescriptor
         let task = acceptTask
+        let connections = Array(activeConnections.values)
         listenDescriptor = nil
         acceptTask = nil
+        stoppingTasks = connections.map(\.task)
+        if let task {
+            stoppingTasks.append(task)
+        }
 
         task?.cancel()
         if let descriptor {
             Darwin.shutdown(descriptor, SHUT_RDWR)
             Darwin.close(descriptor)
         }
+        for connection in connections {
+            Darwin.shutdown(connection.descriptor, SHUT_RDWR)
+        }
         removeSocketFile()
         await service.setSocketPath(nil)
         await task?.value
+        for connection in connections {
+            await connection.task.value
+        }
+        stoppingTasks.removeAll(keepingCapacity: true)
+        isStopping = false
     }
 
     private func prepareSocketDirectory() throws {
@@ -130,7 +170,9 @@ public actor AgentSocketListener {
             Darwin.close(descriptor)
         }
 
-        let isActive = try AgentSocketAddress.withUnixAddress(path: socketPath.value) { address, length in
+        let isActive = try AgentSocketAddress.withUnixAddress(path: socketPath.value) {
+            address,
+            length in
             Darwin.connect(descriptor, address, length) == 0
         }
         guard !isActive else {
@@ -154,14 +196,52 @@ public actor AgentSocketListener {
         }
     }
 
+    private func acceptConnection(_ descriptor: Int32) {
+        guard listenDescriptor != nil,
+              !isStopping,
+              activeConnections.count < Self.maximumConcurrentConnectionCount else {
+            Darwin.shutdown(descriptor, SHUT_RDWR)
+            Darwin.close(descriptor)
+            return
+        }
+        do {
+            try AgentSocketIO.configure(descriptor)
+        } catch {
+            Darwin.shutdown(descriptor, SHUT_RDWR)
+            Darwin.close(descriptor)
+            return
+        }
+
+        let connectionID = nextConnectionID
+        nextConnectionID += 1
+        let service = service
+        let task = Task.detached {
+            await Self.handle(connection: descriptor, service: service)
+            await self.connectionDidFinish(connectionID)
+        }
+        activeConnections[connectionID] = ActiveConnection(
+            descriptor: descriptor,
+            task: task
+        )
+    }
+
+    private func connectionDidFinish(_ connectionID: UInt64) {
+        guard let connection = activeConnections.removeValue(
+            forKey: connectionID
+        ) else {
+            return
+        }
+        Darwin.close(connection.descriptor)
+    }
+
     private nonisolated static func runAcceptLoop(
         descriptor: Int32,
-        service: AgentSocketService
+        listener: AgentSocketListener
     ) async {
         while !Task.isCancelled {
             let connection = Darwin.accept(descriptor, nil, nil)
             if connection >= 0 {
-                await handle(connection: connection, service: service)
+                await listener.acceptConnection(connection)
             } else if errno == EINTR {
                 continue
             } else {
@@ -174,99 +254,17 @@ public actor AgentSocketListener {
         connection: Int32,
         service: AgentSocketService
     ) async {
-        defer {
-            Darwin.close(connection)
-        }
-
         do {
-            let requestData = try AgentSocketIO.readAll(from: connection)
-            let responseData = await service.responseData(for: requestData)
-            try AgentSocketIO.writeAll(responseData, to: connection)
+            let requestData = try AgentSocketIO.readFrame(from: connection)
+            let responseData = try await service.responseData(for: requestData)
+            try AgentSocketIO.writeFrame(responseData, to: connection)
         } catch {
-            let responseData = await service.failureResponseData(for: error)
             do {
-                try AgentSocketIO.writeAll(responseData, to: connection)
+                let responseData = try await service.failureResponseData(for: error)
+                try AgentSocketIO.writeFrame(responseData, to: connection)
             } catch {
                 return
             }
-        }
-    }
-}
-
-public actor AgentSocketService {
-    private enum Handler {
-        case controller(AgentCommandController)
-        case mainActorBridge(MainActorAgentBridge)
-    }
-
-    private let handler: Handler
-    private let codec: AgentMessageCodec
-
-    public init(
-        controller: sending AgentCommandController,
-        codec: AgentMessageCodec = AgentMessageCodec()
-    ) {
-        self.handler = .controller(controller)
-        self.codec = codec
-    }
-
-    public init(
-        mainActorBridge: MainActorAgentBridge,
-        codec: AgentMessageCodec = AgentMessageCodec()
-    ) {
-        self.handler = .mainActorBridge(mainActorBridge)
-        self.codec = codec
-    }
-
-    public func setSocketPath(_ path: String?) async {
-        switch handler {
-        case .controller(let controller):
-            controller.socketPath = path
-        case .mainActorBridge(let bridge):
-            await bridge.setSocketPath(path)
-        }
-    }
-
-    public func responseData(for requestData: Data) async -> Data {
-        do {
-            let requestEnvelope = try codec.decodeRequestEnvelope(from: requestData)
-            let response = await response(for: requestEnvelope.params)
-            return try codec.encode(
-                response,
-                id: requestEnvelope.id,
-                method: requestEnvelope.method
-            )
-        } catch {
-            return failureResponseData(for: error)
-        }
-    }
-
-    public func failureResponseData(for error: Error) -> Data {
-        let response: AgentResponse
-        if let error = error as? EditorError {
-            response = .failure(error)
-        } else {
-            response = .failure(
-                EditorError(
-                    code: .commandInvalid,
-                    message: error.localizedDescription
-                )
-            )
-        }
-
-        do {
-            return try codec.encode(response, id: nil)
-        } catch {
-            return Data()
-        }
-    }
-
-    private func response(for request: AgentRequest) async -> AgentResponse {
-        switch handler {
-        case .controller(let controller):
-            controller.handle(request)
-        case .mainActorBridge(let bridge):
-            await bridge.handle(request)
         }
     }
 }

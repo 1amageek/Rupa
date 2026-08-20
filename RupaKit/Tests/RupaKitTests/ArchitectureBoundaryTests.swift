@@ -6,6 +6,34 @@ func packageSourceImportsRespectArchitectureBoundaries() throws {
     let packageRoot = try rupaKitPackageRoot()
     let sourcesRoot = packageRoot.appendingPathComponent("Sources")
     let forbiddenImportsByTarget: [String: Set<String>] = [
+        "RupaProjectModel": [
+            "RupaEvaluation",
+            "RupaCADIntegration",
+            "RupaProject",
+            "RupaCore",
+        ],
+        "RupaEvaluation": [
+            "RupaCADIntegration",
+            "RupaProject",
+            "RupaCore",
+            "RupaUI",
+            "RupaAgentRuntime",
+            "RupaAgentTransport",
+        ],
+        "RupaCADIntegration": [
+            "RupaProject",
+            "RupaCore",
+            "RupaUI",
+            "RupaAgentRuntime",
+            "RupaAgentTransport",
+        ],
+        "RupaProject": [
+            "RupaCADIntegration",
+            "RupaCore",
+            "RupaUI",
+            "RupaAgentRuntime",
+            "RupaAgentTransport",
+        ],
         "RupaCore": [
             "RupaAutomation",
             "RupaDomainFoundation",
@@ -44,6 +72,16 @@ func packageSourceImportsRespectArchitectureBoundaries() throws {
             "RupaUI",
         ],
         "RupaAgentRuntime": [
+            "RupaCLIKit",
+            "RupaCLI",
+            "RupaUI",
+        ],
+        "RupaAgentTransport": [
+            "RupaCore",
+            "RupaAutomation",
+            "RupaDomainFoundation",
+            "RupaCapabilities",
+            "RupaAgentRuntime",
             "RupaCLIKit",
             "RupaCLI",
             "RupaUI",
@@ -101,6 +139,7 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
             "RupaProjectModel",
         ],
         "RupaCADIntegration": [
+            "RupaCoreTypes",
             "RupaEvaluation",
             "RupaGeometry",
             "RupaProjectModel",
@@ -110,6 +149,7 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
         ],
         "RupaKit": [
             "RupaCore",
+            "RupaCoreTypes",
             "RupaAutomation",
             "RupaDomainFoundation",
             "RupaCADIntegration",
@@ -123,6 +163,7 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
             "RupaDomainFoundation",
             "RupaRendering",
             "RupaPreview",
+            "RupaViewportScene",
         ],
         "RupaAgentUI": [
             "RupaAgentRuntime",
@@ -133,6 +174,7 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
         ],
         "RupaViewportScene": [
             "RupaCore",
+            "RupaCoreTypes",
             "RupaEvaluation",
             "RupaGeometry",
             "RupaProjectModel",
@@ -146,9 +188,11 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
         ],
         "RupaAutomation": [
             "RupaCore",
+            "RupaCoreTypes",
         ],
         "RupaDomainFoundation": [
             "RupaCore",
+            "RupaCoreTypes",
             "RupaAutomation",
             "RupaCapabilities",
         ],
@@ -159,21 +203,22 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
         ],
         "RupaAgentProtocol": [
             "RupaCore",
+            "RupaCoreTypes",
             "RupaAutomation",
             "RupaCapabilities",
             "RupaDomainFoundation",
         ],
         "RupaAgentRuntime": [
             "RupaCore",
+            "RupaCoreTypes",
             "RupaAutomation",
             "RupaCapabilities",
             "RupaDomainFoundation",
             "RupaAgentProtocol",
         ],
         "RupaAgentTransport": [
-            "RupaCore",
+            "RupaCoreTypes",
             "RupaAgentProtocol",
-            "RupaAgentRuntime",
         ],
         "RupaAgent": [
             "RupaAgentProtocol",
@@ -214,7 +259,32 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
         let expectedDependencies = expectedGraph[target] ?? []
         if observedDependencies != expectedDependencies {
             violations.append(
-                "\(target) internal dependencies are \(observedDependencies.sorted()), expected \(expectedDependencies.sorted())."
+                "\(target) internal dependencies are "
+                    + "\(observedDependencies.sorted()), expected "
+                    + "\(expectedDependencies.sorted())."
+            )
+        }
+    }
+
+    #expect(violations.isEmpty, Comment(rawValue: violations.joined(separator: "\n")))
+}
+
+@Test(.timeLimit(.minutes(1)))
+func packageSourceImportsAreDeclaredAsDirectTargetDependencies() throws {
+    let packageRoot = try rupaKitPackageRoot()
+    let sourcesRoot = packageRoot.appendingPathComponent("Sources")
+    let graph = try packageManifestProductionTargetDependencies()
+    let productionTargets = Set(graph.keys)
+    var violations: [String] = []
+
+    for target in productionTargets.sorted() {
+        let imports = try swiftImports(
+            in: sourcesRoot.appendingPathComponent(target)
+        ).intersection(productionTargets)
+        let undeclaredImports = imports.subtracting(graph[target, default: []])
+        for undeclaredImport in undeclaredImports.sorted() {
+            violations.append(
+                "\(target) imports \(undeclaredImport) without declaring a direct target dependency."
             )
         }
     }
@@ -253,6 +323,34 @@ func uiAndRuntimeTargetsDoNotImportConcreteDomains() throws {
     }
 
     #expect(violations.isEmpty, Comment(rawValue: violations.joined(separator: "\n")))
+}
+
+@Test(.timeLimit(.minutes(1)))
+func universalProjectCompositionDelegatesConcreteCADEvaluationConstruction() throws {
+    let packageRoot = try rupaKitPackageRoot()
+    let compositionRoot = packageRoot.appendingPathComponent("Sources/RupaKit")
+    let adapterURL = packageRoot
+        .appendingPathComponent("Sources/RupaCADIntegration/DefaultCADDocumentEvaluator.swift")
+    guard let enumerator = FileManager.default.enumerator(
+        at: compositionRoot,
+        includingPropertiesForKeys: [.isRegularFileKey],
+        options: [.skipsHiddenFiles]
+    ) else {
+        throw TestArchitectureBoundaryError.targetNotFound(compositionRoot.path)
+    }
+
+    let forbiddenConstructions = ["DocumentEvaluator(", "CADPipeline(", ".modelingDefault"]
+    var violations: [String] = []
+    for case let fileURL as URL in enumerator where fileURL.pathExtension == "swift" {
+        let contents = try String(contentsOf: fileURL, encoding: .utf8)
+        for construction in forbiddenConstructions where contents.contains(construction) {
+            violations.append("\(fileURL.lastPathComponent) constructs \(construction).")
+        }
+    }
+    let adapter = try String(contentsOf: adapterURL, encoding: .utf8)
+
+    #expect(violations.isEmpty, Comment(rawValue: violations.joined(separator: "\n")))
+    #expect(adapter.contains("DocumentEvaluator("))
 }
 
 private func rupaKitPackageRoot() throws -> URL {

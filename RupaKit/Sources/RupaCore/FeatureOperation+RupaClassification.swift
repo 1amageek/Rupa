@@ -1,6 +1,60 @@
 import SwiftCAD
 
 extension FeatureOperation {
+    var producesEvaluatedOutput: Bool {
+        if producesRenderableTopology {
+            return true
+        }
+        switch self {
+        case .bridgeCurve,
+             .curveEdit,
+             .curveOffset,
+             .projectCurve,
+             .curveTrim,
+             .curveExtend,
+             .curveMatch:
+            return true
+        case .sketch,
+             .primitive,
+             .extrude,
+             .revolve,
+             .sweep,
+             .loft,
+             .boolean,
+             .chamfer,
+             .fillet,
+             .g2Blend,
+             .setbackCorner,
+             .shell,
+             .thicken,
+             .polySpline,
+             .bSplineSurface,
+             .patchSurface,
+             .faceLoopOffset,
+             .edgeOffset,
+             .faceKnife,
+             .faceDelete,
+             .faceDraft,
+             .faceOffset,
+             .faceMove,
+             .edgeMove,
+             .vertexMove,
+             .linearPattern,
+             .radialPattern,
+             .gridPattern,
+             .curveDrivenPattern,
+             .mirror,
+             .joinBodies,
+             .unjoinBody,
+             .bridgeSurface,
+             .surfaceOffset,
+             .surfaceTrim,
+             .surfaceExtend,
+             .surfaceMatch:
+            return false
+        }
+    }
+
     var producesRenderableTopology: Bool {
         switch self {
         case .sketch:
@@ -172,6 +226,15 @@ extension FeatureOperation {
 }
 
 extension CADDocument {
+    var hasActiveEvaluationFeatures: Bool {
+        designGraph.order.contains { featureID in
+            guard let feature = designGraph.nodes[featureID], !feature.isSuppressed else {
+                return false
+            }
+            return feature.operation.producesEvaluatedOutput
+        }
+    }
+
     var hasActiveRenderableTopologyFeatures: Bool {
         designGraph.order.contains { featureID in
             guard let feature = designGraph.nodes[featureID], !feature.isSuppressed else {

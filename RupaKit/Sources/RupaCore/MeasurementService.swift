@@ -1024,6 +1024,7 @@ public struct MeasurementService {
         if profiles.contains(where: { $0.areaMethod == .sampledCurve }) {
             diagnostics.append(EditorDiagnostic(
                 severity: .info,
+                code: .measurementSampledProfileApproximation,
                 message: "Profile area and bounds marked sampledCurve are approximations derived from curve samples."
             ))
         }
@@ -1033,6 +1034,7 @@ public struct MeasurementService {
         }) {
             diagnostics.append(EditorDiagnostic(
                 severity: .info,
+                code: .measurementTessellatedSheetApproximation,
                 message: "Sheet area and bounds marked tessellatedMesh are approximations derived from the display mesh."
             ))
         }
@@ -1042,6 +1044,7 @@ public struct MeasurementService {
         }) {
             diagnostics.append(EditorDiagnostic(
                 severity: .info,
+                code: .measurementTessellatedSolidApproximation,
                 message: "Solid volume uses analytic or exact B-rep evaluation; reported solid surface area and bounds marked tessellatedMesh are approximations derived from the display mesh."
             ))
         }

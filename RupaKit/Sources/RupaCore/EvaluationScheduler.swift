@@ -57,7 +57,7 @@ public struct EvaluationScheduler: Sendable {
     ) -> DocumentEvaluationResult {
         let document = validatedDocument.document
 
-        guard document.cadDocument.hasActiveRenderableTopologyFeatures else {
+        guard document.cadDocument.hasActiveEvaluationFeatures else {
             return DocumentEvaluationResult(
                 snapshot: evaluatedEmptyDocument(generation: generation)
             )

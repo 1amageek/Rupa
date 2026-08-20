@@ -116,6 +116,7 @@ let package = Package(
             name: "RupaKit",
             dependencies: [
                 "RupaCore",
+                "RupaCoreTypes",
                 "RupaAutomation",
                 "RupaDomainFoundation",
                 "RupaCADIntegration",
@@ -123,6 +124,7 @@ let package = Package(
                 "RupaGeometry",
                 "RupaProjectModel",
                 "RupaViewportScene",
+                .product(name: "SwiftCAD", package: "swift-CAD"),
             ]
         ),
         .target(
@@ -169,6 +171,7 @@ let package = Package(
         .target(
             name: "RupaCADIntegration",
             dependencies: [
+                "RupaCoreTypes",
                 "RupaEvaluation",
                 "RupaGeometry",
                 "RupaProjectModel",
@@ -190,7 +193,9 @@ let package = Package(
                 "RupaDomainFoundation",
                 "RupaRendering",
                 "RupaPreview",
+                "RupaViewportScene",
                 .product(name: "MacComponent", package: "mac-component"),
+                .product(name: "SwiftCAD", package: "swift-CAD"),
             ]
         ),
         .target(
@@ -208,12 +213,14 @@ let package = Package(
             dependencies: [
                 "RupaCore",
                 "RupaViewportScene",
+                .product(name: "SwiftCAD", package: "swift-CAD"),
             ]
         ),
         .target(
             name: "RupaViewportScene",
             dependencies: [
                 "RupaCore",
+                "RupaCoreTypes",
                 "RupaEvaluation",
                 "RupaGeometry",
                 "RupaProjectModel",
@@ -230,12 +237,14 @@ let package = Package(
             name: "RupaAutomation",
             dependencies: [
                 "RupaCore",
+                "RupaCoreTypes",
             ]
         ),
         .target(
             name: "RupaDomainFoundation",
             dependencies: [
                 "RupaCore",
+                "RupaCoreTypes",
                 "RupaAutomation",
                 "RupaCapabilities",
             ]
@@ -260,6 +269,7 @@ let package = Package(
         .target(
             name: "RupaAgentProtocol",
             dependencies: [
+                "RupaCoreTypes",
                 "RupaCore",
                 "RupaAutomation",
                 "RupaDomainFoundation",
@@ -269,6 +279,7 @@ let package = Package(
         .target(
             name: "RupaAgentRuntime",
             dependencies: [
+                "RupaCoreTypes",
                 "RupaCore",
                 "RupaAutomation",
                 "RupaDomainFoundation",
@@ -279,9 +290,8 @@ let package = Package(
         .target(
             name: "RupaAgentTransport",
             dependencies: [
-                "RupaCore",
+                "RupaCoreTypes",
                 "RupaAgentProtocol",
-                "RupaAgentRuntime",
             ]
         ),
         .target(
@@ -294,6 +304,7 @@ let package = Package(
                 "RupaAgentRuntime",
                 "RupaAgentTransport",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                .product(name: "SwiftCAD", package: "swift-CAD"),
             ]
         ),
         .executableTarget(
@@ -365,7 +376,7 @@ let package = Package(
         ),
         .testTarget(
             name: "RupaProjectTests",
-            dependencies: ["RupaProject"]
+            dependencies: ["RupaEvaluation", "RupaProject"]
         ),
         .testTarget(
             name: "RupaAutomationTests",

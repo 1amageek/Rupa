@@ -3,7 +3,7 @@ import RupaAgentProtocol
 import RupaCore
 
 @MainActor
-public final class MainActorAgentBridge {
+public final class MainActorAgentBridge: AgentSocketServing {
     private let controller: AgentCommandController
 
     public init(controller: AgentCommandController = AgentCommandController()) {

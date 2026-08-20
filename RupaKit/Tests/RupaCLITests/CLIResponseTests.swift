@@ -356,7 +356,7 @@ func cliExecutableAutoParameterFormulaAndListUsesLiveSessionThroughSocketAsJSON(
     )
     server.register(session: session, path: documentURL)
     let listener = AgentSocketListener(
-        controller: server,
+        handler: AgentCommandHandler(controller: server),
         socketPath: AgentSocketPath(socketURL.path)
     )
 
@@ -1484,7 +1484,7 @@ func cliExecutableListsAndAttachesOpenSessionThroughSocketAsJSON() async throws 
         id: sessionID
     )
     let listener = AgentSocketListener(
-        controller: server,
+        handler: AgentCommandHandler(controller: server),
         socketPath: AgentSocketPath(socketURL.path)
     )
 
@@ -1536,7 +1536,7 @@ func cliExecutableRenameLiveMutatesOpenSessionThroughSocketAsJSON() async throws
     let server = AgentCommandController()
     server.register(session: EditorSession(document: .empty(named: "Before Live")), id: sessionID)
     let listener = AgentSocketListener(
-        controller: server,
+        handler: AgentCommandHandler(controller: server),
         socketPath: AgentSocketPath(socketURL.path)
     )
 
@@ -1607,7 +1607,7 @@ func cliExecutableSelectionReferencesSelectsLiveSurfaceControlPointAsJSON() asyn
     let referenceJSON = String(decoding: referenceData, as: UTF8.self)
     server.register(session: session, id: sessionID)
     let listener = AgentSocketListener(
-        controller: server,
+        handler: AgentCommandHandler(controller: server),
         socketPath: AgentSocketPath(socketURL.path)
     )
 
@@ -3642,7 +3642,7 @@ struct CLICommandApplyTests {
             id: sessionID
         )
         let listener = AgentSocketListener(
-            controller: server,
+            handler: AgentCommandHandler(controller: server),
             socketPath: AgentSocketPath(socketURL.path)
         )
         let batch = AutomationBatch(
@@ -3715,7 +3715,7 @@ struct CLICommandApplyTests {
             id: sessionID
         )
         let listener = AgentSocketListener(
-            controller: server,
+            handler: AgentCommandHandler(controller: server),
             socketPath: AgentSocketPath(socketURL.path)
         )
         let batch = AutomationBatch(
@@ -3780,7 +3780,7 @@ struct CLICommandApplyTests {
             id: sessionID
         )
         let listener = AgentSocketListener(
-            controller: server,
+            handler: AgentCommandHandler(controller: server),
             socketPath: AgentSocketPath(socketURL.path)
         )
         let batch = AutomationBatch(
@@ -4383,7 +4383,7 @@ struct CLICommandApplyTests {
         let server = AgentCommandController()
         server.register(session: EditorSession(document: document), id: sessionID)
         let listener = AgentSocketListener(
-            controller: server,
+            handler: AgentCommandHandler(controller: server),
             socketPath: AgentSocketPath(socketURL.path)
         )
 
@@ -7221,7 +7221,7 @@ func cliExecutableAutoEvaluateUsesLiveSessionThroughSocketAsJSON() async throws 
     )
     server.register(session: session, path: documentURL)
     let listener = AgentSocketListener(
-        controller: server,
+        handler: AgentCommandHandler(controller: server),
         socketPath: AgentSocketPath(socketURL.path)
     )
 
@@ -7274,7 +7274,7 @@ func cliExecutableAutoSavePersistsLiveSessionThroughSocketAsJSON() async throws 
     )
     server.register(session: session, path: documentURL)
     let listener = AgentSocketListener(
-        controller: server,
+        handler: AgentCommandHandler(controller: server),
         socketPath: AgentSocketPath(socketURL.path)
     )
 
@@ -7347,7 +7347,7 @@ func cliExecutableAutoExportUsesLiveSessionThroughSocketAsJSON() async throws {
     )
     server.register(session: session, path: documentURL)
     let listener = AgentSocketListener(
-        controller: server,
+        handler: AgentCommandHandler(controller: server),
         socketPath: AgentSocketPath(socketURL.path)
     )
 
@@ -7400,7 +7400,7 @@ func cliExecutableFileModeRejectsOpenDocumentConflictAndForceOverridesAsJSON() a
         path: documentURL
     )
     let listener = AgentSocketListener(
-        controller: server,
+        handler: AgentCommandHandler(controller: server),
         socketPath: AgentSocketPath(socketURL.path)
     )
 
@@ -7598,7 +7598,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     let session = EditorSession(document: .empty(named: "Open"))
     server.register(session: session, id: sessionID)
     let listener = AgentSocketListener(
-        controller: server,
+        handler: AgentCommandHandler(controller: server),
         socketPath: AgentSocketPath(socketURL.path)
     )
 

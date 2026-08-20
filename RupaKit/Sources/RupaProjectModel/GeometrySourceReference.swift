@@ -1,7 +1,9 @@
 import Foundation
 import RupaGeometry
 
-public enum GeometrySourceReference: Codable, Equatable, Sendable {
+public enum GeometrySourceReference: Codable, Equatable, Hashable, Sendable {
+    public static let meshProviderID = "mesh"
+
     case mesh(MeshSourceID)
     case external(providerID: String, sourceID: String, outputID: String?)
 
@@ -10,12 +12,19 @@ public enum GeometrySourceReference: Codable, Equatable, Sendable {
         case .mesh(let sourceID):
             try sourceID.validate()
         case .external(let providerID, let sourceID, let outputID):
-            guard !providerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                  !sourceID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                  outputID?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != true else {
+            let trimmedProviderID = providerID.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedSourceID = sourceID.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedOutputID = outputID?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let hasValidOutputID = outputID == nil
+                || (trimmedOutputID?.isEmpty == false && outputID == trimmedOutputID)
+            guard !trimmedProviderID.isEmpty,
+                  providerID == trimmedProviderID,
+                  !trimmedSourceID.isEmpty,
+                  sourceID == trimmedSourceID,
+                  hasValidOutputID else {
                 throw ProjectModelError(
                     code: .invalidReference,
-                    message: "External geometry references require non-empty provider and source IDs; output IDs must be non-empty when present."
+                    message: "External geometry references require non-empty provider, source, and optional output IDs without surrounding whitespace."
                 )
             }
         }
@@ -24,7 +33,7 @@ public enum GeometrySourceReference: Codable, Equatable, Sendable {
     public var providerID: String {
         switch self {
         case .mesh:
-            "mesh"
+            Self.meshProviderID
         case .external(let providerID, _, _):
             providerID
         }

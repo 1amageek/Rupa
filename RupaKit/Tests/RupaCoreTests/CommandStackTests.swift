@@ -1060,7 +1060,7 @@ import Testing
     #expect(surfaceArea > 0.001)
     #expect(bounds.sizeY > 0.05)
     #expect(bounds.sizeZ > 0.05)
-    #expect(result.diagnostics.isEmpty)
+    #expect(result.diagnostics.map(\.code) == [.measurementTessellatedSolidApproximation])
 }
 
 @MainActor
@@ -1166,7 +1166,7 @@ import Testing
 
     #expect(sweepResult.didMutate)
     let result = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
-    #expect(result.diagnostics.map(\.message) == [])
+    #expect(result.diagnostics.map(\.code) == [.measurementTessellatedSolidApproximation])
     #expect(result.counts.sourceFeatures == 4)
     let solid = try #require(result.solids.first)
     let pathLength = try linearDimensionMeters(.sweepPathLength, in: solid)

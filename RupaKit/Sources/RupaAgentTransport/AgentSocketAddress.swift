@@ -1,6 +1,6 @@
 import Darwin
 import Foundation
-import RupaCore
+import RupaCoreTypes
 
 enum AgentSocketAddress {
     static func withUnixAddress<Result>(

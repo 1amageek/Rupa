@@ -2,17 +2,15 @@ import RupaCoreTypes
 import RupaGeometry
 import RupaProjectModel
 
-public struct ProjectEvaluationEngine: Sendable {
-    private let providers: [String: any GeometrySourceEvaluationProvider]
+public struct ProjectEvaluationEngine: ProjectEvaluating {
+    private let registry: GeometrySourceEvaluationProviderRegistry
 
-    public init(
-        providers: [any GeometrySourceEvaluationProvider] = [MeshSourceEvaluationProvider()]
-    ) {
-        var indexed: [String: any GeometrySourceEvaluationProvider] = [:]
-        for provider in providers {
-            indexed[provider.providerID] = provider
-        }
-        self.providers = indexed
+    public init() {
+        self.registry = .meshSourceOnly
+    }
+
+    public init(registry: GeometrySourceEvaluationProviderRegistry) {
+        self.registry = registry
     }
 
     public func evaluate(
@@ -28,9 +26,16 @@ public struct ProjectEvaluationEngine: Sendable {
             throw EvaluationError(code: code, message: error.message)
         }
 
+        let occurrenceIDs = project.occurrences.keys.sorted(by: { $0.rawValue < $1.rawValue })
+        let resultsByReference = try evaluateGeometrySources(
+            for: occurrenceIDs,
+            in: project,
+            sourceRevision: sourceRevision
+        )
+
         var transformCache: [SceneOccurrenceID: GeometryTransform3D] = [:]
         var evaluated: [SceneOccurrenceID: EvaluatedOccurrenceSnapshot] = [:]
-        for occurrenceID in project.occurrences.keys.sorted(by: { $0.rawValue < $1.rawValue }) {
+        for occurrenceID in occurrenceIDs {
             guard let occurrence = project.occurrences[occurrenceID],
                   let definition = project.objectDefinitions[occurrence.definitionID],
                   let reference = definition.geometry else {
@@ -41,17 +46,10 @@ public struct ProjectEvaluationEngine: Sendable {
                 in: project,
                 cache: &transformCache
             )
-            guard let provider = providers[reference.providerID] else {
-                throw EvaluationError(
-                    code: .providerNotRegistered,
-                    message: "No geometry evaluation provider is registered for \(reference.providerID)."
-                )
-            }
-            let result = try provider.evaluate(reference: reference, in: project)
-            guard result.reference == reference else {
+            guard let result = resultsByReference[reference] else {
                 throw EvaluationError(
                     code: .invalidResult,
-                    message: "Geometry evaluation provider returned a different source reference."
+                    message: "Geometry evaluation produced no result for a referenced source."
                 )
             }
             let worldBounds = try result.localBounds.transformed(by: worldTransform)
@@ -74,6 +72,86 @@ public struct ProjectEvaluationEngine: Sendable {
             projectID: project.id,
             occurrences: evaluated
         )
+    }
+
+    private func evaluateGeometrySources(
+        for occurrenceIDs: [SceneOccurrenceID],
+        in project: ProjectSourceModel,
+        sourceRevision: DocumentTransactionRevision
+    ) throws -> [GeometrySourceReference: GeometryEvaluationResult] {
+        var referencesByProvider: [String: [GeometrySourceReference]] = [:]
+        var seenReferences: Set<GeometrySourceReference> = []
+
+        for occurrenceID in occurrenceIDs {
+            guard let occurrence = project.occurrences[occurrenceID],
+                  let definition = project.objectDefinitions[occurrence.definitionID],
+                  let reference = definition.geometry,
+                  seenReferences.insert(reference).inserted else {
+                continue
+            }
+            referencesByProvider[reference.providerID, default: []].append(reference)
+        }
+
+        var resultsByReference: [GeometrySourceReference: GeometryEvaluationResult] = [:]
+        resultsByReference.reserveCapacity(seenReferences.count)
+        for providerID in referencesByProvider.keys.sorted() {
+            guard let references = referencesByProvider[providerID] else {
+                continue
+            }
+            let provider = try registry.provider(identifiedBy: providerID)
+            let request = try GeometrySourceEvaluationRequest(
+                references: references,
+                sourceRevision: sourceRevision
+            )
+            let providerResults = try provider.evaluate(request, in: project)
+            try validate(
+                providerResults,
+                for: request,
+                providerID: providerID
+            )
+            for (reference, result) in providerResults {
+                resultsByReference[reference] = result
+            }
+        }
+        return resultsByReference
+    }
+
+    private func validate(
+        _ results: [GeometrySourceReference: GeometryEvaluationResult],
+        for request: GeometrySourceEvaluationRequest,
+        providerID: String
+    ) throws {
+        let expectedReferences = Set(request.references)
+        guard Set(results.keys) == expectedReferences else {
+            throw EvaluationError(
+                code: .invalidResult,
+                message: "Geometry evaluation provider \(providerID) must return exactly one result for every requested reference."
+            )
+        }
+        for (reference, result) in results where result.reference != reference {
+            throw EvaluationError(
+                code: .invalidResult,
+                message: "Geometry evaluation provider \(providerID) returned a result keyed by a different source reference."
+            )
+        }
+        for result in results.values {
+            do {
+                try result.mesh.validate()
+                guard try result.mesh.bounds() == result.localBounds else {
+                    throw EvaluationError(
+                        code: .invalidResult,
+                        message: "Geometry evaluation provider \(providerID) returned bounds that do not match its mesh."
+                    )
+                }
+            } catch let error as EvaluationError {
+                throw error
+            } catch {
+                throw EvaluationError(
+                    code: .invalidResult,
+                    message: "Geometry evaluation provider \(providerID) returned invalid mesh data: \(error)"
+                )
+            }
+        }
     }
 
     private func worldTransform(

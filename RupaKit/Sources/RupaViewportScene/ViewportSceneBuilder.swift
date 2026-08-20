@@ -614,7 +614,7 @@ public struct ViewportSceneBuilder {
         guard let curves = evaluatedDocument?.curves[featureID] else {
             return nil
         }
-        let segments = curves.enumerated().compactMap { index, curve in
+        let segments: [ViewportCurveSegment] = curves.enumerated().compactMap { index, curve -> ViewportCurveSegment? in
             guard curve.points.count >= 2 else {
                 return nil
             }

@@ -7,6 +7,7 @@ public struct DesignDocumentProjectBridgeError: Error, Equatable, LocalizedError
         case multipleParents
         case invalidTransform
         case unresolvedGeometry
+        case staleEvaluation
     }
 
     public var code: Code
