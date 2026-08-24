@@ -1,16 +1,21 @@
 import Foundation
+import RupaCoreTypes
 import RupaGeometry
 
 public enum GeometrySourceReference: Codable, Equatable, Hashable, Sendable {
     public static let meshProviderID = "mesh"
 
-    case mesh(MeshSourceID)
+    case mesh(GeometrySourceID)
     case external(providerID: String, sourceID: String, outputID: String?)
 
     public func validate() throws {
         switch self {
         case .mesh(let sourceID):
-            try sourceID.validate()
+            do {
+                try sourceID.validate()
+            } catch let error as EditorError {
+                throw ProjectModelError(code: .invalidReference, message: error.message)
+            }
         case .external(let providerID, let sourceID, let outputID):
             let trimmedProviderID = providerID.trimmingCharacters(in: .whitespacesAndNewlines)
             let trimmedSourceID = sourceID.trimmingCharacters(in: .whitespacesAndNewlines)

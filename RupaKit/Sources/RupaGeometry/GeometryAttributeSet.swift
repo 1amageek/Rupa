@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 
 public struct GeometryAttributeSet: Codable, Equatable, Sendable {
     private var layers: [GeometryAttributeID: GeometryAttributeLayer]

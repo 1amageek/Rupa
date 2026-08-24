@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 
 public struct GeometryAttributeDescriptor: Codable, Equatable, Sendable {
     public var id: GeometryAttributeID
@@ -25,7 +26,11 @@ public struct GeometryAttributeDescriptor: Codable, Equatable, Sendable {
     }
 
     public func validate() throws {
-        try id.validate()
+        do {
+            try id.validate()
+        } catch let error as EditorError {
+            throw MeshSourceError(code: .invalidIdentity, message: error.message)
+        }
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw MeshSourceError(
                 code: .invalidIdentity,

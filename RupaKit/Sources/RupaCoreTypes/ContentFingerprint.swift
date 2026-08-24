@@ -5,27 +5,39 @@ public struct ContentFingerprint: Codable, Hashable, Sendable {
     public let value: String
 
     public init(algorithm: String, value: String) throws {
-        let algorithm = algorithm.trimmingCharacters(in: .whitespacesAndNewlines)
-        let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !algorithm.isEmpty, !value.isEmpty else {
+        let trimmedAlgorithm = algorithm.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedAlgorithm.isEmpty,
+              !trimmedValue.isEmpty,
+              trimmedAlgorithm == algorithm,
+              trimmedValue == value,
+              trimmedAlgorithm.utf8.count <= StableTypeValidation.maximumIdentifierByteCount,
+              trimmedValue.utf8.count <= StableTypeValidation.maximumIdentifierByteCount,
+              trimmedAlgorithm.unicodeScalars.allSatisfy({
+                  !CharacterSet.controlCharacters.contains($0)
+              }),
+              trimmedValue.unicodeScalars.allSatisfy({
+                  !CharacterSet.controlCharacters.contains($0)
+              }) else {
             throw EditorError(
                 code: .commandInvalid,
-                message: "Content fingerprints require non-empty algorithm and value fields."
+                message: "Content fingerprints require non-empty, unpadded, "
+                    + "control-free, bounded algorithm and value fields."
             )
         }
-        if algorithm.hasPrefix("sha256-") {
-            let hexadecimal = value.utf8.allSatisfy { byte in
+        if trimmedAlgorithm.hasPrefix("sha256-") {
+            let hexadecimal = trimmedValue.utf8.allSatisfy { byte in
                 (48...57).contains(byte) || (97...102).contains(byte)
             }
-            guard value.utf8.count == 64, hexadecimal else {
+            guard trimmedValue.utf8.count == 64, hexadecimal else {
                 throw EditorError(
                     code: .commandInvalid,
                     message: "SHA-256 content fingerprints require 64 lowercase hexadecimal characters."
                 )
             }
         }
-        self.algorithm = algorithm
-        self.value = value
+        self.algorithm = trimmedAlgorithm
+        self.value = trimmedValue
     }
 
     public static func sha256(

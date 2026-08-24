@@ -350,12 +350,16 @@ let package = Package(
             dependencies: ["RupaCore"]
         ),
         .testTarget(
+            name: "RupaCoreTypesTests",
+            dependencies: ["RupaCoreTypes"]
+        ),
+        .testTarget(
             name: "RupaCapabilitiesTests",
             dependencies: ["RupaCapabilities"]
         ),
         .testTarget(
             name: "RupaGeometryTests",
-            dependencies: ["RupaGeometry"]
+            dependencies: ["RupaCoreTypes", "RupaGeometry"]
         ),
         .testTarget(
             name: "RupaProjectModelTests",

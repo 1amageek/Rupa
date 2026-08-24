@@ -1,7 +1,8 @@
 import Foundation
+import RupaCoreTypes
 
 public struct MeshSource: Codable, Equatable, Sendable {
-    public let identity: MeshSourceID
+    public let identity: GeometrySourceID
     public let vertexIDs: GeometryBuffer<MeshVertexID>
     public let vertexPositions: GeometryBuffer<GeometryPoint3D>
     public let edgeIDs: GeometryBuffer<MeshEdgeID>
@@ -14,7 +15,7 @@ public struct MeshSource: Codable, Equatable, Sendable {
     public let attributes: GeometryAttributeSet
 
     public init(
-        identity: MeshSourceID = MeshSourceID(),
+        identity: GeometrySourceID = GeometrySourceID(),
         vertexIDs: GeometryBuffer<MeshVertexID>,
         vertexPositions: GeometryBuffer<GeometryPoint3D>,
         edgeIDs: GeometryBuffer<MeshEdgeID>,
@@ -41,7 +42,11 @@ public struct MeshSource: Codable, Equatable, Sendable {
     }
 
     public func validate() throws {
-        try identity.validate()
+        do {
+            try identity.validate()
+        } catch let error as EditorError {
+            throw MeshSourceError(code: .invalidIdentity, message: error.message)
+        }
         guard vertexIDs.count == vertexPositions.count else {
             throw invalid("Vertex ID and position buffers must have equal counts.")
         }

@@ -1,7 +1,7 @@
 import Foundation
 
 public struct DocumentGeneration: Codable, Comparable, Hashable, Sendable {
-    public var value: UInt64
+    public let value: UInt64
 
     public init(_ value: UInt64 = 0) {
         self.value = value

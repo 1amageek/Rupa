@@ -1,10 +1,11 @@
 import Foundation
+import RupaCoreTypes
 import RupaGeometry
 
 public struct ProjectSourceModel: Codable, Equatable, Sendable {
     public var id: ProjectID
     public var name: String
-    public var meshSources: [MeshSourceID: MeshSource]
+    public var meshSources: [GeometrySourceID: MeshSource]
     public var objectDefinitions: [ObjectDefinitionID: ObjectDefinition]
     public var occurrences: [SceneOccurrenceID: SceneOccurrence]
     public var rootOccurrenceIDs: [SceneOccurrenceID]
@@ -12,7 +13,7 @@ public struct ProjectSourceModel: Codable, Equatable, Sendable {
     public init(
         id: ProjectID,
         name: String,
-        meshSources: [MeshSourceID: MeshSource] = [:],
+        meshSources: [GeometrySourceID: MeshSource] = [:],
         objectDefinitions: [ObjectDefinitionID: ObjectDefinition] = [:],
         occurrences: [SceneOccurrenceID: SceneOccurrence] = [:],
         rootOccurrenceIDs: [SceneOccurrenceID] = []
@@ -27,7 +28,11 @@ public struct ProjectSourceModel: Codable, Equatable, Sendable {
     }
 
     public func validate() throws {
-        try id.validate()
+        do {
+            try id.validate()
+        } catch let error as EditorError {
+            throw ProjectModelError(code: .invalidIdentity, message: error.message)
+        }
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw ProjectModelError(code: .invalidIdentity, message: "Project names must not be empty.")
         }

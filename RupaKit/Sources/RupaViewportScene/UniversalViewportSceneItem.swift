@@ -1,3 +1,4 @@
+import RupaCoreTypes
 import RupaEvaluation
 import RupaGeometry
 import RupaProjectModel

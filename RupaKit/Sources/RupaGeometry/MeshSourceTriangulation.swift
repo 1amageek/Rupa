@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 
 public extension MeshSource {
     func triangulate(

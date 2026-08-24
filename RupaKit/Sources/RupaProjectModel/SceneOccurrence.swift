@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 import RupaGeometry
 
 public struct SceneOccurrence: Codable, Equatable, Sendable {
@@ -20,8 +21,13 @@ public struct SceneOccurrence: Codable, Equatable, Sendable {
     }
 
     public func validate() throws {
-        try id.validate()
-        try definitionID.validate()
+        do {
+            try id.validate()
+            try definitionID.validate()
+            try parentID?.validate()
+        } catch let error as EditorError {
+            throw ProjectModelError(code: .invalidIdentity, message: error.message)
+        }
         if parentID == id {
             throw ProjectModelError(code: .hierarchyCycle, message: "Scene occurrences cannot parent themselves.")
         }
@@ -29,6 +35,5 @@ public struct SceneOccurrence: Codable, Equatable, Sendable {
               localTransform.values.allSatisfy(\.isFinite) else {
             throw ProjectModelError(code: .invalidTransform, message: "Scene occurrence transforms must be finite 4x4 matrices.")
         }
-        try parentID?.validate()
     }
 }

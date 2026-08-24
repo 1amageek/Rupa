@@ -1,13 +1,9 @@
-import Foundation
+import RupaCoreTypes
 
-public struct ObjectPropertyID: RawRepresentable, Codable, Hashable, Sendable, ExpressibleByStringLiteral {
-    public var rawValue: String
-
-    public init(rawValue: String) {
-        self.rawValue = rawValue
-    }
-
-    public init(stringLiteral value: String) {
-        self.rawValue = value
-    }
-}
+@available(
+    *,
+    deprecated,
+    renamed: "PropertyID",
+    message: "Use PropertyID as the universal property identity. Remove this alias after RupaCore callers migrate."
+)
+public typealias ObjectPropertyID = PropertyID

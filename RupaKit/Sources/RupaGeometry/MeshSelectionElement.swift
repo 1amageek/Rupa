@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 
 public enum MeshSelectionElement: Codable, Equatable, Hashable, Sendable {
     case vertex(MeshVertexID)

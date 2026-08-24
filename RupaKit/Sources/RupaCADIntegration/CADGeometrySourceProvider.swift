@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 import RupaEvaluation
 import RupaGeometry
 import RupaProjectModel
@@ -346,7 +347,7 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
             // materializes Swift-CAD arrays once. The cache reuses the result while
             // the immutable evaluated mesh remains identical.
             var builder = MeshSourceBuilder(
-                identity: MeshSourceID(
+                identity: GeometrySourceID(
                     rawValue: "cad.\(sourceID).\(bodyID.description)"
                 )
             )

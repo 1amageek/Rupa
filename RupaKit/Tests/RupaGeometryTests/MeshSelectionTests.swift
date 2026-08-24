@@ -1,3 +1,4 @@
+import RupaCoreTypes
 import Testing
 @testable import RupaGeometry
 

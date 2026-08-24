@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 import RupaGeometry
 
 public struct SceneGeometrySelection: Codable, Equatable, Hashable, Sendable {
@@ -14,7 +15,11 @@ public struct SceneGeometrySelection: Codable, Equatable, Hashable, Sendable {
     }
 
     public func validate(in project: ProjectSourceModel) throws {
-        try occurrenceID.validate()
+        do {
+            try occurrenceID.validate()
+        } catch let error as EditorError {
+            throw ProjectModelError(code: .invalidIdentity, message: error.message)
+        }
         guard project.occurrences[occurrenceID] != nil else {
             throw ProjectModelError(
                 code: .invalidReference,

@@ -100,7 +100,7 @@ flowchart LR
 
 | Area | Owns | Must not own |
 |---|---|---|
-| `RupaCoreTypes` | Shared foundation DTOs such as errors, diagnostics, document generation, display units, and save result | CAD feature evaluation, SwiftCAD document mutation, UI state |
+| `RupaCoreTypes` | Stable semantic IDs, source revisions, canonical payloads and quantities, content fingerprints, transport-neutral errors, diagnostics, display units, and save results | Geometry algorithms, CAD feature evaluation, SwiftCAD document mutation, registry behavior, UI or Agent state |
 | `RupaProjectModel` | Immutable universal project source, object definitions, occurrences, and geometry source references | Evaluation providers, editor history, concrete CAD types |
 | `RupaEvaluation` | Provider registry, de-duplicated provider batch planning, source-result contract validation, occurrence transforms, and immutable evaluated snapshots | Concrete CAD algorithms, editor session mutation, rendering state |
 | `RupaCADIntegration` | CAD source resolution, Swift-CAD evaluator construction, source-revision-aware incremental reuse, lossless supported-attribute conversion, and conversion into universal immutable geometry results | Universal project ownership, occurrence transforms, editor session lifetime, silent fidelity fallback |
@@ -122,7 +122,7 @@ flowchart LR
 
 | Rule | Reason |
 |---|---|
-| `RupaCoreTypes` is below `RupaCore`; it must stay free of SwiftCAD mutation and UI/Agent dependencies. | Sketch, Surface, Automation, Agent, and CLI need stable shared DTOs without pulling modeling services. |
+| `RupaCoreTypes` is the dependency floor. Stable IDs validate at construction and Codable boundaries; canonical payloads reject non-finite or unbounded data; the module stays free of geometry, SwiftCAD, registry, UI, and Agent dependencies. | Every higher contract needs process-stable identity and wire data without importing a concrete feature owner. |
 | `RupaEvaluation` groups unique geometry references by provider before evaluation and validates an exact result for every requested reference. | Provider work is source-scoped; occurrence count, hierarchy, and transforms must not multiply CAD or mesh evaluation. |
 | Geometry provider IDs are registered once through `GeometrySourceEvaluationProviderRegistry`; duplicate or malformed IDs fail explicitly. | Composition ambiguity must not be resolved by last-writer-wins replacement. |
 | `RupaCADIntegration` owns `CADGeometrySourceResolving`, `CADDocumentEvaluating`, `DefaultCADDocumentEvaluator`, and `CADDocumentEvaluationCache`; one provider resolves every referenced CAD document, evaluates each source once, and atomically publishes cache entries only after all requested sources convert successfully. | Swift-CAD construction, multi-document routing, fidelity policy, and cache transaction semantics stay inside the CAD adapter instead of leaking into project composition or generic evaluation. |

@@ -22,7 +22,7 @@ The plan is executable and the following slices have evidence in the repository:
 
 | Slice | Status | Evidence |
 |---|---|---|
-| M0 / F02 stable revisions and canonical values | Complete | `RupaCoreTypes` compiles; canonical JSON bytes, validation, and revision tests pass. |
+| M0 / F02 stable IDs, revisions, canonical values, and errors | Complete | `RupaCoreTypes` owns the universal ID families and content/evaluation identities; 12 focused tests cover Codable validation, ID non-aliasing, canonical JSON ordering, invalid numbers/keys/depth, SHA-256 fingerprints, quantities, revision overflow, and the exact stable error wire payload. |
 | M0 / F03 universal capability registry | Complete | `RupaCapabilities` compiles; duplicate, version, effect/result, path, availability, and surface discovery tests pass. |
 | Domain capability adapter | Complete | `DomainRegistry.capabilityRegistry()` converts validated domain descriptors and bridge tests pass. |
 | Agent capability projection | First slice complete | `AgentCommandController.capabilityRegistry()` projects the current Agent surface into the universal registry; static catalog removal remains gated on handler migration. |

@@ -1,7 +1,5 @@
-import Foundation
-
 public struct MeshFaceID: Codable, Comparable, Hashable, Sendable {
-    public var rawValue: UInt64
+    public let rawValue: UInt64
 
     public init(_ rawValue: UInt64) {
         self.rawValue = rawValue

@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 
 public struct MeshTriangle: Codable, Equatable, Sendable {
     public var faceID: MeshFaceID

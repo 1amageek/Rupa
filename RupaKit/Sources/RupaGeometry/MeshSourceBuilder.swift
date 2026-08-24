@@ -1,7 +1,8 @@
 import Foundation
+import RupaCoreTypes
 
 public struct MeshSourceBuilder: Sendable {
-    private var identity: MeshSourceID
+    private var identity: GeometrySourceID
     private var vertexIDs: [MeshVertexID] = []
     private var vertexPositions: [GeometryPoint3D] = []
     private var edgeIDs: [MeshEdgeID] = []
@@ -14,7 +15,7 @@ public struct MeshSourceBuilder: Sendable {
     private var attributes = GeometryAttributeSet()
     private var edgeByVertices: [MeshUndirectedEdgeKey: MeshEdgeID] = [:]
 
-    public init(identity: MeshSourceID = MeshSourceID()) {
+    public init(identity: GeometrySourceID = GeometrySourceID()) {
         self.identity = identity
     }
 

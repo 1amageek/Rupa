@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 
 public struct MeshEdgeEndpoints: Codable, Equatable, Hashable, Sendable {
     public var start: MeshVertexID

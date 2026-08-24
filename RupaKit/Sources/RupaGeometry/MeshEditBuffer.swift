@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 
 public struct MeshEditBuffer: Sendable {
     private struct AddedFace: Sendable {
@@ -23,7 +24,7 @@ public struct MeshEditBuffer: Sendable {
         )
     }
 
-    public var identity: MeshSourceID {
+    public var identity: GeometrySourceID {
         source.identity
     }
 

@@ -1,6 +1,7 @@
 import Foundation
 import RupaCADIntegration
 import RupaCore
+import RupaCoreTypes
 import RupaGeometry
 import RupaProjectModel
 import SwiftCAD
