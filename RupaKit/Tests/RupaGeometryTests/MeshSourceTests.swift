@@ -236,6 +236,30 @@ func meshEditBufferStagesVertexMovesWithoutChangingTheSource() throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
+func meshEditBufferCopiesOneSharedChunkOnceForMultipleVertexMoves() throws {
+    var builder = MeshSourceBuilder(identity: "fixture.edit-multiple-vertices")
+    let v0 = try builder.addVertex(GeometryPoint3D(x: 0, y: 0, z: 0))
+    let v1 = try builder.addVertex(GeometryPoint3D(x: 1, y: 0, z: 0))
+    let v2 = try builder.addVertex(GeometryPoint3D(x: 0, y: 1, z: 0))
+    _ = try builder.addFace(vertexIDs: [v0, v1, v2])
+    let source = try builder.build()
+    var edit = MeshEditBuffer(source: source)
+
+    try edit.setVertexPosition(GeometryPoint3D(x: 0, y: 0, z: 2), for: v0)
+    try edit.setVertexPosition(GeometryPoint3D(x: 1, y: 0, z: 3), for: v1)
+    let committed = try edit.commit()
+
+    #expect(committed.source.vertexPositions[0].z == 2)
+    #expect(committed.source.vertexPositions[1].z == 3)
+    #expect(
+        committed.telemetry.copiedBytes
+            == UInt64(
+                source.vertexPositions.count * MemoryLayout<GeometryPoint3D>.stride
+            )
+    )
+}
+
+@Test(.timeLimit(.minutes(1)))
 func meshEditBufferPreservesFaceIdentityAcrossTopologyEdits() throws {
     var builder = MeshSourceBuilder(identity: "fixture.edit-topology")
     let v0 = try builder.addVertex(GeometryPoint3D(x: 0, y: 0, z: 0))

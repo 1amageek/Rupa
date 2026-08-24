@@ -28,7 +28,7 @@ The plan is executable and the following slices have evidence in the repository:
 | Agent capability projection | First slice complete | `AgentCommandController.capabilityRegistry()` projects the current Agent surface into the universal registry; static catalog removal remains gated on handler migration. |
 | Universal Agent invocation | First slice complete | `capability.invoke` validates universal ID/version/effect/revisions and executes registered automation-command and domain-capability routes; typed legacy Agent request routes remain explicit follow-on adapters. |
 | Agent protocol universal discovery | First slice complete | `agent.capabilityRegistry` request/response round-trips typed universal descriptors through the existing JSON-RPC envelope. |
-| M1 / G01 shared immutable buffers | First slice complete | `RupaGeometry` exposes immutable buffers, zero-copy views, COW builders, and copy telemetry; targeted tests pass. |
+| M1 / G01 shared immutable buffers | Complete on the declared macOS platform | `RupaGeometry` owns a two-level immutable page/chunk directory, storage-retaining leases, closure-borrowed `Span` access, sparse COW edits, bounded content hashing, and overflow-safe copy telemetry. The focused 34-test suite passes. A 1,000,000-point Release benchmark selects 16 KiB chunks, reports 16,368 copied bytes for a local edit, and reports zero copied bytes for every view scan; ordinary WASM also compiles, links, and executes the same contract. |
 | M1 / G02 editable polygon mesh source | First slice complete | `MeshSource` stores vertex/edge/face/corner SoA buffers, preserves n-gon face loops, validates references, and round-trips through its source codec. |
 | M1 / G03 mesh edit buffer | First slice complete | `MeshEditBuffer` stages vertex moves and face add/delete operations without mutating the source, preserves existing face IDs, records commit copies, and rejects topology edits with unremapped attributes. |
 | M1 / G04 generic geometry attributes | First slice complete | `GeometryAttributeSet` validates typed dense/sparse layers across vertex, edge, face, and corner domains; UV and material-index fixtures pass. |
@@ -45,6 +45,17 @@ The plan is executable and the following slices have evidence in the repository:
 The first-slice rows are not milestone completion. The remaining M1 work must
 integrate CAD and mesh sources into one project transaction/evaluation route
 before M1 can be marked complete.
+
+### G01 Verification Baseline
+
+| Responsibility | Owner and invariant | Evidence |
+|---|---|---|
+| Immutable ownership | `GeometryBufferStorage` owns immutable directory pages and chunks; published buffers never expose mutable arrays. | Original snapshots, builder copies, untouched chunk identity, and untouched directory-page identity pass in normal, Address Sanitizer, Thread Sanitizer, and Undefined Behavior Sanitizer runs. |
+| Borrow lifetime | `GeometryBufferLease` retains storage; `withContiguousChunks` lends a non-escaping `Span` only for the closure duration. | A view and lease outlive their originating buffer, aligned chunk access is range-bounded, and view telemetry remains zero. |
+| Mutation | The noncopyable `GeometryBufferBuilder` is the single owner of sparse edited chunks; one edit session copies each touched chunk once, and `build()` freezes a new base before further edits. | Independent-builder COW isolation, multi-edit coalescing, post-publication re-editing, append, and variable-length replacement are tested. |
+| Copy budget | `GeometryBufferPerformanceContract` owns the 64 KiB local-edit ceiling; copy events use checked `UInt64` element-payload byte counts, and local buffer edits account the exact source chunks they isolate. | Three Release runs select 16 KiB chunks; the selected `GeometryPoint3D` edit copies 16,368 bytes and view creation/scanning copies zero bytes. |
+| Hashing and wire compatibility | `GeometryBuffer` streams the existing flat element encoding and produces bounded canonical content hashes independent of chunk layout. | Flat Codable round-trip, canonical `-0`, non-finite rejection, hashing limits, telemetry wire shape, and telemetry overflow are tested. |
+| Platform scope | The package currently declares macOS 26. Ordinary WASM is an additional compile/link/runtime proof; Embedded WASM is not claimed. | The exact 2026-08-14 Swift 6.4 WASM SDK executes the benchmark. Embedded compilation stops in the F02 dependency because `RupaCoreTypes/CanonicalValue.swift` imports unavailable `Foundation`, before G01 is compiled. |
 
 ## 1. Completion Model
 

@@ -113,8 +113,7 @@ public struct MeshEditBuffer: Sendable {
     }
 
     private func commitVertexEdits() throws -> MeshEditCommitResult {
-        var telemetry = GeometryCopyTelemetry()
-        var positions = source.vertexPositions
+        var positions = source.vertexPositions.makeBuilder()
         for (vertexID, position) in vertexOverrides {
             guard let index = source.vertexIDs.firstIndex(of: vertexID) else {
                 throw MeshSourceError(
@@ -122,17 +121,17 @@ public struct MeshEditBuffer: Sendable {
                     message: "Mesh edit cannot commit an unknown vertex."
                 )
             }
-            positions = try positions.replacingSubrange(
+            try positions.replaceSubrange(
                 index..<(index + 1),
-                with: [position],
-                telemetry: &telemetry
+                with: CollectionOfOne(position)
             )
         }
+        let editedPositions = positions.build()
         return MeshEditCommitResult(
             source: try MeshSource(
                 identity: source.identity,
                 vertexIDs: source.vertexIDs,
-                vertexPositions: positions,
+                vertexPositions: editedPositions,
                 edgeIDs: source.edgeIDs,
                 edgeEndpoints: source.edgeEndpoints,
                 faceIDs: source.faceIDs,
@@ -142,7 +141,7 @@ public struct MeshEditBuffer: Sendable {
                 cornerEdgeIDs: source.cornerEdgeIDs,
                 attributes: source.attributes
             ),
-            telemetry: telemetry
+            telemetry: positions.telemetry
         )
     }
 
@@ -216,16 +215,68 @@ public struct MeshEditBuffer: Sendable {
             faceIDs.append(faceID)
             faceCornerRanges.append(MeshIndexRange(start: start, count: loop.count))
         }
-        telemetry.record(
+        try telemetry.record(
             reason: .sourceEdit,
-            copiedBytes: vertexIDs.count * MemoryLayout<MeshVertexID>.stride
-                + positions.count * MemoryLayout<GeometryPoint3D>.stride
-                + edgeIDs.count * MemoryLayout<MeshEdgeID>.stride
-                + edgeEndpoints.count * MemoryLayout<MeshEdgeEndpoints>.stride
-                + faceIDs.count * MemoryLayout<MeshFaceID>.stride
-                + faceCornerRanges.count * MemoryLayout<MeshIndexRange>.stride
-                + cornerIDs.count * MemoryLayout<MeshCornerID>.stride
-                + cornerVertexIDs.count * MemoryLayout<MeshVertexID>.stride
+            copiedBytes: try GeometryBufferLayout.copiedByteCount(
+                forElementCount: vertexIDs.count,
+                of: MeshVertexID.self
+            )
+        )
+        try telemetry.record(
+            reason: .sourceEdit,
+            copiedBytes: try GeometryBufferLayout.copiedByteCount(
+                forElementCount: positions.count,
+                of: GeometryPoint3D.self
+            )
+        )
+        try telemetry.record(
+            reason: .sourceEdit,
+            copiedBytes: try GeometryBufferLayout.copiedByteCount(
+                forElementCount: edgeIDs.count,
+                of: MeshEdgeID.self
+            )
+        )
+        try telemetry.record(
+            reason: .sourceEdit,
+            copiedBytes: try GeometryBufferLayout.copiedByteCount(
+                forElementCount: edgeEndpoints.count,
+                of: MeshEdgeEndpoints.self
+            )
+        )
+        try telemetry.record(
+            reason: .sourceEdit,
+            copiedBytes: try GeometryBufferLayout.copiedByteCount(
+                forElementCount: faceIDs.count,
+                of: MeshFaceID.self
+            )
+        )
+        try telemetry.record(
+            reason: .sourceEdit,
+            copiedBytes: try GeometryBufferLayout.copiedByteCount(
+                forElementCount: faceCornerRanges.count,
+                of: MeshIndexRange.self
+            )
+        )
+        try telemetry.record(
+            reason: .sourceEdit,
+            copiedBytes: try GeometryBufferLayout.copiedByteCount(
+                forElementCount: cornerIDs.count,
+                of: MeshCornerID.self
+            )
+        )
+        try telemetry.record(
+            reason: .sourceEdit,
+            copiedBytes: try GeometryBufferLayout.copiedByteCount(
+                forElementCount: cornerVertexIDs.count,
+                of: MeshVertexID.self
+            )
+        )
+        try telemetry.record(
+            reason: .sourceEdit,
+            copiedBytes: try GeometryBufferLayout.copiedByteCount(
+                forElementCount: cornerEdgeIDs.count,
+                of: MeshEdgeID?.self
+            )
         )
         return MeshEditCommitResult(
             source: try MeshSource(

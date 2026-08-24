@@ -104,6 +104,10 @@ let package = Package(
             name: "rupa-performance-benchmark",
             targets: ["RupaPerformanceBenchmark"]
         ),
+        .executable(
+            name: "rupa-geometry-buffer-benchmark",
+            targets: ["RupaGeometryBufferBenchmark"]
+        ),
     ],
     dependencies: [
         .package(name: "swift-CAD", path: "../swift-CAD"),
@@ -321,6 +325,12 @@ let package = Package(
                 "RupaAutomation",
                 "RupaCore",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
+            ]
+        ),
+        .executableTarget(
+            name: "RupaGeometryBufferBenchmark",
+            dependencies: [
+                "RupaGeometry",
             ]
         ),
         .target(
