@@ -335,6 +335,7 @@ import a concrete domain, UI, Agent transport, or platform renderer.
 | `RupaProceduralModel` | Codable node graph, socket, group, field, and zone source values | Evaluation scheduling or graph-editor layout |
 | `RupaSimulationModel` | Codable simulation definitions, bindings, settings, and authored cache policy | Solver jobs or artifact storage |
 | `RupaProjectModel` | Codable editable aggregate, scenes, collections, object definitions, source libraries, semantic envelopes | Undo history, evaluation caches, UI state |
+| `RupaProjectPackage` | Versioned package manifest, content-addressed source-blob records, bounded archive I/O, integrity checks, unchanged-blob reuse, opaque adjunct preservation, atomic file replacement | Source codec semantics, editor-session ordering, concrete CAD evaluation, artifact/job lifecycle |
 | `RupaEvaluation` | Dependency graph, invalidation, scheduling, quality contexts, cache keys, evaluated project snapshot | Concrete CAD or modifier algorithms, UI |
 | `RupaCADIntegration` | Swift-CAD source provider, B-rep/curve/tessellation adaptation, persistent-name correspondence | Generic mesh editing, project session |
 | `RupaGeometryOperations` | Pure direct mesh/curve algorithms, operation parameters, deltas, correspondence | Project evaluation, command routing, viewport widgets |

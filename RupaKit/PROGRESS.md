@@ -19,3 +19,22 @@
   - [x] Verify RupaGeometry and direct downstream macOS paths from a clean worktree
   - [x] Verify supported ordinary WASM compile, link, and runtime behavior
   - [x] Review cumulative changes and record completion evidence
+- [x] F05-A source-blob package contracts
+  - [x] Freeze the package I/O owner, dependency boundary, and final public usage
+  - [x] Define validated source-entry, blob-reference, manifest, limits, and typed-error contracts
+  - [x] Add borrowed-span incremental hashing and deterministic document content identity
+  - [x] Plan mesh source blobs without whole-blob materialization
+  - [x] Review F05-A, run focused verification, and commit the sprint
+- [ ] F05-B bounded project package I/O
+  - [ ] Implement bounded stored-archive indexing and writing without eager blob materialization
+  - [ ] Stream MeshSourceCodec into and out of declared content-addressed entries
+  - [ ] Preserve unknown adjunct entries and reuse unchanged source blobs byte-for-byte
+  - [ ] Implement validated adjacent-file atomic save and explicit source-blob garbage collection
+  - [ ] Cover corruption, traversal, duplicates, limits, failed save, large resources, and save-load identity
+  - [ ] Measure package read/write chunk bounds and copy telemetry
+  - [ ] Review F05-B, run focused verification, and commit the sprint
+- [ ] Integrated F05 verification
+  - [ ] Re-run incomplete-marker, synchronization, ownership, and zero-copy audits
+  - [ ] Verify focused package contracts and direct downstream macOS paths from a clean snapshot
+  - [ ] Verify ordinary WASM compile, link, and runtime package round trip
+  - [ ] Review cumulative changes and record completion evidence

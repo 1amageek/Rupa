@@ -12,6 +12,12 @@ func packageSourceImportsRespectArchitectureBoundaries() throws {
             "RupaProject",
             "RupaCore",
         ],
+        "RupaProjectPackage": [
+            "RupaEvaluation",
+            "RupaCADIntegration",
+            "RupaProject",
+            "RupaCore",
+        ],
         "RupaEvaluation": [
             "RupaCADIntegration",
             "RupaProject",
@@ -127,6 +133,11 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
         "RupaProjectModel": [
             "RupaCoreTypes",
             "RupaGeometry",
+        ],
+        "RupaProjectPackage": [
+            "RupaCoreTypes",
+            "RupaGeometry",
+            "RupaProjectModel",
         ],
         "RupaEvaluation": [
             "RupaCoreTypes",

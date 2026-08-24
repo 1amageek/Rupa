@@ -50,6 +50,13 @@ public struct StableSHA256Hasher: Sendable {
         }
     }
 
+    /// Hashes a synchronously borrowed byte span without materializing `Data`.
+    public mutating func update(_ bytes: borrowing Span<UInt8>) {
+        bytes.withUnsafeBytes { rawBytes in
+            update(rawBytes)
+        }
+    }
+
     public mutating func update(string: String) {
         update(count: string.utf8.count)
         for byte in string.utf8 {

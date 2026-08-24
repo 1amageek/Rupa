@@ -398,7 +398,7 @@ registry becomes an adapter.
 |---|---|
 | Owner | Package I/O agent |
 | Dependencies | F02, A01, F04 reference schema |
-| Write scope | Package contract implementation and package tests; not geometry codecs |
+| Write scope | `RupaProjectPackage`, focused `RupaCoreTypes` streaming-digest support, package tests; not geometry codecs or project-session ordering |
 | Deliverables | Source blob manifest records, stream/memory-map reader, atomic unchanged-blob reuse, bounded resource policy |
 | Tests | Hash/length mismatch, traversal, duplicate paths, unknown extension preservation, large-resource streaming, failed atomic save, unchanged byte reuse |
 | Done | Large editable geometry/image source can be saved without JSON array materialization or loading every blob into memory. |

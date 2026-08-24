@@ -19,6 +19,9 @@ flowchart LR
     Geometry[RupaGeometry] --> CoreTypes
     ProjectModel[RupaProjectModel] --> CoreTypes
     ProjectModel --> Geometry
+    ProjectPackage[RupaProjectPackage] --> CoreTypes
+    ProjectPackage --> Geometry
+    ProjectPackage --> ProjectModel
     Evaluation[RupaEvaluation] --> CoreTypes
     Evaluation --> Geometry
     Evaluation --> ProjectModel
@@ -102,6 +105,7 @@ flowchart LR
 |---|---|---|
 | `RupaCoreTypes` | Stable semantic IDs, source revisions, canonical payloads and quantities, content fingerprints, transport-neutral errors, diagnostics, display units, and save results | Geometry algorithms, CAD feature evaluation, SwiftCAD document mutation, registry behavior, UI or Agent state |
 | `RupaProjectModel` | Immutable universal project source, object definitions, occurrences, and geometry source references | Evaluation providers, editor history, concrete CAD types |
+| `RupaProjectPackage` | Versioned project-package manifests, content-addressed source blobs, bounded archive I/O, integrity validation, opaque adjunct preservation, and atomic file replacement | Geometry encoding semantics, editor-session ordering, artifacts/jobs, concrete CAD evaluation |
 | `RupaEvaluation` | Provider registry, de-duplicated provider batch planning, source-result contract validation, occurrence transforms, and immutable evaluated snapshots | Concrete CAD algorithms, editor session mutation, rendering state |
 | `RupaCADIntegration` | CAD source resolution, Swift-CAD evaluator construction, source-revision-aware incremental reuse, lossless supported-attribute conversion, and conversion into universal immutable geometry results | Universal project ownership, occurrence transforms, editor session lifetime, silent fidelity fallback |
 | `RupaProject` | Ordered project source staging, revision-conflict checks, evaluation publication, and commit results through `ProjectEvaluating` | Concrete provider construction, CAD semantics, viewport projection |
@@ -127,12 +131,30 @@ flowchart LR
 | Geometry provider IDs are registered once through `GeometrySourceEvaluationProviderRegistry`; duplicate or malformed IDs fail explicitly. | Composition ambiguity must not be resolved by last-writer-wins replacement. |
 | `RupaCADIntegration` owns `CADGeometrySourceResolving`, `CADDocumentEvaluating`, `DefaultCADDocumentEvaluator`, and `CADDocumentEvaluationCache`; one provider resolves every referenced CAD document, evaluates each source once, and atomically publishes cache entries only after all requested sources convert successfully. | Swift-CAD construction, multi-document routing, fidelity policy, and cache transaction semantics stay inside the CAD adapter instead of leaking into project composition or generic evaluation. |
 | `RupaProject` depends on `ProjectEvaluating`, not `ProjectEvaluationEngine`. | Project orchestration owns ordered staging and publication, while `RupaEvaluation` owns the concrete evaluation algorithm. |
+| `RupaProjectPackage` composes package metadata with injected source codecs through their public streaming contracts; it does not place package paths or archive state in `RupaGeometry` or `RupaProjectModel`. | Canonical source bytes remain owned by the source module, while package identity, reuse, integrity, and atomic I/O remain one persistence responsibility. |
 | `DesignDocumentProjectBridge` projects source only; `DefaultDesignDocumentProjectEvaluatorFactory` owns provider registration and the lifetime of the CAD evaluation cache behind `DesignDocumentProjectEvaluatorFactory`. | Source mapping must not own evaluator construction, while cache lifetime must outlive one snapshot build. |
 | `RupaAgentProtocol` must not depend on `RupaAgentRuntime` or `RupaAgentTransport`. | Tooling can encode/decode requests without loading workspace registries or socket code. |
 | `RupaAgentTransport` depends only on `RupaAgentProtocol` and `RupaCoreTypes`; runtime handlers implement the protocol-owned request port. | Socket ownership remains independent from workspace registries and command execution. |
 | Agent transport messages use an unsigned 64-bit network-order length prefix, a 16 MiB payload limit, and total monotonic IO deadlines; the listener tracks bounded concurrent connections and shuts them down before awaiting handler ownership during stop. | Message boundaries do not depend on peer EOF, malformed or stalled peers cannot allocate unbounded memory, and listener shutdown converges for half-open connections. |
 | `RupaUI` depends on `WorkspaceAgentSessionPublishing`, not concrete `AgentHost`. | The CAD workspace can publish UI-owned sessions without depending on Agent server lifecycle details. |
 | `RupaRendering` consumes `RupaViewportScene`; scene construction must remain SwiftUI-free. | Viewport scene, projection, and hit policy can be tested without UI composition. |
+
+## Project Package Usage
+
+The package aggregate retains opaque adjunct entries and the mapped source backing
+needed for byte-for-byte reuse. Callers replace only the editable source value and
+retain the aggregate until a successful atomic save returns a refreshed aggregate.
+
+```swift
+let store = ProjectPackageStore()
+let opened = try store.load(from: sourceURL)
+let edited = try opened.replacingSource(updatedProject)
+let saved = try store.save(edited, to: destinationURL)
+```
+
+`ProjectPackageStore` owns synchronous package I/O only. A later `RupaProject`
+integration owns actor ordering, revision checks, dirty-state publication, and the
+decision to replace the session's retained package aggregate after `save` succeeds.
 
 ## Editing State Contracts
 

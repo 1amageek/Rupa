@@ -61,6 +61,23 @@ func stableSHA256MatchesPublishedVectors() {
 }
 
 @Test(.timeLimit(.minutes(1)))
+func stableSHA256HashesBorrowedSpansWithoutMaterialization() {
+    let bytes = ContiguousArray("abc".utf8)
+    var hasher = StableSHA256Hasher()
+
+    bytes.withUnsafeBufferPointer { pointer in
+        let span = Span(_unsafeElements: pointer)
+        hasher.update(span)
+    }
+
+    #expect(
+        hasher.hexDigest()
+            == "ba7816bf8f01cfea414140de5dae2223"
+                + "b00361a396177a9cb410ff61f20015ad"
+    )
+}
+
+@Test(.timeLimit(.minutes(1)))
 func contentFingerprintsRejectNonCanonicalRepresentations() throws {
     let fingerprint = try ContentFingerprint.sha256(
         algorithm: "sha256-test-v1",
