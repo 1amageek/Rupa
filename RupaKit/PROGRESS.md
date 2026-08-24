@@ -7,13 +7,13 @@
   - [x] Preserve the new source contract through the existing MeshEditBuffer compatibility path
   - [x] Add success, failure, compaction, storage-sharing, and copy-telemetry tests
   - [x] Review G02-A, run focused verification, and commit the sprint
-- [ ] G02-B bounded streaming mesh-source codec
-  - [ ] Define the versioned source-blob framing, limits, streaming ports, and error contract
-  - [ ] Implement bounded chunk encoding without source-array materialization
-  - [ ] Implement bounded chunk decoding directly into owned geometry storage
-  - [ ] Cover attributes, corruption, truncation, limits, deterministic encoding, and round trips
-  - [ ] Measure chunk bounds and copy telemetry on a large fixture
-  - [ ] Review G02-B, run focused verification, and commit the sprint
+- [x] G02-B bounded streaming mesh-source codec
+  - [x] Define the versioned source-blob framing, limits, streaming ports, and error contract
+  - [x] Implement bounded chunk encoding without source-array materialization
+  - [x] Implement bounded chunk decoding directly into owned geometry storage
+  - [x] Cover attributes, corruption, truncation, limits, deterministic encoding, and round trips
+  - [x] Measure chunk bounds and copy telemetry on a large fixture
+  - [x] Review G02-B, run focused verification, and commit the sprint
 - [ ] Integrated G02 verification
   - [ ] Re-run incomplete-marker, synchronization, ownership, and zero-copy audits
   - [ ] Verify RupaGeometry and direct downstream macOS paths from a clean worktree

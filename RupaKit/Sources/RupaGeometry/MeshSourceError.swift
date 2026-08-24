@@ -9,6 +9,10 @@ public struct MeshSourceError: Error, Equatable, LocalizedError, Sendable {
         case duplicateID
         case idSpaceExhausted
         case unsupportedOperation
+        case unsupportedVersion
+        case resourceLimitExceeded
+        case truncatedPayload
+        case ioFailure
         case malformedPayload
     }
 
