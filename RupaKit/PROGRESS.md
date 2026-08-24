@@ -14,8 +14,8 @@
   - [x] Cover attributes, corruption, truncation, limits, deterministic encoding, and round trips
   - [x] Measure chunk bounds and copy telemetry on a large fixture
   - [x] Review G02-B, run focused verification, and commit the sprint
-- [ ] Integrated G02 verification
-  - [ ] Re-run incomplete-marker, synchronization, ownership, and zero-copy audits
-  - [ ] Verify RupaGeometry and direct downstream macOS paths from a clean worktree
-  - [ ] Verify supported ordinary WASM compile, link, and runtime behavior
-  - [ ] Review cumulative changes, update completion evidence, commit integration records, and push
+- [x] Integrated G02 verification
+  - [x] Re-run incomplete-marker, synchronization, ownership, and zero-copy audits
+  - [x] Verify RupaGeometry and direct downstream macOS paths from a clean worktree
+  - [x] Verify supported ordinary WASM compile, link, and runtime behavior
+  - [x] Review cumulative changes and record completion evidence
