@@ -33,8 +33,8 @@
   - [x] Cover corruption, traversal, duplicates, limits, failed save, large resources, and save-load identity
   - [x] Measure package read/write chunk bounds and copy telemetry
   - [x] Review F05-B, run focused verification, and commit the sprint
-- [ ] Integrated F05 verification
-  - [ ] Re-run incomplete-marker, synchronization, ownership, and zero-copy audits
-  - [ ] Verify focused package contracts and direct downstream macOS paths from a clean snapshot
-  - [ ] Verify ordinary WASM compile, link, and runtime package round trip
-  - [ ] Review cumulative changes and record completion evidence
+- [x] Integrated F05 verification
+  - [x] Re-run incomplete-marker, synchronization, ownership, and zero-copy audits
+  - [x] Verify focused package contracts and direct downstream macOS paths from a clean snapshot
+  - [x] Verify ordinary WASM compile, link, and runtime package round trip
+  - [x] Review cumulative changes and record completion evidence
