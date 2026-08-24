@@ -3,15 +3,19 @@ import RupaGeometry
 /// Bounds allocation, archive growth, and borrowed I/O for one project package.
 public struct ProjectPackageResourceLimits: Equatable, Sendable {
     public static let standard: ProjectPackageResourceLimits = {
+        let archiveLimit = min(UInt64(UInt32.max), UInt64(Int.max))
         var meshSource = MeshSourceCodecLimits.standard
-        meshSource.maximumBlobByteCount = UInt64(UInt32.max)
+        meshSource.maximumBlobByteCount = archiveLimit
         return ProjectPackageResourceLimits(
-            maximumArchiveByteCount: UInt64(UInt32.max),
+            maximumArchiveByteCount: archiveLimit,
             maximumEntryCount: 4_096,
             maximumManifestByteCount: 4 * 1_024 * 1_024,
             maximumSourceMetadataByteCount: 64 * 1_024 * 1_024,
-            maximumSourceBlobByteCount: UInt64(UInt32.max),
-            maximumPreservedAdjunctByteCount: 1 * 1_024 * 1_024 * 1_024,
+            maximumSourceBlobByteCount: archiveLimit,
+            maximumPreservedAdjunctByteCount: min(
+                archiveLimit,
+                1 * 1_024 * 1_024 * 1_024
+            ),
             maximumChunkByteCount: 64 * 1_024,
             meshSource: meshSource
         )
@@ -56,6 +60,16 @@ public struct ProjectPackageResourceLimits: Equatable, Sendable {
             maximumSourceBlobByteCount > 0,
             maximumSourceBlobByteCount <= UInt64(UInt32.max),
             maximumChunkByteCount > 0,
+            UInt64(maximumManifestByteCount) <= maximumArchiveByteCount,
+            UInt64(maximumSourceMetadataByteCount) <= maximumArchiveByteCount,
+            maximumSourceBlobByteCount <= maximumArchiveByteCount,
+            maximumPreservedAdjunctByteCount <= maximumArchiveByteCount,
+            UInt64(maximumChunkByteCount) <= maximumArchiveByteCount,
+            meshSource.maximumBlobByteCount > 0,
+            meshSource.maximumChunkByteCount > 0,
+            meshSource.maximumElementCountPerBuffer >= 0,
+            meshSource.maximumAttributeCount >= 0,
+            meshSource.maximumStringByteCount >= 0,
             meshSource.maximumBlobByteCount <= maximumSourceBlobByteCount,
             meshSource.maximumChunkByteCount <= maximumChunkByteCount
         else {

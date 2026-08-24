@@ -51,6 +51,12 @@ struct ProjectPackageSourcePlanner {
                 )
             } catch let error as ProjectPackageError {
                 throw error
+            } catch let error as MeshSourceError
+            where error.code == .resourceLimitExceeded {
+                throw ProjectPackageError(
+                    code: .resourceLimitExceeded,
+                    message: error.message
+                )
             } catch {
                 throw ProjectPackageError(
                     code: .invalidSource,

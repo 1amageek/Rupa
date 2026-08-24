@@ -131,7 +131,7 @@ flowchart LR
 | Geometry provider IDs are registered once through `GeometrySourceEvaluationProviderRegistry`; duplicate or malformed IDs fail explicitly. | Composition ambiguity must not be resolved by last-writer-wins replacement. |
 | `RupaCADIntegration` owns `CADGeometrySourceResolving`, `CADDocumentEvaluating`, `DefaultCADDocumentEvaluator`, and `CADDocumentEvaluationCache`; one provider resolves every referenced CAD document, evaluates each source once, and atomically publishes cache entries only after all requested sources convert successfully. | Swift-CAD construction, multi-document routing, fidelity policy, and cache transaction semantics stay inside the CAD adapter instead of leaking into project composition or generic evaluation. |
 | `RupaProject` depends on `ProjectEvaluating`, not `ProjectEvaluationEngine`. | Project orchestration owns ordered staging and publication, while `RupaEvaluation` owns the concrete evaluation algorithm. |
-| `RupaProjectPackage` composes package metadata with injected source codecs through their public streaming contracts; it does not place package paths or archive state in `RupaGeometry` or `RupaProjectModel`. | Canonical source bytes remain owned by the source module, while package identity, reuse, integrity, and atomic I/O remain one persistence responsibility. |
+| `RupaProjectPackage` composes package metadata with the canonical source codecs through their public streaming contracts; it does not place package paths or archive state in `RupaGeometry` or `RupaProjectModel`. | Canonical source bytes remain owned by the source module, while package identity, reuse, integrity, and atomic I/O remain one persistence responsibility. |
 | `DesignDocumentProjectBridge` projects source only; `DefaultDesignDocumentProjectEvaluatorFactory` owns provider registration and the lifetime of the CAD evaluation cache behind `DesignDocumentProjectEvaluatorFactory`. | Source mapping must not own evaluator construction, while cache lifetime must outlive one snapshot build. |
 | `RupaAgentProtocol` must not depend on `RupaAgentRuntime` or `RupaAgentTransport`. | Tooling can encode/decode requests without loading workspace registries or socket code. |
 | `RupaAgentTransport` depends only on `RupaAgentProtocol` and `RupaCoreTypes`; runtime handlers implement the protocol-owned request port. | Socket ownership remains independent from workspace registries and command execution. |
@@ -150,6 +150,7 @@ let store = ProjectPackageStore()
 let opened = try store.load(from: sourceURL)
 let edited = try opened.replacingSource(updatedProject)
 let saved = try store.save(edited, to: destinationURL)
+let retainedPackage = saved.document
 ```
 
 `ProjectPackageStore` owns synchronous package I/O only. A later `RupaProject`

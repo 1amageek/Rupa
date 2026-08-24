@@ -33,6 +33,7 @@ func projectPackagePlanningIsDeterministicAndUsesBoundedBorrowedChunks() throws 
     #expect(firstPlan.blobs.map(\.reference.path) == secondPlan.blobs.map(\.reference.path))
     #expect(firstPlan.blobs.allSatisfy { $0.maximumEncodedChunkByteCount <= 17 })
     #expect(firstPlan.telemetry.events.count == 2)
+    #expect(!String(decoding: firstPlan.sourceData, as: UTF8.self).contains("vertexPositions"))
 
     let envelope = try ProjectPackageCanonicalJSON.decode(
         ProjectPackageSourceEnvelope.self,
@@ -122,6 +123,16 @@ func projectPackagePlannerRejectsConfiguredEntryLimit() throws {
     #expect(projectPackageErrorCode {
         _ = try ProjectPackageSourcePlanner(limits: limits).plan(project)
     } == .resourceLimitExceeded)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectPackageCRC32MatchesPublishedVector() {
+    let bytes = ContiguousArray("123456789".utf8)
+    var crc32 = ProjectPackageCRC32()
+    bytes.withUnsafeBufferPointer { pointer in
+        crc32.update(Span(_unsafeElements: pointer))
+    }
+    #expect(crc32.checksum == 0xcbf4_3926)
 }
 
 private func triangleSource(id: GeometrySourceID, xOffset: Double) throws -> MeshSource {
