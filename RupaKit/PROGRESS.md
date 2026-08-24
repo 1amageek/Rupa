@@ -1,0 +1,21 @@
+# Progress
+
+- [x] G02-A persistent mesh-source contract
+  - [x] Define MeshSource ownership, topology invariants, monotonic element allocation, and copy budgets
+  - [x] Implement persistent allocation state and complete topology validation
+  - [x] Implement single-copy source construction including loose topology
+  - [x] Preserve the new source contract through the existing MeshEditBuffer compatibility path
+  - [x] Add success, failure, compaction, storage-sharing, and copy-telemetry tests
+  - [x] Review G02-A, run focused verification, and commit the sprint
+- [ ] G02-B bounded streaming mesh-source codec
+  - [ ] Define the versioned source-blob framing, limits, streaming ports, and error contract
+  - [ ] Implement bounded chunk encoding without source-array materialization
+  - [ ] Implement bounded chunk decoding directly into owned geometry storage
+  - [ ] Cover attributes, corruption, truncation, limits, deterministic encoding, and round trips
+  - [ ] Measure chunk bounds and copy telemetry on a large fixture
+  - [ ] Review G02-B, run focused verification, and commit the sprint
+- [ ] Integrated G02 verification
+  - [ ] Re-run incomplete-marker, synchronization, ownership, and zero-copy audits
+  - [ ] Verify RupaGeometry and direct downstream macOS paths from a clean worktree
+  - [ ] Verify supported ordinary WASM compile, link, and runtime behavior
+  - [ ] Review cumulative changes, update completion evidence, commit integration records, and push

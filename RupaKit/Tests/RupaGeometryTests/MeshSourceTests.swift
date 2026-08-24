@@ -48,18 +48,17 @@ func meshSourceBuilderAddsTrianglesWithoutWeakeningValidation() throws {
     let v3 = try builder.addVertex(GeometryPoint3D(x: 0, y: 1, z: 0))
     _ = try builder.addTriangle(v0, v1, v2)
     _ = try builder.addTriangle(v0, v2, v3)
-    let source = try builder.build()
-
-    #expect(source.faceIDs.count == 2)
-    #expect(source.cornerIDs.count == 6)
-    #expect(source.edgeIDs.count == 5)
-
     #expect(throws: MeshSourceError.self) {
         _ = try builder.addTriangle(v0, v0, v1)
     }
     #expect(throws: MeshSourceError.self) {
         _ = try builder.addTriangle(v0, v1, MeshVertexID(4))
     }
+    let source = try builder.build()
+
+    #expect(source.faceIDs.count == 2)
+    #expect(source.cornerIDs.count == 6)
+    #expect(source.edgeIDs.count == 5)
 }
 
 @Test(.timeLimit(.minutes(1)))

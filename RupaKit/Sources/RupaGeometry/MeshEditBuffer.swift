@@ -10,18 +10,26 @@ public struct MeshEditBuffer: Sendable {
     private let source: MeshSource
     private let vertexIndexByID: [MeshVertexID: Int]
     private let faceIndexByID: [MeshFaceID: Int]
+    private var allocationState: MeshElementIDAllocationState
     private var vertexOverrides: [MeshVertexID: GeometryPoint3D] = [:]
     private var deletedFaceIDs: Set<MeshFaceID> = []
     private var addedFaces: [AddedFace] = []
 
     public init(source: MeshSource) {
         self.source = source
-        self.vertexIndexByID = Dictionary(
-            uniqueKeysWithValues: source.vertexIDs.enumerated().map { ($0.element, $0.offset) }
-        )
-        self.faceIndexByID = Dictionary(
-            uniqueKeysWithValues: source.faceIDs.enumerated().map { ($0.element, $0.offset) }
-        )
+        var vertexIndexByID: [MeshVertexID: Int] = [:]
+        vertexIndexByID.reserveCapacity(source.vertexIDs.count)
+        for index in source.vertexIDs.indices {
+            vertexIndexByID[source.vertexIDs[index]] = index
+        }
+        self.vertexIndexByID = vertexIndexByID
+        var faceIndexByID: [MeshFaceID: Int] = [:]
+        faceIndexByID.reserveCapacity(source.faceIDs.count)
+        for index in source.faceIDs.indices {
+            faceIndexByID[source.faceIDs[index]] = index
+        }
+        self.faceIndexByID = faceIndexByID
+        self.allocationState = source.allocationState
     }
 
     public var identity: GeometrySourceID {
@@ -29,7 +37,10 @@ public struct MeshEditBuffer: Sendable {
     }
 
     public var hasEdits: Bool {
-        !vertexOverrides.isEmpty || !deletedFaceIDs.isEmpty || !addedFaces.isEmpty
+        !vertexOverrides.isEmpty
+            || !deletedFaceIDs.isEmpty
+            || !addedFaces.isEmpty
+            || allocationState != source.allocationState
     }
 
     public func position(for vertexID: MeshVertexID) throws -> GeometryPoint3D {
@@ -70,11 +81,7 @@ public struct MeshEditBuffer: Sendable {
                 message: "Added mesh faces require three or more unique existing vertices."
             )
         }
-        let id = MeshFaceID(
-            try nextRawValue(
-                after: source.faceIDs.map(\.rawValue) + addedFaces.map { $0.id.rawValue }
-            )
-        )
+        let id = try allocationState.allocateFaceID()
         addedFaces.append(AddedFace(id: id, vertexIDs: vertexIDs))
         return id
     }
@@ -115,7 +122,7 @@ public struct MeshEditBuffer: Sendable {
     private func commitVertexEdits() throws -> MeshEditCommitResult {
         var positions = source.vertexPositions.makeBuilder()
         for (vertexID, position) in vertexOverrides {
-            guard let index = source.vertexIDs.firstIndex(of: vertexID) else {
+            guard let index = vertexIndexByID[vertexID] else {
                 throw MeshSourceError(
                     code: .invalidReference,
                     message: "Mesh edit cannot commit an unknown vertex."
@@ -130,6 +137,7 @@ public struct MeshEditBuffer: Sendable {
         return MeshEditCommitResult(
             source: try MeshSource(
                 identity: source.identity,
+                allocationState: allocationState,
                 vertexIDs: source.vertexIDs,
                 vertexPositions: editedPositions,
                 edgeIDs: source.edgeIDs,
@@ -146,186 +154,121 @@ public struct MeshEditBuffer: Sendable {
     }
 
     private func commitTopologyEdits() throws -> MeshEditCommitResult {
-        var survivingFaces: [(MeshFaceID, [MeshVertexID])] = []
-        survivingFaces.reserveCapacity(source.faceIDs.count + addedFaces.count)
-        for faceID in source.faceIDs where !deletedFaceIDs.contains(faceID) {
-            survivingFaces.append((faceID, try sourceVertexIDs(for: faceID)))
-        }
-        survivingFaces.append(contentsOf: addedFaces.map { ($0.id, $0.vertexIDs) })
-
-        let vertexIDs = Array(source.vertexIDs)
-        var positions = Array(source.vertexPositions)
-        for index in vertexIDs.indices {
-            if let override = vertexOverrides[vertexIDs[index]] {
-                positions[index] = override
+        var allocationState = self.allocationState
+        var positions = source.vertexPositions.makeBuilder()
+        for (vertexID, position) in vertexOverrides {
+            guard let index = vertexIndexByID[vertexID] else {
+                throw MeshSourceError(
+                    code: .invalidReference,
+                    message: "Mesh edit cannot commit an unknown vertex."
+                )
             }
+            try positions.replaceSubrange(
+                index..<(index + 1),
+                with: CollectionOfOne(position)
+            )
         }
-        var edgeIDs = Array(source.edgeIDs)
-        var edgeEndpoints = Array(source.edgeEndpoints)
-        var edgeByVertices: [EdgeKey: MeshEdgeID] = [:]
-        for index in edgeIDs.indices {
-            let endpoints = edgeEndpoints[index]
-            edgeByVertices[EdgeKey(start: endpoints.start, end: endpoints.end)] = edgeIDs[index]
+        let editedPositions = positions.build()
+
+        var edgeIDs = source.edgeIDs.makeBuilder()
+        var edgeEndpoints = source.edgeEndpoints.makeBuilder()
+        var edgeByVertices: [MeshUndirectedEdgeKey: MeshEdgeID] = [:]
+        edgeByVertices.reserveCapacity(source.edgeIDs.count)
+        for index in source.edgeIDs.indices {
+            let endpoints = source.edgeEndpoints[index]
+            edgeByVertices[
+                MeshUndirectedEdgeKey(first: endpoints.start, second: endpoints.end)
+            ] = source.edgeIDs[index]
         }
-        var faceIDs: [MeshFaceID] = []
-        var faceCornerRanges: [MeshIndexRange] = []
-        var cornerIDs: [MeshCornerID] = []
-        var cornerVertexIDs: [MeshVertexID] = []
-        var cornerEdgeIDs: [MeshEdgeID?] = []
-        var nextCorner = try nextRawValue(after: source.cornerIDs.map(\.rawValue))
-        var nextEdge = try nextRawValue(after: source.edgeIDs.map(\.rawValue))
+        var faceIDs = GeometryBufferConstructionBuffer<MeshFaceID>()
+        var faceCornerRanges = GeometryBufferConstructionBuffer<MeshIndexRange>()
+        var cornerIDs = GeometryBufferConstructionBuffer<MeshCornerID>()
+        var cornerVertexIDs = GeometryBufferConstructionBuffer<MeshVertexID>()
+        var cornerEdgeIDs = GeometryBufferConstructionBuffer<MeshEdgeID>()
+        faceIDs.reserveCapacity(source.faceIDs.count + addedFaces.count)
+        faceCornerRanges.reserveCapacity(source.faceIDs.count + addedFaces.count)
+        cornerIDs.reserveCapacity(source.cornerIDs.count)
+        cornerVertexIDs.reserveCapacity(source.cornerIDs.count)
+        cornerEdgeIDs.reserveCapacity(source.cornerIDs.count)
         var telemetry = GeometryCopyTelemetry()
 
-        for (faceID, loop) in survivingFaces {
+        for faceIndex in source.faceIDs.indices {
+            let faceID = source.faceIDs[faceIndex]
+            guard !deletedFaceIDs.contains(faceID) else {
+                continue
+            }
             let start = cornerIDs.count
-            let originalCorners: [MeshCornerID] = source.faceIDs.firstIndex(of: faceID).map { index in
-                let range = source.faceCornerRanges[index]
-                return Array(range.start..<range.end).map { source.cornerIDs[$0] }
-            } ?? []
-            for index in loop.indices {
-                let vertexID = loop[index]
-                let nextVertexID = loop[(index + 1) % loop.count]
-                let edgeKey = EdgeKey(start: vertexID, end: nextVertexID)
+            let range = source.faceCornerRanges[faceIndex]
+            for cornerIndex in range.start..<range.end {
+                try cornerIDs.append(source.cornerIDs[cornerIndex])
+                try cornerVertexIDs.append(source.cornerVertexIDs[cornerIndex])
+                try cornerEdgeIDs.append(source.cornerEdgeIDs[cornerIndex])
+            }
+            try faceIDs.append(faceID)
+            try faceCornerRanges.append(
+                MeshIndexRange(start: start, count: range.count)
+            )
+        }
+
+        for addedFace in addedFaces {
+            let start = cornerIDs.count
+            for index in addedFace.vertexIDs.indices {
+                let vertexID = addedFace.vertexIDs[index]
+                let nextVertexID = addedFace.vertexIDs[
+                    (index + 1) % addedFace.vertexIDs.count
+                ]
+                let edgeKey = MeshUndirectedEdgeKey(
+                    first: vertexID,
+                    second: nextVertexID
+                )
                 let edgeID: MeshEdgeID
                 if let existing = edgeByVertices[edgeKey] {
                     edgeID = existing
                 } else {
-                    edgeID = MeshEdgeID(nextEdge)
-                    nextEdge += 1
-                    edgeIDs.append(edgeID)
-                    edgeEndpoints.append(
+                    edgeID = try allocationState.allocateEdgeID()
+                    try edgeIDs.append(edgeID)
+                    try edgeEndpoints.append(
                         MeshEdgeEndpoints(
-                            start: min(vertexID, nextVertexID),
-                            end: max(vertexID, nextVertexID)
+                            start: edgeKey.first,
+                            end: edgeKey.second
                         )
                     )
                     edgeByVertices[edgeKey] = edgeID
                 }
-                let cornerID: MeshCornerID
-                if index < originalCorners.count {
-                    cornerID = originalCorners[index]
-                } else {
-                    cornerID = MeshCornerID(nextCorner)
-                    nextCorner += 1
-                }
-                cornerIDs.append(cornerID)
-                cornerVertexIDs.append(vertexID)
-                cornerEdgeIDs.append(edgeID)
+                try cornerIDs.append(allocationState.allocateCornerID())
+                try cornerVertexIDs.append(vertexID)
+                try cornerEdgeIDs.append(edgeID)
             }
-            faceIDs.append(faceID)
-            faceCornerRanges.append(MeshIndexRange(start: start, count: loop.count))
+            try faceIDs.append(addedFace.id)
+            try faceCornerRanges.append(
+                MeshIndexRange(start: start, count: addedFace.vertexIDs.count)
+            )
         }
-        try telemetry.record(
-            reason: .sourceEdit,
-            copiedBytes: try GeometryBufferLayout.copiedByteCount(
-                forElementCount: vertexIDs.count,
-                of: MeshVertexID.self
-            )
-        )
-        try telemetry.record(
-            reason: .sourceEdit,
-            copiedBytes: try GeometryBufferLayout.copiedByteCount(
-                forElementCount: positions.count,
-                of: GeometryPoint3D.self
-            )
-        )
-        try telemetry.record(
-            reason: .sourceEdit,
-            copiedBytes: try GeometryBufferLayout.copiedByteCount(
-                forElementCount: edgeIDs.count,
-                of: MeshEdgeID.self
-            )
-        )
-        try telemetry.record(
-            reason: .sourceEdit,
-            copiedBytes: try GeometryBufferLayout.copiedByteCount(
-                forElementCount: edgeEndpoints.count,
-                of: MeshEdgeEndpoints.self
-            )
-        )
-        try telemetry.record(
-            reason: .sourceEdit,
-            copiedBytes: try GeometryBufferLayout.copiedByteCount(
-                forElementCount: faceIDs.count,
-                of: MeshFaceID.self
-            )
-        )
-        try telemetry.record(
-            reason: .sourceEdit,
-            copiedBytes: try GeometryBufferLayout.copiedByteCount(
-                forElementCount: faceCornerRanges.count,
-                of: MeshIndexRange.self
-            )
-        )
-        try telemetry.record(
-            reason: .sourceEdit,
-            copiedBytes: try GeometryBufferLayout.copiedByteCount(
-                forElementCount: cornerIDs.count,
-                of: MeshCornerID.self
-            )
-        )
-        try telemetry.record(
-            reason: .sourceEdit,
-            copiedBytes: try GeometryBufferLayout.copiedByteCount(
-                forElementCount: cornerVertexIDs.count,
-                of: MeshVertexID.self
-            )
-        )
-        try telemetry.record(
-            reason: .sourceEdit,
-            copiedBytes: try GeometryBufferLayout.copiedByteCount(
-                forElementCount: cornerEdgeIDs.count,
-                of: MeshEdgeID?.self
-            )
-        )
+        try telemetry.record(contentsOf: positions.telemetry)
+        try telemetry.record(contentsOf: edgeIDs.telemetry)
+        try telemetry.record(contentsOf: edgeEndpoints.telemetry)
+        try faceIDs.recordCopy(reason: .sourceEdit, in: &telemetry)
+        try faceCornerRanges.recordCopy(reason: .sourceEdit, in: &telemetry)
+        try cornerIDs.recordCopy(reason: .sourceEdit, in: &telemetry)
+        try cornerVertexIDs.recordCopy(reason: .sourceEdit, in: &telemetry)
+        try cornerEdgeIDs.recordCopy(reason: .sourceEdit, in: &telemetry)
+        let editedEdgeIDs = edgeIDs.build()
+        let editedEdgeEndpoints = edgeEndpoints.build()
         return MeshEditCommitResult(
             source: try MeshSource(
                 identity: source.identity,
-                vertexIDs: GeometryBuffer(vertexIDs),
-                vertexPositions: GeometryBuffer(positions),
-                edgeIDs: GeometryBuffer(edgeIDs),
-                edgeEndpoints: GeometryBuffer(edgeEndpoints),
-                faceIDs: GeometryBuffer(faceIDs),
-                faceCornerRanges: GeometryBuffer(faceCornerRanges),
-                cornerIDs: GeometryBuffer(cornerIDs),
-                cornerVertexIDs: GeometryBuffer(cornerVertexIDs),
-                cornerEdgeIDs: GeometryBuffer(cornerEdgeIDs)
+                allocationState: allocationState,
+                vertexIDs: source.vertexIDs,
+                vertexPositions: editedPositions,
+                edgeIDs: editedEdgeIDs,
+                edgeEndpoints: editedEdgeEndpoints,
+                faceIDs: faceIDs.build(),
+                faceCornerRanges: faceCornerRanges.build(),
+                cornerIDs: cornerIDs.build(),
+                cornerVertexIDs: cornerVertexIDs.build(),
+                cornerEdgeIDs: cornerEdgeIDs.build()
             ),
             telemetry: telemetry
         )
-    }
-
-    private func sourceVertexIDs(for faceID: MeshFaceID) throws -> [MeshVertexID] {
-        guard let index = faceIndexByID[faceID] else {
-            throw MeshSourceError(
-                code: .invalidReference,
-                message: "Mesh face is not present in the source."
-            )
-        }
-        let range = source.faceCornerRanges[index]
-        return Array(range.start..<range.end).map { source.cornerVertexIDs[$0] }
-    }
-
-    private func nextRawValue(after values: [UInt64]) throws -> UInt64 {
-        guard let maximum = values.max() else {
-            return 0
-        }
-        guard maximum < UInt64.max else {
-            throw MeshSourceError(
-                code: .invalidBuffer,
-                message: "Mesh edit ID space is exhausted."
-            )
-        }
-        return maximum + 1
-    }
-}
-
-private struct EdgeKey: Hashable, Sendable {
-    let start: MeshVertexID
-    let end: MeshVertexID
-
-    init(start: MeshVertexID, end: MeshVertexID) {
-        self.start = min(start, end)
-        self.end = max(start, end)
     }
 }

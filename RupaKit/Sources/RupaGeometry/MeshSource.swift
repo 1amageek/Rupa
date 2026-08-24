@@ -3,6 +3,7 @@ import RupaCoreTypes
 
 public struct MeshSource: Codable, Equatable, Sendable {
     public let identity: GeometrySourceID
+    public let allocationState: MeshElementIDAllocationState
     public let vertexIDs: GeometryBuffer<MeshVertexID>
     public let vertexPositions: GeometryBuffer<GeometryPoint3D>
     public let edgeIDs: GeometryBuffer<MeshEdgeID>
@@ -11,11 +12,12 @@ public struct MeshSource: Codable, Equatable, Sendable {
     public let faceCornerRanges: GeometryBuffer<MeshIndexRange>
     public let cornerIDs: GeometryBuffer<MeshCornerID>
     public let cornerVertexIDs: GeometryBuffer<MeshVertexID>
-    public let cornerEdgeIDs: GeometryBuffer<MeshEdgeID?>
+    public let cornerEdgeIDs: GeometryBuffer<MeshEdgeID>
     public let attributes: GeometryAttributeSet
 
     public init(
         identity: GeometrySourceID = GeometrySourceID(),
+        allocationState: MeshElementIDAllocationState,
         vertexIDs: GeometryBuffer<MeshVertexID>,
         vertexPositions: GeometryBuffer<GeometryPoint3D>,
         edgeIDs: GeometryBuffer<MeshEdgeID>,
@@ -24,10 +26,11 @@ public struct MeshSource: Codable, Equatable, Sendable {
         faceCornerRanges: GeometryBuffer<MeshIndexRange>,
         cornerIDs: GeometryBuffer<MeshCornerID>,
         cornerVertexIDs: GeometryBuffer<MeshVertexID>,
-        cornerEdgeIDs: GeometryBuffer<MeshEdgeID?>,
+        cornerEdgeIDs: GeometryBuffer<MeshEdgeID>,
         attributes: GeometryAttributeSet = GeometryAttributeSet()
     ) throws {
         self.identity = identity
+        self.allocationState = allocationState
         self.vertexIDs = vertexIDs
         self.vertexPositions = vertexPositions
         self.edgeIDs = edgeIDs
@@ -65,12 +68,20 @@ public struct MeshSource: Codable, Equatable, Sendable {
         try validateUnique(edgeIDs, label: "edge")
         try validateUnique(faceIDs, label: "face")
         try validateUnique(cornerIDs, label: "corner")
+        try allocationState.validate(
+            vertexIDs: vertexIDs,
+            edgeIDs: edgeIDs,
+            faceIDs: faceIDs,
+            cornerIDs: cornerIDs
+        )
         for position in vertexPositions {
             try position.validate()
         }
 
         let vertexSet = Set(vertexIDs)
         let edgeSet = Set(edgeIDs)
+        var endpointsByEdgeID: [MeshEdgeID: MeshEdgeEndpoints] = [:]
+        var edgeIDsByEndpoints: [MeshUndirectedEdgeKey: MeshEdgeID] = [:]
         for endpoints in edgeEndpoints {
             guard endpoints.start != endpoints.end,
                   vertexSet.contains(endpoints.start),
@@ -78,9 +89,24 @@ public struct MeshSource: Codable, Equatable, Sendable {
                 throw invalid("Edges must reference two distinct existing vertices.")
             }
         }
-        for edgeID in cornerEdgeIDs.compactMap({ $0 }) {
+        for index in edgeIDs.indices {
+            let edgeID = edgeIDs[index]
+            let endpoints = edgeEndpoints[index]
+            let key = MeshUndirectedEdgeKey(
+                first: endpoints.start,
+                second: endpoints.end
+            )
+            guard edgeIDsByEndpoints.updateValue(edgeID, forKey: key) == nil else {
+                throw MeshSourceError(
+                    code: .duplicateID,
+                    message: "Mesh edges must use unique undirected endpoint pairs."
+                )
+            }
+            endpointsByEdgeID[edgeID] = endpoints
+        }
+        for edgeID in cornerEdgeIDs {
             guard edgeSet.contains(edgeID) else {
-                throw invalid("Corners must reference existing edges when an edge is present.")
+                throw invalid("Corners must reference existing edges.")
             }
         }
         for vertexID in cornerVertexIDs {
@@ -88,11 +114,54 @@ public struct MeshSource: Codable, Equatable, Sendable {
                 throw invalid("Corners must reference existing vertices.")
             }
         }
+        var expectedCornerStart = 0
         for faceRange in faceCornerRanges {
             try faceRange.validate(upperBound: cornerIDs.count)
             guard faceRange.count >= 3 else {
                 throw invalid("Faces must contain at least three corners.")
             }
+            guard faceRange.start == expectedCornerStart else {
+                throw MeshSourceError(
+                    code: .invalidFaceLoop,
+                    message: "Mesh face ranges must partition the corner buffers in source order."
+                )
+            }
+            var faceVertexIDs: Set<MeshVertexID> = []
+            for cornerIndex in faceRange.start..<faceRange.end {
+                let vertexID = cornerVertexIDs[cornerIndex]
+                guard faceVertexIDs.insert(vertexID).inserted else {
+                    throw MeshSourceError(
+                        code: .invalidFaceLoop,
+                        message: "Mesh faces must not repeat vertices in one loop."
+                    )
+                }
+                let nextCornerIndex =
+                    cornerIndex + 1 == faceRange.end
+                    ? faceRange.start
+                    : cornerIndex + 1
+                let nextVertexID = cornerVertexIDs[nextCornerIndex]
+                let edgeID = cornerEdgeIDs[cornerIndex]
+                guard let endpoints = endpointsByEdgeID[edgeID],
+                      MeshUndirectedEdgeKey(
+                        first: endpoints.start,
+                        second: endpoints.end
+                      ) == MeshUndirectedEdgeKey(
+                        first: vertexID,
+                        second: nextVertexID
+                      ) else {
+                    throw MeshSourceError(
+                        code: .invalidFaceLoop,
+                        message: "Each mesh corner edge must connect its vertex to the next face vertex."
+                    )
+                }
+            }
+            expectedCornerStart = faceRange.end
+        }
+        guard expectedCornerStart == cornerIDs.count else {
+            throw MeshSourceError(
+                code: .invalidFaceLoop,
+                message: "Mesh face ranges must cover every corner exactly once."
+            )
         }
         try attributes.validate(
             counts: GeometryAttributeDomainCounts(

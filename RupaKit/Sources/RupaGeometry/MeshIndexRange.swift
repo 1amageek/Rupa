@@ -14,7 +14,13 @@ public struct MeshIndexRange: Codable, Equatable, Hashable, Sendable {
     }
 
     public func validate(upperBound: Int) throws {
-        guard start >= 0, count >= 0, start <= upperBound, end <= upperBound else {
+        let computedEnd = start.addingReportingOverflow(count)
+        guard start >= 0,
+              count >= 0,
+              upperBound >= 0,
+              !computedEnd.overflow,
+              start <= upperBound,
+              computedEnd.partialValue <= upperBound else {
             throw MeshSourceError(
                 code: .invalidFaceLoop,
                 message: "Mesh index ranges must remain within their buffer bounds."

@@ -7,6 +7,7 @@ public struct MeshSourceError: Error, Equatable, LocalizedError, Sendable {
         case invalidReference
         case invalidFaceLoop
         case duplicateID
+        case idSpaceExhausted
         case unsupportedOperation
         case malformedPayload
     }
