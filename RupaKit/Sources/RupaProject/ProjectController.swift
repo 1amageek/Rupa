@@ -158,6 +158,7 @@ public actor ProjectController {
         }
 
         do {
+            try requireTransactionRevision(prepared.baseTransactionRevision)
             try session.commitPreparedSourceTransaction(prepared)
         } catch let error as EditorError {
             throw projectError(for: error)
@@ -206,14 +207,22 @@ public actor ProjectController {
                 message: "Loaded CAD and universal project sources do not match."
             )
         }
-        let loadedRevision = DocumentTransactionRevision()
+        let loadedRevision: DocumentTransactionRevision
+        do {
+            loadedRevision = try expectedTransactionRevision.advanced()
+        } catch let error as EditorError {
+            throw projectError(for: error)
+        }
         let loadedEvaluation = try await evaluate(
             source: projectedSource,
             revision: loadedRevision
         )
         try requireTransactionRevision(expectedTransactionRevision)
 
-        session = EditorSession(document: loadedDocument)
+        session = EditorSession(
+            document: loadedDocument,
+            transactionRevision: loadedRevision
+        )
         packageDocument = loadedPackage
         evaluation = loadedEvaluation
         return ProjectStateSnapshot(

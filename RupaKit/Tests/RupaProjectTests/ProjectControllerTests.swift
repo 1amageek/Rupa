@@ -158,9 +158,88 @@ func projectControllerRoutesSaveAndLoadThroughCoherentPackageState() async throw
 
         #expect(loaded.document.cadDocument.metadata.name == "Saved")
         #expect(loaded.package.source.name == "Saved")
-        #expect(loaded.transactionRevision == DocumentTransactionRevision(0))
+        #expect(loaded.transactionRevision == DocumentTransactionRevision(2))
         #expect(await controller.currentDocument().cadDocument.metadata.name == "Saved")
-        #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(0))
+        #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(2))
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectControllerLoadInvalidatesPreLoadTransactionRevisions() async throws {
+    try await withTemporaryDirectory { directory in
+        let url = directory.appendingPathComponent("project.swcad")
+        let controller = try makeController(document: .empty(named: "Loaded"))
+        _ = try await controller.save(
+            to: url,
+            expectedTransactionRevision: DocumentTransactionRevision(0)
+        )
+        let loaded = try await controller.load(
+            from: url,
+            expectedTransactionRevision: DocumentTransactionRevision(0)
+        )
+
+        #expect(loaded.transactionRevision == DocumentTransactionRevision(1))
+        var caught: ProjectControllerError?
+        do {
+            _ = try await controller.commit(
+                ProjectSourceTransaction(
+                    name: "fixture.stale-after-load",
+                    commands: [.renameDocument(name: "Rejected")],
+                    expectedTransactionRevision: DocumentTransactionRevision(0)
+                )
+            )
+        } catch let error as ProjectControllerError {
+            caught = error
+        }
+        #expect(caught?.code == .revisionConflict)
+        #expect(await controller.currentDocument().cadDocument.metadata.name == "Loaded")
+        #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(1))
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectControllerRejectsLateCommitAfterPackageLoadPublishes() async throws {
+    try await withTemporaryDirectory { directory in
+        let url = directory.appendingPathComponent("project.swcad")
+        let gate = BlockingEvaluationGate()
+        defer { gate.releaseFirstEvaluation() }
+        let controller = try makeController(
+            document: .empty(named: "Loaded"),
+            evaluator: BlockingProjectEvaluator(gate: gate)
+        )
+        _ = try await controller.save(
+            to: url,
+            expectedTransactionRevision: DocumentTransactionRevision(0)
+        )
+        let commit = Task {
+            try await controller.commit(
+                ProjectSourceTransaction(
+                    name: "fixture.late",
+                    commands: [.renameDocument(name: "First")],
+                    expectedTransactionRevision: DocumentTransactionRevision(0)
+                )
+            )
+        }
+        while !gate.didStartFirstEvaluation {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+
+        let loaded = try await controller.load(
+            from: url,
+            expectedTransactionRevision: DocumentTransactionRevision(0)
+        )
+        gate.releaseFirstEvaluation()
+
+        var commitError: ProjectControllerError?
+        do {
+            _ = try await commit.value
+        } catch let error as ProjectControllerError {
+            commitError = error
+        }
+        #expect(commitError?.code == .revisionConflict)
+        #expect(loaded.transactionRevision == DocumentTransactionRevision(1))
+        #expect(await controller.currentDocument().cadDocument.metadata.name == "Loaded")
+        #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(1))
     }
 }
 

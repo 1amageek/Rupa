@@ -60,6 +60,8 @@
   - [x] Cover concurrent callers, stale requests, failed evaluation, failed save, and retained aggregate publication
   - [x] Review T03-A and run focused verification
   - [x] Commit the reviewed T03-A sprint
+  - [x] Preserve monotonic transaction revisions across package loads and reject late pre-load publications
+  - [x] Review, verify, and commit the T03-A concurrency correction
 - [ ] Integrated CAD/project transaction verification
   - [ ] Re-run incomplete-marker, synchronization, ownership, and zero-copy audits
   - [ ] Verify focused Core, DomainFoundation, Project, CAD integration, package, and bridge tests
