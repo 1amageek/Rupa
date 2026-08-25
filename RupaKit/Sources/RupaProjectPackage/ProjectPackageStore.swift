@@ -5,7 +5,9 @@ import RupaProjectModel
 
 /// Synchronous package I/O. Session ordering and dirty-state publication belong
 /// to the caller that owns the editable project lifecycle.
-public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting, Sendable {
+public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
+    ProjectPackageValidating, Sendable
+{
     private static let manifestPath = "manifest.json"
     private static let supportedRequiredFeatures: Set<String> = []
 
@@ -118,6 +120,11 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
             documentContentIdentity: prepared.manifest.documentContentIdentity,
             report: report
         )
+    }
+
+    public func validateForSave(_ document: ProjectPackageDocument) throws {
+        try limits.validate()
+        _ = try prepare(document)
     }
 
     private func decode(

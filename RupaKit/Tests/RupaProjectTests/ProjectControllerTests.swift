@@ -67,6 +67,8 @@ func projectControllerLoadsEvaluatesAndResavesMeshOnlyPackageWithoutCADAuthority
         )
 
         #expect(loaded.document.cadDocument.metadata.name == "Mesh Only")
+        #expect(loaded.document.id == sourceDocument.id)
+        #expect(loaded.document.cadDocument.units == sourceDocument.cadDocument.units)
         #expect(loaded.document.hasAuthoritativeCADSource == false)
         #expect(loaded.package.cadSource == nil)
         #expect(loaded.document.authoredMeshAssets == sourceDocument.authoredMeshAssets)
@@ -115,10 +117,105 @@ func projectControllerCADTransactionPreservesAuthoredMeshAuthorityAndPresentatio
     #expect(resultAsset.source == sourceAsset.source)
     #expect(resultAsset.provenance == sourceAsset.provenance)
     #expect(resultSelection == sourceSelection)
-    #expect(result.evaluation.occurrences.values.contains {
+    let usesPresentationMesh = result.evaluation.occurrences.values.contains {
         $0.representationID == sourceSelection.presentation
             && $0.reference == .authoredMesh(sourceAsset.id)
-    })
+    }
+    #expect(usesPresentationMesh)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectControllerRejectsLossyProductCodecBeforePublishing() async throws {
+    let controller = try makeController(
+        document: try meshOnlyDocument(named: "Before"),
+        productSourceCodec: NameCorruptingProductSourceCodec(triggerName: "After")
+    )
+    let retainedPackage = await controller.currentPackage()
+    var caught: ProjectControllerError?
+
+    do {
+        _ = try await controller.commit(
+            ProjectSourceTransaction(
+                name: "fixture.lossy-product",
+                commands: [.renameDocument(name: "After")],
+                expectedTransactionRevision: DocumentTransactionRevision(0)
+            )
+        )
+    } catch let error as ProjectControllerError {
+        caught = error
+    }
+
+    #expect(caught?.code == .sourceMismatch)
+    #expect(await controller.currentDocument().cadDocument.metadata.name == "Before")
+    #expect(await controller.currentPackage().productSource == retainedPackage.productSource)
+    #expect(await controller.currentEvaluationSource().name == "Before")
+    #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(0))
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectControllerRejectsLossyCADCodecBeforePublishing() async throws {
+    let sourceDocument = try cadAndMeshDocument(named: "Before")
+    let controller = try makeController(
+        document: sourceDocument,
+        cadSourceCodec: NameCorruptingCADSourceCodec(triggerName: "After")
+    )
+    let retainedPackage = await controller.currentPackage()
+    var caught: ProjectControllerError?
+
+    do {
+        _ = try await controller.commit(
+            ProjectSourceTransaction(
+                name: "fixture.lossy-cad",
+                commands: [.renameDocument(name: "After")],
+                expectedTransactionRevision: DocumentTransactionRevision(0)
+            )
+        )
+    } catch let error as ProjectControllerError {
+        caught = error
+    }
+
+    #expect(caught?.code == .sourceMismatch)
+    #expect(await controller.currentDocument().cadDocument.metadata.name == "Before")
+    #expect(await controller.currentPackage().cadSource == retainedPackage.cadSource)
+    #expect(
+        await controller.currentPackage().authoredMeshAssets
+            == retainedPackage.authoredMeshAssets
+    )
+    #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(0))
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectControllerRejectsUnsavableStagedPackageBeforePublishing() async throws {
+    let sourceDocument = try meshOnlyDocument(named: "Before")
+    let initialProductByteCount = try JSONProjectProductSourceCodec()
+        .encode(sourceDocument).data.count
+    var limits = ProjectPackageResourceLimits.standard
+    limits.maximumProductSourceByteCount = initialProductByteCount
+    let validator = ProjectPackageStore(limits: limits)
+    let controller = try makeController(
+        document: sourceDocument,
+        packageValidator: validator
+    )
+    let retainedPackage = await controller.currentPackage()
+    var caught: ProjectControllerError?
+
+    do {
+        _ = try await controller.commit(
+            ProjectSourceTransaction(
+                name: "fixture.unsavable-package",
+                commands: [.renameDocument(name: "A much longer staged Product name")],
+                expectedTransactionRevision: DocumentTransactionRevision(0)
+            )
+        )
+    } catch let error as ProjectControllerError {
+        caught = error
+    }
+
+    #expect(caught?.code == .packageFailed)
+    #expect(await controller.currentDocument().cadDocument.metadata.name == "Before")
+    #expect(await controller.currentPackage().productSource == retainedPackage.productSource)
+    #expect(await controller.currentEvaluationSource().name == "Before")
+    #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(0))
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -154,6 +251,47 @@ func projectControllerRejectsProductCADMismatchWithoutPublishing() async throws 
         }
 
         #expect(caught?.code == .sourceMismatch)
+        #expect(await controller.currentDocument().cadDocument.metadata.name == "Retained")
+        #expect(await controller.currentPackage().productSource == retainedPackage.productSource)
+        #expect(await controller.currentEvaluationSource().name == "Retained")
+        #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(0))
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectControllerProductDecodeFailureDoesNotPublishLoadedPackage() async throws {
+    try await withTemporaryDirectory { directory in
+        let url = directory.appendingPathComponent("invalid-product.rupa")
+        let sourceController = try makeController(
+            document: try meshOnlyDocument(named: "Invalid")
+        )
+        let sourcePackage = await sourceController.currentPackage()
+        let invalidProduct = try ProjectPackageProductSource(
+            data: Data("{\"schemaVersion\":99}".utf8)
+        )
+        let invalidPackage = try sourcePackage.replacingSources(
+            documentID: sourcePackage.documentID,
+            product: invalidProduct,
+            cad: sourcePackage.cadSource,
+            authoredMeshAssets: sourcePackage.authoredMeshAssets
+        )
+        _ = try ProjectPackageStore().save(invalidPackage, to: url)
+
+        let controller = try makeController(
+            document: try meshOnlyDocument(named: "Retained")
+        )
+        let retainedPackage = await controller.currentPackage()
+        var caught: ProjectControllerError?
+        do {
+            _ = try await controller.load(
+                from: url,
+                expectedTransactionRevision: DocumentTransactionRevision(0)
+            )
+        } catch let error as ProjectControllerError {
+            caught = error
+        }
+
+        #expect(caught?.code == .productSourceFailed)
         #expect(await controller.currentDocument().cadDocument.metadata.name == "Retained")
         #expect(await controller.currentPackage().productSource == retainedPackage.productSource)
         #expect(await controller.currentEvaluationSource().name == "Retained")
@@ -479,14 +617,19 @@ func projectControllerFailedSaveRetainsCurrentAggregate() async throws {
 private func makeController(
     document: DesignDocument,
     evaluator: any ProjectEvaluating = ProjectEvaluationEngine(),
-    packageWriter: any ProjectPackageWriting = ProjectPackageStore()
+    productSourceCodec: any ProjectProductSourceCoding = JSONProjectProductSourceCodec(),
+    cadSourceCodec: any ProjectCADSourceCoding = JSONProjectCADSourceCodec(),
+    packageWriter: any ProjectPackageWriting = ProjectPackageStore(),
+    packageValidator: any ProjectPackageValidating = ProjectPackageStore()
 ) throws -> ProjectController {
     try ProjectController(
         document: document,
         evaluator: evaluator,
         projector: FixtureProjector(),
-        cadSourceCodec: FixtureCADSourceCodec(),
-        packageWriter: packageWriter
+        productSourceCodec: productSourceCodec,
+        cadSourceCodec: cadSourceCodec,
+        packageWriter: packageWriter,
+        packageValidator: packageValidator
     )
 }
 
@@ -532,22 +675,42 @@ private struct FixtureProjector: ProjectSourceProjecting {
     }
 }
 
-private struct FixtureCADSourceCodec: ProjectCADSourceCoding {
-    func encode(_ document: CADDocument) throws -> ProjectPackageCADSource {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        return try ProjectPackageCADSource(
-            data: encoder.encode(document)
-        )
+private func decodedProductName(_ source: ProjectPackageProductSource) throws -> String? {
+    try JSONProjectProductSourceCodec().decode(source).name
+}
+
+private struct NameCorruptingProductSourceCodec: ProjectProductSourceCoding {
+    let triggerName: String
+
+    func encode(_ document: DesignDocument) throws -> ProjectPackageProductSource {
+        guard document.cadDocument.metadata.name == triggerName else {
+            return try JSONProjectProductSourceCodec().encode(document)
+        }
+        var corrupted = document
+        corrupted.cadDocument.metadata.name = "Corrupted"
+        return try JSONProjectProductSourceCodec().encode(corrupted)
     }
 
-    func decode(_ source: ProjectPackageCADSource) throws -> CADDocument {
-        try JSONDecoder().decode(CADDocument.self, from: source.data)
+    func decode(_ source: ProjectPackageProductSource) throws -> ProjectProductSourceModel {
+        try JSONProjectProductSourceCodec().decode(source)
     }
 }
 
-private func decodedProductName(_ source: ProjectPackageProductSource) throws -> String? {
-    try JSONProjectProductSourceCodec().decode(source).name
+private struct NameCorruptingCADSourceCodec: ProjectCADSourceCoding {
+    let triggerName: String
+
+    func encode(_ document: CADDocument) throws -> ProjectPackageCADSource {
+        guard document.metadata.name == triggerName else {
+            return try JSONProjectCADSourceCodec().encode(document)
+        }
+        var corrupted = document
+        corrupted.metadata.name = "Corrupted"
+        return try JSONProjectCADSourceCodec().encode(corrupted)
+    }
+
+    func decode(_ source: ProjectPackageCADSource) throws -> CADDocument {
+        try JSONProjectCADSourceCodec().decode(source)
+    }
 }
 
 private struct FailingProjectEvaluator: ProjectEvaluating {

@@ -120,6 +120,12 @@ flowchart LR
 Any decode, cross-reference, evaluation, cancellation, revision, or stale
 publication failure discards all staged values.
 
+Commit performs the same canonical Product/CAD/Mesh catalog and blob planning,
+digest, manifest, and resource-limit validation without writing a destination.
+It then decodes the staged Product/CAD sources, rebuilds the evaluation
+projection, and rejects lossy codec output before publishing editor, package,
+projection, or evaluation state.
+
 ## Verification
 
 Required behavior tests cover:

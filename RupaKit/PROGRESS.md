@@ -91,22 +91,12 @@
   - [x] Preserve bounded streaming, content-addressed reuse, atomic save, adjunct preservation, and garbage collection
   - [x] Verify CAD-only, CAD-plus-Mesh, Mesh-only, corruption, deterministic identity, and copy-budget paths
   - [x] Review, verify, and commit T04-C
-- [ ] T04-D atomic ProjectController integration
-  - [ ] Split Product and CAD codecs and derive evaluation projections from retained sources
-  - [ ] Commit and load Product, optional CAD, Mesh assets, projection, and presentation evaluation atomically
-  - [ ] Reconstruct a non-authoritative empty runtime CAD adapter for Mesh-only packages
-  - [ ] Preserve revision, cancellation, stale-publication, rollback, and save failure contracts
-  - [ ] Review, verify, and commit T04-D
-- [ ] T05 linked and authored-Mesh lifecycle
-  - [ ] Add saved derivation recipes and dependency-keyed linked-Mesh invalidation
-  - [ ] Implement atomic Make Editable or Bake with provenance and undo or redo
-  - [ ] Prove CAD and authored-Mesh mutation isolation through UI-neutral project commands
-  - [ ] Review, verify, and commit T05
-- [ ] CM03 reconstruction input and CAD acceptance boundary
-  - [ ] Define immutable capture/input identities and bounded package storage
-  - [ ] Define reconstruction job, candidate, deviation, uncertainty, and unresolved-region records
-  - [ ] Implement explicit candidate-CAD acceptance without mutating retained observations
-  - [ ] Review CM03, run focused verification, and commit the sprint
+- [x] T04-D atomic ProjectController integration
+  - [x] Split Product and CAD codecs and derive evaluation projections from retained sources
+  - [x] Commit and load Product, optional CAD, Mesh assets, projection, and presentation evaluation atomically
+  - [x] Reconstruct a non-authoritative empty runtime CAD adapter for Mesh-only packages
+  - [x] Preserve revision, cancellation, stale-publication, rollback, and save failure contracts
+  - [x] Review, verify, and commit T04-D
 - [ ] Integrated T04 representation source-authority verification
   - [ ] Re-run incomplete-marker, synchronization, ownership, and zero-copy audits
   - [ ] Verify CAD-only, CAD-plus-Mesh, Mesh-only, package, transaction, and failure paths

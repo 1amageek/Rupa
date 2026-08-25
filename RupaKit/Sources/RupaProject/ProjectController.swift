@@ -17,6 +17,7 @@ public actor ProjectController {
     private let cadSourceCodec: any ProjectCADSourceCoding
     private let packageReader: any ProjectPackageReading
     private let packageWriter: any ProjectPackageWriting
+    private let packageValidator: any ProjectPackageValidating
 
     public init(
         document: DesignDocument,
@@ -25,13 +26,15 @@ public actor ProjectController {
         productSourceCodec: any ProjectProductSourceCoding = JSONProjectProductSourceCodec(),
         cadSourceCodec: any ProjectCADSourceCoding = JSONProjectCADSourceCodec(),
         packageReader: any ProjectPackageReading = ProjectPackageStore(),
-        packageWriter: any ProjectPackageWriting = ProjectPackageStore()
+        packageWriter: any ProjectPackageWriting = ProjectPackageStore(),
+        packageValidator: any ProjectPackageValidating = ProjectPackageStore()
     ) throws {
         let initial = try Self.makeInitialState(
             document: document,
             projector: projector,
             productSourceCodec: productSourceCodec,
-            cadSourceCodec: cadSourceCodec
+            cadSourceCodec: cadSourceCodec,
+            packageValidator: packageValidator
         )
         session = EditorSession(document: document)
         packageDocument = initial.package
@@ -43,6 +46,7 @@ public actor ProjectController {
         self.cadSourceCodec = cadSourceCodec
         self.packageReader = packageReader
         self.packageWriter = packageWriter
+        self.packageValidator = packageValidator
     }
 
     public init(
@@ -52,8 +56,17 @@ public actor ProjectController {
         productSourceCodec: any ProjectProductSourceCoding = JSONProjectProductSourceCodec(),
         cadSourceCodec: any ProjectCADSourceCoding = JSONProjectCADSourceCodec(),
         packageReader: any ProjectPackageReading = ProjectPackageStore(),
-        packageWriter: any ProjectPackageWriting = ProjectPackageStore()
+        packageWriter: any ProjectPackageWriting = ProjectPackageStore(),
+        packageValidator: any ProjectPackageValidating = ProjectPackageStore()
     ) throws {
+        do {
+            try packageValidator.validateForSave(package)
+        } catch {
+            throw ProjectControllerError(
+                code: .packageFailed,
+                message: "Initial project package validation failed: \(error)."
+            )
+        }
         let initial = try Self.decodeAndValidate(
             package: package,
             projector: projector,
@@ -70,6 +83,7 @@ public actor ProjectController {
         self.cadSourceCodec = cadSourceCodec
         self.packageReader = packageReader
         self.packageWriter = packageWriter
+        self.packageValidator = packageValidator
     }
 
     public func currentDocument() -> DesignDocument {
@@ -156,10 +170,6 @@ public actor ProjectController {
                 message: "A source transaction cannot change the project identity."
             )
         }
-        let stagedEvaluation = try await evaluate(
-            source: stagedEvaluationSource,
-            revision: prepared.proposedTransactionRevision
-        )
         let stagedPackage: ProjectPackageDocument
         do {
             stagedPackage = try packageDocument.replacingSources(
@@ -174,6 +184,18 @@ public actor ProjectController {
                 message: "Staged project package validation failed: \(error)."
             )
         }
+        try await validatePackageForSave(stagedPackage)
+        let reconstructed = try await reconstructState(from: stagedPackage)
+        guard reconstructed.evaluationSource == stagedEvaluationSource else {
+            throw ProjectControllerError(
+                code: .sourceMismatch,
+                message: "Staged Product, CAD, and Mesh sources do not reproduce the edited document."
+            )
+        }
+        let stagedEvaluation = try await evaluate(
+            source: reconstructed.evaluationSource,
+            revision: prepared.proposedTransactionRevision
+        )
 
         do {
             try requireTransactionRevision(prepared.baseTransactionRevision)
@@ -218,24 +240,7 @@ public actor ProjectController {
             )
         }
 
-        let loadedProductSource = try await decodeProductSource(
-            loadedPackage.productSource
-        )
-        let loadedCADDocument = try await decodeOptionalCADSource(
-            loadedPackage.cadSource
-        )
-        let loadedDocument = try Self.assembleDocument(
-            package: loadedPackage,
-            product: loadedProductSource,
-            cadDocument: loadedCADDocument
-        )
-        let loadedEvaluationSource = try await projectSource(loadedDocument)
-        guard loadedEvaluationSource.id == loadedPackage.documentID else {
-            throw ProjectControllerError(
-                code: .sourceMismatch,
-                message: "Loaded Product identity and evaluation projection differ."
-            )
-        }
+        let reconstructed = try await reconstructState(from: loadedPackage)
         let loadedRevision: DocumentTransactionRevision
         do {
             loadedRevision = try expectedTransactionRevision.advanced()
@@ -243,20 +248,20 @@ public actor ProjectController {
             throw projectError(for: error)
         }
         let loadedEvaluation = try await evaluate(
-            source: loadedEvaluationSource,
+            source: reconstructed.evaluationSource,
             revision: loadedRevision
         )
         try requireTransactionRevision(expectedTransactionRevision)
 
         session = EditorSession(
-            document: loadedDocument,
+            document: reconstructed.document,
             transactionRevision: loadedRevision
         )
         packageDocument = loadedPackage
-        evaluationSource = loadedEvaluationSource
+        evaluationSource = reconstructed.evaluationSource
         evaluation = loadedEvaluation
         return ProjectStateSnapshot(
-            document: loadedDocument,
+            document: reconstructed.document,
             package: loadedPackage,
             transactionRevision: loadedRevision,
             evaluation: loadedEvaluation
@@ -407,6 +412,46 @@ public actor ProjectController {
         }
     }
 
+    private func reconstructState(
+        from package: ProjectPackageDocument
+    ) async throws -> (document: DesignDocument, evaluationSource: ProjectSourceModel) {
+        let product = try await decodeProductSource(package.productSource)
+        let cadDocument = try await decodeOptionalCADSource(package.cadSource)
+        let document = try Self.assembleDocument(
+            package: package,
+            product: product,
+            cadDocument: cadDocument
+        )
+        let source = try await projectSource(document)
+        guard source.id == package.documentID else {
+            throw ProjectControllerError(
+                code: .sourceMismatch,
+                message: "Product identity and evaluation projection differ."
+            )
+        }
+        return (document, source)
+    }
+
+    private func validatePackageForSave(
+        _ package: ProjectPackageDocument
+    ) async throws {
+        let validator = packageValidator
+        do {
+            try await Self.performDetached {
+                try Task.checkCancellation()
+                try validator.validateForSave(package)
+                try Task.checkCancellation()
+            }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw ProjectControllerError(
+                code: .packageFailed,
+                message: "Staged project package encoding validation failed: \(error)."
+            )
+        }
+    }
+
     private func evaluate(
         source: ProjectSourceModel,
         revision: DocumentTransactionRevision
@@ -460,7 +505,8 @@ public actor ProjectController {
         document: DesignDocument,
         projector: any ProjectSourceProjecting,
         productSourceCodec: any ProjectProductSourceCoding,
-        cadSourceCodec: any ProjectCADSourceCoding
+        cadSourceCodec: any ProjectCADSourceCoding,
+        packageValidator: any ProjectPackageValidating
     ) throws -> (package: ProjectPackageDocument, evaluationSource: ProjectSourceModel) {
         do {
             _ = try document.validate()
@@ -500,30 +546,13 @@ public actor ProjectController {
                 message: "Initial CAD source encoding failed: \(error)."
             )
         }
-        let product: ProjectProductSourceModel
+        let package: ProjectPackageDocument
         do {
-            product = try productSourceCodec.decode(productSource)
-        } catch {
-            throw ProjectControllerError(
-                code: .productSourceFailed,
-                message: "Initial Product source verification failed: \(error)."
-            )
-        }
-        guard product.projectID == source.id else {
-            throw ProjectControllerError(
-                code: .sourceMismatch,
-                message: "Initial Product identity and evaluation projection differ."
-            )
-        }
-        do {
-            return (
-                try ProjectPackageDocument(
-                    documentID: source.id,
-                    productSource: productSource,
-                    cadSource: cadSource,
-                    authoredMeshAssets: document.authoredMeshAssets
-                ),
-                source
+            package = try ProjectPackageDocument(
+                documentID: source.id,
+                productSource: productSource,
+                cadSource: cadSource,
+                authoredMeshAssets: document.authoredMeshAssets
             )
         } catch {
             throw ProjectControllerError(
@@ -531,6 +560,27 @@ public actor ProjectController {
                 message: "Initial project package creation failed: \(error)."
             )
         }
+        do {
+            try packageValidator.validateForSave(package)
+        } catch {
+            throw ProjectControllerError(
+                code: .packageFailed,
+                message: "Initial project package encoding validation failed: \(error)."
+            )
+        }
+        let reconstructed = try decodeAndValidate(
+            package: package,
+            projector: projector,
+            productSourceCodec: productSourceCodec,
+            cadSourceCodec: cadSourceCodec
+        )
+        guard reconstructed.evaluationSource == source else {
+            throw ProjectControllerError(
+                code: .sourceMismatch,
+                message: "Initial codecs do not reproduce the supplied DesignDocument."
+            )
+        }
+        return (package, source)
     }
 
     private static func decodeAndValidate(
