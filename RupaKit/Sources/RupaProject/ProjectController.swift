@@ -6,7 +6,7 @@ import RupaProjectModel
 import RupaProjectPackage
 import SwiftCAD
 
-public actor ProjectController {
+public actor ProjectController: ProjectOperating {
     private var session: EditorSession
     private var packageDocument: ProjectPackageDocument
     private var evaluationSource: ProjectSourceModel
