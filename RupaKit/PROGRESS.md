@@ -62,8 +62,8 @@
   - [x] Commit the reviewed T03-A sprint
   - [x] Preserve monotonic transaction revisions across package loads and reject late pre-load publications
   - [x] Review, verify, and commit the T03-A concurrency correction
-- [ ] Integrated CAD/project transaction verification
-  - [ ] Re-run incomplete-marker, synchronization, ownership, and zero-copy audits
-  - [ ] Verify focused Core, DomainFoundation, Project, CAD integration, package, and bridge tests
-  - [ ] Verify the direct ProjectController transaction and package routes without changing the deferred RupaKit application composition
-  - [ ] Review cumulative changes, remove obsolete status text, and record completion evidence
+- [x] Integrated CAD/project transaction verification
+  - [x] Re-run incomplete-marker, synchronization, ownership, and zero-copy audits
+  - [x] Verify focused Core, DomainFoundation, Project, CAD integration, package, and bridge tests
+  - [x] Verify the direct ProjectController transaction and package routes without changing the deferred RupaKit application composition
+  - [x] Review cumulative changes, remove obsolete status text, and record completion evidence

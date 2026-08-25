@@ -29,12 +29,12 @@ Model.swcad
     `-- <namespaced preserved entries>
 ```
 
-Only `manifest.json` and the declared source entries are required. Source blobs
-are required only when referenced by an authored source record. Records,
-artifacts, and namespaced extension entries are optional. Removing cache artifacts
-must not remove editable source. Removing audit records may invalidate a previous
-handoff claim and therefore requires an explicit package operation, never normal
-source save.
+Package schema v2 requires `manifest.json`, `source/cad.json`, and
+`source/rupa.json`. Additional source blobs are required only when referenced by
+an authored source record. Records, artifacts, and namespaced extension entries
+are optional. Removing cache artifacts must not remove editable source. Removing
+audit records may invalidate a previous handoff claim and therefore requires an
+explicit package operation, never normal source save.
 
 ## Independent Schema Versions
 

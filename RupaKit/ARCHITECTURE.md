@@ -153,9 +153,12 @@ let saved = try store.save(edited, to: destinationURL)
 let retainedPackage = saved.document
 ```
 
-`ProjectPackageStore` owns synchronous package I/O only. A later `RupaProject`
-integration owns actor ordering, revision checks, dirty-state publication, and the
-decision to replace the session's retained package aggregate after `save` succeeds.
+`ProjectPackageStore` owns synchronous package I/O only. `RupaProject.ProjectController`
+owns actor ordering, transaction-revision checks, staged CAD/universal evaluation,
+monotonic revision publication across package loads, and replacement of its
+retained package aggregate after `save` succeeds. RupaKit application composition
+still owns injection of the concrete CAD codec/projector and routing the current
+UI lifecycle through that controller.
 
 ## Editing State Contracts
 
@@ -179,7 +182,7 @@ flowchart LR
 | Validated source capability | `ValidatedDesignDocument` and `ValidatedCADDocument` | Full validation produces an immutable capability. Graph-stable feature edits may derive a new capability only when inputs, outputs, and suppression are unchanged and the edited operation and expressions validate locally. The evaluation cache carries the capability so Core does not repeat whole-document validation. |
 | Incremental exact evaluation | `SwiftCAD.DocumentEvaluationEngine` | A changed feature invalidates its dependency closure. Unchanged profiles, curves, BRep deltas, generated names, and meshes are reused; rebuilt feature results are validated before deterministic delta merge. |
 | Universal CAD evaluation reuse | `CADDocumentEvaluationCache` owned by `DefaultDesignDocumentProjectEvaluatorFactory` | A matching `DocumentEvaluationContext` seeds the current revision so migration does not evaluate the same CAD source twice. An exact revision returns the cached immutable evaluation without invoking Swift-CAD; a later revision receives it for incremental execution. Equal revisions with different source fingerprints fail as `sourceRevisionConflict`, stale contexts fail explicitly, and an older completion cannot replace a newer cache entry. A multi-source provider request stages all entries and validates conflicts before one atomic publication. Mutex sections contain only in-memory lookup/publication; validation, evaluation, fingerprinting, and mesh conversion run outside the lock. |
-| Temporary CAD-first editor route | `RupaCore.EvaluationScheduler` and `EvaluatedDocumentCache` | This remains the authoritative current editor evaluation until the universal source transaction milestone T01 replaces `DesignDocument` publication. New universal consumers must use `DesignDocumentProjectSnapshotBuilder` and seed from `DocumentEvaluationContext`; they must not add another direct `DocumentEvaluator` route. The deletion gate is a revision-checked universal commit with equivalent CAD command, undo, failure, and viewport behavior. |
+| Temporary CAD-first editor route | `RupaCore.EvaluationScheduler` and `EvaluatedDocumentCache` | This remains the authoritative application evaluation during deferred RupaKit composition. T01 now provides coherent revision-checked `DesignDocument` transaction publication, and `ProjectController` provides staged CAD/universal/package publication. New universal consumers must use `DesignDocumentProjectSnapshotBuilder` and seed from `DocumentEvaluationContext`; they must not add another direct `DocumentEvaluator` route. The deletion gate is RupaKit composition with equivalent CAD command, undo, failure, and viewport behavior. |
 
 ## Surface M3 Status
 

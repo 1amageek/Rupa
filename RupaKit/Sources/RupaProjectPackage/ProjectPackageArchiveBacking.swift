@@ -15,7 +15,8 @@ struct ProjectPackageArchiveBacking: Sendable {
                 message: "Project package metadata exceeds its configured limit."
             )
         }
-        // JSONDecoder is the owning metadata boundary. Mesh payloads never call
+        // Canonical JSON metadata and CAD-source codecs consume owning Data.
+        // This is their single materialization boundary; mesh payloads never call
         // this method and remain mapped owner-plus-range values.
         return data.subdata(in: entry.payloadRange)
     }

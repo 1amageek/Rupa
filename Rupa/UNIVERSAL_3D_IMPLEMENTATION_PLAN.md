@@ -36,15 +36,15 @@ The plan is executable and the following slices have evidence in the repository:
 | M1 polygon triangulation view | First slice complete | `MeshSource.triangulate` performs planarity validation and concave-safe ear clipping as derived data; source face loops remain unchanged. |
 | M1 project source aggregate | First slice complete | `RupaProjectModel` validates mesh references, object definitions, occurrence hierarchy, roots, and external provider references without importing CAD. |
 | M1 evaluation integration | First slice complete | `RupaEvaluation` evaluates mesh providers into immutable occurrence snapshots with composed transforms and world bounds; provider injection leaves the CAD adapter boundary explicit. |
-| M1 CAD provider integration | First slice complete | `RupaCADIntegration` owns concrete Swift-CAD evaluator construction, converts body meshes at the provider boundary, batches unique references, seeds the current validated Core evaluation during migration, and retains a source-fingerprint-checked incremental cache across snapshots; source transaction composition is still open. |
+| M1 CAD provider integration | First slice complete | `RupaCADIntegration` owns concrete Swift-CAD evaluator construction, converts body meshes at the provider boundary, batches unique references, seeds the current validated Core evaluation during migration, and retains a source-fingerprint-checked incremental cache across snapshots. Project transaction composition now depends on injected CAD codec and projection ports; RupaKit application composition remains deferred. |
 | M1 DesignDocument source bridge | First slice complete | `DesignDocumentProjectBridge` derives a validated universal project hierarchy from `DesignDocument` without moving CAD types into `RupaProjectModel`; CAD body feature IDs resolve through the provider boundary. |
 | M1 universal viewport scene | First slice complete | `UniversalViewportSceneBuilder` projects immutable evaluated occurrences into a renderer-facing scene while preserving occurrence, definition, source reference, transform, mesh, and world bounds. Metal resource realization remains open. |
-| M1 project transaction controller | First slice complete | `RupaProject.ProjectController` stages immutable source, evaluates off-actor, rechecks source revision, and publishes only successful results. |
-| M1 CAD/project transaction integration | In progress | Read-only `DesignDocument` projection and universal evaluation are connected; bidirectional source publication and persistent mesh/project-source storage remain open. |
+| M1 project transaction controller | Transaction foundation complete | `RupaProject.ProjectController` owns one private `EditorSession` and retained package aggregate, requires expected transaction revisions, encodes and projects staged CAD off-actor, evaluates before publication, rechecks revision, keeps revisions monotonic across package loads, and orders package load/save. |
+| M1 CAD/project transaction integration | Transaction foundation complete | `RupaCore` publishes CAD/history/revision as one source state, package schema v2 requires fingerprinted `source/cad.json` and `source/rupa.json`, and `ProjectController` publishes CAD, universal source, package aggregate, and evaluation only after staged validation. RupaKit still needs to inject its concrete codec/projector and replace the temporary CAD-first application route. |
 
-The first-slice rows are not milestone completion. The remaining M1 work must
-integrate CAD and mesh sources into one project transaction/evaluation route
-before M1 can be marked complete.
+The first-slice rows are not milestone completion. The remaining M1 work is the
+RupaKit application composition and mixed CAD/mesh workflow acceptance evidence;
+the Core, package, and Project transaction foundation is complete.
 
 ### G01 Verification Baseline
 
