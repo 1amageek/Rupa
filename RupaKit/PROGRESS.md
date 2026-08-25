@@ -125,13 +125,13 @@
   - [x] Reconcile normative package and implementation-status documents with the production application route
   - [x] Re-run the Core baseline and the T04/P1 focused verification
   - [x] Review, verify, and commit T05-0
-- [ ] T05-A authored-Mesh source command contract
-  - [ ] Define typed authored-Mesh edit and representation-selection commands in the Core owner
-  - [ ] Apply vertex and supported face edits through MeshEditBuffer with stale-source rejection
-  - [ ] Preserve CAD authority, Mesh provenance, representation references, and no-op identity
-  - [ ] Reject unsupported attribute remapping and invalid source/object/representation combinations explicitly
-  - [ ] Prove unchanged buffer storage sharing and bounded copy telemetry
-  - [ ] Review, verify, and commit T05-A
+- [x] T05-A authored-Mesh source command contract
+  - [x] Define typed authored-Mesh edit and representation-selection commands in the Core owner
+  - [x] Apply vertex and supported face edits through MeshEditBuffer with stale-source rejection
+  - [x] Preserve CAD authority, Mesh provenance, representation references, and no-op identity
+  - [x] Reject unsupported attribute remapping and invalid source/object/representation combinations explicitly
+  - [x] Prove unchanged buffer storage sharing and bounded copy telemetry
+  - [x] Review, verify, and commit T05-A
 - [ ] T05-B atomic authored-Mesh project transactions
   - [ ] Extend ProjectSourceTransaction without making the evaluation projection a mutation source
   - [ ] Stage CAD and authored-Mesh commands in a deterministic order and validate the complete authority aggregate

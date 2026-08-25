@@ -10,6 +10,7 @@ public struct EditorError: Error, Codable, Equatable, Sendable {
         case workspaceRevisionMismatch = "workspace.revisionMismatch"
         case documentLoadFailed = "document.loadFailed"
         case documentSaveFailed = "document.saveFailed"
+        case sourceIdentityMismatch = "source.identityMismatch"
         case commandInvalid = "command.invalid"
         case commandFailed = "command.failed"
         case sessionNotFound = "session.notFound"

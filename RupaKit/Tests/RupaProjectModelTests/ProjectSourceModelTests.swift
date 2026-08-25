@@ -1,3 +1,4 @@
+import Foundation
 import RupaGeometry
 import RupaCoreTypes
 import Testing
@@ -81,6 +82,46 @@ func projectSourceModelRejectsExternalReferenceIDsWithSurroundingWhitespace() th
     }
 
     #expect(error?.code == .invalidReference)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func authoredMeshAssetContentIdentityTracksPayloadAndRejectsTampering() throws {
+    let source = try triangleSource()
+    let asset = try AuthoredMeshAsset(source: source, provenance: .created)
+    var edit = MeshEditBuffer(source: source)
+    try edit.setVertexPosition(
+        GeometryPoint3D(x: 0, y: 0, z: 1),
+        for: source.vertexIDs[0]
+    )
+    let editedAsset = try asset.replacingSource(try edit.commit().source)
+    let encoded = try JSONEncoder().encode(asset)
+    let decoded = try JSONDecoder().decode(AuthoredMeshAsset.self, from: encoded)
+
+    #expect(decoded == asset)
+    #expect(asset.contentIdentity.domain == AuthoredMeshSourceIdentityService.domain)
+    #expect(editedAsset.contentIdentity != asset.contentIdentity)
+
+    let replacementIdentity = try ContentIdentity(
+        domain: AuthoredMeshSourceIdentityService.domain,
+        fingerprint: ContentFingerprint(
+            algorithm: AuthoredMeshSourceIdentityService.fingerprintAlgorithm,
+            value: String(repeating: "0", count: 64)
+        )
+    )
+    let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    var tampered = object
+    tampered["contentIdentity"] = [
+        "domain": replacementIdentity.domain,
+        "fingerprint": [
+            "algorithm": replacementIdentity.fingerprint.algorithm,
+            "value": replacementIdentity.fingerprint.value,
+        ],
+    ]
+    let tamperedData = try JSONSerialization.data(withJSONObject: tampered)
+
+    #expect(throws: DecodingError.self) {
+        _ = try JSONDecoder().decode(AuthoredMeshAsset.self, from: tamperedData)
+    }
 }
 
 private func triangleSource() throws -> MeshSource {

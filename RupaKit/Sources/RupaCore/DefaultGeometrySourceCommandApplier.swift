@@ -1,0 +1,236 @@
+import Foundation
+import SwiftCAD
+import RupaCoreTypes
+import RupaGeometry
+import RupaProjectModel
+
+public struct DefaultGeometrySourceCommandApplier: GeometrySourceCommandApplying {
+    public init() {}
+
+    public func apply(
+        _ command: GeometrySourceCommand,
+        to document: DesignDocument,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> GeometrySourceCommandApplication {
+        _ = try document.validate(objectRegistry: objectRegistry)
+        switch command {
+        case .editAuthoredMesh(let edit):
+            return try apply(
+                edit,
+                to: document,
+                objectRegistry: objectRegistry
+            )
+        case .selectRepresentation(let selection):
+            return try apply(
+                selection,
+                to: document,
+                objectRegistry: objectRegistry
+            )
+        }
+    }
+
+    private func apply(
+        _ command: AuthoredMeshEditCommand,
+        to document: DesignDocument,
+        objectRegistry: ObjectTypeRegistry
+    ) throws -> GeometrySourceCommandApplication {
+        let target = command.target
+        try target.validate()
+        let asset = try requireAsset(for: target, in: document)
+        guard asset.contentIdentity == target.expectedSourceIdentity else {
+            throw EditorError(
+                code: .sourceIdentityMismatch,
+                message: "Authored Mesh source changed after the edit target was resolved."
+            )
+        }
+
+        var editBuffer = MeshEditBuffer(source: asset.source)
+        var addedFaceID: MeshFaceID?
+        switch command {
+        case .setVertexPosition(_, let vertexID, let position):
+            try editBuffer.setVertexPosition(position, for: vertexID)
+        case .addFace(_, let vertexIDs):
+            addedFaceID = try editBuffer.addFace(vertexIDs: vertexIDs)
+        case .deleteFace(_, let faceID):
+            try editBuffer.deleteFace(faceID)
+        }
+
+        let didMutate = editBuffer.hasEdits
+        let commit = try editBuffer.commit()
+        guard didMutate else {
+            return GeometrySourceCommandApplication(
+                document: document,
+                result: .authoredMeshEdit(
+                    GeometrySourceCommandResult.AuthoredMeshEdit(
+                        sourceID: asset.id,
+                        previousSourceIdentity: asset.contentIdentity,
+                        sourceIdentity: asset.contentIdentity,
+                        addedFaceID: nil,
+                        didMutate: false,
+                        copyTelemetry: commit.telemetry
+                    )
+                )
+            )
+        }
+
+        let editedAsset = try asset.replacingSource(commit.source)
+        var staged = document
+        staged.authoredMeshAssets[asset.id] = editedAsset
+        _ = try staged.validate(objectRegistry: objectRegistry)
+        return GeometrySourceCommandApplication(
+            document: staged,
+            result: .authoredMeshEdit(
+                GeometrySourceCommandResult.AuthoredMeshEdit(
+                    sourceID: editedAsset.id,
+                    previousSourceIdentity: asset.contentIdentity,
+                    sourceIdentity: editedAsset.contentIdentity,
+                    addedFaceID: addedFaceID,
+                    didMutate: true,
+                    copyTelemetry: commit.telemetry
+                )
+            )
+        )
+    }
+
+    private func apply(
+        _ command: GeometryRepresentationSelectionCommand,
+        to document: DesignDocument,
+        objectRegistry: ObjectTypeRegistry
+    ) throws -> GeometrySourceCommandApplication {
+        try command.validate()
+        guard var sceneNode = document.productMetadata.sceneNodes[command.sceneNodeID],
+              var object = sceneNode.object else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Geometry representation selection requires an existing Product Object."
+            )
+        }
+        guard let representation = object.geometryRepresentations
+            .representations[command.representationID],
+              var selection = object.geometryRepresentations.selection else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Geometry representation selection requires a retained representation."
+            )
+        }
+        let previousRepresentationID = selection.representationID(for: command.purpose)
+        guard previousRepresentationID != command.representationID else {
+            return GeometrySourceCommandApplication(
+                document: document,
+                result: .representationSelection(
+                    GeometrySourceCommandResult.RepresentationSelection(
+                        sceneNodeID: command.sceneNodeID,
+                        purpose: command.purpose,
+                        previousRepresentationID: previousRepresentationID,
+                        representationID: command.representationID,
+                        didMutate: false
+                    )
+                )
+            )
+        }
+
+        switch command.purpose {
+        case .modeling:
+            selection.modeling = command.representationID
+            sceneNode.reference = try navigationReference(
+                for: representation.source,
+                object: object
+            )
+        case .presentation:
+            selection.presentation = command.representationID
+        }
+        object.geometryRepresentations.selection = selection
+        sceneNode.object = object
+        var staged = document
+        staged.productMetadata.sceneNodes[command.sceneNodeID] = sceneNode
+        _ = try staged.validate(objectRegistry: objectRegistry)
+        return GeometrySourceCommandApplication(
+            document: staged,
+            result: .representationSelection(
+                GeometrySourceCommandResult.RepresentationSelection(
+                    sceneNodeID: command.sceneNodeID,
+                    purpose: command.purpose,
+                    previousRepresentationID: previousRepresentationID,
+                    representationID: command.representationID,
+                    didMutate: true
+                )
+            )
+        )
+    }
+
+    private func requireAsset(
+        for target: AuthoredMeshEditTarget,
+        in document: DesignDocument
+    ) throws -> AuthoredMeshAsset {
+        guard let sceneNode = document.productMetadata.sceneNodes[target.sceneNodeID],
+              let object = sceneNode.object else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Authored Mesh edits require an existing Product Object."
+            )
+        }
+        guard let representation = object.geometryRepresentations
+            .representations[target.representationID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Authored Mesh edits require a retained representation on the target object."
+            )
+        }
+        guard representation.source == .authoredMesh(target.sourceID) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Authored Mesh edit object, representation, and source identities do not match."
+            )
+        }
+        guard let asset = document.authoredMeshAssets[target.sourceID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Authored Mesh edit source is not retained by the document."
+            )
+        }
+        return asset
+    }
+
+    private func navigationReference(
+        for source: GeometrySourceReference,
+        object: ObjectDescriptor
+    ) throws -> SceneNodeReference? {
+        switch source {
+        case .cad(_, let outputID):
+            guard let uuid = UUID(uuidString: outputID) else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Selected CAD representation has an invalid output identity."
+                )
+            }
+            switch object.category {
+            case .body:
+                return .body(FeatureID(uuid))
+            case .sketch:
+                return .sketch(FeatureID(uuid))
+            case .group, .componentInstance, .construction, .annotation, .camera, .light:
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Only geometry objects can select a CAD modeling representation."
+                )
+            }
+        case .authoredMesh(let sourceID):
+            guard object.category == .body,
+                  object.geometryRole == .mesh else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Only Mesh body objects can select an Authored Mesh modeling representation."
+                )
+            }
+            return .authoredMesh(sourceID)
+        case .external:
+            guard object.category == .body else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Only body objects can select an external modeling representation."
+                )
+            }
+            return nil
+        }
+    }
+}

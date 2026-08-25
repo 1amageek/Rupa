@@ -97,8 +97,10 @@ CAD representation. Baking adds an Authored Mesh representation and may switch
 the presentation selection; it does not remove the CAD representation. Its
 provenance records the originating CAD representation and content identity.
 
-T04 establishes this authority and provenance contract. Direct Mesh-edit
-transactions and Make Editable/Bake commands are T05 responsibilities.
+T04 establishes this authority and provenance contract. T05-A provides typed
+Core commands for Authored Mesh vertex edits, supported face edits, and purpose
+selection with stale-content rejection. Atomic Project transaction integration
+and Make Editable/Bake remain the T05-B and T05-C responsibilities respectively.
 
 ## Evaluation Contract
 
