@@ -147,10 +147,10 @@
   - [x] Prove save-load restoration, CAD-edit independence, rollback, and bounded materialization
   - [x] Reject caller-forged Mesh payloads by revalidating the current modeling evaluation at commit
   - [x] Review, verify, and commit T05-C
-- [ ] Integrated T05 authored-Mesh source workflow verification
-  - [ ] Verify CAD-only, Mesh-only edit, CAD-plus-Mesh edit, and Make Editable end-to-end workflows
-  - [ ] Re-run package, rollback, cancellation, stale-publication, zero-copy, and blob-reuse evidence
-  - [ ] Verify supported Native, ordinary WASM, and Embedded WASM compile or runtime evidence without overgeneralization
-  - [ ] Re-run incomplete-implementation, synchronization, ownership, unsafe-memory, and target-branch audits
-  - [ ] Synchronize architecture, source-authority contracts, and PROGRESS with the verified implementation
-  - [ ] Review cumulative changes and commit integrated T05 evidence
+- [x] Integrated T05 authored-Mesh source workflow verification
+  - [x] Verify CAD-only, Mesh-only edit, CAD-plus-Mesh edit, and Make Editable end-to-end workflows
+  - [x] Re-run package, rollback, cancellation, stale-publication, zero-copy, and blob-reuse evidence
+  - [x] Verify Native and ordinary WASM evidence and confirm Embedded WASM stops at the pre-existing Foundation capability boundary
+  - [x] Re-run incomplete-implementation, synchronization, ownership, unsafe-memory, and target-branch audits
+  - [x] Synchronize architecture, source-authority contracts, and PROGRESS with the verified implementation
+  - [x] Review cumulative changes and commit integrated T05 evidence
