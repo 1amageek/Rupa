@@ -14,6 +14,12 @@ public struct DesignDocumentProjectBridge: Sendable {
     public init() {}
 
     public func sourceModel(for document: DesignDocument) throws -> ProjectSourceModel {
+        try projection(for: document).source
+    }
+
+    public func projection(
+        for document: DesignDocument
+    ) throws -> DesignDocumentProjectProjection {
         do {
             try document.validate()
         } catch {
@@ -85,7 +91,7 @@ public struct DesignDocumentProjectBridge: Sendable {
         }
 
         let projectName = document.cadDocument.metadata.name ?? "Untitled"
-        return try ProjectSourceModel(
+        let source = try ProjectSourceModel(
             id: document.projectID,
             name: projectName,
             authoredMeshAssets: document.authoredMeshAssets,
@@ -93,6 +99,18 @@ public struct DesignDocumentProjectBridge: Sendable {
             occurrences: occurrences,
             rootOccurrenceIDs: roots
         )
+        return DesignDocumentProjectProjection(
+            source: source,
+            sceneNodeIDByOccurrenceID: sceneNodeNavigationIndex(for: document)
+        )
+    }
+
+    public func sceneNodeNavigationIndex(
+        for document: DesignDocument
+    ) -> [SceneOccurrenceID: SceneNodeID] {
+        Dictionary(uniqueKeysWithValues: document.productMetadata.sceneNodes.keys.map { nodeID in
+            (occurrenceID(for: nodeID), nodeID)
+        })
     }
 
     private func definitionID(for nodeID: SceneNodeID) -> ObjectDefinitionID {

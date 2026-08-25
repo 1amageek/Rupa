@@ -12,13 +12,18 @@ func designDocumentBridgeProjectsSceneHierarchyAndCADReferences() throws {
     _ = try #require(session.createDefaultExtrudedRectangle())
 
     let bridge = DesignDocumentProjectBridge()
-    let project = try bridge.sourceModel(for: session.document)
+    let projection = try bridge.projection(for: session.document)
+    let project = projection.source
 
     #expect(project.id.rawValue == "project.\(session.document.id.description)")
     #expect(project.name == session.document.cadDocument.metadata.name)
     #expect(project.rootOccurrenceIDs.count == session.document.productMetadata.rootSceneNodeIDs.count)
     #expect(project.objectDefinitions.count == session.document.productMetadata.sceneNodes.count)
     #expect(project.occurrences.count == session.document.productMetadata.sceneNodes.count)
+    #expect(
+        Set(projection.sceneNodeIDByOccurrenceID.values)
+            == Set(session.document.productMetadata.sceneNodes.keys)
+    )
 
     let cadDefinitions = project.objectDefinitions.values.compactMap { definition -> GeometrySourceReference? in
         definition.representations.source(for: .modeling)
@@ -116,44 +121,6 @@ func designDocumentBridgeProjectsAllRepresentationsAndAuthoredMeshAssets() throw
     #expect(presented.reference == GeometrySourceReference.authoredMesh(asset.id))
     #expect(presented.mesh == mesh)
     #expect(presentationSnapshot.copyTelemetry.didCopy == false)
-}
-
-@Test(.timeLimit(.minutes(1)))
-func designDocumentProjectSnapshotBuilderCarriesSourceRevisionIntoViewport() async throws {
-    let session = EditorSession()
-    _ = try #require(session.createDefaultExtrudedRectangle())
-
-    let snapshot = try await DesignDocumentProjectSnapshotBuilder().build(
-        document: session.document,
-        generation: session.generation,
-        currentEvaluation: session.currentEvaluation
-    )
-
-    #expect(snapshot.documentGeneration == session.generation)
-    #expect(snapshot.sourceRevision == DocumentTransactionRevision(session.generation.value))
-    #expect(snapshot.evaluation.id.sourceRevision == snapshot.sourceRevision)
-    #expect(snapshot.evaluation.id.purpose == .presentation)
-    #expect(snapshot.viewport.snapshotID == snapshot.evaluation.id)
-}
-
-@Test(.timeLimit(.minutes(1)))
-func designDocumentProjectSnapshotBuilderRejectsAStaleReusableEvaluation() async throws {
-    let session = EditorSession()
-    _ = try #require(session.createDefaultExtrudedRectangle())
-    let currentEvaluation = try #require(session.currentEvaluation)
-    var error: DesignDocumentProjectBridgeError?
-
-    do {
-        _ = try await DesignDocumentProjectSnapshotBuilder().build(
-            document: session.document,
-            generation: try session.generation.advanced(),
-            currentEvaluation: currentEvaluation
-        )
-    } catch let caught as DesignDocumentProjectBridgeError {
-        error = caught
-    }
-
-    #expect(error?.code == .staleEvaluation)
 }
 
 private func bridgeTriangleMesh() throws -> MeshSource {

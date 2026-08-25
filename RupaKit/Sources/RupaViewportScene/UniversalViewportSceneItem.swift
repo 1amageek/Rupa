@@ -7,6 +7,7 @@ public struct UniversalViewportSceneItem: Equatable, Sendable, Identifiable {
     public let id: SceneOccurrenceID
     public let definitionID: ObjectDefinitionID
     public let displayName: String
+    public let representationID: GeometryRepresentationID
     public let reference: GeometrySourceReference
     public let mesh: MeshSource
     public let worldTransform: GeometryTransform3D
@@ -16,6 +17,7 @@ public struct UniversalViewportSceneItem: Equatable, Sendable, Identifiable {
         id: SceneOccurrenceID,
         definitionID: ObjectDefinitionID,
         displayName: String,
+        representationID: GeometryRepresentationID,
         reference: GeometrySourceReference,
         mesh: MeshSource,
         worldTransform: GeometryTransform3D,
@@ -24,6 +26,7 @@ public struct UniversalViewportSceneItem: Equatable, Sendable, Identifiable {
         self.id = id
         self.definitionID = definitionID
         self.displayName = displayName
+        self.representationID = representationID
         self.reference = reference
         self.mesh = mesh
         self.worldTransform = worldTransform
@@ -35,6 +38,7 @@ public struct UniversalViewportSceneItem: Equatable, Sendable, Identifiable {
             id: snapshot.occurrenceID,
             definitionID: snapshot.definitionID,
             displayName: displayName,
+            representationID: snapshot.representationID,
             reference: snapshot.reference,
             mesh: snapshot.mesh,
             worldTransform: snapshot.worldTransform,

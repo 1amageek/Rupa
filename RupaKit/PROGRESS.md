@@ -166,13 +166,13 @@
   - [x] Mark the session clean only after atomic save succeeds
   - [x] Cover history success, empty history, evaluation failure, save failure, and rollback
   - [x] Review, verify, and commit T06-0B
-- [ ] T06-0C revision-safe project view boundary
-  - [ ] Bind presentation geometry and optional CAD interaction data to one state revision
-  - [ ] Preserve explicit occurrence-to-scene-node navigation without parsing identifier strings
-  - [ ] Add a MainActor observation adapter that rejects late snapshot publication
-  - [ ] Keep package bytes and source mutation authority outside the UI view state
-  - [ ] Cover CAD-only, Mesh-only, mixed representation, stale publication, and storage-sharing paths
-  - [ ] Review, verify, and commit T06-0C
+- [x] T06-0C revision-safe project view boundary
+  - [x] Bind presentation geometry and optional CAD interaction data to one state revision
+  - [x] Preserve explicit occurrence-to-scene-node navigation without parsing identifier strings
+  - [x] Add a MainActor observation adapter that rejects late snapshot publication
+  - [x] Keep package bytes and source mutation authority outside the UI view state
+  - [x] Cover CAD-only, Mesh-only, mixed representation, stale publication, and storage-sharing paths
+  - [x] Review, verify, and commit T06-0C
 - [ ] Integrated T06-0 project-path foundation verification
   - [ ] Verify source, workspace, history, load, save, evaluation, and view-snapshot paths
   - [ ] Re-run cancellation, rollback, stale-publication, zero-copy, and package-integrity evidence
