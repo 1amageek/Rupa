@@ -10,11 +10,3 @@ public protocol DesignDocumentProjectEvaluatorFactory: ProjectEvaluatorPreparing
         reusing currentEvaluation: DocumentEvaluationContext?
     ) throws -> any ProjectEvaluating
 }
-
-public extension DesignDocumentProjectEvaluatorFactory {
-    func makeEvaluator(
-        for document: DesignDocument
-    ) throws -> any ProjectEvaluating {
-        try makeEvaluator(for: document, reusing: nil)
-    }
-}

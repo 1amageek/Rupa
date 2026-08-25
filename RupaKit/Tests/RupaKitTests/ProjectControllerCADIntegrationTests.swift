@@ -3,7 +3,7 @@ import RupaCADIntegration
 import RupaCore
 import RupaCoreTypes
 import RupaEvaluation
-import RupaKit
+@testable import RupaKit
 import RupaProject
 import RupaProjectModel
 import SwiftCAD
@@ -40,6 +40,41 @@ func projectControllerEvaluatesCADCreatedAfterInitialization() async throws {
     #expect(occurrence.mesh.faceIDs.isEmpty == false)
     #expect(result.package.cadSource != nil)
     #expect(result.transactionRevision == DocumentTransactionRevision(1))
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectControllerReusesStagedCADEvaluationForProjectPublication() async throws {
+    let probe = CADDocumentEvaluationProbe()
+    let controller = try makeCADProjectController(
+        document: .empty(named: "Reuse CAD"),
+        evaluatorPreparer: ProbedCADProjectEvaluatorPreparer(probe: probe)
+    )
+
+    let result = try await controller.commit(
+        ProjectSourceTransaction(
+            name: "integration.reuse-staged-cad",
+            commands: [
+                .createExtrudedRectangle(
+                    name: "Body",
+                    plane: .xy,
+                    width: .length(1.0, .meter),
+                    height: .length(1.0, .meter),
+                    depth: .length(1.0, .meter),
+                    direction: .normal
+                ),
+            ],
+            expectedTransactionRevision: DocumentTransactionRevision(0)
+        )
+    )
+    let state = try await controller.currentState()
+
+    #expect(probe.evaluationCount == 0)
+    #expect(state.documentGeneration == result.documentGeneration)
+    #expect(state.transactionRevision == result.transactionRevision)
+    #expect(state.publicationSequence == 1)
+    #expect(state.cadInteraction?.generation == result.documentGeneration)
+    #expect(state.evaluation.id.sourceRevision == result.transactionRevision)
+    #expect(state.evaluation.occurrences.isEmpty == false)
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -485,6 +520,68 @@ private func makeCADProjectController(
     )
 }
 
+private final class CADDocumentEvaluationProbe: Sendable {
+    private let count = Mutex(0)
+
+    var evaluationCount: Int {
+        count.withLock { $0 }
+    }
+
+    func recordEvaluation() {
+        count.withLock { $0 += 1 }
+    }
+}
+
+private struct ProbedCADDocumentEvaluator: CADDocumentEvaluating {
+    let configuration: CADGeometryEvaluationConfiguration
+    let probe: CADDocumentEvaluationProbe
+
+    func evaluate(
+        _ document: ValidatedCADDocument,
+        reusing previous: EvaluatedDocument?
+    ) throws -> EvaluatedDocument {
+        probe.recordEvaluation()
+        return try DefaultCADDocumentEvaluator(configuration: configuration).evaluate(
+            document,
+            reusing: previous
+        )
+    }
+}
+
+private struct ProbedCADProjectEvaluatorPreparer: ProjectEvaluatorPreparing {
+    let probe: CADDocumentEvaluationProbe
+    private let cache = CADDocumentEvaluationCache()
+
+    func makeEvaluator(
+        for document: DesignDocument,
+        reusing currentEvaluation: DocumentEvaluationContext?
+    ) throws -> any ProjectEvaluating {
+        let configuration = CADGeometryEvaluationConfiguration(
+            tolerance: document.modelingSettings.tolerance,
+            tessellationOptions: document.modelingSettings.tessellationOptions
+        )
+        let registry = try GeometrySourceEvaluationProviderRegistry(
+            providers: [
+                MeshSourceEvaluationProvider(),
+                CADGeometrySourceProvider(
+                    document: document.cadDocument,
+                    evaluator: ProbedCADDocumentEvaluator(
+                        configuration: configuration,
+                        probe: probe
+                    ),
+                    cache: cache
+                ),
+            ]
+        )
+        return DesignDocumentProjectEvaluator(
+            evaluator: ProjectEvaluationEngine(registry: registry),
+            cadEvaluationCache: cache,
+            cadConfiguration: configuration,
+            reusableEvaluation: currentEvaluation
+        )
+    }
+}
+
 private final class NthEvaluationGate: Sendable {
     private struct State {
         var evaluationCount = 0
@@ -530,10 +627,14 @@ private struct GatedCADProjectEvaluatorPreparer: ProjectEvaluatorPreparing {
     private let base = DefaultDesignDocumentProjectEvaluatorFactory()
 
     func makeEvaluator(
-        for document: DesignDocument
+        for document: DesignDocument,
+        reusing currentEvaluation: DocumentEvaluationContext?
     ) throws -> any ProjectEvaluating {
         GatedProjectEvaluator(
-            base: try base.makeEvaluator(for: document),
+            base: try base.makeEvaluator(
+                for: document,
+                reusing: currentEvaluation
+            ),
             gate: gate
         )
     }

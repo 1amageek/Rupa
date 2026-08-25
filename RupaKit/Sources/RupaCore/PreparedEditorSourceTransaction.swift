@@ -10,6 +10,12 @@ public struct PreparedEditorSourceTransaction<Value> {
     public let proposedTransactionRevision: DocumentTransactionRevision
     public let wouldMutate: Bool
 
+    /// The validated CAD interaction result produced while staging this source state.
+    /// Project-level evaluation may reuse it when the staged document and generation match.
+    public var stagedEvaluation: DocumentEvaluationContext? {
+        after.store.evaluationCache.map(DocumentEvaluationContext.init(cache:))
+    }
+
     let ownerID: UUID
     let commandName: String
     let before: DocumentSnapshot

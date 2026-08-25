@@ -11,6 +11,7 @@ public actor ProjectController {
     private var packageDocument: ProjectPackageDocument
     private var evaluationSource: ProjectSourceModel
     private var evaluation: EvaluatedProjectSnapshot?
+    private var publicationSequence: UInt64
     private let evaluatorPreparer: any ProjectEvaluatorPreparing
     private let projector: any ProjectSourceProjecting
     private let productSourceCodec: any ProjectProductSourceCoding
@@ -43,6 +44,7 @@ public actor ProjectController {
         packageDocument = initial.package
         evaluationSource = initial.evaluationSource
         evaluation = nil
+        publicationSequence = 0
         self.evaluatorPreparer = evaluatorPreparer
         self.projector = projector
         self.productSourceCodec = productSourceCodec
@@ -83,6 +85,7 @@ public actor ProjectController {
         packageDocument = package
         evaluationSource = initial.evaluationSource
         evaluation = nil
+        publicationSequence = 0
         self.evaluatorPreparer = evaluatorPreparer
         self.projector = projector
         self.productSourceCodec = productSourceCodec
@@ -123,7 +126,14 @@ public actor ProjectController {
         ProjectStateSnapshot(
             document: session.document,
             package: packageDocument,
+            documentGeneration: session.generation,
             transactionRevision: session.transactionRevision,
+            publicationSequence: publicationSequence,
+            isDirty: session.isDirty,
+            selection: session.selection,
+            workspaceState: session.workspaceState,
+            evaluationSource: evaluationSource,
+            cadInteraction: session.currentEvaluation,
             evaluation: try currentEvaluation()
         )
     }
@@ -134,10 +144,13 @@ public actor ProjectController {
             document: session.document,
             source: evaluationSource,
             purpose: .presentation,
-            revision: baseRevision
+            revision: baseRevision,
+            reusing: session.currentEvaluation
         )
         try requireTransactionRevision(baseRevision)
+        let nextPublicationSequence = try advancedPublicationSequence()
         evaluation = stagedEvaluation
+        publicationSequence = nextPublicationSequence
         return stagedEvaluation
     }
 
@@ -203,7 +216,8 @@ public actor ProjectController {
             document: document,
             source: source,
             purpose: .modeling,
-            revision: baseRevision
+            revision: baseRevision,
+            reusing: session.currentEvaluation
         )
         try requireTransactionRevision(baseRevision)
         guard modelingSnapshot.id == EvaluationSnapshotID(
@@ -347,12 +361,15 @@ public actor ProjectController {
             document: reconstructed.document,
             source: reconstructed.evaluationSource,
             purpose: .presentation,
-            revision: prepared.proposedTransactionRevision
+            revision: prepared.proposedTransactionRevision,
+            reusing: prepared.stagedEvaluation
         )
 
         do {
             try requireTransactionRevision(prepared.baseTransactionRevision)
+            let nextPublicationSequence = try advancedPublicationSequence()
             try session.commitPreparedSourceTransaction(prepared)
+            publicationSequence = nextPublicationSequence
         } catch let error as EditorError {
             throw projectError(for: error)
         }
@@ -405,9 +422,11 @@ public actor ProjectController {
             document: reconstructed.document,
             source: reconstructed.evaluationSource,
             purpose: .presentation,
-            revision: loadedRevision
+            revision: loadedRevision,
+            reusing: nil
         )
         try requireTransactionRevision(expectedTransactionRevision)
+        let nextPublicationSequence = try advancedPublicationSequence()
 
         session = EditorSession(
             document: reconstructed.document,
@@ -416,10 +435,18 @@ public actor ProjectController {
         packageDocument = loadedPackage
         evaluationSource = reconstructed.evaluationSource
         evaluation = loadedEvaluation
+        publicationSequence = nextPublicationSequence
         return ProjectStateSnapshot(
             document: reconstructed.document,
             package: loadedPackage,
+            documentGeneration: session.generation,
             transactionRevision: loadedRevision,
+            publicationSequence: publicationSequence,
+            isDirty: session.isDirty,
+            selection: session.selection,
+            workspaceState: session.workspaceState,
+            evaluationSource: reconstructed.evaluationSource,
+            cadInteraction: session.currentEvaluation,
             evaluation: loadedEvaluation
         )
     }
@@ -636,13 +663,17 @@ public actor ProjectController {
         document: DesignDocument,
         source: ProjectSourceModel,
         purpose: GeometryRepresentationPurpose,
-        revision: DocumentTransactionRevision
+        revision: DocumentTransactionRevision,
+        reusing currentEvaluation: DocumentEvaluationContext?
     ) async throws -> EvaluatedProjectSnapshot {
         let evaluatorPreparer = self.evaluatorPreparer
         do {
             return try await Self.performDetached {
                 try Task.checkCancellation()
-                let evaluator = try evaluatorPreparer.makeEvaluator(for: document)
+                let evaluator = try evaluatorPreparer.makeEvaluator(
+                    for: document,
+                    reusing: currentEvaluation
+                )
                 try Task.checkCancellation()
                 let result = try evaluator.evaluate(
                     project: source,
@@ -704,7 +735,8 @@ public actor ProjectController {
             document: document,
             source: source,
             purpose: .modeling,
-            revision: baseRevision
+            revision: baseRevision,
+            reusing: session.currentEvaluation
         )
         try requireTransactionRevision(baseRevision)
 
@@ -737,6 +769,17 @@ public actor ProjectController {
             return ProjectControllerError(code: .revisionConflict, message: error.message)
         }
         return ProjectControllerError(code: .transactionInvalid, message: error.message)
+    }
+
+    private func advancedPublicationSequence() throws -> UInt64 {
+        let advanced = publicationSequence.addingReportingOverflow(1)
+        guard !advanced.overflow else {
+            throw ProjectControllerError(
+                code: .transactionInvalid,
+                message: "Project state publication sequence overflowed."
+            )
+        }
+        return advanced.partialValue
     }
 
     private static func performDetached<Value: Sendable>(

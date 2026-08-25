@@ -154,3 +154,28 @@
   - [x] Re-run incomplete-implementation, synchronization, ownership, unsafe-memory, and target-branch audits
   - [x] Synchronize architecture, source-authority contracts, and PROGRESS with the verified implementation
   - [x] Review cumulative changes and commit integrated T05 evidence
+- [x] T06-0A coherent project state and evaluation reuse
+  - [x] Define the minimal project-operation contract and one coherent immutable state snapshot
+  - [x] Keep document generation, source transaction revision, and publication sequence distinct
+  - [x] Reuse the staged validated CAD evaluation without equating generation and transaction revision
+  - [x] Cover initial evaluation, commit, load, stale reuse, and publication-order boundaries
+  - [x] Review, verify, and commit T06-0A
+- [ ] T06-0B atomic history and save state
+  - [ ] Stage undo and redo without publishing EditorSession state early
+  - [ ] Rebuild Product, CAD, Mesh, package, and presentation evaluation before history publication
+  - [ ] Mark the session clean only after atomic save succeeds
+  - [ ] Cover history success, empty history, evaluation failure, save failure, and rollback
+  - [ ] Review, verify, and commit T06-0B
+- [ ] T06-0C revision-safe project view boundary
+  - [ ] Bind presentation geometry and optional CAD interaction data to one state revision
+  - [ ] Preserve explicit occurrence-to-scene-node navigation without parsing identifier strings
+  - [ ] Add a MainActor observation adapter that rejects late snapshot publication
+  - [ ] Keep package bytes and source mutation authority outside the UI view state
+  - [ ] Cover CAD-only, Mesh-only, mixed representation, stale publication, and storage-sharing paths
+  - [ ] Review, verify, and commit T06-0C
+- [ ] Integrated T06-0 project-path foundation verification
+  - [ ] Verify source, workspace, history, load, save, evaluation, and view-snapshot paths
+  - [ ] Re-run cancellation, rollback, stale-publication, zero-copy, and package-integrity evidence
+  - [ ] Re-run incomplete-implementation, synchronization, ownership, unsafe-memory, and target-branch audits
+  - [ ] Synchronize architecture and state contracts with the verified production-path foundation
+  - [ ] Review cumulative changes and commit integrated T06-0 evidence

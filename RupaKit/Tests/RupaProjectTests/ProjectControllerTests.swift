@@ -35,6 +35,45 @@ func projectControllerPublishesCADPackageAndEvaluationAfterValidation() async th
 }
 
 @Test(.timeLimit(.minutes(1)))
+func projectControllerPublishesOneCoherentStateSnapshot() async throws {
+    let controller = try makeController(document: .empty(named: "Before"))
+
+    _ = try await controller.evaluateCurrent()
+    let initial = try await controller.currentState()
+
+    #expect(initial.document.cadDocument.metadata.name == "Before")
+    #expect(initial.evaluationSource.name == "Before")
+    #expect(initial.evaluation.projectID == initial.evaluationSource.id)
+    #expect(initial.evaluation.id.sourceRevision == initial.transactionRevision)
+    #expect(initial.documentGeneration == DocumentGeneration(0))
+    #expect(initial.transactionRevision == DocumentTransactionRevision(0))
+    #expect(initial.publicationSequence == 1)
+    #expect(initial.isDirty == false)
+    #expect(initial.selection == .empty)
+    #expect(initial.workspaceState.revision == WorkspaceRevision(0))
+    #expect(initial.cadInteraction == nil)
+
+    _ = try await controller.commit(
+        ProjectSourceTransaction(
+            name: "fixture.coherent-state",
+            commands: [.renameDocument(name: "After")],
+            expectedTransactionRevision: DocumentTransactionRevision(0)
+        )
+    )
+    let committed = try await controller.currentState()
+
+    #expect(committed.document.cadDocument.metadata.name == "After")
+    #expect(committed.evaluationSource.name == "After")
+    #expect(try decodedProductName(committed.package.productSource) == "After")
+    #expect(committed.evaluation.projectID == committed.evaluationSource.id)
+    #expect(committed.evaluation.id.sourceRevision == committed.transactionRevision)
+    #expect(committed.documentGeneration == DocumentGeneration(1))
+    #expect(committed.transactionRevision == DocumentTransactionRevision(1))
+    #expect(committed.publicationSequence == 2)
+    #expect(committed.isDirty)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func projectControllerLoadsEvaluatesAndResavesMeshOnlyPackageWithoutCADAuthority() async throws {
     try await withTemporaryDirectory { directory in
         let url = directory.appendingPathComponent("mesh-only.rupa")
@@ -75,6 +114,15 @@ func projectControllerLoadsEvaluatesAndResavesMeshOnlyPackageWithoutCADAuthority
         #expect(loaded.evaluation.occurrences.values.contains {
             $0.reference == .authoredMesh("mesh.controller-only")
         })
+        #expect(loaded.documentGeneration == DocumentGeneration(0))
+        #expect(loaded.transactionRevision == DocumentTransactionRevision(2))
+        #expect(loaded.publicationSequence == 3)
+        #expect(loaded.evaluation.id.sourceRevision == loaded.transactionRevision)
+        #expect(loaded.evaluationSource.name == "Mesh Only")
+        #expect(loaded.isDirty == false)
+        #expect(loaded.selection == .empty)
+        #expect(loaded.workspaceState.revision == WorkspaceRevision(0))
+        #expect(loaded.cadInteraction == nil)
         let resaved = try await controller.save(
             to: resavedURL,
             expectedTransactionRevision: DocumentTransactionRevision(2)
@@ -795,6 +843,7 @@ func projectControllerRejectsStaleRequestBeforeStaging() async throws {
     #expect(caught?.code == .revisionConflict)
     #expect(await controller.currentDocument().cadDocument.metadata.name == "Committed")
     #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(1))
+    #expect(try await controller.currentState().publicationSequence == 1)
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -837,6 +886,7 @@ func projectControllerRejectsPublicationWhenConcurrentCallerWins() async throws 
     #expect(await controller.currentDocument().cadDocument.metadata.name == "Second")
     #expect(await controller.currentEvaluationSource().name == "Second")
     #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(1))
+    #expect(try await controller.currentState().publicationSequence == 1)
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -1189,7 +1239,8 @@ private struct StaticProjectEvaluatorPreparer: ProjectEvaluatorPreparing {
     let evaluator: any ProjectEvaluating
 
     func makeEvaluator(
-        for _: DesignDocument
+        for _: DesignDocument,
+        reusing _: DocumentEvaluationContext?
     ) throws -> any ProjectEvaluating {
         evaluator
     }
@@ -1199,7 +1250,8 @@ private struct NameRejectingProjectEvaluatorPreparer: ProjectEvaluatorPreparing 
     let rejectedName: String
 
     func makeEvaluator(
-        for document: DesignDocument
+        for document: DesignDocument,
+        reusing _: DocumentEvaluationContext?
     ) throws -> any ProjectEvaluating {
         guard document.cadDocument.metadata.name != rejectedName else {
             throw EvaluatorPreparationFixtureError()
