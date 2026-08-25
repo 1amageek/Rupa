@@ -2,7 +2,7 @@ import RupaGeometry
 import RupaProjectModel
 
 public struct MeshSourceEvaluationProvider: GeometrySourceEvaluationProvider {
-    public static let identifier = GeometrySourceReference.meshProviderID
+    public static let identifier = GeometrySourceReference.authoredMeshProviderID
     public let providerID = Self.identifier
 
     public init() {}
@@ -15,7 +15,7 @@ public struct MeshSourceEvaluationProvider: GeometrySourceEvaluationProvider {
         results.reserveCapacity(request.references.count)
 
         for reference in request.references {
-            guard case .mesh(let sourceID) = reference else {
+            guard case .authoredMesh(let sourceID) = reference else {
                 throw EvaluationError(
                     code: .invalidResult,
                     message: "Mesh source provider received a non-mesh reference."

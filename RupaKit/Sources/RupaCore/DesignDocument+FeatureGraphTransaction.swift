@@ -134,6 +134,7 @@ extension DesignDocument {
                 reference: presentation.kind.reference(featureID: presentation.featureID),
                 object: presentation.kind.object(
                     featureID: presentation.featureID,
+                    documentID: cadDocument.id,
                     objectRegistry: objectRegistry
                 ),
                 isVisible: presentation.isVisible,
@@ -169,6 +170,7 @@ private extension FeaturePresentationKind {
 
     func object(
         featureID: FeatureID,
+        documentID: DocumentID,
         objectRegistry: ObjectTypeRegistry
     ) -> ObjectDescriptor? {
         switch self {
@@ -177,6 +179,7 @@ private extension FeaturePresentationKind {
         case let .sketch(typeID, geometryRole, properties):
             return .sketch(
                 featureID: featureID,
+                documentID: documentID,
                 typeID: typeID,
                 geometryRole: geometryRole,
                 properties: properties,
@@ -185,6 +188,7 @@ private extension FeaturePresentationKind {
         case let .body(sourceSection, typeID, geometryRole, properties):
             return .body(
                 featureID: featureID,
+                documentID: documentID,
                 sourceSection: sourceSection,
                 typeID: typeID,
                 geometryRole: geometryRole,

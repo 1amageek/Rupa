@@ -120,7 +120,7 @@ public struct ComponentDefinitionSceneResolver: Sendable {
         }
         if let reference = sceneNode.reference {
             switch reference.kind {
-            case .body, .sketch:
+            case .body, .sketch, .authoredMesh:
                 return true
             case .componentInstance:
                 if nestedComponentInstanceContainsRenderableNode(

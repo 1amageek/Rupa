@@ -45,11 +45,11 @@ discipline. Domain modules may add meaning, workflows, validators, generators,
 and simulation adapters, but they must not redefine the universal editing
 pipeline.
 
-Domain intent and exact CAD projection follow the same SSOT rule as every other
-representation. A domain semantic entity may own design parameters and generate
-CAD, or it may classify universal CAD, but a linked Mesh never becomes a second
-domain/CAD truth. Detached Mesh and reconstruction inputs use the explicit roles
-defined by `CAD_MESH_RESPONSIBILITY_CONTRACT.md`.
+Domain intent and geometry representations follow the same SSOT rule as the
+Product model. A domain semantic entity may own design parameters and generate
+CAD, classify universal CAD, or reference Authored Mesh. A CAD-derived Mesh
+snapshot never becomes source. Authored Mesh and reconstruction inputs use the
+explicit roles defined by `CAD_MESH_RESPONSIBILITY_CONTRACT.md`.
 
 ## Dependency Direction
 
@@ -185,7 +185,7 @@ Model.swcad
 | `source/product.json` | Scenes, object definitions, material and presentation intent, saved Mesh recipes, documentation definitions, validation policies, export presets, and semantic envelopes that do not duplicate exact CAD facts. | `RupaCore.ProductMetadata` storage and RupaCore source transactions |
 | Semantic extension envelope | Domain intent data and source ownership for a namespace, stored as neutral product source. | `RupaCore` storage, domain module mutation through RupaCore transaction boundary |
 | Projection manifest | Mapping from domain semantic entities to CAD source features, persistent topology roles, scene nodes, and boundary tags. | `RupaCore` storage, domain generator updates through RupaCore transactions |
-| Detached Mesh source | Optional independent Mesh assets created or imported explicitly; never a linked CAD tessellation. | Rupa Mesh-source commands and package layer |
+| Authored Mesh source | Optional independent Mesh assets created, imported, or explicitly baked; may coexist with CAD and never aliases CAD tessellation storage. | Rupa Mesh-source commands and package layer |
 | Capture input | Immutable scan/photo evidence referenced by reconstruction jobs. | Project input service and package layer |
 | Analysis artifacts | Derived results keyed by dependency, producer, configuration, and output-content identity. | Artifact producer and `RupaProject` store |
 

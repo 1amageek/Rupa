@@ -15,7 +15,7 @@ This document lists the general-purpose CAD capabilities Rupa must define before
 | Reference rule | `REFERENCE_ARTIFACT_CONTRACT.md` defines persistent and derived identity. |
 | Validation rule | `VALIDATION_CONTRACT.md` defines outcomes, fidelity, regions, and policy. |
 | State/project rule | `STATE_AND_PROJECT_CONTRACT.md` separates editable source, workspace state, artifacts, decisions, and jobs. |
-| CAD/Mesh rule | `CAD_MESH_RESPONSIBILITY_CONTRACT.md` keeps CAD authoritative by default and distinguishes linked, detached, observation, reconstruction, and export Mesh roles. |
+| CAD/Mesh rule | `CAD_MESH_RESPONSIBILITY_CONTRACT.md` assigns authority per retained representation and distinguishes Authored Mesh, CAD-derived snapshots, observations, reconstruction intermediates, and exports. |
 | Required scale support | Micrometer (μm) detail through kilometer (km) scale modeling and drawing |
 | Deferred convenience | WorkspacePreset switching after shared source/project contracts are stable |
 
@@ -105,16 +105,16 @@ The universal model must keep geometric kinds distinct.
 |---|---|
 | Solid body | Closed topology suitable for exact modeling, boolean operations, and physical validation. |
 | Surface body | Open or closed surface topology for design, trimming, thickening, and visualization. |
-| Mesh representation | Triangle or polygon data whose linked-derived, detached-editable, observation-input, reconstruction-intermediate, or export-artifact role is explicit. |
+| Mesh representation | Triangle or polygon data whose Authored Mesh, CAD-derived snapshot, observation-input, reconstruction-intermediate, or export-artifact role is explicit. |
 | Curve body | 2D or 3D curves used for paths, construction, profiles, and output. |
 | Sketch body | Editable 2D source geometry and constraints. |
 | Construction body | Planes, axes, points, coordinate systems, layout references, and grids. |
 
 Conversions between body types must be explicit commands with diagnostics.
-CAD-to-Mesh derivation remains linked and reproducible by default. `Bake` or
-`Detach` creates an independent Mesh source. Mesh-to-CAD is an approximate
-reconstruction workflow with retained evidence and explicit acceptance, not a
-lossless implicit conversion.
+CAD-to-Mesh evaluation remains reproducible and non-source. `Bake` adds an
+independent Authored Mesh representation with provenance without removing CAD.
+Mesh-to-CAD is an approximate reconstruction workflow with retained evidence and
+explicit acceptance, not a lossless implicit conversion.
 
 ## 6. Parametric Modeling
 

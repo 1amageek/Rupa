@@ -25,17 +25,19 @@ This document defines product-level requirements for Rupa as a general-purpose C
 
 ## Product Position
 
-Rupa is a native, Agent-ready, CAD-first direct-modeling application for precise
-design, production-oriented export, and presentation. Swift-CAD source is the
-normal geometry SSOT. Mesh supports viewport, rendering, analysis, exchange, and
-explicit reconstruction or detached-Mesh workflows; it is not a coequal default
-copy of CAD truth.
+Rupa is a native, Agent-ready, CAD-centered direct-modeling application for
+precise design, production-oriented export, and presentation. A Product Object
+may retain CAD, Authored Mesh, and external representations with explicit
+modeling and presentation selections. Every representation payload owns its own
+geometry facts; a Derived Mesh snapshot never becomes editable source.
 
 Rupa must not branch into separate domain products. Video 3D modeling, 3D printer object modeling, and architecture are required acceptance use cases that prove the same universal CAD system works across scales, outputs, and workflows.
 
 ```mermaid
 flowchart TD
-    CAD["Rupa universal CAD<br/>units, sketch, features, bodies, components"] --> Tessellation["Derived Mesh"]
+    Object["Rupa Product Object"] --> CAD["Universal CAD<br/>units, sketch, features, bodies, components"]
+    Object --> Authored["Authored Mesh"]
+    CAD --> Tessellation["Derived Mesh"]
     Tessellation --> Video["Video 3D modeling"]
     CAD --> Print["3D printer object modeling"]
     CAD --> Architecture["Architecture"]
@@ -52,7 +54,7 @@ Rupa should not be defined as a general clone of Fusion. Fusion is the benchmark
 | Unified design environment | One document, one command pipeline, one UI model, one automation model. |
 | Parametric CAD | First-class source model built on Swift-CAD. |
 | Direct modeling | Topology-aware CAD edits remain source commands even when the user interacts with a tessellated viewport. |
-| Mesh control | Repeatable derivation recipes by default; explicit detach creates an independent Mesh asset. |
+| Mesh control | Authored Mesh is first-class source; CAD derivation recipes remain non-source until an explicit Bake adds an Authored Mesh representation. |
 | Reality capture | Scan and photo data remains observation evidence until an explicit approximate CAD reconstruction is accepted. |
 | Direct production output | Generic validation rules and export presets, not domain forks. |
 | Automation | Stable CLI and live app automation are core product features. |
@@ -126,9 +128,9 @@ The following capabilities are required in the universal CAD model and must be r
 | Sketching | 2D sketch entities, dimensions, geometric constraints, profiles, and construction geometry are required. |
 | Solid modeling | Extrude, revolve, sweep, loft, boolean, shell, fillet, chamfer, draft, hole, mirror, linear pattern, circular pattern are required product capabilities. |
 | Surface modeling | Planar, ruled, lofted, swept, offset, trim, stitch, thicken, and patch surfaces are required. |
-| Geometry roles | Solid, surface, curve, sketch, and construction CAD bodies remain distinct. Every Mesh is additionally identified as linked-derived, detached-editable, scan observation, reconstruction intermediate, or export artifact. |
+| Geometry roles | Solid, surface, curve, sketch, and construction CAD bodies remain distinct. Every Mesh is additionally identified as authored, CAD-derived snapshot, scan observation, reconstruction intermediate, or export artifact. |
 | CAD-to-Mesh | Tessellation, normals, smoothing, LOD, decimation, UV generation, repair policy, and Mesh export previews are repeatable derivation recipes where applicable. |
-| Detached Mesh | `Bake` or `Detach` explicitly creates an independent Mesh SSOT with provenance and no implicit CAD synchronization. |
+| Authored Mesh | Direct creation or import creates Authored Mesh source. `Bake` explicitly adds a provenance-bearing Authored Mesh representation without deleting retained CAD. |
 | Mesh-to-CAD | Scan/photo/Mesh reconstruction preserves input identity, tolerances, deviation, confidence, and unresolved regions and creates CAD only through explicit acceptance. |
 | Components | Components, local origins, transforms, hierarchy, external references, and simple joints are required. |
 | Materials | Named materials, display colors, PBR export metadata, manufacturing metadata, and per-body or per-face assignment are required. |
@@ -254,8 +256,8 @@ Agent-assisted workflows are product requirements, not developer-only tooling.
 | Validation loop | Agents can run validation rules and inspect typed diagnostics. |
 | Export loop | Agents can invoke named export presets. |
 | Safety | Expected transaction revision protects source mutation; dependency/content identity protects artifacts and decisions. |
-| Representation roles | Agent commands declare whether they mutate CAD source, a saved Mesh recipe, detached Mesh source, capture input metadata, workspace state, or an artifact. |
-| Derived Mesh | Agents never persist direct writes into linked tessellation buffers; they update a repeatable recipe or explicitly detach. |
+| Representation roles | Agent commands declare whether they mutate CAD source, Authored Mesh source, purpose selection, capture input metadata, workspace state, or an artifact. |
+| Derived Mesh | Agents never persist direct writes into CAD evaluation buffers; they update CAD/product source or explicitly Bake a new Authored Mesh representation. |
 | Reconstruction | Agents report approximation and evidence and cannot silently replace observations or CAD source. |
 
 ## Non-Goals for Initial Product Scope

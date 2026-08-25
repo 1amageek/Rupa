@@ -31,7 +31,7 @@ flowchart TD
 
 | Partition | Examples | Mutation owner | Undo/history | Freshness role |
 |---|---|---|---|---|
-| Editable document source | Exact CAD source; disjoint product intent; explicitly detached Mesh assets; references to capture inputs; object definitions; materials; semantic intent; document annotations; saved views; validation configurations; export presets | `EditorSession` through role-specific source commands | Source command history | Fingerprinted as declared artifact dependencies |
+| Editable document source | Product Objects and purpose selection; optional CAD source; Authored Mesh assets and provenance; references to capture inputs; materials; semantic intent; document annotations; saved views; validation configurations; export presets | `EditorSession` through role-specific source commands | Source command history | Fingerprinted as declared artifact dependencies |
 | Observation inputs | Immutable photos, depth, poses, point clouds, scan Mesh, scale and coordinate metadata used for reconstruction | Input/package service through an explicit source transaction that attaches or removes references | The reference mutation is undoable; referenced bytes are immutable | Own content identity; included in reconstruction dependencies but never treated as exact CAD source |
 | Workspace state | Selection, active tool, hover, active construction plane, viewport camera, visual grid mode, transient analysis displays, panel layout | Open document session | Separate workspace history when needed; never source undo | Never changes source-content identity |
 | Derived artifacts | Evaluated B-rep/geometry snapshots, triangulation, BVH, GPU resources, drawing, validation result, exchange output, render pass, solver input/result | Artifact producer through `ProjectController` | Immutable records, cache retention policy | Identified by input dependencies, producer/configuration, and output content |
@@ -45,10 +45,11 @@ definition. That captured definition is document source. The currently active
 camera, panel, grid, or construction plane remains workspace state until an
 explicit source command saves it.
 
-Geometry representation follows `CAD_MESH_RESPONSIBILITY_CONTRACT.md`. Linked
+Geometry representation follows `CAD_MESH_RESPONSIBILITY_CONTRACT.md`. CAD
 tessellation, reconstruction intermediates, render Mesh, BVH, and GPU buffers are
-derived artifacts. Only an explicitly detached Mesh is editable Mesh source, and
-it cannot share shape authority with CAD for the same occurrence.
+derived artifacts. Authored Mesh is editable source and may coexist with CAD on
+the same Product Object; explicit purpose selection decides which representation
+is used without transferring payload authority.
 
 ## ProjectController Boundary
 
@@ -151,8 +152,8 @@ editor command, and validation override recording is not a product-metadata edit
 - Large geometry is borrowed from immutable evaluated snapshots or shared buffers
   with an explicit lifetime. A process boundary copy is measured rather than
   described as zero-copy.
-- A linked derived Mesh is read-only. A persistent Mesh mutation updates a saved
-  derivation recipe or explicitly detaches the Mesh as a new source asset.
+- A CAD-derived Mesh snapshot is read-only. A persistent Mesh mutation targets an
+  Authored Mesh asset or explicitly Bakes a new Authored Mesh representation.
 - Reconstruction jobs receive immutable observation-input snapshots. Only an
   explicit acceptance transaction may publish their candidate CAD as source.
 
@@ -161,7 +162,7 @@ editor command, and validation override recording is not a product-metadata edit
 | Test family | Required cases |
 |---|---|
 | Partition | Workspace-only edits do not change source identity, dirty state, source history, or source revision. |
-| Geometry role | Linked Mesh cannot be mutated as source; detached Mesh and CAD never both own one occurrence's shape. |
+| Geometry role | CAD-derived snapshots cannot be mutated as source; CAD and Authored Mesh may coexist, and each payload plus explicit purpose selection retains distinct authority. |
 | Reconstruction | Candidate generation does not mutate source; acceptance binds exact input and deviation evidence to the new CAD source. |
 | Revision | Multi-command source transactions increment exactly once; failure increments zero times. |
 | Reload | Identical source content receives the same content identity even when session revisions differ. |

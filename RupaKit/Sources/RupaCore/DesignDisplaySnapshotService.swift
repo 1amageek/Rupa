@@ -301,6 +301,8 @@ public struct DesignDisplaySnapshotService: Sendable {
             )
         case .construction:
             break
+        case .authoredMesh:
+            break
         }
     }
 

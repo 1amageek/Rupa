@@ -4,16 +4,50 @@ import RupaCoreTypes
 public struct ObjectDefinition: Codable, Equatable, Sendable {
     public var id: ObjectDefinitionID
     public var name: String
-    public var geometry: GeometrySourceReference?
+    public var representations: GeometryRepresentationSet
 
     public init(
         id: ObjectDefinitionID,
         name: String,
-        geometry: GeometrySourceReference? = nil
+        representations: GeometryRepresentationSet = .empty
     ) {
         self.id = id
         self.name = name
-        self.geometry = geometry
+        self.representations = representations
+    }
+
+    @available(*, deprecated, message: "Use the representations initializer and explicit purpose selection.")
+    public init(
+        id: ObjectDefinitionID,
+        name: String,
+        geometry: GeometrySourceReference?
+    ) {
+        self.id = id
+        self.name = name
+        guard let geometry else {
+            self.representations = .empty
+            return
+        }
+        let representationID = GeometryRepresentationID(
+            rawValue: "representation.\(id.rawValue)"
+        )
+        self.representations = GeometryRepresentationSet(
+            representations: [
+                representationID: GeometryRepresentation(
+                    id: representationID,
+                    source: geometry
+                ),
+            ],
+            selection: GeometryRepresentationSelection(
+                modeling: representationID,
+                presentation: representationID
+            )
+        )
+    }
+
+    @available(*, deprecated, message: "Use representations.source(for:) with an explicit purpose.")
+    public var geometry: GeometrySourceReference? {
+        representations.source(for: .presentation)
     }
 
     public func validate() throws {
@@ -25,8 +59,8 @@ public struct ObjectDefinition: Codable, Equatable, Sendable {
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw ProjectModelError(code: .invalidIdentity, message: "Object definition names must not be empty.")
         }
-        if let geometry {
-            try geometry.validate()
-        }
+        try representations.validate(
+            requiresSelection: representations.representations.isEmpty == false
+        )
     }
 }

@@ -39,6 +39,7 @@ extension DesignDocument {
             reference: .sketch(featureID),
             object: .sketch(
                 featureID: featureID,
+                documentID: cadDocument.id,
                 typeID: typeID,
                 geometryRole: geometryRole,
                 properties: properties,

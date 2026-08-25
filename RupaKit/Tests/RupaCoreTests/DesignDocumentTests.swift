@@ -2160,6 +2160,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     })
     node.object = .sketch(
         featureID: featureID,
+        documentID: document.cadDocument.id,
         typeID: customTypeID,
         properties: ObjectPropertySet(values: ["panel.thickness": .length(0.04)]),
         objectRegistry: registry
@@ -2215,6 +2216,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     })
     node.object = .sketch(
         featureID: featureID,
+        documentID: document.cadDocument.id,
         typeID: customTypeID,
         properties: ObjectPropertySet(values: ["panel.thickness": .length(0.04)]),
         objectRegistry: registry
@@ -2238,11 +2240,11 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     var node = try #require(document.productMetadata.sceneNodes.values.first {
         $0.reference?.featureID == featureID
     })
-    node.object = ObjectDescriptor(
-        category: .sketch,
-        geometryRole: .solid,
+    node.object = ObjectDescriptor.sketch(
+        featureID: featureID,
+        documentID: document.cadDocument.id,
         typeID: .cube,
-        sourceFeatureID: featureID
+        geometryRole: .solid
     )
     document.productMetadata.sceneNodes[node.id] = node
 

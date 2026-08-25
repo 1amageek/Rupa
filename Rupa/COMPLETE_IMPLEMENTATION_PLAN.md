@@ -53,7 +53,7 @@ flowchart TD
 | Area | Complete means |
 |---|---|
 | Universal CAD | All required body types, feature types, parameters, constraints, topology references, drawing/inspection, validation, and exchange workflows are command-backed and tested. |
-| CAD/Mesh ownership | CAD is the normal design SSOT; linked Mesh, detached Mesh, capture input, reconstruction intermediate, and export artifact roles are explicit and cannot silently synchronize. |
+| CAD/Mesh ownership | Every retained representation owns its payload; purpose selection owns use context; Authored Mesh, CAD-derived snapshots, capture input, reconstruction intermediates, and export artifacts cannot silently synchronize. |
 | Agent readiness | Every supported operation is discoverable, executable or queryable, generation-safe, dry-run aware where applicable, and returns typed diagnostics. |
 | Domain extensibility | Specialized semantics live in domain modules, use neutral RupaCore storage, register through `RupaDomainFoundation`, and never force lower layers to import concrete domains. |
 | Specialized workflows | Architecture, turbomachinery, character, manufacturing, and simulation workflows use the same document, command stack, selection model, validation model, and Agent transport. |
@@ -105,7 +105,7 @@ flowchart LR
 | W8 Manufacturing | RupaManufacturing | W1-W7 | 3D print/CNC readiness, thickness, clearance, supportability, build volume, export validation. |
 | W9 Architecture | RupaArchitecture | W7, W5 | Site, level, room, wall, opening, roof, schedules, building drawings, IFC/DXF/PDF paths. |
 | W10 Turbomachinery | RupaTurbomachinery, RupaSimulation | W3, W7 | Airfoil, blade, rotor/stator, duct/nozzle, boundary tags, CFD/FEA handoff. |
-| W11 CAD-authored visual assets | RupaCharacterDesign | W3, W7 | CAD/surface control structures, derived presentation Mesh, optional explicit detached Mesh, UV/export readiness. |
+| W11 CAD-authored visual assets | RupaCharacterDesign | W3, W7 | CAD/surface control structures, derived presentation Mesh, optional Authored Mesh representation, UV/export readiness. |
 | W12 Simulation | RupaSimulation | W7-W11 | Solver input manifests, boundary conditions, derived result artifacts, result visualization. |
 | W13 Exchange and interoperability | Swift-CAD, RupaCore, export/import services | W1-W12 | STEP, IGES, STL, 3MF, OBJ, GLB, USD/USDZ, DXF, IFC, PDF, SVG with reports. |
 | W14 Performance and reliability | All layers | Continuous | Zero-copy data flow, cancellable tasks, benchmarks, stress tests, recovery tests. |
@@ -131,7 +131,7 @@ Goal: finish the shared CAD foundation before relying on domain semantics.
 |---|---|
 | Units and scale | Micrometer through kilometer workflows, local origins, workspace rebase, readable units, mixed-unit inputs. |
 | Parameters and constraints | Named formulas, dependency tracking, sketch/entity constraints, overdefined/underdefined diagnostics. |
-| Geometry roles | Solid, surface, curve, sketch, and construction CAD bodies remain distinct; every Mesh is declared linked-derived, detached-editable, observation input, reconstruction intermediate, or export artifact. |
+| Geometry roles | Solid, surface, curve, sketch, and construction CAD bodies remain distinct; every Mesh is declared authored, CAD-derived snapshot, observation input, reconstruction intermediate, or export artifact. |
 | Persistent references | Source and generated topology references survive supported edits or fail with repair diagnostics. |
 | Components and assemblies | Reusable definitions, instances, hierarchy, transforms, local origins, visibility, locks, simple joints. |
 | Materials and metadata | Visual, physical, manufacturing, per-object/per-face bindings, classification, custom properties. |
@@ -146,7 +146,7 @@ Goal: implement the modeling operations expected from a serious CAD system.
 | Solids | Extrude, revolve, sweep, loft, shell, hole, draft, fillet, chamfer, boolean, pattern, mirror, direct face/edge/vertex edits. |
 | Surfaces | Planar, ruled, lofted, swept, offset, trim, stitch, thicken, patch, bridge, match, extend, CV/knot/weight editing. |
 | Mesh derivation | Linked tessellation recipes, normals, UV generation, smoothing, LOD, decimation, repair policy, cache invalidation, and Mesh export preview preserve CAD authority. |
-| Detached Mesh | Explicit bake/detach, provenance, independent topology editing, validation, and no implicit CAD synchronization. |
+| Authored Mesh | Direct creation/import or explicit Bake, provenance, independent topology editing, validation, coexistence with CAD, and no implicit synchronization. |
 | Reconstruction | Scan/photo/Mesh inputs, segmentation and fitting, deviation evidence, unresolved regions, and explicit acceptance into a new CAD source. |
 | Drawings | Hidden-line, sections, hatches, dimensions, annotations, sheets, schedules, PDF/SVG/DXF export. |
 
@@ -221,7 +221,7 @@ performance, and test evidence defined by that document.
 | Precision part | Parametric part with dimensions, fillets, booleans, material, print/fabrication validation, STEP/STL/3MF export. |
 | Architecture house | Site, levels, rooms, walls, doors/windows, roof, drawings, schedules, IFC/DXF/PDF export, Agent-editable changes. |
 | Turbomachinery component | Airfoil/blade/duct source, surface continuity, manufacturability checks, boundary tags, CFD/FEA handoff artifact. |
-| CAD-authored visual asset | Exact or surface-controlled source, repeatable Mesh derivation or explicit detach, UV/export diagnostics, and DCC-ready USD/GLB output. |
+| CAD-authored visual asset | Exact or surface-controlled source, repeatable Mesh derivation or explicit Authored Mesh Bake, UV/export diagnostics, and DCC-ready USD/GLB output. |
 | Agent-generated variant set | Agent creates variants, runs validation, exports artifacts, and reports structured differences without manual source edits. |
 
 ## Parallelization Plan

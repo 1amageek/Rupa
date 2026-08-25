@@ -107,7 +107,7 @@ classDiagram
 
 ### Storage Shape
 
-The first storage shape should live inside `rupa.json`.
+The storage shape lives in the Product source region at `source/product.json`.
 
 ```json
 {

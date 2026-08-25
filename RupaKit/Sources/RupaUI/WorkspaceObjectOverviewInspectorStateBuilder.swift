@@ -147,6 +147,15 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
             }
         case .construction:
             rows.append(WorkspaceInspectorTextRow(title: "Role", value: "Construction"))
+        case .authoredMesh:
+            if let geometrySourceID = reference.geometrySourceID {
+                rows.append(
+                    WorkspaceInspectorTextRow(
+                        title: "Authored Mesh ID",
+                        value: geometrySourceID.rawValue
+                    )
+                )
+            }
         }
         return rows
     }
@@ -648,6 +657,8 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
             return "Component Instance"
         case .construction:
             return "Construction"
+        case .authoredMesh:
+            return "Authored Mesh"
         }
     }
 

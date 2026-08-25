@@ -349,6 +349,7 @@ extension DesignDocument {
             reference: .body(featureID),
             object: .body(
                 featureID: featureID,
+                documentID: cadDocument.id,
                 sourceSection: nil,
                 typeID: nil,
                 geometryRole: sceneNode.object?.geometryRole ?? .solid,
@@ -526,6 +527,7 @@ extension DesignDocument {
             reference: .body(featureID),
             object: .body(
                 featureID: featureID,
+                documentID: cadDocument.id,
                 sourceSection: nil,
                 typeID: nil,
                 geometryRole: sceneNode.object?.geometryRole ?? .solid,
@@ -737,4 +739,3 @@ extension DesignDocument {
         return .add(radius, distance)
     }
 }
-

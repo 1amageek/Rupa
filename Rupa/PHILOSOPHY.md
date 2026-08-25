@@ -225,26 +225,29 @@ Evaluation output is a snapshot, not source truth.
 | Evaluated geometry artifacts | May be cached, but must be replaceable from the document source and evaluated generation. |
 | Undo history | Does not store running tasks or heavy evaluated artifacts. |
 
-### 8. Keep CAD and Mesh Roles Explicit
+### 8. Keep Geometry Representation Authority Explicit
 
-Rupa is CAD-first. Exact design intent remains in `DesignDocument` and
-Swift-CAD; Mesh normally exists to display, render, analyze, or export that
-design.
+Rupa is CAD-centered, while a Product Object may retain CAD and Authored Mesh
+representations simultaneously or contain Authored Mesh without CAD. Each
+representation payload owns its geometry facts, and purpose selection owns which
+representation is used.
 
 ```mermaid
 flowchart LR
-    CAD["CAD source"] --> Exact["Exact evaluation"]
+    Object["Product Object"] --> CAD["CAD representation"]
+    Object --> MeshSource["Authored Mesh representation"]
+    CAD --> Exact["Exact evaluation"]
     Exact --> Mesh["Linked derived Mesh"]
     Mesh --> Render["Viewport / render / export"]
-    Mesh -->|"Bake or Detach"| MeshSource["Independent Mesh source"]
+    MeshSource --> Render
     Capture["Scan / photo evidence"] --> Reconstruction["Approximate CAD reconstruction"]
     Reconstruction --> CAD
 ```
 
 | Geometry state | Rule |
 |---|---|
-| Linked derived Mesh | Rebuildable from CAD plus a repeatable Mesh recipe; direct persistent vertex edits are rejected. |
-| Detached editable Mesh | Has its own source identity and provenance; it does not silently update or replace CAD. |
+| CAD-derived Mesh snapshot | Rebuildable from CAD plus a repeatable Mesh recipe; direct persistent vertex edits are rejected. |
+| Authored Mesh | Has its own source identity and provenance; it may coexist with CAD and is never silently synchronized. |
 | Scan or photo reconstruction | Preserves input evidence, tolerance, deviation, and unresolved regions before explicit CAD acceptance. |
 | Renderer/GPU data | Cache only; never document source. |
 

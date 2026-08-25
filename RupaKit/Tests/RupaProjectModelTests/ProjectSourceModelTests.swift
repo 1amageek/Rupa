@@ -1,14 +1,28 @@
 import RupaGeometry
+import RupaCoreTypes
 import Testing
 @testable import RupaProjectModel
 
 @Test(.timeLimit(.minutes(1)))
 func projectSourceModelValidatesMeshDefinitionsAndHierarchy() throws {
     let mesh = try triangleSource()
+    let asset = try AuthoredMeshAsset(source: mesh, provenance: .created)
+    let representationID: GeometryRepresentationID = "representation.triangle"
     let definition = ObjectDefinition(
         id: "triangle.definition",
         name: "Triangle",
-        geometry: .mesh(mesh.identity)
+        representations: GeometryRepresentationSet(
+            representations: [
+                representationID: GeometryRepresentation(
+                    id: representationID,
+                    source: .authoredMesh(mesh.identity)
+                ),
+            ],
+            selection: GeometryRepresentationSelection(
+                modeling: representationID,
+                presentation: representationID
+            )
+        )
     )
     let occurrence = SceneOccurrence(
         id: "triangle.occurrence",
@@ -17,14 +31,17 @@ func projectSourceModelValidatesMeshDefinitionsAndHierarchy() throws {
     let project = try ProjectSourceModel(
         id: "project.fixture",
         name: "Fixture",
-        meshSources: [mesh.identity: mesh],
+        authoredMeshAssets: [asset.id: asset],
         objectDefinitions: [definition.id: definition],
         occurrences: [occurrence.id: occurrence],
         rootOccurrenceIDs: [occurrence.id]
     )
 
-    #expect(project.meshSources.count == 1)
-    #expect(project.objectDefinitions[definition.id]?.geometry == .mesh(mesh.identity))
+    #expect(project.authoredMeshAssets.count == 1)
+    #expect(
+        project.objectDefinitions[definition.id]?.representations.source(for: .presentation)
+            == .authoredMesh(mesh.identity)
+    )
 }
 
 @Test(.timeLimit(.minutes(1)))

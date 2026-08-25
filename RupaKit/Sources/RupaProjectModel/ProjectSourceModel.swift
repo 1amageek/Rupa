@@ -5,7 +5,7 @@ import RupaGeometry
 public struct ProjectSourceModel: Codable, Equatable, Sendable {
     public var id: ProjectID
     public var name: String
-    public var meshSources: [GeometrySourceID: MeshSource]
+    public var authoredMeshAssets: [GeometrySourceID: AuthoredMeshAsset]
     public var objectDefinitions: [ObjectDefinitionID: ObjectDefinition]
     public var occurrences: [SceneOccurrenceID: SceneOccurrence]
     public var rootOccurrenceIDs: [SceneOccurrenceID]
@@ -13,18 +13,48 @@ public struct ProjectSourceModel: Codable, Equatable, Sendable {
     public init(
         id: ProjectID,
         name: String,
-        meshSources: [GeometrySourceID: MeshSource] = [:],
+        authoredMeshAssets: [GeometrySourceID: AuthoredMeshAsset] = [:],
         objectDefinitions: [ObjectDefinitionID: ObjectDefinition] = [:],
         occurrences: [SceneOccurrenceID: SceneOccurrence] = [:],
         rootOccurrenceIDs: [SceneOccurrenceID] = []
     ) throws {
         self.id = id
         self.name = name
-        self.meshSources = meshSources
+        self.authoredMeshAssets = authoredMeshAssets
         self.objectDefinitions = objectDefinitions
         self.occurrences = occurrences
         self.rootOccurrenceIDs = rootOccurrenceIDs
         try validate()
+    }
+
+    @available(*, deprecated, message: "Use authoredMeshAssets so persisted Mesh provenance is explicit.")
+    public init(
+        id: ProjectID,
+        name: String,
+        meshSources: [GeometrySourceID: MeshSource],
+        objectDefinitions: [ObjectDefinitionID: ObjectDefinition] = [:],
+        occurrences: [SceneOccurrenceID: SceneOccurrence] = [:],
+        rootOccurrenceIDs: [SceneOccurrenceID] = []
+    ) throws {
+        let assets = try Dictionary(uniqueKeysWithValues: meshSources.map { sourceID, source in
+            (
+                sourceID,
+                try AuthoredMeshAsset(source: source, provenance: .created)
+            )
+        })
+        try self.init(
+            id: id,
+            name: name,
+            authoredMeshAssets: assets,
+            objectDefinitions: objectDefinitions,
+            occurrences: occurrences,
+            rootOccurrenceIDs: rootOccurrenceIDs
+        )
+    }
+
+    @available(*, deprecated, message: "Use authoredMeshAssets and retain provenance.")
+    public var meshSources: [GeometrySourceID: MeshSource] {
+        authoredMeshAssets.mapValues(\.source)
     }
 
     public func validate() throws {
@@ -36,20 +66,25 @@ public struct ProjectSourceModel: Codable, Equatable, Sendable {
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw ProjectModelError(code: .invalidIdentity, message: "Project names must not be empty.")
         }
-        for (sourceID, source) in meshSources {
-            guard sourceID == source.identity else {
-                throw ProjectModelError(code: .invalidReference, message: "Mesh source dictionary keys must match source identities.")
+        for (sourceID, asset) in authoredMeshAssets {
+            guard sourceID == asset.id else {
+                throw ProjectModelError(code: .invalidReference, message: "Authored Mesh asset dictionary keys must match source identities.")
             }
-            try source.validate()
+            try asset.validate()
         }
         for (definitionID, definition) in objectDefinitions {
             guard definitionID == definition.id else {
                 throw ProjectModelError(code: .invalidReference, message: "Object definition dictionary keys must match identities.")
             }
             try definition.validate()
-            if case .mesh(let sourceID) = definition.geometry {
-                guard meshSources[sourceID] != nil else {
-                    throw ProjectModelError(code: .invalidReference, message: "Object definition references a missing mesh source.")
+            for representation in definition.representations.representations.values {
+                switch representation.source {
+                case .authoredMesh(let sourceID):
+                    guard authoredMeshAssets[sourceID] != nil else {
+                        throw ProjectModelError(code: .invalidReference, message: "Object definition references a missing authored Mesh asset.")
+                    }
+                case .cad, .external:
+                    break
                 }
             }
         }
@@ -91,7 +126,17 @@ public struct ProjectSourceModel: Codable, Equatable, Sendable {
 
     public func adding(_ source: MeshSource) throws -> ProjectSourceModel {
         var result = self
-        result.meshSources[source.identity] = source
+        result.authoredMeshAssets[source.identity] = try AuthoredMeshAsset(
+            source: source,
+            provenance: .created
+        )
+        try result.validate()
+        return result
+    }
+
+    public func adding(_ asset: AuthoredMeshAsset) throws -> ProjectSourceModel {
+        var result = self
+        result.authoredMeshAssets[asset.id] = asset
         try result.validate()
         return result
     }

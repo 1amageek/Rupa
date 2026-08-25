@@ -8,18 +8,22 @@ architecture, turbomachinery, and Agent-driven design while preserving one
 shared document model, command pipeline, validation system, and automation
 surface.
 
-Rupa is a CAD-first direct-modeling product. Exact CAD source is the design
-authority; Mesh is normally derived for viewport, rendering, analysis, and
-exchange. A Mesh becomes independently editable only through an explicit detach
-transition. Scan and photo geometry enters as observation evidence and may create
-a new CAD source only through explicit approximate reconstruction. These
-ownership rules are normative in `CAD_MESH_RESPONSIBILITY_CONTRACT.md`.
+Rupa is a CAD-centered direct-modeling product whose Product Objects may retain
+CAD, Authored Mesh, and external geometry representations. Each representation
+payload owns its own geometry facts, while explicit modeling and presentation
+selections own the use context. CAD evaluation produces non-source Mesh snapshots;
+Authored Mesh may also exist without CAD. Scan and photo geometry enters as
+observation evidence and may create a new CAD representation only through explicit
+approximate reconstruction. These ownership rules are normative in
+`CAD_MESH_RESPONSIBILITY_CONTRACT.md`.
 
 ```mermaid
 flowchart LR
-    CAD["Exact CAD source"] --> Mesh["Derived Mesh"]
+    Object["Product Object"] --> CAD["CAD representation"]
+    Object --> Editable["Authored Mesh representation"]
+    CAD --> Mesh["Derived Mesh snapshot"]
     Mesh --> Render["Viewport and rendering"]
-    Mesh -->|"explicit detach"| Editable["Independent Mesh source"]
+    Editable --> Render
     Scan["Scan / photo evidence"] --> Reconstruct["Validated reconstruction"]
     Reconstruct --> CAD
 ```
@@ -88,7 +92,7 @@ A task is done only when all of these statements are true.
 |---|---|
 | Scope | The implementation satisfies the named conformance profile and capability case set without adding unrelated product behavior. |
 | Architecture | The app host remains thin, RupaKit owns product behavior, and Swift-CAD remains the CAD foundation. |
-| Representation ownership | CAD remains the normal design SSOT; linked Mesh, detached Mesh, and reconstruction input roles are explicit and never silently synchronized. |
+| Representation ownership | Each retained representation owns its payload; modeling and presentation selections are explicit; CAD, Authored Mesh, and reconstruction inputs are never silently synchronized. |
 | Generality | The solution supports the universal CAD direction and does not encode video, printing, or architecture as separate product forks. |
 | Design process | The feature has an explicit design packet or an assessment entry that covers the same DBN artifacts. |
 | Units and precision | Length display and modeling behavior remain valid across micrometer-detail through kilometer-scale workflows. |
@@ -103,7 +107,7 @@ A task is done only when all of these statements are true.
 | Question | Expected answer |
 |---|---|
 | Does the change preserve one shared CAD model? | Yes. |
-| Does every geometry value have exactly one CAD, detached-Mesh, input, or derived role? | Yes. |
+| Does every geometry value have exactly one CAD, Authored Mesh, external, input, or derived role and an explicit owner? | Yes. |
 | Does every mutation pass through an intentional command or session boundary? | Yes. |
 | Does the UI distinguish component Browser, canvas tools, logs, and Inspector? | Yes, `NavigationSplitView` owns the component Browser sidebar, modeling tools float on the bottom of the canvas as Liquid Glass controls, and `MacComponent` owns the collapsed-by-default logs pane plus the right-side Inspector Pane for contextual properties. |
 | Does the change respect the deferred `WorkspacePreset` boundary? | Yes, presets can later group defaults and UI emphasis without changing capability availability or core semantics. |

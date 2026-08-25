@@ -11,7 +11,7 @@ func projectEvaluationProducesImmutableOccurrenceSnapshotsWithWorldBounds() thro
     let definition = ObjectDefinition(
         id: "triangle.definition",
         name: "Triangle",
-        geometry: .mesh(mesh.identity)
+        geometry: .authoredMesh(mesh.identity)
     )
     let root = SceneOccurrence(
         id: "triangle.root",
@@ -41,7 +41,7 @@ func projectEvaluationProducesImmutableOccurrenceSnapshotsWithWorldBounds() thro
 @Test(.timeLimit(.minutes(1)))
 func projectEvaluationComposesParentAndChildTransforms() throws {
     let mesh = try triangleSource()
-    let definition = ObjectDefinition(id: "definition", name: "Triangle", geometry: .mesh(mesh.identity))
+    let definition = ObjectDefinition(id: "definition", name: "Triangle", geometry: .authoredMesh(mesh.identity))
     let root = SceneOccurrence(
         id: "root",
         definitionID: definition.id,

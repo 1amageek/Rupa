@@ -4736,6 +4736,8 @@ public struct MainView: View {
             return "cube.transparent"
         case .construction:
             return "axis.3d"
+        case .authoredMesh:
+            return "square.3.layers.3d"
         }
     }
 
@@ -7965,6 +7967,8 @@ public struct MainView: View {
             return "Component Instance"
         case .construction:
             return "Construction"
+        case .authoredMesh:
+            return "Authored Mesh"
         }
     }
 

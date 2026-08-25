@@ -139,6 +139,7 @@ let package = Package(
             name: "RupaCore",
             dependencies: [
                 "RupaCoreTypes",
+                "RupaProjectModel",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
                 .product(name: "CADModeling", package: "swift-CAD"),
                 .product(name: "CADTopology", package: "swift-CAD"),
@@ -371,7 +372,7 @@ let package = Package(
         ),
         .testTarget(
             name: "RupaCoreTests",
-            dependencies: ["RupaCore"]
+            dependencies: ["RupaCore", "RupaProjectModel"]
         ),
         .testTarget(
             name: "RupaCoreTypesTests",

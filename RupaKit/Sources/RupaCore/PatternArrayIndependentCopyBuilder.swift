@@ -318,6 +318,8 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
             )
         case .construction:
             return reference
+        case .authoredMesh:
+            return reference
         }
     }
 
@@ -333,9 +335,7 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
             )
         }
         var clonedObject = object
-        if let sourceFeatureID = object.sourceFeatureID {
-            clonedObject.sourceFeatureID = try remapper.remappedFeatureID(sourceFeatureID)
-        }
+        try clonedObject.remapCADRepresentations(using: featureIDMap)
         if let sourceSection = object.sourceSection {
             clonedObject.sourceSection = try remapper.remappedBodySourceSectionReference(sourceSection)
         }

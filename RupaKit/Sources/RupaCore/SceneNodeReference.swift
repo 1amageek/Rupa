@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 public struct SceneNodeReference: Codable, Hashable, Sendable {
     public enum Kind: String, Codable, Sendable {
@@ -8,23 +9,27 @@ public struct SceneNodeReference: Codable, Hashable, Sendable {
         case sketch
         case componentInstance
         case construction
+        case authoredMesh
     }
 
     public var kind: Kind
     public var featureID: FeatureID?
     public var componentInstanceID: ComponentInstanceID?
     public var constructionPlaneID: ConstructionPlaneSourceID?
+    public var geometrySourceID: GeometrySourceID?
 
     public init(
         kind: Kind,
         featureID: FeatureID? = nil,
         componentInstanceID: ComponentInstanceID? = nil,
-        constructionPlaneID: ConstructionPlaneSourceID? = nil
+        constructionPlaneID: ConstructionPlaneSourceID? = nil,
+        geometrySourceID: GeometrySourceID? = nil
     ) {
         self.kind = kind
         self.featureID = featureID
         self.componentInstanceID = componentInstanceID
         self.constructionPlaneID = constructionPlaneID
+        self.geometrySourceID = geometrySourceID
     }
 
     public static func feature(_ id: FeatureID) -> SceneNodeReference {
@@ -47,6 +52,10 @@ public struct SceneNodeReference: Codable, Hashable, Sendable {
         SceneNodeReference(kind: .construction, constructionPlaneID: id)
     }
 
+    public static func authoredMesh(_ id: GeometrySourceID) -> SceneNodeReference {
+        SceneNodeReference(kind: .authoredMesh, geometrySourceID: id)
+    }
+
     public static let construction = SceneNodeReference(kind: .construction)
 
     public func validate() throws {
@@ -54,7 +63,8 @@ public struct SceneNodeReference: Codable, Hashable, Sendable {
         case .feature, .body, .sketch:
             guard featureID != nil,
                   componentInstanceID == nil,
-                  constructionPlaneID == nil else {
+                  constructionPlaneID == nil,
+                  geometrySourceID == nil else {
                 throw DocumentValidationError.invalidProductMetadata(
                     "Feature, body, and sketch scene references must contain exactly one feature ID."
                 )
@@ -62,16 +72,27 @@ public struct SceneNodeReference: Codable, Hashable, Sendable {
         case .componentInstance:
             guard componentInstanceID != nil,
                   featureID == nil,
-                  constructionPlaneID == nil else {
+                  constructionPlaneID == nil,
+                  geometrySourceID == nil else {
                 throw DocumentValidationError.invalidProductMetadata(
                     "Component instance scene references must contain exactly one component instance ID."
                 )
             }
         case .construction:
             guard featureID == nil,
-                  componentInstanceID == nil else {
+                  componentInstanceID == nil,
+                  geometrySourceID == nil else {
                 throw DocumentValidationError.invalidProductMetadata(
                     "Construction scene references must not contain feature or component instance IDs."
+                )
+            }
+        case .authoredMesh:
+            guard geometrySourceID != nil,
+                  featureID == nil,
+                  componentInstanceID == nil,
+                  constructionPlaneID == nil else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Authored Mesh scene references must contain exactly one geometry source ID."
                 )
             }
         }

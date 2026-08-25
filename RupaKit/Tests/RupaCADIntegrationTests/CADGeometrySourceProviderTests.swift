@@ -20,7 +20,7 @@ func cadProviderRejectsNonCADReferencesBeforeEvaluation() throws {
     do {
         _ = try provider.evaluate(
             try GeometrySourceEvaluationRequest(
-                references: [.mesh("mesh.source")],
+                references: [.authoredMesh("mesh.source")],
                 sourceRevision: .init()
             ),
             in: try ProjectSourceModel(id: "project", name: "Project")

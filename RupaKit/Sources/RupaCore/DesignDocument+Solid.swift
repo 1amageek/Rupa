@@ -59,6 +59,7 @@ extension DesignDocument {
             reference: .body(featureID),
             object: .body(
                 featureID: featureID,
+                documentID: cadDocument.id,
                 sourceSection: .profile(profile),
                 typeID: typeID,
                 objectRegistry: objectRegistry
@@ -127,6 +128,7 @@ extension DesignDocument {
             reference: .body(featureID),
             object: .body(
                 featureID: featureID,
+                documentID: cadDocument.id,
                 sourceSection: .profile(profile),
                 typeID: nil,
                 objectRegistry: objectRegistry
@@ -215,6 +217,7 @@ extension DesignDocument {
             reference: .body(featureID),
             object: .body(
                 featureID: featureID,
+                documentID: cadDocument.id,
                 sourceSection: sections.first.map(BodySourceSectionReference.init(sweepSection:)),
                 typeID: nil,
                 geometryRole: options.resultKind.objectGeometryRole,
@@ -281,6 +284,7 @@ extension DesignDocument {
             reference: .body(featureID),
             object: .body(
                 featureID: featureID,
+                documentID: cadDocument.id,
                 sourceSection: sections.first.map { .profile($0.profile) },
                 typeID: nil,
                 geometryRole: options.resultKind.objectGeometryRole,
@@ -352,6 +356,7 @@ extension DesignDocument {
             reference: .body(featureID),
             object: .body(
                 featureID: featureID,
+                documentID: cadDocument.id,
                 sourceSection: nil,
                 typeID: nil,
                 geometryRole: .solid,

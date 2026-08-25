@@ -89,10 +89,11 @@ The supported implementation has one editing pipeline:
 | CLI live mode | RupaAgent request into app `EditorSession` | App session mutation, dirty state, diagnostics, structured CLI result. |
 | Batch automation | Ordered `AutomationCommand` execution inside an `EditorSession` transaction | Ordered results with generation and diagnostics; failed batches restore document, selection, and undo/redo state. |
 
-The product pipeline is CAD-first. Swift-CAD source remains authoritative for
-normal modeling; tessellated Mesh is derived for viewport, rendering, analysis,
-and export. Persistent Mesh editing requires an explicit detach transition, and
-scan/photo data becomes CAD only through explicit approximate reconstruction.
+The product pipeline is CAD-centered but does not require CAD. Product Objects
+may retain CAD and Authored Mesh simultaneously, and explicit modeling and
+presentation selections choose the representation for each use. CAD tessellation
+is a non-source snapshot. Scan/photo data becomes CAD only through explicit
+approximate reconstruction.
 The implementation and package migration required to enforce these roles is
 defined by `CAD_MESH_RESPONSIBILITY_CONTRACT.md` and
 `DOCUMENT_PACKAGE_CONTRACT.md`.
@@ -1275,13 +1276,16 @@ File mode requirements:
 
 ### Rupa Package Format
 
-Rupa uses `.swcad` as the user-facing extension. New saves write a Rupa package with Swift-CAD source plus Rupa metadata. Existing Swift-CAD native packages remain loadable.
+Rupa uses `.swcad` as the user-facing extension. New project saves use package
+schema v3 with required Product source, optional CAD source, and optional Authored
+Mesh source. Legacy project schema v2 is rejected explicitly.
 
 | Entry | Meaning |
 |---|---|
-| `manifest.json` | Package format, schema version, document path, Rupa metadata path, and document timestamps. |
-| `document.json` | Swift-CAD `CADDocument` source. |
-| `rupa.json` | Display unit, ruler configuration, and `ProductMetadata`. |
+| `manifest.json` | Package format, schema version, source records, identities, and integrity metadata. |
+| `source/product.json` | Document identity, units, settings, Product metadata, representation sets, and purpose selections. |
+| `source/cad.json` | Optional Swift-CAD `CADDocument` source; absent in Mesh-only packages. |
+| `source/mesh-assets.json` and blobs | Optional Authored Mesh catalog, provenance, and content-addressed payloads. |
 
 The file service must validate both the Swift-CAD source and the Rupa metadata after loading.
 
@@ -1827,7 +1831,7 @@ Initial implementation is accepted when these behavior contracts pass.
 
 | Topic | Decision needed |
 |---|---|
-| Document format boundary | Resolved: `.swcad` is the Rupa product package containing `manifest.json`, Swift-CAD `document.json`, and Rupa `rupa.json`, as implemented by `DocumentPackageStore`. |
+| Document format boundary | Resolved: `.swcad` project schema v3 separates required Product source, optional CAD source, and optional Authored Mesh catalog/blob source under one manifest. |
 | App sandbox socket path | Resolved: the socket lives in the shared app-group container (`WWCKBW8CKN.team.stamp.rupa`) so the sandboxed app and external clients resolve the same path; distribution-signing validation remains before release. |
 | iPadOS and visionOS CLI exclusion | Decide whether `RupaCLI` is macOS-only in a separate package configuration or guarded in the shared package. |
 | XPC migration | Decide the threshold for replacing Unix domain sockets with XPC. |

@@ -117,7 +117,7 @@ explicit wire-schema/version decision and compatibility test.
 The method table below documents the current development protocol. The target
 project architecture introduces a breaking, independently versioned protocol
 rather than wrapping the current internal command enum. Capability descriptors
-declare CAD source, product source, detached-Mesh source, input, workspace,
+declare CAD source, Product source, Authored Mesh source, purpose-selection, input, workspace,
 artifact, export, job, or decision effects as required by
 `CAD_MESH_RESPONSIBILITY_CONTRACT.md`:
 

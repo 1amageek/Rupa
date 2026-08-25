@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaProjectModel
 
 public struct ProductMetadata: Codable, Hashable, Sendable {
     public var sceneNodes: [SceneNodeID: SceneNode]
@@ -439,6 +440,8 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 )
             }
             return
+        case .authoredMesh:
+            return
         }
     }
 
@@ -452,6 +455,12 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
             return
         }
         try object.validate()
+        try validateGeometryRepresentations(
+            object.geometryRepresentations,
+            category: object.category,
+            geometryRole: object.geometryRole,
+            against: cadDocument
+        )
         let definition = try object.typeID.map { typeID in
             try objectRegistry.requireDefinition(for: typeID)
         }
@@ -473,30 +482,36 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         case .group:
             guard reference == nil else {
                 throw DocumentValidationError.invalidProductMetadata(
-                    "Group objects must not point to CAD source references."
+                    "Group objects must not point to geometry source references."
                 )
             }
         case .body:
-            guard reference?.kind == .body,
-                  reference?.featureID == object.sourceFeatureID,
-                  let sourceFeatureID = object.sourceFeatureID,
-                  let feature = cadDocument.designGraph.nodes[sourceFeatureID],
-                  feature.producesSceneGeometry else {
+            guard let modelingSource = object.geometryRepresentations.source(for: .modeling) else {
                 throw DocumentValidationError.invalidProductMetadata(
-                    "Body objects must point to a geometry-producing CAD feature."
+                    "Body objects require a modeling representation."
                 )
             }
-            if object.geometryRole == .solid {
-                guard feature.outputs.contains(where: { $0.role == .body }) else {
+            switch modelingSource {
+            case .cad(_, let outputID):
+                guard let uuid = UUID(uuidString: outputID),
+                      reference == .body(FeatureID(uuid)) else {
                     throw DocumentValidationError.invalidProductMetadata(
-                        "Solid body objects must point to a solid-producing CAD feature."
+                        "CAD-modeled body scene references must match the selected modeling representation."
                     )
                 }
-            }
-            if object.geometryRole == .surface {
-                guard feature.outputs.contains(where: { $0.role == .sheet }) else {
+            case .authoredMesh(let sourceID):
+                guard object.geometryRole == .mesh,
+                      reference == .authoredMesh(sourceID),
+                      object.sourceSection == nil else {
                     throw DocumentValidationError.invalidProductMetadata(
-                        "Surface body objects must point to a sheet-producing CAD feature."
+                        "Authored Mesh body scene references must match the selected Mesh representation."
+                    )
+                }
+            case .external:
+                guard reference == nil,
+                      object.sourceSection == nil else {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        "Externally modeled body objects must not infer a native source index."
                     )
                 }
             }
@@ -509,11 +524,9 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 }
             }
         case .sketch:
-            guard reference?.kind == .sketch,
-                  reference?.featureID == object.sourceFeatureID,
-                  let sourceFeatureID = object.sourceFeatureID,
-                  let feature = cadDocument.designGraph.nodes[sourceFeatureID],
-                  feature.outputs.contains(where: { $0.role == .profile || $0.role == .curve }) else {
+            guard case let .cad(_, outputID)? = object.geometryRepresentations.source(for: .modeling),
+                  let uuid = UUID(uuidString: outputID),
+                  reference == .sketch(FeatureID(uuid)) else {
                 throw DocumentValidationError.invalidProductMetadata(
                     "Sketch objects must point to a CAD sketch profile or curve feature."
                 )
@@ -543,6 +556,56 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 against: definition,
                 materialLibrary: materialLibrary
             )
+        }
+    }
+
+    private func validateGeometryRepresentations(
+        _ representationSet: GeometryRepresentationSet,
+        category: ObjectDescriptor.Category,
+        geometryRole: ObjectDescriptor.GeometryRole?,
+        against cadDocument: CADDocument
+    ) throws {
+        for representation in representationSet.representations.values {
+            guard case let .cad(sourceID, outputID) = representation.source else {
+                continue
+            }
+            guard sourceID == cadDocument.id.description,
+                  let uuid = UUID(uuidString: outputID),
+                  let feature = cadDocument.designGraph.nodes[FeatureID(uuid)] else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "CAD representations must reference an existing feature in the current CAD document."
+                )
+            }
+            switch category {
+            case .body:
+                guard feature.producesSceneGeometry else {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        "Body CAD representations must reference geometry-producing features."
+                    )
+                }
+                if geometryRole == .solid,
+                   feature.outputs.contains(where: { $0.role == .body }) == false {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        "Solid body CAD representations must reference solid-producing features."
+                    )
+                }
+                if geometryRole == .surface,
+                   feature.outputs.contains(where: { $0.role == .sheet }) == false {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        "Surface body CAD representations must reference sheet-producing features."
+                    )
+                }
+            case .sketch:
+                guard feature.outputs.contains(where: { $0.role == .profile || $0.role == .curve }) else {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        "Sketch CAD representations must reference profile or curve features."
+                    )
+                }
+            case .group, .componentInstance, .construction, .annotation, .camera, .light:
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Non-geometry objects must not retain CAD representations."
+                )
+            }
         }
     }
 

@@ -72,13 +72,13 @@
   - [x] Classify rigid, affine, offset-image, and procedural geometry through explicit source and failure contracts
   - [x] Verify the Project build path and focused curve-path behavior
   - [x] Review, verify, and commit the prerequisite
-- [ ] T04-A multi-representation authority contract
-  - [ ] Define representation identity, purpose, source, selection, and authored-Mesh provenance contracts
-  - [ ] Make Product objects and DesignDocument own representation sets and authored-Mesh assets
-  - [ ] Replace stored CAD source duplication with a derived compatibility accessor and explicit remapping
-  - [ ] Validate CAD-only, CAD-plus-Mesh, Mesh-only, missing-source, and non-geometry boundaries
-  - [ ] Replace obsolete single-source and CAD-required documentation
-  - [ ] Review, verify, and commit T04-A
+- [x] T04-A multi-representation authority contract
+  - [x] Define representation identity, purpose, source, selection, and authored-Mesh provenance contracts
+  - [x] Make Product objects and DesignDocument own representation sets and authored-Mesh assets
+  - [x] Replace stored CAD source duplication with a derived compatibility accessor and explicit remapping
+  - [x] Validate CAD-only, CAD-plus-Mesh, Mesh-only, missing-source, and non-geometry boundaries
+  - [x] Replace obsolete single-source and CAD-required documentation
+  - [x] Review, verify, and commit T04-A
 - [ ] T04-B purpose-aware projection and evaluation
   - [ ] Project all retained representations and authored-Mesh assets into the immutable evaluation model
   - [ ] Select modeling or presentation representations explicitly during evaluation
