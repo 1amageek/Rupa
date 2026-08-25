@@ -114,7 +114,7 @@
   - [x] Adapt the RupaKit provider composition while preserving the shared CAD evaluation cache
   - [x] Cover changed CAD content with stable IDs and loaded CAD replacement through the real provider path
   - [x] Review, verify, and commit P1-2
-- [ ] Integrated P1 verification
-  - [ ] Verify real Product, CAD, Mesh, package, projection, and presentation-evaluation paths
-  - [ ] Re-run rollback, cancellation, stale-publication, synchronization, ownership, incomplete-marker, and zero-copy audits
-  - [ ] Review cumulative changes and commit completion evidence
+- [x] Integrated P1 verification
+  - [x] Verify real Product, CAD, Mesh, package, projection, and presentation-evaluation paths
+  - [x] Re-run rollback, cancellation, stale-publication, synchronization, ownership, incomplete-marker, and zero-copy audits
+  - [x] Review cumulative changes and commit completion evidence

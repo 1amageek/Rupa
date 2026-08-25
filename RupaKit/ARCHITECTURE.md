@@ -136,7 +136,7 @@ flowchart LR
 | `RupaProject` depends on `ProjectEvaluating`, not `ProjectEvaluationEngine`. | Project orchestration owns ordered staging and publication, while `RupaEvaluation` owns the concrete evaluation algorithm. |
 | `RupaProjectPackage` composes package metadata with role-specific Product, optional CAD, Authored Mesh, and input codecs through public streaming contracts; it does not place package paths or archive state in `RupaGeometry` or `RupaProjectModel`. | Canonical bytes remain owned by their semantic source/input modules, while package identity, reuse, integrity, and atomic I/O remain one persistence responsibility. |
 | `ProjectController` validates through `ProjectPackageValidating` before publication. | A committed source aggregate must already satisfy canonical catalog, blob digest, manifest, and resource-limit contracts; save must not be the first point where an unsavable source is discovered. |
-| `DesignDocumentProjectBridge` creates a derived evaluation projection only; `DefaultDesignDocumentProjectEvaluatorFactory` owns provider registration and the CAD evaluation-cache lifetime behind `DesignDocumentProjectEvaluatorFactory`. | Evaluation projection must not become a second persisted CAD source, while cache lifetime must outlive one snapshot build. |
+| `DesignDocumentProjectBridge` creates a derived evaluation projection only. `RupaProject.ProjectEvaluatorPreparing` requires `ProjectController` to prepare an evaluator from the exact immutable `DesignDocument` being evaluated; `DefaultDesignDocumentProjectEvaluatorFactory` implements that port while owning provider registration and the shared CAD evaluation-cache lifetime. | Evaluation projection must not become a second persisted CAD source, and a controller must not retain an evaluator bound to an older CAD document while cache lifetime outlives one snapshot build. |
 | `RupaAgentProtocol` must not depend on `RupaAgentRuntime` or `RupaAgentTransport`. | Tooling can encode/decode requests without loading workspace registries or socket code. |
 | `RupaAgentTransport` depends only on `RupaAgentProtocol` and `RupaCoreTypes`; runtime handlers implement the protocol-owned request port. | Socket ownership remains independent from workspace registries and command execution. |
 | Agent transport messages use an unsigned 64-bit network-order length prefix, a 16 MiB payload limit, and total monotonic IO deadlines; the listener tracks bounded concurrent connections and shuts them down before awaiting handler ownership during stop. | Message boundaries do not depend on peer EOF, malformed or stalled peers cannot allocate unbounded memory, and listener shutdown converges for half-open connections. |
@@ -166,7 +166,9 @@ The complete path and integrity rules are normative in
 aggregate retains opaque adjunct entries and mapped backing required for bounded
 I/O and unchanged-blob reuse. `ProjectController` publishes session, retained
 package, projection, and presentation evaluation only after every staged step
-succeeds.
+succeeds. Current, commit, and load evaluation each prepare an evaluator from the
+same immutable `DesignDocument` that produced the projection. Evaluator
+preparation or evaluation failure leaves the published aggregate unchanged.
 
 ## Editing State Contracts
 
