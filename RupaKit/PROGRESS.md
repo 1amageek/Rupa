@@ -132,13 +132,13 @@
   - [x] Reject unsupported attribute remapping and invalid source/object/representation combinations explicitly
   - [x] Prove unchanged buffer storage sharing and bounded copy telemetry
   - [x] Review, verify, and commit T05-A
-- [ ] T05-B atomic authored-Mesh project transactions
-  - [ ] Extend ProjectSourceTransaction without making the evaluation projection a mutation source
-  - [ ] Stage CAD and authored-Mesh commands in a deterministic order and validate the complete authority aggregate
-  - [ ] Encode, evaluate, save, and publish the staged Mesh source atomically
-  - [ ] Preserve unchanged package blobs and collect superseded blobs only after successful publication
-  - [ ] Cover validation, codec, evaluation, save, cancellation, stale-revision, and late-publication rollback
-  - [ ] Review, verify, and commit T05-B
+- [x] T05-B atomic authored-Mesh project transactions
+  - [x] Extend ProjectSourceTransaction without making the evaluation projection a mutation source
+  - [x] Stage CAD and authored-Mesh commands in a deterministic order and validate the complete authority aggregate
+  - [x] Encode, evaluate, save, and publish the staged Mesh source atomically
+  - [x] Preserve unchanged package blobs and collect superseded blobs only after successful publication
+  - [x] Cover validation, codec, evaluation, save, cancellation, stale-revision, and late-publication rollback
+  - [x] Review, verify, and commit T05-B
 - [ ] T05-C explicit Make Editable from CAD
   - [ ] Define a source command that binds CAD representation, snapshot, revision, and content identity
   - [ ] Promote the validated CAD evaluation snapshot to an authored-Mesh asset with derived-from-CAD provenance

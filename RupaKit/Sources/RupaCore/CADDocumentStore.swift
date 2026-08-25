@@ -222,6 +222,38 @@ public final class CADDocumentStore {
         }
     }
 
+    package func apply(
+        _ command: GeometrySourceCommand,
+        using applier: any GeometrySourceCommandApplying
+    ) throws -> GeometrySourceCommandResult {
+        let transactionSnapshot = transactionSnapshot()
+        let ownsEvaluationBoundary = evaluationDeferralDepth == 0
+        do {
+            let result = try withDeferredEvaluation {
+                let application = try applier.apply(
+                    command,
+                    to: document,
+                    objectRegistry: objectRegistry
+                )
+                guard application.result.didMutate else {
+                    return application.result
+                }
+                _ = try application.document.validate(objectRegistry: objectRegistry)
+                document = application.document
+                try commitMutation()
+                evaluateCurrentDocument()
+                return application.result
+            }
+            if ownsEvaluationBoundary, result.didMutate {
+                try requireValidCommittedEvaluation()
+            }
+            return result
+        } catch {
+            restoreTransactionSnapshot(transactionSnapshot)
+            throw error
+        }
+    }
+
     // Each case body below runs inside a nested run() so the per-case
     // temporaries do not accumulate into this function's frame; unoptimized
     // builds must stay within 512 KB worker stacks on deep command chains.

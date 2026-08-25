@@ -99,8 +99,9 @@ provenance records the originating CAD representation and content identity.
 
 T04 establishes this authority and provenance contract. T05-A provides typed
 Core commands for Authored Mesh vertex edits, supported face edits, and purpose
-selection with stale-content rejection. Atomic Project transaction integration
-and Make Editable/Bake remain the T05-B and T05-C responsibilities respectively.
+selection with stale-content rejection. T05-B integrates those commands into
+atomic Project transactions. Explicit Make Editable/Bake remains the T05-C
+responsibility.
 
 ## Evaluation Contract
 
@@ -189,6 +190,15 @@ mismatch is a typed load failure, not a merge policy.
 
 Commit and load stage all source, projection, evaluation, and package work before
 publishing controller state.
+
+Within a source transaction, CAD editor commands execute in their declared order,
+then Geometry source commands execute in their declared order. The two phases
+produce one undo entry and advance the transaction revision at most once. An
+Authored Mesh edit stages Product/CAD/Mesh authority validation, separated source
+encoding, projection, and presentation evaluation before publication. Superseded
+Mesh blobs become eligible for explicit package garbage collection only in the
+successfully published package state; unchanged blobs remain reusable by content
+identity.
 
 ```mermaid
 sequenceDiagram

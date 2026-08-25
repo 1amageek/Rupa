@@ -136,6 +136,7 @@ flowchart LR
 | `RupaProject` depends on `ProjectEvaluating`, not `ProjectEvaluationEngine`. | Project orchestration owns ordered staging and publication, while `RupaEvaluation` owns the concrete evaluation algorithm. |
 | `RupaProjectPackage` composes package metadata with role-specific Product, optional CAD, Authored Mesh, and input codecs through public streaming contracts; it does not place package paths or archive state in `RupaGeometry` or `RupaProjectModel`. | Canonical bytes remain owned by their semantic source/input modules, while package identity, reuse, integrity, and atomic I/O remain one persistence responsibility. |
 | `ProjectController` validates through `ProjectPackageValidating` before publication. | A committed source aggregate must already satisfy canonical catalog, blob digest, manifest, and resource-limit contracts; save must not be the first point where an unsavable source is discovered. |
+| `EditorSession` applies `GeometrySourceCommand` through the injected Core applier and records its immutable result through the same `CADDocumentStore` generation and `CommandStack` history boundary as CAD commands. | Authored Mesh mutation must not bypass undo/redo, validation, evaluation invalidation, or transaction-revision ownership. |
 | `DesignDocumentProjectBridge` creates a derived evaluation projection only. `RupaProject.ProjectEvaluatorPreparing` requires `ProjectController` to prepare an evaluator from the exact immutable `DesignDocument` being evaluated; `DefaultDesignDocumentProjectEvaluatorFactory` implements that port while owning provider registration and the shared CAD evaluation-cache lifetime. | Evaluation projection must not become a second persisted CAD source, and a controller must not retain an evaluator bound to an older CAD document while cache lifetime outlives one snapshot build. |
 | `RupaAgentProtocol` must not depend on `RupaAgentRuntime` or `RupaAgentTransport`. | Tooling can encode/decode requests without loading workspace registries or socket code. |
 | `RupaAgentTransport` depends only on `RupaAgentProtocol` and `RupaCoreTypes`; runtime handlers implement the protocol-owned request port. | Socket ownership remains independent from workspace registries and command execution. |
@@ -169,6 +170,11 @@ package, projection, and presentation evaluation only after every staged step
 succeeds. Current, commit, and load evaluation each prepare an evaluator from the
 same immutable `DesignDocument` that produced the projection. Evaluator
 preparation or evaluation failure leaves the published aggregate unchanged.
+`ProjectSourceTransaction` executes its ordered CAD command phase before its
+ordered Geometry source-command phase. Both phases are isolated as one session
+transaction, one undo entry, and at most one transaction-revision advance.
+Successful Authored Mesh edits mark only superseded source blobs for collection;
+the next package save reuses every unchanged content-addressed blob.
 
 ## Editing State Contracts
 

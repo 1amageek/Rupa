@@ -949,6 +949,37 @@ public final class EditorSession {
         try workspaceState.apply(command, document: document)
     }
 
+    @discardableResult
+    public func execute(
+        _ command: GeometrySourceCommand,
+        using applier: any GeometrySourceCommandApplying = DefaultGeometrySourceCommandApplier(),
+        expectedTransactionRevision: DocumentTransactionRevision? = nil
+    ) throws -> GeometrySourceCommandResult {
+        try requireTransactionRevision(expectedTransactionRevision)
+        guard !commandStack.isExecutingGroupedSourceCommands else {
+            let result = try commandStack.execute(
+                command,
+                using: applier,
+                in: store
+            )
+            selection.pruneMissingReferences(in: document)
+            workspaceState.pruneMissingReferences(in: document)
+            return result
+        }
+
+        return try executeIsolatedSourceTransaction(
+            commandName: command.name,
+            commits: true,
+            expectedTransactionRevision: expectedTransactionRevision
+        ) { stagedSession in
+            try stagedSession.commandStack.execute(
+                command,
+                using: applier,
+                in: stagedSession.store
+            )
+        }.value
+    }
+
     public func withSourceCommandGroup<Value>(
         named commandName: String,
         expectedTransactionRevision: DocumentTransactionRevision? = nil,

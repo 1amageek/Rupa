@@ -381,6 +381,80 @@ func presentationSelectionChangesUseContextWithoutChangingCADOrMeshAuthority() t
     #expect(!noOp.result.didMutate)
 }
 
+@Test(.timeLimit(.minutes(1)))
+func editorSessionPublishesAuthoredMeshEditWithGenerationRevisionAndUndoHistory() throws {
+    let source = try editableQuadSource(identity: "mesh.session-edit")
+    let fixture = try meshOnlyDocument(source: source)
+    let session = EditorSession(document: fixture.document)
+    let replacement = GeometryPoint3D(x: 0, y: 0, z: 2)
+
+    let result = try session.execute(
+        .editAuthoredMesh(
+            .setVertexPosition(
+                target: AuthoredMeshEditTarget(
+                    sceneNodeID: fixture.sceneNodeID,
+                    representationID: fixture.representationID,
+                    sourceID: source.identity,
+                    expectedSourceIdentity: fixture.asset.contentIdentity
+                ),
+                vertexID: source.vertexIDs[0],
+                position: replacement
+            )
+        ),
+        expectedTransactionRevision: DocumentTransactionRevision(0)
+    )
+
+    #expect(result.didMutate)
+    #expect(session.generation == DocumentGeneration(1))
+    #expect(session.transactionRevision == DocumentTransactionRevision(1))
+    #expect(session.commandStack.undoEntries.count == 1)
+    #expect(
+        try session.document.authoredMeshAssets[source.identity]?
+            .source.position(of: source.vertexIDs[0]) == replacement
+    )
+
+    _ = try session.undo(expectedTransactionRevision: DocumentTransactionRevision(1))
+
+    #expect(session.generation == DocumentGeneration(2))
+    #expect(session.transactionRevision == DocumentTransactionRevision(2))
+    #expect(
+        session.document.authoredMeshAssets[source.identity]?.contentIdentity
+            == fixture.asset.contentIdentity
+    )
+}
+
+@Test(.timeLimit(.minutes(1)))
+func editorSessionAuthoredMeshNoOpDoesNotAdvanceGenerationOrRevision() throws {
+    let source = try editableQuadSource(identity: "mesh.session-no-op")
+    let fixture = try meshOnlyDocument(source: source)
+    let session = EditorSession(document: fixture.document)
+
+    let result = try session.execute(
+        .editAuthoredMesh(
+            .setVertexPosition(
+                target: AuthoredMeshEditTarget(
+                    sceneNodeID: fixture.sceneNodeID,
+                    representationID: fixture.representationID,
+                    sourceID: source.identity,
+                    expectedSourceIdentity: fixture.asset.contentIdentity
+                ),
+                vertexID: source.vertexIDs[0],
+                position: try source.position(of: source.vertexIDs[0])
+            )
+        ),
+        expectedTransactionRevision: DocumentTransactionRevision(0)
+    )
+
+    #expect(!result.didMutate)
+    #expect(session.generation == DocumentGeneration(0))
+    #expect(session.transactionRevision == DocumentTransactionRevision(0))
+    #expect(session.commandStack.undoEntries.isEmpty)
+    #expect(
+        session.document.authoredMeshAssets[source.identity]?.contentIdentity
+            == fixture.asset.contentIdentity
+    )
+}
+
 private struct MeshSourceCommandFixture {
     let document: DesignDocument
     let asset: AuthoredMeshAsset

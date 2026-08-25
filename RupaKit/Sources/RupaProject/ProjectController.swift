@@ -18,6 +18,7 @@ public actor ProjectController {
     private let packageReader: any ProjectPackageReading
     private let packageWriter: any ProjectPackageWriting
     private let packageValidator: any ProjectPackageValidating
+    private let geometrySourceCommandApplier: any GeometrySourceCommandApplying
 
     public init(
         document: DesignDocument,
@@ -27,7 +28,9 @@ public actor ProjectController {
         cadSourceCodec: any ProjectCADSourceCoding = JSONProjectCADSourceCodec(),
         packageReader: any ProjectPackageReading = ProjectPackageStore(),
         packageWriter: any ProjectPackageWriting = ProjectPackageStore(),
-        packageValidator: any ProjectPackageValidating = ProjectPackageStore()
+        packageValidator: any ProjectPackageValidating = ProjectPackageStore(),
+        geometrySourceCommandApplier: any GeometrySourceCommandApplying =
+            DefaultGeometrySourceCommandApplier()
     ) throws {
         let initial = try Self.makeInitialState(
             document: document,
@@ -47,6 +50,7 @@ public actor ProjectController {
         self.packageReader = packageReader
         self.packageWriter = packageWriter
         self.packageValidator = packageValidator
+        self.geometrySourceCommandApplier = geometrySourceCommandApplier
     }
 
     public init(
@@ -57,7 +61,9 @@ public actor ProjectController {
         cadSourceCodec: any ProjectCADSourceCoding = JSONProjectCADSourceCodec(),
         packageReader: any ProjectPackageReading = ProjectPackageStore(),
         packageWriter: any ProjectPackageWriting = ProjectPackageStore(),
-        packageValidator: any ProjectPackageValidating = ProjectPackageStore()
+        packageValidator: any ProjectPackageValidating = ProjectPackageStore(),
+        geometrySourceCommandApplier: any GeometrySourceCommandApplying =
+            DefaultGeometrySourceCommandApplier()
     ) throws {
         do {
             try packageValidator.validateForSave(package)
@@ -84,6 +90,7 @@ public actor ProjectController {
         self.packageReader = packageReader
         self.packageWriter = packageWriter
         self.packageValidator = packageValidator
+        self.geometrySourceCommandApplier = geometrySourceCommandApplier
     }
 
     public func currentDocument() -> DesignDocument {
@@ -138,7 +145,7 @@ public actor ProjectController {
     ) async throws -> ProjectSourceCommitResult {
         try requireTransactionRevision(transaction.expectedTransactionRevision)
 
-        let prepared: PreparedEditorSourceTransaction<[CommandExecutionResult]>
+        let prepared: PreparedEditorSourceTransaction<StagedCommandResults>
         do {
             prepared = try session.prepareIsolatedSourceTransaction(
                 commandName: transaction.name,
@@ -146,9 +153,20 @@ public actor ProjectController {
             ) { stagedSession in
                 try stagedSession.withSourceCommandGroup(named: transaction.name) {
                     groupedSession in
-                    try transaction.commands.map { command in
+                    let commandResults = try transaction.commands.map { command in
                         try groupedSession.execute(command)
                     }
+                    let geometrySourceCommandResults = try transaction
+                        .geometrySourceCommands.map { command in
+                            try groupedSession.execute(
+                                command,
+                                using: geometrySourceCommandApplier
+                            )
+                        }
+                    return StagedCommandResults(
+                        commandResults: commandResults,
+                        geometrySourceCommandResults: geometrySourceCommandResults
+                    )
                 }
             }
         } catch let error as EditorError {
@@ -177,12 +195,15 @@ public actor ProjectController {
         }
         let stagedPackage: ProjectPackageDocument
         do {
-            stagedPackage = try packageDocument.replacingSources(
+            let replacedPackage = try packageDocument.replacingSources(
                 documentID: stagedEvaluationSource.id,
                 product: stagedProductSource,
                 cad: stagedCADSource,
                 authoredMeshAssets: prepared.stagedDocument.authoredMeshAssets
             )
+            stagedPackage = prepared.value.didMutateAuthoredMesh
+                ? replacedPackage.garbageCollectingUnreferencedSourceBlobs()
+                : replacedPackage
         } catch {
             throw ProjectControllerError(
                 code: .packageFailed,
@@ -228,7 +249,8 @@ public actor ProjectController {
             document: prepared.stagedDocument,
             package: stagedPackage,
             evaluation: stagedEvaluation,
-            commandResults: prepared.value
+            commandResults: prepared.value.commandResults,
+            geometrySourceCommandResults: prepared.value.geometrySourceCommandResults
         )
     }
 
@@ -773,5 +795,19 @@ public actor ProjectController {
             )
         }
         return document
+    }
+}
+
+private struct StagedCommandResults: Sendable {
+    let commandResults: [CommandExecutionResult]
+    let geometrySourceCommandResults: [GeometrySourceCommandResult]
+
+    var didMutateAuthoredMesh: Bool {
+        geometrySourceCommandResults.contains { result in
+            guard case .authoredMeshEdit = result else {
+                return false
+            }
+            return result.didMutate
+        }
     }
 }

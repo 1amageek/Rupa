@@ -149,6 +149,37 @@ public final class CommandStack {
         return result
     }
 
+    @discardableResult
+    package func execute(
+        _ command: GeometrySourceCommand,
+        using applier: any GeometrySourceCommandApplying,
+        in store: CADDocumentStore
+    ) throws -> GeometrySourceCommandResult {
+        if groupedExecution != nil {
+            let result = try store.apply(command, using: applier)
+            if result.didMutate {
+                groupedExecution?.didMutate = true
+            }
+            return result
+        }
+        let before = store.snapshot()
+        let result = try store.apply(command, using: applier)
+        let after = store.snapshot()
+
+        if result.didMutate {
+            undoEntries.append(
+                CommandHistoryEntry(
+                    commandName: command.name,
+                    before: before,
+                    after: after
+                )
+            )
+            redoEntries.removeAll()
+        }
+
+        return result
+    }
+
     package func withGroupedExecution<Value>(
         commandName: String,
         in store: CADDocumentStore,
