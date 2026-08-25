@@ -4,9 +4,12 @@ public struct ProjectControllerError: Error, Equatable, LocalizedError, Sendable
     public enum Code: String, Equatable, Sendable {
         case revisionConflict
         case sourceInvalid
-        case mutationFailed
+        case sourceMismatch
+        case transactionInvalid
+        case cadSourceFailed
+        case projectionFailed
+        case packageFailed
         case evaluationFailed
-        case revisionOverflow
         case snapshotUnavailable
     }
 

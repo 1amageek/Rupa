@@ -197,9 +197,11 @@ let package = Package(
         .target(
             name: "RupaProject",
             dependencies: [
+                "RupaCore",
                 "RupaCoreTypes",
                 "RupaEvaluation",
                 "RupaProjectModel",
+                "RupaProjectPackage",
             ]
         ),
         .target(
@@ -406,7 +408,13 @@ let package = Package(
         ),
         .testTarget(
             name: "RupaProjectTests",
-            dependencies: ["RupaEvaluation", "RupaProject"]
+            dependencies: [
+                "RupaCore",
+                "RupaEvaluation",
+                "RupaProject",
+                "RupaProjectPackage",
+                .product(name: "SwiftCAD", package: "swift-CAD"),
+            ]
         ),
         .testTarget(
             name: "RupaAutomationTests",

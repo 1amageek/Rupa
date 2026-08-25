@@ -52,13 +52,14 @@
   - [x] Cover round trip, corruption, missing CAD source, identity, reuse, and bounded I/O
   - [x] Review F05-C and run focused verification
   - [x] Commit the reviewed F05-C sprint
-- [ ] T03-A bounded ProjectController integration
-  - [ ] Require caller-provided expected transaction revisions before staging and before publication
-  - [ ] Own one editable session and retained project-package aggregate without absorbing CAD semantics
-  - [ ] Project and evaluate the staged CAD source before publishing CAD and universal project state
-  - [ ] Route source commit and package load/save through the same ordered project boundary
-  - [ ] Cover concurrent callers, stale requests, failed evaluation, failed save, and retained aggregate publication
-  - [ ] Review T03-A, run focused verification, and commit the sprint
+- [x] T03-A bounded ProjectController integration
+  - [x] Require caller-provided expected transaction revisions before staging and before publication
+  - [x] Own one editable session and retained project-package aggregate without absorbing CAD semantics
+  - [x] Project and evaluate the staged CAD source before publishing CAD and universal project state
+  - [x] Route source commit and package load/save through the same ordered project boundary
+  - [x] Cover concurrent callers, stale requests, failed evaluation, failed save, and retained aggregate publication
+  - [x] Review T03-A and run focused verification
+  - [x] Commit the reviewed T03-A sprint
 - [ ] Integrated CAD/project transaction verification
   - [ ] Re-run incomplete-marker, synchronization, ownership, and zero-copy audits
   - [ ] Verify focused Core, DomainFoundation, Project, CAD integration, package, and bridge tests
