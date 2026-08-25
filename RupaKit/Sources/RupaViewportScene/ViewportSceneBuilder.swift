@@ -1120,7 +1120,8 @@ public struct ViewportSceneBuilder {
             }
         case .affine, .harmonic, .sphericalGreatCircle,
              .certifiedImplicit, .certifiedAnalyticImplicit, .certifiedAnalyticPair,
-             .projectedAnalytic, .periodicTranslation:
+             .projectedAnalytic, .periodicTranslation, .rigidImage,
+             .offsetSurfaceImage:
             return []
         }
     }

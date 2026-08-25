@@ -67,25 +67,48 @@
   - [x] Verify focused Core, DomainFoundation, Project, CAD integration, package, and bridge tests
   - [x] Verify the direct ProjectController transaction and package routes without changing the deferred RupaKit application composition
   - [x] Review cumulative changes, remove obsolete status text, and record completion evidence
-- [ ] CM01 CAD/Mesh source-boundary migration
-  - [x] Freeze CAD, linked-Mesh, detached-Mesh, reconstruction-input, rendering, package, Agent-effect, and zero-copy responsibilities
-  - [ ] Replace package schema v2 source/rupa.json duplication with disjoint CAD and product source entries
-  - [ ] Separate authored product source from the CAD-derived immutable evaluation projection
-  - [ ] Add explicit Mesh role and provenance validation at source, package, and command boundaries
-  - [ ] Preserve bounded streaming, content-addressed reuse, atomic save, and copy telemetry through the schema replacement
-  - [ ] Review CM01, run focused verification, and commit the sprint
-- [ ] CM02 linked and detached Mesh lifecycle
+- [x] T04 prerequisite: current kernel geometry compatibility
+  - [x] Adopt the reviewed RupaKit compatibility changes without importing unrelated swift-CAD work in progress
+  - [x] Classify rigid, affine, offset-image, and procedural geometry through explicit source and failure contracts
+  - [x] Verify the Project build path and focused curve-path behavior
+  - [x] Review, verify, and commit the prerequisite
+- [ ] T04-A multi-representation authority contract
+  - [ ] Define representation identity, purpose, source, selection, and authored-Mesh provenance contracts
+  - [ ] Make Product objects and DesignDocument own representation sets and authored-Mesh assets
+  - [ ] Replace stored CAD source duplication with a derived compatibility accessor and explicit remapping
+  - [ ] Validate CAD-only, CAD-plus-Mesh, Mesh-only, missing-source, and non-geometry boundaries
+  - [ ] Replace obsolete single-source and CAD-required documentation
+  - [ ] Review, verify, and commit T04-A
+- [ ] T04-B purpose-aware projection and evaluation
+  - [ ] Project all retained representations and authored-Mesh assets into the immutable evaluation model
+  - [ ] Select modeling or presentation representations explicitly during evaluation
+  - [ ] Include purpose and representation identity in evaluated snapshot identity and occurrence evidence
+  - [ ] Prove authored-Mesh evaluation shares source storage without materialization
+  - [ ] Review, verify, and commit T04-B
+- [ ] T04-C disjoint project package schema v3
+  - [ ] Replace source/rupa.json with required product, optional CAD, and optional Mesh catalog source regions
+  - [ ] Reject schema v2 without a compatibility fallback
+  - [ ] Preserve bounded streaming, content-addressed reuse, atomic save, adjunct preservation, and garbage collection
+  - [ ] Verify CAD-only, CAD-plus-Mesh, Mesh-only, corruption, deterministic identity, and copy-budget paths
+  - [ ] Review, verify, and commit T04-C
+- [ ] T04-D atomic ProjectController integration
+  - [ ] Split Product and CAD codecs and derive evaluation projections from retained sources
+  - [ ] Commit and load Product, optional CAD, Mesh assets, projection, and presentation evaluation atomically
+  - [ ] Reconstruct a non-authoritative empty runtime CAD adapter for Mesh-only packages
+  - [ ] Preserve revision, cancellation, stale-publication, rollback, and save failure contracts
+  - [ ] Review, verify, and commit T04-D
+- [ ] T05 linked and authored-Mesh lifecycle
   - [ ] Add saved derivation recipes and dependency-keyed linked-Mesh invalidation
-  - [ ] Implement atomic Bake/Detach with provenance, occurrence source switching, and undo/redo
-  - [ ] Prove CAD and detached-Mesh mutation isolation through UI-neutral project commands
-  - [ ] Review CM02, run focused verification, and commit the sprint
+  - [ ] Implement atomic Make Editable or Bake with provenance and undo or redo
+  - [ ] Prove CAD and authored-Mesh mutation isolation through UI-neutral project commands
+  - [ ] Review, verify, and commit T05
 - [ ] CM03 reconstruction input and CAD acceptance boundary
   - [ ] Define immutable capture/input identities and bounded package storage
   - [ ] Define reconstruction job, candidate, deviation, uncertainty, and unresolved-region records
   - [ ] Implement explicit candidate-CAD acceptance without mutating retained observations
   - [ ] Review CM03, run focused verification, and commit the sprint
-- [ ] Integrated CAD/Mesh responsibility verification
+- [ ] Integrated T04 representation source-authority verification
   - [ ] Re-run incomplete-marker, synchronization, ownership, and zero-copy audits
-  - [ ] Verify CAD-to-linked-Mesh, detach, detached edit, reconstruction, package, Agent, and failure paths
-  - [ ] Integrate ProjectController only after CAD command, undo, viewport, role, and copy-budget parity passes
-  - [ ] Review cumulative changes and record completion evidence
+  - [ ] Verify CAD-only, CAD-plus-Mesh, Mesh-only, package, transaction, and failure paths
+  - [ ] Verify supported Native, ordinary WASM, and Embedded WASM compile or runtime evidence without overgeneralizing target coverage
+  - [ ] Review cumulative changes, remove obsolete T04 records, and commit completion evidence

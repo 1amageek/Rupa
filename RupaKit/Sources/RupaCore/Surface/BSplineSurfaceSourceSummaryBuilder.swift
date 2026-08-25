@@ -552,7 +552,8 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         switch curve {
         case .affine, .harmonic, .sphericalGreatCircle, .certifiedImplicit,
              .certifiedAnalyticImplicit, .certifiedAnalyticPair,
-             .periodicTranslation, .projectedAnalytic:
+             .periodicTranslation, .projectedAnalytic, .rigidImage,
+             .offsetSurfaceImage:
             return SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurve(
                 kind: "analytic",
                 unsupportedReason: "Analytic and certified trim p-curves are not editable source primitives."
@@ -719,7 +720,8 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         switch curve {
         case .constantU, .constantV, .affine, .harmonic, .sphericalGreatCircle,
              .certifiedImplicit, .certifiedAnalyticImplicit, .certifiedAnalyticPair,
-             .periodicTranslation, .projectedAnalytic:
+             .periodicTranslation, .projectedAnalytic, .rigidImage,
+             .offsetSurfaceImage:
             return []
         case .polyline(let points):
             return parameterCurveControlPoints(

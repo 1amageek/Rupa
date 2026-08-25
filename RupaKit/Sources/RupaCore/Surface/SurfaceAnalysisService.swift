@@ -6,15 +6,18 @@ public struct SurfaceAnalysisService: Sendable {
     private let pipelineOverride: CADPipeline?
     private let tolerance: ModelingTolerance
     private let options: SurfaceAnalysisOptions
+    private let edgeLengthEvaluator: any BRepEdgeLengthEvaluating
 
     public init(
         pipeline: CADPipeline? = nil,
         tolerance: ModelingTolerance = .standard,
-        options: SurfaceAnalysisOptions = SurfaceAnalysisOptions()
+        options: SurfaceAnalysisOptions = SurfaceAnalysisOptions(),
+        edgeLengthEvaluator: any BRepEdgeLengthEvaluating = DefaultBRepEdgeLengthEvaluator()
     ) {
         self.pipelineOverride = pipeline
         self.tolerance = tolerance
         self.options = options
+        self.edgeLengthEvaluator = edgeLengthEvaluator
     }
 
     private struct PersistentTopologyNames {
@@ -405,77 +408,24 @@ public struct SurfaceAnalysisService: Sendable {
     ) throws -> Double {
         let vertexIDs = try orientedVertexIDs(for: orientedEdge, in: model)
         guard let edge = model.edges[orientedEdge.edgeID],
-              let start = model.vertices[vertexIDs.start]?.point,
-              let end = model.vertices[vertexIDs.end]?.point,
-              let curve = model.geometry.curves[edge.curveID] else {
+              model.vertices[vertexIDs.start] != nil,
+              model.vertices[vertexIDs.end] != nil,
+              model.geometry.curves[edge.curveID] != nil else {
             throw EditorError(
                 code: .evaluationFailed,
                 message: "Surface analysis encountered missing trim boundary edge geometry."
             )
         }
-        let chordLength = (end - start).length
-        switch curve {
-        case .line:
-            return chordLength
-        case .circle(let circle):
-            guard let trim = edge.trim else {
-                return chordLength
-            }
-            return abs(trim.endParameter - trim.startParameter) * circle.radius
-        case .bSpline:
-            return try estimatedSampledLength(
-                for: curve,
-                edge: edge,
-                fallback: chordLength
-            )
-        case .analytic, .implicit, .surfaceLift, .certifiedIntersection:
-            return chordLength
-        }
-    }
-
-    private func estimatedSampledLength(
-        for curve: Curve3D,
-        edge: Edge,
-        fallback: Double
-    ) throws -> Double {
-        let parameterSpan: (start: Double, end: Double)
-        if let trim = edge.trim {
-            parameterSpan = (trim.startParameter, trim.endParameter)
-        } else {
-            switch curve.parameterDomain {
-            case .unbounded:
-                return fallback
-            case .closed(let start, let end):
-                parameterSpan = (start, end)
-            case .periodic(let period):
-                parameterSpan = (0.0, period)
-            }
-        }
-
-        guard parameterSpan.start.isFinite,
-              parameterSpan.end.isFinite else {
-            return fallback
-        }
-        let span = parameterSpan.end - parameterSpan.start
-        guard abs(span) > tolerance.distance else {
-            return fallback
-        }
-
-        let segmentCount = 32
         do {
-            var previous = try curve.point(at: parameterSpan.start, tolerance: tolerance)
-            var length = 0.0
-            for index in 1...segmentCount {
-                let parameter = parameterSpan.start + span * Double(index) / Double(segmentCount)
-                let current = try curve.point(at: parameter, tolerance: tolerance)
-                length += (current - previous).length
-                previous = current
-            }
-            return length
+            return try edgeLengthEvaluator.lengthEnclosure(
+                of: edge,
+                in: model,
+                tolerance: tolerance
+            ).midpoint
         } catch {
             throw EditorError(
                 code: .evaluationFailed,
-                message: "Surface analysis could not sample trim boundary curve length: \(String(describing: error))"
+                message: "Surface analysis could not certify trim boundary curve length: \(String(describing: error))"
             )
         }
     }

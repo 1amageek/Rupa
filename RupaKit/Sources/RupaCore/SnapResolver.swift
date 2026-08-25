@@ -858,7 +858,8 @@ public struct SnapResolver: Sendable {
         switch curve {
         case .constantU, .constantV, .affine, .harmonic, .sphericalGreatCircle,
              .certifiedImplicit, .certifiedAnalyticImplicit, .certifiedAnalyticPair,
-             .periodicTranslation, .projectedAnalytic:
+             .periodicTranslation, .projectedAnalytic, .rigidImage,
+             .offsetSurfaceImage:
             return []
         case let .polyline(points):
             guard points.count > 2 else {

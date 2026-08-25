@@ -1815,6 +1815,8 @@ extension DesignDocument {
         tolerance: ModelingTolerance
     ) throws -> SurfaceParameterCurve {
         switch curve {
+        case .rigidImage, .offsetSurfaceImage:
+            throw derivedTrimCurveEditingError(owner: owner)
         case .affine, .harmonic, .sphericalGreatCircle, .certifiedImplicit, .certifiedAnalyticImplicit, .certifiedAnalyticPair, .periodicTranslation, .projectedAnalytic:
             throw EditorError(
                 code: .commandInvalid,
@@ -1868,6 +1870,8 @@ extension DesignDocument {
         owner: String
     ) throws -> SurfaceParameterCurve {
         switch curve {
+        case .rigidImage, .offsetSurfaceImage:
+            throw derivedTrimCurveEditingError(owner: owner)
         case .constantU, .constantV, .affine, .harmonic, .sphericalGreatCircle, .certifiedImplicit, .certifiedAnalyticImplicit, .certifiedAnalyticPair, .periodicTranslation, .projectedAnalytic:
             throw EditorError(
                 code: .commandInvalid,
@@ -1918,6 +1922,8 @@ extension DesignDocument {
         tolerance: ModelingTolerance
     ) throws -> SurfaceParameterCurve {
         switch curve {
+        case .rigidImage, .offsetSurfaceImage:
+            throw derivedTrimCurveEditingError(owner: owner)
         case .constantU, .constantV, .polyline, .affine, .harmonic, .sphericalGreatCircle, .certifiedImplicit, .certifiedAnalyticImplicit, .certifiedAnalyticPair, .periodicTranslation, .projectedAnalytic:
             throw EditorError(
                 code: .commandInvalid,
@@ -1957,6 +1963,8 @@ extension DesignDocument {
         tolerance: ModelingTolerance
     ) throws -> SurfaceParameterCurve {
         switch curve {
+        case .rigidImage, .offsetSurfaceImage:
+            throw derivedTrimCurveEditingError(owner: owner)
         case .constantU, .constantV, .polyline, .affine, .harmonic, .sphericalGreatCircle, .certifiedImplicit, .certifiedAnalyticImplicit, .certifiedAnalyticPair, .periodicTranslation, .projectedAnalytic:
             throw EditorError(
                 code: .commandInvalid,
@@ -2088,6 +2096,8 @@ extension DesignDocument {
         tolerance: ModelingTolerance
     ) throws -> SurfaceParameterCurve {
         switch curve {
+        case .rigidImage, .offsetSurfaceImage:
+            throw derivedTrimCurveEditingError(owner: owner)
         case .constantU, .constantV, .polyline, .affine, .harmonic, .sphericalGreatCircle, .certifiedImplicit, .certifiedAnalyticImplicit, .certifiedAnalyticPair, .periodicTranslation, .projectedAnalytic:
             throw EditorError(
                 code: .commandInvalid,
@@ -2113,6 +2123,8 @@ extension DesignDocument {
         tolerance: ModelingTolerance
     ) throws -> SurfaceParameterCurve {
         switch curve {
+        case .rigidImage, .offsetSurfaceImage:
+            throw derivedTrimCurveEditingError(owner: owner)
         case .constantU, .constantV, .polyline, .affine, .harmonic, .sphericalGreatCircle, .certifiedImplicit, .certifiedAnalyticImplicit, .certifiedAnalyticPair, .periodicTranslation, .projectedAnalytic:
             throw EditorError(
                 code: .commandInvalid,
@@ -2128,6 +2140,15 @@ extension DesignDocument {
                 )
             }
         }
+    }
+
+    private static func derivedTrimCurveEditingError(
+        owner: String
+    ) -> EditorError {
+        EditorError(
+            code: .commandInvalid,
+            message: "\(owner) cannot edit a derived trim p-curve. Edit the owning source surface or materialize an authored target-surface trim first."
+        )
     }
 
     private static func linearSurfaceParameterCurve(
