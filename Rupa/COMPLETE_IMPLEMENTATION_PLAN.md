@@ -183,7 +183,7 @@ Goal: prove the same system works across very different expert domains.
 | Architecture | Import or define site, create levels, rooms, walls, openings, roofs, validate area/clearance/enclosure, generate drawings/schedules, export IFC/DXF/PDF. |
 | Manufacturing | Validate wall thickness, clearance, overhangs, supportability, build volume, material/process metadata, export STL/3MF/STEP with diagnostics. |
 | Turbomachinery | Create airfoil sections, blade laws, rotor/stator arrays, ducts/nozzles, manufacturable fillets, boundary tags, CFD/FEA handoff artifacts. |
-| CAD-authored visual asset | Create exact and surface-controlled source, derive or explicitly detach presentation Mesh, validate topology/UV/deformation readiness, and export DCC-ready assets without making DCC parity a product goal. |
+| CAD-authored visual asset | Create exact and surface-controlled source, derive immutable presentation snapshots or explicitly Bake an Authored Mesh without removing CAD, validate topology/UV/deformation readiness, and export DCC-ready assets without making DCC parity a product goal. |
 | Simulation | Prepare reproducible solver inputs, run/import results where supported, visualize results, and require explicit commands for design changes. |
 
 ### Phase 6: Interoperability Completion

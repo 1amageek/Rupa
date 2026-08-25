@@ -97,8 +97,8 @@
   - [x] Reconstruct a non-authoritative empty runtime CAD adapter for Mesh-only packages
   - [x] Preserve revision, cancellation, stale-publication, rollback, and save failure contracts
   - [x] Review, verify, and commit T04-D
-- [ ] Integrated T04 representation source-authority verification
-  - [ ] Re-run incomplete-marker, synchronization, ownership, and zero-copy audits
-  - [ ] Verify CAD-only, CAD-plus-Mesh, Mesh-only, package, transaction, and failure paths
-  - [ ] Verify supported Native, ordinary WASM, and Embedded WASM compile or runtime evidence without overgeneralizing target coverage
-  - [ ] Review cumulative changes, remove obsolete T04 records, and commit completion evidence
+- [x] Integrated T04 representation source-authority verification
+  - [x] Re-run incomplete-marker, synchronization, ownership, and zero-copy audits
+  - [x] Verify CAD-only, CAD-plus-Mesh, Mesh-only, package, transaction, and failure paths
+  - [x] Verify supported Native, ordinary WASM, and Embedded WASM compile or runtime evidence without overgeneralizing target coverage
+  - [x] Review cumulative changes, remove obsolete T04 records, and commit completion evidence
