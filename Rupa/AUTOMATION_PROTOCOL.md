@@ -112,11 +112,14 @@ Wire schemas are declared in `RupaAgentProtocol` DTOs and fixtures. They do not
 inherit an internal Codable shape implicitly. Reusing a value type requires an
 explicit wire-schema/version decision and compatibility test.
 
-## Universal 3D Protocol Migration
+## Versioned Capability Protocol Migration
 
-The method table below documents the current development protocol. The universal
-3D architecture introduces a breaking, independently versioned protocol rather
-than wrapping the current internal command enum:
+The method table below documents the current development protocol. The target
+project architecture introduces a breaking, independently versioned protocol
+rather than wrapping the current internal command enum. Capability descriptors
+declare CAD source, product source, detached-Mesh source, input, workspace,
+artifact, export, job, or decision effects as required by
+`CAD_MESH_RESPONSIBILITY_CONTRACT.md`:
 
 | vNext method family | Contract |
 |---|---|
@@ -130,10 +133,10 @@ than wrapping the current internal command enum:
 mutation by `expectedTransactionRevision`. Evaluated results separately report
 their source dependency identity and evaluation snapshot identity. Method-specific
 ergonomic endpoints may remain only as adapters to registered capability IDs; they
-must not own separate handlers. T02 and AG01 in
-`UNIVERSAL_3D_IMPLEMENTATION_PLAN.md` own this migration and delete
-`command.apply`/`command.applyBatch` after equivalent capability/program routes and
-fixtures pass.
+must not own separate handlers. The owning capability design packet and
+`COMPLETE_IMPLEMENTATION_PLAN.md` schedule this migration and delete
+`command.apply`/`command.applyBatch` only after equivalent capability/program
+routes and fixtures pass.
 
 ## Common Params
 

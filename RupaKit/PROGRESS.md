@@ -47,7 +47,7 @@
   - [x] Commit the reviewed T01 sprint
 - [x] F05-C CAD source in the project package aggregate
   - [x] Define package-owned CAD source entry metadata without moving CAD encoding semantics into the package target
-  - [x] Persist and restore source/cad.json with source/rupa.json and referenced source blobs
+  - [x] Persist and restore source/cad.json with source/rupa.json and referenced source blobs in development schema v2 (superseded by the CAD/Mesh responsibility contract)
   - [x] Preserve CAD source bytes and identity through replacement, adjunct preservation, and failed atomic saves
   - [x] Cover round trip, corruption, missing CAD source, identity, reuse, and bounded I/O
   - [x] Review F05-C and run focused verification
@@ -55,7 +55,7 @@
 - [x] T03-A bounded ProjectController integration
   - [x] Require caller-provided expected transaction revisions before staging and before publication
   - [x] Own one editable session and retained project-package aggregate without absorbing CAD semantics
-  - [x] Project and evaluate the staged CAD source before publishing CAD and universal project state
+  - [x] Project and evaluate the staged CAD source before publishing CAD and the development project projection
   - [x] Route source commit and package load/save through the same ordered project boundary
   - [x] Cover concurrent callers, stale requests, failed evaluation, failed save, and retained aggregate publication
   - [x] Review T03-A and run focused verification
@@ -67,3 +67,25 @@
   - [x] Verify focused Core, DomainFoundation, Project, CAD integration, package, and bridge tests
   - [x] Verify the direct ProjectController transaction and package routes without changing the deferred RupaKit application composition
   - [x] Review cumulative changes, remove obsolete status text, and record completion evidence
+- [ ] CM01 CAD/Mesh source-boundary migration
+  - [x] Freeze CAD, linked-Mesh, detached-Mesh, reconstruction-input, rendering, package, Agent-effect, and zero-copy responsibilities
+  - [ ] Replace package schema v2 source/rupa.json duplication with disjoint CAD and product source entries
+  - [ ] Separate authored product source from the CAD-derived immutable evaluation projection
+  - [ ] Add explicit Mesh role and provenance validation at source, package, and command boundaries
+  - [ ] Preserve bounded streaming, content-addressed reuse, atomic save, and copy telemetry through the schema replacement
+  - [ ] Review CM01, run focused verification, and commit the sprint
+- [ ] CM02 linked and detached Mesh lifecycle
+  - [ ] Add saved derivation recipes and dependency-keyed linked-Mesh invalidation
+  - [ ] Implement atomic Bake/Detach with provenance, occurrence source switching, and undo/redo
+  - [ ] Prove CAD and detached-Mesh mutation isolation through UI-neutral project commands
+  - [ ] Review CM02, run focused verification, and commit the sprint
+- [ ] CM03 reconstruction input and CAD acceptance boundary
+  - [ ] Define immutable capture/input identities and bounded package storage
+  - [ ] Define reconstruction job, candidate, deviation, uncertainty, and unresolved-region records
+  - [ ] Implement explicit candidate-CAD acceptance without mutating retained observations
+  - [ ] Review CM03, run focused verification, and commit the sprint
+- [ ] Integrated CAD/Mesh responsibility verification
+  - [ ] Re-run incomplete-marker, synchronization, ownership, and zero-copy audits
+  - [ ] Verify CAD-to-linked-Mesh, detach, detached edit, reconstruction, package, Agent, and failure paths
+  - [ ] Integrate ProjectController only after CAD command, undo, viewport, role, and copy-budget parity passes
+  - [ ] Review cumulative changes and record completion evidence

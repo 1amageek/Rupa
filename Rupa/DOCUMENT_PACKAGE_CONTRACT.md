@@ -2,39 +2,87 @@
 
 ## Purpose
 
-This document defines the `.swcad` package schema boundary, editable source
-identity, optional portable records, schema versioning, integrity, and unknown
-entry behavior. It is independent from Swift-CAD's internal document schema.
+This document defines the `.swcad` package boundary, disjoint source ownership,
+observation inputs, source and input identity, optional records, derived artifacts,
+schema versioning, integrity, and unknown-entry behavior. It is independent from
+Swift-CAD's internal document schema and follows
+`CAD_MESH_RESPONSIBILITY_CONTRACT.md`.
 
 ## Package Aggregate
 
-`DesignDocument` is editable source. `DocumentPackage` is the file aggregate that
-contains source plus package adjuncts. File services load and save the aggregate;
-editor sessions edit only its source partition.
+`DesignDocument` is the logical editable aggregate used by a session.
+`DocumentPackage` stores that aggregate as disjoint entries plus immutable inputs,
+records, and derived artifacts. File services load and save the package;
+`EditorSession` mutates only source and attached-input references through explicit
+transactions.
 
 ```text
 Model.swcad
 |-- manifest.json
 |-- source/
 |   |-- cad.json
-|   |-- rupa.json
+|   |-- product.json
+|   |-- mesh-assets.json
+|   `-- blobs/
+|       `-- sha256/<content-identity>
+|-- inputs/
+|   |-- capture.json
 |   `-- blobs/
 |       `-- sha256/<content-identity>
 |-- records/
+|   |-- reconstruction/*.json
 |   `-- validation/*.json
 |-- artifacts/
 |   |-- index.json
-|   `-- <content-addressed entries>
+|   |-- render-mesh/*
+|   `-- renders/*
 `-- extensions/
     `-- <namespaced preserved entries>
 ```
 
-Package schema v2 requires `manifest.json`, `source/cad.json`, and
-`source/rupa.json`. Additional source blobs are required only when referenced by
-an authored source record. Records, artifacts, and namespaced extension entries
-are optional. Removing cache artifacts must not remove editable source. Removing
-audit records may invalidate a previous handoff claim and therefore requires an
-explicit package operation, never normal source save.
+The target development schema requires `manifest.json`, `source/cad.json`, and
+`source/product.json`. `source/mesh-assets.json` is present only when the document
+owns detached Mesh assets. `inputs/capture.json` is present only when the document
+retains observation inputs. Records, artifacts, and namespaced extensions are
+optional.
+
+| Region | Meaning | Authority |
+|---|---|---|
+| `source/cad.json` | Sketches, exact curves and surfaces, B-rep features, parameters, constraints, and exact topology intent | Swift-CAD source |
+| `source/product.json` | Scene organization, material assignment, saved Mesh recipes, semantic envelopes, documentation, validation, and export intent that does not duplicate CAD facts | Rupa product source |
+| `source/mesh-assets.json` and source blobs | Explicitly detached editable Mesh assets | Detached Mesh source |
+| `inputs/capture.json` and input blobs | Photos, depth, poses, point clouds, scan Mesh, scale, coordinate, and import provenance | Immutable observation evidence |
+| `records/reconstruction` | Job configuration, candidate identity, tolerance, deviation, confidence, unresolved regions, and acceptance decision | Immutable audit record |
+| `artifacts/render-mesh` | Linked CAD tessellation and repeatable Mesh-processing results | Rebuildable artifact |
+| `artifacts/renders` | Viewport captures and renderer outputs | Rebuildable artifact |
+
+Removing artifacts must not remove source or observation inputs. Removing a
+referenced source/input blob or reconstruction record is an explicit package
+operation and must fail while a retained source or record depends on it.
+
+## Source Authority Rules
+
+```mermaid
+flowchart LR
+    CAD["source/cad.json"] --> Evaluation["Exact evaluation"]
+    Product["source/product.json"] --> Evaluation
+    Evaluation --> RenderMesh["artifacts/render-mesh"]
+    CAD -->|"explicit detach"| MeshSource["source/mesh-assets.json"]
+    Inputs["inputs/capture.json"] --> Reconstruction["records/reconstruction"]
+    Reconstruction -->|"explicit accept"| CAD
+```
+
+- `source/product.json` may reference CAD identities but must not contain a
+  materialized copy of exact CAD shape, feature, or topology authority.
+- Each object occurrence declares one authoritative geometry source kind: CAD,
+  detached Mesh, or external reference.
+- Linked render Mesh, reconstruction intermediates, BVH, adjacency, and GPU data
+  are artifacts even when retained for fast reopen.
+- A CAD-derived artifact does not become source because it is content-addressed.
+- Capture inputs are immutable evidence, not exact CAD. Their annotations and
+  attachment references may be edited separately without rewriting raw bytes.
+- Bake/detach and reconstruction acceptance are explicit source transactions with
+  provenance; normal package save never infers either transition.
 
 ## Independent Schema Versions
 
@@ -44,114 +92,158 @@ The manifest declares independent compatibility domains.
 |---|---|
 | `packageSchemaVersion` | Archive layout and manifest semantics |
 | `cadSourceSchemaVersion` | Swift-CAD source encoding |
-| `rupaSourceSchemaVersion` | Rupa editable product/documentation metadata encoding |
-| `sourceBlobSchemaVersions` | Media-type-specific schemas for source-owned mesh, image, volume, and other large authored payloads |
-| `recordSchemaVersions` | Immutable audit record families |
+| `productSourceSchemaVersion` | Disjoint Rupa product-source encoding |
+| `meshAssetSchemaVersions` | Detached-Mesh metadata and media-type-specific buffer schemas |
+| `captureInputSchemaVersions` | Observation-input manifests and media-type-specific schemas |
+| `recordSchemaVersions` | Reconstruction, validation, and other immutable record families |
 | `artifactIndexSchemaVersion` | Portable artifact index and locator encoding |
 
-One schema version must not be reused as the version of another domain. A change
-to product metadata does not silently change the Swift-CAD schema version.
+One schema version must not be reused as another domain's version. Changing
+product metadata does not silently change the CAD schema. Changing an artifact
+codec does not silently change source or input identity.
 
-## Manifest Identity
+## Identities
 
 The manifest contains:
 
 - package format ID and package schema version;
 - document ID;
-- each source entry path, media type, schema version, byte length, and SHA-256
-  content fingerprint;
-- the canonical `DocumentContentIdentity` derived from sorted logical source
-  entries and their content fingerprints;
+- each source and input entry path, role, media type, schema version, byte length,
+  and SHA-256 content fingerprint;
+- `CADSourceIdentity`, `ProductSourceIdentity`, optional detached-Mesh source
+  identities, and optional `InputEvidenceIdentity` values;
+- canonical `DocumentContentIdentity` derived from sorted authored-source entries
+  and the immutable input identities referenced by that source;
 - optional record/artifact indexes and their fingerprints;
 - required feature declarations for safe unsupported-version diagnostics.
 
-Archive byte layout, ZIP timestamps, compression, file order, and package save
-time are not editable source identity. The canonical identity hashes logical entry
-identity and canonical content.
+Archive layout, ZIP timestamps, compression, file order, save time, retained
+artifacts, and workspace state are not editable source identity. Canonical
+identity hashes logical entry role and canonical content, not container bytes.
 
-## Source Blobs
+A reconstruction record separately fingerprints its input-evidence identity,
+provider/version, configuration, candidate CAD, deviation output, and acceptance
+decision. Replacing input evidence makes that record stale; it never silently
+rewrites accepted CAD.
 
-Large authored data is stored as content-addressed source blobs. `source/rupa.json`
-maps a stable source record ID to a declared blob reference; the blob path is
-derived from its SHA-256 content identity and is not the editable object identity.
+## Source and Input Blobs
 
-| Data | Source or artifact | Reason |
+Large source and input data is content-addressed. Stable object/input IDs reference
+declared blob identities; blob paths are not editable object identities.
+
+| Data | Classification | Reason |
 |---|---|---|
-| Editable mesh topology and authored attributes | Source blob | Removing it would remove editable geometry. |
-| Authored image pixels or packed texture tiles | Source blob | They are direct material/paint input. |
-| Authored volume grid | Source blob | It is direct object input. |
-| External asset reference metadata | Source JSON | The external content remains outside the package unless packed. |
-| Triangulation, normals, adjacency, BVH, and GPU buffers | Artifact | They are reproducible evaluation/render products. |
+| Detached Mesh topology and authored attributes | Source blob | Removing it removes independent editable geometry. |
+| Raw photo/depth/point-cloud/scan-Mesh bytes | Input blob | They are immutable evidence used to reconstruct or compare design. |
+| Authored image pixels or packed material textures | Product source blob | They are direct presentation/material intent. |
+| External asset reference metadata | Product source JSON | External content remains outside the package unless explicitly packed. |
+| CAD tessellation, generated normals, adjacency, BVH, and GPU buffers | Artifact | They are reproducible evaluation/render results. |
+| Reconstruction intermediate Mesh and deviation map | Artifact referenced by a record | They are job outputs, not accepted exact design. |
 | Thumbnail, render output, and simulation cache | Artifact | They are derived outputs with independent artifact identity. |
 
-Source blob rules:
+Blob rules:
 
-- every source blob has a declared path, media type, schema version, byte length,
+- every blob has a declared role, path, media type, schema version, byte length,
   and content fingerprint;
-- the fingerprint covers the canonical uncompressed blob encoding; archive
-  compression and container metadata are excluded;
-- a source record cannot reference an undeclared blob;
+- the fingerprint covers canonical uncompressed encoding; archive compression and
+  container metadata are excluded;
+- a source, input, or record cannot reference an undeclared blob;
 - unchanged blobs are reused byte-for-byte during atomic save;
-- decoding and encoding are streaming or memory-mapped and obey explicit resource
-  limits;
-- changing archive compression does not change logical source identity;
-- packing an external asset adds exact source blobs but preserves the referenced
-  asset and version identity separately;
-- garbage collection removes an unreferenced source blob only as an explicit
-  source/package operation, never as normal artifact-cache cleanup.
+- decoding and encoding are bounded, streaming, or memory-mapped;
+- changing archive compression does not change logical identity;
+- packing an external asset adds exact blobs while preserving referenced asset
+  and version provenance separately;
+- garbage collection removes an unreferenced source or input blob only through an
+  explicit package operation, never artifact-cache cleanup.
 
-## Source and Adjunct Mutation
+## Zero-Copy and Resource Rules
 
-| Operation | Source transaction revision | Source dirty state | Source content identity |
+- Metadata open must not eagerly decode detached Mesh, capture, or artifact blobs.
+- Mesh and point-cloud codecs stream directly between validated owners and bounded
+  I/O buffers without whole-payload `Array` or `Data` materialization.
+- Memory mapping may expose immutable borrowed views only while the owning package
+  aggregate remains alive.
+- Save reuses unchanged blob storage and streams changed blobs once. Any required
+  encryption, compression, process, or GPU copy is attributed and measured at
+  that boundary.
+- Package limits cover entry count, compressed and uncompressed size, per-role
+  limits, nesting, and total mapped/decoded memory.
+
+## Source, Input, and Adjunct Mutation
+
+| Operation | Source transaction revision | Dirty state | Document content identity |
 |---|---:|---:|---:|
-| Source command save | Preserved from session provenance | Cleared after successful atomic write | May change |
+| CAD/product/detached-Mesh source command | Increments once on commit | Dirty | Changes when canonical content changes |
+| Attach or remove observation input reference | Increments once on commit | Dirty | Changes |
+| Run reconstruction without accepting candidate | Unchanged | Unchanged | Unchanged |
+| Accept reconstructed CAD | Increments once on commit | Dirty | Changes |
 | Workspace-state save | Unchanged | Unchanged | Unchanged |
-| Add artifact cache | Unchanged | Unchanged | Unchanged |
-| Record validation decision | Unchanged | Unchanged | Unchanged |
-| Revoke audit decision | Unchanged | Unchanged | Unchanged |
+| Add or evict artifact cache | Unchanged | Unchanged | Unchanged |
+| Record validation/reconstruction audit adjunct | Unchanged unless the acceptance itself is one source transaction | Unchanged | Unchanged |
 
 Package adjunct updates use atomic file replacement but do not enter source undo
-history. The project layer coordinates source and adjunct writes when one external
-handoff operation needs both.
+history. When one operation commits source and an acceptance record together, the
+project layer stages both and publishes neither if either validation/write fails.
 
 ## Unknown Entries
 
 - Unknown entries under a valid namespaced `extensions/` path are preserved
-  byte-for-byte when the package is saved without a registered handler.
+  byte-for-byte when saved without a registered handler.
 - Unknown required manifest features reject load with a typed unsupported-version
   result.
-- Unknown arbitrary top-level entries are invalid; they are not silently ignored.
-- A loader that exposes only editable source must retain an opaque adjunct set so a
-  later save cannot discard records or extensions.
+- Unknown arbitrary top-level entries are invalid and are not silently ignored.
+- A loader that exposes only source retains opaque adjuncts so later save cannot
+  discard records or extensions.
+- Unknown geometry/input roles reject load; they must not default to editable or
+  derived behavior.
 
 ## Integrity and Safety
 
-- Every declared entry is checked against its manifest length and fingerprint.
+- Every declared entry is checked against manifest length and fingerprint.
 - Entry paths are normalized and cannot escape the archive root.
 - Duplicate normalized paths, symlink-like entries, invalid UTF-8 names, and
   resource-limit violations are rejected.
-- Large artifacts are streamed or memory-mapped. Package parsing does not require
-  copying every artifact into one in-memory dictionary.
-- Large source blobs are also streamed or memory-mapped. Opening metadata does not
-  eagerly decode every geometry, image, or volume payload.
+- Role references are validated before any session source is published.
 - Atomic save prepares a complete package next to the destination, validates it,
   then replaces the destination.
+- Cancellation or failure removes temporary output and publishes no partial
+  source, input, record, artifact index, or destination.
 
-## Migration
+## Development Schema Migration
 
-Development schemas may break without compatibility shims. A released
-conformance manifest explicitly lists accepted package, CAD source, Rupa source,
-record, and artifact-index versions. Migrations are explicit transforms from one
-declared schema tuple to another and preserve unknown namespaced entries.
+The current code implements unreleased package schema v2 with
+`source/cad.json` and `source/rupa.json`. `source/rupa.json` stores a
+`ProjectSourceModel` that is reproduced from `DesignDocument` and is checked for
+equality on load. That is a duplicated projection, not a disjoint source owner.
+
+Schema v2 is superseded. The implementation must replace it with this contract
+before RupaKit project integration. Migration must:
+
+1. retain `source/cad.json` as exact CAD authority;
+2. encode only disjoint Rupa-authored facts in `source/product.json`;
+3. classify existing Mesh records as detached source, input, or derived and
+   reject ambiguous records;
+4. omit a CAD-derived project projection from authored source;
+5. preserve the existing bounded streaming, blob reuse, integrity, unknown-entry,
+   and atomic-save guarantees;
+6. remove the unreleased v2 schema rather than adding a permanent compatibility
+   shim.
+
+Released conformance manifests list the exact accepted schema tuple. A migration
+between released tuples is an explicit transform and preserves unknown namespaced
+entries.
 
 ## Required Tests
 
 | Test family | Required cases |
 |---|---|
-| Versioning | Package, CAD, Rupa, source-blob, record, and artifact schema versions vary independently. |
-| Identity | Re-encoding, compression, or package-entry order does not change canonical source identity; source JSON/blob changes do. |
-| Adjuncts | Artifact/decision updates do not alter source identity or source dirty state. |
+| Versioning | Package, CAD, product, Mesh-asset, capture-input, record, and artifact schemas vary independently. |
+| Authority | CAD/project duplication, ambiguous Mesh role, and two source kinds for one occurrence reject load. |
+| Identity | Compression and entry order do not change logical identity; source or referenced-input changes do. |
+| Adjuncts | Artifact and audit-record updates do not alter source identity or dirty state. |
+| Role lifecycle | CAD-to-Mesh cache, detach, detached edit, reconstruction candidate, and acceptance preserve their declared ownership. |
 | Preservation | Unknown namespaced entries survive load/save byte-for-byte. |
-| Source blobs | Missing/undeclared blobs reject load; unchanged blobs are reused; explicit source garbage collection retains every referenced blob. |
-| Integrity | Length/hash mismatch, duplicate paths, traversal, unsupported required features, and size limits reject safely. |
-| I/O | Save failure leaves the original package intact; large source and artifact entries are bounded and streamed. |
+| Blobs | Missing or undeclared blobs reject load; unchanged blobs are reused; garbage collection retains every reference. |
+| Integrity | Hash/length mismatch, duplicates, traversal, unsupported required features, and size limits reject safely. |
+| I/O | Save failure leaves the original intact; large source, input, and artifact entries remain bounded and streaming. |
+| Zero-copy | Large Mesh/input fixtures prove bounded I/O and named copy/allocation budgets without eager package materialization. |

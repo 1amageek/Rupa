@@ -26,6 +26,7 @@ This document defines the initial official implementation specification for Rupa
 | Reference and artifact contract | `REFERENCE_ARTIFACT_CONTRACT.md` |
 | Domain transaction contract | `DOMAIN_TRANSACTION_CONTRACT.md` |
 | Validation contract | `VALIDATION_CONTRACT.md` |
+| CAD/Mesh responsibility contract | `CAD_MESH_RESPONSIBILITY_CONTRACT.md` |
 | Implementation status | `IMPLEMENTATION_STATUS.md` |
 | Deferred profile layer | ApplicationProfile switching after the universal CAD implementation is complete |
 | Initial app platforms | macOS |
@@ -88,12 +89,21 @@ The supported implementation has one editing pipeline:
 | CLI live mode | RupaAgent request into app `EditorSession` | App session mutation, dirty state, diagnostics, structured CLI result. |
 | Batch automation | Ordered `AutomationCommand` execution inside an `EditorSession` transaction | Ordered results with generation and diagnostics; failed batches restore document, selection, and undo/redo state. |
 
+The product pipeline is CAD-first. Swift-CAD source remains authoritative for
+normal modeling; tessellated Mesh is derived for viewport, rendering, analysis,
+and export. Persistent Mesh editing requires an explicit detach transition, and
+scan/photo data becomes CAD only through explicit approximate reconstruction.
+The implementation and package migration required to enforce these roles is
+defined by `CAD_MESH_RESPONSIBILITY_CONTRACT.md` and
+`DOCUMENT_PACKAGE_CONTRACT.md`.
+
 The required product capabilities are defined separately from the implementation graph.
 
 | Requirement document | Scope |
 |---|---|
 | `PRODUCT_REQUIREMENTS.md` | Product position, acceptance use cases, shared product requirements, workflows, and acceptance criteria. |
 | `UNIVERSAL_CAD_REQUIREMENTS.md` | Units, scale, rulers, precision, geometry, components, validation, interoperability, automation, and performance requirements for the single universal CAD model. |
+| `CAD_MESH_RESPONSIBILITY_CONTRACT.md` | CAD authority, Mesh roles, Rupa ownership, reconstruction, package partition, Agent effects, and zero-copy invariants. |
 | `DOMAIN_EXTENSION_ARCHITECTURE.md` | Dependency direction, ownership, projection, validation, simulation, UI, CLI, and Agent contracts for specialized domains built on top of the universal model. |
 | `DOMAIN_FOUNDATION_DESIGN.md` | Implementation design for neutral semantic storage, registry contracts, command lowering, Agent/CLI/UI discovery, ownership resolution, and tests. |
 | `COMPLETE_IMPLEMENTATION_PLAN.md` | No-compromise execution plan, workstreams, phase gates, acceptance matrix, parallelization policy, and milestone reporting requirements. |

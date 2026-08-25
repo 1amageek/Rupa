@@ -51,8 +51,10 @@ or create external artifacts.
 RupaCore owns a domain-neutral transaction representation. Concrete domains do
 not add cases to a central command enum, and RupaCore does not decode concrete
 domain payloads. The current development `EditorCommand` enum is a migration
-source, not the target extension contract; `UNIVERSAL_3D_ARCHITECTURE.md` replaces
-it with registered typed command and mutation values.
+source, not the target extension contract; `DOMAIN_EXTENSION_ARCHITECTURE.md` and
+`AUTOMATION_PROTOCOL.md` replace it with registered typed command and mutation
+values. Geometry effects also obey the CAD, detached-Mesh, input, and artifact
+roles in `CAD_MESH_RESPONSIBILITY_CONTRACT.md`.
 
 The normative transaction contract contains:
 

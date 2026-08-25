@@ -18,19 +18,25 @@ This document defines product-level requirements for Rupa as a general-purpose C
 | Reference and artifact contract | `REFERENCE_ARTIFACT_CONTRACT.md` |
 | Validation contract | `VALIDATION_CONTRACT.md` |
 | Domain transaction contract | `DOMAIN_TRANSACTION_CONTRACT.md` |
+| CAD/Mesh responsibility contract | `CAD_MESH_RESPONSIBILITY_CONTRACT.md` |
 | Required acceptance use cases | Video 3D modeling, 3D printer object modeling, architecture |
 | Deferred convenience | Workspace preset switching after shared source and project contracts are stable |
 | CAD foundation | Swift-CAD |
 
 ## Product Position
 
-Rupa is a native, agent-ready, general-purpose CAD application for precise parametric modeling and production-oriented export.
+Rupa is a native, Agent-ready, CAD-first direct-modeling application for precise
+design, production-oriented export, and presentation. Swift-CAD source is the
+normal geometry SSOT. Mesh supports viewport, rendering, analysis, exchange, and
+explicit reconstruction or detached-Mesh workflows; it is not a coequal default
+copy of CAD truth.
 
 Rupa must not branch into separate domain products. Video 3D modeling, 3D printer object modeling, and architecture are required acceptance use cases that prove the same universal CAD system works across scales, outputs, and workflows.
 
 ```mermaid
 flowchart TD
-    CAD["Rupa universal CAD<br/>units, sketch, features, bodies, components"] --> Video["Video 3D modeling"]
+    CAD["Rupa universal CAD<br/>units, sketch, features, bodies, components"] --> Tessellation["Derived Mesh"]
+    Tessellation --> Video["Video 3D modeling"]
     CAD --> Print["3D printer object modeling"]
     CAD --> Architecture["Architecture"]
 
@@ -45,6 +51,9 @@ Rupa should not be defined as a general clone of Fusion. Fusion is the benchmark
 |---|---|
 | Unified design environment | One document, one command pipeline, one UI model, one automation model. |
 | Parametric CAD | First-class source model built on Swift-CAD. |
+| Direct modeling | Topology-aware CAD edits remain source commands even when the user interacts with a tessellated viewport. |
+| Mesh control | Repeatable derivation recipes by default; explicit detach creates an independent Mesh asset. |
+| Reality capture | Scan and photo data remains observation evidence until an explicit approximate CAD reconstruction is accepted. |
 | Direct production output | Generic validation rules and export presets, not domain forks. |
 | Automation | Stable CLI and live app automation are core product features. |
 | Collaboration and cloud PDM | Later phase; local-first versioned documents are the initial requirement. |
@@ -117,8 +126,10 @@ The following capabilities are required in the universal CAD model and must be r
 | Sketching | 2D sketch entities, dimensions, geometric constraints, profiles, and construction geometry are required. |
 | Solid modeling | Extrude, revolve, sweep, loft, boolean, shell, fillet, chamfer, draft, hole, mirror, linear pattern, circular pattern are required product capabilities. |
 | Surface modeling | Planar, ruled, lofted, swept, offset, trim, stitch, thicken, and patch surfaces are required. |
-| Body types | Solid, surface, mesh, curve, sketch, and construction bodies must be distinct in the document and UI. |
-| Mesh conversion | Tessellation options, normals, smoothing, decimation, repair, and mesh export previews are required. |
+| Geometry roles | Solid, surface, curve, sketch, and construction CAD bodies remain distinct. Every Mesh is additionally identified as linked-derived, detached-editable, scan observation, reconstruction intermediate, or export artifact. |
+| CAD-to-Mesh | Tessellation, normals, smoothing, LOD, decimation, UV generation, repair policy, and Mesh export previews are repeatable derivation recipes where applicable. |
+| Detached Mesh | `Bake` or `Detach` explicitly creates an independent Mesh SSOT with provenance and no implicit CAD synchronization. |
+| Mesh-to-CAD | Scan/photo/Mesh reconstruction preserves input identity, tolerances, deviation, confidence, and unresolved regions and creates CAD only through explicit acceptance. |
 | Components | Components, local origins, transforms, hierarchy, external references, and simple joints are required. |
 | Materials | Named materials, display colors, PBR export metadata, manufacturing metadata, and per-body or per-face assignment are required. |
 | Selection | Body, face, edge, vertex, sketch entity, component, material, annotation, and construction reference selection must be stable and command-addressable. |
@@ -243,18 +254,20 @@ Agent-assisted workflows are product requirements, not developer-only tooling.
 | Validation loop | Agents can run validation rules and inspect typed diagnostics. |
 | Export loop | Agents can invoke named export presets. |
 | Safety | Expected transaction revision protects source mutation; dependency/content identity protects artifacts and decisions. |
+| Representation roles | Agent commands declare whether they mutate CAD source, a saved Mesh recipe, detached Mesh source, capture input metadata, workspace state, or an artifact. |
+| Derived Mesh | Agents never persist direct writes into linked tessellation buffers; they update a repeatable recipe or explicitly detach. |
+| Reconstruction | Agents report approximation and evidence and cannot silently replace observations or CAD source. |
 
 ## Non-Goals for Initial Product Scope
 
-These are not required for the first complete Rupa product milestone.
-They are release-scope exclusions, not permanent architecture exclusions.
-`UNIVERSAL_3D_ARCHITECTURE.md` defines the later source, evaluation, rendering,
-animation, sculpt, simulation, asset, and automation boundaries so adding those
-capabilities does not fork the document or bypass Swift-CAD.
+These are not required for the first complete Rupa product milestone. They are
+release-scope exclusions and must not distort the CAD-first responsibility
+boundary in `CAD_MESH_RESPONSIBILITY_CONTRACT.md`.
 
 | Area | Non-goal |
 |---|---|
 | Character sculpting | Organic sculpting, retopology suites, rigging, skinning, and character animation are outside initial scope. |
+| General DCC replacement | Blender-class general Mesh authoring, broad animation, compositing, and VFX workflows are not the product target. |
 | Full CAM | Toolpath generation, machine simulation, probing, post-processors, and CNC G-code are outside initial scope. |
 | Full CAE | Finite element solving, thermal simulation, injection molding simulation, and optimization solvers are outside initial scope. |
 | PCB design | Schematic capture, PCB routing, SPICE, and ECAD libraries are outside initial scope. |
@@ -270,7 +283,8 @@ as an implicit requirement of every release.
 
 | Scenario | Acceptance criteria |
 |---|---|
-| Video prop asset | User creates a parametric hard-surface prop, assigns materials, checks normals/UVs, exports USD or GLB, and imports it into a DCC tool at correct scale. |
+| Video prop asset | User creates a CAD-authored hard-surface prop, assigns materials, controls repeatable Mesh derivation, checks normals/UVs, exports USD or GLB, and imports it into a DCC tool at correct scale. |
+| Reality-capture reconstruction | User imports scan or photo evidence, inspects deviation and unresolved regions, accepts an approximate CAD reconstruction explicitly, and can still compare the CAD result with retained observations. |
 | 3D printed enclosure | User creates a two-part enclosure with wall thickness, holes, tolerances, and fastener features, validates printability, exports 3MF and STL, and receives no manifold errors. |
 | Architectural room | User creates levels, walls, slab, openings, windows, doors, and dimensions, generates plan/elevation drawing views, exports DXF/PDF and an architectural interchange file. |
 | Micrometer-to-meter editing | User can model μm-scale details and m-scale structures in the same document model with correct rulers, snapping, dimensions, tolerances, and export units. |

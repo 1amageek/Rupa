@@ -21,15 +21,18 @@ flowchart TD
     Project --> Jobs["External job store"]
 
     Session --> Source["Editable document source"]
+    Source --> Inputs["Immutable observation inputs"]
     Session --> Workspace["Workspace state"]
     Source --> Artifacts
+    Inputs --> Artifacts
     Artifacts --> Decisions
     Artifacts --> Jobs
 ```
 
 | Partition | Examples | Mutation owner | Undo/history | Freshness role |
 |---|---|---|---|---|
-| Editable document source | CAD features, editable meshes/curves, object definitions, operation/procedural graphs, materials, animation/simulation intent, semantic intent, document annotations, saved views, validation configurations, export presets | `EditorSession` through source commands | Source command history | Fingerprinted as declared artifact dependencies |
+| Editable document source | Exact CAD source; disjoint product intent; explicitly detached Mesh assets; references to capture inputs; object definitions; materials; semantic intent; document annotations; saved views; validation configurations; export presets | `EditorSession` through role-specific source commands | Source command history | Fingerprinted as declared artifact dependencies |
+| Observation inputs | Immutable photos, depth, poses, point clouds, scan Mesh, scale and coordinate metadata used for reconstruction | Input/package service through an explicit source transaction that attaches or removes references | The reference mutation is undoable; referenced bytes are immutable | Own content identity; included in reconstruction dependencies but never treated as exact CAD source |
 | Workspace state | Selection, active tool, hover, active construction plane, viewport camera, visual grid mode, transient analysis displays, panel layout | Open document session | Separate workspace history when needed; never source undo | Never changes source-content identity |
 | Derived artifacts | Evaluated B-rep/geometry snapshots, triangulation, BVH, GPU resources, drawing, validation result, exchange output, render pass, solver input/result | Artifact producer through `ProjectController` | Immutable records, cache retention policy | Identified by input dependencies, producer/configuration, and output content |
 | Validation decisions | Allow/block/override records for a policy evaluation and prepared output | Decision recorder through `ProjectController` | Immutable append/revoke audit log | Bound to exact policy, findings, inputs, and prepared artifact |
@@ -41,6 +44,11 @@ Presentation state may be captured deliberately inside a saved view or drawing
 definition. That captured definition is document source. The currently active
 camera, panel, grid, or construction plane remains workspace state until an
 explicit source command saves it.
+
+Geometry representation follows `CAD_MESH_RESPONSIBILITY_CONTRACT.md`. Linked
+tessellation, reconstruction intermediates, render Mesh, BVH, and GPU buffers are
+derived artifacts. Only an explicitly detached Mesh is editable Mesh source, and
+it cannot share shape authority with CAD for the same occurrence.
 
 ## ProjectController Boundary
 
@@ -68,6 +76,7 @@ Three concepts are intentionally separate.
 |---|---|---|
 | `DocumentTransactionRevision` | Monotonic revision of committed source transactions in one open session; used for optimistic concurrency and observation ordering | Exact equality only inside the owning session |
 | `DocumentContentIdentity` | Persistent identity of canonical editable source content | Content fingerprint equality across reload, undo restoration, and branches |
+| `InputEvidenceIdentity` | Persistent content identity of immutable capture/import evidence plus coordinate and scale metadata | Exact evidence equality across reconstruction jobs and audit records |
 | `SourceDependencySetIdentity` | Canonical identity of only the source/external inputs consumed by one computation | Exact logical dependency and content fingerprint equality |
 
 A transaction revision is provenance, not content identity. Reloading the same
@@ -142,12 +151,18 @@ editor command, and validation override recording is not a product-metadata edit
 - Large geometry is borrowed from immutable evaluated snapshots or shared buffers
   with an explicit lifetime. A process boundary copy is measured rather than
   described as zero-copy.
+- A linked derived Mesh is read-only. A persistent Mesh mutation updates a saved
+  derivation recipe or explicitly detaches the Mesh as a new source asset.
+- Reconstruction jobs receive immutable observation-input snapshots. Only an
+  explicit acceptance transaction may publish their candidate CAD as source.
 
 ## Required Tests
 
 | Test family | Required cases |
 |---|---|
 | Partition | Workspace-only edits do not change source identity, dirty state, source history, or source revision. |
+| Geometry role | Linked Mesh cannot be mutated as source; detached Mesh and CAD never both own one occurrence's shape. |
+| Reconstruction | Candidate generation does not mutate source; acceptance binds exact input and deviation evidence to the new CAD source. |
 | Revision | Multi-command source transactions increment exactly once; failure increments zero times. |
 | Reload | Identical source content receives the same content identity even when session revisions differ. |
 | Project | UI, CLI, and Agent adapters address the same registered session and project services. |

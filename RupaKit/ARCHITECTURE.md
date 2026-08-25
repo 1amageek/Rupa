@@ -4,14 +4,13 @@ RupaKit is organized by execution boundary. Keep new code close to the layer tha
 
 UI layout, canvas overlay, and affordance rules live in [DESIGN_GUIDE.md](DESIGN_GUIDE.md). Keep architectural ownership rules here and visual interaction rules in the design guide.
 
-This file describes the currently implemented package graph. The breaking target
-architecture for general 3D authoring is defined in
-[`UNIVERSAL_3D_ARCHITECTURE.md`](../Rupa/UNIVERSAL_3D_ARCHITECTURE.md), with
-dependency-ordered work packages in
-[`UNIVERSAL_3D_IMPLEMENTATION_PLAN.md`](../Rupa/UNIVERSAL_3D_IMPLEMENTATION_PLAN.md).
-When the current graph conflicts with that target during a scheduled migration,
-the target document governs the replacement and its deletion gate; a permanent
-compatibility layer must not be introduced.
+This file describes the currently implemented package graph. The normative target
+for CAD source, linked Mesh, detached Mesh, reconstruction inputs, rendering, and
+package SSOT is
+[`CAD_MESH_RESPONSIBILITY_CONTRACT.md`](../Rupa/CAD_MESH_RESPONSIBILITY_CONTRACT.md).
+The current graph contains an unreleased package/source boundary that must be
+replaced before RupaKit project integration. A permanent compatibility layer must
+not preserve that incorrect development contract.
 
 ```mermaid
 flowchart LR
@@ -104,8 +103,8 @@ flowchart LR
 | Area | Owns | Must not own |
 |---|---|---|
 | `RupaCoreTypes` | Stable semantic IDs, source revisions, canonical payloads and quantities, content fingerprints, transport-neutral errors, diagnostics, display units, and save results | Geometry algorithms, CAD feature evaluation, SwiftCAD document mutation, registry behavior, UI or Agent state |
-| `RupaProjectModel` | Immutable universal project source, object definitions, occurrences, and geometry source references | Evaluation providers, editor history, concrete CAD types |
-| `RupaProjectPackage` | Versioned project-package manifests, content-addressed source blobs, bounded archive I/O, integrity validation, opaque adjunct preservation, and atomic file replacement | Geometry encoding semantics, editor-session ordering, artifacts/jobs, concrete CAD evaluation |
+| `RupaProjectModel` | Immutable provider-neutral evaluation projection, object definitions, occurrences, geometry references, and current Mesh primitives pending role separation | Exact CAD source, product metadata authority, editor history, concrete CAD types |
+| `RupaProjectPackage` | Current development package manifest, content-addressed blobs, bounded archive I/O, integrity validation, opaque adjunct preservation, and atomic file replacement | Geometry encoding semantics, editor-session ordering, artifacts/jobs, concrete CAD evaluation, or authority inference from stored representation |
 | `RupaEvaluation` | Provider registry, de-duplicated provider batch planning, source-result contract validation, occurrence transforms, and immutable evaluated snapshots | Concrete CAD algorithms, editor session mutation, rendering state |
 | `RupaCADIntegration` | CAD source resolution, Swift-CAD evaluator construction, source-revision-aware incremental reuse, lossless supported-attribute conversion, and conversion into universal immutable geometry results | Universal project ownership, occurrence transforms, editor session lifetime, silent fidelity fallback |
 | `RupaProject` | Ordered project source staging, revision-conflict checks, evaluation publication, and commit results through `ProjectEvaluating` | Concrete provider construction, CAD semantics, viewport projection |
@@ -131,15 +130,40 @@ flowchart LR
 | Geometry provider IDs are registered once through `GeometrySourceEvaluationProviderRegistry`; duplicate or malformed IDs fail explicitly. | Composition ambiguity must not be resolved by last-writer-wins replacement. |
 | `RupaCADIntegration` owns `CADGeometrySourceResolving`, `CADDocumentEvaluating`, `DefaultCADDocumentEvaluator`, and `CADDocumentEvaluationCache`; one provider resolves every referenced CAD document, evaluates each source once, and atomically publishes cache entries only after all requested sources convert successfully. | Swift-CAD construction, multi-document routing, fidelity policy, and cache transaction semantics stay inside the CAD adapter instead of leaking into project composition or generic evaluation. |
 | `RupaProject` depends on `ProjectEvaluating`, not `ProjectEvaluationEngine`. | Project orchestration owns ordered staging and publication, while `RupaEvaluation` owns the concrete evaluation algorithm. |
-| `RupaProjectPackage` composes package metadata with the canonical source codecs through their public streaming contracts; it does not place package paths or archive state in `RupaGeometry` or `RupaProjectModel`. | Canonical source bytes remain owned by the source module, while package identity, reuse, integrity, and atomic I/O remain one persistence responsibility. |
-| `DesignDocumentProjectBridge` projects source only; `DefaultDesignDocumentProjectEvaluatorFactory` owns provider registration and the lifetime of the CAD evaluation cache behind `DesignDocumentProjectEvaluatorFactory`. | Source mapping must not own evaluator construction, while cache lifetime must outlive one snapshot build. |
+| `RupaProjectPackage` composes package metadata with role-specific CAD, product, detached-Mesh, and input codecs through public streaming contracts; it does not place package paths or archive state in `RupaGeometry` or `RupaProjectModel`. | Canonical bytes remain owned by their semantic source/input modules, while package identity, reuse, integrity, and atomic I/O remain one persistence responsibility. |
+| `DesignDocumentProjectBridge` creates a derived evaluation projection only; `DefaultDesignDocumentProjectEvaluatorFactory` owns provider registration and the CAD evaluation-cache lifetime behind `DesignDocumentProjectEvaluatorFactory`. | Evaluation projection must not become a second persisted CAD source, while cache lifetime must outlive one snapshot build. |
 | `RupaAgentProtocol` must not depend on `RupaAgentRuntime` or `RupaAgentTransport`. | Tooling can encode/decode requests without loading workspace registries or socket code. |
 | `RupaAgentTransport` depends only on `RupaAgentProtocol` and `RupaCoreTypes`; runtime handlers implement the protocol-owned request port. | Socket ownership remains independent from workspace registries and command execution. |
 | Agent transport messages use an unsigned 64-bit network-order length prefix, a 16 MiB payload limit, and total monotonic IO deadlines; the listener tracks bounded concurrent connections and shuts them down before awaiting handler ownership during stop. | Message boundaries do not depend on peer EOF, malformed or stalled peers cannot allocate unbounded memory, and listener shutdown converges for half-open connections. |
 | `RupaUI` depends on `WorkspaceAgentSessionPublishing`, not concrete `AgentHost`. | The CAD workspace can publish UI-owned sessions without depending on Agent server lifecycle details. |
 | `RupaRendering` consumes `RupaViewportScene`; scene construction must remain SwiftUI-free. | Viewport scene, projection, and hit policy can be tested without UI composition. |
 
-## Project Package Usage
+## Current Project Package Gap
+
+Package schema v2 currently requires `source/cad.json` and `source/rupa.json`.
+`DesignDocumentProjectBridge` reproduces the stored `ProjectSourceModel` from CAD
+and product metadata, and `ProjectController` requires equality on load. This is a
+consistent duplicate projection, not the target SSOT partition.
+
+```mermaid
+flowchart LR
+    CurrentCAD["source/cad.json"] --> Projection["DesignDocumentProjectBridge"]
+    Projection --> CurrentRupa["source/rupa.json"]
+    CurrentRupa --> Equality["load equality check"]
+    Equality --> Gap["Duplicate CAD-derived source"]
+
+    TargetCAD["source/cad.json"] --> TargetEval["Derived evaluation projection"]
+    TargetProduct["source/product.json\ndisjoint intent"] --> TargetEval
+```
+
+Before application integration, the package and project boundaries must implement
+the role split in
+[`DOCUMENT_PACKAGE_CONTRACT.md`](../Rupa/DOCUMENT_PACKAGE_CONTRACT.md). Existing bounded streaming,
+content-addressed blob reuse, integrity validation, and atomic save are retained.
+The unreleased v2 schema and stored CAD projection are removed rather than adapted
+permanently.
+
+## Current Development Package Usage
 
 The package aggregate retains opaque adjunct entries and the mapped source backing
 needed for byte-for-byte reuse. Callers replace only the editable source value and
@@ -153,12 +177,12 @@ let saved = try store.save(edited, to: destinationURL)
 let retainedPackage = saved.document
 ```
 
-`ProjectPackageStore` owns synchronous package I/O only. `RupaProject.ProjectController`
-owns actor ordering, transaction-revision checks, staged CAD/universal evaluation,
-monotonic revision publication across package loads, and replacement of its
-retained package aggregate after `save` succeeds. RupaKit application composition
-still owns injection of the concrete CAD codec/projector and routing the current
-UI lifecycle through that controller.
+`ProjectPackageStore` currently owns synchronous package I/O only.
+`RupaProject.ProjectController` owns actor ordering, transaction-revision checks,
+staged CAD/project evaluation, monotonic revision publication across package
+loads, and replacement of its retained package aggregate after `save` succeeds.
+This API demonstrates the development v2 route; RupaKit application composition
+must not adopt it as the final source boundary before the package migration above.
 
 ## Editing State Contracts
 
@@ -182,7 +206,7 @@ flowchart LR
 | Validated source capability | `ValidatedDesignDocument` and `ValidatedCADDocument` | Full validation produces an immutable capability. Graph-stable feature edits may derive a new capability only when inputs, outputs, and suppression are unchanged and the edited operation and expressions validate locally. The evaluation cache carries the capability so Core does not repeat whole-document validation. |
 | Incremental exact evaluation | `SwiftCAD.DocumentEvaluationEngine` | A changed feature invalidates its dependency closure. Unchanged profiles, curves, BRep deltas, generated names, and meshes are reused; rebuilt feature results are validated before deterministic delta merge. |
 | Universal CAD evaluation reuse | `CADDocumentEvaluationCache` owned by `DefaultDesignDocumentProjectEvaluatorFactory` | A matching `DocumentEvaluationContext` seeds the current revision so migration does not evaluate the same CAD source twice. An exact revision returns the cached immutable evaluation without invoking Swift-CAD; a later revision receives it for incremental execution. Equal revisions with different source fingerprints fail as `sourceRevisionConflict`, stale contexts fail explicitly, and an older completion cannot replace a newer cache entry. A multi-source provider request stages all entries and validates conflicts before one atomic publication. Mutex sections contain only in-memory lookup/publication; validation, evaluation, fingerprinting, and mesh conversion run outside the lock. |
-| Temporary CAD-first editor route | `RupaCore.EvaluationScheduler` and `EvaluatedDocumentCache` | This remains the authoritative application evaluation during deferred RupaKit composition. T01 now provides coherent revision-checked `DesignDocument` transaction publication, and `ProjectController` provides staged CAD/universal/package publication. New universal consumers must use `DesignDocumentProjectSnapshotBuilder` and seed from `DocumentEvaluationContext`; they must not add another direct `DocumentEvaluator` route. The deletion gate is RupaKit composition with equivalent CAD command, undo, failure, and viewport behavior. |
+| Temporary CAD-first editor route | `RupaCore.EvaluationScheduler` and `EvaluatedDocumentCache` | This remains the authoritative application evaluation during deferred RupaKit composition. T01 provides coherent revision-checked `DesignDocument` transaction publication. The development `ProjectController` route proves staging and package behavior but still uses package v2 duplication. New evaluation consumers use `DesignDocumentProjectSnapshotBuilder` and seed from `DocumentEvaluationContext`; they must not add another direct `DocumentEvaluator` route. The deletion gate is migrated package/project composition with equivalent CAD command, undo, failure, viewport, Mesh-role, and zero-copy behavior. |
 
 ## Surface M3 Status
 

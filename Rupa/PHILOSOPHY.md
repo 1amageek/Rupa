@@ -225,7 +225,33 @@ Evaluation output is a snapshot, not source truth.
 | Evaluated geometry artifacts | May be cached, but must be replaceable from the document source and evaluated generation. |
 | Undo history | Does not store running tasks or heavy evaluated artifacts. |
 
-### 8. Treat Dimensions as Source, Not Scale
+### 8. Keep CAD and Mesh Roles Explicit
+
+Rupa is CAD-first. Exact design intent remains in `DesignDocument` and
+Swift-CAD; Mesh normally exists to display, render, analyze, or export that
+design.
+
+```mermaid
+flowchart LR
+    CAD["CAD source"] --> Exact["Exact evaluation"]
+    Exact --> Mesh["Linked derived Mesh"]
+    Mesh --> Render["Viewport / render / export"]
+    Mesh -->|"Bake or Detach"| MeshSource["Independent Mesh source"]
+    Capture["Scan / photo evidence"] --> Reconstruction["Approximate CAD reconstruction"]
+    Reconstruction --> CAD
+```
+
+| Geometry state | Rule |
+|---|---|
+| Linked derived Mesh | Rebuildable from CAD plus a repeatable Mesh recipe; direct persistent vertex edits are rejected. |
+| Detached editable Mesh | Has its own source identity and provenance; it does not silently update or replace CAD. |
+| Scan or photo reconstruction | Preserves input evidence, tolerance, deviation, and unresolved regions before explicit CAD acceptance. |
+| Renderer/GPU data | Cache only; never document source. |
+
+The complete ownership, Agent-effect, package, and zero-copy rules are defined in
+`CAD_MESH_RESPONSIBILITY_CONTRACT.md`.
+
+### 9. Treat Dimensions as Source, Not Scale
 
 CAD dimensions are product truth. A Cube's `Size X`, `Size Y`, and `Size Z` describe the object itself; they are not a renderer convenience and they are not equivalent to scene-node scale.
 
@@ -246,7 +272,7 @@ flowchart LR
 
 Object dimension commands therefore mutate the shape-defining source and then regenerate derived geometry. Rendering may preview transient edits, but persisted dimensional edits must enter RupaCore as typed commands.
 
-### 9. Use CAD Object Semantics
+### 10. Use CAD Object Semantics
 
 Rupa treats an Object as a selectable occurrence with identity, placement, appearance, hierarchy, and a typed source descriptor. Feature IDs, sketches, bodies, and generated meshes are related layers, not interchangeable names for the same thing.
 
@@ -283,7 +309,7 @@ Object types are open. The product must not require a new stored enum case every
 
 This lets Rupa keep Inspector and renderer interfaces stable while allowing the object catalog to grow beyond the initial built-in list. A Path can have a 2D editable source and resolve to a 3D generated result through extrusion and bevel, while zero extrusion remains 2D. Renderer bindings are semantic IDs, not a closed enum, so new object definitions can extend the catalog without forcing a stored document-schema change.
 
-### 10. Automation Is a Stable Product Surface
+### 11. Automation Is a Stable Product Surface
 
 Automation commands are not an internal test hook. They are the stable contract for CLI, agents, future MCP servers, and batch operations.
 
@@ -305,7 +331,7 @@ Evaluation and saving keep the same boundary discipline. Evaluation refreshes de
 
 Parameter formulas follow the same source-truth rule. CLI and Agent expression strings are parsed at the command boundary into Swift-CAD `CADExpression` AST values; saved documents persist the typed AST, not the transient input string.
 
-### 11. Keep Dependencies Directional
+### 12. Keep Dependencies Directional
 
 Rupa modules should form a one-way graph.
 
@@ -346,7 +372,7 @@ and projection contract in `DOMAIN_EXTENSION_ARCHITECTURE.md` decides whether a
 later edit is routed to the domain command, explicitly converted to universal CAD,
 or rejected with diagnostics.
 
-### 12. Prefer Protocol-Oriented Services
+### 13. Prefer Protocol-Oriented Services
 
 Public boundaries should be small protocols with replaceable implementations.
 
@@ -361,7 +387,7 @@ Public boundaries should be small protocols with replaceable implementations.
 
 Concrete implementations belong behind these contracts so tests can exercise core behavior without launching the app or renderer.
 
-### 13. Concurrency Must Protect Ordering
+### 14. Concurrency Must Protect Ordering
 
 Rupa has both high-frequency UI state and ordered asynchronous work.
 
@@ -376,7 +402,7 @@ Rupa has both high-frequency UI state and ordered asynchronous work.
 
 Command ordering, document generation, and diagnostics publication must remain deterministic.
 
-### 14. Errors Are Part of the UX
+### 15. Errors Are Part of the UX
 
 CAD failures are normal product events.
 

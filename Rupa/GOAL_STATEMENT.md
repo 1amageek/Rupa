@@ -8,6 +8,22 @@ architecture, turbomachinery, and Agent-driven design while preserving one
 shared document model, command pipeline, validation system, and automation
 surface.
 
+Rupa is a CAD-first direct-modeling product. Exact CAD source is the design
+authority; Mesh is normally derived for viewport, rendering, analysis, and
+exchange. A Mesh becomes independently editable only through an explicit detach
+transition. Scan and photo geometry enters as observation evidence and may create
+a new CAD source only through explicit approximate reconstruction. These
+ownership rules are normative in `CAD_MESH_RESPONSIBILITY_CONTRACT.md`.
+
+```mermaid
+flowchart LR
+    CAD["Exact CAD source"] --> Mesh["Derived Mesh"]
+    Mesh --> Render["Viewport and rendering"]
+    Mesh -->|"explicit detach"| Editable["Independent Mesh source"]
+    Scan["Scan / photo evidence"] --> Reconstruct["Validated reconstruction"]
+    Reconstruct --> CAD
+```
+
 A release is complete only for versioned conformance manifests governed by
 `CONFORMANCE_MANIFEST_CONTRACT.md`; `CONFORMANCE_PROFILES.md` is their human
 catalog. The product vision does not silently broaden one release claim.
@@ -72,6 +88,7 @@ A task is done only when all of these statements are true.
 |---|---|
 | Scope | The implementation satisfies the named conformance profile and capability case set without adding unrelated product behavior. |
 | Architecture | The app host remains thin, RupaKit owns product behavior, and Swift-CAD remains the CAD foundation. |
+| Representation ownership | CAD remains the normal design SSOT; linked Mesh, detached Mesh, and reconstruction input roles are explicit and never silently synchronized. |
 | Generality | The solution supports the universal CAD direction and does not encode video, printing, or architecture as separate product forks. |
 | Design process | The feature has an explicit design packet or an assessment entry that covers the same DBN artifacts. |
 | Units and precision | Length display and modeling behavior remain valid across micrometer-detail through kilometer-scale workflows. |
@@ -86,6 +103,7 @@ A task is done only when all of these statements are true.
 | Question | Expected answer |
 |---|---|
 | Does the change preserve one shared CAD model? | Yes. |
+| Does every geometry value have exactly one CAD, detached-Mesh, input, or derived role? | Yes. |
 | Does every mutation pass through an intentional command or session boundary? | Yes. |
 | Does the UI distinguish component Browser, canvas tools, logs, and Inspector? | Yes, `NavigationSplitView` owns the component Browser sidebar, modeling tools float on the bottom of the canvas as Liquid Glass controls, and `MacComponent` owns the collapsed-by-default logs pane plus the right-side Inspector Pane for contextual properties. |
 | Does the change respect the deferred `WorkspacePreset` boundary? | Yes, presets can later group defaults and UI emphasis without changing capability availability or core semantics. |

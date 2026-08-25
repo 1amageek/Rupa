@@ -15,6 +15,7 @@ This document lists the general-purpose CAD capabilities Rupa must define before
 | Reference rule | `REFERENCE_ARTIFACT_CONTRACT.md` defines persistent and derived identity. |
 | Validation rule | `VALIDATION_CONTRACT.md` defines outcomes, fidelity, regions, and policy. |
 | State/project rule | `STATE_AND_PROJECT_CONTRACT.md` separates editable source, workspace state, artifacts, decisions, and jobs. |
+| CAD/Mesh rule | `CAD_MESH_RESPONSIBILITY_CONTRACT.md` keeps CAD authoritative by default and distinguishes linked, detached, observation, reconstruction, and export Mesh roles. |
 | Required scale support | Micrometer (μm) detail through kilometer (km) scale modeling and drawing |
 | Deferred convenience | WorkspacePreset switching after shared source/project contracts are stable |
 
@@ -104,12 +105,16 @@ The universal model must keep geometric kinds distinct.
 |---|---|
 | Solid body | Closed topology suitable for exact modeling, boolean operations, and physical validation. |
 | Surface body | Open or closed surface topology for design, trimming, thickening, and visualization. |
-| Mesh body | Triangle or polygon mesh for import, preview, repair, and export workflows. |
+| Mesh representation | Triangle or polygon data whose linked-derived, detached-editable, observation-input, reconstruction-intermediate, or export-artifact role is explicit. |
 | Curve body | 2D or 3D curves used for paths, construction, profiles, and output. |
 | Sketch body | Editable 2D source geometry and constraints. |
 | Construction body | Planes, axes, points, coordinate systems, layout references, and grids. |
 
 Conversions between body types must be explicit commands with diagnostics.
+CAD-to-Mesh derivation remains linked and reproducible by default. `Bake` or
+`Detach` creates an independent Mesh source. Mesh-to-CAD is an approximate
+reconstruction workflow with retained evidence and explicit acceptance, not a
+lossless implicit conversion.
 
 ## 6. Parametric Modeling
 
@@ -212,6 +217,7 @@ Generic CAD must remain usable across model sizes.
 | Incremental evaluation | Edits should invalidate only affected dependencies where possible. |
 | Progressive rendering | Viewport can display intermediate or simplified results while evaluation continues. |
 | Cancellable operations | Long import, export, tessellation, and evaluation operations must be cancellable. |
+| Geometry data path | Repeated tessellation, evaluation, selection, rendering, and codec paths use owned buffers plus borrowed views and prove copy/allocation budgets for the named path. |
 
 ## 14. Required Acceptance Matrix
 

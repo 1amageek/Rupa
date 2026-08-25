@@ -5,7 +5,9 @@
 This document defines identity, lifetime, and resolution rules for editable
 source, generated topology, evaluated geometry, validation regions, drawings,
 exchange outputs, and simulation results. It is normative for UI, CLI, Agent,
-validators, exporters, project services, and domain modules.
+validators, exporters, project services, and domain modules. CAD, linked-Mesh,
+detached-Mesh, and observation-input roles follow
+`CAD_MESH_RESPONSIBILITY_CONTRACT.md`.
 
 ## Identity Layers
 
@@ -80,6 +82,8 @@ The public reference model is a tagged union. Each case carries only valid field
 | Source object | Document plus scene/object occurrence ID |
 | Source feature | Document plus feature ID |
 | Source sketch entity | Document plus feature/entity ID and typed component when needed |
+| Detached Mesh element | Document plus detached Mesh asset ID, stable element kind, and element ID |
+| Observation input element | Input-evidence identity plus typed sample, point, or triangle range |
 | Generated topology | Document plus persistent name, topology kind, and owning source context |
 | Semantic entity | Document plus namespace, extension ID, and semantic entity ID |
 | Mesh triangle region | Materialized mesh artifact plus body IDs and compressed triangle ranges per body |
@@ -89,6 +93,13 @@ The public reference model is a tagged union. Each case carries only valid field
 
 Multi-body regions preserve body-to-range mapping. They do not flatten unrelated
 triangle indexes into one global list.
+
+Linked tessellation triangles are materialized artifact regions, not editable
+Mesh-source references. Viewport hits on them resolve back to persistent CAD
+topology when the evaluator provides that mapping. Detached Mesh elements are
+source references and mutate only through detached-Mesh commands. Observation
+input ranges remain immutable evidence; annotations or reconstruction selections
+reference them without changing their bytes.
 
 ## Resolution Result
 
@@ -129,6 +140,7 @@ Ownership is assigned per semantic entity and generated source mapping.
 |---|---|
 | Domain-owned | Registered domain source command |
 | Universal-owned | Universal CAD source command |
+| Detached-Mesh-owned | Detached Mesh source command; no CAD projection is implied |
 | Classified | Universal source remains editable; classification is revalidated or invalidated |
 | Unknown namespace | Preserve payload and reject semantic edits |
 | Stale projection | Permit inspection/repair and reject unsafe mutation |
