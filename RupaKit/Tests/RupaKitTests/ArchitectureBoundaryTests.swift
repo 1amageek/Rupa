@@ -35,7 +35,6 @@ func packageSourceImportsRespectArchitectureBoundaries() throws {
         ],
         "RupaProject": [
             "RupaCADIntegration",
-            "RupaCore",
             "RupaUI",
             "RupaAgentRuntime",
             "RupaAgentTransport",
@@ -145,9 +144,11 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
             "RupaProjectModel",
         ],
         "RupaProject": [
+            "RupaCore",
             "RupaCoreTypes",
             "RupaEvaluation",
             "RupaProjectModel",
+            "RupaProjectPackage",
         ],
         "RupaCADIntegration": [
             "RupaCoreTypes",
@@ -157,6 +158,7 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
         ],
         "RupaCore": [
             "RupaCoreTypes",
+            "RupaProjectModel",
         ],
         "RupaKit": [
             "RupaCore",
@@ -252,6 +254,9 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
             "RupaAutomation",
             "RupaAgentProtocol",
             "RupaAgentRuntime",
+        ],
+        "RupaGeometryBufferBenchmark": [
+            "RupaGeometry",
         ],
     ]
 

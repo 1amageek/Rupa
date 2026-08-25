@@ -21,7 +21,7 @@ public struct MeshSourceEvaluationProvider: GeometrySourceEvaluationProvider {
                     message: "Mesh source provider received a non-mesh reference."
                 )
             }
-            guard let mesh = project.meshSources[sourceID] else {
+            guard let mesh = project.authoredMeshAssets[sourceID]?.source else {
                 throw EvaluationError(
                     code: .sourceUnavailable,
                     message: "Mesh source \(sourceID.rawValue) is not present in the project."

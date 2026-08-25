@@ -1,18 +1,22 @@
 import RupaCoreTypes
+import RupaGeometry
 import RupaProjectModel
 
 public struct EvaluatedProjectSnapshot: Sendable {
     public let id: EvaluationSnapshotID
     public let projectID: ProjectID
     public let occurrences: [SceneOccurrenceID: EvaluatedOccurrenceSnapshot]
+    public let copyTelemetry: GeometryCopyTelemetry
 
     public init(
         id: EvaluationSnapshotID,
         projectID: ProjectID,
-        occurrences: [SceneOccurrenceID: EvaluatedOccurrenceSnapshot]
+        occurrences: [SceneOccurrenceID: EvaluatedOccurrenceSnapshot],
+        copyTelemetry: GeometryCopyTelemetry
     ) {
         self.id = id
         self.projectID = projectID
         self.occurrences = occurrences
+        self.copyTelemetry = copyTelemetry
     }
 }

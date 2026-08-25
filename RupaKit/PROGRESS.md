@@ -79,12 +79,12 @@
   - [x] Validate CAD-only, CAD-plus-Mesh, Mesh-only, missing-source, and non-geometry boundaries
   - [x] Replace obsolete single-source and CAD-required documentation
   - [x] Review, verify, and commit T04-A
-- [ ] T04-B purpose-aware projection and evaluation
-  - [ ] Project all retained representations and authored-Mesh assets into the immutable evaluation model
-  - [ ] Select modeling or presentation representations explicitly during evaluation
-  - [ ] Include purpose and representation identity in evaluated snapshot identity and occurrence evidence
-  - [ ] Prove authored-Mesh evaluation shares source storage without materialization
-  - [ ] Review, verify, and commit T04-B
+- [x] T04-B purpose-aware projection and evaluation
+  - [x] Project all retained representations and authored-Mesh assets into the immutable evaluation model
+  - [x] Select modeling or presentation representations explicitly during evaluation
+  - [x] Include purpose and representation identity in evaluated snapshot identity and occurrence evidence
+  - [x] Prove authored-Mesh evaluation shares source storage without materialization
+  - [x] Review, verify, and commit T04-B
 - [ ] T04-C disjoint project package schema v3
   - [ ] Replace source/rupa.json with required product, optional CAD, and optional Mesh catalog source regions
   - [ ] Reject schema v2 without a compatibility fallback

@@ -42,8 +42,9 @@ public struct DesignDocumentProjectSnapshotBuilder: Sendable {
                 for: document,
                 reusing: currentEvaluation
             ).evaluate(
-                source,
-                sourceRevision: sourceRevision
+                project: source,
+                purpose: .presentation,
+                revision: sourceRevision
             )
             let viewport = try UniversalViewportSceneBuilder().build(
                 from: evaluation,

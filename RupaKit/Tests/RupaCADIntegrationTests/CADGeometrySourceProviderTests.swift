@@ -1,5 +1,6 @@
 import Foundation
 import RupaCore
+import RupaCoreTypes
 import RupaCADIntegration
 import RupaEvaluation
 import RupaProjectModel
@@ -47,8 +48,7 @@ func cadProviderRejectsReferencesForAnotherDocument() throws {
         _ = try provider.evaluate(
             try GeometrySourceEvaluationRequest(
                 references: [
-                    .external(
-                        providerID: CADGeometrySourceProvider.identifier,
+                    .cad(
                         sourceID: "another-document",
                         outputID: UUID().uuidString
                     ),
@@ -69,8 +69,7 @@ func cadProviderTranslatesForeignResolverFailuresAtItsBoundary() throws {
     let provider = CADGeometrySourceProvider(
         resolver: FailingCADGeometrySourceResolver()
     )
-    let reference = GeometrySourceReference.external(
-        providerID: CADGeometrySourceProvider.identifier,
+    let reference = GeometrySourceReference.cad(
         sourceID: UUID().uuidString,
         outputID: UUID().uuidString
     )
@@ -107,8 +106,7 @@ func cadProviderConvertsEvaluatedBodyMeshIntoUniversalGeometrySource() throws {
         )
     )
     let project = try ProjectSourceModel(id: "project.cad", name: "CAD")
-    let reference = GeometrySourceReference.external(
-        providerID: CADGeometrySourceProvider.identifier,
+    let reference = GeometrySourceReference.cad(
         sourceID: session.document.cadDocument.id.description,
         outputID: bodyID.description
     )
@@ -126,6 +124,7 @@ func cadProviderConvertsEvaluatedBodyMeshIntoUniversalGeometrySource() throws {
     #expect(result.mesh.faceIDs.count > 0)
     #expect(result.mesh.attributes.layer(for: "cad.normal") != nil)
     #expect(result.localBounds.maximum.x > result.localBounds.minimum.x)
+    #expect(result.copyTelemetry.didCopy)
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -152,13 +151,11 @@ func cadProviderEvaluatesTheDocumentOnceForAnEntireReferenceBatch() throws {
         document: session.document.cadDocument,
         evaluator: evaluator
     )
-    let bodyReference = GeometrySourceReference.external(
-        providerID: CADGeometrySourceProvider.identifier,
+    let bodyReference = GeometrySourceReference.cad(
         sourceID: session.document.cadDocument.id.description,
         outputID: bodyID.description
     )
-    let featureReference = GeometrySourceReference.external(
-        providerID: CADGeometrySourceProvider.identifier,
+    let featureReference = GeometrySourceReference.cad(
         sourceID: session.document.cadDocument.id.description,
         outputID: featureID.description
     )
@@ -371,11 +368,10 @@ func cadProviderParticipatesInProjectEvaluationThroughProviderBoundary() throws 
     )
     let evaluatedDocument = try evaluator.evaluate(session.document.cadDocument)
     let bodyID = try #require(evaluatedDocument.meshes.keys.first)
-    let definition = ObjectDefinition(
+    let definition = cadObjectDefinition(
         id: "cad.definition",
         name: "CAD Body",
-        geometry: .external(
-            providerID: CADGeometrySourceProvider.identifier,
+        source: .cad(
             sourceID: session.document.cadDocument.id.description,
             outputID: bodyID.description
         )
@@ -400,7 +396,11 @@ func cadProviderParticipatesInProjectEvaluationThroughProviderBoundary() throws 
     )
     let engine = ProjectEvaluationEngine(registry: registry)
 
-    let snapshot = try engine.evaluate(project)
+    let snapshot = try engine.evaluate(
+        project: project,
+        purpose: .presentation,
+        revision: DocumentTransactionRevision()
+    )
     #expect(snapshot.occurrences[occurrence.id]?.mesh.faceIDs.count ?? 0 > 0)
 }
 
@@ -424,11 +424,13 @@ func cadProviderReturnsAnExactCachedRevisionWithoutReevaluating() throws {
         sourceRevision: DocumentTransactionRevision(3)
     )
 
-    _ = try firstProvider.evaluate(request, in: fixture.project)
-    _ = try secondProvider.evaluate(request, in: fixture.project)
+    let firstResults = try firstProvider.evaluate(request, in: fixture.project)
+    let secondResults = try secondProvider.evaluate(request, in: fixture.project)
 
     #expect(evaluator.evaluationCount() == 1)
     #expect(evaluator.reusedEvaluationCount() == 0)
+    #expect(try #require(firstResults[fixture.reference]).copyTelemetry.didCopy)
+    #expect(try #require(secondResults[fixture.reference]).copyTelemetry.didCopy == false)
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -650,6 +652,32 @@ private struct CADProviderFixture {
     let project: ProjectSourceModel
 }
 
+private func cadObjectDefinition(
+    id: ObjectDefinitionID,
+    name: String,
+    source: GeometrySourceReference
+) -> ObjectDefinition {
+    let representationID = GeometryRepresentationID(
+        rawValue: "representation.\(id.rawValue)"
+    )
+    return ObjectDefinition(
+        id: id,
+        name: name,
+        representations: GeometryRepresentationSet(
+            representations: [
+                representationID: GeometryRepresentation(
+                    id: representationID,
+                    source: source
+                ),
+            ],
+            selection: GeometryRepresentationSelection(
+                modeling: representationID,
+                presentation: representationID
+            )
+        )
+    )
+}
+
 private func makeCADProviderFixture() throws -> CADProviderFixture {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -661,8 +689,7 @@ private func makeCADProviderFixture() throws -> CADProviderFixture {
     return CADProviderFixture(
         document: session.document.cadDocument,
         evaluatedDocument: evaluatedDocument,
-        reference: .external(
-            providerID: CADGeometrySourceProvider.identifier,
+        reference: .cad(
             sourceID: session.document.cadDocument.id.description,
             outputID: bodyID.description
         ),

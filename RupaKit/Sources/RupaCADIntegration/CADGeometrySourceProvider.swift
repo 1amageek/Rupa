@@ -17,7 +17,12 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
         let publication: CADDocumentEvaluationCache.Publication
     }
 
-    public static let identifier = "cad"
+    private struct MaterializedMeshSource {
+        let source: MeshSource
+        let copyTelemetry: GeometryCopyTelemetry
+    }
+
+    public static let identifier = GeometrySourceReference.cadProviderID
     public let providerID = Self.identifier
     private let resolver: any CADGeometrySourceResolving
     private let cache: CADDocumentEvaluationCache
@@ -200,8 +205,10 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
                 )
             }
             let meshSource: MeshSource
+            let copyTelemetry: GeometryCopyTelemetry
             if let cached = meshSourcesByBodyID[bodyID] {
                 meshSource = cached.source
+                copyTelemetry = GeometryCopyTelemetry()
             } else {
                 guard let mesh = evaluatedDocument.meshes[bodyID] else {
                     throw CADIntegrationError(
@@ -209,12 +216,14 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
                         message: "CAD evaluation produced no mesh for body \(bodyID.description)."
                     )
                 }
-                meshSource = try makeMeshSource(
+                let materialized = try makeMeshSource(
                     sourceID: source.sourceID,
                     bodyID: bodyID,
                     mesh: mesh,
                     tolerance: evaluator.configuration.tolerance
                 )
+                meshSource = materialized.source
+                copyTelemetry = materialized.copyTelemetry
                 meshSourcesByBodyID[bodyID] = CADDocumentEvaluationCache.CachedMeshSource(
                     mesh: mesh,
                     source: meshSource
@@ -223,7 +232,8 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
             results[output.reference] = GeometryEvaluationResult(
                 reference: output.reference,
                 mesh: meshSource,
-                localBounds: try meshSource.bounds()
+                localBounds: try meshSource.bounds(),
+                copyTelemetry: copyTelemetry
             )
         }
 
@@ -265,8 +275,7 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
     private func validatedOutput(
         for reference: GeometrySourceReference
     ) throws -> ValidatedOutput {
-        guard case .external(let providerID, let sourceID, let outputID) = reference,
-              providerID == self.providerID else {
+        guard case let .cad(sourceID, outputID) = reference else {
             throw CADIntegrationError(
                 code: .unsupportedReference,
                 message: "CAD provider received a non-CAD geometry reference."
@@ -278,8 +287,7 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
                 message: "CAD geometry references require a source ID."
             )
         }
-        guard let outputID,
-              UUID(uuidString: outputID) != nil else {
+        guard UUID(uuidString: outputID) != nil else {
             throw CADIntegrationError(
                 code: .bodyUnavailable,
                 message: "CAD geometry references require a valid body or feature output ID."
@@ -326,7 +334,7 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
         bodyID: BodyID,
         mesh: Mesh,
         tolerance: ModelingTolerance
-    ) throws -> MeshSource {
+    ) throws -> MaterializedMeshSource {
         do {
             try mesh.validate(tolerance: tolerance)
         } catch {
@@ -420,7 +428,12 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
                     )
                 )
             }
-            return try builder.build()
+            var copyTelemetry = GeometryCopyTelemetry()
+            let source = try builder.build(telemetry: &copyTelemetry)
+            return MaterializedMeshSource(
+                source: source,
+                copyTelemetry: copyTelemetry
+            )
         } catch {
             throw CADIntegrationError(
                 code: .invalidMesh,

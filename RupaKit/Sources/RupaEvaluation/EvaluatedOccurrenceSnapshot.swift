@@ -5,6 +5,7 @@ import RupaProjectModel
 public struct EvaluatedOccurrenceSnapshot: Sendable {
     public let occurrenceID: SceneOccurrenceID
     public let definitionID: ObjectDefinitionID
+    public let representationID: GeometryRepresentationID
     public let reference: GeometrySourceReference
     public let mesh: MeshSource
     public let worldTransform: GeometryTransform3D
@@ -13,6 +14,7 @@ public struct EvaluatedOccurrenceSnapshot: Sendable {
     public init(
         occurrenceID: SceneOccurrenceID,
         definitionID: ObjectDefinitionID,
+        representationID: GeometryRepresentationID,
         reference: GeometrySourceReference,
         mesh: MeshSource,
         worldTransform: GeometryTransform3D,
@@ -20,6 +22,7 @@ public struct EvaluatedOccurrenceSnapshot: Sendable {
     ) {
         self.occurrenceID = occurrenceID
         self.definitionID = definitionID
+        self.representationID = representationID
         self.reference = reference
         self.mesh = mesh
         self.worldTransform = worldTransform

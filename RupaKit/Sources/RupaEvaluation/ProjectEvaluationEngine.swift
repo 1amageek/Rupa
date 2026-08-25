@@ -14,8 +14,9 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
     }
 
     public func evaluate(
-        _ project: ProjectSourceModel,
-        sourceRevision: DocumentTransactionRevision = DocumentTransactionRevision()
+        project: ProjectSourceModel,
+        purpose: GeometryRepresentationPurpose,
+        revision: DocumentTransactionRevision
     ) throws -> EvaluatedProjectSnapshot {
         do {
             try project.validate()
@@ -30,17 +31,24 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
         let resultsByReference = try evaluateGeometrySources(
             for: occurrenceIDs,
             in: project,
-            sourceRevision: sourceRevision
+            purpose: purpose,
+            sourceRevision: revision
         )
 
         var transformCache: [SceneOccurrenceID: GeometryTransform3D] = [:]
         var evaluated: [SceneOccurrenceID: EvaluatedOccurrenceSnapshot] = [:]
         for occurrenceID in occurrenceIDs {
             guard let occurrence = project.occurrences[occurrenceID],
-                  let definition = project.objectDefinitions[occurrence.definitionID],
-                  let reference = definition.geometry else {
+                  let definition = project.objectDefinitions[occurrence.definitionID] else {
                 continue
             }
+            guard let representation = try selectedRepresentation(
+                in: definition,
+                purpose: purpose
+            ) else {
+                continue
+            }
+            let reference = representation.source
             let worldTransform = try worldTransform(
                 for: occurrenceID,
                 in: project,
@@ -56,6 +64,7 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
             evaluated[occurrenceID] = EvaluatedOccurrenceSnapshot(
                 occurrenceID: occurrenceID,
                 definitionID: occurrence.definitionID,
+                representationID: representation.id,
                 reference: reference,
                 mesh: result.mesh,
                 worldTransform: worldTransform,
@@ -65,18 +74,25 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
 
         let id = EvaluationSnapshotID(
             projectID: project.id,
-            sourceRevision: sourceRevision
+            purpose: purpose,
+            sourceRevision: revision
         )
+        var copyTelemetry = GeometryCopyTelemetry()
+        for result in resultsByReference.values {
+            try copyTelemetry.record(contentsOf: result.copyTelemetry)
+        }
         return EvaluatedProjectSnapshot(
             id: id,
             projectID: project.id,
-            occurrences: evaluated
+            occurrences: evaluated,
+            copyTelemetry: copyTelemetry
         )
     }
 
     private func evaluateGeometrySources(
         for occurrenceIDs: [SceneOccurrenceID],
         in project: ProjectSourceModel,
+        purpose: GeometryRepresentationPurpose,
         sourceRevision: DocumentTransactionRevision
     ) throws -> [GeometrySourceReference: GeometryEvaluationResult] {
         var referencesByProvider: [String: [GeometrySourceReference]] = [:]
@@ -85,8 +101,14 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
         for occurrenceID in occurrenceIDs {
             guard let occurrence = project.occurrences[occurrenceID],
                   let definition = project.objectDefinitions[occurrence.definitionID],
-                  let reference = definition.geometry,
-                  seenReferences.insert(reference).inserted else {
+                  let representation = try selectedRepresentation(
+                    in: definition,
+                    purpose: purpose
+                  ) else {
+                continue
+            }
+            let reference = representation.source
+            guard seenReferences.insert(reference).inserted else {
                 continue
             }
             referencesByProvider[reference.providerID, default: []].append(reference)
@@ -114,6 +136,22 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
             }
         }
         return resultsByReference
+    }
+
+    private func selectedRepresentation(
+        in definition: ObjectDefinition,
+        purpose: GeometryRepresentationPurpose
+    ) throws -> GeometryRepresentation? {
+        guard definition.representations.representations.isEmpty == false else {
+            return nil
+        }
+        guard let representation = definition.representations.representation(for: purpose) else {
+            throw EvaluationError(
+                code: .invalidProject,
+                message: "Geometry object definitions must resolve the requested representation purpose."
+            )
+        }
+        return representation
     }
 
     private func validate(

@@ -92,6 +92,7 @@ func numericGeometryIdentifiersRemainDistinctAndOrdered() throws {
 
     let evaluation = EvaluationSnapshotID(
         projectID: "project.primary",
+        purpose: .presentation,
         sourceRevision: DocumentTransactionRevision(42)
     )
     try expectRoundTrip(evaluation)

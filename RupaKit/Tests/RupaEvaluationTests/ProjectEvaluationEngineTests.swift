@@ -1,17 +1,18 @@
 import RupaCoreTypes
 import RupaEvaluation
-import RupaGeometry
 import RupaProjectModel
 import Synchronization
 import Testing
+@testable import RupaGeometry
 
 @Test(.timeLimit(.minutes(1)))
 func projectEvaluationProducesImmutableOccurrenceSnapshotsWithWorldBounds() throws {
     let mesh = try triangleSource()
-    let definition = ObjectDefinition(
+    let asset = try AuthoredMeshAsset(source: mesh, provenance: .created)
+    let definition = objectDefinition(
         id: "triangle.definition",
         name: "Triangle",
-        geometry: .authoredMesh(mesh.identity)
+        source: .authoredMesh(mesh.identity)
     )
     let root = SceneOccurrence(
         id: "triangle.root",
@@ -21,19 +22,22 @@ func projectEvaluationProducesImmutableOccurrenceSnapshotsWithWorldBounds() thro
     let project = try ProjectSourceModel(
         id: "project.evaluation",
         name: "Evaluation",
-        meshSources: [mesh.identity: mesh],
+        authoredMeshAssets: [asset.id: asset],
         objectDefinitions: [definition.id: definition],
         occurrences: [root.id: root],
         rootOccurrenceIDs: [root.id]
     )
 
     let snapshot = try ProjectEvaluationEngine().evaluate(
-        project,
-        sourceRevision: DocumentTransactionRevision(7)
+        project: project,
+        purpose: .presentation,
+        revision: DocumentTransactionRevision(7)
     )
     let evaluated = try #require(snapshot.occurrences[root.id])
 
     #expect(snapshot.id.sourceRevision == DocumentTransactionRevision(7))
+    #expect(snapshot.id.purpose == .presentation)
+    #expect(evaluated.representationID == definition.representations.selection?.presentation)
     #expect(evaluated.worldBounds.minimum == GeometryPoint3D(x: 2, y: 3, z: 0))
     #expect(evaluated.worldBounds.maximum == GeometryPoint3D(x: 3, y: 4, z: 0))
 }
@@ -41,7 +45,12 @@ func projectEvaluationProducesImmutableOccurrenceSnapshotsWithWorldBounds() thro
 @Test(.timeLimit(.minutes(1)))
 func projectEvaluationComposesParentAndChildTransforms() throws {
     let mesh = try triangleSource()
-    let definition = ObjectDefinition(id: "definition", name: "Triangle", geometry: .authoredMesh(mesh.identity))
+    let asset = try AuthoredMeshAsset(source: mesh, provenance: .created)
+    let definition = objectDefinition(
+        id: "definition",
+        name: "Triangle",
+        source: .authoredMesh(mesh.identity)
+    )
     let root = SceneOccurrence(
         id: "root",
         definitionID: definition.id,
@@ -56,24 +65,85 @@ func projectEvaluationComposesParentAndChildTransforms() throws {
     let project = try ProjectSourceModel(
         id: "project.hierarchy",
         name: "Hierarchy",
-        meshSources: [mesh.identity: mesh],
+        authoredMeshAssets: [asset.id: asset],
         objectDefinitions: [definition.id: definition],
         occurrences: [root.id: root, child.id: child],
         rootOccurrenceIDs: [root.id]
     )
 
-    let snapshot = try ProjectEvaluationEngine().evaluate(project)
+    let snapshot = try ProjectEvaluationEngine().evaluate(
+        project: project,
+        purpose: .modeling,
+        revision: DocumentTransactionRevision()
+    )
     let evaluatedChild = try #require(snapshot.occurrences[child.id])
 
     #expect(evaluatedChild.worldBounds.minimum == GeometryPoint3D(x: 10, y: 4, z: 0))
 }
 
 @Test(.timeLimit(.minutes(1)))
+func projectEvaluationSelectsPurposeAndSharesAuthoredMeshStorageWithoutMaterialization() throws {
+    let modelingMesh = try triangleSource(identity: "mesh.modeling")
+    let presentationMesh = try triangleSource(identity: "mesh.presentation", xOffset: 5)
+    let modelingAsset = try AuthoredMeshAsset(source: modelingMesh, provenance: .created)
+    let presentationAsset = try AuthoredMeshAsset(source: presentationMesh, provenance: .created)
+    let definition = objectDefinition(
+        id: "multi-representation.definition",
+        name: "Multi Representation",
+        modelingSource: .authoredMesh(modelingAsset.id),
+        presentationSource: .authoredMesh(presentationAsset.id)
+    )
+    let occurrence = SceneOccurrence(
+        id: "multi-representation.occurrence",
+        definitionID: definition.id
+    )
+    let project = try ProjectSourceModel(
+        id: "project.multi-representation",
+        name: "Multi Representation",
+        authoredMeshAssets: [
+            modelingAsset.id: modelingAsset,
+            presentationAsset.id: presentationAsset,
+        ],
+        objectDefinitions: [definition.id: definition],
+        occurrences: [occurrence.id: occurrence],
+        rootOccurrenceIDs: [occurrence.id]
+    )
+    let engine = ProjectEvaluationEngine()
+
+    let modeling = try engine.evaluate(
+        project: project,
+        purpose: .modeling,
+        revision: DocumentTransactionRevision(11)
+    )
+    let presentation = try engine.evaluate(
+        project: project,
+        purpose: .presentation,
+        revision: DocumentTransactionRevision(11)
+    )
+    let modeledOccurrence = try #require(modeling.occurrences[occurrence.id])
+    let presentedOccurrence = try #require(presentation.occurrences[occurrence.id])
+
+    #expect(modeling.id != presentation.id)
+    #expect(modeling.id.purpose == .modeling)
+    #expect(presentation.id.purpose == .presentation)
+    #expect(modeledOccurrence.representationID == definition.representations.selection?.modeling)
+    #expect(presentedOccurrence.representationID == definition.representations.selection?.presentation)
+    #expect(modeledOccurrence.reference == .authoredMesh(modelingAsset.id))
+    #expect(presentedOccurrence.reference == .authoredMesh(presentationAsset.id))
+    #expect(modeledOccurrence.worldBounds.minimum.x == 0)
+    #expect(presentedOccurrence.worldBounds.minimum.x == 5)
+    #expect(modeling.copyTelemetry.didCopy == false)
+    #expect(presentation.copyTelemetry.didCopy == false)
+    expectSharedStorage(modelingMesh, modeledOccurrence.mesh)
+    expectSharedStorage(presentationMesh, presentedOccurrence.mesh)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func projectEvaluationRejectsUnregisteredExternalProviders() throws {
-    let definition = ObjectDefinition(
+    let definition = objectDefinition(
         id: "external.definition",
         name: "External",
-        geometry: .external(providerID: "cad", sourceID: "document", outputID: "body")
+        source: .external(providerID: "unregistered", sourceID: "document", outputID: "body")
     )
     let occurrence = SceneOccurrence(id: "external.occurrence", definitionID: definition.id)
     let project = try ProjectSourceModel(
@@ -86,7 +156,11 @@ func projectEvaluationRejectsUnregisteredExternalProviders() throws {
     var error: EvaluationError?
 
     do {
-        _ = try ProjectEvaluationEngine().evaluate(project)
+        _ = try ProjectEvaluationEngine().evaluate(
+            project: project,
+            purpose: .presentation,
+            revision: DocumentTransactionRevision()
+        )
     } catch let caught as EvaluationError {
         error = caught
     }
@@ -107,10 +181,10 @@ func projectEvaluationBatchesSharedGeometryReferencesBeforeOccurrenceProjection(
         sourceID: "shared.source",
         outputID: "shared.output"
     )
-    let definition = ObjectDefinition(
+    let definition = objectDefinition(
         id: "shared.definition",
         name: "Shared",
-        geometry: reference
+        source: reference
     )
     let first = SceneOccurrence(id: "shared.first", definitionID: definition.id)
     let second = SceneOccurrence(id: "shared.second", definitionID: definition.id)
@@ -124,8 +198,9 @@ func projectEvaluationBatchesSharedGeometryReferencesBeforeOccurrenceProjection(
 
     let sourceRevision = DocumentTransactionRevision(9)
     let snapshot = try ProjectEvaluationEngine(registry: registry).evaluate(
-        project,
-        sourceRevision: sourceRevision
+        project: project,
+        purpose: .presentation,
+        revision: sourceRevision
     )
 
     #expect(snapshot.occurrences.count == 2)
@@ -168,10 +243,10 @@ func projectEvaluationRejectsIncompleteProviderResultBatches() throws {
         sourceID: "missing.source",
         outputID: "missing.output"
     )
-    let definition = ObjectDefinition(
+    let definition = objectDefinition(
         id: "missing.definition",
         name: "Missing",
-        geometry: reference
+        source: reference
     )
     let occurrence = SceneOccurrence(id: "missing.occurrence", definitionID: definition.id)
     let project = try ProjectSourceModel(
@@ -184,7 +259,11 @@ func projectEvaluationRejectsIncompleteProviderResultBatches() throws {
     var error: EvaluationError?
 
     do {
-        _ = try ProjectEvaluationEngine(registry: registry).evaluate(project)
+        _ = try ProjectEvaluationEngine(registry: registry).evaluate(
+            project: project,
+            purpose: .presentation,
+            revision: DocumentTransactionRevision()
+        )
     } catch let caught as EvaluationError {
         error = caught
     }
@@ -209,10 +288,10 @@ func projectEvaluationRejectsProviderBoundsThatDoNotMatchTheMesh() throws {
         sourceID: "invalid-bounds.source",
         outputID: "invalid-bounds.output"
     )
-    let definition = ObjectDefinition(
+    let definition = objectDefinition(
         id: "invalid-bounds.definition",
         name: "Invalid Bounds",
-        geometry: reference
+        source: reference
     )
     let occurrence = SceneOccurrence(
         id: "invalid-bounds.occurrence",
@@ -228,7 +307,11 @@ func projectEvaluationRejectsProviderBoundsThatDoNotMatchTheMesh() throws {
     var error: EvaluationError?
 
     do {
-        _ = try ProjectEvaluationEngine(registry: registry).evaluate(project)
+        _ = try ProjectEvaluationEngine(registry: registry).evaluate(
+            project: project,
+            purpose: .presentation,
+            revision: DocumentTransactionRevision()
+        )
     } catch let caught as EvaluationError {
         error = caught
     }
@@ -236,13 +319,104 @@ func projectEvaluationRejectsProviderBoundsThatDoNotMatchTheMesh() throws {
     #expect(error?.code == .invalidResult)
 }
 
-private func triangleSource() throws -> MeshSource {
-    var builder = MeshSourceBuilder(identity: "mesh.evaluation")
-    let v0 = try builder.addVertex(GeometryPoint3D(x: 0, y: 0, z: 0))
-    let v1 = try builder.addVertex(GeometryPoint3D(x: 1, y: 0, z: 0))
-    let v2 = try builder.addVertex(GeometryPoint3D(x: 0, y: 1, z: 0))
+private func objectDefinition(
+    id: ObjectDefinitionID,
+    name: String,
+    source: GeometrySourceReference
+) -> ObjectDefinition {
+    objectDefinition(
+        id: id,
+        name: name,
+        modelingSource: source,
+        presentationSource: source
+    )
+}
+
+private func objectDefinition(
+    id: ObjectDefinitionID,
+    name: String,
+    modelingSource: GeometrySourceReference,
+    presentationSource: GeometrySourceReference
+) -> ObjectDefinition {
+    let modelingID = GeometryRepresentationID(
+        rawValue: "representation.\(id.rawValue).modeling"
+    )
+    if modelingSource == presentationSource {
+        return ObjectDefinition(
+            id: id,
+            name: name,
+            representations: GeometryRepresentationSet(
+                representations: [
+                    modelingID: GeometryRepresentation(
+                        id: modelingID,
+                        source: modelingSource
+                    ),
+                ],
+                selection: GeometryRepresentationSelection(
+                    modeling: modelingID,
+                    presentation: modelingID
+                )
+            )
+        )
+    }
+    let presentationID = GeometryRepresentationID(
+        rawValue: "representation.\(id.rawValue).presentation"
+    )
+    return ObjectDefinition(
+        id: id,
+        name: name,
+        representations: GeometryRepresentationSet(
+            representations: [
+                modelingID: GeometryRepresentation(
+                    id: modelingID,
+                    source: modelingSource
+                ),
+                presentationID: GeometryRepresentation(
+                    id: presentationID,
+                    source: presentationSource
+                ),
+            ],
+            selection: GeometryRepresentationSelection(
+                modeling: modelingID,
+                presentation: presentationID
+            )
+        )
+    )
+}
+
+private func triangleSource(
+    identity: GeometrySourceID = "mesh.evaluation",
+    xOffset: Double = 0
+) throws -> MeshSource {
+    var builder = MeshSourceBuilder(identity: identity)
+    let v0 = try builder.addVertex(GeometryPoint3D(x: xOffset, y: 0, z: 0))
+    let v1 = try builder.addVertex(GeometryPoint3D(x: xOffset + 1, y: 0, z: 0))
+    let v2 = try builder.addVertex(GeometryPoint3D(x: xOffset, y: 1, z: 0))
     _ = try builder.addFace(vertexIDs: [v0, v1, v2])
     return try builder.build()
+}
+
+private func expectSharedStorage(_ source: MeshSource, _ evaluated: MeshSource) {
+    #expect(source.vertexIDs.storage.chunkIdentities == evaluated.vertexIDs.storage.chunkIdentities)
+    #expect(source.vertexIDs.storage.pageIdentities == evaluated.vertexIDs.storage.pageIdentities)
+    #expect(
+        source.vertexPositions.storage.chunkIdentities
+            == evaluated.vertexPositions.storage.chunkIdentities
+    )
+    #expect(
+        source.vertexPositions.storage.pageIdentities
+            == evaluated.vertexPositions.storage.pageIdentities
+    )
+    #expect(source.faceIDs.storage.chunkIdentities == evaluated.faceIDs.storage.chunkIdentities)
+    #expect(source.faceIDs.storage.pageIdentities == evaluated.faceIDs.storage.pageIdentities)
+    #expect(
+        source.cornerVertexIDs.storage.chunkIdentities
+            == evaluated.cornerVertexIDs.storage.chunkIdentities
+    )
+    #expect(
+        source.cornerVertexIDs.storage.pageIdentities
+            == evaluated.cornerVertexIDs.storage.pageIdentities
+    )
 }
 
 private func translation(x: Double, y: Double, z: Double) throws -> GeometryTransform3D {

@@ -308,8 +308,9 @@ private struct FixtureCADSourceCodec: ProjectCADSourceCoding {
 
 private struct FailingProjectEvaluator: ProjectEvaluating {
     func evaluate(
-        _: ProjectSourceModel,
-        sourceRevision _: DocumentTransactionRevision
+        project _: ProjectSourceModel,
+        purpose _: GeometryRepresentationPurpose,
+        revision _: DocumentTransactionRevision
     ) throws -> EvaluatedProjectSnapshot {
         throw EvaluationError(
             code: .sourceUnavailable,
@@ -349,13 +350,15 @@ private struct BlockingProjectEvaluator: ProjectEvaluating {
     let gate: BlockingEvaluationGate
 
     func evaluate(
-        _ source: ProjectSourceModel,
-        sourceRevision: DocumentTransactionRevision
+        project source: ProjectSourceModel,
+        purpose: GeometryRepresentationPurpose,
+        revision: DocumentTransactionRevision
     ) throws -> EvaluatedProjectSnapshot {
         gate.waitIfNeeded(for: source.name)
         return try ProjectEvaluationEngine().evaluate(
-            source,
-            sourceRevision: sourceRevision
+            project: source,
+            purpose: purpose,
+            revision: revision
         )
     }
 }

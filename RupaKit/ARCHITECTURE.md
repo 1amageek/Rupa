@@ -25,8 +25,10 @@ flowchart LR
     Evaluation --> Geometry
     Evaluation --> ProjectModel
     Project[RupaProject] --> CoreTypes
+    Project --> Core
     Project --> Evaluation
     Project --> ProjectModel
+    Project --> ProjectPackage
     Core[RupaCore] --> CoreTypes
     Core --> ProjectModel
     Core --> SwiftCAD[SwiftCAD]

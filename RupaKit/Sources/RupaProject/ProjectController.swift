@@ -335,7 +335,11 @@ public actor ProjectController {
         do {
             return try await Task.detached(priority: nil) {
                 try Task.checkCancellation()
-                let result = try evaluator.evaluate(source, sourceRevision: revision)
+                let result = try evaluator.evaluate(
+                    project: source,
+                    purpose: .presentation,
+                    revision: revision
+                )
                 try Task.checkCancellation()
                 return result
             }.value

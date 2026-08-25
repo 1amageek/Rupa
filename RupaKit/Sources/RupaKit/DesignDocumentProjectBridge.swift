@@ -1,5 +1,4 @@
 import Foundation
-import RupaCADIntegration
 import RupaCore
 import RupaCoreTypes
 import RupaGeometry
@@ -53,7 +52,6 @@ public struct DesignDocumentProjectBridge: Sendable {
             }
             let definitionID = definitionID(for: nodeID)
             let occurrenceID = occurrenceID(for: nodeID)
-            let geometry = try geometryReference(for: node, documentID: document.id)
             let transform: GeometryTransform3D
             do {
                 transform = try GeometryTransform3D(values: node.localTransform.matrix.values)
@@ -66,7 +64,7 @@ public struct DesignDocumentProjectBridge: Sendable {
             definitions[definitionID] = ObjectDefinition(
                 id: definitionID,
                 name: node.name,
-                geometry: geometry
+                representations: evaluationRepresentations(for: node)
             )
             occurrences[occurrenceID] = SceneOccurrence(
                 id: occurrenceID,
@@ -88,8 +86,9 @@ public struct DesignDocumentProjectBridge: Sendable {
 
         let projectName = document.cadDocument.metadata.name ?? "Untitled"
         return try ProjectSourceModel(
-            id: ProjectID(rawValue: "cad.\(document.id.description)"),
+            id: ProjectID(rawValue: "project.\(document.id.description)"),
             name: projectName,
+            authoredMeshAssets: document.authoredMeshAssets,
             objectDefinitions: definitions,
             occurrences: occurrences,
             rootOccurrenceIDs: roots
@@ -104,24 +103,14 @@ public struct DesignDocumentProjectBridge: Sendable {
         SceneOccurrenceID(rawValue: "scene.\(nodeID.description)")
     }
 
-    private func geometryReference(
-        for node: SceneNode,
-        documentID: DocumentID
-    ) throws -> GeometrySourceReference? {
+    private func evaluationRepresentations(
+        for node: SceneNode
+    ) -> GeometryRepresentationSet {
         let isBody = node.object?.category == .body || node.reference?.kind == .body
         guard isBody else {
-            return nil
+            return .empty
         }
-        guard let featureID = node.reference?.featureID ?? node.object?.sourceFeatureID else {
-            throw DesignDocumentProjectBridgeError(
-                code: .unresolvedGeometry,
-                message: "Body scene node \(node.id.description) has no source feature ID."
-            )
-        }
-        return .external(
-            providerID: CADGeometrySourceProvider.identifier,
-            sourceID: documentID.description,
-            outputID: featureID.description
-        )
+        return node.object?.geometryRepresentations ?? .empty
     }
+
 }

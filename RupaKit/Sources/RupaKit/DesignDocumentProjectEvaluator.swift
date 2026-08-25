@@ -24,11 +24,12 @@ struct DesignDocumentProjectEvaluator: ProjectEvaluating {
     }
 
     func evaluate(
-        _ project: ProjectSourceModel,
-        sourceRevision: DocumentTransactionRevision
+        project: ProjectSourceModel,
+        purpose: GeometryRepresentationPurpose,
+        revision: DocumentTransactionRevision
     ) throws -> EvaluatedProjectSnapshot {
         if let reusableEvaluation {
-            guard sourceRevision.value == reusableEvaluation.generation.value else {
+            guard revision.value == reusableEvaluation.generation.value else {
                 throw DesignDocumentProjectBridgeError(
                     code: .staleEvaluation,
                     message: "The reusable CAD evaluation generation does not match the requested source revision."
@@ -37,13 +38,14 @@ struct DesignDocumentProjectEvaluator: ProjectEvaluating {
             try cadEvaluationCache.seed(
                 validatedDocument: reusableEvaluation.validatedDocument.validatedCADDocument,
                 evaluatedDocument: reusableEvaluation.evaluatedDocument,
-                sourceRevision: sourceRevision,
+                sourceRevision: revision,
                 configuration: cadConfiguration
             )
         }
         return try evaluator.evaluate(
-            project,
-            sourceRevision: sourceRevision
+            project: project,
+            purpose: purpose,
+            revision: revision
         )
     }
 }
