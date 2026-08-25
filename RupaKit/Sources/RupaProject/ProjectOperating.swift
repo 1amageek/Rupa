@@ -13,6 +13,14 @@ public protocol ProjectOperating: Actor {
         _ transaction: ProjectSourceTransaction
     ) async throws -> ProjectSourceCommitResult
 
+    func undo(
+        expectedTransactionRevision: DocumentTransactionRevision
+    ) async throws -> ProjectStateSnapshot
+
+    func redo(
+        expectedTransactionRevision: DocumentTransactionRevision
+    ) async throws -> ProjectStateSnapshot
+
     func load(
         from url: URL,
         expectedTransactionRevision: DocumentTransactionRevision

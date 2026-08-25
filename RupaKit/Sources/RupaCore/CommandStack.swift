@@ -23,6 +23,7 @@ public final class CommandStack {
     public private(set) var undoEntries: [CommandHistoryEntry]
     public private(set) var redoEntries: [CommandHistoryEntry]
     @ObservationIgnored private var groupedExecution: GroupedExecutionState?
+    @ObservationIgnored private var mutationToken: CommandStackMutationToken
 
     public init(
         undoEntries: [CommandHistoryEntry] = [],
@@ -30,6 +31,7 @@ public final class CommandStack {
     ) {
         self.undoEntries = undoEntries
         self.redoEntries = redoEntries
+        self.mutationToken = CommandStackMutationToken()
     }
 
     public var canUndo: Bool {
@@ -47,13 +49,15 @@ public final class CommandStack {
     public func snapshot() -> CommandStackSnapshot {
         CommandStackSnapshot(
             undoEntries: undoEntries,
-            redoEntries: redoEntries
+            redoEntries: redoEntries,
+            mutationToken: mutationToken
         )
     }
 
     public func restore(_ snapshot: CommandStackSnapshot) {
         undoEntries = snapshot.undoEntries
         redoEntries = snapshot.redoEntries
+        recordMutation()
     }
 
     func collapseUndoEntries(
@@ -70,6 +74,7 @@ public final class CommandStack {
         }
         if groupedEntries.count == 1 {
             undoEntries[startIndex].commandName = commandName
+            recordMutation()
             return
         }
         undoEntries.replaceSubrange(
@@ -82,6 +87,7 @@ public final class CommandStack {
                 ),
             ]
         )
+        recordMutation()
     }
 
     public func markCurrentStateClean() {
@@ -100,6 +106,7 @@ public final class CommandStack {
         if let currentEntryIndex = redoEntries.indices.last {
             redoEntries[currentEntryIndex].before.isDirty = false
         }
+        recordMutation()
     }
 
     func appendCommittedEntry(
@@ -115,6 +122,7 @@ public final class CommandStack {
             )
         )
         redoEntries.removeAll()
+        recordMutation()
     }
 
     @discardableResult
@@ -144,6 +152,7 @@ public final class CommandStack {
                 )
             )
             redoEntries.removeAll()
+            recordMutation()
         }
 
         return result
@@ -175,6 +184,7 @@ public final class CommandStack {
                 )
             )
             redoEntries.removeAll()
+            recordMutation()
         }
 
         return result
@@ -238,6 +248,7 @@ public final class CommandStack {
                     )
                 )
                 redoEntries.removeAll()
+                recordMutation()
             } else if generationChanged {
                 throw EditorError(
                     code: .commandFailed,
@@ -248,7 +259,7 @@ public final class CommandStack {
         } catch {
             groupedExecution = nil
             store.restoreTransactionSnapshot(storeSnapshot)
-            restore(historySnapshot)
+            restoreForRollback(historySnapshot)
             throw error
         }
     }
@@ -264,6 +275,7 @@ public final class CommandStack {
         try store.restoreAsMutation(entry.before)
         store.evaluateCurrentDocument()
         redoEntries.append(entry)
+        recordMutation()
         return CommandExecutionResult(
             commandName: "undo.\(entry.commandName)",
             generation: store.generation,
@@ -283,12 +295,23 @@ public final class CommandStack {
         try store.restoreAsMutation(entry.after)
         store.evaluateCurrentDocument()
         undoEntries.append(entry)
+        recordMutation()
         return CommandExecutionResult(
             commandName: "redo.\(entry.commandName)",
             generation: store.generation,
             didMutate: true,
             diagnostics: store.diagnostics
         )
+    }
+
+    private func recordMutation() {
+        mutationToken = CommandStackMutationToken()
+    }
+
+    private func restoreForRollback(_ snapshot: CommandStackSnapshot) {
+        undoEntries = snapshot.undoEntries
+        redoEntries = snapshot.redoEntries
+        mutationToken = snapshot.mutationToken
     }
 }
 

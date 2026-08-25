@@ -130,6 +130,8 @@ public actor ProjectController: ProjectOperating {
             transactionRevision: session.transactionRevision,
             publicationSequence: publicationSequence,
             isDirty: session.isDirty,
+            canUndo: session.commandStack.canUndo,
+            canRedo: session.commandStack.canRedo,
             selection: session.selection,
             workspaceState: session.workspaceState,
             evaluationSource: evaluationSource,
@@ -273,6 +275,7 @@ public actor ProjectController: ProjectOperating {
         _ transaction: ProjectSourceTransaction
     ) async throws -> ProjectSourceCommitResult {
         try requireTransactionRevision(transaction.expectedTransactionRevision)
+        let basePublicationSequence = publicationSequence
         try await validateMakeEditableEvaluationBindings(in: transaction)
 
         let prepared: PreparedEditorSourceTransaction<StagedCommandResults>
@@ -367,6 +370,7 @@ public actor ProjectController: ProjectOperating {
 
         do {
             try requireTransactionRevision(prepared.baseTransactionRevision)
+            try requirePublicationSequence(basePublicationSequence)
             let nextPublicationSequence = try advancedPublicationSequence()
             try session.commitPreparedSourceTransaction(prepared)
             publicationSequence = nextPublicationSequence
@@ -385,6 +389,24 @@ public actor ProjectController: ProjectOperating {
             evaluation: stagedEvaluation,
             commandResults: prepared.value.commandResults,
             geometrySourceCommandResults: prepared.value.geometrySourceCommandResults
+        )
+    }
+
+    public func undo(
+        expectedTransactionRevision: DocumentTransactionRevision
+    ) async throws -> ProjectStateSnapshot {
+        try await performHistoryTransaction(
+            direction: .undo,
+            expectedTransactionRevision: expectedTransactionRevision
+        )
+    }
+
+    public func redo(
+        expectedTransactionRevision: DocumentTransactionRevision
+    ) async throws -> ProjectStateSnapshot {
+        try await performHistoryTransaction(
+            direction: .redo,
+            expectedTransactionRevision: expectedTransactionRevision
         )
     }
 
@@ -443,6 +465,8 @@ public actor ProjectController: ProjectOperating {
             transactionRevision: loadedRevision,
             publicationSequence: publicationSequence,
             isDirty: session.isDirty,
+            canUndo: session.commandStack.canUndo,
+            canRedo: session.commandStack.canRedo,
             selection: session.selection,
             workspaceState: session.workspaceState,
             evaluationSource: reconstructed.evaluationSource,
@@ -458,9 +482,12 @@ public actor ProjectController: ProjectOperating {
         expectedTransactionRevision: DocumentTransactionRevision
     ) throws -> ProjectPackageSaveResult {
         try requireTransactionRevision(expectedTransactionRevision)
+        let nextPublicationSequence = try advancedPublicationSequence()
         do {
             let result = try packageWriter.save(packageDocument, to: url)
             packageDocument = result.document
+            session.markClean()
+            publicationSequence = nextPublicationSequence
             return result
         } catch {
             throw ProjectControllerError(
@@ -470,6 +497,110 @@ public actor ProjectController: ProjectOperating {
         }
     }
 
+    private func performHistoryTransaction(
+        direction: HistoryDirection,
+        expectedTransactionRevision: DocumentTransactionRevision
+    ) async throws -> ProjectStateSnapshot {
+        try requireTransactionRevision(expectedTransactionRevision)
+        let basePublicationSequence = publicationSequence
+        let historyIsAvailable: Bool
+        switch direction {
+        case .undo:
+            historyIsAvailable = session.commandStack.canUndo
+        case .redo:
+            historyIsAvailable = session.commandStack.canRedo
+        }
+        guard historyIsAvailable else {
+            throw ProjectControllerError(
+                code: .historyUnavailable,
+                message: "There is no project history entry to \(direction.operationName)."
+            )
+        }
+
+        let prepared: PreparedEditorHistoryTransaction
+        do {
+            switch direction {
+            case .undo:
+                prepared = try session.prepareUndo(
+                    expectedTransactionRevision: expectedTransactionRevision
+                )
+            case .redo:
+                prepared = try session.prepareRedo(
+                    expectedTransactionRevision: expectedTransactionRevision
+                )
+            }
+        } catch let error as EditorError {
+            throw projectError(for: error)
+        }
+
+        let stagedAuthority = try await sourceAuthoritySnapshot(
+            for: prepared.stagedDocument,
+            includesCADSource: prepared.stagedDocument.hasAuthoritativeCADSource
+        )
+        let stagedProductSource = try await encodeProductSource(prepared.stagedDocument)
+        let stagedCADSource = try await encodeCADSourceIfAuthoritative(prepared.stagedDocument)
+        let stagedEvaluationSource = try await projectSource(prepared.stagedDocument)
+        guard stagedEvaluationSource.id == packageDocument.documentID else {
+            throw ProjectControllerError(
+                code: .sourceMismatch,
+                message: "Project history cannot change the project identity."
+            )
+        }
+
+        let stagedPackage: ProjectPackageDocument
+        do {
+            stagedPackage = try packageDocument.replacingSources(
+                documentID: stagedEvaluationSource.id,
+                product: stagedProductSource,
+                cad: stagedCADSource,
+                authoredMeshAssets: prepared.stagedDocument.authoredMeshAssets
+            ).garbageCollectingUnreferencedSourceBlobs()
+        } catch {
+            throw ProjectControllerError(
+                code: .packageFailed,
+                message: "Staged project history package validation failed: \(error)."
+            )
+        }
+        try await validatePackageForSave(stagedPackage)
+        let reconstructed = try await reconstructState(from: stagedPackage)
+        let reconstructedAuthority = try await sourceAuthoritySnapshot(
+            for: reconstructed.document,
+            includesCADSource: stagedPackage.cadSource != nil
+        )
+        try Self.requireMatchingAuthority(
+            expected: stagedAuthority,
+            actual: reconstructedAuthority,
+            context: "Staged project history sources"
+        )
+        guard reconstructed.evaluationSource == stagedEvaluationSource else {
+            throw ProjectControllerError(
+                code: .sourceMismatch,
+                message: "Staged project history sources do not reproduce the restored document."
+            )
+        }
+        let stagedEvaluation = try await evaluate(
+            document: reconstructed.document,
+            source: reconstructed.evaluationSource,
+            purpose: .presentation,
+            revision: prepared.proposedTransactionRevision,
+            reusing: prepared.stagedEvaluation
+        )
+
+        do {
+            try requireTransactionRevision(prepared.baseTransactionRevision)
+            try requirePublicationSequence(basePublicationSequence)
+            let nextPublicationSequence = try advancedPublicationSequence()
+            try session.commitPreparedHistoryTransaction(prepared)
+            packageDocument = stagedPackage
+            evaluationSource = reconstructed.evaluationSource
+            evaluation = stagedEvaluation
+            publicationSequence = nextPublicationSequence
+        } catch let error as EditorError {
+            throw projectError(for: error)
+        }
+        return try currentState()
+    }
+
     private func requireTransactionRevision(
         _ expectedTransactionRevision: DocumentTransactionRevision
     ) throws {
@@ -477,6 +608,17 @@ public actor ProjectController: ProjectOperating {
             try session.requireTransactionRevision(expectedTransactionRevision)
         } catch let error as EditorError {
             throw projectError(for: error)
+        }
+    }
+
+    private func requirePublicationSequence(
+        _ expectedPublicationSequence: UInt64
+    ) throws {
+        guard publicationSequence == expectedPublicationSequence else {
+            throw ProjectControllerError(
+                code: .publicationConflict,
+                message: "Expected project publication sequence \(expectedPublicationSequence), but current sequence is \(publicationSequence)."
+            )
         }
     }
 
@@ -1022,6 +1164,20 @@ public actor ProjectController: ProjectOperating {
             )
         }
         return document
+    }
+}
+
+private enum HistoryDirection {
+    case undo
+    case redo
+
+    var operationName: String {
+        switch self {
+        case .undo:
+            return "undo"
+        case .redo:
+            return "redo"
+        }
     }
 }
 

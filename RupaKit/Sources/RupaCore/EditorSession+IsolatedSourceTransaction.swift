@@ -40,7 +40,7 @@ public extension EditorSession {
         after.transactionRevision = proposedTransactionRevision
         return PreparedEditorSourceTransaction(
             value: value,
-            ownerID: sourceTransactionOwnerID,
+            ownerID: transactionOwnerID,
             commandName: commandName,
             before: initialSnapshot.store.document,
             after: after,

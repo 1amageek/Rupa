@@ -160,12 +160,12 @@
   - [x] Reuse the staged validated CAD evaluation without equating generation and transaction revision
   - [x] Cover initial evaluation, commit, load, stale reuse, and publication-order boundaries
   - [x] Review, verify, and commit T06-0A
-- [ ] T06-0B atomic history and save state
-  - [ ] Stage undo and redo without publishing EditorSession state early
-  - [ ] Rebuild Product, CAD, Mesh, package, and presentation evaluation before history publication
-  - [ ] Mark the session clean only after atomic save succeeds
-  - [ ] Cover history success, empty history, evaluation failure, save failure, and rollback
-  - [ ] Review, verify, and commit T06-0B
+- [x] T06-0B atomic history and save state
+  - [x] Stage undo and redo without publishing EditorSession state early
+  - [x] Rebuild Product, CAD, Mesh, package, and presentation evaluation before history publication
+  - [x] Mark the session clean only after atomic save succeeds
+  - [x] Cover history success, empty history, evaluation failure, save failure, and rollback
+  - [x] Review, verify, and commit T06-0B
 - [ ] T06-0C revision-safe project view boundary
   - [ ] Bind presentation geometry and optional CAD interaction data to one state revision
   - [ ] Preserve explicit occurrence-to-scene-node navigation without parsing identifier strings

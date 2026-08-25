@@ -74,6 +74,151 @@ func projectControllerPublishesOneCoherentStateSnapshot() async throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
+func projectControllerPublishesUndoAndRedoAsCompleteSourceAggregates() async throws {
+    let controller = try makeController(document: .empty(named: "Before"))
+    _ = try await controller.commit(
+        ProjectSourceTransaction(
+            name: "fixture.history-source",
+            commands: [.renameDocument(name: "After")],
+            expectedTransactionRevision: DocumentTransactionRevision(0)
+        )
+    )
+
+    let undone = try await controller.undo(
+        expectedTransactionRevision: DocumentTransactionRevision(1)
+    )
+
+    #expect(undone.document.cadDocument.metadata.name == "Before")
+    #expect(undone.evaluationSource.name == "Before")
+    #expect(try decodedProductName(undone.package.productSource) == "Before")
+    #expect(undone.documentGeneration == DocumentGeneration(2))
+    #expect(undone.transactionRevision == DocumentTransactionRevision(2))
+    #expect(undone.evaluation.id.sourceRevision == undone.transactionRevision)
+    #expect(undone.publicationSequence == 2)
+    #expect(undone.canUndo == false)
+    #expect(undone.canRedo)
+
+    let redone = try await controller.redo(
+        expectedTransactionRevision: DocumentTransactionRevision(2)
+    )
+
+    #expect(redone.document.cadDocument.metadata.name == "After")
+    #expect(redone.evaluationSource.name == "After")
+    #expect(try decodedProductName(redone.package.productSource) == "After")
+    #expect(redone.documentGeneration == DocumentGeneration(3))
+    #expect(redone.transactionRevision == DocumentTransactionRevision(3))
+    #expect(redone.evaluation.id.sourceRevision == redone.transactionRevision)
+    #expect(redone.publicationSequence == 3)
+    #expect(redone.canUndo)
+    #expect(redone.canRedo == false)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectControllerHistoryFailureDoesNotPublishStagedState() async throws {
+    let controller = try makeController(
+        document: .empty(named: "Before"),
+        evaluatorPreparer: NameRejectingProjectEvaluatorPreparer(
+            rejectedName: "Before"
+        )
+    )
+    _ = try await controller.commit(
+        ProjectSourceTransaction(
+            name: "fixture.history-evaluation-failure",
+            commands: [.renameDocument(name: "After")],
+            expectedTransactionRevision: DocumentTransactionRevision(0)
+        )
+    )
+    let retained = try await controller.currentState()
+
+    var error: ProjectControllerError?
+    do {
+        _ = try await controller.undo(
+            expectedTransactionRevision: DocumentTransactionRevision(1)
+        )
+    } catch let caught as ProjectControllerError {
+        error = caught
+    }
+    let current = try await controller.currentState()
+
+    #expect(error?.code == .evaluationFailed)
+    #expect(current.document.cadDocument.metadata.name == "After")
+    #expect(current.transactionRevision == retained.transactionRevision)
+    #expect(current.publicationSequence == retained.publicationSequence)
+    #expect(current.canUndo)
+    #expect(current.canRedo == false)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectControllerRejectsEmptyHistoryWithoutPublication() async throws {
+    let controller = try makeController(document: .empty(named: "Retained"))
+    _ = try await controller.evaluateCurrent()
+
+    var error: ProjectControllerError?
+    do {
+        _ = try await controller.undo(
+            expectedTransactionRevision: DocumentTransactionRevision(0)
+        )
+    } catch let caught as ProjectControllerError {
+        error = caught
+    }
+    let retained = try await controller.currentState()
+
+    #expect(error?.code == .historyUnavailable)
+    #expect(retained.document.cadDocument.metadata.name == "Retained")
+    #expect(retained.transactionRevision == DocumentTransactionRevision(0))
+    #expect(retained.publicationSequence == 1)
+    #expect(retained.canUndo == false)
+    #expect(retained.canRedo == false)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectControllerUndoAndRedoRestoreAuthoredMeshAuthority() async throws {
+    let sourceDocument = try meshOnlyDocument(named: "Mesh History")
+    let sourceAsset = try #require(sourceDocument.authoredMeshAssets.values.first)
+    let controller = try makeController(document: sourceDocument)
+    let commit = try await controller.commit(
+        ProjectSourceTransaction(
+            name: "fixture.mesh-history",
+            geometrySourceCommands: [
+                try authoredMeshVertexEditCommand(
+                    document: sourceDocument,
+                    sourceID: sourceAsset.id,
+                    position: GeometryPoint3D(x: 0, y: 0, z: 21)
+                ),
+            ],
+            expectedTransactionRevision: DocumentTransactionRevision(0)
+        )
+    )
+    let editedAsset = try #require(commit.document.authoredMeshAssets[sourceAsset.id])
+
+    let undone = try await controller.undo(
+        expectedTransactionRevision: DocumentTransactionRevision(1)
+    )
+    let restoredAsset = try #require(undone.document.authoredMeshAssets[sourceAsset.id])
+    let restoredEvaluation = try #require(undone.evaluation.occurrences.values.first?.mesh)
+
+    #expect(restoredAsset == sourceAsset)
+    #expect(undone.package.authoredMeshAssets[sourceAsset.id] == sourceAsset)
+    #expect(restoredEvaluation == sourceAsset.source)
+    #expect(restoredEvaluation.vertexPositions.storage.chunkIdentities
+        == sourceAsset.source.vertexPositions.storage.chunkIdentities)
+    #expect(undone.evaluation.copyTelemetry.didCopy == false)
+
+    let redone = try await controller.redo(
+        expectedTransactionRevision: DocumentTransactionRevision(2)
+    )
+    let redoneAsset = try #require(redone.document.authoredMeshAssets[sourceAsset.id])
+    let redoneEvaluation = try #require(redone.evaluation.occurrences.values.first?.mesh)
+
+    #expect(redoneAsset == editedAsset)
+    #expect(redone.package.authoredMeshAssets[sourceAsset.id] == editedAsset)
+    #expect(redoneEvaluation == editedAsset.source)
+    #expect(redoneEvaluation.vertexPositions.storage.chunkIdentities
+        == editedAsset.source.vertexPositions.storage.chunkIdentities)
+    #expect(redone.evaluation.copyTelemetry.didCopy == false)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func projectControllerLoadsEvaluatesAndResavesMeshOnlyPackageWithoutCADAuthority() async throws {
     try await withTemporaryDirectory { directory in
         let url = directory.appendingPathComponent("mesh-only.rupa")
@@ -116,7 +261,7 @@ func projectControllerLoadsEvaluatesAndResavesMeshOnlyPackageWithoutCADAuthority
         })
         #expect(loaded.documentGeneration == DocumentGeneration(0))
         #expect(loaded.transactionRevision == DocumentTransactionRevision(2))
-        #expect(loaded.publicationSequence == 3)
+        #expect(loaded.publicationSequence == 4)
         #expect(loaded.evaluation.id.sourceRevision == loaded.transactionRevision)
         #expect(loaded.evaluationSource.name == "Mesh Only")
         #expect(loaded.isDirty == false)
@@ -890,6 +1035,101 @@ func projectControllerRejectsPublicationWhenConcurrentCallerWins() async throws 
 }
 
 @Test(.timeLimit(.minutes(1)))
+func projectControllerRejectsSourcePublicationAfterSaveChangesHistoryState() async throws {
+    try await withTemporaryDirectory { directory in
+        let gate = BlockingEvaluationGate(blockedSourceName: "After")
+        defer { gate.releaseFirstEvaluation() }
+        let controller = try makeController(
+            document: .empty(named: "Before"),
+            evaluator: BlockingProjectEvaluator(gate: gate)
+        )
+        _ = try await controller.evaluateCurrent()
+        let commit = Task {
+            try await controller.commit(
+                ProjectSourceTransaction(
+                    name: "fixture.commit-versus-save",
+                    commands: [.renameDocument(name: "After")],
+                    expectedTransactionRevision: DocumentTransactionRevision(0)
+                )
+            )
+        }
+        while !gate.didStartFirstEvaluation {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+
+        _ = try await controller.save(
+            to: directory.appendingPathComponent("commit-versus-save.rupa"),
+            expectedTransactionRevision: DocumentTransactionRevision(0)
+        )
+        gate.releaseFirstEvaluation()
+
+        var error: ProjectControllerError?
+        do {
+            _ = try await commit.value
+        } catch let caught as ProjectControllerError {
+            error = caught
+        }
+        let retained = try await controller.currentState()
+
+        #expect(error?.code == .publicationConflict)
+        #expect(retained.document.cadDocument.metadata.name == "Before")
+        #expect(retained.transactionRevision == DocumentTransactionRevision(0))
+        #expect(retained.publicationSequence == 2)
+        #expect(retained.isDirty == false)
+        #expect(retained.canUndo == false)
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectControllerRejectsHistoryPublicationAfterSaveChangesCleanMarker() async throws {
+    try await withTemporaryDirectory { directory in
+        let gate = BlockingEvaluationGate(blockedSourceName: "Before")
+        defer { gate.releaseFirstEvaluation() }
+        let controller = try makeController(
+            document: .empty(named: "Before"),
+            evaluator: BlockingProjectEvaluator(gate: gate)
+        )
+        _ = try await controller.commit(
+            ProjectSourceTransaction(
+                name: "fixture.history-versus-save-source",
+                commands: [.renameDocument(name: "After")],
+                expectedTransactionRevision: DocumentTransactionRevision(0)
+            )
+        )
+        let undo = Task {
+            try await controller.undo(
+                expectedTransactionRevision: DocumentTransactionRevision(1)
+            )
+        }
+        while !gate.didStartFirstEvaluation {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+
+        _ = try await controller.save(
+            to: directory.appendingPathComponent("history-versus-save.rupa"),
+            expectedTransactionRevision: DocumentTransactionRevision(1)
+        )
+        gate.releaseFirstEvaluation()
+
+        var error: ProjectControllerError?
+        do {
+            _ = try await undo.value
+        } catch let caught as ProjectControllerError {
+            error = caught
+        }
+        let retained = try await controller.currentState()
+
+        #expect(error?.code == .publicationConflict)
+        #expect(retained.document.cadDocument.metadata.name == "After")
+        #expect(retained.transactionRevision == DocumentTransactionRevision(1))
+        #expect(retained.publicationSequence == 2)
+        #expect(retained.isDirty == false)
+        #expect(retained.canUndo)
+        #expect(retained.canRedo == false)
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
 func projectControllerCancelledMeshCommitDoesNotPublishStagedAuthority() async throws {
     let sourceDocument = try meshOnlyDocument(named: "First")
     let sourceAsset = try #require(sourceDocument.authoredMeshAssets.values.first)
@@ -1061,6 +1301,81 @@ func projectControllerRoutesSaveAndLoadThroughCoherentPackageState() async throw
         #expect(loaded.transactionRevision == DocumentTransactionRevision(2))
         #expect(await controller.currentDocument().cadDocument.metadata.name == "Saved")
         #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(2))
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectControllerMarksCleanOnlyAfterSuccessfulSave() async throws {
+    try await withTemporaryDirectory { directory in
+        let controller = try makeController(document: .empty(named: "Before"))
+        _ = try await controller.commit(
+            ProjectSourceTransaction(
+                name: "fixture.save-clean-state",
+                commands: [.renameDocument(name: "Saved")],
+                expectedTransactionRevision: DocumentTransactionRevision(0)
+            )
+        )
+        let dirty = try await controller.currentState()
+
+        _ = try await controller.save(
+            to: directory.appendingPathComponent("clean-state.rupa"),
+            expectedTransactionRevision: DocumentTransactionRevision(1)
+        )
+        let saved = try await controller.currentState()
+
+        #expect(dirty.isDirty)
+        #expect(dirty.publicationSequence == 1)
+        #expect(saved.isDirty == false)
+        #expect(saved.publicationSequence == 2)
+        #expect(saved.transactionRevision == DocumentTransactionRevision(1))
+
+        let undone = try await controller.undo(
+            expectedTransactionRevision: DocumentTransactionRevision(1)
+        )
+        #expect(undone.isDirty)
+        #expect(undone.publicationSequence == 3)
+
+        let redone = try await controller.redo(
+            expectedTransactionRevision: DocumentTransactionRevision(2)
+        )
+        #expect(redone.isDirty == false)
+        #expect(redone.publicationSequence == 4)
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectControllerFailedSaveRetainsDirtyPublicationState() async throws {
+    try await withTemporaryDirectory { directory in
+        let controller = try makeController(
+            document: .empty(named: "Before"),
+            packageWriter: FailingPackageWriter()
+        )
+        _ = try await controller.commit(
+            ProjectSourceTransaction(
+                name: "fixture.failed-save-clean-state",
+                commands: [.renameDocument(name: "Retained")],
+                expectedTransactionRevision: DocumentTransactionRevision(0)
+            )
+        )
+        let retained = try await controller.currentState()
+
+        var error: ProjectControllerError?
+        do {
+            _ = try await controller.save(
+                to: directory.appendingPathComponent("failed-clean-state.rupa"),
+                expectedTransactionRevision: DocumentTransactionRevision(1)
+            )
+        } catch let caught as ProjectControllerError {
+            error = caught
+        }
+        let current = try await controller.currentState()
+
+        #expect(error?.code == .packageFailed)
+        #expect(current.document.cadDocument.metadata.name == "Retained")
+        #expect(current.isDirty)
+        #expect(current.publicationSequence == retained.publicationSequence)
+        #expect(current.package.productSource == retained.package.productSource)
+        #expect(current.canUndo)
     }
 }
 

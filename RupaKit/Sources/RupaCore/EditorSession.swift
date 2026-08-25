@@ -13,7 +13,7 @@ public final class EditorSession {
         var transactionRevision: DocumentTransactionRevision
     }
 
-    let sourceTransactionOwnerID: UUID
+    let transactionOwnerID: UUID
     private var documentState: DocumentState
 
     public var store: CADDocumentStore {
@@ -143,7 +143,7 @@ public final class EditorSession {
         initialSelection.pruneMissingReferences(in: document)
         var initialWorkspaceState = workspaceState
         initialWorkspaceState.pruneMissingReferences(in: document)
-        self.sourceTransactionOwnerID = UUID()
+        self.transactionOwnerID = UUID()
         self.documentState = DocumentState(
             store: store,
             commandStack: CommandStack(),
@@ -219,7 +219,7 @@ public final class EditorSession {
     func publishPreparedSourceTransaction<Value>(
         _ prepared: PreparedEditorSourceTransaction<Value>
     ) throws {
-        guard prepared.ownerID == sourceTransactionOwnerID else {
+        guard prepared.ownerID == transactionOwnerID else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Prepared source transactions belong to the session that staged them."
@@ -4014,38 +4014,22 @@ public final class EditorSession {
     public func undo(
         expectedTransactionRevision: DocumentTransactionRevision? = nil
     ) throws -> CommandExecutionResult {
-        try executeHistoryTransaction(
+        let prepared = try prepareUndo(
             expectedTransactionRevision: expectedTransactionRevision
-        ) { stagedSession in
-            try stagedSession.commandStack.undo(in: stagedSession.store)
-        }
+        )
+        try commitPreparedHistoryTransaction(prepared)
+        return prepared.result
     }
 
     @discardableResult
     public func redo(
         expectedTransactionRevision: DocumentTransactionRevision? = nil
     ) throws -> CommandExecutionResult {
-        try executeHistoryTransaction(
+        let prepared = try prepareRedo(
             expectedTransactionRevision: expectedTransactionRevision
-        ) { stagedSession in
-            try stagedSession.commandStack.redo(in: stagedSession.store)
-        }
-    }
-
-    private func executeHistoryTransaction(
-        expectedTransactionRevision: DocumentTransactionRevision?,
-        _ operation: (EditorSession) throws -> CommandExecutionResult
-    ) throws -> CommandExecutionResult {
-        try requireTransactionRevision(expectedTransactionRevision)
-        let baseRevision = transactionRevision
-        let stagedSession = makeIsolatedTransactionSession(from: transactionSnapshot())
-        let result = try operation(stagedSession)
-        let nextRevision = try baseRevision.advanced()
-        var after = stagedSession.transactionSnapshot()
-        after.transactionRevision = nextRevision
-        try requireTransactionRevision(baseRevision)
-        restoreTransactionSnapshot(after)
-        return result
+        )
+        try commitPreparedHistoryTransaction(prepared)
+        return prepared.result
     }
 
     private func record(_ error: Error) {

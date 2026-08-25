@@ -11,6 +11,8 @@ public struct ProjectStateSnapshot: Sendable {
     public let transactionRevision: DocumentTransactionRevision
     public let publicationSequence: UInt64
     public let isDirty: Bool
+    public let canUndo: Bool
+    public let canRedo: Bool
     public let selection: SelectionModel
     public let workspaceState: WorkspaceState
     public let evaluationSource: ProjectSourceModel
@@ -24,6 +26,8 @@ public struct ProjectStateSnapshot: Sendable {
         transactionRevision: DocumentTransactionRevision,
         publicationSequence: UInt64,
         isDirty: Bool,
+        canUndo: Bool,
+        canRedo: Bool,
         selection: SelectionModel,
         workspaceState: WorkspaceState,
         evaluationSource: ProjectSourceModel,
@@ -36,6 +40,8 @@ public struct ProjectStateSnapshot: Sendable {
         self.transactionRevision = transactionRevision
         self.publicationSequence = publicationSequence
         self.isDirty = isDirty
+        self.canUndo = canUndo
+        self.canRedo = canRedo
         self.selection = selection
         self.workspaceState = workspaceState
         self.evaluationSource = evaluationSource

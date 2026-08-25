@@ -113,6 +113,64 @@ func projectControllerEvaluatesChangedCADContentWithStableRepresentationIDs() as
 }
 
 @Test(.timeLimit(.minutes(1)))
+func projectControllerUndoAndRedoRebuildCADEvaluationAtomically() async throws {
+    let fixture = try extrudedCADDocument(named: "CAD History", depth: 1.0)
+    let controller = try makeCADProjectController(document: fixture.document)
+    let initial = try await controller.evaluateCurrent()
+    let initialOccurrence = try #require(initial.occurrences.values.first {
+        $0.reference.providerID == CADGeometrySourceProvider.identifier
+    })
+
+    let committed = try await controller.commit(
+        ProjectSourceTransaction(
+            name: "integration.cad-history",
+            commands: [
+                .setExtrudeDistance(
+                    featureID: fixture.bodyFeatureID,
+                    distance: .length(2.0, .meter)
+                ),
+            ],
+            expectedTransactionRevision: DocumentTransactionRevision(0)
+        )
+    )
+    let committedOccurrence = try #require(committed.evaluation.occurrences.values.first {
+        $0.reference == initialOccurrence.reference
+    })
+
+    let undone = try await controller.undo(
+        expectedTransactionRevision: DocumentTransactionRevision(1)
+    )
+    let undoneOccurrence = try #require(undone.evaluation.occurrences.values.first {
+        $0.reference == initialOccurrence.reference
+    })
+
+    let redone = try await controller.redo(
+        expectedTransactionRevision: DocumentTransactionRevision(2)
+    )
+    let redoneOccurrence = try #require(redone.evaluation.occurrences.values.first {
+        $0.reference == initialOccurrence.reference
+    })
+
+    let initialDepth = initialOccurrence.worldBounds.maximum.z
+        - initialOccurrence.worldBounds.minimum.z
+    let committedDepth = committedOccurrence.worldBounds.maximum.z
+        - committedOccurrence.worldBounds.minimum.z
+    let undoneDepth = undoneOccurrence.worldBounds.maximum.z
+        - undoneOccurrence.worldBounds.minimum.z
+    let redoneDepth = redoneOccurrence.worldBounds.maximum.z
+        - redoneOccurrence.worldBounds.minimum.z
+
+    #expect(abs(undoneDepth - initialDepth) < 0.000_001)
+    #expect(abs(redoneDepth - committedDepth) < 0.000_001)
+    #expect(undone.transactionRevision == DocumentTransactionRevision(2))
+    #expect(redone.transactionRevision == DocumentTransactionRevision(3))
+    #expect(undone.publicationSequence == 3)
+    #expect(redone.publicationSequence == 4)
+    #expect(undone.cadInteraction?.generation == undone.documentGeneration)
+    #expect(redone.cadInteraction?.generation == redone.documentGeneration)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func projectControllerLoadEvaluatesTheLoadedCADDocument() async throws {
     try await withCADProjectTemporaryDirectory { directory in
         let original = try extrudedCADDocument(named: "Loaded CAD", depth: 1.0)
