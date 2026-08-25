@@ -18,8 +18,13 @@ func projectPackageSaveLoadRoundTripUsesBoundedStreamingAndReusesBlobPayload() t
         )
         let store = ProjectPackageStore()
 
-        let first = try store.save(try ProjectPackageDocument(source: project), to: sourceURL)
+        let cadSource = try fixtureCADSource("large")
+        let first = try store.save(
+            try ProjectPackageDocument(source: project, cadSource: cadSource),
+            to: sourceURL
+        )
         #expect(first.document.source == project)
+        #expect(first.document.cadSource == cadSource)
         #expect(first.report.encodedSourceBlobCount == 1)
         #expect(first.report.reusedSourceBlobCount == 0)
         #expect(first.report.maximumWriteChunkByteCount <= 64 * 1_024)
@@ -70,7 +75,13 @@ func projectPackagePreservesOpaqueAdjunctsAndGarbageCollectsOnlyExplicitly() thr
             meshSources: [firstMesh.identity: firstMesh]
         )
         let store = ProjectPackageStore()
-        _ = try store.save(try ProjectPackageDocument(source: original), to: sourceURL)
+        _ = try store.save(
+            try ProjectPackageDocument(
+                source: original,
+                cadSource: fixtureCADSource("preservation")
+            ),
+            to: sourceURL
+        )
         try addAdjunct(
             path: "extensions/example/vendor.bin",
             data: Data([1, 3, 3, 7]),
@@ -78,12 +89,15 @@ func projectPackagePreservesOpaqueAdjunctsAndGarbageCollectsOnlyExplicitly() thr
         )
 
         let loaded = try store.load(from: sourceURL)
-        let replaced = try loaded.replacingSource(retainedSource)
+        let replaced = try loaded.replacingSources(
+            project: retainedSource,
+            cad: loaded.cadSource
+        )
         let preserved = try store.save(replaced, to: preservedURL)
         #expect(preserved.document.source == retainedSource)
         #expect(preserved.report.preservedAdjunctCount == 1)
         #expect(preserved.report.reusedSourceBlobCount == 2)
-        #expect(preserved.document.manifest?.sourceEntries.count == 3)
+        #expect(preserved.document.manifest?.sourceEntries.count == 4)
         #expect(
             try adjunctPayload(
                 path: "extensions/example/vendor.bin",
@@ -95,7 +109,7 @@ func projectPackagePreservesOpaqueAdjunctsAndGarbageCollectsOnlyExplicitly() thr
             preserved.document.garbageCollectingUnreferencedSourceBlobs(),
             to: collectedURL
         )
-        #expect(collected.document.manifest?.sourceEntries.count == 2)
+        #expect(collected.document.manifest?.sourceEntries.count == 3)
         #expect(
             try adjunctPayload(
                 path: "extensions/example/vendor.bin",
@@ -112,10 +126,17 @@ func projectPackageLoadRejectsPayloadCorruptionAndArchiveTraversal() throws {
         let traversalURL = directory.appendingPathComponent("traversal.swcad")
         let store = ProjectPackageStore()
         let project = try singleTriangleProject()
-        let saved = try store.save(try ProjectPackageDocument(source: project), to: corruptedURL)
+        let saved = try store.save(
+            try ProjectPackageDocument(
+                source: project,
+                cadSource: fixtureCADSource("corruption")
+            ),
+            to: corruptedURL
+        )
         let blobEntry = try #require(
             saved.document.manifest?.sourceEntries.first {
                 $0.path != ProjectPackageManifest.sourceMetadataPath
+                    && $0.path != ProjectPackageManifest.cadSourcePath
             }
         )
         let descriptor = try #require(saved.document.backing?.entries[blobEntry.path])
@@ -124,7 +145,13 @@ func projectPackageLoadRejectsPayloadCorruptionAndArchiveTraversal() throws {
         try corruptedData.write(to: corruptedURL)
         #expect(projectPackageErrorCode { try store.load(from: corruptedURL) } == .integrityMismatch)
 
-        _ = try store.save(try ProjectPackageDocument(source: project), to: traversalURL)
+        _ = try store.save(
+            try ProjectPackageDocument(
+                source: project,
+                cadSource: fixtureCADSource("traversal")
+            ),
+            to: traversalURL
+        )
         try addAdjunct(path: "records/x", data: Data([9]), to: traversalURL)
         var traversalData = try Data(contentsOf: traversalURL)
         let replacements = replaceAll(
@@ -144,7 +171,10 @@ func projectPackageLoadRejectsInconsistentStoredEntryLength() throws {
         let url = directory.appendingPathComponent("length.swcad")
         let store = ProjectPackageStore()
         let saved = try store.save(
-            try ProjectPackageDocument(source: singleTriangleProject()),
+            try ProjectPackageDocument(
+                source: singleTriangleProject(),
+                cadSource: fixtureCADSource("length")
+            ),
             to: url
         )
         let descriptor = try #require(
@@ -156,6 +186,66 @@ func projectPackageLoadRejectsInconsistentStoredEntryLength() throws {
         try data.write(to: url)
 
         #expect(projectPackageErrorCode { try store.load(from: url) } == .malformedArchive)
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectPackageCADSourceRoundTripChangesAggregateIdentityWithoutReencoding() throws {
+    try withTemporaryDirectory { directory in
+        let firstURL = directory.appendingPathComponent("first.swcad")
+        let secondURL = directory.appendingPathComponent("second.swcad")
+        let project = try singleTriangleProject()
+        let firstCAD = try fixtureCADSource("first")
+        let secondCAD = try fixtureCADSource("second")
+        let store = ProjectPackageStore()
+
+        let first = try store.save(
+            try ProjectPackageDocument(source: project, cadSource: firstCAD),
+            to: firstURL
+        )
+        let second = try store.save(
+            first.document.replacingSources(project: project, cad: secondCAD),
+            to: secondURL
+        )
+
+        #expect(first.document.cadSource.data == firstCAD.data)
+        #expect(second.document.cadSource.data == secondCAD.data)
+        #expect(first.documentContentIdentity != second.documentContentIdentity)
+
+        let resaved = try store.save(second.document, to: firstURL)
+        #expect(resaved.document.cadSource.data == secondCAD.data)
+        #expect(resaved.documentContentIdentity == second.documentContentIdentity)
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectPackageRejectsCorruptAndOversizedCADSource() throws {
+    try withTemporaryDirectory { directory in
+        let url = directory.appendingPathComponent("cad-corrupt.swcad")
+        let project = try singleTriangleProject()
+        let cadSource = try fixtureCADSource("corrupt")
+        let store = ProjectPackageStore()
+        let saved = try store.save(
+            try ProjectPackageDocument(source: project, cadSource: cadSource),
+            to: url
+        )
+        let descriptor = try #require(
+            saved.document.backing?.entries[ProjectPackageManifest.cadSourcePath]
+        )
+        var corrupted = try Data(contentsOf: url)
+        corrupted[descriptor.payloadRange.lowerBound] ^= 0xff
+        try corrupted.write(to: url)
+        #expect(projectPackageErrorCode { try store.load(from: url) } == .integrityMismatch)
+
+        var limits = ProjectPackageResourceLimits.standard
+        limits.maximumCADSourceByteCount = cadSource.data.count - 1
+        let limitedStore = ProjectPackageStore(limits: limits)
+        #expect(projectPackageErrorCode {
+            try limitedStore.save(
+                try ProjectPackageDocument(source: project, cadSource: cadSource),
+                to: directory.appendingPathComponent("oversized.swcad")
+            )
+        } == .resourceLimitExceeded)
     }
 }
 
@@ -206,11 +296,17 @@ func projectPackageFailedAtomicReplacementPreservesDestinationAndCleansTemporary
         )
         let store = ProjectPackageStore()
         let saved = try store.save(
-            try ProjectPackageDocument(source: original),
+            try ProjectPackageDocument(
+                source: original,
+                cadSource: fixtureCADSource("original")
+            ),
             to: destinationURL
         )
         let replaced = try store.save(
-            saved.document.replacingSource(replacement),
+            saved.document.replacingSources(
+                project: replacement,
+                cad: fixtureCADSource("replacement")
+            ),
             to: destinationURL
         )
         #expect(replaced.document.source == replacement)
@@ -227,11 +323,17 @@ func projectPackageFailedAtomicReplacementPreservesDestinationAndCleansTemporary
 
         #expect(projectPackageErrorCode {
             _ = try failingStore.save(
-                replaced.document.replacingSource(original),
+                replaced.document.replacingSources(
+                    project: original,
+                    cad: fixtureCADSource("failed")
+                ),
                 to: destinationURL
             )
         } == .atomicSaveFailure)
-        #expect(try store.load(from: destinationURL).source == replacement)
+        let retained = try store.load(from: destinationURL)
+        let expectedRetainedCADSource = try fixtureCADSource("replacement")
+        #expect(retained.source == replacement)
+        #expect(retained.cadSource == expectedRetainedCADSource)
         let temporaryPrefix = ".\(destinationURL.lastPathComponent)."
         let remainingNames = try FileManager.default.contentsOfDirectory(
             atPath: directory.path
@@ -275,10 +377,15 @@ private func activeBlobPayload(in document: ProjectPackageDocument) throws -> Da
     let entry = try #require(
         manifest.sourceEntries.first {
             $0.path != ProjectPackageManifest.sourceMetadataPath
+                && $0.path != ProjectPackageManifest.cadSourcePath
         }
     )
     let descriptor = try #require(backing.entries[entry.path])
     return backing.data.subdata(in: descriptor.payloadRange)
+}
+
+private func fixtureCADSource(_ seed: String) throws -> ProjectPackageCADSource {
+    try ProjectPackageCADSource(data: Data("{\"fixture\":\"\(seed)\"}".utf8))
 }
 
 private func adjunctPayload(

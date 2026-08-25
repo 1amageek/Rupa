@@ -3,8 +3,9 @@ import RupaCoreTypes
 
 public struct ProjectPackageManifest: Codable, Equatable, Sendable {
     public static let format = "rupa.project"
-    public static let currentSchemaVersion: UInt32 = 1
+    public static let currentSchemaVersion: UInt32 = 2
     public static let sourceMetadataPath = "source/rupa.json"
+    public static let cadSourcePath = "source/cad.json"
 
     public let packageFormat: String
     public let packageSchemaVersion: UInt32
@@ -87,11 +88,12 @@ public struct ProjectPackageManifest: Codable, Equatable, Sendable {
         _ entries: [ProjectPackageSourceEntry]
     ) throws {
         guard !entries.isEmpty,
-            entries.contains(where: { $0.path == sourceMetadataPath })
+            entries.contains(where: { $0.path == sourceMetadataPath }),
+            entries.contains(where: { $0.path == cadSourcePath })
         else {
             throw ProjectPackageError(
                 code: .missingEntry,
-                message: "Project packages require source/rupa.json."
+                message: "Project packages require source/cad.json and source/rupa.json."
             )
         }
         var paths: Set<String> = []

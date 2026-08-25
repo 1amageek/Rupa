@@ -71,6 +71,7 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
             )
             let validated = try load(from: temporaryURL)
             guard validated.source == document.source,
+                validated.cadSource == document.cadSource,
                 validated.persistedContentIdentity == prepared.manifest.documentContentIdentity
             else {
                 throw ProjectPackageError(
@@ -145,6 +146,35 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
             )
         }
         try validateDeclaredSourcePaths(manifest, backing: backing)
+
+        guard let cadEntry = manifest.sourceEntry(at: ProjectPackageManifest.cadSourcePath),
+            cadEntry.mediaType == ProjectPackageCADSource.mediaType,
+            cadEntry.schemaVersion == ProjectPackageCADSource.schemaVersion,
+            cadEntry.fingerprint.algorithm == ProjectPackageCADSource.fingerprintAlgorithm,
+            cadEntry.byteCount <= UInt64(limits.maximumCADSourceByteCount),
+            let cadDescriptor = backing.entries[cadEntry.path]
+        else {
+            throw ProjectPackageError(
+                code: .invalidManifest,
+                message: "Project package CAD source declaration is unsupported."
+            )
+        }
+        maximumReadChunkByteCount = max(
+            maximumReadChunkByteCount,
+            try backing.validate(
+                cadDescriptor,
+                against: cadEntry,
+                maximumChunkByteCount: limits.maximumChunkByteCount
+            )
+        )
+        let cadData = try backing.materialize(
+            cadDescriptor,
+            maximumByteCount: limits.maximumCADSourceByteCount
+        )
+        let cadSource = try ProjectPackageCADSource(
+            data: cadData,
+            declaredEntry: cadEntry
+        )
 
         guard let metadataEntry = manifest.sourceEntry(
             at: ProjectPackageManifest.sourceMetadataPath
@@ -254,6 +284,7 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
 
         for sourceEntry in manifest.sourceEntries
         where sourceEntry.path != ProjectPackageManifest.sourceMetadataPath
+            && sourceEntry.path != ProjectPackageManifest.cadSourcePath
             && !referencedBlobPaths.contains(sourceEntry.path)
         {
             let reference = try ProjectSourceBlobReference(entry: sourceEntry)
@@ -313,6 +344,7 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
         )
         return ProjectPackageDocument(
             source: project,
+            cadSource: cadSource,
             manifest: manifest,
             backing: backing,
             loadReport: report
@@ -366,13 +398,21 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
         _ document: ProjectPackageDocument
     ) throws -> ProjectPackagePreparedOutput {
         let plan = try ProjectPackageSourcePlanner(limits: limits).plan(document.source)
-        var sourceEntries = plan.manifest.sourceEntries
+        guard document.cadSource.data.count <= limits.maximumCADSourceByteCount else {
+            throw ProjectPackageError(
+                code: .resourceLimitExceeded,
+                message: "Project CAD source exceeds its configured limit."
+            )
+        }
+        var sourceEntries = [plan.sourceEntry, document.cadSource.sourceEntry]
+        sourceEntries.append(contentsOf: try plan.blobs.map { try $0.reference.sourceEntry })
         let activePaths = Set(sourceEntries.map(\.path))
         if document.retainsUnreferencedSourceBlobs,
             let oldManifest = document.manifest
         {
             for entry in oldManifest.sourceEntries
             where entry.path != ProjectPackageManifest.sourceMetadataPath
+                && entry.path != ProjectPackageManifest.cadSourcePath
                 && !activePaths.contains(entry.path)
             {
                 sourceEntries.append(entry)
@@ -403,6 +443,20 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
                 ($0.path, $0)
             }
         )
+        if let backing = document.backing,
+            oldSourceEntries[ProjectPackageManifest.cadSourcePath]
+                == document.cadSource.sourceEntry,
+            let descriptor = backing.entries[ProjectPackageManifest.cadSourcePath]
+        {
+            entries.append(.retained(descriptor))
+        } else {
+            entries.append(
+                .data(
+                    path: ProjectPackageManifest.cadSourcePath,
+                    value: document.cadSource.data
+                )
+            )
+        }
         for blob in plan.blobs {
             if let backing = document.backing,
                 oldSourceEntries[blob.reference.path] == (try blob.reference.sourceEntry),
@@ -424,6 +478,7 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
             let activeBlobPaths = Set(plan.blobs.map(\.reference.path))
             for entry in oldManifest.sourceEntries
             where entry.path != ProjectPackageManifest.sourceMetadataPath
+                && entry.path != ProjectPackageManifest.cadSourcePath
                 && !activeBlobPaths.contains(entry.path)
             {
                 guard let descriptor = backing.entries[entry.path] else {

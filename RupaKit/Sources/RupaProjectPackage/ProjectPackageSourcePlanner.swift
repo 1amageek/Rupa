@@ -105,28 +105,17 @@ struct ProjectPackageSourcePlanner {
             byteCount: UInt64(sourceData.count),
             fingerprint: sourceFingerprint
         )
-        let blobEntries = try blobs.map { try $0.reference.sourceEntry }
-        let entries = [sourceEntry] + blobEntries
-        guard entries.count + 1 <= limits.maximumEntryCount else {
+        let requiredEntryCount = blobs.count.addingReportingOverflow(3)
+        guard !requiredEntryCount.overflow,
+            requiredEntryCount.partialValue <= limits.maximumEntryCount
+        else {
             throw ProjectPackageError(
                 code: .resourceLimitExceeded,
                 message: "Project source entry count exceeds its configured limit."
             )
         }
-        let manifest = try ProjectPackageManifest(
-            documentID: project.id,
-            sourceEntries: entries
-        )
-        let manifestData = try ProjectPackageCanonicalJSON.encode(manifest)
-        guard manifestData.count <= limits.maximumManifestByteCount else {
-            throw ProjectPackageError(
-                code: .resourceLimitExceeded,
-                message: "Project package manifest exceeds its configured limit."
-            )
-        }
         return ProjectPackageSourcePlan(
-            manifest: manifest,
-            manifestData: manifestData,
+            sourceEntry: sourceEntry,
             sourceData: sourceData,
             blobs: blobs,
             telemetry: updatedTelemetry

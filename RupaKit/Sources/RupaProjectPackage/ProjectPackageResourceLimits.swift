@@ -10,6 +10,7 @@ public struct ProjectPackageResourceLimits: Equatable, Sendable {
             maximumArchiveByteCount: archiveLimit,
             maximumEntryCount: 4_096,
             maximumManifestByteCount: 4 * 1_024 * 1_024,
+            maximumCADSourceByteCount: 64 * 1_024 * 1_024,
             maximumSourceMetadataByteCount: 64 * 1_024 * 1_024,
             maximumSourceBlobByteCount: archiveLimit,
             maximumPreservedAdjunctByteCount: min(
@@ -24,6 +25,7 @@ public struct ProjectPackageResourceLimits: Equatable, Sendable {
     public var maximumArchiveByteCount: UInt64
     public var maximumEntryCount: Int
     public var maximumManifestByteCount: Int
+    public var maximumCADSourceByteCount: Int
     public var maximumSourceMetadataByteCount: Int
     public var maximumSourceBlobByteCount: UInt64
     public var maximumPreservedAdjunctByteCount: UInt64
@@ -34,6 +36,7 @@ public struct ProjectPackageResourceLimits: Equatable, Sendable {
         maximumArchiveByteCount: UInt64,
         maximumEntryCount: Int,
         maximumManifestByteCount: Int,
+        maximumCADSourceByteCount: Int,
         maximumSourceMetadataByteCount: Int,
         maximumSourceBlobByteCount: UInt64,
         maximumPreservedAdjunctByteCount: UInt64,
@@ -43,6 +46,7 @@ public struct ProjectPackageResourceLimits: Equatable, Sendable {
         self.maximumArchiveByteCount = maximumArchiveByteCount
         self.maximumEntryCount = maximumEntryCount
         self.maximumManifestByteCount = maximumManifestByteCount
+        self.maximumCADSourceByteCount = maximumCADSourceByteCount
         self.maximumSourceMetadataByteCount = maximumSourceMetadataByteCount
         self.maximumSourceBlobByteCount = maximumSourceBlobByteCount
         self.maximumPreservedAdjunctByteCount = maximumPreservedAdjunctByteCount
@@ -56,11 +60,13 @@ public struct ProjectPackageResourceLimits: Equatable, Sendable {
             maximumEntryCount > 0,
             maximumEntryCount <= Int(UInt16.max),
             maximumManifestByteCount > 0,
+            maximumCADSourceByteCount > 0,
             maximumSourceMetadataByteCount > 0,
             maximumSourceBlobByteCount > 0,
             maximumSourceBlobByteCount <= UInt64(UInt32.max),
             maximumChunkByteCount > 0,
             UInt64(maximumManifestByteCount) <= maximumArchiveByteCount,
+            UInt64(maximumCADSourceByteCount) <= maximumArchiveByteCount,
             UInt64(maximumSourceMetadataByteCount) <= maximumArchiveByteCount,
             maximumSourceBlobByteCount <= maximumArchiveByteCount,
             maximumPreservedAdjunctByteCount <= maximumArchiveByteCount,

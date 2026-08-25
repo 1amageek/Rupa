@@ -1,10 +1,11 @@
 import RupaCoreTypes
 import RupaProjectModel
 
-/// Retains the editable source plus mapped package ownership needed for opaque
-/// adjunct preservation and byte-identical reuse of unchanged source blobs.
+/// Retains the coherent CAD and universal source aggregate plus mapped package
+/// ownership needed for adjunct preservation and byte-identical source reuse.
 public struct ProjectPackageDocument: Sendable {
     public let source: ProjectSourceModel
+    public let cadSource: ProjectPackageCADSource
     public let persistedContentIdentity: DocumentContentIdentity?
     public let loadReport: ProjectPackageIOReport?
 
@@ -12,7 +13,10 @@ public struct ProjectPackageDocument: Sendable {
     let manifest: ProjectPackageManifest?
     let retainsUnreferencedSourceBlobs: Bool
 
-    public init(source: ProjectSourceModel) throws {
+    public init(
+        source: ProjectSourceModel,
+        cadSource: ProjectPackageCADSource
+    ) throws {
         do {
             try source.validate()
         } catch {
@@ -22,6 +26,7 @@ public struct ProjectPackageDocument: Sendable {
             )
         }
         self.source = source
+        self.cadSource = cadSource
         persistedContentIdentity = nil
         loadReport = nil
         backing = nil
@@ -31,12 +36,14 @@ public struct ProjectPackageDocument: Sendable {
 
     init(
         source: ProjectSourceModel,
+        cadSource: ProjectPackageCADSource,
         manifest: ProjectPackageManifest,
         backing: ProjectPackageArchiveBacking,
         loadReport: ProjectPackageIOReport,
         retainsUnreferencedSourceBlobs: Bool = true
     ) {
         self.source = source
+        self.cadSource = cadSource
         persistedContentIdentity = manifest.documentContentIdentity
         self.loadReport = loadReport
         self.backing = backing
@@ -44,8 +51,9 @@ public struct ProjectPackageDocument: Sendable {
         self.retainsUnreferencedSourceBlobs = retainsUnreferencedSourceBlobs
     }
 
-    public func replacingSource(
-        _ source: ProjectSourceModel
+    public func replacingSources(
+        project source: ProjectSourceModel,
+        cad cadSource: ProjectPackageCADSource
     ) throws -> ProjectPackageDocument {
         do {
             try source.validate()
@@ -57,6 +65,7 @@ public struct ProjectPackageDocument: Sendable {
         }
         return ProjectPackageDocument(
             source: source,
+            cadSource: cadSource,
             persistedContentIdentity: nil,
             loadReport: loadReport,
             backing: backing,
@@ -68,6 +77,7 @@ public struct ProjectPackageDocument: Sendable {
     public func garbageCollectingUnreferencedSourceBlobs() -> ProjectPackageDocument {
         ProjectPackageDocument(
             source: source,
+            cadSource: cadSource,
             persistedContentIdentity: nil,
             loadReport: loadReport,
             backing: backing,
@@ -78,6 +88,7 @@ public struct ProjectPackageDocument: Sendable {
 
     private init(
         source: ProjectSourceModel,
+        cadSource: ProjectPackageCADSource,
         persistedContentIdentity: DocumentContentIdentity?,
         loadReport: ProjectPackageIOReport?,
         backing: ProjectPackageArchiveBacking?,
@@ -85,6 +96,7 @@ public struct ProjectPackageDocument: Sendable {
         retainsUnreferencedSourceBlobs: Bool
     ) {
         self.source = source
+        self.cadSource = cadSource
         self.persistedContentIdentity = persistedContentIdentity
         self.loadReport = loadReport
         self.backing = backing

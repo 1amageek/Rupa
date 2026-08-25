@@ -45,12 +45,13 @@
   - [x] Cover success, stale revision, failure, dry run, one revision increment, and undo restoration
   - [x] Review T01 integration and run focused verification
   - [x] Commit the reviewed T01 sprint
-- [ ] F05-C CAD source in the project package aggregate
-  - [ ] Define package-owned CAD source entry metadata without moving CAD encoding semantics into the package target
-  - [ ] Persist and restore source/cad.json with source/rupa.json and referenced source blobs
-  - [ ] Preserve CAD source bytes and identity through replacement, adjunct preservation, and failed atomic saves
-  - [ ] Cover round trip, corruption, missing CAD source, identity, reuse, and bounded I/O
-  - [ ] Review F05-C, run focused verification, and commit the sprint
+- [x] F05-C CAD source in the project package aggregate
+  - [x] Define package-owned CAD source entry metadata without moving CAD encoding semantics into the package target
+  - [x] Persist and restore source/cad.json with source/rupa.json and referenced source blobs
+  - [x] Preserve CAD source bytes and identity through replacement, adjunct preservation, and failed atomic saves
+  - [x] Cover round trip, corruption, missing CAD source, identity, reuse, and bounded I/O
+  - [x] Review F05-C and run focused verification
+  - [x] Commit the reviewed F05-C sprint
 - [ ] T03-A bounded ProjectController integration
   - [ ] Require caller-provided expected transaction revisions before staging and before publication
   - [ ] Own one editable session and retained project-package aggregate without absorbing CAD semantics

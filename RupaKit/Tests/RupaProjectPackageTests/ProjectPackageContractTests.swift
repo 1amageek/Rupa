@@ -26,10 +26,23 @@ func projectPackagePlanningIsDeterministicAndUsesBoundedBorrowedChunks() throws 
 
     let firstPlan = try planner.plan(forward)
     let secondPlan = try planner.plan(reverse)
+    let cadEntry = try ProjectPackageCADSource(
+        data: Data("{\"fixture\":\"contract\"}".utf8)
+    ).sourceEntry
+    let firstManifest = try ProjectPackageManifest(
+        documentID: forward.id,
+        sourceEntries: [firstPlan.sourceEntry, cadEntry]
+            + firstPlan.blobs.map { try $0.reference.sourceEntry }
+    )
+    let secondManifest = try ProjectPackageManifest(
+        documentID: reverse.id,
+        sourceEntries: [secondPlan.sourceEntry, cadEntry]
+            + secondPlan.blobs.map { try $0.reference.sourceEntry }
+    )
 
-    #expect(firstPlan.manifestData == secondPlan.manifestData)
     #expect(firstPlan.sourceData == secondPlan.sourceData)
-    #expect(firstPlan.documentContentIdentity == secondPlan.documentContentIdentity)
+    #expect(firstManifest == secondManifest)
+    #expect(firstManifest.documentContentIdentity == secondManifest.documentContentIdentity)
     #expect(firstPlan.blobs.map(\.reference.path) == secondPlan.blobs.map(\.reference.path))
     #expect(firstPlan.blobs.allSatisfy { $0.maximumEncodedChunkByteCount <= 17 })
     #expect(firstPlan.telemetry.events.count == 2)
@@ -49,6 +62,9 @@ func projectPackageContentIdentityIsIndependentOfManifestEntryOrder() throws {
         path: ProjectPackageManifest.sourceMetadataPath,
         seed: "metadata"
     )
+    let cad = try ProjectPackageCADSource(
+        data: Data("{\"fixture\":\"identity\"}".utf8)
+    ).sourceEntry
     let fingerprint = try fingerprint(seed: "mesh")
     let blob = try ProjectSourceBlobReference(
         mediaType: ProjectPackageMeshDigestSink.mediaType,
@@ -59,11 +75,11 @@ func projectPackageContentIdentityIsIndependentOfManifestEntryOrder() throws {
 
     let first = try ProjectPackageManifest(
         documentID: "project.identity",
-        sourceEntries: [metadata, blob]
+        sourceEntries: [metadata, cad, blob]
     )
     let second = try ProjectPackageManifest(
         documentID: "project.identity",
-        sourceEntries: [blob, metadata]
+        sourceEntries: [blob, metadata, cad]
     )
 
     #expect(first == second)
@@ -86,16 +102,25 @@ func projectPackageContractsRejectTraversalDuplicatesAndAlteredIdentity() throws
         path: ProjectPackageManifest.sourceMetadataPath,
         seed: "metadata"
     )
+    let cad = try ProjectPackageCADSource(
+        data: Data("{\"fixture\":\"contract\"}".utf8)
+    ).sourceEntry
+    #expect(projectPackageErrorCode {
+        _ = try ProjectPackageManifest(
+            documentID: "project.missing-cad",
+            sourceEntries: [metadata]
+        )
+    } == .missingEntry)
     #expect(projectPackageErrorCode {
         _ = try ProjectPackageManifest(
             documentID: "project.duplicate",
-            sourceEntries: [metadata, metadata]
+            sourceEntries: [metadata, cad, metadata]
         )
     } == .duplicateEntry)
 
     let manifest = try ProjectPackageManifest(
         documentID: "project.tamper",
-        sourceEntries: [metadata]
+        sourceEntries: [metadata, cad]
     )
     let encoded = try ProjectPackageCanonicalJSON.encode(manifest)
     let original = manifest.documentContentIdentity.content.fingerprint.value
