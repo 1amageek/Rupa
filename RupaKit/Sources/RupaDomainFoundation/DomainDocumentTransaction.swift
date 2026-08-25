@@ -7,6 +7,7 @@ public struct DomainDocumentTransaction: Codable, Equatable, Sendable {
     public var sourceCommands: [EditorCommand]
     public var semanticMutations: [SemanticExtensionMutation]
     public var expectedGeneration: DocumentGeneration?
+    public var expectedTransactionRevision: DocumentTransactionRevision?
     public var resultPayload: SemanticJSONValue?
 
     public init(
@@ -14,12 +15,14 @@ public struct DomainDocumentTransaction: Codable, Equatable, Sendable {
         sourceCommands: [EditorCommand],
         semanticMutations: [SemanticExtensionMutation],
         expectedGeneration: DocumentGeneration? = nil,
+        expectedTransactionRevision: DocumentTransactionRevision? = nil,
         resultPayload: SemanticJSONValue? = nil
     ) {
         self.name = name
         self.sourceCommands = sourceCommands
         self.semanticMutations = semanticMutations
         self.expectedGeneration = expectedGeneration
+        self.expectedTransactionRevision = expectedTransactionRevision
         self.resultPayload = resultPayload
     }
 

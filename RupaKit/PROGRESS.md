@@ -38,3 +38,28 @@
   - [x] Verify focused package contracts and direct downstream macOS paths from a clean snapshot
   - [x] Verify ordinary WASM compile, link, and runtime package round trip
   - [x] Review cumulative changes and record completion evidence
+- [x] T01-CAD/project coherent source transaction
+  - [x] Freeze the source aggregate, transaction-revision, staging, history, and publication ownership contracts
+  - [x] Add one session-owned transaction revision independent from internal document generations
+  - [x] Stage and publish CAD source, history, selection pruning, and transaction revision as one coherent session state
+  - [x] Cover success, stale revision, failure, dry run, one revision increment, and undo restoration
+  - [x] Review T01 integration and run focused verification
+  - [x] Commit the reviewed T01 sprint
+- [ ] F05-C CAD source in the project package aggregate
+  - [ ] Define package-owned CAD source entry metadata without moving CAD encoding semantics into the package target
+  - [ ] Persist and restore source/cad.json with source/rupa.json and referenced source blobs
+  - [ ] Preserve CAD source bytes and identity through replacement, adjunct preservation, and failed atomic saves
+  - [ ] Cover round trip, corruption, missing CAD source, identity, reuse, and bounded I/O
+  - [ ] Review F05-C, run focused verification, and commit the sprint
+- [ ] T03-A bounded ProjectController integration
+  - [ ] Require caller-provided expected transaction revisions before staging and before publication
+  - [ ] Own one editable session and retained project-package aggregate without absorbing CAD semantics
+  - [ ] Project and evaluate the staged CAD source before publishing CAD and universal project state
+  - [ ] Route source commit and package load/save through the same ordered project boundary
+  - [ ] Cover concurrent callers, stale requests, failed evaluation, failed save, and retained aggregate publication
+  - [ ] Review T03-A, run focused verification, and commit the sprint
+- [ ] Integrated CAD/project transaction verification
+  - [ ] Re-run incomplete-marker, synchronization, ownership, and zero-copy audits
+  - [ ] Verify focused Core, DomainFoundation, Project, CAD integration, package, and bridge tests
+  - [ ] Verify the direct ProjectController transaction and package routes without changing the deferred RupaKit application composition
+  - [ ] Review cumulative changes, remove obsolete status text, and record completion evidence

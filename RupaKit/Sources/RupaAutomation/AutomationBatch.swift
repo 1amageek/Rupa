@@ -4,15 +4,18 @@ import RupaCore
 public struct AutomationBatch: Codable, Equatable, Sendable {
     public var commands: [AutomationCommand]
     public var expectedGeneration: DocumentGeneration?
+    public var expectedTransactionRevision: DocumentTransactionRevision?
     public var expectedWorkspaceRevision: WorkspaceRevision?
 
     public init(
         commands: [AutomationCommand],
         expectedGeneration: DocumentGeneration? = nil,
+        expectedTransactionRevision: DocumentTransactionRevision? = nil,
         expectedWorkspaceRevision: WorkspaceRevision? = nil
     ) {
         self.commands = commands
         self.expectedGeneration = expectedGeneration
+        self.expectedTransactionRevision = expectedTransactionRevision
         self.expectedWorkspaceRevision = expectedWorkspaceRevision
     }
 

@@ -14,6 +14,7 @@ func sourceCommandGroupEvaluatesAndRecordsHistoryOnce() throws {
     #expect(names.isEmpty)
     #expect(session.document.cadDocument.metadata.name == "After")
     #expect(session.generation == DocumentGeneration(2))
+    #expect(session.transactionRevision == DocumentTransactionRevision(1))
     #expect(session.store.completedEvaluationPassCount == 1)
     #expect(session.commandStack.undoEntries.count == 1)
     #expect(session.commandStack.undoEntries.first?.commandName == "fixture.group")
@@ -21,6 +22,7 @@ func sourceCommandGroupEvaluatesAndRecordsHistoryOnce() throws {
     _ = try session.undo()
 
     #expect(session.document.cadDocument.metadata.name == "Before")
+    #expect(session.transactionRevision == DocumentTransactionRevision(2))
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -37,6 +39,7 @@ func sourceCommandGroupFailureRestoresSourceHistoryAndEvaluation() throws {
 
     #expect(session.document.cadDocument.metadata.name == "Before")
     #expect(session.generation == DocumentGeneration())
+    #expect(session.transactionRevision == DocumentTransactionRevision())
     #expect(session.commandStack.undoEntries.isEmpty)
     #expect(session.commandStack.redoEntries.isEmpty)
     #expect(session.evaluationSnapshot == initialEvaluation)
@@ -57,5 +60,6 @@ func sourceCommandGroupsRejectWorkspaceMutation() throws {
     #expect(session.document.cadDocument.metadata.name == "Before")
     #expect(session.workspaceState.displayUnit == .millimeter)
     #expect(session.generation == DocumentGeneration())
+    #expect(session.transactionRevision == DocumentTransactionRevision())
     #expect(session.workspaceState.revision == WorkspaceRevision())
 }

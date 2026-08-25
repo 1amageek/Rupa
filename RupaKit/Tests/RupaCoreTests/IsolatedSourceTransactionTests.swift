@@ -20,20 +20,24 @@ func isolatedTransactionCommitsMultipleMutationsAsOneUndoEntry() throws {
     #expect(execution.value == "After")
     #expect(execution.baseGeneration == DocumentGeneration(0))
     #expect(execution.proposedGeneration == DocumentGeneration(2))
+    #expect(execution.baseTransactionRevision == DocumentTransactionRevision(0))
+    #expect(execution.proposedTransactionRevision == DocumentTransactionRevision(1))
     #expect(execution.didCommit)
     #expect(session.commandStack.undoEntries.count == 1)
     #expect(session.commandStack.undoEntries.first?.commandName == "fixture.atomic")
     #expect(session.document.cadDocument.metadata.name == "After")
     #expect(session.store !== originalStore)
-    #expect(session.commandStack === originalCommandStack)
+    #expect(session.commandStack !== originalCommandStack)
     #expect(originalStore.document.cadDocument.metadata.name == "Before")
     #expect(originalStore.generation == DocumentGeneration(0))
-    #expect(originalCommandStack.undoEntries.count == 1)
+    #expect(originalCommandStack.undoEntries.isEmpty)
+    #expect(session.transactionRevision == DocumentTransactionRevision(1))
 
     _ = try session.undo()
 
     #expect(session.document.cadDocument.metadata.name == "Before")
     #expect(session.workspaceState.displayUnit == .millimeter)
+    #expect(session.transactionRevision == DocumentTransactionRevision(2))
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -54,6 +58,8 @@ func isolatedTransactionDryRunDoesNotPublishStagedState() throws {
 
     #expect(execution.value == "Proposed")
     #expect(execution.proposedGeneration == DocumentGeneration(1))
+    #expect(execution.baseTransactionRevision == DocumentTransactionRevision(0))
+    #expect(execution.proposedTransactionRevision == DocumentTransactionRevision(1))
     #expect(!execution.didCommit)
     #expect(session.document.cadDocument.metadata.name == "Before")
     #expect(session.generation == DocumentGeneration(0))
@@ -62,6 +68,7 @@ func isolatedTransactionDryRunDoesNotPublishStagedState() throws {
     #expect(session.evaluationStatus == initialEvaluationStatus)
     #expect(session.store === originalStore)
     #expect(session.commandStack === originalCommandStack)
+    #expect(session.transactionRevision == DocumentTransactionRevision(0))
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -90,6 +97,7 @@ func isolatedTransactionFailureLeavesDocumentAndHistoryUnchanged() throws {
     #expect(session.commandStack.redoEntries.isEmpty)
     #expect(session.store === originalStore)
     #expect(session.commandStack === originalCommandStack)
+    #expect(session.transactionRevision == DocumentTransactionRevision(0))
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -115,5 +123,54 @@ func isolatedSourceTransactionRejectsWorkspaceMutation() throws {
     #expect(session.workspaceState.displayUnit == .millimeter)
     #expect(session.workspaceState.revision == initialWorkspaceRevision)
     #expect(session.generation == DocumentGeneration(0))
+    #expect(session.commandStack.undoEntries.isEmpty)
+    #expect(session.transactionRevision == DocumentTransactionRevision(0))
+}
+
+@Test(.timeLimit(.minutes(1)))
+func preparedSourceTransactionRejectsStalePublication() throws {
+    let session = EditorSession(document: .empty(named: "Before"))
+    let prepared = try session.prepareIsolatedSourceTransaction(
+        commandName: "fixture.prepared",
+        expectedTransactionRevision: DocumentTransactionRevision(0)
+    ) { stagedSession in
+        try stagedSession.commandStack.execute(
+            .renameDocument(name: "Prepared"),
+            in: stagedSession.store
+        )
+    }
+
+    _ = try session.execute(
+        .renameDocument(name: "Concurrent"),
+        expectedTransactionRevision: DocumentTransactionRevision(0)
+    )
+
+    var caught: EditorError?
+    do {
+        try session.commitPreparedSourceTransaction(prepared)
+    } catch let error as EditorError {
+        caught = error
+    }
+
+    #expect(caught?.code == .documentTransactionRevisionMismatch)
+    #expect(session.document.cadDocument.metadata.name == "Concurrent")
+    #expect(session.transactionRevision == DocumentTransactionRevision(1))
+    #expect(session.commandStack.undoEntries.count == 1)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func sourceCommandRejectsStaleTransactionRevisionBeforeMutation() throws {
+    let session = EditorSession(document: .empty(named: "Before"))
+
+    #expect(throws: EditorError.self) {
+        _ = try session.execute(
+            .renameDocument(name: "Never Published"),
+            expectedTransactionRevision: DocumentTransactionRevision(1)
+        )
+    }
+
+    #expect(session.document.cadDocument.metadata.name == "Before")
+    #expect(session.generation == DocumentGeneration(0))
+    #expect(session.transactionRevision == DocumentTransactionRevision(0))
     #expect(session.commandStack.undoEntries.isEmpty)
 }

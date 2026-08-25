@@ -1,10 +1,11 @@
 public extension EditorSession {
-    func executeIsolatedSourceTransaction<Value>(
+    func prepareIsolatedSourceTransaction<Value>(
         commandName: String,
-        commits: Bool,
+        expectedTransactionRevision: DocumentTransactionRevision? = nil,
         _ operation: (EditorSession) throws -> Value
-    ) throws -> IsolatedSourceTransactionExecution<Value> {
-        let baseGeneration = generation
+    ) throws -> PreparedEditorSourceTransaction<Value> {
+        try requireTransactionRevision(expectedTransactionRevision)
+        let baseTransactionRevision = transactionRevision
         let initialSnapshot = isolatedTransactionSnapshot()
         let stagedSession = makeIsolatedTransactionSession(from: initialSnapshot)
 
@@ -14,12 +15,17 @@ public extension EditorSession {
             from: initialSnapshot,
             transactionName: "Isolated source transactions"
         )
+        try requireOnlyPrunedSelectionState(
+            in: stagedSession,
+            from: initialSnapshot,
+            transactionName: "Isolated source transactions"
+        )
         stagedSession.commandStack.collapseUndoEntries(
             startingAt: 0,
             commandName: commandName
         )
         let proposedGeneration = stagedSession.generation
-        let didMutateSource = proposedGeneration != baseGeneration
+        let didMutateSource = proposedGeneration != initialSnapshot.store.document.generation
         guard stagedSession.commandStack.undoEntries.count == (didMutateSource ? 1 : 0) else {
             throw EditorError(
                 code: .commandFailed,
@@ -27,19 +33,50 @@ public extension EditorSession {
             )
         }
 
-        if commits, didMutateSource {
-            publishIsolatedSourceTransaction(
-                stagedSession.transactionSnapshot(),
-                commandName: commandName,
-                before: initialSnapshot.store.document
-            )
-        }
-
-        return IsolatedSourceTransactionExecution(
+        let proposedTransactionRevision = didMutateSource
+            ? try baseTransactionRevision.advanced()
+            : baseTransactionRevision
+        var after = stagedSession.transactionSnapshot()
+        after.transactionRevision = proposedTransactionRevision
+        return PreparedEditorSourceTransaction(
             value: value,
-            baseGeneration: baseGeneration,
-            proposedGeneration: proposedGeneration,
-            didCommit: commits && didMutateSource
+            ownerID: sourceTransactionOwnerID,
+            commandName: commandName,
+            before: initialSnapshot.store.document,
+            after: after,
+            baseTransactionRevision: baseTransactionRevision,
+            proposedTransactionRevision: proposedTransactionRevision,
+            wouldMutate: didMutateSource
+        )
+    }
+
+    func commitPreparedSourceTransaction<Value>(
+        _ prepared: PreparedEditorSourceTransaction<Value>
+    ) throws {
+        try publishPreparedSourceTransaction(prepared)
+    }
+
+    func executeIsolatedSourceTransaction<Value>(
+        commandName: String,
+        commits: Bool,
+        expectedTransactionRevision: DocumentTransactionRevision? = nil,
+        _ operation: (EditorSession) throws -> Value
+    ) throws -> IsolatedSourceTransactionExecution<Value> {
+        let prepared = try prepareIsolatedSourceTransaction(
+            commandName: commandName,
+            expectedTransactionRevision: expectedTransactionRevision,
+            operation
+        )
+        if commits {
+            try commitPreparedSourceTransaction(prepared)
+        }
+        return IsolatedSourceTransactionExecution(
+            value: prepared.value,
+            baseGeneration: prepared.baseGeneration,
+            proposedGeneration: prepared.proposedGeneration,
+            baseTransactionRevision: prepared.baseTransactionRevision,
+            proposedTransactionRevision: prepared.proposedTransactionRevision,
+            didCommit: commits && prepared.wouldMutate
         )
     }
 }

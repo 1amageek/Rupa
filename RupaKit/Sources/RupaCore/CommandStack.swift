@@ -40,6 +40,10 @@ public final class CommandStack {
         !redoEntries.isEmpty
     }
 
+    var isExecutingGroupedSourceCommands: Bool {
+        groupedExecution != nil
+    }
+
     public func snapshot() -> CommandStackSnapshot {
         CommandStackSnapshot(
             undoEntries: undoEntries,

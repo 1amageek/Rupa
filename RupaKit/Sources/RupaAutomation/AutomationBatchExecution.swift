@@ -6,6 +6,8 @@ public struct AutomationBatchExecution: Sendable {
     public var effect: AutomationCommandEffect
     public var baseGeneration: DocumentGeneration
     public var proposedGeneration: DocumentGeneration
+    public var baseTransactionRevision: DocumentTransactionRevision
+    public var proposedTransactionRevision: DocumentTransactionRevision
     public var baseWorkspaceRevision: WorkspaceRevision
     public var proposedWorkspaceRevision: WorkspaceRevision
     public var didCommit: Bool
@@ -16,6 +18,8 @@ public struct AutomationBatchExecution: Sendable {
         effect: AutomationCommandEffect,
         baseGeneration: DocumentGeneration,
         proposedGeneration: DocumentGeneration,
+        baseTransactionRevision: DocumentTransactionRevision = DocumentTransactionRevision(),
+        proposedTransactionRevision: DocumentTransactionRevision = DocumentTransactionRevision(),
         baseWorkspaceRevision: WorkspaceRevision,
         proposedWorkspaceRevision: WorkspaceRevision,
         didCommit: Bool,
@@ -25,6 +29,8 @@ public struct AutomationBatchExecution: Sendable {
         self.effect = effect
         self.baseGeneration = baseGeneration
         self.proposedGeneration = proposedGeneration
+        self.baseTransactionRevision = baseTransactionRevision
+        self.proposedTransactionRevision = proposedTransactionRevision
         self.baseWorkspaceRevision = baseWorkspaceRevision
         self.proposedWorkspaceRevision = proposedWorkspaceRevision
         self.didCommit = didCommit

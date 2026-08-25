@@ -9,6 +9,9 @@ public struct DomainExecutionResult: Codable, Equatable, Sendable {
     public var baseGeneration: DocumentGeneration
     public var generation: DocumentGeneration
     public var proposedGeneration: DocumentGeneration
+    public var baseTransactionRevision: DocumentTransactionRevision
+    public var transactionRevision: DocumentTransactionRevision
+    public var proposedTransactionRevision: DocumentTransactionRevision
     public var didMutate: Bool
     public var wouldMutate: Bool
     public var dryRun: Bool
@@ -27,6 +30,9 @@ public struct DomainExecutionResult: Codable, Equatable, Sendable {
         baseGeneration: DocumentGeneration,
         generation: DocumentGeneration,
         proposedGeneration: DocumentGeneration,
+        baseTransactionRevision: DocumentTransactionRevision = DocumentTransactionRevision(),
+        transactionRevision: DocumentTransactionRevision = DocumentTransactionRevision(),
+        proposedTransactionRevision: DocumentTransactionRevision = DocumentTransactionRevision(),
         didMutate: Bool,
         wouldMutate: Bool,
         dryRun: Bool,
@@ -44,6 +50,9 @@ public struct DomainExecutionResult: Codable, Equatable, Sendable {
         self.baseGeneration = baseGeneration
         self.generation = generation
         self.proposedGeneration = proposedGeneration
+        self.baseTransactionRevision = baseTransactionRevision
+        self.transactionRevision = transactionRevision
+        self.proposedTransactionRevision = proposedTransactionRevision
         self.didMutate = didMutate
         self.wouldMutate = wouldMutate
         self.dryRun = dryRun

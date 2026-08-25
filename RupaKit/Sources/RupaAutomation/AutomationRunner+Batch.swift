@@ -19,6 +19,7 @@ public extension AutomationRunner {
     ) throws -> AutomationBatchExecution {
         let effect = try batch.validatedEffect()
         try session.store.requireGeneration(batch.expectedGeneration)
+        try session.requireTransactionRevision(batch.expectedTransactionRevision)
         try session.workspaceState.requireRevision(batch.expectedWorkspaceRevision)
 
         switch effect {
@@ -36,6 +37,7 @@ public extension AutomationRunner {
         in session: EditorSession
     ) throws -> AutomationBatchExecution {
         let baseGeneration = session.generation
+        let transactionRevision = session.transactionRevision
         let baseWorkspaceRevision = session.workspaceState.revision
         let stage = try session.executeIsolatedReadTransaction { stagedSession in
             try executeStage(batch.commands, in: stagedSession) {
@@ -47,6 +49,8 @@ public extension AutomationRunner {
             effect: .readOnly,
             baseGeneration: baseGeneration,
             proposedGeneration: baseGeneration,
+            baseTransactionRevision: transactionRevision,
+            proposedTransactionRevision: transactionRevision,
             baseWorkspaceRevision: baseWorkspaceRevision,
             proposedWorkspaceRevision: baseWorkspaceRevision,
             didCommit: false,
@@ -62,7 +66,8 @@ public extension AutomationRunner {
         let workspaceRevision = session.workspaceState.revision
         let execution = try session.executeIsolatedSourceTransaction(
             commandName: "automationBatch.source",
-            commits: commits
+            commits: commits,
+            expectedTransactionRevision: batch.expectedTransactionRevision
         ) { stagedSession in
             try executeStage(batch.commands, in: stagedSession) {
                 let results = try stagedSession.withSourceCommandGroup(
@@ -82,6 +87,8 @@ public extension AutomationRunner {
             effect: .sourceMutation,
             baseGeneration: execution.baseGeneration,
             proposedGeneration: execution.proposedGeneration,
+            baseTransactionRevision: execution.baseTransactionRevision,
+            proposedTransactionRevision: execution.proposedTransactionRevision,
             baseWorkspaceRevision: workspaceRevision,
             proposedWorkspaceRevision: workspaceRevision,
             didCommit: execution.didCommit,
@@ -95,6 +102,7 @@ public extension AutomationRunner {
         commits: Bool
     ) throws -> AutomationBatchExecution {
         let generation = session.generation
+        let transactionRevision = session.transactionRevision
         let execution = try session.executeIsolatedWorkspaceTransaction(
             commits: commits
         ) { stagedSession in
@@ -107,6 +115,8 @@ public extension AutomationRunner {
             effect: .workspaceMutation,
             baseGeneration: generation,
             proposedGeneration: generation,
+            baseTransactionRevision: transactionRevision,
+            proposedTransactionRevision: transactionRevision,
             baseWorkspaceRevision: execution.baseRevision,
             proposedWorkspaceRevision: execution.proposedRevision,
             didCommit: execution.didCommit,

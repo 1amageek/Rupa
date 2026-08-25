@@ -23,6 +23,7 @@ public struct DomainCommandExecutor {
         let plan = try registry.lower(request)
         try validate(plan: plan, for: descriptor)
         let baseGeneration = session.generation
+        let baseTransactionRevision = session.transactionRevision
         let result: DomainExecutionResult
         switch plan {
         case .automationBatch(let batch):
@@ -49,7 +50,9 @@ public struct DomainCommandExecutor {
             request: request,
             descriptor: descriptor,
             baseGeneration: baseGeneration,
-            currentGeneration: session.generation
+            currentGeneration: session.generation,
+            baseTransactionRevision: baseTransactionRevision,
+            currentTransactionRevision: session.transactionRevision
         )
         return result
     }
@@ -108,7 +111,9 @@ public struct DomainCommandExecutor {
         request: DomainCommandRequest,
         descriptor: DomainCapabilityDescriptor,
         baseGeneration: DocumentGeneration,
-        currentGeneration: DocumentGeneration
+        currentGeneration: DocumentGeneration,
+        baseTransactionRevision: DocumentTransactionRevision,
+        currentTransactionRevision: DocumentTransactionRevision
     ) throws {
         guard result.capabilityID == request.capabilityID,
               result.namespace == request.namespace,
@@ -119,16 +124,19 @@ public struct DomainCommandExecutor {
             )
         }
         guard result.baseGeneration == baseGeneration,
-              result.generation == currentGeneration else {
+              result.generation == currentGeneration,
+              result.baseTransactionRevision == baseTransactionRevision,
+              result.transactionRevision == currentTransactionRevision else {
             throw EditorError(
                 code: .commandFailed,
-                message: "Domain execution returned inconsistent document generations."
+                message: "Domain execution returned inconsistent document revisions."
             )
         }
         if descriptor.effect == .query {
             guard !result.didMutate,
                   !result.wouldMutate,
-                  result.proposedGeneration == baseGeneration else {
+                  result.proposedGeneration == baseGeneration,
+                  result.proposedTransactionRevision == baseTransactionRevision else {
                 throw EditorError(
                     code: .commandFailed,
                     message: "Query domain capabilities must not propose or commit document mutations."
@@ -144,7 +152,8 @@ public struct DomainCommandExecutor {
     ) throws -> DomainExecutionResult {
         let effectiveBatch = try batchApplyingExpectedGeneration(
             batch,
-            requestExpectedGeneration: request.expectedGeneration
+            requestExpectedGeneration: request.expectedGeneration,
+            requestExpectedTransactionRevision: request.expectedTransactionRevision
         )
         let execution = try automationRunner.executeBatchTransaction(
             effectiveBatch,
@@ -158,6 +167,11 @@ public struct DomainCommandExecutor {
             baseGeneration: execution.baseGeneration,
             generation: request.dryRun ? execution.baseGeneration : execution.proposedGeneration,
             proposedGeneration: execution.proposedGeneration,
+            baseTransactionRevision: execution.baseTransactionRevision,
+            transactionRevision: request.dryRun
+                ? execution.baseTransactionRevision
+                : execution.proposedTransactionRevision,
+            proposedTransactionRevision: execution.proposedTransactionRevision,
             didMutate: execution.didCommit && execution.results.contains { $0.didMutate },
             wouldMutate: execution.results.contains { $0.didMutate },
             dryRun: request.dryRun,
@@ -176,14 +190,20 @@ public struct DomainCommandExecutor {
             planExpectedGeneration: transaction.expectedGeneration,
             requestExpectedGeneration: request.expectedGeneration
         )
+        let effectiveExpectedTransactionRevision = try mergedExpectedTransactionRevision(
+            planExpectedTransactionRevision: transaction.expectedTransactionRevision,
+            requestExpectedTransactionRevision: request.expectedTransactionRevision
+        )
         try session.store.requireGeneration(effectiveExpectedGeneration)
+        try session.requireTransactionRevision(effectiveExpectedTransactionRevision)
         let expectedProposedGeneration = try proposedGeneration(
             from: session.generation,
             mutationCount: transaction.sourceCommands.count + 1
         )
         let execution = try session.executeIsolatedSourceTransaction(
             commandName: transaction.name,
-            commits: !request.dryRun
+            commits: !request.dryRun,
+            expectedTransactionRevision: effectiveExpectedTransactionRevision
         ) { stagedSession in
             let sourceCommandResults = try stagedSession.withSourceCommandGroup(
                 named: transaction.name
@@ -223,6 +243,11 @@ public struct DomainCommandExecutor {
             baseGeneration: execution.baseGeneration,
             generation: request.dryRun ? execution.baseGeneration : execution.proposedGeneration,
             proposedGeneration: execution.proposedGeneration,
+            baseTransactionRevision: execution.baseTransactionRevision,
+            transactionRevision: request.dryRun
+                ? execution.baseTransactionRevision
+                : execution.proposedTransactionRevision,
+            proposedTransactionRevision: execution.proposedTransactionRevision,
             didMutate: execution.didCommit,
             wouldMutate: execution.proposedGeneration != execution.baseGeneration,
             dryRun: request.dryRun,
@@ -239,7 +264,9 @@ public struct DomainCommandExecutor {
         in session: EditorSession
     ) throws -> DomainExecutionResult {
         try session.store.requireGeneration(request.expectedGeneration)
+        try session.requireTransactionRevision(request.expectedTransactionRevision)
         let generation = session.generation
+        let transactionRevision = session.transactionRevision
         let queryResult = try query.execute(
             request,
             in: DomainQueryContext(
@@ -258,6 +285,9 @@ public struct DomainCommandExecutor {
             baseGeneration: generation,
             generation: generation,
             proposedGeneration: generation,
+            baseTransactionRevision: transactionRevision,
+            transactionRevision: transactionRevision,
+            proposedTransactionRevision: transactionRevision,
             didMutate: false,
             wouldMutate: false,
             dryRun: request.dryRun,
@@ -326,7 +356,8 @@ public struct DomainCommandExecutor {
 
     private func batchApplyingExpectedGeneration(
         _ batch: AutomationBatch,
-        requestExpectedGeneration: DocumentGeneration?
+        requestExpectedGeneration: DocumentGeneration?,
+        requestExpectedTransactionRevision: DocumentTransactionRevision?
     ) throws -> AutomationBatch {
         let expectedGeneration = try mergedExpectedGeneration(
             planExpectedGeneration: batch.expectedGeneration,
@@ -335,6 +366,10 @@ public struct DomainCommandExecutor {
         return AutomationBatch(
             commands: batch.commands,
             expectedGeneration: expectedGeneration,
+            expectedTransactionRevision: try mergedExpectedTransactionRevision(
+                planExpectedTransactionRevision: batch.expectedTransactionRevision,
+                requestExpectedTransactionRevision: requestExpectedTransactionRevision
+            ),
             expectedWorkspaceRevision: batch.expectedWorkspaceRevision
         )
     }
@@ -352,6 +387,21 @@ public struct DomainCommandExecutor {
             )
         }
         return planExpectedGeneration ?? requestExpectedGeneration
+    }
+
+    private func mergedExpectedTransactionRevision(
+        planExpectedTransactionRevision: DocumentTransactionRevision?,
+        requestExpectedTransactionRevision: DocumentTransactionRevision?
+    ) throws -> DocumentTransactionRevision? {
+        if let planExpectedTransactionRevision,
+           let requestExpectedTransactionRevision,
+           planExpectedTransactionRevision != requestExpectedTransactionRevision {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Domain command lowering returned a transaction revision that conflicts with the request."
+            )
+        }
+        return planExpectedTransactionRevision ?? requestExpectedTransactionRevision
     }
 
     private func message(for request: DomainCommandRequest) -> String {

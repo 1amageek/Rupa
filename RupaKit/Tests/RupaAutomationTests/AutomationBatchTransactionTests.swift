@@ -195,6 +195,8 @@ func automationSourceBatchDryRunDoesNotPublishSource() async throws {
     #expect(execution.effect == .sourceMutation)
     #expect(execution.baseGeneration == DocumentGeneration(0))
     #expect(execution.proposedGeneration == DocumentGeneration(1))
+    #expect(execution.baseTransactionRevision == DocumentTransactionRevision(0))
+    #expect(execution.proposedTransactionRevision == DocumentTransactionRevision(1))
     #expect(!execution.didCommit)
     #expect(execution.results.map(\.effect) == [.sourceMutation, .readOnly])
     #expect(execution.metrics.commandCount == 2)
@@ -206,7 +208,39 @@ func automationSourceBatchDryRunDoesNotPublishSource() async throws {
     #expect(execution.results.last?.workspaceScale == nil)
     #expect(session.document.cadDocument.metadata.name == "Before")
     #expect(session.generation == DocumentGeneration(0))
+    #expect(session.transactionRevision == DocumentTransactionRevision(0))
     #expect(session.commandStack.undoEntries.isEmpty)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func automationSourceBatchRejectsStaleTransactionRevisionBeforeMutation() throws {
+    let session = EditorSession(document: .empty(named: "Before"))
+    _ = try AutomationRunner().executeBatch(
+        AutomationBatch(
+            commands: [.renameDocument(name: "Committed")],
+            expectedTransactionRevision: DocumentTransactionRevision(0)
+        ),
+        in: session
+    )
+
+    var caught: EditorError?
+    do {
+        _ = try AutomationRunner().executeBatch(
+            AutomationBatch(
+                commands: [.renameDocument(name: "Rejected")],
+                expectedTransactionRevision: DocumentTransactionRevision(0)
+            ),
+            in: session
+        )
+    } catch let error as EditorError {
+        caught = error
+    }
+
+    #expect(caught?.code == .documentTransactionRevisionMismatch)
+    #expect(session.document.cadDocument.metadata.name == "Committed")
+    #expect(session.transactionRevision == DocumentTransactionRevision(1))
+    #expect(session.commandStack.undoEntries.count == 1)
 }
 
 @MainActor

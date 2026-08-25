@@ -6,6 +6,7 @@ public struct DomainCommandRequest: Codable, Equatable, Sendable {
     public var namespace: SemanticNamespaceID
     public var payload: SemanticJSONValue
     public var expectedGeneration: DocumentGeneration?
+    public var expectedTransactionRevision: DocumentTransactionRevision?
     public var dryRun: Bool
 
     public init(
@@ -13,12 +14,14 @@ public struct DomainCommandRequest: Codable, Equatable, Sendable {
         namespace: SemanticNamespaceID,
         payload: SemanticJSONValue,
         expectedGeneration: DocumentGeneration? = nil,
+        expectedTransactionRevision: DocumentTransactionRevision? = nil,
         dryRun: Bool = false
     ) {
         self.capabilityID = capabilityID
         self.namespace = namespace
         self.payload = payload
         self.expectedGeneration = expectedGeneration
+        self.expectedTransactionRevision = expectedTransactionRevision
         self.dryRun = dryRun
     }
 }

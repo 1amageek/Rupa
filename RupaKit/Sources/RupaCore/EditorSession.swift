@@ -9,10 +9,12 @@ public final class EditorSession {
         var store: CADDocumentStore
         var commandStack: CommandStack
         var selection: SelectionModel
+        var workspaceState: WorkspaceState
+        var transactionRevision: DocumentTransactionRevision
     }
 
+    let sourceTransactionOwnerID: UUID
     private var documentState: DocumentState
-    public private(set) var workspaceState: WorkspaceState
 
     public var store: CADDocumentStore {
         documentState.store
@@ -29,6 +31,19 @@ public final class EditorSession {
         set {
             documentState.selection = newValue
         }
+    }
+
+    public private(set) var workspaceState: WorkspaceState {
+        get {
+            documentState.workspaceState
+        }
+        set {
+            documentState.workspaceState = newValue
+        }
+    }
+
+    public var transactionRevision: DocumentTransactionRevision {
+        documentState.transactionRevision
     }
     public private(set) var polygonToolState: PolygonToolState
     public private(set) var sketchInputState: SketchInputState
@@ -115,6 +130,7 @@ public final class EditorSession {
         sketchInputState: SketchInputState = .standard,
         selection: SelectionModel = .empty,
         workspaceState: WorkspaceState = WorkspaceState(),
+        transactionRevision: DocumentTransactionRevision = DocumentTransactionRevision(),
         diagnostics: [EditorDiagnostic] = [],
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) {
@@ -127,12 +143,14 @@ public final class EditorSession {
         initialSelection.pruneMissingReferences(in: document)
         var initialWorkspaceState = workspaceState
         initialWorkspaceState.pruneMissingReferences(in: document)
+        self.sourceTransactionOwnerID = UUID()
         self.documentState = DocumentState(
             store: store,
             commandStack: CommandStack(),
-            selection: initialSelection
+            selection: initialSelection,
+            workspaceState: initialWorkspaceState,
+            transactionRevision: transactionRevision
         )
-        self.workspaceState = initialWorkspaceState
         self.selectedTool = selectedTool
         self.polygonToolState = polygonToolState
         self.sketchInputState = sketchInputState
@@ -143,7 +161,8 @@ public final class EditorSession {
             store: store.transactionSnapshot(),
             commandStack: commandStack.snapshot(),
             selection: selection,
-            workspaceState: workspaceState
+            workspaceState: workspaceState,
+            transactionRevision: transactionRevision
         )
     }
 
@@ -152,7 +171,8 @@ public final class EditorSession {
             store: store.transactionSnapshot(),
             commandStack: CommandStackSnapshot(undoEntries: [], redoEntries: []),
             selection: selection,
-            workspaceState: workspaceState
+            workspaceState: workspaceState,
+            transactionRevision: transactionRevision
         )
     }
 
@@ -167,13 +187,15 @@ public final class EditorSession {
         )
         var restoredSelection = snapshot.selection
         restoredSelection.pruneMissingReferences(in: restoredStore.document)
+        var restoredWorkspaceState = snapshot.workspaceState
+        restoredWorkspaceState.pruneMissingReferences(in: restoredStore.document)
         documentState = DocumentState(
             store: restoredStore,
             commandStack: restoredCommandStack,
-            selection: restoredSelection
+            selection: restoredSelection,
+            workspaceState: restoredWorkspaceState,
+            transactionRevision: snapshot.transactionRevision
         )
-        workspaceState = snapshot.workspaceState
-        workspaceState.pruneMissingReferences(in: restoredStore.document)
     }
 
     func makeIsolatedTransactionSession(
@@ -186,6 +208,7 @@ public final class EditorSession {
             sketchInputState: sketchInputState,
             selection: snapshot.selection,
             workspaceState: snapshot.workspaceState,
+            transactionRevision: snapshot.transactionRevision,
             diagnostics: snapshot.store.document.diagnostics,
             objectRegistry: objectRegistry
         )
@@ -193,30 +216,59 @@ public final class EditorSession {
         return stagedSession
     }
 
-    func publishIsolatedSourceTransaction(
-        _ snapshot: EditorSessionTransactionSnapshot,
-        commandName: String,
-        before: DocumentSnapshot
-    ) {
-        let retainedCommandStack = commandStack
+    func publishPreparedSourceTransaction<Value>(
+        _ prepared: PreparedEditorSourceTransaction<Value>
+    ) throws {
+        guard prepared.ownerID == sourceTransactionOwnerID else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Prepared source transactions belong to the session that staged them."
+            )
+        }
+        try requireTransactionRevision(prepared.baseTransactionRevision)
+        try store.requireGeneration(prepared.baseGeneration)
+        guard prepared.wouldMutate else {
+            return
+        }
+
         let restoredStore = CADDocumentStore(
-            transactionSnapshot: snapshot.store,
+            transactionSnapshot: prepared.after.store,
             objectRegistry: objectRegistry
         )
-        var restoredSelection = snapshot.selection
+        let replacementCommandStack = CommandStack(
+            undoEntries: commandStack.undoEntries,
+            redoEntries: commandStack.redoEntries
+        )
+        replacementCommandStack.appendCommittedEntry(
+            commandName: prepared.commandName,
+            before: prepared.before,
+            after: prepared.after.store.document
+        )
+        var restoredSelection = prepared.after.selection
         restoredSelection.pruneMissingReferences(in: restoredStore.document)
+        var restoredWorkspaceState = prepared.after.workspaceState
+        restoredWorkspaceState.pruneMissingReferences(in: restoredStore.document)
         documentState = DocumentState(
             store: restoredStore,
-            commandStack: retainedCommandStack,
-            selection: restoredSelection
+            commandStack: replacementCommandStack,
+            selection: restoredSelection,
+            workspaceState: restoredWorkspaceState,
+            transactionRevision: prepared.proposedTransactionRevision
         )
-        workspaceState = snapshot.workspaceState
-        workspaceState.pruneMissingReferences(in: restoredStore.document)
-        retainedCommandStack.appendCommittedEntry(
-            commandName: commandName,
-            before: before,
-            after: snapshot.store.document
-        )
+    }
+
+    public func requireTransactionRevision(
+        _ expectedTransactionRevision: DocumentTransactionRevision?
+    ) throws {
+        guard let expectedTransactionRevision else {
+            return
+        }
+        guard expectedTransactionRevision == transactionRevision else {
+            throw EditorError(
+                code: .documentTransactionRevisionMismatch,
+                message: "Expected transaction revision \(expectedTransactionRevision.value), but current transaction revision is \(transactionRevision.value)."
+            )
+        }
     }
 
     func publishWorkspaceState(_ state: WorkspaceState) throws {
@@ -247,6 +299,21 @@ public final class EditorSession {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(transactionName) cannot execute workspace mutations."
+            )
+        }
+    }
+
+    func requireOnlyPrunedSelectionState(
+        in stagedSession: EditorSession,
+        from snapshot: EditorSessionTransactionSnapshot,
+        transactionName: String
+    ) throws {
+        var expectedSelection = snapshot.selection
+        expectedSelection.pruneMissingReferences(in: stagedSession.document)
+        guard stagedSession.selection == expectedSelection else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(transactionName) cannot execute selection mutations."
             )
         }
     }
@@ -842,17 +909,35 @@ public final class EditorSession {
     @discardableResult
     public func execute(
         _ command: EditorCommand,
-        expectedGeneration: DocumentGeneration? = nil
+        expectedGeneration: DocumentGeneration? = nil,
+        expectedTransactionRevision: DocumentTransactionRevision? = nil
     ) throws -> CommandExecutionResult {
+        try requireTransactionRevision(expectedTransactionRevision)
         let resolvedCommand = try commandResolvingSelectionContext(command)
-        let result = try commandStack.execute(
-            resolvedCommand,
-            in: store,
-            expectedGeneration: expectedGeneration
-        )
-        selection.pruneMissingReferences(in: document)
-        workspaceState.pruneMissingReferences(in: document)
-        return result
+        guard command.mutatesDocument,
+              !commandStack.isExecutingGroupedSourceCommands else {
+            let result = try commandStack.execute(
+                resolvedCommand,
+                in: store,
+                expectedGeneration: expectedGeneration
+            )
+            selection.pruneMissingReferences(in: document)
+            workspaceState.pruneMissingReferences(in: document)
+            return result
+        }
+
+        return try executeIsolatedSourceTransaction(
+            commandName: command.name,
+            commits: true,
+            expectedTransactionRevision: expectedTransactionRevision
+        ) { stagedSession in
+            let stagedCommand = try stagedSession.commandResolvingSelectionContext(command)
+            return try stagedSession.commandStack.execute(
+                stagedCommand,
+                in: stagedSession.store,
+                expectedGeneration: expectedGeneration
+            )
+        }.value
     }
 
     @discardableResult
@@ -864,24 +949,30 @@ public final class EditorSession {
 
     public func withSourceCommandGroup<Value>(
         named commandName: String,
+        expectedTransactionRevision: DocumentTransactionRevision? = nil,
         _ operation: (EditorSession) throws -> Value
     ) throws -> Value {
-        let initialDocumentState = documentState
-        let initialWorkspaceState = workspaceState
-        do {
-            let value = try commandStack.withGroupedExecution(
+        try executeIsolatedSourceTransaction(
+            commandName: commandName,
+            commits: true,
+            expectedTransactionRevision: expectedTransactionRevision
+        ) { stagedSession in
+            let initialStore = stagedSession.store
+            let initialCommandStack = stagedSession.commandStack
+            let initialWorkspaceState = stagedSession.workspaceState
+            return try stagedSession.commandStack.withGroupedExecution(
                 commandName: commandName,
-                in: store
+                in: stagedSession.store
             ) {
-                let value = try operation(self)
-                guard store === initialDocumentState.store,
-                      commandStack === initialDocumentState.commandStack else {
+                let value = try operation(stagedSession)
+                guard stagedSession.store === initialStore,
+                      stagedSession.commandStack === initialCommandStack else {
                     throw EditorError(
                         code: .commandInvalid,
                         message: "Source command groups cannot replace session document state."
                     )
                 }
-                guard workspaceState.revision == initialWorkspaceState.revision else {
+                guard stagedSession.workspaceState.revision == initialWorkspaceState.revision else {
                     throw EditorError(
                         code: .commandInvalid,
                         message: "Source command groups cannot execute workspace mutations."
@@ -889,14 +980,7 @@ public final class EditorSession {
                 }
                 return value
             }
-            selection.pruneMissingReferences(in: document)
-            workspaceState.pruneMissingReferences(in: document)
-            return value
-        } catch {
-            documentState = initialDocumentState
-            workspaceState = initialWorkspaceState
-            throw error
-        }
+        }.value
     }
 
     private func commandResolvingSelectionContext(_ command: EditorCommand) throws -> EditorCommand {
@@ -3893,16 +3977,40 @@ public final class EditorSession {
     }
 
     @discardableResult
-    public func undo() throws -> CommandExecutionResult {
-        let result = try commandStack.undo(in: store)
-        selection.pruneMissingReferences(in: document)
-        return result
+    public func undo(
+        expectedTransactionRevision: DocumentTransactionRevision? = nil
+    ) throws -> CommandExecutionResult {
+        try executeHistoryTransaction(
+            expectedTransactionRevision: expectedTransactionRevision
+        ) { stagedSession in
+            try stagedSession.commandStack.undo(in: stagedSession.store)
+        }
     }
 
     @discardableResult
-    public func redo() throws -> CommandExecutionResult {
-        let result = try commandStack.redo(in: store)
-        selection.pruneMissingReferences(in: document)
+    public func redo(
+        expectedTransactionRevision: DocumentTransactionRevision? = nil
+    ) throws -> CommandExecutionResult {
+        try executeHistoryTransaction(
+            expectedTransactionRevision: expectedTransactionRevision
+        ) { stagedSession in
+            try stagedSession.commandStack.redo(in: stagedSession.store)
+        }
+    }
+
+    private func executeHistoryTransaction(
+        expectedTransactionRevision: DocumentTransactionRevision?,
+        _ operation: (EditorSession) throws -> CommandExecutionResult
+    ) throws -> CommandExecutionResult {
+        try requireTransactionRevision(expectedTransactionRevision)
+        let baseRevision = transactionRevision
+        let stagedSession = makeIsolatedTransactionSession(from: transactionSnapshot())
+        let result = try operation(stagedSession)
+        let nextRevision = try baseRevision.advanced()
+        var after = stagedSession.transactionSnapshot()
+        after.transactionRevision = nextRevision
+        try requireTransactionRevision(baseRevision)
+        restoreTransactionSnapshot(after)
         return result
     }
 
