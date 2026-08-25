@@ -168,6 +168,7 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
             "RupaCADIntegration",
             "RupaEvaluation",
             "RupaGeometry",
+            "RupaProject",
             "RupaProjectModel",
             "RupaViewportScene",
         ],

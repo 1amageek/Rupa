@@ -108,12 +108,12 @@
   - [x] Preserve Mesh buffer ownership without rematerialization during authority comparison
   - [x] Cover complete Product and CAD loss, rollback, Mesh-only, and CAD-plus-Mesh boundaries
   - [x] Review, verify, and commit P1-1
-- [ ] P1-2 document-bound project evaluation
-  - [ ] Define the RupaProject-owned evaluator-preparation port
-  - [ ] Bind every current, commit, and load evaluation to the matching immutable DesignDocument
-  - [ ] Adapt the RupaKit provider composition while preserving the shared CAD evaluation cache
-  - [ ] Cover changed CAD content with stable IDs and loaded CAD replacement through the real provider path
-  - [ ] Review, verify, and commit P1-2
+- [x] P1-2 document-bound project evaluation
+  - [x] Define the RupaProject-owned evaluator-preparation port
+  - [x] Bind every current, commit, and load evaluation to the matching immutable DesignDocument
+  - [x] Adapt the RupaKit provider composition while preserving the shared CAD evaluation cache
+  - [x] Cover changed CAD content with stable IDs and loaded CAD replacement through the real provider path
+  - [x] Review, verify, and commit P1-2
 - [ ] Integrated P1 verification
   - [ ] Verify real Product, CAD, Mesh, package, projection, and presentation-evaluation paths
   - [ ] Re-run rollback, cancellation, stale-publication, synchronization, ownership, incomplete-marker, and zero-copy audits

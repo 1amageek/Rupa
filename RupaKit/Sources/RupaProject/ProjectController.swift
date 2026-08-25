@@ -11,7 +11,7 @@ public actor ProjectController {
     private var packageDocument: ProjectPackageDocument
     private var evaluationSource: ProjectSourceModel
     private var evaluation: EvaluatedProjectSnapshot?
-    private let evaluator: any ProjectEvaluating
+    private let evaluatorPreparer: any ProjectEvaluatorPreparing
     private let projector: any ProjectSourceProjecting
     private let productSourceCodec: any ProjectProductSourceCoding
     private let cadSourceCodec: any ProjectCADSourceCoding
@@ -21,7 +21,7 @@ public actor ProjectController {
 
     public init(
         document: DesignDocument,
-        evaluator: any ProjectEvaluating,
+        evaluatorPreparer: any ProjectEvaluatorPreparing,
         projector: any ProjectSourceProjecting,
         productSourceCodec: any ProjectProductSourceCoding = JSONProjectProductSourceCodec(),
         cadSourceCodec: any ProjectCADSourceCoding = JSONProjectCADSourceCodec(),
@@ -40,7 +40,7 @@ public actor ProjectController {
         packageDocument = initial.package
         evaluationSource = initial.evaluationSource
         evaluation = nil
-        self.evaluator = evaluator
+        self.evaluatorPreparer = evaluatorPreparer
         self.projector = projector
         self.productSourceCodec = productSourceCodec
         self.cadSourceCodec = cadSourceCodec
@@ -51,7 +51,7 @@ public actor ProjectController {
 
     public init(
         package: ProjectPackageDocument,
-        evaluator: any ProjectEvaluating,
+        evaluatorPreparer: any ProjectEvaluatorPreparing,
         projector: any ProjectSourceProjecting,
         productSourceCodec: any ProjectProductSourceCoding = JSONProjectProductSourceCodec(),
         cadSourceCodec: any ProjectCADSourceCoding = JSONProjectCADSourceCodec(),
@@ -77,7 +77,7 @@ public actor ProjectController {
         packageDocument = package
         evaluationSource = initial.evaluationSource
         evaluation = nil
-        self.evaluator = evaluator
+        self.evaluatorPreparer = evaluatorPreparer
         self.projector = projector
         self.productSourceCodec = productSourceCodec
         self.cadSourceCodec = cadSourceCodec
@@ -124,6 +124,7 @@ public actor ProjectController {
     public func evaluateCurrent() async throws -> EvaluatedProjectSnapshot {
         let baseRevision = session.transactionRevision
         let stagedEvaluation = try await evaluate(
+            document: session.document,
             source: evaluationSource,
             revision: baseRevision
         )
@@ -206,6 +207,7 @@ public actor ProjectController {
             )
         }
         let stagedEvaluation = try await evaluate(
+            document: reconstructed.document,
             source: reconstructed.evaluationSource,
             revision: prepared.proposedTransactionRevision
         )
@@ -261,6 +263,7 @@ public actor ProjectController {
             throw projectError(for: error)
         }
         let loadedEvaluation = try await evaluate(
+            document: reconstructed.document,
             source: reconstructed.evaluationSource,
             revision: loadedRevision
         )
@@ -490,12 +493,15 @@ public actor ProjectController {
     }
 
     private func evaluate(
+        document: DesignDocument,
         source: ProjectSourceModel,
         revision: DocumentTransactionRevision
     ) async throws -> EvaluatedProjectSnapshot {
-        let evaluator = self.evaluator
+        let evaluatorPreparer = self.evaluatorPreparer
         do {
             return try await Self.performDetached {
+                try Task.checkCancellation()
+                let evaluator = try evaluatorPreparer.makeEvaluator(for: document)
                 try Task.checkCancellation()
                 let result = try evaluator.evaluate(
                     project: source,

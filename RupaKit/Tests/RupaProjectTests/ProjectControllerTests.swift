@@ -479,6 +479,36 @@ func projectControllerDoesNotPublishWhenEvaluationFails() async throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
+func projectControllerDoesNotPublishWhenEvaluatorPreparationFails() async throws {
+    let controller = try makeController(
+        document: try meshOnlyDocument(named: "Before"),
+        evaluatorPreparer: NameRejectingProjectEvaluatorPreparer(
+            rejectedName: "After"
+        )
+    )
+    let retainedPackage = await controller.currentPackage()
+    var caught: ProjectControllerError?
+
+    do {
+        _ = try await controller.commit(
+            ProjectSourceTransaction(
+                name: "fixture.preparation-failure",
+                commands: [.renameDocument(name: "After")],
+                expectedTransactionRevision: DocumentTransactionRevision(0)
+            )
+        )
+    } catch let error as ProjectControllerError {
+        caught = error
+    }
+
+    #expect(caught?.code == .evaluationFailed)
+    #expect(await controller.currentDocument().cadDocument.metadata.name == "Before")
+    #expect(await controller.currentPackage().productSource == retainedPackage.productSource)
+    #expect(await controller.currentEvaluationSource().name == "Before")
+    #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(0))
+}
+
+@Test(.timeLimit(.minutes(1)))
 func projectControllerRejectsStaleRequestBeforeStaging() async throws {
     let controller = try makeController(document: .empty(named: "Before"))
     _ = try await controller.commit(
@@ -688,6 +718,7 @@ func projectControllerFailedSaveRetainsCurrentAggregate() async throws {
 private func makeController(
     document: DesignDocument,
     evaluator: any ProjectEvaluating = ProjectEvaluationEngine(),
+    evaluatorPreparer: (any ProjectEvaluatorPreparing)? = nil,
     productSourceCodec: any ProjectProductSourceCoding = JSONProjectProductSourceCodec(),
     cadSourceCodec: any ProjectCADSourceCoding = JSONProjectCADSourceCodec(),
     packageWriter: any ProjectPackageWriting = ProjectPackageStore(),
@@ -695,7 +726,8 @@ private func makeController(
 ) throws -> ProjectController {
     try ProjectController(
         document: document,
-        evaluator: evaluator,
+        evaluatorPreparer: evaluatorPreparer
+            ?? StaticProjectEvaluatorPreparer(evaluator: evaluator),
         projector: FixtureProjector(),
         productSourceCodec: productSourceCodec,
         cadSourceCodec: cadSourceCodec,
@@ -703,6 +735,31 @@ private func makeController(
         packageValidator: packageValidator
     )
 }
+
+private struct StaticProjectEvaluatorPreparer: ProjectEvaluatorPreparing {
+    let evaluator: any ProjectEvaluating
+
+    func makeEvaluator(
+        for _: DesignDocument
+    ) throws -> any ProjectEvaluating {
+        evaluator
+    }
+}
+
+private struct NameRejectingProjectEvaluatorPreparer: ProjectEvaluatorPreparing {
+    let rejectedName: String
+
+    func makeEvaluator(
+        for document: DesignDocument
+    ) throws -> any ProjectEvaluating {
+        guard document.cadDocument.metadata.name != rejectedName else {
+            throw EvaluatorPreparationFixtureError()
+        }
+        return ProjectEvaluationEngine()
+    }
+}
+
+private struct EvaluatorPreparationFixtureError: Error {}
 
 private struct FixtureProjector: ProjectSourceProjecting {
     func project(_ document: DesignDocument) throws -> ProjectSourceModel {
