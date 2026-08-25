@@ -71,7 +71,7 @@ import SwiftCAD
         capabilityID: capabilityID,
         version: descriptor.version,
         payload: try canonicalValue(for: command),
-        expectedTransactionRevision: DocumentTransactionRevision(session.generation.value)
+        expectedTransactionRevision: session.transactionRevision
     )
     let request = AgentRequest.invokeCapability(
         sessionID: sessionID,

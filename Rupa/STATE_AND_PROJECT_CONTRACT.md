@@ -98,6 +98,9 @@ viewport construction run from immutable values outside the main actor. The
 adapter publishes strictly increasing `publicationSequence` values, so an older
 asynchronous completion cannot replace a newer UI state. CLI and Agent adapters
 call `ProjectOperating` directly and do not route through the UI adapter.
+An initial package load obtains the current transaction revision from the project
+owner and publishes the loaded state directly; it does not manufacture or evaluate
+a placeholder view first. Later UI operations use the revision of the visible view.
 
 ## Revisions and Identities
 

@@ -174,9 +174,9 @@
   - [x] Cover CAD-only, Mesh-only, mixed representation, stale publication, and storage-sharing paths
   - [x] Allow an initial package load without manufacturing a placeholder view
   - [x] Review, verify, and commit T06-0C
-- [ ] Integrated T06-0 project-path foundation verification
-  - [ ] Verify source, workspace, history, load, save, evaluation, and view-snapshot paths
-  - [ ] Re-run cancellation, rollback, stale-publication, zero-copy, and package-integrity evidence
-  - [ ] Re-run incomplete-implementation, synchronization, ownership, unsafe-memory, and target-branch audits
-  - [ ] Synchronize architecture and state contracts with the verified production-path foundation
-  - [ ] Review cumulative changes and commit integrated T06-0 evidence
+- [x] Integrated T06-0 project-path foundation verification
+  - [x] Verify source, workspace, history, load, save, evaluation, and view-snapshot paths
+  - [x] Re-run cancellation, rollback, stale-publication, zero-copy, and package-integrity evidence
+  - [x] Re-run incomplete-implementation, synchronization, ownership, unsafe-memory, and target-branch audits
+  - [x] Synchronize architecture and state contracts with the verified production-path foundation
+  - [x] Review cumulative changes and commit integrated T06-0 evidence

@@ -19,7 +19,7 @@ func universalViewportScenePreservesEvaluatedIdentityAndBounds() throws {
     let snapshot = try evaluator.evaluate(
         project: project,
         purpose: .presentation,
-        revision: DocumentTransactionRevision(session.generation.value)
+        revision: session.transactionRevision
     )
 
     let scene = try UniversalViewportSceneBuilder().build(
