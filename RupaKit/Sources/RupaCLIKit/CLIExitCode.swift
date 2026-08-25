@@ -26,6 +26,7 @@ public enum CLIExitCode: Int32, Codable, Equatable, Sendable {
              .documentGenerationMismatch,
              .documentTransactionRevisionMismatch,
              .workspaceRevisionMismatch,
+             .sourceIdentityMismatch,
              .sessionNotFound,
              .referenceUnresolved:
             return .data

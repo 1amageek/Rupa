@@ -7840,6 +7840,11 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     )
     #expect(
         CLIExitCode.value(
+            for: EditorError(code: .sourceIdentityMismatch, message: "Stale source")
+        ) == .data
+    )
+    #expect(
+        CLIExitCode.value(
             for: EditorError(code: .documentLoadFailed, message: "Load")
         ) == .inputOutput
     )
