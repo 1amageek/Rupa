@@ -5,6 +5,8 @@ import RupaProjectPackage
 
 /// The source-authority operations exposed by one isolated project owner.
 public protocol ProjectOperating: Actor {
+    func currentTransactionRevision() -> DocumentTransactionRevision
+
     func currentState() throws -> ProjectStateSnapshot
 
     func evaluateCurrent() async throws -> EvaluatedProjectSnapshot

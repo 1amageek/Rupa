@@ -59,7 +59,12 @@ public final class ProjectWorkspace {
 
     @discardableResult
     public func load(from url: URL) async throws -> ProjectViewSnapshot {
-        let revision = try currentTransactionRevision()
+        let revision: DocumentTransactionRevision
+        if let view {
+            revision = view.transactionRevision
+        } else {
+            revision = await project.currentTransactionRevision()
+        }
         return try await publish(
             try await project.load(
                 from: url,

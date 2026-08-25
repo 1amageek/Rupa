@@ -172,6 +172,7 @@
   - [x] Add a MainActor observation adapter that rejects late snapshot publication
   - [x] Keep package bytes and source mutation authority outside the UI view state
   - [x] Cover CAD-only, Mesh-only, mixed representation, stale publication, and storage-sharing paths
+  - [x] Allow an initial package load without manufacturing a placeholder view
   - [x] Review, verify, and commit T06-0C
 - [ ] Integrated T06-0 project-path foundation verification
   - [ ] Verify source, workspace, history, load, save, evaluation, and view-snapshot paths

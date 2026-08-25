@@ -1,3 +1,4 @@
+import Foundation
 import RupaCADIntegration
 import RupaCore
 import RupaCoreTypes
@@ -363,6 +364,38 @@ func projectWorkspaceRejectsLateViewPublication() async throws {
     #expect(published?.publicationSequence == newer.publicationSequence)
 }
 
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspaceSavesAndLoadsWithoutAnInitialTargetView() async throws {
+    try await withProjectViewTemporaryDirectory { directory in
+        let sourceController = try projectViewController(
+            document: try projectViewMeshOnlyDocument(named: "Saved View")
+        )
+        let sourceWorkspace = await ProjectWorkspace(project: sourceController)
+        _ = try await sourceWorkspace.evaluate()
+        let packageURL = directory.appendingPathComponent("saved.rupa")
+        let saved = try await sourceWorkspace.save(to: packageURL)
+
+        #expect(saved.isDirty == false)
+
+        let targetController = try projectViewController(
+            document: .empty(named: "Load Target")
+        )
+        let targetWorkspace = await ProjectWorkspace(project: targetController)
+        #expect(await targetWorkspace.view?.projectName == nil)
+
+        let loaded = try await targetWorkspace.load(from: packageURL)
+        let item = try #require(loaded.viewport.items.first)
+
+        #expect(loaded.projectName == "Saved View")
+        #expect(loaded.viewport.items.count == 1)
+        #expect(
+            item.reference.providerID
+                == GeometrySourceReference.authoredMeshProviderID
+        )
+        #expect(await targetWorkspace.view?.publicationSequence == loaded.publicationSequence)
+    }
+}
+
 private func projectViewController(
     document: DesignDocument
 ) throws -> ProjectController {
@@ -500,4 +533,34 @@ private func expectProjectViewSharedStorage(
         evaluated.cornerVertexIDs.storage.chunkIdentities
             == source.cornerVertexIDs.storage.chunkIdentities
     )
+}
+
+private func withProjectViewTemporaryDirectory<Result: Sendable>(
+    _ body: (URL) async throws -> Result
+) async throws -> Result {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+        "rupa-project-view-tests-\(UUID().uuidString)",
+        isDirectory: true
+    )
+    try FileManager.default.createDirectory(
+        at: directory,
+        withIntermediateDirectories: false
+    )
+    do {
+        let result = try await body(directory)
+        try FileManager.default.removeItem(at: directory)
+        return result
+    } catch {
+        let primaryError = error
+        do {
+            try FileManager.default.removeItem(at: directory)
+        } catch let cleanupError {
+            throw ProjectViewSnapshotError(
+                code: .sourceMismatch,
+                message: "Test failed and temporary cleanup also failed: "
+                    + "\(primaryError); \(cleanupError)."
+            )
+        }
+        throw primaryError
+    }
 }
