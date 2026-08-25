@@ -125,6 +125,7 @@ func projectControllerCADTransactionPreservesAuthoredMeshAuthorityAndPresentatio
             && $0.reference == .authoredMesh(sourceAsset.id)
     }
     #expect(usesPresentationMesh)
+    #expect(result.evaluation.copyTelemetry.didCopy == false)
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -184,6 +185,73 @@ func projectControllerRejectsLossyCADCodecBeforePublishing() async throws {
         await controller.currentPackage().authoredMeshAssets
             == retainedPackage.authoredMeshAssets
     )
+    #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(0))
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectControllerRejectsLostProductModelingSettingsBeforePublishing() async throws {
+    let sourceDocument = try meshOnlyDocument(named: "Before")
+    let controller = try makeController(
+        document: sourceDocument,
+        productSourceCodec: ModelingSettingsCorruptingProductSourceCodec(
+            triggerName: "After"
+        )
+    )
+    let retainedPackage = await controller.currentPackage()
+    var caught: ProjectControllerError?
+
+    do {
+        _ = try await controller.commit(
+            ProjectSourceTransaction(
+                name: "fixture.lossy-product-settings",
+                commands: [.renameDocument(name: "After")],
+                expectedTransactionRevision: DocumentTransactionRevision(0)
+            )
+        )
+    } catch let error as ProjectControllerError {
+        caught = error
+    }
+
+    #expect(caught?.code == .sourceMismatch)
+    #expect(await controller.currentDocument().modelingSettings == sourceDocument.modelingSettings)
+    #expect(await controller.currentPackage().productSource == retainedPackage.productSource)
+    #expect(await controller.currentEvaluationSource().name == "Before")
+    #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(0))
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectControllerRejectsLostCADParametersBeforePublishing() async throws {
+    let sourceDocument = DesignDocument.empty(named: "Parameters")
+    let controller = try makeController(
+        document: sourceDocument,
+        cadSourceCodec: ParameterDroppingCADSourceCodec()
+    )
+    let retainedPackage = await controller.currentPackage()
+    var caught: ProjectControllerError?
+
+    do {
+        _ = try await controller.commit(
+            ProjectSourceTransaction(
+                name: "fixture.lossy-cad-parameters",
+                commands: [
+                    .upsertParameter(
+                        name: "width",
+                        expression: .constant(.length(1.0, unit: .meter)),
+                        kind: .length
+                    ),
+                ],
+                expectedTransactionRevision: DocumentTransactionRevision(0)
+            )
+        )
+    } catch let error as ProjectControllerError {
+        caught = error
+    }
+
+    #expect(caught?.code == .sourceMismatch)
+    #expect(await controller.currentDocument().cadDocument.parameters.parameters.isEmpty)
+    #expect(await controller.currentPackage().productSource == retainedPackage.productSource)
+    #expect(await controller.currentPackage().cadSource == nil)
+    #expect(await controller.currentEvaluationSource().name == "Parameters")
     #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(0))
 }
 
@@ -708,6 +776,48 @@ private struct NameCorruptingCADSourceCodec: ProjectCADSourceCoding {
         }
         var corrupted = document
         corrupted.metadata.name = "Corrupted"
+        return try JSONProjectCADSourceCodec().encode(corrupted)
+    }
+
+    func decode(_ source: ProjectPackageCADSource) throws -> CADDocument {
+        try JSONProjectCADSourceCodec().decode(source)
+    }
+}
+
+private struct ModelingSettingsCorruptingProductSourceCodec: ProjectProductSourceCoding {
+    let triggerName: String
+
+    func encode(_ document: DesignDocument) throws -> ProjectPackageProductSource {
+        try JSONProjectProductSourceCodec().encode(document)
+    }
+
+    func decode(_ source: ProjectPackageProductSource) throws -> ProjectProductSourceModel {
+        let decoded = try JSONProjectProductSourceCodec().decode(source)
+        guard decoded.name == triggerName else {
+            return decoded
+        }
+        let current = decoded.modelingSettings.tessellationOptions
+        return try ProjectProductSourceModel(
+            documentID: decoded.documentID,
+            name: decoded.name,
+            units: decoded.units,
+            modelingSettings: DocumentModelingSettings(
+                tolerance: decoded.modelingSettings.tolerance,
+                tessellationOptions: TessellationOptions(
+                    linearTolerance: current.linearTolerance * 2.0,
+                    angularTolerance: current.angularTolerance,
+                    maxEdgeLength: current.maxEdgeLength
+                )
+            ),
+            productMetadata: decoded.productMetadata
+        )
+    }
+}
+
+private struct ParameterDroppingCADSourceCodec: ProjectCADSourceCoding {
+    func encode(_ document: CADDocument) throws -> ProjectPackageCADSource {
+        var corrupted = document
+        corrupted.parameters = ParameterTable(revision: document.parameters.revision)
         return try JSONProjectCADSourceCodec().encode(corrupted)
     }
 

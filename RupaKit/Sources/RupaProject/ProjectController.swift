@@ -159,6 +159,10 @@ public actor ProjectController {
             )
         }
 
+        let stagedAuthority = try await sourceAuthoritySnapshot(
+            for: prepared.stagedDocument,
+            includesCADSource: prepared.stagedDocument.hasAuthoritativeCADSource
+        )
         let stagedProductSource = try await encodeProductSource(prepared.stagedDocument)
         let stagedCADSource = try await encodeCADSourceIfAuthoritative(
             prepared.stagedDocument
@@ -186,6 +190,15 @@ public actor ProjectController {
         }
         try await validatePackageForSave(stagedPackage)
         let reconstructed = try await reconstructState(from: stagedPackage)
+        let reconstructedAuthority = try await sourceAuthoritySnapshot(
+            for: reconstructed.document,
+            includesCADSource: stagedPackage.cadSource != nil
+        )
+        try Self.requireMatchingAuthority(
+            expected: stagedAuthority,
+            actual: reconstructedAuthority,
+            context: "Staged project sources"
+        )
         guard reconstructed.evaluationSource == stagedEvaluationSource else {
             throw ProjectControllerError(
                 code: .sourceMismatch,
@@ -204,7 +217,7 @@ public actor ProjectController {
             throw projectError(for: error)
         }
         packageDocument = stagedPackage
-        evaluationSource = stagedEvaluationSource
+        evaluationSource = reconstructed.evaluationSource
         evaluation = stagedEvaluation
         return ProjectSourceCommitResult(
             baseTransactionRevision: prepared.baseTransactionRevision,
@@ -412,6 +425,30 @@ public actor ProjectController {
         }
     }
 
+    private func sourceAuthoritySnapshot(
+        for document: DesignDocument,
+        includesCADSource: Bool
+    ) async throws -> ProjectSourceAuthoritySnapshot {
+        do {
+            return try await Self.performDetached {
+                try Task.checkCancellation()
+                let snapshot = try ProjectSourceAuthoritySnapshot(
+                    document: document,
+                    includesCADSource: includesCADSource
+                )
+                try Task.checkCancellation()
+                return snapshot
+            }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw ProjectControllerError(
+                code: .sourceInvalid,
+                message: "Project source authority identity generation failed: \(error)."
+            )
+        }
+    }
+
     private func reconstructState(
         from package: ProjectPackageDocument
     ) async throws -> (document: DesignDocument, evaluationSource: ProjectSourceModel) {
@@ -516,6 +553,18 @@ public actor ProjectController {
                 message: "Initial DesignDocument validation failed: \(error)."
             )
         }
+        let expectedAuthority: ProjectSourceAuthoritySnapshot
+        do {
+            expectedAuthority = try ProjectSourceAuthoritySnapshot(
+                document: document,
+                includesCADSource: document.hasAuthoritativeCADSource
+            )
+        } catch {
+            throw ProjectControllerError(
+                code: .sourceInvalid,
+                message: "Initial project source authority identity generation failed: \(error)."
+            )
+        }
         let source: ProjectSourceModel
         do {
             source = try projector.project(document)
@@ -574,6 +623,23 @@ public actor ProjectController {
             productSourceCodec: productSourceCodec,
             cadSourceCodec: cadSourceCodec
         )
+        let reconstructedAuthority: ProjectSourceAuthoritySnapshot
+        do {
+            reconstructedAuthority = try ProjectSourceAuthoritySnapshot(
+                document: reconstructed.document,
+                includesCADSource: package.cadSource != nil
+            )
+        } catch {
+            throw ProjectControllerError(
+                code: .sourceInvalid,
+                message: "Initial reconstructed source authority identity generation failed: \(error)."
+            )
+        }
+        try requireMatchingAuthority(
+            expected: expectedAuthority,
+            actual: reconstructedAuthority,
+            context: "Initial project sources"
+        )
         guard reconstructed.evaluationSource == source else {
             throw ProjectControllerError(
                 code: .sourceMismatch,
@@ -581,6 +647,31 @@ public actor ProjectController {
             )
         }
         return (package, source)
+    }
+
+    private static func requireMatchingAuthority(
+        expected: ProjectSourceAuthoritySnapshot,
+        actual: ProjectSourceAuthoritySnapshot,
+        context: String
+    ) throws {
+        guard expected.product == actual.product else {
+            throw ProjectControllerError(
+                code: .sourceMismatch,
+                message: "\(context) do not reproduce the Product authority."
+            )
+        }
+        guard expected.cad == actual.cad else {
+            throw ProjectControllerError(
+                code: .sourceMismatch,
+                message: "\(context) do not reproduce the CAD authority."
+            )
+        }
+        guard expected.authoredMeshAssets == actual.authoredMeshAssets else {
+            throw ProjectControllerError(
+                code: .sourceMismatch,
+                message: "\(context) do not reproduce the Authored-Mesh authority."
+            )
+        }
     }
 
     private static func decodeAndValidate(

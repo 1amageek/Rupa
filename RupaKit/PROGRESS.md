@@ -102,3 +102,19 @@
   - [x] Verify CAD-only, CAD-plus-Mesh, Mesh-only, package, transaction, and failure paths
   - [x] Verify supported Native, ordinary WASM, and Embedded WASM compile or runtime evidence without overgeneralizing target coverage
   - [x] Review cumulative changes, remove obsolete T04 records, and commit completion evidence
+- [x] P1-1 authoritative source fidelity
+  - [x] Define Product, CAD, and Authored-Mesh authority identity without using the evaluation projection as source evidence
+  - [x] Reject lossy Product and CAD codec round trips before publishing staged state
+  - [x] Preserve Mesh buffer ownership without rematerialization during authority comparison
+  - [x] Cover complete Product and CAD loss, rollback, Mesh-only, and CAD-plus-Mesh boundaries
+  - [x] Review, verify, and commit P1-1
+- [ ] P1-2 document-bound project evaluation
+  - [ ] Define the RupaProject-owned evaluator-preparation port
+  - [ ] Bind every current, commit, and load evaluation to the matching immutable DesignDocument
+  - [ ] Adapt the RupaKit provider composition while preserving the shared CAD evaluation cache
+  - [ ] Cover changed CAD content with stable IDs and loaded CAD replacement through the real provider path
+  - [ ] Review, verify, and commit P1-2
+- [ ] Integrated P1 verification
+  - [ ] Verify real Product, CAD, Mesh, package, projection, and presentation-evaluation paths
+  - [ ] Re-run rollback, cancellation, stale-publication, synchronization, ownership, incomplete-marker, and zero-copy audits
+  - [ ] Review cumulative changes and commit completion evidence

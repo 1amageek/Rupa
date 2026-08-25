@@ -3,7 +3,7 @@ import RupaCoreTypes
 import SwiftCAD
 
 /// Decoded Product authority without CAD or Authored Mesh payload ownership.
-public struct ProjectProductSourceModel: Sendable {
+public struct ProjectProductSourceModel: Equatable, Sendable {
     public let documentID: DocumentID
     public let name: String?
     public let units: UnitSystem
