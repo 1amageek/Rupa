@@ -7,6 +7,7 @@ import RupaKit
 import RupaProject
 import RupaProjectModel
 import SwiftCAD
+import Synchronization
 import Testing
 @testable import RupaGeometry
 
@@ -185,6 +186,129 @@ func projectControllerMakesCADRepresentationEditableThroughModelingEvaluation() 
 }
 
 @Test(.timeLimit(.minutes(1)))
+func projectControllerRejectsForgedMakeEditableMeshPayloadWithoutPublication() async throws {
+    let fixture = try extrudedCADDocument(named: "Forged Make Editable", depth: 1.0)
+    let sceneNodeID = try bodySceneNodeID(
+        in: fixture.document,
+        featureID: fixture.bodyFeatureID
+    )
+    let controller = try makeCADProjectController(document: fixture.document)
+    let prepared = try await controller.prepareMakeCADRepresentationEditableCommand(
+        sceneNodeID: sceneNodeID,
+        authoredMeshSourceID: "mesh.forged",
+        authoredMeshRepresentationID: "representation.forged",
+        expectedTransactionRevision: DocumentTransactionRevision(0)
+    )
+    guard case .makeCADRepresentationEditable(let command) = prepared else {
+        Issue.record("Expected a Make Editable geometry source command.")
+        return
+    }
+    let vertexID = try #require(command.evaluatedMesh.vertexIDs.first)
+    let originalPosition = try command.evaluatedMesh.position(of: vertexID)
+    var editor = MeshEditBuffer(source: command.evaluatedMesh)
+    try editor.setVertexPosition(
+        GeometryPoint3D(
+            x: originalPosition.x + 10,
+            y: originalPosition.y,
+            z: originalPosition.z
+        ),
+        for: vertexID
+    )
+    let forgedMesh = try editor.commit().source
+    let forgedCommand = try MakeCADRepresentationEditableCommand(
+        sceneNodeID: command.sceneNodeID,
+        sourceRepresentationID: command.sourceRepresentationID,
+        sourceReference: command.sourceReference,
+        evaluationSnapshotID: command.evaluationSnapshotID,
+        sourceIdentity: command.sourceIdentity,
+        evaluatedMesh: forgedMesh,
+        evaluationCopyTelemetry: command.evaluationCopyTelemetry,
+        authoredMeshSourceID: command.authoredMeshSourceID,
+        authoredMeshRepresentationID: command.authoredMeshRepresentationID,
+        switchesPresentationSelection: command.switchesPresentationSelection
+    )
+    let retainedPackage = await controller.currentPackage()
+    var error: ProjectControllerError?
+
+    do {
+        _ = try await controller.commit(
+            ProjectSourceTransaction(
+                name: "integration.reject-forged-make-editable",
+                geometrySourceCommands: [.makeCADRepresentationEditable(forgedCommand)],
+                expectedTransactionRevision: DocumentTransactionRevision(0)
+            )
+        )
+    } catch let caught as ProjectControllerError {
+        error = caught
+    }
+
+    #expect(error?.code == .sourceMismatch)
+    #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(0))
+    #expect(await controller.currentDocument().authoredMeshAssets.isEmpty)
+    let currentPackage = await controller.currentPackage()
+    #expect(currentPackage.documentID == retainedPackage.documentID)
+    #expect(currentPackage.productSource == retainedPackage.productSource)
+    #expect(currentPackage.cadSource == retainedPackage.cadSource)
+    #expect(currentPackage.authoredMeshAssets == retainedPackage.authoredMeshAssets)
+    #expect(currentPackage.persistedContentIdentity == retainedPackage.persistedContentIdentity)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func makeEditableValidationRejectsLatePublicationAfterConcurrentCommit() async throws {
+    let fixture = try extrudedCADDocument(named: "Concurrent Make Editable", depth: 1.0)
+    let sceneNodeID = try bodySceneNodeID(
+        in: fixture.document,
+        featureID: fixture.bodyFeatureID
+    )
+    let gate = NthEvaluationGate(blockedEvaluationNumber: 2)
+    defer { gate.releaseBlockedEvaluation() }
+    let controller = try makeCADProjectController(
+        document: fixture.document,
+        evaluatorPreparer: GatedCADProjectEvaluatorPreparer(gate: gate)
+    )
+    let prepared = try await controller.prepareMakeCADRepresentationEditableCommand(
+        sceneNodeID: sceneNodeID,
+        authoredMeshSourceID: "mesh.concurrent",
+        authoredMeshRepresentationID: "representation.concurrent",
+        expectedTransactionRevision: DocumentTransactionRevision(0)
+    )
+    let makeEditableCommit = Task {
+        try await controller.commit(
+            ProjectSourceTransaction(
+                name: "integration.make-editable.concurrent",
+                geometrySourceCommands: [prepared],
+                expectedTransactionRevision: DocumentTransactionRevision(0)
+            )
+        )
+    }
+    while !gate.didBlockEvaluation {
+        try await Task.sleep(for: .milliseconds(1))
+    }
+
+    let winningCommit = try await controller.commit(
+        ProjectSourceTransaction(
+            name: "integration.concurrent-winner",
+            commands: [.renameDocument(name: "Concurrent Winner")],
+            expectedTransactionRevision: DocumentTransactionRevision(0)
+        )
+    )
+    gate.releaseBlockedEvaluation()
+
+    var makeEditableError: ProjectControllerError?
+    do {
+        _ = try await makeEditableCommit.value
+    } catch let error as ProjectControllerError {
+        makeEditableError = error
+    }
+
+    #expect(makeEditableError?.code == .revisionConflict)
+    #expect(winningCommit.transactionRevision == DocumentTransactionRevision(1))
+    #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(1))
+    #expect(await controller.currentDocument().cadDocument.metadata.name == "Concurrent Winner")
+    #expect(await controller.currentDocument().authoredMeshAssets.isEmpty)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func madeEditableMeshSurvivesSaveLoadAndRemainsIndependentFromLaterCADEdits() async throws {
     try await withCADProjectTemporaryDirectory { directory in
         let fixture = try extrudedCADDocument(named: "Independent Mesh", depth: 1.0)
@@ -350,13 +474,87 @@ func makeEditableRejectsStaleRevisionAndRollsBackMixedCADMutation() async throws
 }
 
 private func makeCADProjectController(
-    document: DesignDocument
+    document: DesignDocument,
+    evaluatorPreparer: any ProjectEvaluatorPreparing =
+        DefaultDesignDocumentProjectEvaluatorFactory()
 ) throws -> ProjectController {
     try ProjectController(
         document: document,
-        evaluatorPreparer: DefaultDesignDocumentProjectEvaluatorFactory(),
+        evaluatorPreparer: evaluatorPreparer,
         projector: DesignDocumentProjectBridge()
     )
+}
+
+private final class NthEvaluationGate: Sendable {
+    private struct State {
+        var evaluationCount = 0
+        var didBlockEvaluation = false
+        var canFinishBlockedEvaluation = false
+    }
+
+    private let blockedEvaluationNumber: Int
+    private let state = Mutex(State())
+
+    init(blockedEvaluationNumber: Int) {
+        self.blockedEvaluationNumber = blockedEvaluationNumber
+    }
+
+    var didBlockEvaluation: Bool {
+        state.withLock { $0.didBlockEvaluation }
+    }
+
+    func waitIfNeeded() {
+        let shouldBlock = state.withLock { state -> Bool in
+            state.evaluationCount += 1
+            guard state.evaluationCount == blockedEvaluationNumber else {
+                return false
+            }
+            state.didBlockEvaluation = true
+            return true
+        }
+        guard shouldBlock else {
+            return
+        }
+        while !state.withLock({ $0.canFinishBlockedEvaluation }) {
+            Thread.sleep(forTimeInterval: 0.001)
+        }
+    }
+
+    func releaseBlockedEvaluation() {
+        state.withLock { $0.canFinishBlockedEvaluation = true }
+    }
+}
+
+private struct GatedCADProjectEvaluatorPreparer: ProjectEvaluatorPreparing {
+    let gate: NthEvaluationGate
+    private let base = DefaultDesignDocumentProjectEvaluatorFactory()
+
+    func makeEvaluator(
+        for document: DesignDocument
+    ) throws -> any ProjectEvaluating {
+        GatedProjectEvaluator(
+            base: try base.makeEvaluator(for: document),
+            gate: gate
+        )
+    }
+}
+
+private struct GatedProjectEvaluator: ProjectEvaluating {
+    let base: any ProjectEvaluating
+    let gate: NthEvaluationGate
+
+    func evaluate(
+        project: ProjectSourceModel,
+        purpose: GeometryRepresentationPurpose,
+        revision: DocumentTransactionRevision
+    ) throws -> EvaluatedProjectSnapshot {
+        gate.waitIfNeeded()
+        return try base.evaluate(
+            project: project,
+            purpose: purpose,
+            revision: revision
+        )
+    }
 }
 
 private func extrudedCADDocument(

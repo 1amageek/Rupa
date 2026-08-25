@@ -259,6 +259,7 @@ public actor ProjectController {
         _ transaction: ProjectSourceTransaction
     ) async throws -> ProjectSourceCommitResult {
         try requireTransactionRevision(transaction.expectedTransactionRevision)
+        try await validateMakeEditableEvaluationBindings(in: transaction)
 
         let prepared: PreparedEditorSourceTransaction<StagedCommandResults>
         do {
@@ -663,6 +664,71 @@ public actor ProjectController {
                 code: .evaluationFailed,
                 message: "Project evaluation failed: \(error)."
             )
+        }
+    }
+
+    /// Re-evaluates the current modeling projection so a caller-provided
+    /// command cannot promote an arbitrary Mesh payload under valid-looking
+    /// snapshot and CAD identities. The shared CAD cache keeps this validation
+    /// zero-copy after command preparation while the exact payload comparison
+    /// remains independent from cache-storage identity.
+    private func validateMakeEditableEvaluationBindings(
+        in transaction: ProjectSourceTransaction
+    ) async throws {
+        let baseRevision = session.transactionRevision
+        var requiresModelingEvaluation = false
+        for geometryCommand in transaction.geometrySourceCommands {
+            guard case .makeCADRepresentationEditable(let command) = geometryCommand else {
+                continue
+            }
+            do {
+                try command.validate()
+            } catch let error as EditorError {
+                throw ProjectControllerError(code: .transactionInvalid, message: error.message)
+            }
+            guard command.evaluationSnapshotID.sourceRevision == baseRevision else {
+                throw ProjectControllerError(
+                    code: .revisionConflict,
+                    message: "Make Editable command was prepared from a stale transaction revision."
+                )
+            }
+            requiresModelingEvaluation = true
+        }
+        guard requiresModelingEvaluation else {
+            return
+        }
+
+        let document = session.document
+        let source = evaluationSource
+        let snapshot = try await evaluate(
+            document: document,
+            source: source,
+            purpose: .modeling,
+            revision: baseRevision
+        )
+        try requireTransactionRevision(baseRevision)
+
+        for geometryCommand in transaction.geometrySourceCommands {
+            guard case .makeCADRepresentationEditable(let command) = geometryCommand else {
+                continue
+            }
+            guard command.evaluationSnapshotID == snapshot.id else {
+                throw ProjectControllerError(
+                    code: .sourceMismatch,
+                    message: "Make Editable command is not bound to the current modeling evaluation snapshot."
+                )
+            }
+            let matchesEvaluatedSource = snapshot.occurrences.values.contains { occurrence in
+                occurrence.representationID == command.sourceRepresentationID
+                    && occurrence.reference == command.sourceReference
+                    && occurrence.mesh == command.evaluatedMesh
+            }
+            guard matchesEvaluatedSource else {
+                throw ProjectControllerError(
+                    code: .sourceMismatch,
+                    message: "Make Editable Mesh payload does not match the bound CAD modeling evaluation."
+                )
+            }
         }
     }
 

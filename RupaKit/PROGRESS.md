@@ -145,6 +145,7 @@
   - [x] Retain CAD authority and modeling selection while optionally switching presentation selection
   - [x] Reject stale, wrong-purpose, mismatched-representation, and duplicate requests explicitly
   - [x] Prove save-load restoration, CAD-edit independence, rollback, and bounded materialization
+  - [x] Reject caller-forged Mesh payloads by revalidating the current modeling evaluation at commit
   - [x] Review, verify, and commit T05-C
 - [ ] Integrated T05 authored-Mesh source workflow verification
   - [ ] Verify CAD-only, Mesh-only edit, CAD-plus-Mesh edit, and Make Editable end-to-end workflows

@@ -163,6 +163,7 @@ editor command, and validation override recording is not a product-metadata edit
 |---|---|
 | Partition | Workspace-only edits do not change source identity, dirty state, source history, or source revision. |
 | Geometry role | CAD-derived snapshots cannot be mutated as source; CAD and Authored Mesh may coexist, and each payload plus explicit purpose selection retains distinct authority. |
+| Make Editable | A prepared CAD snapshot becomes Authored Mesh authority only when commit-time modeling evaluation matches its project, purpose, revision, representation reference, CAD identity, and complete Mesh payload; concurrent or forged inputs publish nothing. |
 | Reconstruction | Candidate generation does not mutate source; acceptance binds exact input and deviation evidence to the new CAD source. |
 | Revision | Multi-command source transactions increment exactly once; failure increments zero times. |
 | Reload | Identical source content receives the same content identity even when session revisions differ. |

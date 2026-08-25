@@ -113,7 +113,11 @@ sequenceDiagram
     P->>E: evaluate CAD representation at current revision
     E-->>P: immutable occurrence Mesh + copy telemetry
     P->>P: bind project, purpose, revision, representation, and CAD content identity
-    P->>C: commit MakeCADRepresentationEditableCommand
+    P->>P: accept MakeCADRepresentationEditableCommand
+    P->>E: re-evaluate current modeling source
+    E-->>P: current immutable occurrence Mesh
+    P->>P: match snapshot, reference, and exact Mesh payload
+    P->>C: apply validated source command
     C->>C: revalidate revision, representation, and CAD identity
     C->>A: add reidentified Authored Mesh with shared buffers
     C->>A: retain CAD/modeling; optionally switch presentation
@@ -122,12 +126,16 @@ sequenceDiagram
 Make Editable is a two-step explicit source transaction: preparation evaluates
 the selected `modeling` CAD representation without publishing a new controller
 state; commit revalidates the captured transaction revision and exact CAD source
-identity before adding authority. The new asset records `derivedFromCAD`
-provenance. Reidentification changes only the Authored Mesh source ID and shares
-all immutable geometry and attribute buffers with the evaluated snapshot. A
-wrong-purpose snapshot, stale revision, changed CAD payload, mismatched retained
-representation, or duplicate source/representation ID is a typed failure and
-publishes no partial CAD, Product, package, or evaluation state.
+identity, then evaluates the current modeling projection and requires the
+command's complete Mesh payload to equal the selected current occurrence before
+adding authority. Snapshot IDs and content identities alone are not proof that a
+caller-provided Mesh came from CAD evaluation. The new asset records
+`derivedFromCAD` provenance. Reidentification changes only the Authored Mesh
+source ID and shares all immutable geometry and attribute buffers with the
+evaluated snapshot. A wrong-purpose snapshot, stale or concurrently superseded
+revision, changed CAD payload, mismatched retained representation, forged Mesh
+payload, or duplicate source/representation ID is a typed failure and publishes
+no partial CAD, Product, package, or evaluation state.
 
 ## Evaluation Contract
 
