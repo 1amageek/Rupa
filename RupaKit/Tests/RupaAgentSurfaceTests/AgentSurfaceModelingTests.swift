@@ -1966,13 +1966,13 @@ import SwiftCAD
         Issue.record("Agent must return PolySpline mesh analysis.")
         return
     }
-    #expect(!result.isSupported)
+    #expect(result.isSupported)
     #expect(result.candidateKind == .singleQuad)
     #expect(result.supportedPatchCount == 1)
     #expect(result.candidatePatchCount == 1)
     #expect(result.patchGraph?.candidates.count == 1)
     #expect(result.patchGraph?.partition?.selectedCandidateIDs == [0])
-    #expect(result.errors.contains { $0.code == .unsupportedRoundedCorners })
+    #expect(result.errors.isEmpty)
     #expect(session.generation == DocumentGeneration(0))
     #expect(session.document.cadDocument.designGraph.order.isEmpty)
 }
@@ -1997,9 +1997,9 @@ import SwiftCAD
         Issue.record("Agent must return PolySpline mesh analysis.")
         return
     }
-    #expect(!result.isSupported)
+    #expect(result.isSupported)
     #expect(result.candidateKind == .quadPatchGraph)
-    #expect(result.supportedPatchCount == 0)
+    #expect(result.supportedPatchCount == 2)
     #expect(result.candidatePatchCount == 3)
     #expect(result.patchGraph?.ambiguousTriangleIndices == [0, 3])
     #expect(result.patchGraph?.partition?.isComplete == true)
@@ -2015,9 +2015,8 @@ import SwiftCAD
     #expect(result.diagnostics.contains { $0.code == .patchGraphIdentified })
     #expect(result.diagnostics.contains { $0.code == .patchGraphPartitioned })
     #expect(result.diagnostics.contains { $0.code == .patchAdjacencyIdentified })
-    #expect(result.diagnostics.contains { $0.code == .patchTangentPlaneDiscontinuity })
-    #expect(result.diagnostics.contains { $0.code == .patchCurvatureContinuityUnresolved })
-    #expect(result.errors.contains { $0.code == .unsupportedPatchNetwork })
+    #expect(result.diagnostics.contains { $0.code == .bicubicPatchNetworkSupported })
+    #expect(result.errors.isEmpty)
     #expect(session.generation == DocumentGeneration(0))
     #expect(session.document.cadDocument.designGraph.order.isEmpty)
 }
@@ -2050,8 +2049,7 @@ import SwiftCAD
     #expect(result.patchGraph?.selectedAdjacencies.count == 1)
     #expect(result.patchGraph?.selectedAdjacencies.first?.continuityLevel == .tangentPlane)
     #expect(result.patchGraph?.selectedAdjacencies.first?.requiresCurvatureContinuitySolve == false)
-    #expect(result.diagnostics.contains { $0.code == .planarPatchNetworkSupported })
-    #expect(!result.diagnostics.contains { $0.code == .patchCurvatureContinuityUnresolved })
+    #expect(result.diagnostics.contains { $0.code == .bicubicPatchNetworkSupported })
     #expect(result.errors.isEmpty)
     #expect(session.generation == DocumentGeneration(0))
     #expect(session.document.cadDocument.designGraph.order.isEmpty)

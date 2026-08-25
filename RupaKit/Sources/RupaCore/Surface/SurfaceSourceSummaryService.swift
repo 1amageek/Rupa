@@ -3,10 +3,10 @@ import SwiftCAD
 import RupaCoreTypes
 
 public struct SurfaceSourceSummaryService: Sendable {
-    private let pipelineOverride: CADPipeline?
+    private let exactEvaluatorOverride: (any ExactDocumentEvaluating)?
 
-    public init(pipeline: CADPipeline? = nil) {
-        self.pipelineOverride = pipeline
+    public init(exactEvaluator: (any ExactDocumentEvaluating)? = nil) {
+        self.exactEvaluatorOverride = exactEvaluator
     }
 
     private struct PatchCandidate {
@@ -776,7 +776,7 @@ public struct SurfaceSourceSummaryService: Sendable {
         currentEvaluation: DocumentEvaluationContext?,
         currentGeneration: DocumentGeneration?
     ) throws -> [String: TopologySummaryResult.Entry] {
-        let summary = try TopologySnapshotService(pipeline: pipelineOverride).snapshot(
+        let summary = try TopologySnapshotService(exactEvaluator: exactEvaluatorOverride).snapshot(
             document: document,
             objectRegistry: objectRegistry,
             currentEvaluation: currentEvaluation,

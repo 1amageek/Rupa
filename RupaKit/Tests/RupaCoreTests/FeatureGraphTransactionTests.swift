@@ -96,7 +96,7 @@ func featureGraphTransactionRejectsFailedGeometryWithoutPublishingSourceOrHistor
     #expect(session.commandStack.undoEntries.isEmpty)
     #expect(session.commandStack.redoEntries.isEmpty)
     #expect(session.evaluationStatus == .notEvaluated)
-    #expect(session.store.completedEvaluationPassCount == 1)
+    #expect(session.store.completedEvaluationPassCount == 0)
 }
 
 private struct BoxFeatureGraphFixture {

@@ -208,7 +208,7 @@ import SwiftCAD
         geometryRole: .curve
     )
 
-    _ = try document.createLoft(
+    let loftID = try document.createLoft(
         name: "Rail Loft",
         sections: [
             LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
@@ -220,17 +220,16 @@ import SwiftCAD
     )
     let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
     let body = try #require(evaluated.brep.bodies.values.first)
-    let railVertices = evaluated.brep.vertices.values.filter { vertex in
-        abs(vertex.point.y + 0.001) <= 1.0e-12
-            && vertex.point.z > 0.0
-            && vertex.point.z < 0.010
-            && vertex.point.x > 0.0025
-    }
+    let rail = try loftConnectorCurve(ordinal: 8, loftID: loftID, in: evaluated)
+    let railMiddle = try rail.point(at: 0.5, tolerance: document.modelingSettings.tolerance)
 
     #expect(body.kind == .solid)
-    #expect(evaluated.brep.vertices.count > 8)
-    #expect(evaluated.brep.faces.count > 6)
-    #expect(railVertices.isEmpty == false)
+    #expect(evaluated.brep.vertices.count == 8)
+    #expect(evaluated.brep.faces.count == 6)
+    #expect(rail.degree == 3)
+    #expect(railMiddle.x > 0.0025)
+    #expect(abs(railMiddle.y + 0.001) <= 1.0e-12)
+    #expect(railMiddle.z > 0.0 && railMiddle.z < 0.010)
     try document.validate()
 }
 
@@ -261,7 +260,7 @@ import SwiftCAD
         geometryRole: .curve
     )
 
-    _ = try document.createLoft(
+    let loftID = try document.createLoft(
         name: "Multi Rail Loft",
         sections: [
             LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
@@ -274,24 +273,20 @@ import SwiftCAD
     )
     let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
     let body = try #require(evaluated.brep.bodies.values.first)
-    let rightRailVertices = evaluated.brep.vertices.values.filter { vertex in
-        abs(vertex.point.y + 0.001) <= 1.0e-12
-            && vertex.point.z > 0.0
-            && vertex.point.z < 0.010
-            && vertex.point.x > 0.0025
+    let nonlinearRails = try (8..<12).compactMap { ordinal -> BSplineCurve3D? in
+        let curve = try loftConnectorCurve(ordinal: ordinal, loftID: loftID, in: evaluated)
+        return curve.degree > 1 ? curve : nil
     }
-    let leftRailVertices = evaluated.brep.vertices.values.filter { vertex in
-        abs(vertex.point.y - 0.001) <= 1.0e-12
-            && vertex.point.z > 0.0
-            && vertex.point.z < 0.010
-            && vertex.point.x < -0.0025
+    let railMiddlePoints = try nonlinearRails.map {
+        try $0.point(at: 0.5, tolerance: document.modelingSettings.tolerance)
     }
 
     #expect(body.kind == .solid)
-    #expect(evaluated.brep.vertices.count > 8)
-    #expect(evaluated.brep.faces.count > 6)
-    #expect(rightRailVertices.isEmpty == false)
-    #expect(leftRailVertices.isEmpty == false)
+    #expect(evaluated.brep.vertices.count == 8)
+    #expect(evaluated.brep.faces.count == 6)
+    #expect(nonlinearRails.count == 2)
+    #expect(railMiddlePoints.contains { $0.x > 0.0025 && abs($0.y + 0.001) <= 1.0e-12 })
+    #expect(railMiddlePoints.contains { $0.x < -0.0025 && abs($0.y - 0.001) <= 1.0e-12 })
     try document.validate()
 }
 
@@ -309,6 +304,7 @@ import SwiftCAD
         name: "Multi Section Rail Loft Middle",
         width: 4.0,
         height: 2.0,
+        x: 2.25,
         z: 5.0
     )
     let lastProfileID = try createLoftProfile(
@@ -324,7 +320,7 @@ import SwiftCAD
         geometryRole: .curve
     )
 
-    _ = try document.createLoft(
+    let loftID = try document.createLoft(
         name: "Multi Section Rail Loft",
         sections: [
             LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
@@ -337,24 +333,21 @@ import SwiftCAD
     )
     let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
     let body = try #require(evaluated.brep.bodies.values.first)
-    let railVertices = evaluated.brep.vertices.values.filter { vertex in
-        abs(vertex.point.y + 0.001) <= 1.0e-12
-            && vertex.point.z > 0.0
-            && vertex.point.z < 0.010
-            && abs(vertex.point.z - 0.005) > 1.0e-6
-            && vertex.point.x > 0.0025
-    }
-    let middleSectionVertices = evaluated.brep.vertices.values.filter { vertex in
-        abs(vertex.point.x - 0.002) <= 1.0e-12
-            && abs(vertex.point.y + 0.001) <= 1.0e-12
-            && abs(vertex.point.z - 0.005) <= 1.0e-12
-    }
+    let lowerRail = try loftConnectorCurve(ordinal: 12, loftID: loftID, in: evaluated)
+    let upperRail = try loftConnectorCurve(ordinal: 16, loftID: loftID, in: evaluated)
+    let lowerEnd = try lowerRail.point(at: 1.0, tolerance: document.modelingSettings.tolerance)
+    let upperStart = try upperRail.point(at: 0.0, tolerance: document.modelingSettings.tolerance)
 
     #expect(body.kind == .solid)
-    #expect(evaluated.brep.vertices.count > 12)
-    #expect(evaluated.brep.faces.count > 10)
-    #expect(railVertices.isEmpty == false)
-    #expect(middleSectionVertices.isEmpty == false)
+    #expect(evaluated.brep.vertices.count == 12)
+    #expect(evaluated.brep.faces.count == 10)
+    #expect(lowerRail.degree == 3)
+    #expect(upperRail.degree == 3)
+    #expect(lowerEnd.isApproximatelyEqual(to: upperStart, tolerance: 1.0e-12))
+    #expect(lowerEnd.isApproximatelyEqual(
+        to: Point3D(x: 0.00425, y: -0.001, z: 0.005),
+        tolerance: 1.0e-12
+    ))
     try document.validate()
 }
 
@@ -943,6 +936,27 @@ private func firstSmoothConnectorCurve(
         throw EditorError(
             code: .evaluationFailed,
             message: "Missing first smooth Loft connector curve."
+        )
+    }
+    return curve
+}
+
+private func loftConnectorCurve(
+    ordinal: Int,
+    loftID: FeatureID,
+    in evaluated: EvaluatedDocument
+) throws -> BSplineCurve3D {
+    let subshapeID = SubshapeID(
+        featureID: loftID,
+        role: GeneratedSubshapeRole.edge.rawValue,
+        ordinal: ordinal
+    )
+    guard case .edge(let edgeID) = evaluated.subshapes[subshapeID],
+          let edge = evaluated.brep.edges[edgeID],
+          let curve = evaluated.brep.geometry.curves[edge.curveID]?.bSplineCurve else {
+        throw EditorError(
+            code: .evaluationFailed,
+            message: "Missing exact Loft connector curve at ordinal \(ordinal)."
         )
     }
     return curve

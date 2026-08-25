@@ -28,7 +28,6 @@ requirement and never prove completion by themselves.
 |---|---|
 | `COMPLETE_IMPLEMENTATION_PLAN.md` | Dependency-ordered roadmap and work scheduling. It cannot add completion gates. |
 | `CAPABILITY_LEDGER.md` | Projection of current evidence and missing gates. |
-| `IMPLEMENTATION_STATUS.md` | Historical implementation observations. |
 | `CAD_QUALITY_MILESTONES.md` | Quality planning and evidence index. |
 | `SPEC.md` | Current package and implementation organization that is subordinate to the contracts above. Statements about current support are observations, not requirements. |
 

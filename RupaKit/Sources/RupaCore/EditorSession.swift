@@ -310,7 +310,9 @@ public final class EditorSession {
     ) throws {
         var expectedSelection = snapshot.selection
         expectedSelection.pruneMissingReferences(in: stagedSession.document)
-        guard stagedSession.selection == expectedSelection else {
+        var actualSelection = stagedSession.selection
+        actualSelection.pruneMissingReferences(in: stagedSession.document)
+        guard actualSelection == expectedSelection else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(transactionName) cannot execute selection mutations."

@@ -287,7 +287,7 @@ import SwiftCAD
     var document = DesignDocument.empty()
     _ = try document.createBSplineSurface(
         name: "Direct Authored Trim Surface",
-        surface: surfaceSourceSummaryDirectBSplineSurface()
+        surface: surfaceSourceSummaryPlanarBSplineSurface()
     )
     let initialSummary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let faceReference = try #require(initialSummary.sources.first?.patches.first?.faceSelectionReference)
@@ -552,12 +552,7 @@ private func surfaceSourceLength(_ vector: SurfaceSourceSummaryResult.Vector) ->
 }
 
 private func surfaceSourceSummaryDirectBSplineSurface() -> BSplineSurface3D {
-    let base = BSplineSurface3D.cubicBezierPatch(
-        bottomLeft: Point3D(x: 0.0, y: 0.0, z: 0.0),
-        bottomRight: Point3D(x: 0.02, y: 0.0, z: 0.0),
-        topRight: Point3D(x: 0.02, y: 0.015, z: 0.0),
-        topLeft: Point3D(x: 0.0, y: 0.015, z: 0.0)
-    )
+    let base = surfaceSourceSummaryPlanarBSplineSurface()
     var weights = base.weights
     weights[1][1] = 2.0
     return BSplineSurface3D(
@@ -567,6 +562,15 @@ private func surfaceSourceSummaryDirectBSplineSurface() -> BSplineSurface3D {
         vKnots: base.vKnots,
         controlPoints: base.controlPoints,
         weights: weights
+    )
+}
+
+private func surfaceSourceSummaryPlanarBSplineSurface() -> BSplineSurface3D {
+    BSplineSurface3D.cubicBezierPatch(
+        bottomLeft: Point3D(x: 0.0, y: 0.0, z: 0.0),
+        bottomRight: Point3D(x: 0.02, y: 0.0, z: 0.0),
+        topRight: Point3D(x: 0.02, y: 0.015, z: 0.0),
+        topLeft: Point3D(x: 0.0, y: 0.015, z: 0.0)
     )
 }
 

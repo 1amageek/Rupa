@@ -3,14 +3,14 @@ import SwiftCAD
 import RupaCoreTypes
 
 public struct TopologySnapshotService: Sendable {
-    private let pipelineOverride: CADPipeline?
+    private let exactEvaluatorOverride: (any ExactDocumentEvaluating)?
     private let edgeLengthEvaluator: any BRepEdgeLengthEvaluating
 
     public init(
-        pipeline: CADPipeline? = nil,
+        exactEvaluator: (any ExactDocumentEvaluating)? = nil,
         edgeLengthEvaluator: any BRepEdgeLengthEvaluating = DefaultBRepEdgeLengthEvaluator()
     ) {
-        self.pipelineOverride = pipeline
+        self.exactEvaluatorOverride = exactEvaluator
         self.edgeLengthEvaluator = edgeLengthEvaluator
     }
 
@@ -60,8 +60,8 @@ public struct TopologySnapshotService: Sendable {
         }
 
         let evaluatedDocument = try DocumentEvaluationContextResolver(
-            pipeline: pipelineOverride
-        ).evaluatedDocument(
+            exactEvaluator: exactEvaluatorOverride
+        ).exactEvaluatedDocument(
             document: document,
             objectRegistry: objectRegistry,
             currentEvaluation: currentEvaluation,

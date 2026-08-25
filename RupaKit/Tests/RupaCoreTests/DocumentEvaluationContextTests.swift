@@ -83,7 +83,12 @@ import SwiftCAD
         currentEvaluation: currentEvaluation,
         currentGeneration: session.generation
     )
-    let topologySummary = try TopologySummaryService(pipeline: failingPipeline).summarize(
+    let topologySummary = try TopologySummaryService(
+        exactEvaluator: DocumentEvaluator(
+            featureEvaluator: ContextFailingFeatureEvaluator(),
+            tolerance: tolerance
+        )
+    ).summarize(
         document: session.document,
         displayUnit: session.workspaceState.displayUnit,
         currentEvaluation: currentEvaluation,
@@ -119,6 +124,26 @@ import SwiftCAD
     #expect(surfaceAnalysis.counts.bSplineFaceCount == 0)
     #expect(surfaceContinuity.counts.bSplineFaceCount == 0)
     #expect(displaySnapshot.bodies.count == 1)
+}
+
+@MainActor
+@Test func topologySummaryDoesNotMaterializeDerivedMeshes() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let tolerance = session.document.modelingSettings.tolerance
+    let evaluator = DocumentEvaluator(
+        tessellator: ContextRejectingTessellator(),
+        tolerance: tolerance,
+        artifactPolicy: .materialized
+    )
+
+    let summary = try TopologySummaryService(exactEvaluator: evaluator).summarize(
+        document: session.document,
+        displayUnit: session.workspaceState.displayUnit
+    )
+
+    #expect(summary.counts.bodyCount == 1)
+    #expect(summary.counts.faceCount > 0)
 }
 
 @MainActor
@@ -294,6 +319,20 @@ import SwiftCAD
 private struct ContextFailingFeatureEvaluator: FeatureEvaluating {
     func evaluate(feature _: FeatureNode, context _: EvaluationContext) throws -> EvaluationResult {
         throw FeatureEvaluationError.invalidGraph("Injected evaluator should not be used.")
+    }
+}
+
+private struct ContextRejectingTessellator: Tessellating {
+    func tessellate(
+        model: BRepModel,
+        options: TessellationOptions
+    ) throws -> [BodyID: Mesh] {
+        throw KernelError(
+            phase: .evaluation,
+            code: .unsupportedCapability,
+            tolerance: .standard,
+            message: "Topology queries must not materialize derived meshes."
+        )
     }
 }
 

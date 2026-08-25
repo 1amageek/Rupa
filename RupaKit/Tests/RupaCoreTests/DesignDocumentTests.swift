@@ -1983,20 +1983,20 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     #expect(node.object?.properties["interpolate.boundary"] == .boolean(true))
 }
 
-@Test func polySplineMeshAnalysisServiceReportsPreflightDiagnostics() async throws {
+@Test func polySplineMeshAnalysisServiceReportsRoundedCornerSupport() async throws {
     let result = PolySplineMeshAnalysisService().analyze(
         sourceMesh: designDocumentPolySplineQuadMesh(),
         options: PolySplineOptions(roundedCorners: true),
         tolerance: DocumentModelingSettings.standard.tolerance
     )
 
-    #expect(!result.isSupported)
+    #expect(result.isSupported)
     #expect(result.candidateKind == .singleQuad)
     #expect(result.supportedPatchCount == 1)
     #expect(result.candidatePatchCount == 1)
     #expect(result.patchGraph?.candidates.count == 1)
     #expect(result.patchGraph?.partition?.selectedCandidateIDs == [0])
-    #expect(result.errors.contains { $0.code == .unsupportedRoundedCorners })
+    #expect(result.errors.isEmpty)
 }
 
 @Test func polySplineMeshAnalysisServiceReportsPatchGraphCandidates() async throws {
@@ -2005,9 +2005,9 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
         tolerance: DocumentModelingSettings.standard.tolerance
     )
 
-    #expect(!result.isSupported)
+    #expect(result.isSupported)
     #expect(result.candidateKind == .quadPatchGraph)
-    #expect(result.supportedPatchCount == 0)
+    #expect(result.supportedPatchCount == 2)
     #expect(result.candidatePatchCount == 3)
     #expect(result.patchGraph?.ambiguousTriangleIndices == [0, 3])
     #expect(result.patchGraph?.partition?.isComplete == true)
@@ -2023,8 +2023,8 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     #expect(result.diagnostics.contains { $0.code == .patchGraphIdentified })
     #expect(result.diagnostics.contains { $0.code == .patchGraphPartitioned })
     #expect(result.diagnostics.contains { $0.code == .patchAdjacencyIdentified })
-    #expect(result.diagnostics.contains { $0.code == .patchTangentPlaneDiscontinuity })
-    #expect(result.diagnostics.contains { $0.code == .patchCurvatureContinuityUnresolved })
+    #expect(result.diagnostics.contains { $0.code == .bicubicPatchNetworkSupported })
+    #expect(result.errors.isEmpty)
 }
 
 @Test func polySplineMeshAnalysisServiceSupportsPlanarUnmergedPatchNetwork() async throws {
@@ -2042,29 +2042,26 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     #expect(result.patchGraph?.selectedAdjacencies.count == 1)
     #expect(result.patchGraph?.selectedAdjacencies.first?.continuityLevel == .tangentPlane)
     #expect(result.patchGraph?.selectedAdjacencies.first?.requiresCurvatureContinuitySolve == false)
-    #expect(result.diagnostics.contains { $0.code == .planarPatchNetworkSupported })
-    #expect(!result.diagnostics.contains { $0.code == .patchCurvatureContinuityUnresolved })
+    #expect(result.diagnostics.contains { $0.code == .bicubicPatchNetworkSupported })
     #expect(result.errors.isEmpty)
 }
 
-@Test func polySplineSurfaceRejectsUnsupportedOptionsBeforeMutation() async throws {
+@Test func polySplineSurfaceAcceptsRoundedCorners() async throws {
     var document = DesignDocument.empty()
-    var caught: EditorError?
-
-    do {
-        _ = try document.createPolySplineSurface(
-            name: "Rounded Surface",
-            sourceMesh: designDocumentPolySplineQuadMesh(),
-            options: PolySplineOptions(roundedCorners: true)
-        )
-    } catch let error as EditorError {
-        caught = error
+    let featureID = try document.createPolySplineSurface(
+        name: "Rounded Surface",
+        sourceMesh: designDocumentPolySplineQuadMesh(),
+        options: PolySplineOptions(roundedCorners: true)
+    )
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case .polySpline(let polySpline) = feature.operation else {
+        Issue.record("Expected a PolySpline feature.")
+        return
     }
 
-    #expect(caught?.code == .commandInvalid)
-    #expect(caught?.message.contains("rounded-corner") == true)
-    #expect(document.cadDocument.designGraph.order.isEmpty)
-    #expect(document.productMetadata.sceneNodes.values.allSatisfy { $0.reference == nil })
+    #expect(polySpline.options.roundedCorners)
+    #expect(feature.outputs == [FeatureOutput(role: .sheet)])
+    try document.validate()
 }
 
 @Test func sketchObjectsReceiveTypedProperties() async throws {

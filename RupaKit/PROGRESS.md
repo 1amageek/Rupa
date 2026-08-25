@@ -118,3 +118,38 @@
   - [x] Verify real Product, CAD, Mesh, package, projection, and presentation-evaluation paths
   - [x] Re-run rollback, cancellation, stale-publication, synchronization, ownership, incomplete-marker, and zero-copy audits
   - [x] Review cumulative changes and commit completion evidence
+- [x] T05-0 project source-authority baseline stabilization
+  - [x] Classify every current RupaCore test failure against the implemented kernel contract
+  - [x] Correct implementation regressions or stale expectations without weakening failure contracts
+  - [x] Remove the deprecated projection-only Mesh compatibility API
+  - [x] Reconcile normative package and implementation-status documents with the production application route
+  - [x] Re-run the Core baseline and the T04/P1 focused verification
+  - [x] Review, verify, and commit T05-0
+- [ ] T05-A authored-Mesh source command contract
+  - [ ] Define typed authored-Mesh edit and representation-selection commands in the Core owner
+  - [ ] Apply vertex and supported face edits through MeshEditBuffer with stale-source rejection
+  - [ ] Preserve CAD authority, Mesh provenance, representation references, and no-op identity
+  - [ ] Reject unsupported attribute remapping and invalid source/object/representation combinations explicitly
+  - [ ] Prove unchanged buffer storage sharing and bounded copy telemetry
+  - [ ] Review, verify, and commit T05-A
+- [ ] T05-B atomic authored-Mesh project transactions
+  - [ ] Extend ProjectSourceTransaction without making the evaluation projection a mutation source
+  - [ ] Stage CAD and authored-Mesh commands in a deterministic order and validate the complete authority aggregate
+  - [ ] Encode, evaluate, save, and publish the staged Mesh source atomically
+  - [ ] Preserve unchanged package blobs and collect superseded blobs only after successful publication
+  - [ ] Cover validation, codec, evaluation, save, cancellation, stale-revision, and late-publication rollback
+  - [ ] Review, verify, and commit T05-B
+- [ ] T05-C explicit Make Editable from CAD
+  - [ ] Define a source command that binds CAD representation, snapshot, revision, and content identity
+  - [ ] Promote the validated CAD evaluation snapshot to an authored-Mesh asset with derived-from-CAD provenance
+  - [ ] Retain CAD authority and modeling selection while optionally switching presentation selection
+  - [ ] Reject stale, wrong-purpose, mismatched-representation, and duplicate requests explicitly
+  - [ ] Prove save-load restoration, CAD-edit independence, rollback, and bounded materialization
+  - [ ] Review, verify, and commit T05-C
+- [ ] Integrated T05 authored-Mesh source workflow verification
+  - [ ] Verify CAD-only, Mesh-only edit, CAD-plus-Mesh edit, and Make Editable end-to-end workflows
+  - [ ] Re-run package, rollback, cancellation, stale-publication, zero-copy, and blob-reuse evidence
+  - [ ] Verify supported Native, ordinary WASM, and Embedded WASM compile or runtime evidence without overgeneralization
+  - [ ] Re-run incomplete-implementation, synchronization, ownership, unsafe-memory, and target-branch audits
+  - [ ] Synchronize architecture, source-authority contracts, and PROGRESS with the verified implementation
+  - [ ] Review cumulative changes and commit integrated T05 evidence

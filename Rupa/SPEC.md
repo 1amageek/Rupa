@@ -27,7 +27,6 @@ This document defines the initial official implementation specification for Rupa
 | Domain transaction contract | `DOMAIN_TRANSACTION_CONTRACT.md` |
 | Validation contract | `VALIDATION_CONTRACT.md` |
 | CAD/Mesh responsibility contract | `CAD_MESH_RESPONSIBILITY_CONTRACT.md` |
-| Implementation status | `IMPLEMENTATION_STATUS.md` |
 | Deferred profile layer | ApplicationProfile switching after the universal CAD implementation is complete |
 | Initial app platforms | macOS |
 | Initial CLI platform | macOS |
@@ -1276,9 +1275,11 @@ File mode requirements:
 
 ### Rupa Package Format
 
-Rupa uses `.swcad` as the user-facing extension. New project saves use package
-schema v3 with required Product source, optional CAD source, and optional Authored
-Mesh source. Legacy project schema v2 is rejected explicitly.
+Rupa uses `.swcad` as the user-facing extension. The `ProjectController` source
+route saves package schema v3 with required Product source, optional CAD source,
+and optional Authored Mesh source. Legacy project schema v2 is rejected explicitly.
+The application, Agent, and CLI still use `DocumentFileService` until their T06
+migration; those legacy routes do not claim schema-v3 or Authored-Mesh persistence.
 
 | Entry | Meaning |
 |---|---|

@@ -128,9 +128,14 @@ public struct DrawingProjectionService: Sendable {
     }
 
     private let pipelineOverride: CADPipeline?
+    private let exactEvaluatorOverride: (any ExactDocumentEvaluating)?
 
-    public init(pipeline: CADPipeline? = nil) {
+    public init(
+        pipeline: CADPipeline? = nil,
+        exactEvaluator: (any ExactDocumentEvaluating)? = nil
+    ) {
         self.pipelineOverride = pipeline
+        self.exactEvaluatorOverride = exactEvaluator
     }
 
     public func generate(
@@ -407,7 +412,7 @@ public struct DrawingProjectionService: Sendable {
               document.cadDocument.hasActiveRenderableTopologyFeatures else {
             return nil
         }
-        return try TopologySnapshotService(pipeline: pipelineOverride).snapshot(
+        return try TopologySnapshotService(exactEvaluator: exactEvaluatorOverride).snapshot(
             document: document,
             objectRegistry: objectRegistry,
             currentEvaluation: currentEvaluation,

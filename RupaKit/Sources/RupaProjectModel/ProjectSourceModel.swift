@@ -27,36 +27,6 @@ public struct ProjectSourceModel: Codable, Equatable, Sendable {
         try validate()
     }
 
-    @available(*, deprecated, message: "Use authoredMeshAssets so persisted Mesh provenance is explicit.")
-    public init(
-        id: ProjectID,
-        name: String,
-        meshSources: [GeometrySourceID: MeshSource],
-        objectDefinitions: [ObjectDefinitionID: ObjectDefinition] = [:],
-        occurrences: [SceneOccurrenceID: SceneOccurrence] = [:],
-        rootOccurrenceIDs: [SceneOccurrenceID] = []
-    ) throws {
-        let assets = try Dictionary(uniqueKeysWithValues: meshSources.map { sourceID, source in
-            (
-                sourceID,
-                try AuthoredMeshAsset(source: source, provenance: .created)
-            )
-        })
-        try self.init(
-            id: id,
-            name: name,
-            authoredMeshAssets: assets,
-            objectDefinitions: objectDefinitions,
-            occurrences: occurrences,
-            rootOccurrenceIDs: rootOccurrenceIDs
-        )
-    }
-
-    @available(*, deprecated, message: "Use authoredMeshAssets and retain provenance.")
-    public var meshSources: [GeometrySourceID: MeshSource] {
-        authoredMeshAssets.mapValues(\.source)
-    }
-
     public func validate() throws {
         do {
             try id.validate()

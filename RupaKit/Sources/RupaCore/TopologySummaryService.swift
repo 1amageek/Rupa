@@ -4,8 +4,8 @@ import RupaCoreTypes
 public struct TopologySummaryService: Sendable {
     private let snapshotService: TopologySnapshotService
 
-    public init(pipeline: CADPipeline? = nil) {
-        snapshotService = TopologySnapshotService(pipeline: pipeline)
+    public init(exactEvaluator: (any ExactDocumentEvaluating)? = nil) {
+        snapshotService = TopologySnapshotService(exactEvaluator: exactEvaluator)
     }
 
     public func summarize(

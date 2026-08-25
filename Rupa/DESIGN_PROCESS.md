@@ -96,7 +96,6 @@ wall-clock and memory regression fixtures for heavy geometry paths.
 | `CAD_UI_OBJECTIVE_EVALUATION.md` | Objective rating model | Treat assessment entries as `ValidatedArtifact`, `ObservationSet`, confidence, calibration-anchor, and performance-measurement records. |
 | `CADInteractionQualityAssessmentService` | Agent-readable assessment | Emit machine-readable design packets with evidence, open work, route observations, performance observations, calibration anchors, performance measurement records, and confidence. |
 | `CAD_INTERACTION_ARCHITECTURE.md` | Interaction layer contract | Use `FlowGraph` checks to prove UI, command, source, evaluation, and Agent routes are connected. |
-| `IMPLEMENTATION_STATUS.md` | Status ledger | Report progress by design packet maturity, not only feature count. |
 
 ## Current Process State
 
