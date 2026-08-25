@@ -88,10 +88,13 @@ func projectControllerLoadsEvaluatesAndResavesMeshOnlyPackageWithoutCADAuthority
 func projectControllerCADTransactionPreservesAuthoredMeshAuthorityAndPresentationSelection() async throws {
     let sourceDocument = try cadAndMeshDocument(named: "Hybrid")
     let sourceAsset = try #require(sourceDocument.authoredMeshAssets["mesh.controller-presentation"])
-    let sourceSelections = sourceDocument.productMetadata.sceneNodes.values.compactMap {
-        $0.object?.geometryRepresentations.selection
-    }
-    let sourceSelection = try #require(sourceSelections.first)
+    let sourceNode = try #require(sourceDocument.productMetadata.sceneNodes.first {
+        $0.value.object?.geometryRepresentations.source(for: .presentation)
+            == .authoredMesh(sourceAsset.id)
+    })
+    let sourceSelection = try #require(
+        sourceNode.value.object?.geometryRepresentations.selection
+    )
     let controller = try makeController(document: sourceDocument)
     let beforePackage = await controller.currentPackage()
 
@@ -106,10 +109,10 @@ func projectControllerCADTransactionPreservesAuthoredMeshAuthorityAndPresentatio
     let resultAsset = try #require(
         result.package.authoredMeshAssets[sourceAsset.id]
     )
-    let resultSelections = result.document.productMetadata.sceneNodes.values.compactMap {
-        $0.object?.geometryRepresentations.selection
-    }
-    let resultSelection = try #require(resultSelections.first)
+    let resultSelection = try #require(
+        result.document.productMetadata.sceneNodes[sourceNode.key]?
+            .object?.geometryRepresentations.selection
+    )
     #expect(beforePackage.cadSource != nil)
     #expect(result.package.cadSource != nil)
     #expect(result.package.cadSource != beforePackage.cadSource)
