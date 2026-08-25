@@ -5,6 +5,7 @@ import Testing
 import RupaCore
 import RupaCoreTypes
 import RupaEvaluation
+import RupaGeometry
 import RupaProjectModel
 import RupaProjectPackage
 @testable import RupaProject
@@ -24,13 +25,219 @@ func projectControllerPublishesCADPackageAndEvaluationAfterValidation() async th
     #expect(result.transactionRevision == DocumentTransactionRevision(1))
     #expect(result.documentGeneration == DocumentGeneration(1))
     #expect(result.document.cadDocument.metadata.name == "After")
-    #expect(result.package.source.name == "After")
-    #expect(result.evaluation.projectID == result.package.source.id)
+    #expect(try decodedProductName(result.package.productSource) == "After")
+    #expect(result.evaluation.projectID == result.package.documentID)
     #expect(result.commandResults.count == 1)
     #expect(await controller.currentDocument().cadDocument.metadata.name == "After")
-    #expect(await controller.currentSource().name == "After")
+    #expect(await controller.currentEvaluationSource().name == "After")
     #expect(await controller.currentPackage().cadSource == result.package.cadSource)
     #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(1))
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectControllerLoadsEvaluatesAndResavesMeshOnlyPackageWithoutCADAuthority() async throws {
+    try await withTemporaryDirectory { directory in
+        let url = directory.appendingPathComponent("mesh-only.rupa")
+        let resavedURL = directory.appendingPathComponent("mesh-only-resaved.rupa")
+        let sourceDocument = try meshOnlyDocument(named: "Mesh Only")
+        let controller = try makeController(document: sourceDocument)
+
+        let initialEvaluation = try await controller.evaluateCurrent()
+        let initialPackage = await controller.currentPackage()
+        #expect(initialPackage.cadSource == nil)
+        #expect(initialEvaluation.occurrences.values.contains {
+            $0.reference == .authoredMesh("mesh.controller-only")
+                && $0.mesh == sourceDocument.authoredMeshAssets["mesh.controller-only"]?.source
+        })
+        _ = try await controller.save(
+            to: url,
+            expectedTransactionRevision: DocumentTransactionRevision(0)
+        )
+
+        _ = try await controller.commit(
+            ProjectSourceTransaction(
+                name: "fixture.rename-mesh-only",
+                commands: [.renameDocument(name: "Changed")],
+                expectedTransactionRevision: DocumentTransactionRevision(0)
+            )
+        )
+        let loaded = try await controller.load(
+            from: url,
+            expectedTransactionRevision: DocumentTransactionRevision(1)
+        )
+
+        #expect(loaded.document.cadDocument.metadata.name == "Mesh Only")
+        #expect(loaded.document.hasAuthoritativeCADSource == false)
+        #expect(loaded.package.cadSource == nil)
+        #expect(loaded.document.authoredMeshAssets == sourceDocument.authoredMeshAssets)
+        #expect(loaded.evaluation.occurrences.values.contains {
+            $0.reference == .authoredMesh("mesh.controller-only")
+        })
+        let resaved = try await controller.save(
+            to: resavedURL,
+            expectedTransactionRevision: DocumentTransactionRevision(2)
+        )
+        #expect(resaved.document.cadSource == nil)
+        #expect(resaved.document.authoredMeshAssets == sourceDocument.authoredMeshAssets)
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectControllerCADTransactionPreservesAuthoredMeshAuthorityAndPresentationSelection() async throws {
+    let sourceDocument = try cadAndMeshDocument(named: "Hybrid")
+    let sourceAsset = try #require(sourceDocument.authoredMeshAssets["mesh.controller-presentation"])
+    let sourceSelections = sourceDocument.productMetadata.sceneNodes.values.compactMap {
+        $0.object?.geometryRepresentations.selection
+    }
+    let sourceSelection = try #require(sourceSelections.first)
+    let controller = try makeController(document: sourceDocument)
+    let beforePackage = await controller.currentPackage()
+
+    let result = try await controller.commit(
+        ProjectSourceTransaction(
+            name: "fixture.rename-hybrid",
+            commands: [.renameDocument(name: "Hybrid Renamed")],
+            expectedTransactionRevision: DocumentTransactionRevision(0)
+        )
+    )
+
+    let resultAsset = try #require(
+        result.package.authoredMeshAssets[sourceAsset.id]
+    )
+    let resultSelections = result.document.productMetadata.sceneNodes.values.compactMap {
+        $0.object?.geometryRepresentations.selection
+    }
+    let resultSelection = try #require(resultSelections.first)
+    #expect(beforePackage.cadSource != nil)
+    #expect(result.package.cadSource != nil)
+    #expect(result.package.cadSource != beforePackage.cadSource)
+    #expect(resultAsset.id == sourceAsset.id)
+    #expect(resultAsset.source == sourceAsset.source)
+    #expect(resultAsset.provenance == sourceAsset.provenance)
+    #expect(resultSelection == sourceSelection)
+    #expect(result.evaluation.occurrences.values.contains {
+        $0.representationID == sourceSelection.presentation
+            && $0.reference == .authoredMesh(sourceAsset.id)
+    })
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectControllerRejectsProductCADMismatchWithoutPublishing() async throws {
+    try await withTemporaryDirectory { directory in
+        let url = directory.appendingPathComponent("mismatch.rupa")
+        let sourceController = try makeController(
+            document: try cadAndMeshDocument(named: "Matched")
+        )
+        let sourcePackage = await sourceController.currentPackage()
+        let sourceCAD = try #require(sourcePackage.cadSource)
+        var mismatchedCAD = try JSONProjectCADSourceCodec().decode(sourceCAD)
+        mismatchedCAD.metadata.name = "Mismatched"
+        let mismatchedPackage = try sourcePackage.replacingSources(
+            documentID: sourcePackage.documentID,
+            product: sourcePackage.productSource,
+            cad: JSONProjectCADSourceCodec().encode(mismatchedCAD),
+            authoredMeshAssets: sourcePackage.authoredMeshAssets
+        )
+        _ = try ProjectPackageStore().save(mismatchedPackage, to: url)
+
+        let retainedDocument = try meshOnlyDocument(named: "Retained")
+        let controller = try makeController(document: retainedDocument)
+        let retainedPackage = await controller.currentPackage()
+        var caught: ProjectControllerError?
+        do {
+            _ = try await controller.load(
+                from: url,
+                expectedTransactionRevision: DocumentTransactionRevision(0)
+            )
+        } catch let error as ProjectControllerError {
+            caught = error
+        }
+
+        #expect(caught?.code == .sourceMismatch)
+        #expect(await controller.currentDocument().cadDocument.metadata.name == "Retained")
+        #expect(await controller.currentPackage().productSource == retainedPackage.productSource)
+        #expect(await controller.currentEvaluationSource().name == "Retained")
+        #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(0))
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectControllerLoadEvaluationFailureDoesNotPublishStagedSources() async throws {
+    try await withTemporaryDirectory { directory in
+        let url = directory.appendingPathComponent("evaluation-failure.rupa")
+        let sourceController = try makeController(
+            document: try meshOnlyDocument(named: "Rejected")
+        )
+        _ = try await sourceController.save(
+            to: url,
+            expectedTransactionRevision: DocumentTransactionRevision(0)
+        )
+        let controller = try makeController(
+            document: try meshOnlyDocument(named: "Retained"),
+            evaluator: NameRejectingProjectEvaluator(rejectedName: "Rejected")
+        )
+        let retainedPackage = await controller.currentPackage()
+        var caught: ProjectControllerError?
+
+        do {
+            _ = try await controller.load(
+                from: url,
+                expectedTransactionRevision: DocumentTransactionRevision(0)
+            )
+        } catch let error as ProjectControllerError {
+            caught = error
+        }
+
+        #expect(caught?.code == .evaluationFailed)
+        #expect(await controller.currentDocument().cadDocument.metadata.name == "Retained")
+        #expect(await controller.currentPackage().productSource == retainedPackage.productSource)
+        #expect(await controller.currentEvaluationSource().name == "Retained")
+        #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(0))
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectControllerCancelledLoadDoesNotPublishStagedSources() async throws {
+    try await withTemporaryDirectory { directory in
+        let url = directory.appendingPathComponent("cancelled-load.rupa")
+        let sourceController = try makeController(
+            document: try meshOnlyDocument(named: "Blocked")
+        )
+        _ = try await sourceController.save(
+            to: url,
+            expectedTransactionRevision: DocumentTransactionRevision(0)
+        )
+        let gate = BlockingEvaluationGate(blockedSourceName: "Blocked")
+        defer { gate.releaseFirstEvaluation() }
+        let controller = try makeController(
+            document: try meshOnlyDocument(named: "Retained"),
+            evaluator: BlockingProjectEvaluator(gate: gate)
+        )
+        let retainedPackage = await controller.currentPackage()
+        let load = Task {
+            try await controller.load(
+                from: url,
+                expectedTransactionRevision: DocumentTransactionRevision(0)
+            )
+        }
+        while !gate.didStartFirstEvaluation {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        load.cancel()
+        gate.releaseFirstEvaluation()
+
+        var wasCancelled = false
+        do {
+            _ = try await load.value
+        } catch is CancellationError {
+            wasCancelled = true
+        }
+        #expect(wasCancelled)
+        #expect(await controller.currentDocument().cadDocument.metadata.name == "Retained")
+        #expect(await controller.currentPackage().productSource == retainedPackage.productSource)
+        #expect(await controller.currentEvaluationSource().name == "Retained")
+        #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(0))
+    }
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -57,7 +264,7 @@ func projectControllerDoesNotPublishWhenEvaluationFails() async throws {
 
     #expect(caught?.code == .evaluationFailed)
     #expect(await controller.currentDocument().cadDocument.metadata.name == "Before")
-    #expect(await controller.currentSource().name == "Before")
+    #expect(await controller.currentEvaluationSource().name == "Before")
     #expect(await controller.currentPackage().cadSource == initialPackage.cadSource)
     #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(0))
 }
@@ -129,7 +336,7 @@ func projectControllerRejectsPublicationWhenConcurrentCallerWins() async throws 
     #expect(firstError?.code == .revisionConflict)
     #expect(second.transactionRevision == DocumentTransactionRevision(1))
     #expect(await controller.currentDocument().cadDocument.metadata.name == "Second")
-    #expect(await controller.currentSource().name == "Second")
+    #expect(await controller.currentEvaluationSource().name == "Second")
     #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(1))
 }
 
@@ -142,7 +349,7 @@ func projectControllerRoutesSaveAndLoadThroughCoherentPackageState() async throw
             to: url,
             expectedTransactionRevision: DocumentTransactionRevision(0)
         )
-        #expect(saved.document.source.name == "Saved")
+        #expect(try decodedProductName(saved.document.productSource) == "Saved")
 
         _ = try await controller.commit(
             ProjectSourceTransaction(
@@ -157,7 +364,7 @@ func projectControllerRoutesSaveAndLoadThroughCoherentPackageState() async throw
         )
 
         #expect(loaded.document.cadDocument.metadata.name == "Saved")
-        #expect(loaded.package.source.name == "Saved")
+        #expect(try decodedProductName(loaded.package.productSource) == "Saved")
         #expect(loaded.transactionRevision == DocumentTransactionRevision(2))
         #expect(await controller.currentDocument().cadDocument.metadata.name == "Saved")
         #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(2))
@@ -263,7 +470,7 @@ func projectControllerFailedSaveRetainsCurrentAggregate() async throws {
         }
 
         #expect(caught?.code == .packageFailed)
-        #expect(await controller.currentPackage().source == before.source)
+        #expect(await controller.currentPackage().productSource == before.productSource)
         #expect(await controller.currentPackage().cadSource == before.cadSource)
         #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(0))
     }
@@ -285,25 +492,62 @@ private func makeController(
 
 private struct FixtureProjector: ProjectSourceProjecting {
     func project(_ document: DesignDocument) throws -> ProjectSourceModel {
-        try ProjectSourceModel(
-            id: ProjectID(rawValue: "cad.\(document.id.description)"),
-            name: document.cadDocument.metadata.name ?? "Untitled"
+        var parentByChild: [SceneNodeID: SceneNodeID] = [:]
+        for parent in document.productMetadata.sceneNodes.values {
+            for childID in parent.childIDs {
+                parentByChild[childID] = parent.id
+            }
+        }
+        var definitions: [ObjectDefinitionID: ObjectDefinition] = [:]
+        var occurrences: [SceneOccurrenceID: SceneOccurrence] = [:]
+        for node in document.productMetadata.sceneNodes.values {
+            let definitionID = ObjectDefinitionID(rawValue: "object.\(node.id.description)")
+            let occurrenceID = SceneOccurrenceID(rawValue: "scene.\(node.id.description)")
+            definitions[definitionID] = ObjectDefinition(
+                id: definitionID,
+                name: node.name,
+                representations: node.object?.category == .body
+                    ? node.object?.geometryRepresentations ?? .empty
+                    : .empty
+            )
+            occurrences[occurrenceID] = SceneOccurrence(
+                id: occurrenceID,
+                definitionID: definitionID,
+                parentID: parentByChild[node.id].map {
+                    SceneOccurrenceID(rawValue: "scene.\($0.description)")
+                },
+                localTransform: .identity
+            )
+        }
+        return try ProjectSourceModel(
+            id: ProjectID(rawValue: "project.\(document.id.description)"),
+            name: document.cadDocument.metadata.name ?? "Untitled",
+            authoredMeshAssets: document.authoredMeshAssets,
+            objectDefinitions: definitions,
+            occurrences: occurrences,
+            rootOccurrenceIDs: document.productMetadata.rootSceneNodeIDs.map {
+                SceneOccurrenceID(rawValue: "scene.\($0.description)")
+            }
         )
     }
 }
 
 private struct FixtureCADSourceCodec: ProjectCADSourceCoding {
-    func encode(_ document: DesignDocument) throws -> ProjectPackageCADSource {
+    func encode(_ document: CADDocument) throws -> ProjectPackageCADSource {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         return try ProjectPackageCADSource(
-            data: encoder.encode(document.cadDocument)
+            data: encoder.encode(document)
         )
     }
 
-    func decode(_ source: ProjectPackageCADSource) throws -> DesignDocument {
-        DesignDocument(cadDocument: try JSONDecoder().decode(CADDocument.self, from: source.data))
+    func decode(_ source: ProjectPackageCADSource) throws -> CADDocument {
+        try JSONDecoder().decode(CADDocument.self, from: source.data)
     }
+}
+
+private func decodedProductName(_ source: ProjectPackageProductSource) throws -> String? {
+    try JSONProjectProductSourceCodec().decode(source).name
 }
 
 private struct FailingProjectEvaluator: ProjectEvaluating {
@@ -319,6 +563,28 @@ private struct FailingProjectEvaluator: ProjectEvaluating {
     }
 }
 
+private struct NameRejectingProjectEvaluator: ProjectEvaluating {
+    let rejectedName: String
+
+    func evaluate(
+        project: ProjectSourceModel,
+        purpose: GeometryRepresentationPurpose,
+        revision: DocumentTransactionRevision
+    ) throws -> EvaluatedProjectSnapshot {
+        guard project.name != rejectedName else {
+            throw EvaluationError(
+                code: .sourceUnavailable,
+                message: "Fixture rejected the staged source."
+            )
+        }
+        return try ProjectEvaluationEngine().evaluate(
+            project: project,
+            purpose: purpose,
+            revision: revision
+        )
+    }
+}
+
 private final class BlockingEvaluationGate: Sendable {
     private struct State {
         var didStartFirstEvaluation = false
@@ -326,13 +592,18 @@ private final class BlockingEvaluationGate: Sendable {
     }
 
     private let state = Mutex(State())
+    private let blockedSourceName: String
+
+    init(blockedSourceName: String = "First") {
+        self.blockedSourceName = blockedSourceName
+    }
 
     var didStartFirstEvaluation: Bool {
         state.withLock { $0.didStartFirstEvaluation }
     }
 
     func waitIfNeeded(for sourceName: String) {
-        guard sourceName == "First" else {
+        guard sourceName == blockedSourceName else {
             return
         }
         state.withLock { $0.didStartFirstEvaluation = true }
@@ -373,6 +644,91 @@ private struct FailingPackageWriter: ProjectPackageWriting {
             message: "Fixture save failure."
         )
     }
+}
+
+private func meshOnlyDocument(named name: String) throws -> DesignDocument {
+    var document = DesignDocument.empty(named: name)
+    let mesh = try triangleMesh(identity: "mesh.controller-only")
+    let asset = try AuthoredMeshAsset(source: mesh, provenance: .created)
+    let representationID: GeometryRepresentationID = "representation.controller-only"
+    document.authoredMeshAssets[asset.id] = asset
+    _ = try document.productMetadata.appendSceneNodeToFirstRoot(
+        name: "Mesh",
+        reference: .authoredMesh(asset.id),
+        object: ObjectDescriptor(
+            category: .body,
+            geometryRole: .mesh,
+            geometryRepresentations: representationSet(
+                representationID: representationID,
+                source: .authoredMesh(asset.id)
+            )
+        )
+    )
+    _ = try document.validate()
+    return document
+}
+
+private func cadAndMeshDocument(named name: String) throws -> DesignDocument {
+    var document = DesignDocument.empty(named: name)
+    let bodyFeatureID = try document.createExtrudedRectangle(
+        name: "Body",
+        plane: .xy,
+        width: .length(1, .meter),
+        height: .length(1, .meter),
+        depth: .length(1, .meter),
+        direction: .normal
+    )
+    let bodyNodeID = try #require(document.productMetadata.sceneNodes.first {
+        $0.value.reference == .body(bodyFeatureID)
+    }?.key)
+    var object = try #require(document.productMetadata.sceneNodes[bodyNodeID]?.object)
+    let cadRepresentationID = try #require(
+        object.geometryRepresentations.selection?.modeling
+    )
+    let mesh = try triangleMesh(identity: "mesh.controller-presentation")
+    let asset = try AuthoredMeshAsset(source: mesh, provenance: .created)
+    let meshRepresentationID: GeometryRepresentationID =
+        "representation.controller-presentation"
+    document.authoredMeshAssets[asset.id] = asset
+    object.geometryRepresentations.representations[meshRepresentationID] =
+        GeometryRepresentation(
+            id: meshRepresentationID,
+            source: .authoredMesh(asset.id)
+        )
+    object.geometryRepresentations.selection = GeometryRepresentationSelection(
+        modeling: cadRepresentationID,
+        presentation: meshRepresentationID
+    )
+    document.productMetadata.sceneNodes[bodyNodeID]?.object = object
+    _ = try document.validate()
+    return document
+}
+
+private func representationSet(
+    representationID: GeometryRepresentationID,
+    source: GeometrySourceReference
+) -> GeometryRepresentationSet {
+    GeometryRepresentationSet(
+        representations: [
+            representationID: GeometryRepresentation(
+                id: representationID,
+                source: source
+            ),
+        ],
+        selection: GeometryRepresentationSelection(
+            modeling: representationID,
+            presentation: representationID
+        )
+    )
+}
+
+private func triangleMesh(identity: GeometrySourceID) throws -> MeshSource {
+    var builder = MeshSourceBuilder(identity: identity)
+    let first = try builder.addVertex(GeometryPoint3D(x: 0, y: 0, z: 0))
+    let second = try builder.addVertex(GeometryPoint3D(x: 1, y: 0, z: 0))
+    let third = try builder.addVertex(GeometryPoint3D(x: 0, y: 1, z: 0))
+    _ = try builder.addFace(vertexIDs: [first, second, third])
+    return try builder.build()
 }
 
 private func withTemporaryDirectory<Result: Sendable>(

@@ -9,7 +9,7 @@ enum ProjectPackageCanonicalJSON {
         } catch {
             throw ProjectPackageError(
                 code: .invalidSource,
-                message: "Project package source metadata encoding failed: \(error)."
+                message: "Project package canonical JSON encoding failed: \(error)."
             )
         }
     }
@@ -25,7 +25,7 @@ enum ProjectPackageCanonicalJSON {
         } catch {
             throw ProjectPackageError(
                 code: .invalidSource,
-                message: "Project package source metadata decoding failed: \(error)."
+                message: "Project package canonical JSON decoding failed: \(error)."
             )
         }
     }

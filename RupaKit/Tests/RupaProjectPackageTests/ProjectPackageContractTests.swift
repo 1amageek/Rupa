@@ -6,62 +6,59 @@ import Testing
 @testable import RupaProjectPackage
 
 @Test(.timeLimit(.minutes(1)))
-func projectPackagePlanningIsDeterministicAndUsesBoundedBorrowedChunks() throws {
-    let first = try triangleSource(id: "mesh.first", xOffset: 0)
-    let second = try triangleSource(id: "mesh.second", xOffset: 2)
-    let forward = try ProjectSourceModel(
-        id: "project.package",
-        name: "Package",
-        meshSources: [first.identity: first, second.identity: second]
-    )
-    let reverse = try ProjectSourceModel(
-        id: "project.package",
-        name: "Package",
-        meshSources: [second.identity: second, first.identity: first]
-    )
+func projectPackageMeshPlanningIsDeterministicAndUsesBoundedBorrowedChunks() throws {
+    let first = try authoredMesh(id: "mesh.first", xOffset: 0)
+    let second = try authoredMesh(id: "mesh.second", xOffset: 2)
+    let forward = [first.id: first, second.id: second]
+    let reverse = [second.id: second, first.id: first]
     var limits = ProjectPackageResourceLimits.standard
     limits.maximumChunkByteCount = 17
     limits.meshSource.maximumChunkByteCount = 17
-    let planner = ProjectPackageSourcePlanner(limits: limits)
+    let planner = ProjectPackageMeshPlanner(limits: limits)
 
     let firstPlan = try planner.plan(forward)
     let secondPlan = try planner.plan(reverse)
-    let cadEntry = try ProjectPackageCADSource(
+    let productEntry = try ProjectPackageProductSource(
         data: Data("{\"fixture\":\"contract\"}".utf8)
     ).sourceEntry
+    let firstCatalogEntry = try #require(firstPlan.catalogEntry)
+    let secondCatalogEntry = try #require(secondPlan.catalogEntry)
     let firstManifest = try ProjectPackageManifest(
-        documentID: forward.id,
-        sourceEntries: [firstPlan.sourceEntry, cadEntry]
+        documentID: "project.package",
+        sourceEntries: [productEntry, firstCatalogEntry]
             + firstPlan.blobs.map { try $0.reference.sourceEntry }
     )
     let secondManifest = try ProjectPackageManifest(
-        documentID: reverse.id,
-        sourceEntries: [secondPlan.sourceEntry, cadEntry]
-            + secondPlan.blobs.map { try $0.reference.sourceEntry }
+        documentID: "project.package",
+        sourceEntries: [secondCatalogEntry, productEntry]
+            + secondPlan.blobs.reversed().map { try $0.reference.sourceEntry }
     )
 
-    #expect(firstPlan.sourceData == secondPlan.sourceData)
+    #expect(firstPlan.catalogData == secondPlan.catalogData)
     #expect(firstManifest == secondManifest)
     #expect(firstManifest.documentContentIdentity == secondManifest.documentContentIdentity)
     #expect(firstPlan.blobs.map(\.reference.path) == secondPlan.blobs.map(\.reference.path))
     #expect(firstPlan.blobs.allSatisfy { $0.maximumEncodedChunkByteCount <= 17 })
     #expect(firstPlan.telemetry.events.count == 2)
-    #expect(!String(decoding: firstPlan.sourceData, as: UTF8.self).contains("vertexPositions"))
+    #expect(!String(decoding: try #require(firstPlan.catalogData), as: UTF8.self)
+        .contains("vertexPositions"))
+}
 
-    let envelope = try ProjectPackageCanonicalJSON.decode(
-        ProjectPackageSourceEnvelope.self,
-        from: firstPlan.sourceData
-    )
-    let reconstructed = try envelope.makeProject(meshSources: forward.meshSources)
-    #expect(reconstructed == forward)
+@Test(.timeLimit(.minutes(1)))
+func projectPackageEmptyMeshPlanOmitsCatalogAndBlobs() throws {
+    let plan = try ProjectPackageMeshPlanner(limits: .standard).plan([:])
+
+    #expect(plan.catalogEntry == nil)
+    #expect(plan.catalogData == nil)
+    #expect(plan.blobs.isEmpty)
+    #expect(plan.telemetry.events.isEmpty)
 }
 
 @Test(.timeLimit(.minutes(1)))
 func projectPackageContentIdentityIsIndependentOfManifestEntryOrder() throws {
-    let metadata = try sourceEntry(
-        path: ProjectPackageManifest.sourceMetadataPath,
-        seed: "metadata"
-    )
+    let product = try ProjectPackageProductSource(
+        data: Data("{\"fixture\":\"identity\"}".utf8)
+    ).sourceEntry
     let cad = try ProjectPackageCADSource(
         data: Data("{\"fixture\":\"identity\"}".utf8)
     ).sourceEntry
@@ -75,19 +72,20 @@ func projectPackageContentIdentityIsIndependentOfManifestEntryOrder() throws {
 
     let first = try ProjectPackageManifest(
         documentID: "project.identity",
-        sourceEntries: [metadata, cad, blob]
+        sourceEntries: [product, cad, blob]
     )
     let second = try ProjectPackageManifest(
         documentID: "project.identity",
-        sourceEntries: [blob, metadata, cad]
+        sourceEntries: [blob, product, cad]
     )
 
     #expect(first == second)
+    #expect(first.packageSchemaVersion == 3)
     #expect(first.documentContentIdentity == second.documentContentIdentity)
 }
 
 @Test(.timeLimit(.minutes(1)))
-func projectPackageContractsRejectTraversalDuplicatesAndAlteredIdentity() throws {
+func projectPackageContractsRequireProductAndRejectTraversalDuplicatesAndTampering() throws {
     #expect(projectPackageErrorCode {
         _ = try ProjectPackageSourceEntry(
             path: "source/../escape",
@@ -98,29 +96,28 @@ func projectPackageContractsRejectTraversalDuplicatesAndAlteredIdentity() throws
         )
     } == .invalidEntryPath)
 
-    let metadata = try sourceEntry(
-        path: ProjectPackageManifest.sourceMetadataPath,
-        seed: "metadata"
-    )
+    let product = try ProjectPackageProductSource(
+        data: Data("{\"fixture\":\"contract\"}".utf8)
+    ).sourceEntry
     let cad = try ProjectPackageCADSource(
         data: Data("{\"fixture\":\"contract\"}".utf8)
     ).sourceEntry
     #expect(projectPackageErrorCode {
         _ = try ProjectPackageManifest(
-            documentID: "project.missing-cad",
-            sourceEntries: [metadata]
+            documentID: "project.missing-product",
+            sourceEntries: [cad]
         )
     } == .missingEntry)
     #expect(projectPackageErrorCode {
         _ = try ProjectPackageManifest(
             documentID: "project.duplicate",
-            sourceEntries: [metadata, cad, metadata]
+            sourceEntries: [product, cad, product]
         )
     } == .duplicateEntry)
 
     let manifest = try ProjectPackageManifest(
         documentID: "project.tamper",
-        sourceEntries: [metadata, cad]
+        sourceEntries: [product, cad]
     )
     let encoded = try ProjectPackageCanonicalJSON.encode(manifest)
     let original = manifest.documentContentIdentity.content.fingerprint.value
@@ -135,18 +132,14 @@ func projectPackageContractsRejectTraversalDuplicatesAndAlteredIdentity() throws
 }
 
 @Test(.timeLimit(.minutes(1)))
-func projectPackagePlannerRejectsConfiguredEntryLimit() throws {
-    let mesh = try triangleSource(id: "mesh.limit", xOffset: 0)
-    let project = try ProjectSourceModel(
-        id: "project.limit",
-        name: "Limit",
-        meshSources: [mesh.identity: mesh]
-    )
+func projectPackageMeshPlannerRejectsConfiguredBlobLimit() throws {
+    let mesh = try authoredMesh(id: "mesh.limit", xOffset: 0)
     var limits = ProjectPackageResourceLimits.standard
-    limits.maximumEntryCount = 1
+    limits.maximumSourceBlobByteCount = 64
+    limits.meshSource.maximumBlobByteCount = 64
 
     #expect(projectPackageErrorCode {
-        _ = try ProjectPackageSourcePlanner(limits: limits).plan(project)
+        _ = try ProjectPackageMeshPlanner(limits: limits).plan([mesh.id: mesh])
     } == .resourceLimitExceeded)
 }
 
@@ -160,23 +153,16 @@ func projectPackageCRC32MatchesPublishedVector() {
     #expect(crc32.checksum == 0xcbf4_3926)
 }
 
-private func triangleSource(id: GeometrySourceID, xOffset: Double) throws -> MeshSource {
+private func authoredMesh(
+    id: GeometrySourceID,
+    xOffset: Double
+) throws -> AuthoredMeshAsset {
     var builder = MeshSourceBuilder(identity: id)
     let first = try builder.addVertex(GeometryPoint3D(x: xOffset, y: 0, z: 0))
     let second = try builder.addVertex(GeometryPoint3D(x: xOffset + 1, y: 0, z: 0))
     let third = try builder.addVertex(GeometryPoint3D(x: xOffset, y: 1, z: 0))
     _ = try builder.addTriangle(first, second, third)
-    return try builder.build()
-}
-
-private func sourceEntry(path: String, seed: String) throws -> ProjectPackageSourceEntry {
-    try ProjectPackageSourceEntry(
-        path: path,
-        mediaType: "application/vnd.rupa.project-source+json",
-        schemaVersion: 1,
-        byteCount: 8,
-        fingerprint: fingerprint(seed: seed)
-    )
+    return try AuthoredMeshAsset(source: builder.build(), provenance: .created)
 }
 
 private func fingerprint(seed: String) throws -> ContentFingerprint {

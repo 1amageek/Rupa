@@ -8,9 +8,9 @@ This file describes the currently implemented package graph. The normative targe
 for CAD source, Authored Mesh, derived Mesh snapshots, reconstruction inputs, rendering, and
 package SSOT is
 [`CAD_MESH_RESPONSIBILITY_CONTRACT.md`](../Rupa/CAD_MESH_RESPONSIBILITY_CONTRACT.md).
-The current graph contains an unreleased package/source boundary that must be
-replaced before RupaKit project integration. A permanent compatibility layer must
-not preserve that incorrect development contract.
+Package schema v3 and the `ProjectController` source boundary are implemented.
+Application composition still uses the documented migration route until its
+viewport and command parity is verified; no schema-v2 compatibility layer remains.
 
 ```mermaid
 flowchart LR
@@ -29,6 +29,7 @@ flowchart LR
     Project --> Evaluation
     Project --> ProjectModel
     Project --> ProjectPackage
+    Project --> SwiftCAD
     Core[RupaCore] --> CoreTypes
     Core --> ProjectModel
     Core --> SwiftCAD[SwiftCAD]
@@ -107,10 +108,10 @@ flowchart LR
 |---|---|---|
 | `RupaCoreTypes` | Stable semantic IDs, source revisions, canonical payloads and quantities, content fingerprints, transport-neutral errors, diagnostics, display units, and save results | Geometry algorithms, CAD feature evaluation, SwiftCAD document mutation, registry behavior, UI or Agent state |
 | `RupaProjectModel` | Provider-neutral geometry representations, purpose selections, Authored Mesh asset/provenance values, and immutable evaluation projection | Exact CAD source, Product mutation policy, editor history, concrete CAD types |
-| `RupaProjectPackage` | Current development package manifest, content-addressed blobs, bounded archive I/O, integrity validation, opaque adjunct preservation, and atomic file replacement | Geometry encoding semantics, editor-session ordering, artifacts/jobs, concrete CAD evaluation, or authority inference from stored representation |
+| `RupaProjectPackage` | Schema-v3 manifest, opaque Product/CAD bytes, Authored Mesh catalog and content-addressed blobs, bounded archive I/O, integrity validation, namespaced adjunct preservation, and atomic file replacement | Product/CAD encoding semantics, editor-session ordering, artifacts/jobs, concrete CAD evaluation, or authority inference from stored representation |
 | `RupaEvaluation` | Provider registry, de-duplicated provider batch planning, source-result contract validation, occurrence transforms, and immutable evaluated snapshots | Concrete CAD algorithms, editor session mutation, rendering state |
 | `RupaCADIntegration` | CAD source resolution, Swift-CAD evaluator construction, source-revision-aware incremental reuse, lossless supported-attribute conversion, and conversion into universal immutable geometry results | Universal project ownership, occurrence transforms, editor session lifetime, silent fidelity fallback |
-| `RupaProject` | Ordered project source staging, revision-conflict checks, evaluation publication, and commit results through `ProjectEvaluating` | Concrete provider construction, CAD semantics, viewport projection |
+| `RupaProject` | Product/CAD codecs, cross-source assembly, ordered source staging, revision-conflict checks, cancellation-linked evaluation publication, and commit results through `ProjectEvaluating` | Concrete provider construction, CAD modeling algorithms, viewport projection |
 | `RupaCore` | Product document state, retained representation sets, Authored Mesh assets, CAD runtime/source state, semantic validation, source commands, and domain services | Evaluation projection persistence, UI state, transport protocol, CLI parsing |
 | `RupaCore/Surface` | Surface analysis, PolySpline editing, UVN frame and source summaries | Viewport drawing or Agent request routing |
 | `RupaAutomation` | Stable command vocabulary and command execution bridge | Agent protocol envelopes or view-specific state |
@@ -154,6 +155,10 @@ flowchart LR
     Purpose["modeling / presentation"] --> Evaluation["Purpose-aware evaluation"]
     Projection --> Evaluation
 ```
+
+`ProjectPackageDocument` retains these source regions, never a
+`ProjectSourceModel`. `ProjectController.currentEvaluationSource()` exposes the
+cached immutable projection rebuilt from the retained sources.
 
 The complete path and integrity rules are normative in
 [`DOCUMENT_PACKAGE_CONTRACT.md`](../Rupa/DOCUMENT_PACKAGE_CONTRACT.md). The package

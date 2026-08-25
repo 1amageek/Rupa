@@ -1,11 +1,13 @@
 import RupaCoreTypes
 import RupaProjectModel
 
-/// Retains the coherent CAD and universal source aggregate plus mapped package
-/// ownership needed for adjunct preservation and byte-identical source reuse.
+/// Retains disjoint Product, optional CAD, and Authored Mesh sources plus mapped
+/// package ownership needed for adjunct preservation and byte-identical reuse.
 public struct ProjectPackageDocument: Sendable {
-    public let source: ProjectSourceModel
-    public let cadSource: ProjectPackageCADSource
+    public let documentID: ProjectID
+    public let productSource: ProjectPackageProductSource
+    public let cadSource: ProjectPackageCADSource?
+    public let authoredMeshAssets: [GeometrySourceID: AuthoredMeshAsset]
     public let persistedContentIdentity: DocumentContentIdentity?
     public let loadReport: ProjectPackageIOReport?
 
@@ -14,19 +16,19 @@ public struct ProjectPackageDocument: Sendable {
     let retainsUnreferencedSourceBlobs: Bool
 
     public init(
-        source: ProjectSourceModel,
-        cadSource: ProjectPackageCADSource
+        documentID: ProjectID,
+        productSource: ProjectPackageProductSource,
+        cadSource: ProjectPackageCADSource?,
+        authoredMeshAssets: [GeometrySourceID: AuthoredMeshAsset] = [:]
     ) throws {
-        do {
-            try source.validate()
-        } catch {
-            throw ProjectPackageError(
-                code: .invalidSource,
-                message: "Project source validation failed: \(error)."
-            )
-        }
-        self.source = source
+        try Self.validate(
+            documentID: documentID,
+            authoredMeshAssets: authoredMeshAssets
+        )
+        self.documentID = documentID
+        self.productSource = productSource
         self.cadSource = cadSource
+        self.authoredMeshAssets = authoredMeshAssets
         persistedContentIdentity = nil
         loadReport = nil
         backing = nil
@@ -35,15 +37,19 @@ public struct ProjectPackageDocument: Sendable {
     }
 
     init(
-        source: ProjectSourceModel,
-        cadSource: ProjectPackageCADSource,
+        documentID: ProjectID,
+        productSource: ProjectPackageProductSource,
+        cadSource: ProjectPackageCADSource?,
+        authoredMeshAssets: [GeometrySourceID: AuthoredMeshAsset],
         manifest: ProjectPackageManifest,
         backing: ProjectPackageArchiveBacking,
         loadReport: ProjectPackageIOReport,
         retainsUnreferencedSourceBlobs: Bool = true
     ) {
-        self.source = source
+        self.documentID = documentID
+        self.productSource = productSource
         self.cadSource = cadSource
+        self.authoredMeshAssets = authoredMeshAssets
         persistedContentIdentity = manifest.documentContentIdentity
         self.loadReport = loadReport
         self.backing = backing
@@ -52,20 +58,20 @@ public struct ProjectPackageDocument: Sendable {
     }
 
     public func replacingSources(
-        project source: ProjectSourceModel,
-        cad cadSource: ProjectPackageCADSource
+        documentID: ProjectID,
+        product productSource: ProjectPackageProductSource,
+        cad cadSource: ProjectPackageCADSource?,
+        authoredMeshAssets: [GeometrySourceID: AuthoredMeshAsset]
     ) throws -> ProjectPackageDocument {
-        do {
-            try source.validate()
-        } catch {
-            throw ProjectPackageError(
-                code: .invalidSource,
-                message: "Replacement project source validation failed: \(error)."
-            )
-        }
+        try Self.validate(
+            documentID: documentID,
+            authoredMeshAssets: authoredMeshAssets
+        )
         return ProjectPackageDocument(
-            source: source,
+            documentID: documentID,
+            productSource: productSource,
             cadSource: cadSource,
+            authoredMeshAssets: authoredMeshAssets,
             persistedContentIdentity: nil,
             loadReport: loadReport,
             backing: backing,
@@ -76,8 +82,10 @@ public struct ProjectPackageDocument: Sendable {
 
     public func garbageCollectingUnreferencedSourceBlobs() -> ProjectPackageDocument {
         ProjectPackageDocument(
-            source: source,
+            documentID: documentID,
+            productSource: productSource,
             cadSource: cadSource,
+            authoredMeshAssets: authoredMeshAssets,
             persistedContentIdentity: nil,
             loadReport: loadReport,
             backing: backing,
@@ -87,20 +95,49 @@ public struct ProjectPackageDocument: Sendable {
     }
 
     private init(
-        source: ProjectSourceModel,
-        cadSource: ProjectPackageCADSource,
+        documentID: ProjectID,
+        productSource: ProjectPackageProductSource,
+        cadSource: ProjectPackageCADSource?,
+        authoredMeshAssets: [GeometrySourceID: AuthoredMeshAsset],
         persistedContentIdentity: DocumentContentIdentity?,
         loadReport: ProjectPackageIOReport?,
         backing: ProjectPackageArchiveBacking?,
         manifest: ProjectPackageManifest?,
         retainsUnreferencedSourceBlobs: Bool
     ) {
-        self.source = source
+        self.documentID = documentID
+        self.productSource = productSource
         self.cadSource = cadSource
+        self.authoredMeshAssets = authoredMeshAssets
         self.persistedContentIdentity = persistedContentIdentity
         self.loadReport = loadReport
         self.backing = backing
         self.manifest = manifest
         self.retainsUnreferencedSourceBlobs = retainsUnreferencedSourceBlobs
+    }
+
+    private static func validate(
+        documentID: ProjectID,
+        authoredMeshAssets: [GeometrySourceID: AuthoredMeshAsset]
+    ) throws {
+        do {
+            try documentID.validate()
+            for (sourceID, asset) in authoredMeshAssets {
+                guard sourceID == asset.id else {
+                    throw ProjectPackageError(
+                        code: .invalidSource,
+                        message: "Authored Mesh asset dictionary keys must match asset identities."
+                    )
+                }
+                try asset.validate()
+            }
+        } catch let error as ProjectPackageError {
+            throw error
+        } catch {
+            throw ProjectPackageError(
+                code: .invalidSource,
+                message: "Project package source validation failed: \(error)."
+            )
+        }
     }
 }

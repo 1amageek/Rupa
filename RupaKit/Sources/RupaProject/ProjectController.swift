@@ -4,13 +4,16 @@ import RupaCoreTypes
 import RupaEvaluation
 import RupaProjectModel
 import RupaProjectPackage
+import SwiftCAD
 
 public actor ProjectController {
     private var session: EditorSession
     private var packageDocument: ProjectPackageDocument
+    private var evaluationSource: ProjectSourceModel
     private var evaluation: EvaluatedProjectSnapshot?
     private let evaluator: any ProjectEvaluating
     private let projector: any ProjectSourceProjecting
+    private let productSourceCodec: any ProjectProductSourceCoding
     private let cadSourceCodec: any ProjectCADSourceCoding
     private let packageReader: any ProjectPackageReading
     private let packageWriter: any ProjectPackageWriting
@@ -19,20 +22,24 @@ public actor ProjectController {
         document: DesignDocument,
         evaluator: any ProjectEvaluating,
         projector: any ProjectSourceProjecting,
-        cadSourceCodec: any ProjectCADSourceCoding,
+        productSourceCodec: any ProjectProductSourceCoding = JSONProjectProductSourceCodec(),
+        cadSourceCodec: any ProjectCADSourceCoding = JSONProjectCADSourceCodec(),
         packageReader: any ProjectPackageReading = ProjectPackageStore(),
         packageWriter: any ProjectPackageWriting = ProjectPackageStore()
     ) throws {
-        let initialPackage = try Self.makePackage(
+        let initial = try Self.makeInitialState(
             document: document,
             projector: projector,
+            productSourceCodec: productSourceCodec,
             cadSourceCodec: cadSourceCodec
         )
-        self.session = EditorSession(document: document)
-        self.packageDocument = initialPackage
-        self.evaluation = nil
+        session = EditorSession(document: document)
+        packageDocument = initial.package
+        evaluationSource = initial.evaluationSource
+        evaluation = nil
         self.evaluator = evaluator
         self.projector = projector
+        self.productSourceCodec = productSourceCodec
         self.cadSourceCodec = cadSourceCodec
         self.packageReader = packageReader
         self.packageWriter = packageWriter
@@ -42,20 +49,24 @@ public actor ProjectController {
         package: ProjectPackageDocument,
         evaluator: any ProjectEvaluating,
         projector: any ProjectSourceProjecting,
-        cadSourceCodec: any ProjectCADSourceCoding,
+        productSourceCodec: any ProjectProductSourceCoding = JSONProjectProductSourceCodec(),
+        cadSourceCodec: any ProjectCADSourceCoding = JSONProjectCADSourceCodec(),
         packageReader: any ProjectPackageReading = ProjectPackageStore(),
         packageWriter: any ProjectPackageWriting = ProjectPackageStore()
     ) throws {
-        let document = try Self.decodeAndValidate(
+        let initial = try Self.decodeAndValidate(
             package: package,
             projector: projector,
+            productSourceCodec: productSourceCodec,
             cadSourceCodec: cadSourceCodec
         )
-        self.session = EditorSession(document: document)
-        self.packageDocument = package
-        self.evaluation = nil
+        session = EditorSession(document: initial.document)
+        packageDocument = package
+        evaluationSource = initial.evaluationSource
+        evaluation = nil
         self.evaluator = evaluator
         self.projector = projector
+        self.productSourceCodec = productSourceCodec
         self.cadSourceCodec = cadSourceCodec
         self.packageReader = packageReader
         self.packageWriter = packageWriter
@@ -69,8 +80,8 @@ public actor ProjectController {
         packageDocument
     }
 
-    public func currentSource() -> ProjectSourceModel {
-        packageDocument.source
+    public func currentEvaluationSource() -> ProjectSourceModel {
+        evaluationSource
     }
 
     public func currentTransactionRevision() -> DocumentTransactionRevision {
@@ -98,8 +109,10 @@ public actor ProjectController {
 
     public func evaluateCurrent() async throws -> EvaluatedProjectSnapshot {
         let baseRevision = session.transactionRevision
-        let source = packageDocument.source
-        let stagedEvaluation = try await evaluate(source: source, revision: baseRevision)
+        let stagedEvaluation = try await evaluate(
+            source: evaluationSource,
+            revision: baseRevision
+        )
         try requireTransactionRevision(baseRevision)
         evaluation = stagedEvaluation
         return stagedEvaluation
@@ -132,23 +145,28 @@ public actor ProjectController {
             )
         }
 
-        let stagedCADSource = try await encodeCADSource(prepared.stagedDocument)
-        let stagedSource = try await projectSource(prepared.stagedDocument)
-        guard stagedSource.id == packageDocument.source.id else {
+        let stagedProductSource = try await encodeProductSource(prepared.stagedDocument)
+        let stagedCADSource = try await encodeCADSourceIfAuthoritative(
+            prepared.stagedDocument
+        )
+        let stagedEvaluationSource = try await projectSource(prepared.stagedDocument)
+        guard stagedEvaluationSource.id == packageDocument.documentID else {
             throw ProjectControllerError(
                 code: .sourceMismatch,
                 message: "A source transaction cannot change the project identity."
             )
         }
         let stagedEvaluation = try await evaluate(
-            source: stagedSource,
+            source: stagedEvaluationSource,
             revision: prepared.proposedTransactionRevision
         )
         let stagedPackage: ProjectPackageDocument
         do {
             stagedPackage = try packageDocument.replacingSources(
-                project: stagedSource,
-                cad: stagedCADSource
+                documentID: stagedEvaluationSource.id,
+                product: stagedProductSource,
+                cad: stagedCADSource,
+                authoredMeshAssets: prepared.stagedDocument.authoredMeshAssets
             )
         } catch {
             throw ProjectControllerError(
@@ -164,6 +182,7 @@ public actor ProjectController {
             throw projectError(for: error)
         }
         packageDocument = stagedPackage
+        evaluationSource = stagedEvaluationSource
         evaluation = stagedEvaluation
         return ProjectSourceCommitResult(
             baseTransactionRevision: prepared.baseTransactionRevision,
@@ -184,12 +203,12 @@ public actor ProjectController {
         let reader = packageReader
         let loadedPackage: ProjectPackageDocument
         do {
-            loadedPackage = try await Task.detached(priority: nil) {
+            loadedPackage = try await Self.performDetached {
                 try Task.checkCancellation()
                 let package = try reader.load(from: url)
                 try Task.checkCancellation()
                 return package
-            }.value
+            }
         } catch is CancellationError {
             throw CancellationError()
         } catch {
@@ -199,12 +218,22 @@ public actor ProjectController {
             )
         }
 
-        let loadedDocument = try await decodeCADSource(loadedPackage.cadSource)
-        let projectedSource = try await projectSource(loadedDocument)
-        guard projectedSource == loadedPackage.source else {
+        let loadedProductSource = try await decodeProductSource(
+            loadedPackage.productSource
+        )
+        let loadedCADDocument = try await decodeOptionalCADSource(
+            loadedPackage.cadSource
+        )
+        let loadedDocument = try Self.assembleDocument(
+            package: loadedPackage,
+            product: loadedProductSource,
+            cadDocument: loadedCADDocument
+        )
+        let loadedEvaluationSource = try await projectSource(loadedDocument)
+        guard loadedEvaluationSource.id == loadedPackage.documentID else {
             throw ProjectControllerError(
                 code: .sourceMismatch,
-                message: "Loaded CAD and universal project sources do not match."
+                message: "Loaded Product identity and evaluation projection differ."
             )
         }
         let loadedRevision: DocumentTransactionRevision
@@ -214,7 +243,7 @@ public actor ProjectController {
             throw projectError(for: error)
         }
         let loadedEvaluation = try await evaluate(
-            source: projectedSource,
+            source: loadedEvaluationSource,
             revision: loadedRevision
         )
         try requireTransactionRevision(expectedTransactionRevision)
@@ -224,6 +253,7 @@ public actor ProjectController {
             transactionRevision: loadedRevision
         )
         packageDocument = loadedPackage
+        evaluationSource = loadedEvaluationSource
         evaluation = loadedEvaluation
         return ProjectStateSnapshot(
             document: loadedDocument,
@@ -262,17 +292,65 @@ public actor ProjectController {
         }
     }
 
-    private func encodeCADSource(
+    private func encodeProductSource(
         _ document: DesignDocument
-    ) async throws -> ProjectPackageCADSource {
-        let codec = cadSourceCodec
+    ) async throws -> ProjectPackageProductSource {
+        let codec = productSourceCodec
         do {
-            return try await Task.detached(priority: nil) {
+            return try await Self.performDetached {
                 try Task.checkCancellation()
                 let source = try codec.encode(document)
                 try Task.checkCancellation()
                 return source
-            }.value
+            }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw ProjectControllerError(
+                code: .productSourceFailed,
+                message: "Product source encoding failed: \(error)."
+            )
+        }
+    }
+
+    private func decodeProductSource(
+        _ source: ProjectPackageProductSource
+    ) async throws -> ProjectProductSourceModel {
+        let codec = productSourceCodec
+        do {
+            return try await Self.performDetached {
+                try Task.checkCancellation()
+                let product = try codec.decode(source)
+                try Task.checkCancellation()
+                return product
+            }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as ProjectControllerError {
+            throw error
+        } catch {
+            throw ProjectControllerError(
+                code: .productSourceFailed,
+                message: "Product source decoding failed: \(error)."
+            )
+        }
+    }
+
+    private func encodeCADSourceIfAuthoritative(
+        _ document: DesignDocument
+    ) async throws -> ProjectPackageCADSource? {
+        guard document.hasAuthoritativeCADSource else {
+            return nil
+        }
+        let codec = cadSourceCodec
+        let cadDocument = document.cadDocument
+        do {
+            return try await Self.performDetached {
+                try Task.checkCancellation()
+                let source = try codec.encode(cadDocument)
+                try Task.checkCancellation()
+                return source
+            }
         } catch is CancellationError {
             throw CancellationError()
         } catch {
@@ -283,18 +361,20 @@ public actor ProjectController {
         }
     }
 
-    private func decodeCADSource(
-        _ source: ProjectPackageCADSource
-    ) async throws -> DesignDocument {
+    private func decodeOptionalCADSource(
+        _ source: ProjectPackageCADSource?
+    ) async throws -> CADDocument? {
+        guard let source else {
+            return nil
+        }
         let codec = cadSourceCodec
         do {
-            return try await Task.detached(priority: nil) {
+            return try await Self.performDetached {
                 try Task.checkCancellation()
                 let document = try codec.decode(source)
-                _ = try document.validate()
                 try Task.checkCancellation()
                 return document
-            }.value
+            }
         } catch is CancellationError {
             throw CancellationError()
         } catch {
@@ -310,19 +390,19 @@ public actor ProjectController {
     ) async throws -> ProjectSourceModel {
         let projector = self.projector
         do {
-            return try await Task.detached(priority: nil) {
+            return try await Self.performDetached {
                 try Task.checkCancellation()
                 let source = try projector.project(document)
                 try source.validate()
                 try Task.checkCancellation()
                 return source
-            }.value
+            }
         } catch is CancellationError {
             throw CancellationError()
         } catch {
             throw ProjectControllerError(
                 code: .projectionFailed,
-                message: "CAD project source projection failed: \(error)."
+                message: "Project evaluation-source projection failed: \(error)."
             )
         }
     }
@@ -333,7 +413,7 @@ public actor ProjectController {
     ) async throws -> EvaluatedProjectSnapshot {
         let evaluator = self.evaluator
         do {
-            return try await Task.detached(priority: nil) {
+            return try await Self.performDetached {
                 try Task.checkCancellation()
                 let result = try evaluator.evaluate(
                     project: source,
@@ -342,7 +422,7 @@ public actor ProjectController {
                 )
                 try Task.checkCancellation()
                 return result
-            }.value
+            }
         } catch let error as EvaluationError {
             throw ProjectControllerError(
                 code: .evaluationFailed,
@@ -365,17 +445,29 @@ public actor ProjectController {
         return ProjectControllerError(code: .transactionInvalid, message: error.message)
     }
 
-    private static func makePackage(
+    private static func performDetached<Value: Sendable>(
+        _ operation: @escaping @Sendable () throws -> Value
+    ) async throws -> Value {
+        let task = Task.detached(priority: nil, operation: operation)
+        return try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
+    private static func makeInitialState(
         document: DesignDocument,
         projector: any ProjectSourceProjecting,
+        productSourceCodec: any ProjectProductSourceCoding,
         cadSourceCodec: any ProjectCADSourceCoding
-    ) throws -> ProjectPackageDocument {
+    ) throws -> (package: ProjectPackageDocument, evaluationSource: ProjectSourceModel) {
         do {
             _ = try document.validate()
         } catch {
             throw ProjectControllerError(
                 code: .sourceInvalid,
-                message: "Initial CAD document validation failed: \(error)."
+                message: "Initial DesignDocument validation failed: \(error)."
             )
         }
         let source: ProjectSourceModel
@@ -385,20 +477,54 @@ public actor ProjectController {
         } catch {
             throw ProjectControllerError(
                 code: .projectionFailed,
-                message: "Initial project source projection failed: \(error)."
+                message: "Initial project evaluation-source projection failed: \(error)."
             )
         }
-        let cadSource: ProjectPackageCADSource
+        let productSource: ProjectPackageProductSource
         do {
-            cadSource = try cadSourceCodec.encode(document)
+            productSource = try productSourceCodec.encode(document)
+        } catch {
+            throw ProjectControllerError(
+                code: .productSourceFailed,
+                message: "Initial Product source encoding failed: \(error)."
+            )
+        }
+        let cadSource: ProjectPackageCADSource?
+        do {
+            cadSource = document.hasAuthoritativeCADSource
+                ? try cadSourceCodec.encode(document.cadDocument)
+                : nil
         } catch {
             throw ProjectControllerError(
                 code: .cadSourceFailed,
                 message: "Initial CAD source encoding failed: \(error)."
             )
         }
+        let product: ProjectProductSourceModel
         do {
-            return try ProjectPackageDocument(source: source, cadSource: cadSource)
+            product = try productSourceCodec.decode(productSource)
+        } catch {
+            throw ProjectControllerError(
+                code: .productSourceFailed,
+                message: "Initial Product source verification failed: \(error)."
+            )
+        }
+        guard product.projectID == source.id else {
+            throw ProjectControllerError(
+                code: .sourceMismatch,
+                message: "Initial Product identity and evaluation projection differ."
+            )
+        }
+        do {
+            return (
+                try ProjectPackageDocument(
+                    documentID: source.id,
+                    productSource: productSource,
+                    cadSource: cadSource,
+                    authoredMeshAssets: document.authoredMeshAssets
+                ),
+                source
+            )
         } catch {
             throw ProjectControllerError(
                 code: .packageFailed,
@@ -410,32 +536,93 @@ public actor ProjectController {
     private static func decodeAndValidate(
         package: ProjectPackageDocument,
         projector: any ProjectSourceProjecting,
+        productSourceCodec: any ProjectProductSourceCoding,
         cadSourceCodec: any ProjectCADSourceCoding
-    ) throws -> DesignDocument {
-        let document: DesignDocument
+    ) throws -> (document: DesignDocument, evaluationSource: ProjectSourceModel) {
+        let product: ProjectProductSourceModel
         do {
-            document = try cadSourceCodec.decode(package.cadSource)
-            _ = try document.validate()
+            product = try productSourceCodec.decode(package.productSource)
+        } catch {
+            throw ProjectControllerError(
+                code: .productSourceFailed,
+                message: "Initial Product source decoding failed: \(error)."
+            )
+        }
+        let cadDocument: CADDocument?
+        do {
+            cadDocument = try package.cadSource.map(cadSourceCodec.decode)
         } catch {
             throw ProjectControllerError(
                 code: .cadSourceFailed,
                 message: "Initial CAD source decoding failed: \(error)."
             )
         }
-        let projectedSource: ProjectSourceModel
+        let document = try assembleDocument(
+            package: package,
+            product: product,
+            cadDocument: cadDocument
+        )
+        let source: ProjectSourceModel
         do {
-            projectedSource = try projector.project(document)
-            try projectedSource.validate()
+            source = try projector.project(document)
+            try source.validate()
         } catch {
             throw ProjectControllerError(
                 code: .projectionFailed,
-                message: "Initial project source projection failed: \(error)."
+                message: "Initial project evaluation-source projection failed: \(error)."
             )
         }
-        guard projectedSource == package.source else {
+        guard source.id == package.documentID else {
             throw ProjectControllerError(
                 code: .sourceMismatch,
-                message: "CAD and universal project sources do not match."
+                message: "Initial Product identity and evaluation projection differ."
+            )
+        }
+        return (document, source)
+    }
+
+    private static func assembleDocument(
+        package: ProjectPackageDocument,
+        product: ProjectProductSourceModel,
+        cadDocument: CADDocument?
+    ) throws -> DesignDocument {
+        guard product.projectID == package.documentID else {
+            throw ProjectControllerError(
+                code: .sourceMismatch,
+                message: "Package and Product document identities differ."
+            )
+        }
+        let runtimeCADDocument: CADDocument
+        if let cadDocument {
+            guard cadDocument.id == product.documentID,
+                cadDocument.units == product.units,
+                cadDocument.metadata.name == product.name
+            else {
+                throw ProjectControllerError(
+                    code: .sourceMismatch,
+                    message: "Product and CAD document identity, units, or name differ."
+                )
+            }
+            runtimeCADDocument = cadDocument
+        } else {
+            runtimeCADDocument = CADDocument(
+                id: product.documentID,
+                units: product.units,
+                metadata: DocumentMetadata(name: product.name)
+            )
+        }
+        let document = DesignDocument(
+            cadDocument: runtimeCADDocument,
+            modelingSettings: product.modelingSettings,
+            productMetadata: product.productMetadata,
+            authoredMeshAssets: package.authoredMeshAssets
+        )
+        do {
+            _ = try document.validate()
+        } catch {
+            throw ProjectControllerError(
+                code: .sourceInvalid,
+                message: "Decoded project sources are semantically invalid: \(error)."
             )
         }
         return document

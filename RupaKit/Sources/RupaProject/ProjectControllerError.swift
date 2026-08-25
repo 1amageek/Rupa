@@ -6,6 +6,7 @@ public struct ProjectControllerError: Error, Equatable, LocalizedError, Sendable
         case sourceInvalid
         case sourceMismatch
         case transactionInvalid
+        case productSourceFailed
         case cadSourceFailed
         case projectionFailed
         case packageFailed

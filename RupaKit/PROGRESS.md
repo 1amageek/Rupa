@@ -47,7 +47,7 @@
   - [x] Commit the reviewed T01 sprint
 - [x] F05-C CAD source in the project package aggregate
   - [x] Define package-owned CAD source entry metadata without moving CAD encoding semantics into the package target
-  - [x] Persist and restore source/cad.json with source/rupa.json and referenced source blobs in development schema v2 (superseded by the CAD/Mesh responsibility contract)
+  - [x] Establish opaque CAD source bytes and aggregate identity as a precursor to role-separated persistence
   - [x] Preserve CAD source bytes and identity through replacement, adjunct preservation, and failed atomic saves
   - [x] Cover round trip, corruption, missing CAD source, identity, reuse, and bounded I/O
   - [x] Review F05-C and run focused verification
@@ -85,12 +85,12 @@
   - [x] Include purpose and representation identity in evaluated snapshot identity and occurrence evidence
   - [x] Prove authored-Mesh evaluation shares source storage without materialization
   - [x] Review, verify, and commit T04-B
-- [ ] T04-C disjoint project package schema v3
-  - [ ] Replace source/rupa.json with required product, optional CAD, and optional Mesh catalog source regions
-  - [ ] Reject schema v2 without a compatibility fallback
-  - [ ] Preserve bounded streaming, content-addressed reuse, atomic save, adjunct preservation, and garbage collection
-  - [ ] Verify CAD-only, CAD-plus-Mesh, Mesh-only, corruption, deterministic identity, and copy-budget paths
-  - [ ] Review, verify, and commit T04-C
+- [x] T04-C disjoint project package schema v3
+  - [x] Store required Product, optional CAD, and optional Mesh catalog source regions without a persisted evaluation projection
+  - [x] Reject schema v2 without a compatibility fallback
+  - [x] Preserve bounded streaming, content-addressed reuse, atomic save, adjunct preservation, and garbage collection
+  - [x] Verify CAD-only, CAD-plus-Mesh, Mesh-only, corruption, deterministic identity, and copy-budget paths
+  - [x] Review, verify, and commit T04-C
 - [ ] T04-D atomic ProjectController integration
   - [ ] Split Product and CAD codecs and derive evaluation projections from retained sources
   - [ ] Commit and load Product, optional CAD, Mesh assets, projection, and presentation evaluation atomically

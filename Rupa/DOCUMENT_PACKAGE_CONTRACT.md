@@ -83,8 +83,9 @@ Package limits are correctness contracts and apply before allocation or decode.
 
 Metadata open does not eagerly materialize Authored Mesh blobs. Mesh decoding
 streams directly into its owned geometry storage. Unchanged content-addressed
-blobs are reused byte-for-byte. Saving removes unreferenced source blobs from the
-new archive while preserving valid unknown adjunct bytes.
+blobs are reused byte-for-byte. An explicit source-blob garbage-collection save
+removes unreferenced blobs; ordinary saves retain them for recoverability. Both
+paths preserve valid namespaced adjunct bytes.
 
 ## Determinism
 

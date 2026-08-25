@@ -6,6 +6,7 @@ public struct ProjectPackageError: Error, Equatable, LocalizedError, Sendable {
         case invalidEntryPath
         case duplicateEntry
         case missingEntry
+        case unsupportedSchema
         case unsupportedVersion
         case unsupportedFeature
         case resourceLimitExceeded

@@ -10,8 +10,9 @@ public struct ProjectPackageResourceLimits: Equatable, Sendable {
             maximumArchiveByteCount: archiveLimit,
             maximumEntryCount: 4_096,
             maximumManifestByteCount: 4 * 1_024 * 1_024,
+            maximumProductSourceByteCount: 64 * 1_024 * 1_024,
             maximumCADSourceByteCount: 64 * 1_024 * 1_024,
-            maximumSourceMetadataByteCount: 64 * 1_024 * 1_024,
+            maximumMeshCatalogByteCount: 64 * 1_024 * 1_024,
             maximumSourceBlobByteCount: archiveLimit,
             maximumPreservedAdjunctByteCount: min(
                 archiveLimit,
@@ -25,8 +26,9 @@ public struct ProjectPackageResourceLimits: Equatable, Sendable {
     public var maximumArchiveByteCount: UInt64
     public var maximumEntryCount: Int
     public var maximumManifestByteCount: Int
+    public var maximumProductSourceByteCount: Int
     public var maximumCADSourceByteCount: Int
-    public var maximumSourceMetadataByteCount: Int
+    public var maximumMeshCatalogByteCount: Int
     public var maximumSourceBlobByteCount: UInt64
     public var maximumPreservedAdjunctByteCount: UInt64
     public var maximumChunkByteCount: Int
@@ -36,8 +38,9 @@ public struct ProjectPackageResourceLimits: Equatable, Sendable {
         maximumArchiveByteCount: UInt64,
         maximumEntryCount: Int,
         maximumManifestByteCount: Int,
+        maximumProductSourceByteCount: Int,
         maximumCADSourceByteCount: Int,
-        maximumSourceMetadataByteCount: Int,
+        maximumMeshCatalogByteCount: Int,
         maximumSourceBlobByteCount: UInt64,
         maximumPreservedAdjunctByteCount: UInt64,
         maximumChunkByteCount: Int,
@@ -46,8 +49,9 @@ public struct ProjectPackageResourceLimits: Equatable, Sendable {
         self.maximumArchiveByteCount = maximumArchiveByteCount
         self.maximumEntryCount = maximumEntryCount
         self.maximumManifestByteCount = maximumManifestByteCount
+        self.maximumProductSourceByteCount = maximumProductSourceByteCount
         self.maximumCADSourceByteCount = maximumCADSourceByteCount
-        self.maximumSourceMetadataByteCount = maximumSourceMetadataByteCount
+        self.maximumMeshCatalogByteCount = maximumMeshCatalogByteCount
         self.maximumSourceBlobByteCount = maximumSourceBlobByteCount
         self.maximumPreservedAdjunctByteCount = maximumPreservedAdjunctByteCount
         self.maximumChunkByteCount = maximumChunkByteCount
@@ -60,14 +64,16 @@ public struct ProjectPackageResourceLimits: Equatable, Sendable {
             maximumEntryCount > 0,
             maximumEntryCount <= Int(UInt16.max),
             maximumManifestByteCount > 0,
+            maximumProductSourceByteCount > 0,
             maximumCADSourceByteCount > 0,
-            maximumSourceMetadataByteCount > 0,
+            maximumMeshCatalogByteCount > 0,
             maximumSourceBlobByteCount > 0,
             maximumSourceBlobByteCount <= UInt64(UInt32.max),
             maximumChunkByteCount > 0,
             UInt64(maximumManifestByteCount) <= maximumArchiveByteCount,
+            UInt64(maximumProductSourceByteCount) <= maximumArchiveByteCount,
             UInt64(maximumCADSourceByteCount) <= maximumArchiveByteCount,
-            UInt64(maximumSourceMetadataByteCount) <= maximumArchiveByteCount,
+            UInt64(maximumMeshCatalogByteCount) <= maximumArchiveByteCount,
             maximumSourceBlobByteCount <= maximumArchiveByteCount,
             maximumPreservedAdjunctByteCount <= maximumArchiveByteCount,
             UInt64(maximumChunkByteCount) <= maximumArchiveByteCount,
@@ -81,7 +87,7 @@ public struct ProjectPackageResourceLimits: Equatable, Sendable {
         else {
             throw ProjectPackageError(
                 code: .resourceLimitExceeded,
-                message: "Project package limits are invalid for the version 1 archive contract."
+                message: "Project package limits are invalid for the schema-v3 archive contract."
             )
         }
     }

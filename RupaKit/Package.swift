@@ -203,6 +203,7 @@ let package = Package(
                 "RupaEvaluation",
                 "RupaProjectModel",
                 "RupaProjectPackage",
+                .product(name: "SwiftCAD", package: "swift-CAD"),
             ]
         ),
         .target(

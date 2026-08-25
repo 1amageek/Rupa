@@ -3,9 +3,10 @@ import RupaCoreTypes
 
 public struct ProjectPackageManifest: Codable, Equatable, Sendable {
     public static let format = "rupa.project"
-    public static let currentSchemaVersion: UInt32 = 2
-    public static let sourceMetadataPath = "source/rupa.json"
+    public static let currentSchemaVersion: UInt32 = 3
+    public static let productSourcePath = "source/product.json"
     public static let cadSourcePath = "source/cad.json"
+    public static let meshCatalogPath = "source/mesh-assets.json"
 
     public let packageFormat: String
     public let packageSchemaVersion: UInt32
@@ -48,12 +49,16 @@ public struct ProjectPackageManifest: Codable, Equatable, Sendable {
             UInt32.self,
             forKey: .packageSchemaVersion
         )
-        guard packageFormat == Self.format,
-            packageSchemaVersion == Self.currentSchemaVersion
-        else {
+        guard packageFormat == Self.format else {
             throw ProjectPackageError(
-                code: .unsupportedVersion,
-                message: "Project package format or schema version is unsupported."
+                code: .invalidManifest,
+                message: "Project package format is unsupported."
+            )
+        }
+        guard packageSchemaVersion == Self.currentSchemaVersion else {
+            throw ProjectPackageError(
+                code: .unsupportedSchema,
+                message: "Project package schema version is unsupported."
             )
         }
         let documentID = try container.decode(ProjectID.self, forKey: .documentID)
@@ -88,12 +93,11 @@ public struct ProjectPackageManifest: Codable, Equatable, Sendable {
         _ entries: [ProjectPackageSourceEntry]
     ) throws {
         guard !entries.isEmpty,
-            entries.contains(where: { $0.path == sourceMetadataPath }),
-            entries.contains(where: { $0.path == cadSourcePath })
+            entries.contains(where: { $0.path == productSourcePath })
         else {
             throw ProjectPackageError(
                 code: .missingEntry,
-                message: "Project packages require source/cad.json and source/rupa.json."
+                message: "Project packages require source/product.json."
             )
         }
         var paths: Set<String> = []

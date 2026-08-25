@@ -70,13 +70,15 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
                 to: temporaryURL
             )
             let validated = try load(from: temporaryURL)
-            guard validated.source == document.source,
+            guard validated.documentID == document.documentID,
+                validated.productSource == document.productSource,
                 validated.cadSource == document.cadSource,
+                validated.authoredMeshAssets == document.authoredMeshAssets,
                 validated.persistedContentIdentity == prepared.manifest.documentContentIdentity
             else {
                 throw ProjectPackageError(
                     code: .integrityMismatch,
-                    message: "Temporary project package validation did not reproduce its source."
+                    message: "Temporary project package validation did not reproduce its sources."
                 )
             }
             try replaceFile(temporaryURL, url)
@@ -147,144 +149,164 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
         }
         try validateDeclaredSourcePaths(manifest, backing: backing)
 
-        guard let cadEntry = manifest.sourceEntry(at: ProjectPackageManifest.cadSourcePath),
-            cadEntry.mediaType == ProjectPackageCADSource.mediaType,
-            cadEntry.schemaVersion == ProjectPackageCADSource.schemaVersion,
-            cadEntry.fingerprint.algorithm == ProjectPackageCADSource.fingerprintAlgorithm,
-            cadEntry.byteCount <= UInt64(limits.maximumCADSourceByteCount),
-            let cadDescriptor = backing.entries[cadEntry.path]
-        else {
-            throw ProjectPackageError(
-                code: .invalidManifest,
-                message: "Project package CAD source declaration is unsupported."
-            )
+        let productEntry = try requiredEntry(
+            at: ProjectPackageManifest.productSourcePath,
+            in: manifest,
+            mediaType: ProjectPackageProductSource.mediaType,
+            schemaVersion: ProjectPackageProductSource.schemaVersion,
+            fingerprintAlgorithm: ProjectPackageProductSource.fingerprintAlgorithm,
+            maximumByteCount: limits.maximumProductSourceByteCount
+        )
+        guard let productDescriptor = backing.entries[productEntry.path] else {
+            throw missing(productEntry.path)
         }
         maximumReadChunkByteCount = max(
             maximumReadChunkByteCount,
             try backing.validate(
-                cadDescriptor,
-                against: cadEntry,
+                productDescriptor,
+                against: productEntry,
                 maximumChunkByteCount: limits.maximumChunkByteCount
             )
         )
-        let cadData = try backing.materialize(
-            cadDescriptor,
-            maximumByteCount: limits.maximumCADSourceByteCount
-        )
-        let cadSource = try ProjectPackageCADSource(
-            data: cadData,
-            declaredEntry: cadEntry
+        let productSource = try ProjectPackageProductSource(
+            data: backing.materialize(
+                productDescriptor,
+                maximumByteCount: limits.maximumProductSourceByteCount
+            ),
+            declaredEntry: productEntry
         )
 
-        guard let metadataEntry = manifest.sourceEntry(
-            at: ProjectPackageManifest.sourceMetadataPath
-        ),
-            metadataEntry.mediaType == ProjectPackageSourcePlanner.sourceMetadataMediaType,
-            metadataEntry.schemaVersion
-                == ProjectPackageSourcePlanner.sourceMetadataSchemaVersion,
-            metadataEntry.fingerprint.algorithm
-                == ProjectPackageSourcePlanner.sourceMetadataFingerprintAlgorithm,
-            let metadataDescriptor = backing.entries[metadataEntry.path]
-        else {
-            throw ProjectPackageError(
-                code: .invalidManifest,
-                message: "Project package source metadata declaration is unsupported."
+        let cadSource: ProjectPackageCADSource?
+        if let cadEntry = manifest.sourceEntry(at: ProjectPackageManifest.cadSourcePath) {
+            try validateEntry(
+                cadEntry,
+                mediaType: ProjectPackageCADSource.mediaType,
+                schemaVersion: ProjectPackageCADSource.schemaVersion,
+                fingerprintAlgorithm: ProjectPackageCADSource.fingerprintAlgorithm,
+                maximumByteCount: limits.maximumCADSourceByteCount
             )
-        }
-        maximumReadChunkByteCount = max(
-            maximumReadChunkByteCount,
-            try backing.validate(
-                metadataDescriptor,
-                against: metadataEntry,
-                maximumChunkByteCount: limits.maximumChunkByteCount
+            guard let cadDescriptor = backing.entries[cadEntry.path] else {
+                throw missing(cadEntry.path)
+            }
+            maximumReadChunkByteCount = max(
+                maximumReadChunkByteCount,
+                try backing.validate(
+                    cadDescriptor,
+                    against: cadEntry,
+                    maximumChunkByteCount: limits.maximumChunkByteCount
+                )
             )
-        )
-        let sourceData = try backing.materialize(
-            metadataDescriptor,
-            maximumByteCount: limits.maximumSourceMetadataByteCount
-        )
-        let envelope = try ProjectPackageCanonicalJSON.decode(
-            ProjectPackageSourceEnvelope.self,
-            from: sourceData
-        )
-        guard envelope.projectID == manifest.documentID else {
-            throw ProjectPackageError(
-                code: .integrityMismatch,
-                message: "Project package manifest and source document identities differ."
+            cadSource = try ProjectPackageCADSource(
+                data: backing.materialize(
+                    cadDescriptor,
+                    maximumByteCount: limits.maximumCADSourceByteCount
+                ),
+                declaredEntry: cadEntry
             )
+        } else {
+            cadSource = nil
         }
 
         var telemetry = GeometryCopyTelemetry()
         var meshSources: [GeometrySourceID: MeshSource] = [:]
         var referencedBlobPaths: Set<String> = []
-        for record in envelope.meshes {
-            try validateMeshReference(record.blob)
-            guard referencedBlobPaths.insert(record.blob.path).inserted,
-                let declaredEntry = manifest.sourceEntry(at: record.blob.path),
-                try declaredEntry == record.blob.sourceEntry,
-                let descriptor = backing.entries[record.blob.path]
-            else {
-                throw ProjectPackageError(
-                    code: .invalidManifest,
-                    message: "Project mesh blob reference is missing or inconsistent."
-                )
+        let catalog: ProjectPackageMeshAssetCatalog?
+        if let catalogEntry = manifest.sourceEntry(at: ProjectPackageManifest.meshCatalogPath) {
+            try validateEntry(
+                catalogEntry,
+                mediaType: ProjectPackageMeshPlanner.catalogMediaType,
+                schemaVersion: ProjectPackageMeshPlanner.catalogSchemaVersion,
+                fingerprintAlgorithm: ProjectPackageMeshPlanner.catalogFingerprintAlgorithm,
+                maximumByteCount: limits.maximumMeshCatalogByteCount
+            )
+            guard let catalogDescriptor = backing.entries[catalogEntry.path] else {
+                throw missing(catalogEntry.path)
             }
             maximumReadChunkByteCount = max(
                 maximumReadChunkByteCount,
                 try backing.validate(
-                    descriptor,
-                    against: declaredEntry,
+                    catalogDescriptor,
+                    against: catalogEntry,
                     maximumChunkByteCount: limits.maximumChunkByteCount
                 )
             )
-            var source = ProjectPackageArchiveEntrySource(
-                backing: backing,
-                entry: descriptor,
-                maximumChunkByteCount: limits.maximumChunkByteCount
+            catalog = try ProjectPackageCanonicalJSON.decode(
+                ProjectPackageMeshAssetCatalog.self,
+                from: backing.materialize(
+                    catalogDescriptor,
+                    maximumByteCount: limits.maximumMeshCatalogByteCount
+                )
             )
-            let mesh: MeshSource
-            do {
-                mesh = try MeshSourceCodec.decode(
-                    from: &source,
-                    limits: limits.meshSource,
-                    telemetry: &telemetry
-                )
-            } catch let error as MeshSourceError
-            where error.code == .resourceLimitExceeded {
-                throw ProjectPackageError(
-                    code: .resourceLimitExceeded,
-                    message: error.message
-                )
-            } catch let error as MeshSourceError
-            where error.code == .unsupportedVersion {
-                throw ProjectPackageError(
-                    code: .unsupportedVersion,
-                    message: error.message
-                )
-            } catch {
+            guard let catalog else {
                 throw ProjectPackageError(
                     code: .invalidSource,
-                    message: "Project mesh blob decoding failed: \(error)."
+                    message: "Authored Mesh catalog could not be decoded."
                 )
             }
-            try source.validateCompletion(against: record.blob)
-            guard mesh.identity == record.id,
-                meshSources.updateValue(mesh, forKey: record.id) == nil
-            else {
-                throw ProjectPackageError(
-                    code: .invalidSource,
-                    message: "Project mesh blob identity is duplicate or inconsistent."
+            for record in catalog.assets {
+                try validateMeshReference(record.blob)
+                guard referencedBlobPaths.insert(record.blob.path).inserted,
+                    let declaredEntry = manifest.sourceEntry(at: record.blob.path),
+                    try declaredEntry == record.blob.sourceEntry,
+                    let descriptor = backing.entries[record.blob.path]
+                else {
+                    throw ProjectPackageError(
+                        code: .invalidManifest,
+                        message: "Authored Mesh blob reference is missing or inconsistent."
+                    )
+                }
+                maximumReadChunkByteCount = max(
+                    maximumReadChunkByteCount,
+                    try backing.validate(
+                        descriptor,
+                        against: declaredEntry,
+                        maximumChunkByteCount: limits.maximumChunkByteCount
+                    )
+                )
+                var source = ProjectPackageArchiveEntrySource(
+                    backing: backing,
+                    entry: descriptor,
+                    maximumChunkByteCount: limits.maximumChunkByteCount
+                )
+                let mesh: MeshSource
+                do {
+                    mesh = try MeshSourceCodec.decode(
+                        from: &source,
+                        limits: limits.meshSource,
+                        telemetry: &telemetry
+                    )
+                } catch let error as MeshSourceError where error.code == .resourceLimitExceeded {
+                    throw ProjectPackageError(code: .resourceLimitExceeded, message: error.message)
+                } catch let error as MeshSourceError where error.code == .unsupportedVersion {
+                    throw ProjectPackageError(code: .unsupportedVersion, message: error.message)
+                } catch {
+                    throw ProjectPackageError(
+                        code: .invalidSource,
+                        message: "Authored Mesh blob decoding failed: \(error)."
+                    )
+                }
+                try source.validateCompletion(against: record.blob)
+                guard mesh.identity == record.id,
+                    meshSources.updateValue(mesh, forKey: record.id) == nil
+                else {
+                    throw ProjectPackageError(
+                        code: .invalidSource,
+                        message: "Authored Mesh blob identity is duplicate or inconsistent."
+                    )
+                }
+                maximumReadChunkByteCount = max(
+                    maximumReadChunkByteCount,
+                    source.maximumReadChunkByteCount
                 )
             }
-            maximumReadChunkByteCount = max(
-                maximumReadChunkByteCount,
-                source.maximumReadChunkByteCount
-            )
+        } else {
+            catalog = nil
         }
 
         for sourceEntry in manifest.sourceEntries
-        where sourceEntry.path != ProjectPackageManifest.sourceMetadataPath
+        where sourceEntry.path != ProjectPackageManifest.productSourcePath
             && sourceEntry.path != ProjectPackageManifest.cadSourcePath
+            && sourceEntry.path != ProjectPackageManifest.meshCatalogPath
             && !referencedBlobPaths.contains(sourceEntry.path)
         {
             let reference = try ProjectSourceBlobReference(entry: sourceEntry)
@@ -302,16 +324,15 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
             )
         }
 
-        let project = try envelope.makeProject(meshSources: meshSources)
+        let authoredMeshAssets = try catalog?.makeAssets(meshSources: meshSources) ?? [:]
         var adjunctByteCount: UInt64 = 0
         var adjunctCount = 0
         for descriptor in backing.entries.values
         where descriptor.path != Self.manifestPath
             && !descriptor.path.hasPrefix("source/")
         {
-            let addition = adjunctByteCount.addingReportingOverflow(
-                UInt64(descriptor.byteCount)
-            )
+            try validateAdjunctPath(descriptor.path)
+            let addition = adjunctByteCount.addingReportingOverflow(UInt64(descriptor.byteCount))
             guard !addition.overflow,
                 addition.partialValue <= limits.maximumPreservedAdjunctByteCount
             else {
@@ -343,83 +364,57 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
             geometryCopyTelemetry: telemetry
         )
         return ProjectPackageDocument(
-            source: project,
+            documentID: manifest.documentID,
+            productSource: productSource,
             cadSource: cadSource,
+            authoredMeshAssets: authoredMeshAssets,
             manifest: manifest,
             backing: backing,
             loadReport: report
         )
     }
 
-    private func validateDeclaredSourcePaths(
-        _ manifest: ProjectPackageManifest,
-        backing: ProjectPackageArchiveBacking
-    ) throws {
-        let declaredPaths = Set(manifest.sourceEntries.map(\.path))
-        for entry in manifest.sourceEntries {
-            guard entry.byteCount <= limits.maximumSourceBlobByteCount,
-                backing.entries[entry.path] != nil
-            else {
-                throw ProjectPackageError(
-                    code: backing.entries[entry.path] == nil
-                        ? .missingEntry : .resourceLimitExceeded,
-                    message: "Declared project source entry is missing or exceeds limits: "
-                        + entry.path
-                )
-            }
-        }
-        for path in backing.entries.keys where path.hasPrefix("source/") {
-            guard declaredPaths.contains(path) else {
-                throw ProjectPackageError(
-                    code: .invalidManifest,
-                    message: "Project package contains an undeclared source entry: \(path)."
-                )
-            }
-        }
-    }
-
-    private func validateMeshReference(
-        _ reference: ProjectSourceBlobReference
-    ) throws {
-        guard reference.mediaType == ProjectPackageMeshDigestSink.mediaType,
-            reference.schemaVersion == ProjectPackageMeshDigestSink.schemaVersion,
-            reference.fingerprint.algorithm
-                == ProjectPackageMeshDigestSink.fingerprintAlgorithm,
-            reference.byteCount <= limits.maximumSourceBlobByteCount
-        else {
-            throw ProjectPackageError(
-                code: .unsupportedVersion,
-                message: "Project mesh blob contract is unsupported."
-            )
-        }
-    }
-
     private func prepare(
         _ document: ProjectPackageDocument
     ) throws -> ProjectPackagePreparedOutput {
-        let plan = try ProjectPackageSourcePlanner(limits: limits).plan(document.source)
-        guard document.cadSource.data.count <= limits.maximumCADSourceByteCount else {
+        let meshPlan = try ProjectPackageMeshPlanner(limits: limits).plan(
+            document.authoredMeshAssets
+        )
+        guard document.productSource.data.count <= limits.maximumProductSourceByteCount else {
+            throw ProjectPackageError(
+                code: .resourceLimitExceeded,
+                message: "Project Product source exceeds its configured limit."
+            )
+        }
+        if let cadSource = document.cadSource,
+            cadSource.data.count > limits.maximumCADSourceByteCount
+        {
             throw ProjectPackageError(
                 code: .resourceLimitExceeded,
                 message: "Project CAD source exceeds its configured limit."
             )
         }
-        var sourceEntries = [plan.sourceEntry, document.cadSource.sourceEntry]
-        sourceEntries.append(contentsOf: try plan.blobs.map { try $0.reference.sourceEntry })
+
+        var sourceEntries = [document.productSource.sourceEntry]
+        if let cadSource = document.cadSource {
+            sourceEntries.append(cadSource.sourceEntry)
+        }
+        if let catalogEntry = meshPlan.catalogEntry {
+            sourceEntries.append(catalogEntry)
+        }
+        sourceEntries.append(contentsOf: try meshPlan.blobs.map { try $0.reference.sourceEntry })
         let activePaths = Set(sourceEntries.map(\.path))
         if document.retainsUnreferencedSourceBlobs,
             let oldManifest = document.manifest
         {
             for entry in oldManifest.sourceEntries
-            where entry.path != ProjectPackageManifest.sourceMetadataPath
-                && entry.path != ProjectPackageManifest.cadSourcePath
-                && !activePaths.contains(entry.path)
+            where isBlobPath(entry.path) && !activePaths.contains(entry.path)
             {
                 sourceEntries.append(entry)
             }
         }
         let manifest = try ProjectPackageManifest(
-            documentID: document.source.id,
+            documentID: document.documentID,
             sourceEntries: sourceEntries
         )
         let manifestData = try ProjectPackageCanonicalJSON.encode(manifest)
@@ -430,34 +425,50 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
             )
         }
 
-        var entries: [ProjectPackageOutputEntry] = [
-            .data(path: Self.manifestPath, value: manifestData),
-            .data(path: ProjectPackageManifest.sourceMetadataPath, value: plan.sourceData),
-        ]
-        var encodedBlobCount = 0
-        var encodedBlobByteCount: UInt64 = 0
-        var reusedBlobCount = 0
-        var reusedBlobByteCount: UInt64 = 0
         let oldSourceEntries = Dictionary(
             uniqueKeysWithValues: (document.manifest?.sourceEntries ?? []).map {
                 ($0.path, $0)
             }
         )
-        if let backing = document.backing,
-            oldSourceEntries[ProjectPackageManifest.cadSourcePath]
-                == document.cadSource.sourceEntry,
-            let descriptor = backing.entries[ProjectPackageManifest.cadSourcePath]
-        {
-            entries.append(.retained(descriptor))
-        } else {
-            entries.append(
-                .data(
-                    path: ProjectPackageManifest.cadSourcePath,
-                    value: document.cadSource.data
-                )
+        var entries: [ProjectPackageOutputEntry] = [
+            .data(path: Self.manifestPath, value: manifestData),
+        ]
+        appendDataOrRetained(
+            path: ProjectPackageManifest.productSourcePath,
+            data: document.productSource.data,
+            sourceEntry: document.productSource.sourceEntry,
+            oldSourceEntries: oldSourceEntries,
+            backing: document.backing,
+            entries: &entries
+        )
+        if let cadSource = document.cadSource {
+            appendDataOrRetained(
+                path: ProjectPackageManifest.cadSourcePath,
+                data: cadSource.data,
+                sourceEntry: cadSource.sourceEntry,
+                oldSourceEntries: oldSourceEntries,
+                backing: document.backing,
+                entries: &entries
             )
         }
-        for blob in plan.blobs {
+        if let catalogEntry = meshPlan.catalogEntry,
+            let catalogData = meshPlan.catalogData
+        {
+            appendDataOrRetained(
+                path: ProjectPackageManifest.meshCatalogPath,
+                data: catalogData,
+                sourceEntry: catalogEntry,
+                oldSourceEntries: oldSourceEntries,
+                backing: document.backing,
+                entries: &entries
+            )
+        }
+
+        var encodedBlobCount = 0
+        var encodedBlobByteCount: UInt64 = 0
+        var reusedBlobCount = 0
+        var reusedBlobByteCount: UInt64 = 0
+        for blob in meshPlan.blobs {
             if let backing = document.backing,
                 oldSourceEntries[blob.reference.path] == (try blob.reference.sourceEntry),
                 let descriptor = backing.entries[blob.reference.path]
@@ -475,11 +486,9 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
             let oldManifest = document.manifest,
             let backing = document.backing
         {
-            let activeBlobPaths = Set(plan.blobs.map(\.reference.path))
+            let activeBlobPaths = Set(meshPlan.blobs.map(\.reference.path))
             for entry in oldManifest.sourceEntries
-            where entry.path != ProjectPackageManifest.sourceMetadataPath
-                && entry.path != ProjectPackageManifest.cadSourcePath
-                && !activeBlobPaths.contains(entry.path)
+            where isBlobPath(entry.path) && !activeBlobPaths.contains(entry.path)
             {
                 guard let descriptor = backing.entries[entry.path] else {
                     throw missing(entry.path)
@@ -497,6 +506,7 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
             where descriptor.path != Self.manifestPath
                 && !descriptor.path.hasPrefix("source/")
             {
+                try validateAdjunctPath(descriptor.path)
                 entries.append(.retained(descriptor))
                 preservedAdjunctCount += 1
                 preservedAdjunctByteCount += UInt64(descriptor.byteCount)
@@ -511,7 +521,7 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
         return ProjectPackagePreparedOutput(
             manifest: manifest,
             entries: entries.sorted { $0.path < $1.path },
-            telemetry: plan.telemetry,
+            telemetry: meshPlan.telemetry,
             encodedBlobCount: encodedBlobCount,
             encodedBlobByteCount: encodedBlobByteCount,
             reusedBlobCount: reusedBlobCount,
@@ -519,6 +529,24 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
             preservedAdjunctCount: preservedAdjunctCount,
             preservedAdjunctByteCount: preservedAdjunctByteCount
         )
+    }
+
+    private func appendDataOrRetained(
+        path: String,
+        data: Data,
+        sourceEntry: ProjectPackageSourceEntry,
+        oldSourceEntries: [String: ProjectPackageSourceEntry],
+        backing: ProjectPackageArchiveBacking?,
+        entries: inout [ProjectPackageOutputEntry]
+    ) {
+        if let backing,
+            oldSourceEntries[path] == sourceEntry,
+            let descriptor = backing.entries[path]
+        {
+            entries.append(.retained(descriptor))
+        } else {
+            entries.append(.data(path: path, value: data))
+        }
     }
 
     private func write(
@@ -621,10 +649,4 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
         }
     }
 
-    private func missing(_ path: String) -> ProjectPackageError {
-        ProjectPackageError(
-            code: .missingEntry,
-            message: "Project package entry is missing: \(path)."
-        )
-    }
 }
