@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 import RupaProjectModel
 
 public struct DesignDocument: Identifiable, Sendable {
@@ -10,6 +11,14 @@ public struct DesignDocument: Identifiable, Sendable {
 
     public var id: DocumentID {
         cadDocument.id
+    }
+
+    public var projectID: ProjectID {
+        Self.projectID(for: id)
+    }
+
+    public static func projectID(for documentID: DocumentID) -> ProjectID {
+        ProjectID(rawValue: "project.\(documentID.description)")
     }
 
     public init(

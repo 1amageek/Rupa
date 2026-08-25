@@ -455,6 +455,289 @@ func editorSessionAuthoredMeshNoOpDoesNotAdvanceGenerationOrRevision() throws {
     )
 }
 
+@Test(.timeLimit(.minutes(1)))
+func makeEditablePromotesModelingCADSnapshotWithoutCopyingMeshStorage() throws {
+    let fixture = try makeEditableCADFixture()
+    let application = try DefaultGeometrySourceCommandApplier().apply(
+        .makeCADRepresentationEditable(fixture.command),
+        to: fixture.document
+    )
+    let asset = try #require(
+        application.document.authoredMeshAssets[fixture.command.authoredMeshSourceID]
+    )
+    let object = try #require(
+        application.document.productMetadata.sceneNodes[fixture.sceneNodeID]?.object
+    )
+    let selection = try #require(object.geometryRepresentations.selection)
+    guard case .makeEditable(let result) = application.result else {
+        Issue.record("Expected a Make Editable result.")
+        return
+    }
+
+    #expect(application.result.didMutate)
+    #expect(result.copyTelemetry == fixture.command.evaluationCopyTelemetry)
+    #expect(selection.modeling == fixture.cadRepresentationID)
+    #expect(selection.presentation == fixture.command.authoredMeshRepresentationID)
+    #expect(
+        object.geometryRepresentations
+            .representations[fixture.cadRepresentationID]?.source
+            == fixture.cadReference
+    )
+    #expect(
+        object.geometryRepresentations
+            .representations[fixture.command.authoredMeshRepresentationID]?.source
+            == .authoredMesh(fixture.command.authoredMeshSourceID)
+    )
+    #expect(
+        asset.provenance == .derivedFromCAD(
+            representationID: fixture.cadRepresentationID,
+            sourceIdentity: fixture.command.sourceIdentity
+        )
+    )
+    #expect(asset.source.identity == fixture.command.authoredMeshSourceID)
+    expectAllMeshStorageShared(fixture.command.evaluatedMesh, asset.source)
+    #expect(
+        application.document.productMetadata.sceneNodes[fixture.sceneNodeID]?.reference
+            == .body(fixture.bodyFeatureID)
+    )
+    #expect(
+        try application.document.cadDocument.sourceFingerprint(tolerance: .standard)
+            == fixture.document.cadDocument.sourceFingerprint(tolerance: .standard)
+    )
+}
+
+@Test(.timeLimit(.minutes(1)))
+func makeEditableCanRetainCADPresentationSelection() throws {
+    let fixture = try makeEditableCADFixture(switchesPresentationSelection: false)
+    let application = try DefaultGeometrySourceCommandApplier().apply(
+        .makeCADRepresentationEditable(fixture.command),
+        to: fixture.document
+    )
+    let object = try #require(
+        application.document.productMetadata.sceneNodes[fixture.sceneNodeID]?.object
+    )
+
+    #expect(object.geometryRepresentations.selection?.modeling == fixture.cadRepresentationID)
+    #expect(object.geometryRepresentations.selection?.presentation == fixture.cadRepresentationID)
+    #expect(
+        application.document.authoredMeshAssets[fixture.command.authoredMeshSourceID] != nil
+    )
+}
+
+@Test(.timeLimit(.minutes(1)))
+func makeEditableRejectsWrongPurposeMismatchedRepresentationAndDuplicateIdentity() throws {
+    let fixture = try makeEditableCADFixture()
+    var wrongPurposeError: EditorError?
+    do {
+        _ = try makeEditableCommand(
+            fixture: fixture,
+            snapshotID: EvaluationSnapshotID(
+                projectID: fixture.document.projectID,
+                purpose: .presentation,
+                sourceRevision: DocumentTransactionRevision(0)
+            )
+        )
+    } catch let error as EditorError {
+        wrongPurposeError = error
+    }
+    #expect(wrongPurposeError?.code == .commandInvalid)
+
+    let mismatched = try makeEditableCommand(
+        fixture: fixture,
+        sourceRepresentationID: "cad.missing"
+    )
+    var mismatchedError: EditorError?
+    do {
+        _ = try DefaultGeometrySourceCommandApplier().apply(
+            .makeCADRepresentationEditable(mismatched),
+            to: fixture.document
+        )
+    } catch let error as EditorError {
+        mismatchedError = error
+    }
+    #expect(mismatchedError?.code == .referenceUnresolved)
+
+    let first = try DefaultGeometrySourceCommandApplier().apply(
+        .makeCADRepresentationEditable(fixture.command),
+        to: fixture.document
+    )
+    var duplicateError: EditorError?
+    do {
+        _ = try DefaultGeometrySourceCommandApplier().apply(
+            .makeCADRepresentationEditable(fixture.command),
+            to: first.document
+        )
+    } catch let error as EditorError {
+        duplicateError = error
+    }
+    #expect(duplicateError?.code == .commandInvalid)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func makeEditableCommandCodecPreservesBindingsAndRejectsInvalidPurpose() throws {
+    let fixture = try makeEditableCADFixture()
+    let encoded = try JSONEncoder().encode(fixture.command)
+    let decoded = try JSONDecoder().decode(
+        MakeCADRepresentationEditableCommand.self,
+        from: encoded
+    )
+    #expect(decoded == fixture.command)
+
+    var payload = try #require(
+        JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+    )
+    var snapshot = try #require(
+        payload["evaluationSnapshotID"] as? [String: Any]
+    )
+    snapshot["purpose"] = GeometryRepresentationPurpose.presentation.rawValue
+    payload["evaluationSnapshotID"] = snapshot
+    let invalid = try JSONSerialization.data(withJSONObject: payload)
+    var error: EditorError?
+    do {
+        _ = try JSONDecoder().decode(
+            MakeCADRepresentationEditableCommand.self,
+            from: invalid
+        )
+    } catch let caught as EditorError {
+        error = caught
+    }
+    #expect(error?.code == .commandInvalid)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func makeEditableRejectsChangedCADSourceWithoutMutation() throws {
+    let fixture = try makeEditableCADFixture()
+    var changedDocument = fixture.document
+    try changedDocument.setExtrudeDistance(
+        featureID: fixture.bodyFeatureID,
+        distance: .length(2, .meter)
+    )
+    let changedFingerprint = try changedDocument.cadDocument.sourceFingerprint(
+        tolerance: .standard
+    )
+    var error: EditorError?
+
+    do {
+        _ = try DefaultGeometrySourceCommandApplier().apply(
+            .makeCADRepresentationEditable(fixture.command),
+            to: changedDocument
+        )
+    } catch let caught as EditorError {
+        error = caught
+    }
+
+    #expect(error?.code == .sourceIdentityMismatch)
+    #expect(changedDocument.authoredMeshAssets.isEmpty)
+    #expect(
+        try changedDocument.cadDocument.sourceFingerprint(tolerance: .standard)
+            == changedFingerprint
+    )
+}
+
+@Test(.timeLimit(.minutes(1)))
+func editorSessionRejectsMakeEditableSnapshotFromStaleTransactionRevision() throws {
+    let fixture = try makeEditableCADFixture(
+        snapshotRevision: DocumentTransactionRevision(1)
+    )
+    let session = EditorSession(document: fixture.document)
+    var error: EditorError?
+
+    do {
+        _ = try session.execute(
+            .makeCADRepresentationEditable(fixture.command),
+            expectedTransactionRevision: DocumentTransactionRevision(0)
+        )
+    } catch let caught as EditorError {
+        error = caught
+    }
+
+    #expect(error?.code == .documentTransactionRevisionMismatch)
+    #expect(session.transactionRevision == DocumentTransactionRevision(0))
+    #expect(session.generation == DocumentGeneration(0))
+    #expect(session.document.authoredMeshAssets.isEmpty)
+    #expect(session.commandStack.undoEntries.isEmpty)
+}
+
+private struct MakeEditableCADFixture {
+    let document: DesignDocument
+    let sceneNodeID: SceneNodeID
+    let bodyFeatureID: FeatureID
+    let cadRepresentationID: GeometryRepresentationID
+    let cadReference: GeometrySourceReference
+    let command: MakeCADRepresentationEditableCommand
+}
+
+private func makeEditableCADFixture(
+    switchesPresentationSelection: Bool = true,
+    snapshotRevision: DocumentTransactionRevision = DocumentTransactionRevision(0)
+) throws -> MakeEditableCADFixture {
+    var document = DesignDocument.empty(named: "Make Editable")
+    let bodyFeatureID = try document.createExtrudedRectangle(
+        name: "Body",
+        plane: .xy,
+        width: .length(1, .meter),
+        height: .length(1, .meter),
+        depth: .length(1, .meter),
+        direction: .normal
+    )
+    let sceneNodeID = try #require(document.productMetadata.sceneNodes.first {
+        $0.value.reference == .body(bodyFeatureID)
+    }?.key)
+    let object = try #require(document.productMetadata.sceneNodes[sceneNodeID]?.object)
+    let cadRepresentationID = try #require(
+        object.geometryRepresentations.selection?.modeling
+    )
+    let cadReference = try #require(
+        object.geometryRepresentations.representations[cadRepresentationID]?.source
+    )
+    let evaluatedMesh = try editableQuadSource(identity: "cad.evaluation.body")
+    var telemetry = GeometryCopyTelemetry()
+    try telemetry.record(reason: .bufferMaterialization, copiedBytes: 256)
+    let command = try MakeCADRepresentationEditableCommand(
+        sceneNodeID: sceneNodeID,
+        sourceRepresentationID: cadRepresentationID,
+        sourceReference: cadReference,
+        evaluationSnapshotID: EvaluationSnapshotID(
+            projectID: document.projectID,
+            purpose: .modeling,
+            sourceRevision: snapshotRevision
+        ),
+        sourceIdentity: CADSourceContentIdentityService().identity(for: document),
+        evaluatedMesh: evaluatedMesh,
+        evaluationCopyTelemetry: telemetry,
+        authoredMeshSourceID: "mesh.editable.body",
+        authoredMeshRepresentationID: "representation.editable.body",
+        switchesPresentationSelection: switchesPresentationSelection
+    )
+    return MakeEditableCADFixture(
+        document: document,
+        sceneNodeID: sceneNodeID,
+        bodyFeatureID: bodyFeatureID,
+        cadRepresentationID: cadRepresentationID,
+        cadReference: cadReference,
+        command: command
+    )
+}
+
+private func makeEditableCommand(
+    fixture: MakeEditableCADFixture,
+    sourceRepresentationID: GeometryRepresentationID? = nil,
+    snapshotID: EvaluationSnapshotID? = nil
+) throws -> MakeCADRepresentationEditableCommand {
+    try MakeCADRepresentationEditableCommand(
+        sceneNodeID: fixture.sceneNodeID,
+        sourceRepresentationID: sourceRepresentationID ?? fixture.cadRepresentationID,
+        sourceReference: fixture.cadReference,
+        evaluationSnapshotID: snapshotID ?? fixture.command.evaluationSnapshotID,
+        sourceIdentity: fixture.command.sourceIdentity,
+        evaluatedMesh: fixture.command.evaluatedMesh,
+        evaluationCopyTelemetry: fixture.command.evaluationCopyTelemetry,
+        authoredMeshSourceID: fixture.command.authoredMeshSourceID,
+        authoredMeshRepresentationID: fixture.command.authoredMeshRepresentationID,
+        switchesPresentationSelection: fixture.command.switchesPresentationSelection
+    )
+}
+
 private struct MeshSourceCommandFixture {
     let document: DesignDocument
     let asset: AuthoredMeshAsset

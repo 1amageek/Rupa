@@ -3,12 +3,12 @@ import RupaCADIntegration
 import RupaCore
 import RupaCoreTypes
 import RupaEvaluation
-import RupaGeometry
 import RupaKit
 import RupaProject
 import RupaProjectModel
 import SwiftCAD
 import Testing
+@testable import RupaGeometry
 
 @Test(.timeLimit(.minutes(1)))
 func projectControllerEvaluatesCADCreatedAfterInitialization() async throws {
@@ -117,6 +117,238 @@ func projectControllerLoadEvaluatesTheLoadedCADDocument() async throws {
     }
 }
 
+@Test(.timeLimit(.minutes(1)))
+func projectControllerMakesCADRepresentationEditableThroughModelingEvaluation() async throws {
+    let fixture = try extrudedCADDocument(named: "Make Editable", depth: 1.0)
+    let sceneNodeID = try bodySceneNodeID(
+        in: fixture.document,
+        featureID: fixture.bodyFeatureID
+    )
+    let controller = try makeCADProjectController(document: fixture.document)
+    let sourceID: GeometrySourceID = "mesh.make-editable"
+    let representationID: GeometryRepresentationID = "representation.make-editable"
+    let prepared = try await controller.prepareMakeCADRepresentationEditableCommand(
+        sceneNodeID: sceneNodeID,
+        authoredMeshSourceID: sourceID,
+        authoredMeshRepresentationID: representationID,
+        expectedTransactionRevision: DocumentTransactionRevision(0)
+    )
+    guard case .makeCADRepresentationEditable(let command) = prepared else {
+        Issue.record("Expected a Make Editable geometry source command.")
+        return
+    }
+
+    #expect(command.evaluationSnapshotID.purpose == .modeling)
+    #expect(command.evaluationSnapshotID.sourceRevision == DocumentTransactionRevision(0))
+    #expect(command.evaluationCopyTelemetry.didCopy)
+    #expect(command.evaluationCopyTelemetry.copiedBytes > 0)
+
+    let result = try await controller.commit(
+        ProjectSourceTransaction(
+            name: "integration.make-editable",
+            geometrySourceCommands: [prepared],
+            expectedTransactionRevision: DocumentTransactionRevision(0)
+        )
+    )
+    let asset = try #require(result.document.authoredMeshAssets[sourceID])
+    let object = try #require(
+        result.document.productMetadata.sceneNodes[sceneNodeID]?.object
+    )
+    let selection = try #require(object.geometryRepresentations.selection)
+    let occurrence = try #require(result.evaluation.occurrences.values.first {
+        $0.representationID == representationID
+    })
+    guard case .makeEditable(let commandResult)? = result.geometrySourceCommandResults.first else {
+        Issue.record("Expected a Make Editable command result.")
+        return
+    }
+
+    #expect(selection.modeling == command.sourceRepresentationID)
+    #expect(selection.presentation == representationID)
+    #expect(object.geometryRepresentations.representations.count == 2)
+    #expect(result.document.productMetadata.sceneNodes[sceneNodeID]?.reference == .body(fixture.bodyFeatureID))
+    #expect(result.document.hasAuthoritativeCADSource)
+    #expect(result.package.cadSource != nil)
+    #expect(
+        asset.provenance == .derivedFromCAD(
+            representationID: command.sourceRepresentationID,
+            sourceIdentity: command.sourceIdentity
+        )
+    )
+    #expect(commandResult.cadSourceIdentity == command.sourceIdentity)
+    #expect(commandResult.authoredMeshContentIdentity == asset.contentIdentity)
+    #expect(commandResult.copyTelemetry == command.evaluationCopyTelemetry)
+    #expect(!result.evaluation.copyTelemetry.didCopy)
+    #expect(occurrence.reference == .authoredMesh(sourceID))
+    #expect(occurrence.mesh.identity == sourceID)
+    expectEveryMeshBufferShared(command.evaluatedMesh, asset.source)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func madeEditableMeshSurvivesSaveLoadAndRemainsIndependentFromLaterCADEdits() async throws {
+    try await withCADProjectTemporaryDirectory { directory in
+        let fixture = try extrudedCADDocument(named: "Independent Mesh", depth: 1.0)
+        let sceneNodeID = try bodySceneNodeID(
+            in: fixture.document,
+            featureID: fixture.bodyFeatureID
+        )
+        let controller = try makeCADProjectController(document: fixture.document)
+        let sourceID: GeometrySourceID = "mesh.independent"
+        let representationID: GeometryRepresentationID = "representation.independent"
+        let prepared = try await controller.prepareMakeCADRepresentationEditableCommand(
+            sceneNodeID: sceneNodeID,
+            authoredMeshSourceID: sourceID,
+            authoredMeshRepresentationID: representationID,
+            expectedTransactionRevision: DocumentTransactionRevision(0)
+        )
+        let madeEditable = try await controller.commit(
+            ProjectSourceTransaction(
+                name: "integration.make-editable.save",
+                geometrySourceCommands: [prepared],
+                expectedTransactionRevision: DocumentTransactionRevision(0)
+            )
+        )
+        let retainedAsset = try #require(madeEditable.document.authoredMeshAssets[sourceID])
+        let savedCADFingerprint = try madeEditable.document.cadDocument.sourceFingerprint(
+            tolerance: .standard
+        )
+        let packageURL = directory.appendingPathComponent("editable.rupa")
+        _ = try await controller.save(
+            to: packageURL,
+            expectedTransactionRevision: DocumentTransactionRevision(1)
+        )
+
+        let cadEdited = try await controller.commit(
+            ProjectSourceTransaction(
+                name: "integration.edit-cad-after-make-editable",
+                commands: [
+                    .setExtrudeDistance(
+                        featureID: fixture.bodyFeatureID,
+                        distance: .length(3, .meter)
+                    ),
+                ],
+                expectedTransactionRevision: DocumentTransactionRevision(1)
+            )
+        )
+        let editedObject = try #require(
+            cadEdited.document.productMetadata.sceneNodes[sceneNodeID]?.object
+        )
+
+        #expect(cadEdited.document.authoredMeshAssets[sourceID] == retainedAsset)
+        #expect(editedObject.geometryRepresentations.selection?.modeling != representationID)
+        #expect(editedObject.geometryRepresentations.selection?.presentation == representationID)
+        #expect(
+            try cadEdited.document.cadDocument.sourceFingerprint(tolerance: .standard)
+                != savedCADFingerprint
+        )
+        #expect(!cadEdited.evaluation.copyTelemetry.didCopy)
+
+        let loader = try makeCADProjectController(
+            document: .empty(named: "Load Target")
+        )
+        let loaded = try await loader.load(
+            from: packageURL,
+            expectedTransactionRevision: DocumentTransactionRevision(0)
+        )
+        let loadedObject = try #require(
+            loaded.document.productMetadata.sceneNodes[sceneNodeID]?.object
+        )
+
+        #expect(loaded.document.authoredMeshAssets[sourceID] == retainedAsset)
+        #expect(loadedObject.geometryRepresentations.selection?.presentation == representationID)
+        #expect(
+            try loaded.document.cadDocument.sourceFingerprint(tolerance: .standard)
+                == savedCADFingerprint
+        )
+        #expect(loaded.evaluation.id.purpose == .presentation)
+        #expect(!loaded.evaluation.copyTelemetry.didCopy)
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func makeEditableRejectsStaleRevisionAndRollsBackMixedCADMutation() async throws {
+    let fixture = try extrudedCADDocument(named: "Make Editable Rollback", depth: 1.0)
+    let sceneNodeID = try bodySceneNodeID(
+        in: fixture.document,
+        featureID: fixture.bodyFeatureID
+    )
+    let controller = try makeCADProjectController(document: fixture.document)
+    let prepared = try await controller.prepareMakeCADRepresentationEditableCommand(
+        sceneNodeID: sceneNodeID,
+        authoredMeshSourceID: "mesh.rollback",
+        authoredMeshRepresentationID: "representation.rollback",
+        expectedTransactionRevision: DocumentTransactionRevision(0)
+    )
+    let originalFingerprint = try fixture.document.cadDocument.sourceFingerprint(
+        tolerance: .standard
+    )
+    var mixedError: ProjectControllerError?
+
+    do {
+        _ = try await controller.commit(
+            ProjectSourceTransaction(
+                name: "integration.make-editable.rollback",
+                commands: [
+                    .setExtrudeDistance(
+                        featureID: fixture.bodyFeatureID,
+                        distance: .length(2, .meter)
+                    ),
+                ],
+                geometrySourceCommands: [prepared],
+                expectedTransactionRevision: DocumentTransactionRevision(0)
+            )
+        )
+    } catch let error as ProjectControllerError {
+        mixedError = error
+    }
+
+    let afterMixedFailure = await controller.currentDocument()
+    let revisionAfterMixedFailure = await controller.currentTransactionRevision()
+    #expect(mixedError?.code == .transactionInvalid)
+    #expect(revisionAfterMixedFailure == DocumentTransactionRevision(0))
+    #expect(afterMixedFailure.authoredMeshAssets.isEmpty)
+    #expect(
+        try afterMixedFailure.cadDocument.sourceFingerprint(tolerance: .standard)
+            == originalFingerprint
+    )
+
+    _ = try await controller.commit(
+        ProjectSourceTransaction(
+            name: "integration.advance-revision",
+            commands: [
+                .setExtrudeDistance(
+                    featureID: fixture.bodyFeatureID,
+                    distance: .length(2, .meter)
+                ),
+            ],
+            expectedTransactionRevision: DocumentTransactionRevision(0)
+        )
+    )
+    let beforeStaleAttempt = await controller.currentDocument()
+    var staleError: ProjectControllerError?
+    do {
+        _ = try await controller.commit(
+            ProjectSourceTransaction(
+                name: "integration.make-editable.stale",
+                geometrySourceCommands: [prepared],
+                expectedTransactionRevision: DocumentTransactionRevision(1)
+            )
+        )
+    } catch let error as ProjectControllerError {
+        staleError = error
+    }
+    let afterStaleAttempt = await controller.currentDocument()
+    let revisionAfterStaleAttempt = await controller.currentTransactionRevision()
+
+    #expect(staleError?.code == .revisionConflict)
+    #expect(revisionAfterStaleAttempt == DocumentTransactionRevision(1))
+    #expect(afterStaleAttempt.authoredMeshAssets.isEmpty)
+    #expect(
+        try afterStaleAttempt.cadDocument.sourceFingerprint(tolerance: .standard)
+            == beforeStaleAttempt.cadDocument.sourceFingerprint(tolerance: .standard)
+    )
+}
+
 private func makeCADProjectController(
     document: DesignDocument
 ) throws -> ProjectController {
@@ -141,6 +373,65 @@ private func extrudedCADDocument(
         direction: .normal
     )
     return (document, bodyFeatureID)
+}
+
+private func bodySceneNodeID(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> SceneNodeID {
+    try #require(document.productMetadata.sceneNodes.first {
+        $0.value.reference == .body(featureID)
+    }?.key)
+}
+
+private func expectEveryMeshBufferShared(
+    _ original: MeshSource,
+    _ reidentified: MeshSource
+) {
+    #expect(original.vertexIDs.storage.chunkIdentities == reidentified.vertexIDs.storage.chunkIdentities)
+    #expect(original.vertexPositions.storage.chunkIdentities == reidentified.vertexPositions.storage.chunkIdentities)
+    #expect(original.edgeIDs.storage.chunkIdentities == reidentified.edgeIDs.storage.chunkIdentities)
+    #expect(original.edgeEndpoints.storage.chunkIdentities == reidentified.edgeEndpoints.storage.chunkIdentities)
+    #expect(original.faceIDs.storage.chunkIdentities == reidentified.faceIDs.storage.chunkIdentities)
+    #expect(original.faceCornerRanges.storage.chunkIdentities == reidentified.faceCornerRanges.storage.chunkIdentities)
+    #expect(original.cornerIDs.storage.chunkIdentities == reidentified.cornerIDs.storage.chunkIdentities)
+    #expect(original.cornerVertexIDs.storage.chunkIdentities == reidentified.cornerVertexIDs.storage.chunkIdentities)
+    #expect(original.cornerEdgeIDs.storage.chunkIdentities == reidentified.cornerEdgeIDs.storage.chunkIdentities)
+
+    let originalLayers = original.attributes.sortedLayers()
+    let reidentifiedLayers = reidentified.attributes.sortedLayers()
+    #expect(originalLayers.map(\.descriptor.id) == reidentifiedLayers.map(\.descriptor.id))
+    for (originalLayer, reidentifiedLayer) in zip(originalLayers, reidentifiedLayers) {
+        expectAttributeStorageShared(originalLayer.values, reidentifiedLayer.values)
+        #expect(
+            originalLayer.indices?.storage.chunkIdentities
+                == reidentifiedLayer.indices?.storage.chunkIdentities
+        )
+    }
+}
+
+private func expectAttributeStorageShared(
+    _ original: GeometryAttributeStorage,
+    _ reidentified: GeometryAttributeStorage
+) {
+    switch (original, reidentified) {
+    case (.boolean(let lhs), .boolean(let rhs)):
+        #expect(lhs.storage.chunkIdentities == rhs.storage.chunkIdentities)
+    case (.int32(let lhs), .int32(let rhs)):
+        #expect(lhs.storage.chunkIdentities == rhs.storage.chunkIdentities)
+    case (.float32(let lhs), .float32(let rhs)):
+        #expect(lhs.storage.chunkIdentities == rhs.storage.chunkIdentities)
+    case (.float64(let lhs), .float64(let rhs)):
+        #expect(lhs.storage.chunkIdentities == rhs.storage.chunkIdentities)
+    case (.vector2(let lhs), .vector2(let rhs)):
+        #expect(lhs.storage.chunkIdentities == rhs.storage.chunkIdentities)
+    case (.vector3(let lhs), .vector3(let rhs)):
+        #expect(lhs.storage.chunkIdentities == rhs.storage.chunkIdentities)
+    case (.vector4(let lhs), .vector4(let rhs)):
+        #expect(lhs.storage.chunkIdentities == rhs.storage.chunkIdentities)
+    default:
+        Issue.record("Expected matching geometry attribute storage types.")
+    }
 }
 
 private func withCADProjectTemporaryDirectory<Result: Sendable>(

@@ -158,6 +158,7 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
         ],
         "RupaCore": [
             "RupaCoreTypes",
+            "RupaGeometry",
             "RupaProjectModel",
         ],
         "RupaKit": [

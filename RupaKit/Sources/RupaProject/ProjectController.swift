@@ -133,11 +133,126 @@ public actor ProjectController {
         let stagedEvaluation = try await evaluate(
             document: session.document,
             source: evaluationSource,
+            purpose: .presentation,
             revision: baseRevision
         )
         try requireTransactionRevision(baseRevision)
         evaluation = stagedEvaluation
         return stagedEvaluation
+    }
+
+    /// Prepares an explicit source command that promotes the selected modeling
+    /// CAD representation's immutable evaluation into an Authored Mesh asset.
+    /// The prepared command remains subject to revision and CAD-content checks
+    /// when it is committed.
+    public func prepareMakeCADRepresentationEditableCommand(
+        sceneNodeID: SceneNodeID,
+        authoredMeshSourceID: GeometrySourceID,
+        authoredMeshRepresentationID: GeometryRepresentationID,
+        switchesPresentationSelection: Bool = true,
+        expectedTransactionRevision: DocumentTransactionRevision
+    ) async throws -> GeometrySourceCommand {
+        try requireTransactionRevision(expectedTransactionRevision)
+        let baseRevision = session.transactionRevision
+        let document = session.document
+        let source = evaluationSource
+
+        do {
+            try authoredMeshSourceID.validate()
+            try authoredMeshRepresentationID.validate()
+        } catch let error as EditorError {
+            throw ProjectControllerError(code: .transactionInvalid, message: error.message)
+        }
+
+        guard let sceneNode = document.productMetadata.sceneNodes[sceneNodeID],
+              let object = sceneNode.object,
+              object.category == .body,
+              let selection = object.geometryRepresentations.selection,
+              let sourceRepresentation = object.geometryRepresentations
+                .representations[selection.modeling] else {
+            throw ProjectControllerError(
+                code: .transactionInvalid,
+                message: "Make Editable requires an existing CAD body modeling selection."
+            )
+        }
+        guard case .cad = sourceRepresentation.source else {
+            throw ProjectControllerError(
+                code: .transactionInvalid,
+                message: "Make Editable requires the target object's modeling selection to be CAD."
+            )
+        }
+        guard document.authoredMeshAssets[authoredMeshSourceID] == nil,
+              object.geometryRepresentations
+                .representations[authoredMeshRepresentationID] == nil else {
+            throw ProjectControllerError(
+                code: .transactionInvalid,
+                message: "Make Editable requires unused Authored Mesh source and representation identities."
+            )
+        }
+
+        let sourceIdentity: ContentIdentity
+        do {
+            sourceIdentity = try CADSourceContentIdentityService().identity(for: document)
+        } catch {
+            throw ProjectControllerError(
+                code: .sourceInvalid,
+                message: "Make Editable could not identify the authoritative CAD source: \(error)."
+            )
+        }
+        let modelingSnapshot = try await evaluate(
+            document: document,
+            source: source,
+            purpose: .modeling,
+            revision: baseRevision
+        )
+        try requireTransactionRevision(baseRevision)
+        guard modelingSnapshot.id == EvaluationSnapshotID(
+            projectID: source.id,
+            purpose: .modeling,
+            sourceRevision: baseRevision
+        ) else {
+            throw ProjectControllerError(
+                code: .sourceMismatch,
+                message: "Make Editable received an evaluation snapshot with a different project, purpose, or revision."
+            )
+        }
+        let occurrence = modelingSnapshot.occurrences.values
+            .filter {
+                $0.representationID == sourceRepresentation.id
+                    && $0.reference == sourceRepresentation.source
+            }
+            .sorted { $0.occurrenceID.rawValue < $1.occurrenceID.rawValue }
+            .first
+        guard let occurrence else {
+            throw ProjectControllerError(
+                code: .sourceMismatch,
+                message: "Make Editable could not resolve the selected CAD representation in the modeling snapshot."
+            )
+        }
+
+        do {
+            return .makeCADRepresentationEditable(
+                try MakeCADRepresentationEditableCommand(
+                    sceneNodeID: sceneNodeID,
+                    sourceRepresentationID: sourceRepresentation.id,
+                    sourceReference: sourceRepresentation.source,
+                    evaluationSnapshotID: modelingSnapshot.id,
+                    sourceIdentity: sourceIdentity,
+                    evaluatedMesh: occurrence.mesh,
+                    evaluationCopyTelemetry: occurrence.copyTelemetry,
+                    authoredMeshSourceID: authoredMeshSourceID,
+                    authoredMeshRepresentationID: authoredMeshRepresentationID,
+                    switchesPresentationSelection: switchesPresentationSelection
+                )
+            )
+        } catch let error as EditorError {
+            throw ProjectControllerError(code: .transactionInvalid, message: error.message)
+        } catch {
+            throw ProjectControllerError(
+                code: .transactionInvalid,
+                message: "Make Editable command preparation failed: \(error)."
+            )
+        }
     }
 
     public func commit(
@@ -230,6 +345,7 @@ public actor ProjectController {
         let stagedEvaluation = try await evaluate(
             document: reconstructed.document,
             source: reconstructed.evaluationSource,
+            purpose: .presentation,
             revision: prepared.proposedTransactionRevision
         )
 
@@ -287,6 +403,7 @@ public actor ProjectController {
         let loadedEvaluation = try await evaluate(
             document: reconstructed.document,
             source: reconstructed.evaluationSource,
+            purpose: .presentation,
             revision: loadedRevision
         )
         try requireTransactionRevision(expectedTransactionRevision)
@@ -517,6 +634,7 @@ public actor ProjectController {
     private func evaluate(
         document: DesignDocument,
         source: ProjectSourceModel,
+        purpose: GeometryRepresentationPurpose,
         revision: DocumentTransactionRevision
     ) async throws -> EvaluatedProjectSnapshot {
         let evaluatorPreparer = self.evaluatorPreparer
@@ -527,7 +645,7 @@ public actor ProjectController {
                 try Task.checkCancellation()
                 let result = try evaluator.evaluate(
                     project: source,
-                    purpose: .presentation,
+                    purpose: purpose,
                     revision: revision
                 )
                 try Task.checkCancellation()
@@ -804,10 +922,12 @@ private struct StagedCommandResults: Sendable {
 
     var didMutateAuthoredMesh: Bool {
         geometrySourceCommandResults.contains { result in
-            guard case .authoredMeshEdit = result else {
+            switch result {
+            case .authoredMeshEdit, .makeEditable:
+                return result.didMutate
+            case .representationSelection:
                 return false
             }
-            return result.didMutate
         }
     }
 }

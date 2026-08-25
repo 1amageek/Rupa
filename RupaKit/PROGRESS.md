@@ -139,13 +139,13 @@
   - [x] Preserve unchanged package blobs and collect superseded blobs only after successful publication
   - [x] Cover validation, codec, evaluation, save, cancellation, stale-revision, and late-publication rollback
   - [x] Review, verify, and commit T05-B
-- [ ] T05-C explicit Make Editable from CAD
-  - [ ] Define a source command that binds CAD representation, snapshot, revision, and content identity
-  - [ ] Promote the validated CAD evaluation snapshot to an authored-Mesh asset with derived-from-CAD provenance
-  - [ ] Retain CAD authority and modeling selection while optionally switching presentation selection
-  - [ ] Reject stale, wrong-purpose, mismatched-representation, and duplicate requests explicitly
-  - [ ] Prove save-load restoration, CAD-edit independence, rollback, and bounded materialization
-  - [ ] Review, verify, and commit T05-C
+- [x] T05-C explicit Make Editable from CAD
+  - [x] Define a source command that binds CAD representation, snapshot, revision, and content identity
+  - [x] Promote the validated CAD evaluation snapshot to an authored-Mesh asset with derived-from-CAD provenance
+  - [x] Retain CAD authority and modeling selection while optionally switching presentation selection
+  - [x] Reject stale, wrong-purpose, mismatched-representation, and duplicate requests explicitly
+  - [x] Prove save-load restoration, CAD-edit independence, rollback, and bounded materialization
+  - [x] Review, verify, and commit T05-C
 - [ ] Integrated T05 authored-Mesh source workflow verification
   - [ ] Verify CAD-only, Mesh-only edit, CAD-plus-Mesh edit, and Make Editable end-to-end workflows
   - [ ] Re-run package, rollback, cancellation, stale-publication, zero-copy, and blob-reuse evidence

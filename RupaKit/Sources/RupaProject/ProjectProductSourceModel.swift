@@ -11,7 +11,7 @@ public struct ProjectProductSourceModel: Equatable, Sendable {
     public let productMetadata: ProductMetadata
 
     public var projectID: ProjectID {
-        ProjectID(rawValue: "project.\(documentID.description)")
+        DesignDocument.projectID(for: documentID)
     }
 
     public init(

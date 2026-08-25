@@ -185,7 +185,7 @@ Model.swcad
 | `source/product.json` | Scenes, object definitions, material and presentation intent, saved Mesh recipes, documentation definitions, validation policies, export presets, and semantic envelopes that do not duplicate exact CAD facts. | `RupaCore.ProductMetadata` storage and RupaCore source transactions |
 | Semantic extension envelope | Domain intent data and source ownership for a namespace, stored as neutral product source. | `RupaCore` storage, domain module mutation through RupaCore transaction boundary |
 | Projection manifest | Mapping from domain semantic entities to CAD source features, persistent topology roles, scene nodes, and boundary tags. | `RupaCore` storage, domain generator updates through RupaCore transactions |
-| Authored Mesh source | Optional independent Mesh assets created, imported, or explicitly baked; may coexist with CAD and never aliases CAD tessellation storage. | Rupa Mesh-source commands and package layer |
+| Authored Mesh source | Optional independent Mesh authority created, imported, or explicitly baked; may coexist with CAD. Make Editable may initially share immutable CAD-evaluation buffer storage, but later CAD and Mesh mutations never synchronize implicitly and content-addressed persistence remains representation-owned. | Rupa Mesh-source commands and package layer |
 | Capture input | Immutable scan/photo evidence referenced by reconstruction jobs. | Project input service and package layer |
 | Analysis artifacts | Derived results keyed by dependency, producer, configuration, and output-content identity. | Artifact producer and `RupaProject` store |
 

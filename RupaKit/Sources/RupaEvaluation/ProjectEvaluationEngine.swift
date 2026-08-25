@@ -67,6 +67,7 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
                 representationID: representation.id,
                 reference: reference,
                 mesh: result.mesh,
+                copyTelemetry: result.copyTelemetry,
                 worldTransform: worldTransform,
                 worldBounds: worldBounds
             )

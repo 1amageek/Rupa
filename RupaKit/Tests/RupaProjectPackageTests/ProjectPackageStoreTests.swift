@@ -72,7 +72,7 @@ func projectPackageRoundTripsAuthoredMeshProvenance() throws {
     try withTemporaryDirectory { directory in
         let mesh = try triangleSource(id: "mesh.derived", xOffset: 0)
         let sourceIdentity = try ContentIdentity(
-            domain: "rupa.test.cad-source",
+            domain: AuthoredMeshProvenance.cadSourceIdentityDomain,
             fingerprint: .sha256(
                 algorithm: "sha256-test-cad-v1",
                 data: Data("cad-revision".utf8)

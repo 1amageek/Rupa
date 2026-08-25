@@ -20,6 +20,12 @@ public struct DefaultGeometrySourceCommandApplier: GeometrySourceCommandApplying
                 to: document,
                 objectRegistry: objectRegistry
             )
+        case .makeCADRepresentationEditable(let makeEditable):
+            return try apply(
+                makeEditable,
+                to: document,
+                objectRegistry: objectRegistry
+            )
         case .selectRepresentation(let selection):
             return try apply(
                 selection,
@@ -27,6 +33,128 @@ public struct DefaultGeometrySourceCommandApplier: GeometrySourceCommandApplying
                 objectRegistry: objectRegistry
             )
         }
+    }
+
+    private func apply(
+        _ command: MakeCADRepresentationEditableCommand,
+        to document: DesignDocument,
+        objectRegistry: ObjectTypeRegistry
+    ) throws -> GeometrySourceCommandApplication {
+        try command.validate()
+        guard command.evaluationSnapshotID.projectID == document.projectID else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Make Editable evaluation snapshot belongs to a different project."
+            )
+        }
+        guard var sceneNode = document.productMetadata.sceneNodes[command.sceneNodeID],
+              var object = sceneNode.object else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Make Editable requires an existing Product Object."
+            )
+        }
+        guard object.category == .body else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Make Editable currently supports CAD body representations only."
+            )
+        }
+        guard let sourceRepresentation = object.geometryRepresentations
+            .representations[command.sourceRepresentationID],
+              sourceRepresentation.source == command.sourceReference else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Make Editable source representation is not retained by the target object."
+            )
+        }
+        guard case .cad = sourceRepresentation.source else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Make Editable source representation must be CAD-authored."
+            )
+        }
+        guard var selection = object.geometryRepresentations.selection,
+              selection.modeling == command.sourceRepresentationID else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Make Editable source representation must be the current modeling selection."
+            )
+        }
+        let currentSourceIdentity: ContentIdentity
+        do {
+            currentSourceIdentity = try CADSourceContentIdentityService().identity(for: document)
+        } catch let error as EditorError {
+            throw error
+        } catch {
+            throw EditorError(
+                code: .commandFailed,
+                message: "Make Editable could not verify the current CAD source identity: \(error)."
+            )
+        }
+        guard currentSourceIdentity == command.sourceIdentity else {
+            throw EditorError(
+                code: .sourceIdentityMismatch,
+                message: "CAD source changed after the Make Editable snapshot was evaluated."
+            )
+        }
+        guard document.authoredMeshAssets[command.authoredMeshSourceID] == nil else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Make Editable Authored Mesh source identity is already retained."
+            )
+        }
+        guard object.geometryRepresentations
+            .representations[command.authoredMeshRepresentationID] == nil else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Make Editable representation identity is already retained by the target object."
+            )
+        }
+
+        let authoredSource = try command.evaluatedMesh.reidentified(
+            as: command.authoredMeshSourceID
+        )
+        let asset = try AuthoredMeshAsset(
+            source: authoredSource,
+            provenance: .derivedFromCAD(
+                representationID: command.sourceRepresentationID,
+                sourceIdentity: command.sourceIdentity
+            )
+        )
+        let authoredRepresentation = GeometryRepresentation(
+            id: command.authoredMeshRepresentationID,
+            source: .authoredMesh(command.authoredMeshSourceID)
+        )
+        object.geometryRepresentations.representations[
+            command.authoredMeshRepresentationID
+        ] = authoredRepresentation
+        if command.switchesPresentationSelection {
+            selection.presentation = command.authoredMeshRepresentationID
+        }
+        object.geometryRepresentations.selection = selection
+        sceneNode.object = object
+
+        var staged = document
+        staged.authoredMeshAssets[asset.id] = asset
+        staged.productMetadata.sceneNodes[command.sceneNodeID] = sceneNode
+        _ = try staged.validate(objectRegistry: objectRegistry)
+        return GeometrySourceCommandApplication(
+            document: staged,
+            result: .makeEditable(
+                GeometrySourceCommandResult.MakeEditable(
+                    sceneNodeID: command.sceneNodeID,
+                    sourceRepresentationID: command.sourceRepresentationID,
+                    authoredMeshSourceID: command.authoredMeshSourceID,
+                    authoredMeshRepresentationID: command.authoredMeshRepresentationID,
+                    evaluationSnapshotID: command.evaluationSnapshotID,
+                    cadSourceIdentity: command.sourceIdentity,
+                    authoredMeshContentIdentity: asset.contentIdentity,
+                    switchedPresentationSelection: command.switchesPresentationSelection,
+                    copyTelemetry: command.evaluationCopyTelemetry
+                )
+            )
+        )
     }
 
     private func apply(

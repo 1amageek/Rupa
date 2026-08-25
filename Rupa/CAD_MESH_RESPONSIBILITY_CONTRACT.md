@@ -100,8 +100,34 @@ provenance records the originating CAD representation and content identity.
 T04 establishes this authority and provenance contract. T05-A provides typed
 Core commands for Authored Mesh vertex edits, supported face edits, and purpose
 selection with stale-content rejection. T05-B integrates those commands into
-atomic Project transactions. Explicit Make Editable/Bake remains the T05-C
-responsibility.
+atomic Project transactions. T05-C provides explicit Make Editable from a
+modeling-purpose CAD evaluation.
+
+```mermaid
+sequenceDiagram
+    participant P as ProjectController
+    participant E as Modeling evaluation
+    participant C as Core source command
+    participant A as Authority aggregate
+
+    P->>E: evaluate CAD representation at current revision
+    E-->>P: immutable occurrence Mesh + copy telemetry
+    P->>P: bind project, purpose, revision, representation, and CAD content identity
+    P->>C: commit MakeCADRepresentationEditableCommand
+    C->>C: revalidate revision, representation, and CAD identity
+    C->>A: add reidentified Authored Mesh with shared buffers
+    C->>A: retain CAD/modeling; optionally switch presentation
+```
+
+Make Editable is a two-step explicit source transaction: preparation evaluates
+the selected `modeling` CAD representation without publishing a new controller
+state; commit revalidates the captured transaction revision and exact CAD source
+identity before adding authority. The new asset records `derivedFromCAD`
+provenance. Reidentification changes only the Authored Mesh source ID and shares
+all immutable geometry and attribute buffers with the evaluated snapshot. A
+wrong-purpose snapshot, stale revision, changed CAD payload, mismatched retained
+representation, or duplicate source/representation ID is a typed failure and
+publishes no partial CAD, Product, package, or evaluation state.
 
 ## Evaluation Contract
 
@@ -119,7 +145,8 @@ flowchart LR
 
 - Evaluation resolves only the representation selected for the requested purpose.
 - Snapshot identity includes purpose so modeling and presentation results cannot collide.
-- Evaluated occurrences retain the selected representation ID and source reference.
+- Evaluated occurrences retain the selected representation ID, source reference,
+  and copy telemetry attributable to that provider result.
 - Authored Mesh evaluation shares immutable geometry buffer storage.
 - CAD evaluation keeps its explicit CAD-to-Mesh materialization boundary and cache.
 - Missing providers, invalid results, and stale revisions are typed failures.
@@ -194,7 +221,7 @@ publishing controller state.
 Within a source transaction, CAD editor commands execute in their declared order,
 then Geometry source commands execute in their declared order. The two phases
 produce one undo entry and advance the transaction revision at most once. An
-Authored Mesh edit stages Product/CAD/Mesh authority validation, separated source
+Authored Mesh source mutation stages Product/CAD/Mesh authority validation, separated source
 encoding, projection, and presentation evaluation before publication. Superseded
 Mesh blobs become eligible for explicit package garbage collection only in the
 successfully published package state; unchanged blobs remain reusable by content

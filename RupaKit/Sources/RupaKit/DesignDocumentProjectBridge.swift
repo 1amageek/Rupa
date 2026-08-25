@@ -86,7 +86,7 @@ public struct DesignDocumentProjectBridge: Sendable {
 
         let projectName = document.cadDocument.metadata.name ?? "Untitled"
         return try ProjectSourceModel(
-            id: ProjectID(rawValue: "project.\(document.id.description)"),
+            id: document.projectID,
             name: projectName,
             authoredMeshAssets: document.authoredMeshAssets,
             objectDefinitions: definitions,

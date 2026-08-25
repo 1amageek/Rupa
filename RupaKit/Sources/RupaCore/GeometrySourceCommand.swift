@@ -1,5 +1,8 @@
+import RupaCoreTypes
+
 public enum GeometrySourceCommand: Codable, Equatable, Sendable {
     case editAuthoredMesh(AuthoredMeshEditCommand)
+    case makeCADRepresentationEditable(MakeCADRepresentationEditableCommand)
     case selectRepresentation(GeometryRepresentationSelectionCommand)
 
     public var name: String {
@@ -13,8 +16,19 @@ public enum GeometrySourceCommand: Codable, Equatable, Sendable {
             case .deleteFace:
                 "deleteAuthoredMeshFace"
             }
+        case .makeCADRepresentationEditable:
+            "makeCADRepresentationEditable"
         case .selectRepresentation:
             "selectGeometryRepresentation"
+        }
+    }
+
+    public var requiredSourceRevision: DocumentTransactionRevision? {
+        switch self {
+        case .makeCADRepresentationEditable(let command):
+            command.evaluationSnapshotID.sourceRevision
+        case .editAuthoredMesh, .selectRepresentation:
+            nil
         }
     }
 }

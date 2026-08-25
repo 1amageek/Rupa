@@ -209,6 +209,27 @@ public struct MeshSource: Codable, Equatable, Sendable {
         try GeometryBounds3D(points: vertexPositions)
     }
 
+    /// Returns the same immutable geometry storage under a new source identity.
+    ///
+    /// Every geometry buffer and attribute layer remains shared. This operation
+    /// changes source authority identity without materializing element payloads.
+    public func reidentified(as identity: GeometrySourceID) throws -> MeshSource {
+        try MeshSource(
+            identity: identity,
+            allocationState: allocationState,
+            vertexIDs: vertexIDs,
+            vertexPositions: vertexPositions,
+            edgeIDs: edgeIDs,
+            edgeEndpoints: edgeEndpoints,
+            faceIDs: faceIDs,
+            faceCornerRanges: faceCornerRanges,
+            cornerIDs: cornerIDs,
+            cornerVertexIDs: cornerVertexIDs,
+            cornerEdgeIDs: cornerEdgeIDs,
+            attributes: attributes
+        )
+    }
+
     private func validateUnique<Element: Hashable>(
         _ values: GeometryBuffer<Element>,
         label: String

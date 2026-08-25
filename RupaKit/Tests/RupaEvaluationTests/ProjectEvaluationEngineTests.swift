@@ -171,9 +171,12 @@ func projectEvaluationRejectsUnregisteredExternalProviders() throws {
 @Test(.timeLimit(.minutes(1)))
 func projectEvaluationBatchesSharedGeometryReferencesBeforeOccurrenceProjection() throws {
     let mesh = try triangleSource()
+    var providerTelemetry = GeometryCopyTelemetry()
+    try providerTelemetry.record(reason: .bufferMaterialization, copiedBytes: 512)
     let provider = RecordingGeometrySourceEvaluationProvider(
         providerID: "fixture.geometry",
-        mesh: mesh
+        mesh: mesh,
+        copyTelemetry: providerTelemetry
     )
     let registry = try GeometrySourceEvaluationProviderRegistry(providers: [provider])
     let reference = GeometrySourceReference.external(
@@ -204,6 +207,9 @@ func projectEvaluationBatchesSharedGeometryReferencesBeforeOccurrenceProjection(
     )
 
     #expect(snapshot.occurrences.count == 2)
+    #expect(snapshot.copyTelemetry == providerTelemetry)
+    #expect(snapshot.occurrences[first.id]?.copyTelemetry == providerTelemetry)
+    #expect(snapshot.occurrences[second.id]?.copyTelemetry == providerTelemetry)
     #expect(provider.callCount() == 1)
     #expect(provider.requests() == [
         GeometrySourceEvaluationRequestSnapshot(
@@ -438,6 +444,7 @@ private final class RecordingGeometrySourceEvaluationProvider:
     let providerID: String
     private let mesh: MeshSource
     private let localBounds: GeometryBounds3D?
+    private let copyTelemetry: GeometryCopyTelemetry
     private let returnsResults: Bool
     private let state = Mutex(State())
 
@@ -445,11 +452,13 @@ private final class RecordingGeometrySourceEvaluationProvider:
         providerID: String,
         mesh: MeshSource,
         localBounds: GeometryBounds3D? = nil,
+        copyTelemetry: GeometryCopyTelemetry = GeometryCopyTelemetry(),
         returnsResults: Bool = true
     ) {
         self.providerID = providerID
         self.mesh = mesh
         self.localBounds = localBounds
+        self.copyTelemetry = copyTelemetry
         self.returnsResults = returnsResults
     }
 
@@ -474,7 +483,8 @@ private final class RecordingGeometrySourceEvaluationProvider:
             results[reference] = GeometryEvaluationResult(
                 reference: reference,
                 mesh: mesh,
-                localBounds: try localBounds ?? mesh.bounds()
+                localBounds: try localBounds ?? mesh.bounds(),
+                copyTelemetry: copyTelemetry
             )
         }
         return results

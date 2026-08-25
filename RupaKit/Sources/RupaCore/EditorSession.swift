@@ -956,6 +956,7 @@ public final class EditorSession {
         expectedTransactionRevision: DocumentTransactionRevision? = nil
     ) throws -> GeometrySourceCommandResult {
         try requireTransactionRevision(expectedTransactionRevision)
+        try requireTransactionRevision(command.requiredSourceRevision)
         guard !commandStack.isExecutingGroupedSourceCommands else {
             let result = try commandStack.execute(
                 command,
