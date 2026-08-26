@@ -579,6 +579,7 @@ let package = Package(
             name: "RupaRenderingTests",
             dependencies: [
                 "RupaCore",
+                "RupaKit",
                 "RupaRendering",
                 "RupaViewportScene",
             ]

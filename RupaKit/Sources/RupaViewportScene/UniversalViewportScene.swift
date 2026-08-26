@@ -7,15 +7,18 @@ public struct UniversalViewportScene: Equatable, Sendable {
     public let snapshotID: EvaluationSnapshotID
     public let projectID: ProjectID
     public let items: [UniversalViewportSceneItem]
+    public let copyTelemetry: GeometryCopyTelemetry
 
     public init(
         snapshotID: EvaluationSnapshotID,
         projectID: ProjectID,
-        items: [UniversalViewportSceneItem]
+        items: [UniversalViewportSceneItem],
+        copyTelemetry: GeometryCopyTelemetry = GeometryCopyTelemetry()
     ) {
         self.snapshotID = snapshotID
         self.projectID = projectID
         self.items = items
+        self.copyTelemetry = copyTelemetry
     }
 
     public var worldBounds: GeometryBounds3D? {

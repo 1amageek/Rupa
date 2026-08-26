@@ -1,12 +1,7 @@
 # Progress
 
 - [x] T06A-1 read and interaction contract (commit: Define project read and interaction boundary) `depends:none` `parallel:none`
-- [ ] T06A-2 MeshSource-native Viewport `depends:T06A-1` `parallel:none`
-  - [ ] T06A-2.1 Define the Viewport presentation input by occurrence, representation, source reference, transform, bounds, and borrowed MeshSource storage `depends:T06A-1` `parallel:none`
-  - [ ] T06A-2.2 Display CAD-only, Mesh-only, and mixed presentation selections without fabricated FeatureID, modeling-source substitution, or MeshSource rematerialization `depends:T06A-2.1` `parallel:none`
-  - [ ] T06A-2.3 Resolve object picking and navigation by occurrence identity while enabling CAD topology affordances only for an exact CAD interaction context `depends:T06A-2.2` `parallel:none`
-  - [ ] T06A-2.4 Prove representation authority, selection/navigation, CAD-affordance gating, storage identity, copy telemetry, and typed failures `depends:T06A-2.3` `parallel:none`
-  - [ ] T06A-2.5 Pass task-designer review, focused verification, and commit the reviewed Viewport boundary `depends:T06A-2.4` `parallel:none`
+- [x] T06A-2 MeshSource-native Viewport (commit: Add MeshSource-native viewport presentation boundary) `depends:T06A-1` `parallel:none`
 - [ ] T06A-3 ProjectWorkspace command parity `depends:T06A-1` `parallel:none`
   - [ ] T06A-3.1 Enumerate every source, selection, workspace, navigation, and transient action transitively reachable from production MainView and assign one authoritative owner and route `depends:T06A-1` `parallel:none`
   - [ ] T06A-3.2 Add the minimal typed command-planning and ordered-dispatch boundary needed to translate every reachable source mutation into ProjectSourceTransaction without exposing EditorSession `depends:T06A-3.1` `parallel:none`

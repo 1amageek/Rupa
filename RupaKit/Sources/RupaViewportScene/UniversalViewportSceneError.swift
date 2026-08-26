@@ -3,6 +3,12 @@ import Foundation
 public struct UniversalViewportSceneError: Error, Equatable, LocalizedError, Sendable {
     public enum Code: String, Equatable, Sendable {
         case missingDefinition
+        case projectMismatch
+        case purposeMismatch
+        case occurrenceMismatch
+        case sourceMismatch
+        case invalidIdentifier
+        case sourceIdentityMismatch
     }
 
     public var code: Code
