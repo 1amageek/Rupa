@@ -11,7 +11,7 @@ This document defines the initial official implementation specification for Rupa
 | App host | `Rupa/Rupa/Rupa.xcodeproj` |
 | Shared package | `RupaKit` |
 | CLI product | `rupa` |
-| User-facing document extension | `.swcad` |
+| User-facing project extension | `.rupa` |
 | CAD foundation | Swift-CAD |
 | Product requirements | `PRODUCT_REQUIREMENTS.md` |
 | Universal CAD requirements | `UNIVERSAL_CAD_REQUIREMENTS.md` |
@@ -57,36 +57,42 @@ Rupa is organized as a thin app host plus one shared Swift package.
 flowchart TD
     App["Rupa.xcodeproj<br/>Rupa.app"] --> AgentUI["RupaAgentUI"]
     App --> UI["RupaUI"]
-    AgentUI --> UI
-    AgentUI --> Agent["RupaAgent<br/>(umbrella)"]
-    UI --> Core["RupaCore"]
+    AgentUI --> Runtime["RupaAgentRuntime"]
+    AgentUI --> Transport["RupaAgentTransport"]
+    AgentUI --> Kit["RupaKit"]
+    UI --> Kit
     UI --> Rendering["RupaRendering"]
     UI --> Preview["RupaPreview"]
     CLI["rupa CLI"] --> CLIKit["RupaCLIKit"]
-    CLIKit --> Agent
+    CLIKit --> Runtime
+    CLIKit --> Transport
     CLIKit --> Automation["RupaAutomation"]
-    CLIKit --> Core
-    Agent --> Automation
-    Agent --> Core
-    Automation --> Core
+    Runtime --> Kit
+    Runtime --> Automation
+    Kit --> Project["RupaProject"]
+    Project --> Core["RupaCore"]
+    Project --> Evaluation["RupaEvaluation"]
     Rendering --> ViewportScene["RupaViewportScene"]
-    ViewportScene --> Core
     Preview --> Core
-    Core --> CoreTypes["RupaCoreTypes"]
+    Evaluation --> ProjectModel["RupaProjectModel"]
+    ProjectModel --> Geometry["RupaGeometry"]
+    Geometry --> CoreTypes["RupaCoreTypes"]
     Core --> SwiftCAD["Swift-CAD"]
-    ViewportScene --> SwiftCAD
 ```
 
-`RupaAgent` is an umbrella that re-exports the split `RupaAgentProtocol`, `RupaAgentRuntime`, and `RupaAgentTransport` targets. The app host composes both `RupaUI` and `RupaAgentUI`; direct agent-in-UI wiring lives in `RupaAgentUI`, not `RupaUI`.
+`RupaAgent` is an umbrella that re-exports the split `RupaAgentProtocol`,
+`RupaAgentRuntime`, and `RupaAgentTransport` targets. The app host composes RupaUI
+and `RupaAgentUI.AgentHost` beside each other; AgentHost owns listener and
+workspace-registration lifecycle without depending on RupaUI.
 
 The supported implementation has one editing pipeline:
 
 | Source | Mutation path | Result |
 |---|---|---|
-| GUI tool | RupaCore command through `CommandStack` | Undoable session mutation and UI update. |
+| GUI tool | `ProjectWorkspace` source or interaction plan through `ProjectController` | Undoable source mutation or source-independent workspace publication and UI update. |
 | CLI file mode | RupaCore command on a loaded document | Atomic file write or structured failure. |
-| CLI live mode | RupaAgent request into app `EditorSession` | App session mutation, dirty state, diagnostics, structured CLI result. |
-| Batch automation | Ordered `AutomationCommand` execution inside an `EditorSession` transaction | Ordered results with generation and diagnostics; failed batches restore document, selection, and undo/redo state. |
+| CLI live mode | RupaAgent request into the registered app `ProjectWorkspace` | Project mutation, dirty state, diagnostics, structured CLI result. |
+| Batch automation | Ordered `AutomationCommand` execution inside a `ProjectWorkspace` source or interaction transaction | Ordered results with project coordinates and diagnostics; failed batches publish no partial source, selection, workspace, or history state. |
 
 The product pipeline is CAD-centered but does not require CAD. Product Objects
 may retain CAD and Authored Mesh simultaneously, and explicit modeling and
@@ -234,65 +240,28 @@ The app host delegates editor behavior to RupaKit.
 | Automation schema | `RupaAutomation` |
 | Live app coordination | `RupaAgent` |
 
-```swift
-import SwiftUI
-import RupaUI
+`ApplicationRoot` composes exactly one `ProjectController`, one MainActor
+`ProjectWorkspace`, one `ProjectWorkspaceOperationSequencer`, one domain registry,
+and one `AgentHost` for the current application instance. `MainView`,
+`ApplicationProjectCoordinator`, and Agent registration receive that same
+workspace. The coordinator owns security-scoped file URLs and routes new, load,
+save, undo, and redo through the shared sequencer. `MainView` routes source and
+workspace intents through that sequencer as well. Agent file/window commands stay
+typed unsupported because the app host owns file and window lifecycle.
 
-@main
-struct ApplicationRoot: App {
-    var body: some Scene {
-        WindowGroup {
-            MainView()
-        }
-    }
-}
-```
-
-When live CLI support is enabled, the app host imports `RupaAgentUI`, owns an `AgentHost`, and starts or stops the Agent command service across scene-phase transitions. The app host composes the standard domain registry once through `ApplicationDomainRegistry`, passes the same registry to `MainView` and `AgentHost`, and keeps concrete domain imports out of `RupaUI` and `RupaAgentRuntime`. `RupaUI` publishes the UI-owned session through `WorkspaceAgentSessionPublisher` and the `WorkspaceAgentSessionPublishing` protocol but does not control the socket listener lifecycle.
-
-```swift
-import SwiftUI
-import RupaAgentUI
-import RupaCore
-import RupaUI
-
-@main
-struct ApplicationRoot: App {
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var agentHost: AgentHost
-    @State private var editorSession: EditorSession
-    private let domainConfiguration: ApplicationDomainRegistryConfiguration
-
-    init() {
-        let domainConfiguration = ApplicationDomainRegistry.makeConfiguration()
-        self.domainConfiguration = domainConfiguration
-        self._agentHost = State(initialValue: AgentHost(domainRegistry: domainConfiguration.registry))
-        self._editorSession = State(initialValue: WorkspaceLaunchSessionFactory.makeSession())
-    }
-
-    var body: some Scene {
-        WindowGroup {
-            MainView(
-                session: editorSession,
-                domainRegistry: domainConfiguration.registry,
-                agentSessionPublisher: agentHost
-            )
-        }
-        .windowResizability(.contentMinSize)
-        .onChange(of: scenePhase) { _, phase in
-            Task {
-                switch phase {
-                case .active:
-                    await agentHost.start()
-                case .background:
-                    await agentHost.stop()
-                default:
-                    break
-                }
-            }
-        }
-    }
-}
+```mermaid
+flowchart TD
+    Root["ApplicationRoot"] --> Sequence["ProjectWorkspaceOperationSequencer"]
+    Root --> Coordinator["ApplicationProjectCoordinator"]
+    Root --> View["MainView"]
+    Root --> Agent["AgentHost"]
+    Coordinator --> Workspace["ProjectWorkspace"]
+    View --> Workspace
+    Agent --> Registry["ProjectWorkspaceRegistry"]
+    Registry --> Workspace
+    Workspace --> Project["ProjectController"]
+    Sequence --> Coordinator
+    Sequence --> View
 ```
 
 ## Package Products
@@ -319,98 +288,59 @@ struct ApplicationRoot: App {
 | `RupaCLIKit` | Library | `RupaCLIKit` |
 | `rupa` | Executable | `RupaCLI` |
 
-## Package Target Graph
+## Package Responsibility Graph
+
+`RupaKit/Package.swift` is the sole source of truth for exact target and product
+dependencies. This graph records responsibility direction without duplicating the
+manifest edge list.
 
 ```mermaid
 flowchart TD
-    RupaKit["RupaKit"] --> RupaCore["RupaCore"]
-    RupaKit --> RupaAutomation["RupaAutomation"]
-    RupaKit --> RupaDomainFoundation["RupaDomainFoundation"]
+    UI["RupaUI"] --> Kit["RupaKit application boundary"]
+    UI --> Viewport["RupaViewportScene / Rendering / Preview"]
+    AgentUI["RupaAgentUI"] --> Runtime["RupaAgentRuntime"]
+    AgentUI --> Transport["RupaAgentTransport"]
+    Runtime --> Kit
+    Transport --> Protocol["RupaAgentProtocol"]
+    CLI["RupaCLIKit"] --> Runtime
+    CLI --> Transport
 
-    RupaUI["RupaUI"] --> RupaCore
-    RupaUI --> RupaDomainFoundation
-    RupaUI --> RupaRendering["RupaRendering"]
-    RupaUI --> RupaPreview["RupaPreview"]
-
-    RupaAgentUI["RupaAgentUI"] --> RupaUI
-    RupaAgentUI --> RupaCore
-    RupaAgentUI --> RupaDomainFoundation
-    RupaAgentUI --> RupaAgentRuntime
-    RupaAgentUI --> RupaAgentTransport
-
-    RupaRendering --> RupaCore
-    RupaRendering --> RupaViewportScene["RupaViewportScene"]
-    RupaViewportScene --> RupaCore
-    RupaViewportScene --> SwiftCAD["Swift-CAD"]
-    RupaPreview --> RupaCore
-    RupaAutomation --> RupaCore
-    RupaDomainFoundation --> RupaCore
-    RupaDomainFoundation --> RupaAutomation
-    RupaManufacturing["RupaManufacturing"] --> RupaDomainFoundation
-    RupaManufacturing --> RupaAutomation
-    RupaManufacturing --> RupaCore
-
-    RupaAgent["RupaAgent<br/>(umbrella)"] --> RupaAgentProtocol["RupaAgentProtocol"]
-    RupaAgent --> RupaAgentRuntime["RupaAgentRuntime"]
-    RupaAgent --> RupaAgentTransport["RupaAgentTransport"]
-
-    RupaAgentProtocol --> RupaCore
-    RupaAgentProtocol --> RupaAutomation
-    RupaAgentProtocol --> RupaDomainFoundation
-    RupaAgentRuntime --> RupaCore
-    RupaAgentRuntime --> RupaAutomation
-    RupaAgentRuntime --> RupaDomainFoundation
-    RupaAgentRuntime --> RupaAgentProtocol
-    RupaAgentTransport --> RupaCore
-    RupaAgentTransport --> RupaAgentProtocol
-    RupaAgentTransport --> RupaAgentRuntime
-
-    RupaCLI["RupaCLI"] --> RupaCLIKit["RupaCLIKit"]
-    RupaCLIKit --> RupaCore
-    RupaCLIKit --> RupaAutomation
-    RupaCLIKit --> RupaDomainFoundation
-    RupaCLIKit --> RupaAgentProtocol
-    RupaCLIKit --> RupaAgentRuntime
-    RupaCLIKit --> RupaAgentTransport
-
-    RupaCore --> RupaCoreTypes["RupaCoreTypes"]
-    RupaCore --> SwiftCAD
+    Kit --> Project["RupaProject"]
+    Project --> Core["RupaCore"]
+    Project --> Evaluation["RupaEvaluation"]
+    Project --> Package["RupaProjectPackage"]
+    Evaluation --> Model["RupaProjectModel"]
+    Package --> Model
+    Model --> Geometry["RupaGeometry"]
+    Geometry --> Types["RupaCoreTypes"]
+    Core --> Types
+    Core --> SwiftCAD["Swift-CAD"]
 ```
 
-| Target | Dependencies | Responsibility |
-|---|---|---|
-| `RupaKit` | `RupaCore`, `RupaAutomation`, `RupaDomainFoundation` | Umbrella module. |
-| `RupaCore` | `RupaCoreTypes`, Swift-CAD, Collections | Editor sessions, document state, commands, evaluation, services, diagnostics. |
-| `RupaCoreTypes` | none | Swift-CAD-free leaf value types (`SaveResult`, `DocumentGeneration`, `EditorDiagnostic`, `EditorError`, `LengthDisplayUnit`, `LengthDisplayText`). Currently depended on only by `RupaCore`, which re-exports it. |
-| `RupaUI` | `RupaCore`, `RupaDomainFoundation`, `RupaRendering`, `RupaPreview`, MacComponent | SwiftUI editor interface and generic domain command catalog. Agent-in-UI wiring is extracted into `RupaAgentUI`. |
-| `RupaAgentUI` | `RupaUI`, `RupaCore`, `RupaDomainFoundation`, `RupaAgentRuntime`, `RupaAgentTransport` | App-facing agent-host lifecycle (`AgentHost`), injected domain registry handoff, and MainActor-safe session publication bridge for editor-owned sessions. |
-| `RupaRendering` | `RupaCore`, `RupaViewportScene` | Editor viewport and render-scene extraction from CAD source/evaluated state. |
-| `RupaViewportScene` | `RupaCore`, Swift-CAD | CAD-backed viewport scene, camera, and projection basis shared by rendering. |
-| `RupaPreview` | `RupaCore` | RealityKit, Quick Look, USDZ preview. |
-| `RupaAutomation` | `RupaCore` | Codable command schema, batch execution, stable references. |
-| `RupaAgent` | `RupaAgentProtocol`, `RupaAgentRuntime`, `RupaAgentTransport` | Umbrella that re-exports the split agent stack. |
-| `RupaAgentProtocol` | `RupaCore`, `RupaAutomation` | JSON-RPC request/response envelopes, method schemas, and client protocol. |
-| `RupaAgentRuntime` | `RupaCore`, `RupaAutomation`, `RupaAgentProtocol` | Agent command controller, `WorkspaceRegistry`, MainActor bridge, and session resolution. |
-| `RupaAgentTransport` | `RupaCore`, `RupaAgentProtocol`, `RupaAgentRuntime` | Unix-domain socket listener/service, client transport, and socket addressing. |
-| `RupaCLIKit` | `RupaCore`, `RupaAutomation`, `RupaAgentProtocol`, `RupaAgentRuntime`, `RupaAgentTransport`, ArgumentParser | Testable CLI command implementation, CAD inspection, typed AutomationCommand application, sketch/model entrypoints, command-backed document mutation, terminal output, and exit mapping. |
-| `RupaCLI` | `RupaCLIKit` | Thin `rupa` executable entry point. |
+| Target group | Responsibility |
+|---|---|
+| Core and geometry | Provider-neutral identities/buffers, editable Product/CAD/Authored Mesh source, isolated command staging, and CAD kernel integration. |
+| Project model, evaluation, and package | Immutable evaluation projection, purpose-selected provider resolution, schema-v3 Product/CAD/Mesh persistence, and source integrity. |
+| `RupaProject` / `RupaKit` | Atomic source/package/evaluation authority plus the shared application workspace operation boundary. |
+| `RupaUI` / viewport / rendering | Package-free immutable project-view consumption, user-intent planning, presentation MeshSource drawing and picking, and exact CAD-context affordances. |
+| Agent protocol/runtime/transport/UI | Message contracts, registered-workspace execution, independent socket transport, and application-owned host lifecycle. RupaUI is not an Agent dependency. |
+| Automation/domain/CLI | Typed commands, semantic lowering, batch contracts, and headless/live adapters over the same project boundary. |
 
 ## Target Responsibilities
 
 ### RupaKit
 
-Umbrella module for common imports.
-
-```swift
-@_exported import RupaCore
-@_exported import RupaAutomation
-```
-
-`RupaUI` remains separately importable by the app host.
+Application-facing umbrella for Core, domain, geometry, evaluation, project-model,
+CAD-integration, and shared `ProjectWorkspace` contracts. Its exact re-exports are
+defined only by `Sources/RupaKit` and `Package.swift`; `RupaUI` remains a separate
+app-host import.
 
 ### RupaCoreTypes
 
-Dependency-free leaf target holding document-independent value types that carry no Swift-CAD dependency. In the current graph it is depended on **only** by `RupaCore`, which re-exports it wholesale (`@_exported import RupaCoreTypes`); downstream targets therefore see these types as part of `RupaCore` and none of them import `RupaCoreTypes` directly. The split's only realized effect today is that these value types stay compilable without linking Swift-CAD. Direct consumption by `RupaUI`, the agent stack, or `RupaCLIKit` (to use `SaveResult` / `EditorDiagnostic` / `EditorError` without Swift-CAD) is enabled by the split but not yet wired.
+Dependency-free leaf target holding document-independent value contracts that
+carry no Swift-CAD dependency. Core, Geometry, ProjectModel, Evaluation, Package,
+Agent protocol/transport, and other boundary targets import it where their public
+contracts require these shared identities and errors.
 
 | Type | Responsibility |
 |---|---|
@@ -420,7 +350,8 @@ Dependency-free leaf target holding document-independent value types that carry 
 | `EditorError` | Typed editor error carrying the stable error codes mapped to CLI exit codes. |
 | `LengthDisplayUnit` / `LengthDisplayText` | Display-unit resolution and formatted length text shared by summaries, measurement, and drawing annotations. |
 
-`RupaCore` depends on `RupaCoreTypes` and re-exports these types, so existing `RupaCore.SaveResult` / `RupaCore.EditorDiagnostic` usage keeps compiling.
+`RupaCore` re-exports the types it exposes through its own public surface; lower
+layers may depend on `RupaCoreTypes` directly without importing Core.
 
 ### RupaCore
 
@@ -431,7 +362,7 @@ RupaCore owns the editor model and command pipeline.
 | `EditorSession` | Coordinates document state, selection, tools, commands, evaluation, and diagnostics. |
 | `CADDocumentStore` | Owns the current document value, dirty state, document generation, diagnostics, and evaluation snapshot metadata. |
 | `CommandStack` | Applies commands, records undo and redo, and preserves mutation ordering. |
-| `DesignDocument` | Wraps Swift-CAD source with Rupa display settings and universal product metadata. |
+| `DesignDocument` | Owns Product metadata and representation sets, Authored Mesh assets, explicit modeling/presentation selection, and a runtime CAD document whose source authority is optional. |
 | `ProductMetadata` | Persists scene nodes, components, material library, validation rules, export presets, and template defaults. |
 | `ModelingToolActivationResult` | Reports the Core-owned outcome of tool selection or canvas-target activation, including command name, mutation state, selected scene node, and whether diagnostics should be revealed. |
 | `EditorCommand.upsertParameter` | Adds or updates a Swift-CAD parameter by name using typed `CADExpression` and `QuantityKind`. |
@@ -461,12 +392,11 @@ RupaCore owns the editor model and command pipeline.
 | `MeasurementService` | Computes structured, non-mutating document measurements from Swift-CAD source intent. |
 | `MeasurementResult` | Reports measurement counts, bounds, profile area, solid volume, measured profile details, measured solid details, display unit, and diagnostics. |
 | `SaveResult` | Reports successful save path, generation, dirty state, and diagnostics without changing document generation. (Defined in `RupaCoreTypes`.) |
-| `DocumentPackageStore` | Reads and writes Rupa `.swcad` packages containing Swift-CAD source plus Rupa metadata. |
-| `DocumentFileService` | Loads, saves, writes atomically, supports legacy Swift-CAD native packages, and coordinates file access. |
+| `DocumentPackageStore` | Legacy CAD-only `.swcad` codec retained for headless CLI compatibility; it is not selected by `ApplicationRoot` and does not own schema-v3 project persistence. |
 | `DocumentExportService` | Evaluates a Rupa document and writes Swift-CAD exchange output with typed result metadata. |
 | `SelectionModel` | Owns selected and hovered `SelectionTarget` values, exposes scene-node references as an object-compatible view for existing commands, validates target compatibility against the current document, and prunes stale references after source or metadata changes. |
 | `SnapResolver` | Resolves non-mutating grid and source-sketch input candidates before sketch or dimension commands consume coordinates, returning typed snap kinds, distances, labels, resolved points, source and related-source selection references, source spline CVs, closest points, supported source-curve intersections, and reference-point tangent/perpendicular candidates for UI and Agent callers. |
-| `ToolController` | Converts active tool state and canvas gestures into commands. The initial implementation is `EditorSession.activateTool`, `EditorSession.activateSelectedToolFromCanvas`, and `EditorSession.activateSelectedToolFromCanvasDrag`, keeping canvas toolbar selection, viewport click, and viewport drag behavior testable without importing SwiftUI. |
+| `ToolController` | Converts resolved tool and canvas input into commands inside an isolated `EditorSession` stage. Its Core methods are staging primitives, not production UI entry points. |
 | `EditorDiagnostic` | Stores structured errors, warnings, and notes. (Defined in `RupaCoreTypes`.) |
 
 Required command flow:
@@ -486,11 +416,15 @@ RupaCore is headless. It does not import SwiftUI, MetalKit, RealityKit, or app t
 
 ### Universal Product Metadata
 
-Rupa-specific product metadata is generic CAD state. It is not an ApplicationProfile, and it must not encode video, print, or architecture as separate branches.
+Rupa-specific product metadata is provider-neutral Product source. It is not an
+ApplicationProfile, and it must not encode video, print, or architecture as
+separate branches.
 
 ```mermaid
 flowchart TD
-    DesignDocument["DesignDocument"] --> CAD["Swift-CAD CADDocument"]
+    DesignDocument["DesignDocument"] --> Representations["Geometry representation sets<br/>modeling + presentation selection"]
+    DesignDocument --> CAD["Runtime CADDocument<br/>authoritative only when CAD source exists"]
+    DesignDocument --> Mesh["Authored Mesh assets + provenance"]
     DesignDocument --> Settings["Display unit and ruler"]
     DesignDocument --> Metadata["ProductMetadata"]
     Metadata --> Scene["Scene nodes"]
@@ -511,7 +445,10 @@ flowchart TD
 | `ExportPreset` | Format, unit, tessellation, validation, metadata, and destination defaults. |
 | `TemplateDefaults` | Generic defaults that can later be grouped by ApplicationProfile. |
 
-`ProductMetadata.validate(against:)` checks local hierarchy consistency and references into the Swift-CAD source. Invalid metadata is reported through the same evaluation diagnostics and render invalidation path as CAD source failures.
+Semantic validation checks Product hierarchy, representation selection, CAD
+references when CAD authority is present, Authored Mesh asset references, and
+cross-source document identity. Invalid Product, CAD, or Mesh relationships are
+reported through the same typed project failure and evaluation publication path.
 
 ### Parameter Contract
 
@@ -848,7 +785,7 @@ flowchart LR
 
 | Concern | Contract |
 |---|---|
-| File mode | Load the closed `.swcad`, evaluate it, and write the requested exchange file without mutating source. |
+| File mode | Load the supported closed-file source, evaluate it, and write the requested exchange file without mutating source; the legacy `.swcad` path does not claim schema-v3 Authored-Mesh support. |
 | Live mode | Export the running app session so unsaved in-memory edits are reflected in output. |
 | Auto mode | Prefer a matching open session; otherwise export the closed file. |
 | Safety | File mode rejects open-document conflicts unless explicitly forced. |
@@ -888,11 +825,24 @@ The initial scheduler is synchronous and deterministic. A later asynchronous sch
 
 ### RupaUI
 
-RupaUI contains the complete SwiftUI editor surface. It does not depend on the agent stack directly; app-facing agent-host lifecycle and MainActor session publication are extracted into `RupaAgentUI`.
+RupaUI contains the complete SwiftUI editor surface and does not depend on the
+Agent stack. The app composes `RupaAgentUI.AgentHost` beside RupaUI, and the host
+registers the same application-owned `ProjectWorkspace` consumed by `MainView`.
 
 Canvas overlay chrome is intentionally compact because it covers the modeling surface. Top canvas controls use the shared `ViewportCanvasChromeMetrics` height, content height, padding, and outline policy. `RupaRendering` owns the shared `viewportCanvasTopChrome` Liquid Glass shape for viewport badges and `RupaUI` consumes it through `workspaceCanvasTopChromeContainer` for top command controls and bottom context controls. These controls stay content-sized and do not include document filenames because the active document title belongs to the navigation title.
 
-The root editor shell uses SwiftUI's native sidebar model for the leading component Browser column. The sidebar controls scene/component hierarchy, visibility, lock state, and component instances through RupaCore commands. The sidebar is not a modeling tool palette. Modeling tools are canvas-local controls shown as a floating Liquid Glass toolbar on the bottom edge of the viewport. Toolbar buttons call `EditorSession.activateTool` and only change the active tool. Viewport clicks call `EditorSession.activateSelectedToolFromCanvas`, viewport drags call `EditorSession.activateSelectedToolFromCanvasDrag`, and geometry is created from the canvas target or model-space coordinates rather than from toolbar selection alone. Creation tools are single-use: after a successful `Sketch`, `Surface`, `Solid`, or `Section` mutation, `EditorSession` returns the active tool to `Select`; rejected activations keep the active tool. `Select` changes selection mode and picks source-derived sketch/body previews from the initial viewport, Browser and viewport selection are stored in RupaCore `SelectionModel`, `Sketch` creates default-sized rectangle sketches centered on Canvas click coordinates and drag-sized rectangle sketches from Canvas model-space drags, `Surface` creates default-radius circular sketch profiles centered on Canvas click coordinates and drag-sized circular sketches from Canvas model-space center-to-edge drags, `Solid` extrudes a clicked sketch profile when available, creates default-sized rectangular bodies centered on Canvas background click coordinates, and creates drag-sized rectangular bodies from Canvas model-space footprint drags, `Mesh` evaluates and reports a structured generated-mesh summary with bounds and triangle counts from Canvas activation, `Measure` reports a structured clicked or selected-object measurement when a measurable scene node is selected and otherwise reports a document measurement summary with bounds, profile area, and solid volume from Canvas activation, and `Section` creates a construction section plane scene node through `EditorCommand.createSectionPlane` from Canvas activation. `NavigationSplitView` owns the sidebar boundary. The detail column uses `MacComponent` split components for editor panes such as viewport, logs, and the contextual property Pane. The logs pane and the Inspector Pane are collapsed by default. The Inspector Pane uses an ideal default width of about 420 px and must not add custom padding beyond the native control layout.
+The root editor shell uses SwiftUI's native sidebar model for the leading
+component Browser column and canvas-local modeling controls. It renders the
+purpose-selected `UniversalViewportScene` from `ProjectViewSnapshot`, so CAD,
+Authored Mesh, and external-provider presentation use the same primary viewport.
+Browser, toolbar, click, drag, measurement, and section interactions become typed
+MainView intents, run through the shared `ProjectWorkspaceOperationSequencer`, and
+execute through `ProjectWorkspace` and `ProjectController`. Only the controller's
+isolated transaction stage invokes `EditorSession` behavior. Source editing
+affordances require the exact CAD context carried by the same project view;
+Mesh-only presentation never gains inferred CAD authority. `NavigationSplitView`
+owns the sidebar boundary, while MacComponent panes host logs and contextual
+properties without moving project authority into SwiftUI state.
 
 | File | Responsibility |
 |---|---|
@@ -907,15 +857,34 @@ The root editor shell uses SwiftUI's native sidebar model for the leading compon
 | `ExportPanel.swift` | Export workflow controls. |
 | `DiagnosticsPanel.swift` | Structured diagnostics display. |
 
-RupaUI converts user actions into RupaCore commands. It does not mutate `CADDocument` directly.
+RupaUI converts user actions into typed project intents. The shared project route
+resolves those intents into Core commands; UI does not mutate `CADDocument`,
+Product metadata, Authored Mesh, or `EditorSession` directly.
 
 Workspace editing defaults must separate grid-scale interaction distances from fitting tolerances. Operation steps such as slot width and direct-edit nudge defaults may follow the active ruler minor tick, but sketch rebuild/refit tolerance must use a visible-span precision budget so site-planning work does not start with meter-scale curve fitting error.
 
-Selection is UI state owned by `EditorSession`, not CAD source. Selecting, clearing, or hovering selection targets must not advance `DocumentGeneration`, dirty state, or undo history. A selection target is a scene node plus a component identity such as object, face, edge, vertex, or sketch entity. Object targets may point at any existing scene node. Face, edge, and vertex targets require body scene nodes. Sketch-entity targets require sketch scene nodes. Commands, undo, redo, reset, and metadata replacement prune selection entries that no longer exist or are no longer compatible with the current product metadata. The initial viewport consumes the same selection state to highlight source-derived sketch and body previews, maps click hits back to product scene-node references while `Select` is active, maps evaluated-mesh generated topology hits directly to face/edge/vertex components backed by `SelectionComponentID.generatedTopology`, forwards clicked scene-node targets and model-space click coordinates to the active modeling tool when a non-select tool is active, and forwards model-space drag ranges to active tools that create geometry from Canvas gestures. While `Sweep` is active, selected closed profile or body source-profile scene nodes provide the sweep profile, selected sketch curve scene nodes provide optional guide curves, and the clicked sketch curve scene node is the path target; `EditorSession.sweepSelectionPreview` resolves the same profile/path/guide contract without mutating the document so the viewport context panel can show setup state before command execution. The later Metal selection buffer and drag interaction layer must preserve the same Core selection and activation contract.
+Selection and workspace interaction are authoritative project state owned by
+`ProjectController` and exposed to UI only through `ProjectViewSnapshot`.
+Selecting, clearing, or hovering does not change Product/CAD/Mesh source identity,
+dirty state, or source undo history. The primary viewport draws, picks, and
+sections the purpose-selected presentation `MeshSource` carried by
+`ProjectViewSnapshot.viewport`, whether it originated from CAD, Authored Mesh, or
+an external provider. Source-specific editing affordances are enabled only when
+the same snapshot carries an exact CAD interaction context. MainView converts
+hits and gestures into typed intents, then the shared sequencer and
+`ProjectWorkspace` submit them to project authority; UI never reconstructs source
+identity from render identifiers or mutates an `EditorSession` directly. The
+current identity-buffer picking path must preserve the exact occurrence,
+representation, navigation, selection, and project-coordinate contract.
 
 While `Select` is active, a plain click replaces the current selection with the clicked target resolved by the active selection scope, and a background click clears selection. Object scope resolves hits to object targets. Face scope resolves body face hits to face targets; hits that do not expose a body face produce no selection target, leave the existing selection unchanged, and do not fall back to object selection. Selected editable rectangle-extrude faces can be dragged in the viewport; the transient preview is committed through `offsetBodyFace` on mouse-up. Edge scope resolves the initial vertical body edge hit IDs to edge targets for source-owned rectangle-extrude edge commands; hits that do not expose an editable edge produce no target and do not fall back to object selection. Vertex scope resolves supported rectangle-extrude body vertex hits to generated topology vertex targets; hits that do not expose a supported generated vertex produce no target and do not fall back to object selection.
 
-Source-curve scope resolves source sketch hits to `sketchEntity:<featureID>:<entityID>` targets for point, line, circle, arc, and spline entities; hits that do not expose a sketch entity produce no target and do not fall back to object selection. Dragging a screen-space rectangle is enabled only in object scope; it replaces selection with every selectable object whose projected selectable bounds intersects the rectangle. Holding Command or Shift while clicking or rectangle-selecting changes the intent to toggle: matching targets or objects already in the current selection are removed, and new targets or objects are appended in stable order. Command/Shift background clicks and empty rectangle selections leave the existing selection unchanged.
+Source-curve scope resolves source sketch hits to typed sketch-entity targets; hits
+that do not expose a compatible entity do not fall back to object selection.
+Screen-space rectangle selection is supported for object, face, edge, vertex,
+region, and sketch-entity scopes through the scope's target policy. Holding
+Command or Shift changes click and rectangle intents to stable-order toggle;
+background or empty toggle intents preserve the existing selection.
 
 Hover state is a transient selection preview. Sidebar row hover updates object hover. Viewport hover while `Select` is active updates the hovered selection target for the active selection scope. The viewport must render object hover as a distinct non-committal object highlight, face hover as a face highlight, edge hover as an edge highlight, vertex hover as a vertex highlight, and source-curve hover as a primitive-level curve highlight, while leaving the selected highlight stable. Hover updates must not report diagnostics for background movement, create undo history, mark the document dirty, or advance generation.
 Selected object targets must render a transient object-editing affordance in the viewport while object selection scope is active. Object-editing affordance drawing, hover hit testing, and press capture are disabled outside object scope so subobject selection can receive face, edge, vertex, and source-curve hits. Selected face targets render face highlight without whole-body transform handles. Selected edge targets render edge highlights without whole-body transform handles. Selected vertex targets render vertex highlights without whole-body transform handles, except supported PolySpline boundary vertices also expose selected boundary-vertex center and global-axis drag handles that preview and commit source-owned surface edits. Selected source-curve targets render only the selected point, line, circle, arc, or spline primitive as highlighted.
@@ -984,7 +953,17 @@ Mixed multi-selection values follow the Figma-style convention:
 
 ### RupaRendering
 
-RupaRendering owns the editor viewport. The initial implementation may use a SwiftUI Canvas for source-derived sketch/body previews, highlighting, selected-object affordances, direct hit testing, visible X/Y/Z axes, coordinate-aligned projected grid lines, in-plane ruler scale lines, and viewport-to-model coordinate mapping for click and drag gestures. The default viewport projection is isometric. Objects, grid lines, axes, hit testing, model coordinate mapping, and transform affordances must share one projection basis. Viewport pan and zoom are camera state and must feed the same layout used by drawing, grid generation, hit testing, hover, click-to-model mapping, and drag-to-model mapping. Persistent saved views must not store screen-space pan as product data; `SavedViewCamera.target` and `SavedViewProjection.orthographicHeightMeters` are the product camera frame, while RupaRendering accepts a one-shot `ViewportCameraFrameRequest` and computes the transient `ViewportCamera` pan/zoom from the same `ViewportLayout` used for drawing and hit testing. The viewport reports its current `ViewportCameraFrame` after pan, zoom, orbit, reset, and saved-view application so UI save/update actions can persist the current camera frame without owning projection math. Selection hover and construction hover are separate concerns: selection hover highlights selectable objects, while construction hover during drawing tools highlights the hovered body face or the zero-coordinate field cell that will define the drawing plane. Canvas click and drag creation commands must consume that highlighted construction plane so generated sketches, source curves, surfaces, section planes, and solids are parallel to the indicated face or zero-coordinate field. Selected body transform affordances must show coordinate-volume vertices and face centers separately from move and rotation controls. The Axis Gizmo is an interactive viewport UI control: positive X/Y/Z nodes must be selectable independently of canvas picking, selection must be visible on the Gizmo, and selecting an axis rotates the viewport projection so the selected axis becomes the front-facing coordinate. The Gizmo center and explicit Isometric button reset the projection to the default isometric view. The explicit Reset button resets viewport pan and zoom without mutating model coordinates. Axis-driven projection changes are camera-orientation changes, not model-coordinate mutations, and must animate by interpolating the active projection basis from the current visible basis to the target basis. Axis-driven projection changes must feed the same interpolated projection basis into grid drawing, canvas axes, object projection, selected-object affordances, hit testing, hover mapping, click-to-model mapping, drag-to-model mapping, pan, and zoom. The Axis Gizmo control must remain above the canvas input surface in hit-testing order. X/Y/Z colors must be defined once and reused by Canvas axes, Axis Gizmo nodes, and transform affordances. Rulers must not be fixed to the viewport edge; they are part of the projected modeling plane and share the same basis as the grid. Projected grid intervals must use readable 1-2-5 progression steps while respecting ruler minimums, pixel density, and grid-line budgets, so scale labels remain useful from micrometer work to kilometer site planning. The Canvas Scale HUD must show the resolved unit/grid readout and expose the full workspace scale preset ladder, applying selections through the same Core ruler configuration path as the Document Inspector instead of keeping kilometer ranges hidden behind a secondary panel. Viewport scene bounds for degenerate sketch footprints must use the active ruler minor tick as the minimum span and preserve the original geometry center. Viewport interaction defaults for slot width, sketch-vertex offset, and edge-offset previews must resolve from the document ruler when the host does not supply explicit values. The coordinate mapper must support empty documents by deriving a model-space plane from the current ruler and must preserve micrometer-to-kilometer scale behavior. `ViewportLayout` owns a render origin derived from model X/Z bounds plus body Y extents; projection, unprojection, projected depth, CPU hit testing, and identity-buffer planning must use that same render origin so large-coordinate scenes keep local arithmetic before broader Metal buffer rebasing is added. The production viewport target remains a Metal-based renderer with camera navigation, GPU mesh buffers, and an offscreen selection identity buffer.
+RupaRendering owns viewport presentation and interaction rendering, not geometry
+source. Its primary input is the immutable provider-neutral
+`UniversalViewportScene` from `ProjectViewSnapshot`; drawing, CPU hit testing,
+identity-buffer picking, sectioning, bounds, and navigation all use the same
+purpose-selected occurrence and representation identities. Camera, projected
+grid, axes, ruler, hover, affordances, projection/unprojection, and large-coordinate
+render-origin arithmetic share one projection basis. CAD-specific rendering code
+is restricted to exact-CAD affordances supplied by the same project publication
+and cannot replace the presentation MeshSource or make Mesh-only data editable as
+CAD. Gesture output is a typed intent for MainView planning, never a direct source
+mutation.
 
 Canvas length labels for dimensions, drags, and edit affordances must resolve to readable units from the document display unit so millimeter documents can still show meter and kilometer values without unreadable large millimeter numbers.
 
@@ -992,31 +971,34 @@ Viewport framing must use the ruler visible span for empty documents and a ruler
 
 | File | Responsibility |
 |---|---|
-| `Viewport.swift` | Initial SwiftUI Canvas viewport drawing, axis and coordinate-grid hosting, selection highlighting, click-to-hit and click-to-model bridge, drag-to-model bridge, and camera navigation state ownership. |
+| `Viewport.swift` | SwiftUI viewport composition over an immutable `UniversalViewportScene`, interaction-state overlays, gesture planning, and camera navigation. |
 | `ViewportCamera.swift` | Viewport pan and zoom state shared by rendering layout, hit testing, and model coordinate mapping. (Owned by `RupaViewportScene`.) |
 | `ViewportCameraFrame.swift` | Saved-view camera-frame request/report bridge that maps persistent target plus visible height to transient viewport pan/zoom through `ViewportLayout`. |
 | `ViewportInputSurface.swift` | macOS input bridge for click, drag, hover, scroll pan, mouse-wheel zoom, and trackpad magnification. |
 | `ViewportProjectionBasis.swift` | Shared viewport projection basis; default mode is isometric. (Owned by `RupaViewportScene`.) |
 | `ViewportCoordinateAxis+Style.swift` | Shared X/Y/Z labels and colors used by Canvas axes, Axis Gizmo, and transform affordances. |
 | `ViewportProjectedGrid.swift` | Unit-aware projected coordinate-grid and in-plane ruler line calculation. |
-| `ViewportScene.swift` | Source-derived viewport scene extraction, projection/unprojection layout, model coordinate mapping, and initial hit testing for selectable sketch/body previews. (Owned by `RupaViewportScene`.) |
-| `MetalViewport.swift` | SwiftUI/AppKit bridge for the viewport. |
-| `MetalCADRenderer.swift` | Metal renderer lifecycle and draw loop. |
-| `RenderScene.swift` | Renderable derived scene state. |
-| `RenderSceneBuilder.swift` | Conversion from evaluated document state to render scene. |
-| `MeshBufferCache.swift` | GPU buffer cache keyed by evaluated source generation. |
-| `SelectionIDBuffer.swift` | Offscreen selection identity rendering. |
-| `CADCamera.swift` | Camera state, projection, and navigation. |
+| `UniversalViewportScene.swift` / `UniversalViewportSceneBuilder.swift` | Provider-neutral primary presentation scene built from purpose-selected evaluated occurrences, representation provenance, navigation, and optional exact CAD interaction context. (Owned by `RupaViewportScene`.) |
+| `MeshSourcePresentationRenderer.swift` | Draw-plan construction from immutable presentation MeshSource buffers without making CAD source the viewport authority. |
+| `MeshSourcePresentationPicker.swift` | Exact occurrence and representation picking over the same presentation geometry. |
+| `ViewportIdentityBufferRenderer.swift` / `ViewportIdentityHitResolver.swift` | Current offscreen identity-buffer rendering and hit resolution. |
+| `ViewportScene.swift` / `ViewportSceneBuilder.swift` | CAD-derived source affordance context used only when the project view proves an exact CAD interaction match. (Owned by `RupaViewportScene`.) |
 
-RupaRendering depends on `RupaViewportScene` for CAD-backed scene extraction, the shared `ViewportCamera`, and the `ViewportProjectionBasis`, and consumes evaluated document state and selection state. It does not own CAD source.
+RupaRendering consumes the provider-neutral `UniversalViewportScene`, shared
+camera/projection contracts, and immutable interaction state. It does not own CAD,
+Authored Mesh, external-provider source, or project selection authority.
 
 ### RupaViewportScene
 
-RupaViewportScene is the CAD-backed scene layer shared by rendering. It is the only rendering-side target that depends on Swift-CAD, so `RupaRendering` can stay focused on the SwiftUI viewport and interaction affordances without linking the kernel directly.
+RupaViewportScene owns the provider-neutral `UniversalViewportScene` used by the
+primary viewport. CAD-specific scene extraction remains a subordinate affordance
+path and is available only with an exact same-publication CAD interaction context;
+Mesh-only and external-provider presentation stay fully renderable and pickable.
 
 | File | Responsibility |
 |---|---|
-| `ViewportScene.swift` / `ViewportSceneBuilder.swift` | Source-derived viewport scene extraction and conversion from evaluated document state. |
+| `UniversalViewportScene.swift` / `UniversalViewportSceneBuilder.swift` | Provider-neutral primary scene construction from purpose-selected evaluated occurrences. |
+| `ViewportScene.swift` / `ViewportSceneBuilder.swift` | Optional exact-CAD source-affordance scene construction; never the primary presentation authority. |
 | `ViewportCamera.swift` / `ViewportCameraZoomPolicy.swift` | Viewport pan/zoom state and zoom policy shared by layout, hit testing, and coordinate mapping. |
 | `ViewportProjectionBasis.swift` | Shared projection basis; default mode is isometric. |
 | `ViewportPickingBackend.swift` / `ViewportSelectionHitPolicy.swift` / `ViewportSketchControlPointHitPolicy.swift` / `ViewportIdentityPickIndex.swift` | Picking backend and hit-selection policies for scene and identity-buffer picking. |
@@ -1063,38 +1045,41 @@ RupaAgent coordinates the running app and command-line clients. The target is an
 | Split target | Owns |
 |---|---|
 | `RupaAgentProtocol` | Request/response/error envelopes, `AgentMessage`, `AgentMessageCodec`, `AgentClientProtocol`, capability descriptors, and `WorkspaceSessionSummary`. |
-| `RupaAgentRuntime` | `AgentCommandController`, `MainActorAgentBridge`, and `WorkspaceRegistry`. |
+| `RupaAgentRuntime` | `ProjectAgentCommandController`, `ProjectWorkspaceRegistry`, capability/domain dispatch, and project-coordinate validation. |
 | `RupaAgentTransport` | `AgentClient`, `AgentSocketListener`/`AgentSocketService`, `AgentSocketAddress`, `AgentSocketIO`, and `AgentSocketPath`. |
 
 App-facing agent-host wiring lives one layer up in `RupaAgentUI`. The following types are the combined responsibility surface of the umbrella:
 
 | Type | Responsibility |
 |---|---|
-| `AgentCommandController` | Handles decoded agent requests, exposes capabilities, resolves sessions, and dispatches commands. |
-| `MainActorAgentBridge` | Routes app-hosted agent requests to UI-owned sessions on MainActor. |
+| `ProjectAgentCommandController` | Handles decoded Agent requests, exposes capabilities, resolves registered workspaces, and dispatches reads and mutations through `ProjectWorkspace`. |
 | `AgentSocketListener` | Owns Unix domain socket lifecycle and routes socket requests into the agent service. |
-| `AgentSocketService` | Serializes socket request handling and dispatches decoded requests to the in-memory command controller or MainActor app bridge. |
+| `AgentSocketService` | Applies transport limits and dispatches decoded requests to the project command controller. |
 | `AgentClient` | Connects from CLI, checks status, lists sessions, applies commands. |
 | `AgentClientProtocol` | Provides a testable boundary for in-memory and socket-backed clients. |
 | `AgentMessage` | Request, response, error, and session summary envelopes. |
 | `AgentMessageCodec` | Encodes and decodes agent request and response payloads. |
 | `AgentSocketAddress` | Builds Unix socket addresses for client and listener. |
 | `AgentSocketIO` | Provides blocking read/write helpers for socket payloads. |
-| `WorkspaceRegistry` | Registers, unregisters, and resolves open editor sessions. |
-| `DocumentLock` | Prevents unsafe direct file mutation and validates generation. |
-| `FileChangeBroadcaster` | Publishes file and session changes where needed. |
+| `ProjectWorkspaceRegistry` | Registers, reconciles, leases, and resolves application-owned workspaces by runtime session ID and file path. |
 
 RupaAgent transports automation requests. It does not implement CAD commands.
 
-`DocumentLock` and `FileChangeBroadcaster` remain required by the locking contract but are not yet implemented; open-document detection currently routes through `WorkspaceRegistry` and per-request `expectedGeneration` validation.
+The registry rejects duplicate current project identities, validates exact project
+coordinates, and lets unregister wait for accepted operation leases before
+removing a workspace. File and window lifecycle stays application-owned.
 
 ### RupaAgentUI
 
-RupaAgentUI is the app-facing composition target that binds the agent stack to the editor UI. It depends on `RupaUI`, `RupaCore`, `RupaDomainFoundation`, `RupaAgentRuntime`, and `RupaAgentTransport`, and lets the app host own agent lifecycle and inject one domain registry without `RupaUI` depending on the agent stack.
+RupaAgentUI is the app-facing Agent-host target. It depends on `RupaKit`,
+`RupaCore`, `RupaDomainFoundation`, `RupaAgentRuntime`, and
+`RupaAgentTransport`; it does not depend on RupaUI. The app owns Agent lifecycle,
+injects one domain registry, and registers the same `ProjectWorkspace` used by
+the independently composed editor UI.
 
 | Type | Responsibility |
 |---|---|
-| `AgentHost` | Starts and stops the socket-backed Agent command service under app-host lifecycle control, receives the app-composed `DomainRegistry`, and publishes registered UI-owned sessions to the `WorkspaceRegistry` on MainActor. |
+| `AgentHost` | Starts and stops the socket-backed Agent command service under app-host lifecycle control, receives the app-composed `DomainRegistry`, and registers the app-owned `ProjectWorkspace` with `ProjectWorkspaceRegistry` on MainActor. |
 
 ### RupaCLIKit
 
@@ -1130,25 +1115,30 @@ RupaCLI is a thin executable target.
 |---|---|
 | `CLI.swift` | Executable entry point that starts `CLICommand`. |
 
-## Document Session Model
+## Open Project Model
 
-An open Rupa document is represented by an `EditorSession`.
+An open Rupa package is represented by one `ProjectWorkspace` backed by one
+`ProjectController`. `EditorSession` is an isolated source-staging detail inside
+the project transaction path.
 
 ```mermaid
 flowchart TD
-    Workspace["WorkspaceRegistry"] --> Session["EditorSession"]
+    App["ApplicationRoot"] --> Workspace["ProjectWorkspace"]
+    Registry["ProjectWorkspaceRegistry"] --> Workspace
+    Workspace --> Project["ProjectController"]
+    Project --> Session["Isolated EditorSession stage"]
     Session --> Store["CADDocumentStore"]
     Session --> Stack["CommandStack"]
-    Session --> Selection["SelectionModel"]
-    Session --> Tools["ToolController"]
-    Session --> Eval["EvaluationScheduler"]
-    Eval --> Diagnostics["EditorDiagnostic"]
-    Eval --> Render["RenderScene update"]
+    Project --> Eval["Presentation evaluation"]
+    Workspace --> View["ProjectViewSnapshot"]
+    View --> Render["UniversalViewportScene"]
 ```
 
 ### DocumentGeneration
 
-Each document session carries a monotonically increasing generation.
+Each project source session carries a monotonically increasing document generation
+and transaction revision. `ProjectStateSnapshot` also carries a publication
+sequence and a runtime-only document lifetime identity.
 
 ```swift
 public struct DocumentGeneration: Codable, Hashable, Sendable {
@@ -1166,20 +1156,12 @@ public struct DocumentGeneration: Codable, Hashable, Sendable {
 
 Generation is used by the app, renderer, agent, and CLI to detect stale assumptions.
 
-## Workspace Registry
+## Project Workspace Registry
 
-The app registers open sessions with `WorkspaceRegistry`.
-
-```swift
-@MainActor
-public final class WorkspaceRegistry: ObservableObject {
-    public private(set) var sessions: [DocumentSessionID: EditorSession]
-
-    public func register(_ session: EditorSession)
-    public func unregister(_ session: EditorSession)
-    public func session(forDocumentURL url: URL) -> EditorSession?
-}
-```
+The app registers its already-evaluated `ProjectWorkspace` with
+`ProjectWorkspaceRegistry`. Registration retains the same workspace used by
+`MainView` and file/history coordination; it does not copy source or create an
+Agent-owned editor session.
 
 Session summaries exposed to CLI include:
 
@@ -1202,7 +1184,9 @@ Open document matching uses a canonical document identity before falling back to
 | File system file ID | Optional stronger same-file check on supported platforms. |
 | Normalized path string | Fallback display and diagnostics value. |
 
-`WorkspaceRegistry` is responsible for hiding these details from CLI commands. CLI callers provide a path or session ID; the agent resolves that input to an open `EditorSession`.
+`ProjectWorkspaceRegistry` hides these runtime details from live CLI commands.
+Callers provide a path or session ID; the Agent resolves that input to the shared
+workspace and validates its current project, source, and workspace coordinates.
 
 ## CLI Modes
 
@@ -1219,9 +1203,10 @@ Open document matching uses a canonical document identity before falling back to
 | `--dry-run` | Apply and evaluate without saving. |
 | `--json` | Emit stable JSON output. |
 
-`--output` is a file-mode destination policy: the input document is loaded as the source,
-the mutation is applied in memory, and the result is written to a distinct new `.swcad`
-path. It is rejected with live sessions, with `--in-place`, with `--session-id`, when
+`--output` currently belongs to the legacy CAD-only file route: the input
+`.swcad` document is loaded as CAD source, mutated in memory, and written to a
+distinct new `.swcad` path. This route does not read or write schema-v3 Product or
+Authored Mesh authority. It is rejected with live sessions, with `--in-place`, with `--session-id`, when
 the output path does not use the `.swcad` extension, and when the output file already
 exists. `--dry-run` performs the same destination validation without writing the output
 file. Machine-facing commands using the shared write target contract implement this
@@ -1245,9 +1230,11 @@ flowchart TD
     CheckOpen --> FileFlow
 ```
 
-### File Mode
+### Legacy CAD-only File Mode
 
-File mode edits a document without a running app session.
+This file route edits a closed legacy Swift-CAD document without a running app
+session. Schema-v3 `.rupa` project mutation remains on the project package route
+and must not silently fall back to this codec.
 
 ```mermaid
 flowchart TD
@@ -1275,11 +1262,13 @@ File mode requirements:
 
 ### Rupa Package Format
 
-Rupa uses `.swcad` as the user-facing extension. The `ProjectController` source
-route saves package schema v3 with required Product source, optional CAD source,
-and optional Authored Mesh source. Legacy project schema v2 is rejected explicitly.
-The application, Agent, and CLI still use `DocumentFileService` until their T06
-migration; those legacy routes do not claim schema-v3 or Authored-Mesh persistence.
+Rupa uses `.rupa` as the user-facing project extension. `ApplicationRoot` routes
+new, load, save, undo, and redo through `ApplicationProjectCoordinator`, the
+shared `ProjectWorkspace`, and `ProjectController`. Package schema v3 stores the
+required Product source, optional CAD source, and optional Authored Mesh source.
+Legacy project schema v2 is rejected explicitly. Agent create/open/close/save
+requests remain typed unsupported because URL, security scope, file, and window
+lifecycle are application responsibilities.
 
 | Entry | Meaning |
 |---|---|
@@ -1288,7 +1277,10 @@ migration; those legacy routes do not claim schema-v3 or Authored-Mesh persisten
 | `source/cad.json` | Optional Swift-CAD `CADDocument` source; absent in Mesh-only packages. |
 | `source/mesh-assets.json` and blobs | Optional Authored Mesh catalog, provenance, and content-addressed payloads. |
 
-The file service must validate both the Swift-CAD source and the Rupa metadata after loading.
+Load validates the required Product source, every present CAD or Authored Mesh
+source, blob integrity, and all cross-references before publishing the project.
+Mesh-only packages do not acquire CAD authority merely because runtime editing
+uses an empty CAD adapter.
 
 ### Live App Mode
 
@@ -1299,15 +1291,13 @@ flowchart TD
     CLI["rupa CLI"] --> Client["AgentClient"]
     Client --> IPC["Unix domain socket"]
     IPC --> Listener["AgentSocketListener inside Rupa.app"]
-    Listener --> Bridge["MainActorAgentBridge"]
-    Bridge --> Controller["AgentCommandController"]
-    Controller --> Registry["WorkspaceRegistry"]
-    Registry --> Session["EditorSession"]
-    Session --> Stack["CommandStack"]
-    Stack --> Store["CADDocumentStore"]
-    Store --> Eval["EvaluationScheduler"]
-    Eval --> Render["RenderScene update"]
-    Eval --> Result["AutomationResult"]
+    Listener --> Controller["ProjectAgentCommandController"]
+    Controller --> Registry["ProjectWorkspaceRegistry"]
+    Registry --> Workspace["ProjectWorkspace"]
+    Workspace --> Project["ProjectController"]
+    Project --> Eval["Package + evaluation publication"]
+    Eval --> Render["ProjectViewSnapshot update"]
+    Eval --> Result["Typed Agent result"]
     Result --> Client
     Client --> Output["CLI output"]
 ```
@@ -1317,7 +1307,7 @@ Live mode requirements:
 | Requirement | Contract |
 |---|---|
 | Session resolution | Resolve by canonical document URL or explicit session ID. |
-| Mutation | Dispatch into the active `EditorSession`. |
+| Mutation | Dispatch through the registered `ProjectWorkspace` into an atomic project transaction. |
 | Undo and redo | Commands participate when the command supports it. |
 | UI update | Evaluation snapshots and render invalidation publish through normal app state. |
 | Dirty state | Successful unsaved mutations mark the document dirty. |
@@ -1340,7 +1330,11 @@ Initial implementation uses a local Unix domain socket.
 | Canonical socket path | `~/Library/Group Containers/WWCKBW8CKN.team.stamp.rupa/rupa-agent/rupa.sock` — the app-group container is the one location the sandboxed app and unsandboxed CLI/agent clients resolve identically. |
 | Fallback socket path | `$TMPDIR/rupa-agent/rupa.sock`, used only when the app-group container is unavailable. |
 
-The package-level socket listener supports start, stop, stale socket replacement, malformed request recovery, and client/server round trips. App-hosted startup routes open document session mutation through `AgentHost` and `MainActorAgentBridge` so UI-owned `EditorSession` state is read and mutated on MainActor.
+The package-level socket listener supports start, stop, stale socket replacement,
+malformed request recovery, and client/server round trips. App-hosted startup
+routes requests through `AgentHost`, `ProjectAgentCommandController`, and the
+registered application-owned `ProjectWorkspace`; source authority remains in
+`ProjectController`, while MainActor owns workspace registration and publication.
 
 ### Request Envelope
 
@@ -1459,7 +1453,7 @@ flowchart LR
 | Feature name or ID | Resolves through the design graph and command context. |
 | Stable subshape identity | Uses Swift-CAD `SubshapeID` (`featureID` + composed role + ordinal) plus `StableSubshapeReference` (identity + geometry signature) for generated topology. Subobject `SelectionComponentID` values use `generatedTopology:<featureID>/<role>/<ordinal>`; kernel selection references (`SurfaceReference`, `EdgeReference`) carry the full stable reference so regeneration can re-validate the target geometry. |
 | Sketch entity component ID | Uses `sketchEntity:<featureID>:<entityID>` for whole source sketch subobject selection, source-curve edit command targets, source dimension edit targets, and source line-to-arc conversion targets. Uses `sketchPointHandle:<featureID>:<entityID>:<handle>` for point, line endpoint, circle center, and arc center/start/end targets, and `sketchControlPoint:<featureID>:<entityID>:<index>` for source spline CV targets. |
-| Session ID | Resolves through `WorkspaceRegistry` only for the current app run. |
+| Session ID | Resolves through `ProjectWorkspaceRegistry` only for the current app run. |
 
 `ReferenceResolver` owns user-facing and agent-facing lookup rules. RupaCore commands receive resolved typed references.
 
@@ -1479,7 +1473,7 @@ flowchart TD
 
 | Requirement | Contract |
 |---|---|
-| Open document detection | `WorkspaceRegistry` exposes file-backed open sessions. |
+| Open document detection | `ProjectWorkspaceRegistry` exposes file-backed open workspaces. |
 | Direct mutation prevention | File mode refuses open documents by default. |
 | Atomic writes | File mode writes to a temporary file and replaces the destination after success. |
 | Dirty state | Live sessions expose unsaved state to CLI. |
@@ -1592,10 +1586,12 @@ All mutating commands accept the relevant mode, save, dry-run, and JSON options.
 |---|---|
 | GUI command | Participates in undo and redo according to its command definition. |
 | Live CLI command | Participates in the app undo stack when the command definition supports undo. |
-| Live batch | Applies as one transaction; successful commands currently enter undo history as per-command entries, while failed batches restore document, selection, and undo/redo history. |
+| Live batch | Applies as one project source transaction and creates one undo entry; a failed batch restores document, selection, and undo/redo history without publication. |
 | File mode command | Does not participate in app undo because no app session owns the mutation. |
 
-The concrete batch grouping option is an open design detail, but live mode must not bypass the same undo-capable `CommandStack` or leave partial session state after a failed batch.
+Live mode uses the same undo-capable `CommandStack` and cannot leave partial
+session state after a failed batch. A future non-atomic script sequence requires
+a separate contract rather than weakening batch atomicity.
 
 ## Automation Results
 
@@ -1650,131 +1646,10 @@ If package-wide iOS and visionOS platforms are declared, macOS-only targets and 
 
 ## Package.swift
 
-`RupaKit/Package.swift` is the authoritative manifest. The library/executable target graph is:
-
-```swift
-// swift-tools-version: 6.3
-
-import PackageDescription
-
-let package = Package(
-    name: "RupaKit",
-    platforms: [
-        .macOS("26.0")
-    ],
-    products: [
-        .library(name: "RupaKit", targets: ["RupaKit"]),
-        .library(name: "RupaCore", targets: ["RupaCore"]),
-        .library(name: "RupaCoreTypes", targets: ["RupaCoreTypes"]),
-        .library(name: "RupaUI", targets: ["RupaUI"]),
-        .library(name: "RupaAgentUI", targets: ["RupaAgentUI"]),
-        .library(name: "RupaViewportScene", targets: ["RupaViewportScene"]),
-        .library(name: "RupaRendering", targets: ["RupaRendering"]),
-        .library(name: "RupaPreview", targets: ["RupaPreview"]),
-        .library(name: "RupaAutomation", targets: ["RupaAutomation"]),
-        .library(name: "RupaDomainFoundation", targets: ["RupaDomainFoundation"]),
-        .library(name: "RupaManufacturing", targets: ["RupaManufacturing"]),
-        .library(name: "RupaAgentProtocol", targets: ["RupaAgentProtocol"]),
-        .library(name: "RupaAgentRuntime", targets: ["RupaAgentRuntime"]),
-        .library(name: "RupaAgentTransport", targets: ["RupaAgentTransport"]),
-        .library(name: "RupaAgent", targets: ["RupaAgent"]),
-        .library(name: "RupaCLIKit", targets: ["RupaCLIKit"]),
-        .executable(name: "rupa", targets: ["RupaCLI"])
-    ],
-    dependencies: [
-        .package(name: "swift-CAD", path: "../swift-CAD"),
-        .package(url: "https://github.com/1amageek/mac-component", branch: "main"),
-        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
-        .package(url: "https://github.com/apple/swift-collections", from: "1.1.0")
-    ],
-    targets: [
-        .target(name: "RupaKit", dependencies: ["RupaCore", "RupaAutomation", "RupaDomainFoundation"]),
-        .target(
-            name: "RupaCore",
-            dependencies: [
-                "RupaCoreTypes",
-                .product(name: "SwiftCAD", package: "swift-CAD"),
-                .product(name: "Collections", package: "swift-collections")
-            ]
-        ),
-        .target(name: "RupaCoreTypes"),
-        .target(
-            name: "RupaUI",
-            dependencies: [
-                "RupaCore",
-                "RupaDomainFoundation",
-                "RupaRendering",
-                "RupaPreview",
-                .product(name: "MacComponent", package: "mac-component")
-            ]
-        ),
-        .target(
-            name: "RupaAgentUI",
-            dependencies: [
-                "RupaAgentRuntime",
-                "RupaAgentTransport",
-                "RupaCore",
-                "RupaDomainFoundation",
-                "RupaUI"
-            ]
-        ),
-        .target(name: "RupaRendering", dependencies: ["RupaCore", "RupaViewportScene"]),
-        .target(
-            name: "RupaViewportScene",
-            dependencies: ["RupaCore", .product(name: "SwiftCAD", package: "swift-CAD")]
-        ),
-        .target(name: "RupaPreview", dependencies: ["RupaCore"]),
-        .target(name: "RupaAutomation", dependencies: ["RupaCore"]),
-        .target(
-            name: "RupaDomainFoundation",
-            dependencies: ["RupaCore", "RupaAutomation"]
-        ),
-        .target(
-            name: "RupaManufacturing",
-            dependencies: ["RupaDomainFoundation", "RupaAutomation", "RupaCore"]
-        ),
-        .target(
-            name: "RupaAgent",
-            dependencies: ["RupaAgentProtocol", "RupaAgentRuntime", "RupaAgentTransport"]
-        ),
-        .target(
-            name: "RupaAgentProtocol",
-            dependencies: ["RupaCore", "RupaAutomation", "RupaDomainFoundation"]
-        ),
-        .target(
-            name: "RupaAgentRuntime",
-            dependencies: ["RupaCore", "RupaAutomation", "RupaDomainFoundation", "RupaAgentProtocol"]
-        ),
-        .target(
-            name: "RupaAgentTransport",
-            dependencies: ["RupaCore", "RupaAgentProtocol", "RupaAgentRuntime"]
-        ),
-        .target(
-            name: "RupaCLIKit",
-            dependencies: [
-                "RupaCore",
-                "RupaAutomation",
-                "RupaDomainFoundation",
-                "RupaAgentProtocol",
-                "RupaAgentRuntime",
-                "RupaAgentTransport",
-                .product(name: "ArgumentParser", package: "swift-argument-parser")
-            ]
-        ),
-        .executableTarget(name: "RupaCLI", dependencies: ["RupaCLIKit"]),
-        // Test targets (see the manifest for full dependency lists):
-        //   RupaKitTests, RupaCoreTests, RupaAutomationTests,
-        //   RupaDomainFoundationTests, RupaManufacturingTests, RupaAgentTests,
-        //   RupaAgentContractTests, RupaAgentSurfaceTests, RupaAgentSketchTests,
-        //   RupaAgentModelingTests, RupaAgentSelectionTests, RupaAgentInspectionTests,
-        //   RupaAgentTopologyPersistenceTests, RupaAgentTransportTests,
-        //   RupaUIPackageTests, RupaRenderingTests, RupaCLITests
-        // Shared test-fixture library targets (path: Tests/...):
-        //   RupaAgentTestFixtures, RupaAgentIntegrationTestFixtures
-    ],
-    swiftLanguageModes: [.v6]
-)
-```
+`RupaKit/Package.swift` is the authoritative manifest for every product, target,
+dependency, platform, and test-fixture edge. This specification intentionally
+does not copy the manifest; the responsibility graph above explains semantic
+direction, while build tooling reads the executable manifest directly.
 
 ## Test Specification
 
@@ -1786,10 +1661,9 @@ RupaKit tests are split by module boundary.
 | `RupaAutomationTests` | Codable schema, batch ordering, parameter mutation, reference resolution, result encoding. |
 | `RupaDomainFoundationTests` | Domain registry, ownership, command lowering, generic execution, dry-run restoration, and simulation adapter contracts. |
 | `RupaManufacturingTests` | Manufacturing domain registration and printability preflight command lowering. |
-| `RupaUIPackageTests` | Generic domain command catalog mapping, `MainView` domain registry injection, and `AgentHost` socket capability publication from an injected registry. |
+| `RupaUIPackageTests` | Generic domain command catalog mapping, `MainView` domain registry injection, and application-facing `AgentHost` lifecycle, socket capability publication, and shared `ProjectWorkspace` registration. |
 | `RupaAgentTests` | Message encoding, session resolution, generation mismatch, lock behavior, client/server lifecycle. |
-| `RupaUIPackageTests` | App-level agent host lifecycle and MainActor-safe session publication. |
-| `RupaRenderingTests` | Viewport scene extraction, projection/unprojection layout, model coordinate mapping, empty-document drag plane behavior, and source-derived hit testing. |
+| `RupaRenderingTests` | Universal CAD/Mesh/mixed presentation, MeshSource drawing and identity picking, exact-CAD affordance gating, projection/unprojection layout, model coordinate mapping, and empty-document drag-plane behavior. |
 | `RupaCLITests` | Argument parsing, mode selection, file/live parameter workflows, JSON output, exit code mapping. |
 
 Swift tests should be run through `xcodebuild test` with explicit timeouts when an Xcode workspace or project exists. Tests that touch shared files, sockets, or static state must use a shared serialization mechanism.
@@ -1803,36 +1677,21 @@ Initial implementation is accepted when these behavior contracts pass.
 | GUI parameter edit | Mutation goes through `CommandStack`, increments generation, evaluates, updates diagnostics, and invalidates rendering. |
 | CLI parameter edit | `rupa param set` and `rupa param delete` mutate a closed file or live session through the same command path and generation checks. Parsed formulas validate references and cycles before mutation, and deletion rejects still-referenced parameters before mutation. |
 | CLI file edit | Closed document loads, mutates through RupaCore, evaluates, and writes atomically. |
-| CLI live edit | Open document resolves through `WorkspaceRegistry`, mutates in the app session, updates UI state, and returns JSON when requested. |
+| CLI live edit | Open project resolves through `ProjectWorkspaceRegistry`, mutates through the shared project transaction path, updates UI state, and returns JSON when requested. |
 | Open document file conflict | `--file` refuses direct mutation of an open document unless a supported forced path is selected. |
 | Generation mismatch | Request with stale `expectedGeneration` fails before mutation with `document.generationMismatch`. |
 | Dry run | Command validates and evaluates without saving or incrementing persisted file state. |
-| Product metadata persistence | Scene/component/material/validation/export/template metadata round-trips through `.swcad` and participates in undo/redo. |
+| Product metadata persistence | Scene/component/material/validation/export/template metadata round-trips through `.rupa` and participates in undo/redo. |
 | Sessions JSON | `rupa sessions --json` returns stable session summaries with ID, path, dirty state, generation, and display name. |
 | Agent status | `rupa agent status --json` reports running state, socket path, and session count. |
 | Stable reference failure | Unresolvable references fail with `reference.unresolved` and actionable diagnostics. |
 | CLI dependency boundary | `RupaCLI` builds without importing `RupaUI` or the app target. |
 
-## Implementation Phases
-
-| Phase | Deliverable |
-|---|---|
-| 1 | Create `RupaKit` package skeleton, products, targets, and baseline tests. |
-| 2 | Implement RupaCore session, document store, command stack, generation, and diagnostics. |
-| 3 | Implement Automation command schema and batch executor against RupaCore. |
-| 4 | Implement CLI file mode with atomic write and JSON output. |
-| 5 | Implement WorkspaceRegistry, Agent messages, client/server lifecycle, and live mode dispatch. |
-| 6 | Implement RupaUI root editor shell using RupaCore. |
-| 7 | Implement Metal viewport bridge and render scene invalidation. |
-| 8 | Implement MacComponent detail panes, export surfaces, app-host integration, and contextual properties in the MacComponent Inspector Pane. |
-| 9 | Complete universal CAD acceptance use cases for video, 3D print, and architecture workflows without ApplicationProfile branching. |
-| 10 | Add deferred ApplicationProfile switching as preset grouping over the completed universal CAD implementation. |
-
 ## Open Decisions
 
 | Topic | Decision needed |
 |---|---|
-| Document format boundary | Resolved: `.swcad` project schema v3 separates required Product source, optional CAD source, and optional Authored Mesh catalog/blob source under one manifest. |
+| Document format boundary | Resolved: `.rupa` project schema v3 separates required Product source, optional CAD source, and optional Authored Mesh catalog/blob source under one manifest. |
 | App sandbox socket path | Resolved: the socket lives in the shared app-group container (`WWCKBW8CKN.team.stamp.rupa`) so the sandboxed app and external clients resolve the same path; distribution-signing validation remains before release. |
 | iPadOS and visionOS CLI exclusion | Decide whether `RupaCLI` is macOS-only in a separate package configuration or guarded in the shared package. |
 | XPC migration | Decide the threshold for replacing Unix domain sockets with XPC. |

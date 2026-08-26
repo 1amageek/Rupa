@@ -12,7 +12,11 @@ The project exists to make parametric CAD editable through the same core model f
 | CLI | Provide deterministic headless and app-connected operations for scripts, agents, and batch workflows. |
 | Agent bridge | Connect the running app and CLI safely so open documents can be changed without corrupting files or bypassing undo. |
 
-Rupa is not a second CAD kernel. Swift-CAD remains the lower-level foundation for document source, exact geometry, evaluation, and exchange. Rupa owns the product experience, document sessions, commands, UI, rendering, automation, and process coordination.
+Rupa is not a second CAD kernel. Swift-CAD is the lower-level kernel for an
+optional authoritative CAD representation, exact CAD evaluation, and exchange.
+Rupa owns the provider-neutral Product aggregate, representation authority,
+Authored Mesh source, project lifecycle, commands, UI, rendering, automation, and
+process coordination.
 
 ## Core Belief
 
@@ -20,31 +24,40 @@ Every CAD mutation must pass through one shared command pipeline.
 
 ```mermaid
 flowchart TD
-    GUI["GUI tool"] --> Command["RupaCore command"]
-    CLI["CLI automation command"] --> Command
-    Agent["Live agent request"] --> Command
-    Command --> Stack["CommandStack"]
-    Stack --> Store["CADDocumentStore"]
-    Store --> Evaluation["EvaluationScheduler"]
-    Evaluation --> Results["Diagnostics, EvaluationSnapshot, RenderInvalidation"]
+    GUI["GUI tool"] --> Workspace["ProjectWorkspace"]
+    CLI["CLI live command"] --> Agent["Agent project route"]
+    Agent --> Workspace
+    Workspace --> Project["ProjectController"]
+    Project --> Command["Resolved source / interaction plan"]
+    Command --> Stage["Isolated EditorSession stage"]
+    Stage --> Stack["CommandStack"]
+    Stack --> Aggregate["Validated DesignDocument aggregate"]
+    Aggregate --> Package["Staged schema-v3 package"]
+    Aggregate --> Evaluation["Purpose-selected RupaEvaluation"]
+    Package --> Results["Atomic authority publication"]
+    Evaluation --> Results
 ```
 
-The source of truth is not a view, file handle, renderer buffer, command-line process, or agent message. The source of truth is the current `EditorSession` state owned by RupaCore and backed by a validated Rupa document.
+The source of truth is not a view, file handle, renderer buffer, command-line process, or agent message. For one open project, `ProjectController` owns the coherent Product/CAD/Authored-Mesh source aggregate, source history, package, and evaluation publication. `EditorSession` remains the isolated RupaCore staging engine used inside that boundary; it is not a parallel application authority.
 
 | State | Role |
 |---|---|
-| `CADDocumentStore` | Owns the editable document source for a session. |
+| `ProjectController` / `DesignDocument` | Own the authoritative Product aggregate, optional CAD source, Authored Mesh assets, representation selection, and atomic project publication. |
+| `CADDocumentStore` | Owns the runtime CAD document inside an isolated transaction stage; an empty Mesh-only adapter does not create CAD authority. |
 | `CommandStack` | Owns mutation ordering, undo, redo, and command participation. |
-| `EvaluationScheduler` | Owns deterministic regeneration after source changes and publishes generation-keyed derived state. |
+| Project evaluation | Resolves the selected representation for a purpose and produces immutable, representation-bound evaluation snapshots before publication. |
 | `ProductMetadata` | Owns generic product metadata that Swift-CAD should not specialize, such as scene organization, components, materials, validation rules, export presets, and template defaults. |
 | Swift-CAD `DesignGraph` | Owns source-level sketches, feature dependencies, body-producing operations, and parameter references. |
-| `WorkspaceRegistry` | Owns the list of open app sessions visible to the agent layer. |
-| `RenderScene` | Derived view state for interactive display. |
+| `ProjectWorkspace` | Exposes one ordered application-operation and observation boundary over the project authority. |
+| `ProjectWorkspaceRegistry` | Retains the same app-owned workspaces for Agent access and reconciles their current project identity. |
+| `ProjectViewSnapshot.viewport` / `UniversalViewportScene` | Purpose-selected, immutable presentation state for interactive display, picking, and sectioning. |
 | Export files | Derived boundary output. |
 
 ```mermaid
 flowchart LR
-    DesignDoc["DesignDocument"] --> Source["Swift-CAD source"]
+    DesignDoc["DesignDocument"] --> Representations["Geometry representation sets<br/>modeling + presentation"]
+    DesignDoc --> CAD["Optional authoritative CAD source"]
+    DesignDoc --> Mesh["Authored Mesh assets + provenance"]
     DesignDoc --> Metadata["Universal product metadata"]
     Metadata --> Presets["Validation, export, template defaults"]
     Metadata --> Organization["Scene, components, materials"]
@@ -80,23 +93,31 @@ RupaKit is the shared implementation package.
 ```mermaid
 flowchart TD
     Umbrella["RupaKit umbrella"] --> Core["RupaCore"]
-    UI["RupaUI"] --> Core
+    Umbrella --> Project["RupaProject"]
+    Project --> Core
+    UI["RupaUI"] --> Umbrella
     UI --> Rendering["RupaRendering"]
     UI --> Preview["RupaPreview"]
     Automation["RupaAutomation"] --> Core
-    Agent["RupaAgent"] --> Automation
-    Agent --> Core
+    AgentUI["RupaAgentUI"] --> Runtime["RupaAgentRuntime"]
+    AgentUI --> Transport["RupaAgentTransport"]
+    Runtime --> Umbrella
+    Runtime --> Automation
+    Agent["RupaAgent"] --> Runtime
+    Agent --> Transport
     CLI["RupaCLI"] --> CLIKit["RupaCLIKit"]
-    CLIKit --> Agent
+    CLIKit --> Runtime
+    CLIKit --> Transport
     CLIKit --> Automation
     CLIKit --> Core
 ```
 
 | Module | Product-level responsibility |
 |---|---|
-| `RupaCore` | Sessions, document stores, command stack, evaluation, services, diagnostics. |
+| `RupaCore` | Isolated source staging, document stores, command stack, services, diagnostics. |
+| `RupaProject` / `RupaKit` | Project source/package/evaluation authority and the shared application workspace boundary. |
 | `RupaUI` | Complete SwiftUI editor surface. |
-| `RupaRendering` | Metal viewport and editor render scene. |
+| `RupaRendering` | Provider-neutral viewport presentation and interaction rendering, with Metal limited to the identity-buffer backend. |
 | `RupaPreview` | RealityKit, Quick Look, and USDZ preview surfaces. |
 | `RupaAutomation` | Stable command schema and batch execution contract. |
 | `RupaAgent` | Running-app coordination, IPC, workspace registry, locking. |
@@ -129,7 +150,7 @@ flowchart LR
 |---|---|
 | GUI | Convert gestures and controls into RupaCore commands. |
 | CLI file mode | Load a document, apply RupaCore commands, evaluate, validate, and write atomically. |
-| CLI live mode | Send automation commands to the app, where the active `EditorSession` applies them through the same stack. |
+| CLI live mode | Send automation commands to the app, where the registered `ProjectWorkspace` plans and applies them through `ProjectController`. |
 | Agent | Transport commands and results without owning CAD semantics. |
 
 This keeps undo, diagnostics, generation tracking, and rendering aligned across every entry point.
@@ -141,10 +162,11 @@ When the app has a document open, the app owns the active session.
 ```mermaid
 flowchart TD
     CLI["rupa CLI"] --> Detect["Detect running app"]
-    Detect --> Resolve["Resolve open document session"]
+    Detect --> Resolve["Resolve registered project workspace"]
     Resolve --> IPC["Send command over IPC"]
-    IPC --> Session["EditorSession"]
-    Session --> Stack["CommandStack"]
+    IPC --> Workspace["ProjectWorkspace"]
+    Workspace --> Project["ProjectController"]
+    Project --> Stack["Isolated source transaction"]
     Stack --> Dirty["Dirty state + generation"]
     Dirty --> Result["AutomationResult"]
 ```
@@ -169,30 +191,32 @@ The first IPC contract should be local, inspectable, and easy to test.
 | Message style | JSON-RPC style request and response envelopes. |
 | Command payload | `RupaAutomation` Codable types. |
 | Result payload | `AutomationResult` with diagnostics and document summary. |
-| Session discovery | `WorkspaceRegistry` exposed through `AgentCommandController`. |
+| Session discovery | `ProjectWorkspaceRegistry` exposed through `ProjectAgentCommandController`. |
 
 IPC transports may evolve later. CAD semantics stay in RupaCore and RupaAutomation so transport changes do not redefine commands.
 
-### 6. Make Documents Observable, Not Globally Mutable
+### 6. Make Projects Observable, Not Globally Mutable
 
-An open document is represented by an `EditorSession`. A workspace is represented by a registry of sessions.
+An open project is represented by one `ProjectWorkspace` backed by one `ProjectController`. The Agent registry retains that same workspace; it does not construct another editor session.
 
 ```mermaid
 flowchart LR
-    Registry["WorkspaceRegistry"] --> SessionA["EditorSession A"]
-    Registry --> SessionB["EditorSession B"]
-    SessionA --> StoreA["CADDocumentStore"]
-    SessionB --> StoreB["CADDocumentStore"]
+    App["ApplicationRoot<br/>current single-project composition"] --> Workspace["ProjectWorkspace"]
+    Registry["ProjectWorkspaceRegistry"] --> Workspace
+    Workspace --> Project["ProjectController"]
 ```
 
 | Object | Responsibility |
 |---|---|
-| `EditorSession` | Coordinates tools, selection, commands, evaluation, diagnostics, and document state. |
-| `CADDocumentStore` | Owns the mutable document value and generation. |
-| `WorkspaceRegistry` | Registers and resolves open sessions by document URL and session ID. |
-| `DocumentLock` | Prevents unsafe file mutation and validates expected generation. |
+| `ProjectController` | Owns one coherent source, package, evaluation, history, and project-coordinate publication. |
+| `ProjectWorkspace` | Orders application operations and publishes package-free immutable views on MainActor. |
+| `EditorSession` | Stages Core commands inside a project transaction and never escapes as application authority. |
+| `ProjectWorkspaceRegistry` | Registers and resolves shared workspaces by runtime session ID and file path while reconciling current project identity. |
 
 Global mutable CAD state is avoided. Shared app state is explicit and injectable.
+The current application composition owns one project workspace for the whole app
+instance. A future multi-document or per-window authority model requires a
+separate lifecycle design and is not implied by this contract.
 
 ### 7. Rendering Is Derived State
 
@@ -200,10 +224,11 @@ Rendering is essential to the editor, but it does not own the model.
 
 ```mermaid
 flowchart TD
-    Document["CAD document source"] --> Evaluation["Evaluated document"]
-    Evaluation --> Scene["RenderScene"]
-    Scene --> Metal["Metal viewport"]
-    Scene --> Selection["Selection ID buffer"]
+    Sources["Product + CAD? + Authored Mesh?"] --> Evaluation["Purpose-selected evaluation"]
+    Evaluation --> Scene["ProjectViewSnapshot.viewport<br/>UniversalViewportScene"]
+    Scene --> Display["Viewport presentation"]
+    Scene --> Selection["Identity buffer"]
+    Evaluation --> CADContext["Optional exact CAD affordance context"]
 ```
 
 | Rendering data | Source status |
@@ -341,17 +366,24 @@ Rupa modules should form a one-way graph.
 ```mermaid
 flowchart TD
     App["Rupa.app"] --> UI["RupaUI"]
+    App --> AgentUI["RupaAgentUI"]
     UI --> Core["RupaCore"]
-    UI --> Agent["RupaAgent"]
+    UI --> Kit["RupaKit"]
     UI --> Rendering["RupaRendering"]
     UI --> Preview["RupaPreview"]
+    AgentUI --> Runtime["RupaAgentRuntime"]
+    AgentUI --> Transport["RupaAgentTransport"]
+    AgentUI --> Kit
     Rendering --> Core
     Preview --> Core
     Automation["RupaAutomation"] --> Core
-    Agent["RupaAgent"] --> Automation
-    Agent --> Core
+    Runtime --> Automation
+    Runtime --> Kit
+    Agent["RupaAgent"] --> Runtime
+    Agent --> Transport
     CLI["RupaCLI"] --> CLIKit["RupaCLIKit"]
-    CLIKit --> Agent
+    CLIKit --> Runtime
+    CLIKit --> Transport
     CLIKit --> Automation
     CLIKit --> Core
     Core --> SwiftCAD["Swift-CAD"]
@@ -361,9 +393,10 @@ flowchart TD
 |---|---|
 | `RupaCore` imports Swift-CAD and not UI. | The editor core must run headlessly. |
 | `RupaAutomation` imports RupaCore and not CLI. | Automation must be reusable by app, CLI, and future servers. |
-| `RupaAgent` imports Automation and Core. | IPC dispatches stable commands into active sessions. |
-| `RupaUI` imports Agent, Rendering, and Preview. | UI composes app-facing services and visual surfaces without owning CAD mutation semantics. |
-| `RupaCLIKit` imports Agent, Automation, and Core. | The CLI command implementation chooses live or file mode and reports results. |
+| `RupaAgentRuntime` imports Kit, Automation, Core, and protocol contracts. | IPC dispatches stable commands into registered project workspaces without owning their source. |
+| `RupaAgentUI` imports Agent runtime and transport. | The application-facing host owns Agent listener and workspace-registration lifecycle outside the editor UI. |
+| `RupaUI` imports Kit, Rendering, and Preview but not the Agent stack. | The editor surface consumes project operations and views without owning Agent lifecycle or CAD mutation semantics. |
+| `RupaCLIKit` imports Agent runtime/transport, Automation, and Core. | The CLI command implementation chooses live or file mode and reports results. |
 | `RupaCLI` imports RupaCLIKit. | The executable remains a thin shell that can be built and tested around a library boundary. |
 
 Lower-level modules do not import higher-level product shells.
@@ -397,7 +430,7 @@ Rupa has both high-frequency UI state and ordered asynchronous work.
 | State kind | Preferred tool |
 |---|---|
 | UI-facing session orchestration | `@MainActor` where SwiftUI requires it. |
-| App-hosted agent session access | MainActor bridge before touching UI-owned editor sessions. |
+| App-hosted Agent project access | MainActor `AgentHost` registers and unregisters the application-owned `ProjectWorkspace`; the registry resolves operation leases without exposing an editor session. |
 | Ordered asynchronous evaluation | `actor` or an explicit scheduler. |
 | Short memory-only cache access | `Mutex`. |
 | Long-running import/export | `async` service methods with cancellation. |

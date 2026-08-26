@@ -10,19 +10,23 @@ orchestration.
 
 ## State Partitions
 
-Rupa uses one `.swcad` document type, but one document type does not imply one
+Rupa uses one `.rupa` project package, but one package does not imply one
 state lifetime.
 
 ```mermaid
 flowchart TD
-    Project["ProjectController"] --> Session["Document session"]
+    App["ApplicationRoot"] --> Workspace["ProjectWorkspace<br/>operation entry + observation adapter"]
+    Workspace --> Project["ProjectController<br/>authoritative project state"]
+    Project --> Session["Isolated source session"]
+    Project --> Interaction["Authoritative workspace interaction state"]
     Project --> Artifacts["Artifact store"]
     Project --> Decisions["Decision store"]
     Project --> Jobs["External job store"]
 
     Session --> Source["Editable document source"]
     Source --> Inputs["Immutable observation inputs"]
-    Session --> Workspace["Workspace state"]
+    Interaction --> WorkspaceView["Immutable workspace view"]
+    Workspace --> WorkspaceView
     Source --> Artifacts
     Inputs --> Artifacts
     Artifacts --> Decisions
@@ -31,13 +35,13 @@ flowchart TD
 
 | Partition | Examples | Mutation owner | Undo/history | Freshness role |
 |---|---|---|---|---|
-| Editable document source | Product Objects and purpose selection; optional CAD source; Authored Mesh assets and provenance; references to capture inputs; materials; semantic intent; document annotations; saved views; validation configurations; export presets | `EditorSession` through role-specific source commands | Source command history | Fingerprinted as declared artifact dependencies |
+| Editable document source | Product Objects and purpose selection; optional CAD source; Authored Mesh assets and provenance; references to capture inputs; materials; semantic intent; document annotations; saved views; validation configurations; export presets | `ProjectController` through isolated `EditorSession` staging and role-specific source commands | Source command history | Fingerprinted as declared artifact dependencies |
 | Observation inputs | Immutable photos, depth, poses, point clouds, scan Mesh, scale and coordinate metadata used for reconstruction | Input/package service through an explicit source transaction that attaches or removes references | The reference mutation is undoable; referenced bytes are immutable | Own content identity; included in reconstruction dependencies but never treated as exact CAD source |
-| Workspace state | Selection, active tool, hover, active construction plane, viewport camera, visual grid mode, transient analysis displays, panel layout | Open document session | Separate workspace history when needed; never source undo | Never changes source-content identity |
+| Workspace state | Selection, active tool, hover, active construction plane, viewport camera, visual grid mode, transient analysis displays, panel layout | `ProjectController` through isolated `EditorSession` staging; `ProjectWorkspace` delegates explicit interaction transactions and publishes their immutable projection; UI-only transient controls stay in the document-lifetime-bound view tree | Separate workspace history when needed; never source undo | Never changes source-content identity |
 | Derived artifacts | Evaluated B-rep/geometry snapshots, triangulation, BVH, GPU resources, drawing, validation result, exchange output, render pass, solver input/result | Artifact producer through `ProjectController` | Immutable records, cache retention policy | Identified by input dependencies, producer/configuration, and output content |
 | Validation decisions | Allow/block/override records for a policy evaluation and prepared output | Decision recorder through `ProjectController` | Immutable append/revoke audit log | Bound to exact policy, findings, inputs, and prepared artifact |
 | External jobs | Solver/export/import job state, logs, progress, cancellation, temporary files | Effect-specific project service | Job event history | Bound to exact input and produced artifacts |
-| User/application preferences | Default panels, default workspace preset, recent files, accessibility preferences | Application preference service | No document history | Not part of `.swcad` source |
+| User/application preferences | Default panels, default workspace preset, recent files, accessibility preferences | Application preference service | No document history | Not part of `.rupa` project source |
 | Template definitions | Inputs used to create a new source document | Template catalog | Versioned template history | Applied values become normal source or workspace values |
 
 Presentation state may be captured deliberately inside a saved view or drawing
@@ -58,11 +62,11 @@ transport server, geometry kernel, domain rule provider, or SwiftUI view model.
 
 | Owns | Does not own |
 |---|---|
-| Open document session registration and ordered access | CAD geometry semantics |
-| Document package load/save coordination | Concrete domain rules |
+| One document source aggregate, source history, and ordered source publication | CAD geometry semantics |
+| Package decode/encode, load/save staging, and atomic source publication | Open-window registration and security-scoped URL lifetime |
 | Artifact lookup, retention, and publication | UI layout and rendering |
 | Validation decision recording and authorization | JSON-RPC, socket, CLI, or MCP encoding |
-| Prepare/commit coordination for exports and external jobs | Mutation implementations hidden from `EditorSession` |
+| Prepare/commit coordination for exports and external jobs | Agent transport, window lifecycle, or UI ordering |
 | Caller principal and project policy context | Fabricated caller identity or timestamps supplied by clients |
 
 UI, CLI, JSON-RPC, MCP, and Agent integrations are adapters over the same project
@@ -71,7 +75,7 @@ artifact lifetime, validation authorization, or domain semantics.
 
 ### Published project view
 
-`ProjectOperating` is the source-operation port. `ProjectController` publishes one
+`ProjectOperating` is the project-authority operation port. `ProjectController` publishes one
 immutable `ProjectStateSnapshot` only after the document, Product/CAD/Authored
 Mesh sources, package aggregate, presentation evaluation, selection, workspace
 state, history flags, and optional CAD interaction context agree.
@@ -93,14 +97,22 @@ contain package bytes, editable source, or mutation authority. The index is
 generated by the project bridge; consumers do not recover a scene-node identity
 by parsing an occurrence string.
 
-`ProjectWorkspace` is a `MainActor` observation adapter only. Heavy projection and
-viewport construction run from immutable values outside the main actor. The
-adapter publishes strictly increasing `publicationSequence` values, so an older
-asynchronous completion cannot replace a newer UI state. CLI and Agent adapters
-call `ProjectOperating` directly and do not route through the UI adapter.
+`ProjectWorkspace` is the MainActor application-operation and observation
+boundary. It owns neither editable source nor authoritative interaction state:
+both source and interaction operations delegate to `ProjectOperating`, then the
+workspace publishes their immutable projection through one coordinate contract.
+Heavy projection and viewport construction run from immutable values outside the
+main actor. An operation returns its exact built view, while the observable view
+advances only when the candidate publication is newer, so a late completion
+cannot replace newer UI state. `MainView`, the app file/history coordinator, and
+the Agent registry share the same workspace.
 An initial package load obtains the current transaction revision from the project
 owner and publishes the loaded state directly; it does not manufacture or evaluate
-a placeholder view first. Later UI operations use the revision of the visible view.
+a placeholder view first. Load and replacement renew `ProjectDocumentLifetimeID`
+atomically with source, package, and evaluation authority publication. View
+projection may fail after that commit; recovery rebuilds the already-committed
+lifetime without replaying or rolling back the authority transaction. Ordinary
+edits, history, interaction, evaluation, and save preserve the lifetime.
 
 ## Revisions and Identities
 
@@ -129,7 +141,7 @@ universal commands or semantic mutations it contains.
 sequenceDiagram
     participant Caller
     participant Project as ProjectController
-    participant Session as EditorSession
+    participant Session as Isolated EditorSession stage
     participant Stage as Isolated source stage
     participant Eval as Evaluator
 
@@ -179,8 +191,8 @@ editor command, and validation override recording is not a product-metadata edit
 - Long evaluation, validation, import, export, and simulation work receives an
   immutable input snapshot and does not retain mutable session access.
 - UI projection work receives an immutable `ProjectStateSnapshot`, runs outside
-  the main actor, and publishes only if its publication sequence is newer than the
-  currently visible view.
+  the main actor, returns the exact operation result, and replaces the visible
+  view only if its publication sequence is newer.
 - The commit step rechecks the expected transaction revision and declared source
   dependencies before publication.
 - Cancellation cleans temporary artifacts and never publishes partial source,
@@ -203,8 +215,8 @@ editor command, and validation override recording is not a product-metadata edit
 | Reconstruction | Candidate generation does not mutate source; acceptance binds exact input and deviation evidence to the new CAD source. |
 | Revision | Multi-command source transactions increment exactly once; failure increments zero times. |
 | Reload | Identical source content receives the same content identity even when session revisions differ. |
-| Project | UI, CLI, and Agent adapters address the same registered session and project services. |
-| Project view | CAD-only, Mesh-only, and mixed-representation publications bind presentation geometry, optional CAD interaction, navigation, selection, and history to one revision; late publications are rejected. |
+| Project | App UI, file/history coordination, and Agent adapters address the same registered `ProjectWorkspace`; no adapter creates a shadow source authority. |
+| Project view | CAD-only, Mesh-only, and mixed-representation publications bind presentation geometry, optional CAD interaction, navigation, selection, and history to one revision; a late operation still returns its exact result to its caller, but cannot replace a newer observable view. |
 | Effect | Query, source, workspace, artifact, export, job, and decision effects cannot execute through an incompatible context. |
 | Concurrency | Stale revision and stale dependency failures happen before publication. |
 | Performance | Snapshot creation and heavy-result transport meet declared copy and memory budgets. |
