@@ -8,4 +8,4 @@
 - [x] T06A-6 ApplicationRoot file and history integration (commit: Integrate application project lifecycle) `depends:T06A-4,T06A-5` `parallel:none`
 - [x] T06A-IV integration verification (commit: Verify project path integration) `depends:T06A-1,T06A-2,T06A-3,T06A-4,T06A-5,T06A-6` `parallel:none`
 - [x] T07-A demand-driven topology metrics (commit: Evaluate topology metrics on demand) `depends:none` `parallel:none`
-- [ ] T07-IV Core test runtime compression verification `depends:T07-A` `parallel:none`
+- [x] T07-IV Core test runtime compression verification (commit: Verify Core test runtime compression) `depends:T07-A` `parallel:none`
