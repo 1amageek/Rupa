@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import RupaAgentIntegrationTestFixtures
 import RupaAutomation
 import RupaCore
 import SwiftCAD

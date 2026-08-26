@@ -34,6 +34,9 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
         case .failure(let editorError):
             self.result = nil
             self.error = AgentErrorEnvelope(error: editorError)
+        case .committedMutation(let outcome):
+            self.result = nil
+            self.error = AgentErrorEnvelope(committedMutation: outcome)
         default:
             self.result = response
             self.error = nil
@@ -106,6 +109,9 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             return result
         }
         if let error {
+            if let committedMutation = error.committedMutation {
+                return .committedMutation(committedMutation)
+            }
             return .failure(error.editorError)
         }
         throw EditorError(
@@ -134,6 +140,14 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
                 code: .commandInvalid,
                 message: "Agent failure responses must be encoded as response errors."
             )
+        }
+        if let committedMutation = error?.committedMutation {
+            guard method == committedMutation.requestMethod else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Committed mutation receipt method \(committedMutation.requestMethod) does not match response method \(method ?? "nil")."
+                )
+            }
         }
         if let result {
             guard let method else {
@@ -228,6 +242,11 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             try container.encode(value, forKey: .result)
         case .export(let value):
             try container.encode(value, forKey: .result)
+        case .committedMutation:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Committed mutation outcomes must be encoded as response errors."
+            )
         case .failure:
             throw EditorError(
                 code: .commandInvalid,
@@ -446,6 +465,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             "document.save"
         case .export:
             "document.export"
+        case .committedMutation:
+            nil
         case .failure:
             nil
         }

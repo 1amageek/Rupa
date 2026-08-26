@@ -2,6 +2,7 @@ import Darwin
 import Foundation
 import Testing
 import RupaAgentProtocol
+import RupaAgentIntegrationTestFixtures
 import RupaCore
 @testable import RupaAgent
 @testable import RupaAgentTransport

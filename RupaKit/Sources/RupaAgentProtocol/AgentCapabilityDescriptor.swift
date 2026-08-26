@@ -1,5 +1,6 @@
 import RupaCore
 import RupaAutomation
+import RupaCapabilities
 import RupaDomainFoundation
 
 public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
@@ -141,6 +142,10 @@ public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
     public let optionMatrix: [OptionAxis]
     public let inputParameters: [DomainCommandParameterDescriptor]
     public let domainContract: DomainContract?
+    public let semanticEffect: CapabilityEffect?
+    public let semanticResult: CapabilityResultDescriptor?
+    public let semanticRetrySafe: Bool?
+    public let semanticSupportsCancellation: Bool?
 
     public init(
         name: String,
@@ -157,7 +162,11 @@ public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
         failureMode: String,
         optionMatrix: [OptionAxis] = [],
         inputParameters: [DomainCommandParameterDescriptor] = [],
-        domainContract: DomainContract? = nil
+        domainContract: DomainContract? = nil,
+        semanticEffect: CapabilityEffect? = nil,
+        semanticResult: CapabilityResultDescriptor? = nil,
+        semanticRetrySafe: Bool? = nil,
+        semanticSupportsCancellation: Bool? = nil
     ) {
         self.name = name
         self.category = category
@@ -174,5 +183,9 @@ public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
         self.optionMatrix = optionMatrix
         self.inputParameters = inputParameters
         self.domainContract = domainContract
+        self.semanticEffect = semanticEffect
+        self.semanticResult = semanticResult
+        self.semanticRetrySafe = semanticRetrySafe
+        self.semanticSupportsCancellation = semanticSupportsCancellation
     }
 }

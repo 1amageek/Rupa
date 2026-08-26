@@ -225,11 +225,11 @@ let package = Package(
         .target(
             name: "RupaAgentUI",
             dependencies: [
+                "RupaKit",
                 "RupaAgentRuntime",
                 "RupaAgentTransport",
                 "RupaCore",
                 "RupaDomainFoundation",
-                "RupaUI",
             ]
         ),
         .target(
@@ -306,12 +306,15 @@ let package = Package(
         .target(
             name: "RupaAgentRuntime",
             dependencies: [
+                "RupaKit",
                 "RupaCoreTypes",
                 "RupaCore",
+                "RupaProjectModel",
                 "RupaAutomation",
                 "RupaDomainFoundation",
                 "RupaCapabilities",
                 "RupaAgentProtocol",
+                "RupaProject",
             ]
         ),
         .target(
@@ -343,6 +346,7 @@ let package = Package(
         .executableTarget(
             name: "RupaPerformanceBenchmark",
             dependencies: [
+                "RupaKit",
                 "RupaAgentProtocol",
                 "RupaAgentRuntime",
                 "RupaAutomation",
@@ -368,8 +372,13 @@ let package = Package(
             name: "RupaAgentIntegrationTestFixtures",
             dependencies: [
                 "RupaAgent",
+                "RupaAgentProtocol",
+                "RupaAgentRuntime",
                 "RupaAgentTransport",
+                "RupaAutomation",
+                "RupaCapabilities",
                 "RupaCore",
+                "RupaDomainFoundation",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
             ],
             path: "Tests/RupaAgentIntegrationTestFixtures"
@@ -475,6 +484,7 @@ let package = Package(
                 "RupaCore",
                 "RupaCapabilities",
                 "RupaAgentTestFixtures",
+                "RupaAgentIntegrationTestFixtures",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
             ],
             exclude: ["Fixtures"]
@@ -488,6 +498,7 @@ let package = Package(
                 "RupaAutomation",
                 "RupaCore",
                 "RupaAgentTestFixtures",
+                "RupaAgentIntegrationTestFixtures",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
             ]
         ),
@@ -568,20 +579,26 @@ let package = Package(
                 "RupaAgentProtocol",
                 "RupaAgentRuntime",
                 "RupaAgentTransport",
+                "RupaAgentIntegrationTestFixtures",
             ]
         ),
         .testTarget(
             name: "RupaUIPackageTests",
             dependencies: [
                 "RupaAgentProtocol",
+                "RupaAgentRuntime",
                 "RupaAgentTransport",
                 "RupaAgentUI",
                 "RupaAutomation",
+                "RupaCapabilities",
                 "RupaCore",
                 "RupaCoreTypes",
                 "RupaDomainFoundation",
+                "RupaEvaluation",
+                "RupaGeometry",
                 "RupaKit",
                 "RupaProject",
+                "RupaProjectModel",
                 "RupaUI",
             ]
         ),
@@ -612,6 +629,7 @@ let package = Package(
                 "RupaAgentTransport",
                 "RupaCLIKit",
                 "RupaDomainFoundation",
+                "RupaAgentIntegrationTestFixtures",
             ]
         ),
     ],

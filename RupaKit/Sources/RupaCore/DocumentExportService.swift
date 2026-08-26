@@ -25,6 +25,39 @@ public struct DocumentExportService: Sendable {
         dryRun: Bool = false,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> ExportResult {
+        let prepared = try prepareExport(
+            document: document,
+            generation: generation,
+            to: outputURL,
+            options: options,
+            dryRun: dryRun,
+            objectRegistry: objectRegistry
+        )
+        do {
+            return try prepared.publish()
+        } catch {
+            do {
+                try prepared.discard()
+            } catch let cleanupError {
+                throw EditorError(
+                    code: .exportFailed,
+                    message: "\(error.localizedDescription) Cleanup also failed: \(cleanupError.localizedDescription)"
+                )
+            }
+            throw error
+        }
+    }
+
+    /// Evaluates and writes export bytes to a same-filesystem staging path.
+    /// Authority coordinators can revalidate their coordinates before publish.
+    public func prepareExport(
+        document: DesignDocument,
+        generation: DocumentGeneration,
+        to outputURL: URL,
+        options: ExportOptions = ExportOptions(),
+        dryRun: Bool = false,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> PreparedDocumentExport {
         let plan = try resolvedExportPlan(
             for: document,
             outputURL: outputURL,
@@ -74,29 +107,39 @@ public struct DocumentExportService: Sendable {
             dryRun: dryRun
         )
 
-        if !dryRun {
+        let stagedURL = dryRun ? nil : stagingURL(for: destinationURL)
+        if let stagedURL {
             do {
                 if plan.format == .stl, plan.outputUnit == .micrometer {
-                    try exportBinarySTLInMicrometers(evaluatedDocument, to: destinationURL)
+                    try exportBinarySTLInMicrometers(evaluatedDocument, to: stagedURL)
                 } else {
                     let exchange = exchangeOverride ?? OfficialFormatExchange(
                         tolerance: document.modelingSettings.tolerance
                     )
-                    try exchange.export(evaluatedDocument, to: destinationURL)
+                    try exchange.export(evaluatedDocument, to: stagedURL)
                 }
             } catch {
+                let cleanupDescription: String
+                do {
+                    if FileManager.default.fileExists(atPath: stagedURL.path) {
+                        try FileManager.default.removeItem(at: stagedURL)
+                    }
+                    cleanupDescription = ""
+                } catch let cleanupError {
+                    cleanupDescription = " Staging cleanup also failed: \(cleanupError.localizedDescription)"
+                }
                 throw EditorError(
                     code: .exportFailed,
-                    message: "Export failed: \(String(describing: error))"
+                    message: "Export failed: \(String(describing: error)).\(cleanupDescription)"
                 )
             }
         }
 
-        let byteCount = dryRun ? 0 : try exportedByteCount(at: destinationURL)
+        let byteCount = try stagedURL.map(exportedByteCount(at:)) ?? 0
         let message = dryRun
             ? "Export dry run completed for \(plan.format.displayName) at \(destinationURL.path)."
             : "Exported \(plan.format.displayName) to \(destinationURL.path)."
-        return ExportResult(
+        let result = ExportResult(
             message: message,
             format: plan.format,
             outputPath: destinationURL.path,
@@ -112,6 +155,12 @@ public struct DocumentExportService: Sendable {
                 preflightDiagnostics: preflight.diagnostics
             ),
             validationFindings: preflight.findings
+        )
+        return PreparedDocumentExport(
+            result: result,
+            stagedURL: stagedURL,
+            destinationURL: destinationURL,
+            destinationPolicy: plan.destinationPolicy
         )
     }
 
@@ -286,6 +335,12 @@ public struct DocumentExportService: Sendable {
         case .versioned:
             return try versionedDestinationURL(for: outputURL)
         }
+    }
+
+    private func stagingURL(for destinationURL: URL) -> URL {
+        let directory = destinationURL.deletingLastPathComponent()
+        let filename = ".rupa-export-\(UUID().uuidString)-\(destinationURL.lastPathComponent)"
+        return directory.appendingPathComponent(filename, isDirectory: false)
     }
 
     private func versionedDestinationURL(for outputURL: URL) throws -> URL {

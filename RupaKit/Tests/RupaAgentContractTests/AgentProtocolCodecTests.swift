@@ -2,6 +2,7 @@ import Testing
 import Darwin
 import Foundation
 import RupaCapabilities
+import RupaAgentIntegrationTestFixtures
 import RupaAutomation
 import RupaCore
 import RupaDomainFoundation
@@ -47,6 +48,75 @@ import SwiftCAD
         return
     }
     #expect(descriptors.contains { $0.id.rawValue == "agent.createSweep" })
+}
+
+@Test(.timeLimit(.minutes(1)))
+func agentMessageCodecPreservesCommittedMutationReceiptAsWireError() throws {
+    let codec = AgentMessageCodec()
+    let outcome = AgentCommittedMutationOutcome(
+        stage: .viewProjection,
+        mutation: .source,
+        requestMethod: "command.apply",
+        projectID: ProjectID(rawValue: "project.committed-receipt"),
+        documentGeneration: DocumentGeneration(7),
+        transactionRevision: DocumentTransactionRevision(5),
+        publicationSequence: 9,
+        workspaceRevision: WorkspaceRevision(3),
+        message: "Source committed but view projection failed."
+    )
+    let response = AgentResponse.committedMutation(outcome)
+    let encoded = try codec.encode(
+        response,
+        id: "committed-receipt",
+        method: "command.apply"
+    )
+    let envelope = try codec.decodeResponseEnvelope(from: encoded)
+
+    #expect(envelope.result == nil)
+    #expect(envelope.error?.committedMutation == outcome)
+    #expect(
+        try codec.decodeResponse(
+            from: encoded,
+            expectedID: "committed-receipt",
+            expectedMethod: "command.apply"
+        ) == response
+    )
+
+    var wrongIDError: EditorError?
+    do {
+        _ = try codec.decodeResponse(
+            from: encoded,
+            expectedID: "different-request",
+            expectedMethod: "command.apply"
+        )
+    } catch let error as EditorError {
+        wrongIDError = error
+    }
+    #expect(wrongIDError?.code == .agentConnectionFailed)
+
+    var wrongMethodError: EditorError?
+    do {
+        _ = try codec.decodeResponse(
+            from: encoded,
+            expectedID: "committed-receipt",
+            expectedMethod: "command.applyBatch"
+        )
+    } catch let error as EditorError {
+        wrongMethodError = error
+    }
+    #expect(wrongMethodError?.code == .agentConnectionFailed)
+
+    var relabeledReceiptError: EditorError?
+    do {
+        _ = try codec.encode(
+            response,
+            id: "committed-receipt",
+            method: "command.applyBatch"
+        )
+    } catch let error as EditorError {
+        relabeledReceiptError = error
+    }
+    #expect(relabeledReceiptError?.code == .commandInvalid)
 }
 
 @Test func universalCapabilityInvocationExecutesAutomationCommandAndRoundTrips() async throws {

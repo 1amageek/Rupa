@@ -79,9 +79,6 @@ enum ProductionMainViewActionManifest {
     ]
 
     static let legacyExcludedSourceFiles: Set<String> = [
-        "Sources/RupaUI/WorkspaceAgentSessionPublication.swift",
-        "Sources/RupaUI/WorkspaceAgentSessionPublisher.swift",
-        "Sources/RupaUI/WorkspaceAgentSessionPublishing.swift",
         "Sources/RupaUI/WorkspaceLaunchSessionFactory.swift",
     ]
 

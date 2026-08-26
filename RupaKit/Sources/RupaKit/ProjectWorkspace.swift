@@ -18,16 +18,20 @@ public final class ProjectWorkspace {
     private let viewBuilder: any ProjectViewSnapshotBuilding
     @ObservationIgnored
     private let domainResultProjector: any DomainCommandResultProjecting
+    @ObservationIgnored
+    private let automationBatchPlanner: any AutomationBatchPlanning
 
     public init(
         project: any ProjectOperating,
         viewBuilder: any ProjectViewSnapshotBuilding = ProjectViewSnapshotBuilder(),
         domainResultProjector: any DomainCommandResultProjecting =
-            DefaultDomainCommandResultProjector()
+            DefaultDomainCommandResultProjector(),
+        automationBatchPlanner: any AutomationBatchPlanning = DefaultAutomationBatchPlanner()
     ) {
         self.project = project
         self.viewBuilder = viewBuilder
         self.domainResultProjector = domainResultProjector
+        self.automationBatchPlanner = automationBatchPlanner
     }
 
     @discardableResult
@@ -35,10 +39,84 @@ public final class ProjectWorkspace {
         try await publish(try await project.currentState())
     }
 
+    /// Linearizes a read or external publication against project authority.
+    public func withValidatedAuthority<Result: Sendable>(
+        from snapshot: ProjectViewSnapshot,
+        operationGuard: @escaping ProjectOperationGuard = {},
+        _ body: @Sendable () throws -> Result
+    ) async throws -> Result {
+        try await project.withValidatedCoordinates(
+            expectedProjectID: snapshot.projectID,
+            expectedDocumentGeneration: snapshot.documentGeneration,
+            expectedTransactionRevision: snapshot.transactionRevision,
+            expectedPublicationSequence: snapshot.publicationSequence,
+            expectedWorkspaceRevision: snapshot.workspaceState.revision,
+            operationGuard: operationGuard,
+            body
+        )
+    }
+
+    /// Rebuilds presentation from an already committed authority state without
+    /// replaying its mutation.
+    public func recoverCommittedView(
+        _ state: ProjectStateSnapshot,
+        operationGuard: @escaping ProjectOperationGuard = {}
+    ) async throws -> ProjectViewSnapshot {
+        try operationGuard()
+        let builder = viewBuilder
+        let candidate = try await Task.detached(priority: nil) {
+            try builder.build(from: state)
+        }.value
+        _ = try await project.withValidatedCoordinates(
+            expectedProjectID: state.document.projectID,
+            expectedDocumentGeneration: state.documentGeneration,
+            expectedTransactionRevision: state.transactionRevision,
+            expectedPublicationSequence: state.publicationSequence,
+            expectedWorkspaceRevision: state.workspaceState.revision,
+            operationGuard: operationGuard
+        ) {
+            true
+        }
+        if let view {
+            if candidate.publicationSequence > view.publicationSequence {
+                self.view = candidate
+            }
+        } else {
+            view = candidate
+        }
+        return candidate
+    }
+
     @discardableResult
     public func evaluate() async throws -> ProjectViewSnapshot {
-        _ = try await project.evaluateCurrent()
-        return try await publish(try await project.currentState())
+        guard view != nil else {
+            return try await publish(
+                try await project.evaluateCurrent(operationGuard: {})
+            )
+        }
+        return try await evaluate(from: try currentInteractionCoordinates())
+    }
+
+    @discardableResult
+    public func evaluate(
+        from snapshot: ProjectViewSnapshot,
+        operationGuard: @escaping ProjectOperationGuard = {}
+    ) async throws -> ProjectViewSnapshot {
+        let state = try await project.evaluateCurrent(
+            expectedProjectID: snapshot.projectID,
+            expectedTransactionRevision: snapshot.transactionRevision,
+            expectedPublicationSequence: snapshot.publicationSequence,
+            operationGuard: operationGuard
+        )
+        do {
+            return try await buildExactViewAndPublishIfNewer(state)
+        } catch {
+            throw ProjectWorkspacePostCommitError(
+                stage: .viewProjection,
+                commit: .evaluation(state),
+                message: "The evaluation published, but its project view could not be built: \(error)."
+            )
+        }
     }
 
     @discardableResult
@@ -71,11 +149,15 @@ public final class ProjectWorkspace {
 
     @discardableResult
     public func perform(
-        _ action: ProjectWorkspaceAction
+        _ action: ProjectWorkspaceAction,
+        operationGuard: @escaping ProjectOperationGuard = {}
     ) async throws -> ProjectWorkspaceActionResult {
         switch action {
         case .source(let transaction):
-            let commit = try await project.commit(transaction)
+            let commit = try await project.commit(
+                transaction,
+                operationGuard: operationGuard
+            )
             let exactView: ProjectViewSnapshot
             do {
                 exactView = try await buildExactViewAndPublishIfNewer(commit.state)
@@ -88,7 +170,10 @@ public final class ProjectWorkspace {
             }
             return .source(commit: commit, view: exactView)
         case .interaction(let transaction):
-            let commit = try await project.applyInteraction(transaction)
+            let commit = try await project.applyInteraction(
+                transaction,
+                operationGuard: operationGuard
+            )
             let exactView: ProjectViewSnapshot
             do {
                 exactView = try await buildExactViewAndPublishIfNewer(commit.state)
@@ -105,25 +190,164 @@ public final class ProjectWorkspace {
 
     /// Executes full project staging without publishing authority or a view snapshot.
     public func preview(
-        _ action: ProjectWorkspaceAction
+        _ action: ProjectWorkspaceAction,
+        operationGuard: @escaping ProjectOperationGuard = {}
     ) async throws -> ProjectWorkspacePreviewResult {
         switch action {
         case .source(let transaction):
-            return .source(try await project.previewSource(transaction))
+            return .source(
+                try await project.previewSource(
+                    transaction,
+                    operationGuard: operationGuard
+                )
+            )
         case .interaction(let transaction):
-            return .interaction(try await project.previewInteraction(transaction))
+            return .interaction(
+                try await project.previewInteraction(
+                    transaction,
+                    operationGuard: operationGuard
+                )
+            )
         }
     }
 
     /// Executes one previously dispatched domain plan through the project authority.
     public func execute(
-        _ plan: ProjectDomainCommandPlan
+        _ plan: ProjectDomainCommandPlan,
+        operationGuard: @escaping ProjectOperationGuard = {}
     ) async throws -> DomainExecutionResult {
         switch plan {
         case .source(let action), .interaction(let action):
-            return try await executeDomainMutation(action)
+            return try await executeDomainMutation(
+                action,
+                operationGuard: operationGuard
+            )
         case .read(let read):
-            return try await executeDomainRead(read)
+            return try await executeDomainRead(
+                read,
+                operationGuard: operationGuard
+            )
+        }
+    }
+
+    /// Executes Automation through the same project authority used by UI actions.
+    public func executeAutomation(
+        _ batch: AutomationBatch,
+        dryRun: Bool = false
+    ) async throws -> ProjectWorkspaceAutomationResult {
+        try await executeAutomation(
+            batch,
+            from: try currentInteractionCoordinates(),
+            dryRun: dryRun
+        )
+    }
+
+    /// Executes from the exact project coordinates captured by the caller.
+    public func executeAutomation(
+        _ batch: AutomationBatch,
+        from snapshot: ProjectViewSnapshot,
+        operationGuard: @escaping ProjectOperationGuard = {},
+        dryRun: Bool = false
+    ) async throws -> ProjectWorkspaceAutomationResult {
+        try operationGuard()
+        let prepared = try automationBatchPlanner.prepare(
+            batch,
+            in: AutomationPlanningContext(
+                document: snapshot.document.document,
+                generation: snapshot.documentGeneration,
+                transactionRevision: snapshot.transactionRevision,
+                publicationSequence: snapshot.publicationSequence,
+                selection: snapshot.selection,
+                workspaceState: snapshot.workspaceState,
+                objectRegistry: snapshot.objectRegistry,
+                evaluationSnapshot: snapshot.evaluationSnapshot,
+                currentEvaluation: snapshot.cadInteraction
+            )
+        )
+        switch prepared.effect {
+        case .sourceMutation:
+            let action = ProjectWorkspaceAction.source(
+                try ProjectSourceTransaction(
+                    name: "automationBatch.source",
+                    automation: prepared,
+                    expectedProjectID: snapshot.projectID,
+                    expectedTransactionRevision: snapshot.transactionRevision,
+                    expectedPublicationSequence: snapshot.publicationSequence
+                )
+            )
+            if dryRun {
+                guard case .source(let preview) = try await self.preview(
+                    action,
+                    operationGuard: operationGuard
+                ),
+                      let execution = preview.automationExecution else {
+                    throw automationResultMismatch()
+                }
+                return ProjectWorkspaceAutomationResult(
+                    execution: execution,
+                    view: snapshot,
+                    didPublish: false
+                )
+            }
+            guard case .source(let commit, let view) = try await perform(
+                action,
+                operationGuard: operationGuard
+            ),
+                  let execution = commit.automationExecution else {
+                throw automationResultMismatch()
+            }
+            return ProjectWorkspaceAutomationResult(
+                execution: execution,
+                view: view,
+                didPublish: true
+            )
+        case .workspaceMutation:
+            let action = ProjectWorkspaceAction.interaction(
+                try ProjectInteractionTransaction(
+                    automation: prepared,
+                    expectedProjectID: snapshot.projectID,
+                    expectedTransactionRevision: snapshot.transactionRevision,
+                    expectedPublicationSequence: snapshot.publicationSequence
+                )
+            )
+            if dryRun {
+                guard case .interaction(let preview) = try await self.preview(
+                    action,
+                    operationGuard: operationGuard
+                ),
+                      let execution = preview.automationExecution else {
+                    throw automationResultMismatch()
+                }
+                return ProjectWorkspaceAutomationResult(
+                    execution: execution,
+                    view: snapshot,
+                    didPublish: false
+                )
+            }
+            guard case .interaction(let commit, let view) = try await perform(
+                action,
+                operationGuard: operationGuard
+            ),
+                  let execution = commit.automationExecution else {
+                throw automationResultMismatch()
+            }
+            return ProjectWorkspaceAutomationResult(
+                execution: execution,
+                view: view,
+                didPublish: true
+            )
+        case .readOnly:
+            let execution = try await project.executeReadOnlyAutomation(
+                prepared,
+                expectedProjectID: snapshot.projectID,
+                expectedPublicationSequence: snapshot.publicationSequence,
+                operationGuard: operationGuard
+            )
+            return ProjectWorkspaceAutomationResult(
+                execution: execution,
+                view: snapshot,
+                didPublish: false
+            )
         }
     }
 
@@ -131,14 +355,35 @@ public final class ProjectWorkspace {
     public func applySelection(
         _ operation: ProjectSelectionOperation
     ) async throws -> ProjectViewSnapshot {
-        let expected = try currentInteractionCoordinates()
+        try await applySelection(
+            operation,
+            from: try currentInteractionCoordinates()
+        )
+    }
+
+    @discardableResult
+    public func applySelection(
+        _ operation: ProjectSelectionOperation,
+        from expected: ProjectViewSnapshot,
+        operationGuard: @escaping ProjectOperationGuard = {}
+    ) async throws -> ProjectViewSnapshot {
         let transaction = try ProjectInteractionTransaction(
             selection: operation,
             expectedProjectID: expected.projectID,
             expectedTransactionRevision: expected.transactionRevision,
             expectedPublicationSequence: expected.publicationSequence
         )
-        return try await applyInteraction(transaction)
+        let result = try await perform(
+            .interaction(transaction),
+            operationGuard: operationGuard
+        )
+        guard case .interaction(_, let view) = result else {
+            throw ProjectWorkspaceActionError(
+                code: .actionResultMismatch,
+                message: "A selection action returned a source result."
+            )
+        }
+        return view
     }
 
     @discardableResult
@@ -164,18 +409,56 @@ public final class ProjectWorkspace {
 
     @discardableResult
     public func undo() async throws -> ProjectViewSnapshot {
-        let revision = try currentTransactionRevision()
-        return try await publish(
-            try await project.undo(expectedTransactionRevision: revision)
-        )
+        try await undo(from: try currentInteractionCoordinates())
+    }
+
+    @discardableResult
+    public func undo(
+        from snapshot: ProjectViewSnapshot,
+        operationGuard: @escaping ProjectOperationGuard = {}
+    ) async throws -> ProjectViewSnapshot {
+        let state = try await project.undo(
+                expectedProjectID: snapshot.projectID,
+                expectedTransactionRevision: snapshot.transactionRevision,
+                expectedPublicationSequence: snapshot.publicationSequence,
+                operationGuard: operationGuard
+            )
+        do {
+            return try await buildExactViewAndPublishIfNewer(state)
+        } catch {
+            throw ProjectWorkspacePostCommitError(
+                stage: .viewProjection,
+                commit: .undo(state),
+                message: "Undo committed, but its project view could not be built: \(error)."
+            )
+        }
     }
 
     @discardableResult
     public func redo() async throws -> ProjectViewSnapshot {
-        let revision = try currentTransactionRevision()
-        return try await publish(
-            try await project.redo(expectedTransactionRevision: revision)
-        )
+        try await redo(from: try currentInteractionCoordinates())
+    }
+
+    @discardableResult
+    public func redo(
+        from snapshot: ProjectViewSnapshot,
+        operationGuard: @escaping ProjectOperationGuard = {}
+    ) async throws -> ProjectViewSnapshot {
+        let state = try await project.redo(
+                expectedProjectID: snapshot.projectID,
+                expectedTransactionRevision: snapshot.transactionRevision,
+                expectedPublicationSequence: snapshot.publicationSequence,
+                operationGuard: operationGuard
+            )
+        do {
+            return try await buildExactViewAndPublishIfNewer(state)
+        } catch {
+            throw ProjectWorkspacePostCommitError(
+                stage: .viewProjection,
+                commit: .redo(state),
+                message: "Redo committed, but its project view could not be built: \(error)."
+            )
+        }
     }
 
     @discardableResult
@@ -206,20 +489,7 @@ public final class ProjectWorkspace {
 
     @discardableResult
     func publish(_ state: ProjectStateSnapshot) async throws -> ProjectViewSnapshot {
-        if let view,
-           state.publicationSequence <= view.publicationSequence {
-            return view
-        }
-        let builder = viewBuilder
-        let candidate = try await Task.detached(priority: nil) {
-            try builder.build(from: state)
-        }.value
-        if let view,
-           candidate.publicationSequence <= view.publicationSequence {
-            return view
-        }
-        view = candidate
-        return candidate
+        try await buildExactViewAndPublishIfNewer(state)
     }
 
     private func buildExactViewAndPublishIfNewer(
@@ -259,20 +529,34 @@ public final class ProjectWorkspace {
         return view.transactionRevision
     }
 
+    private func automationResultMismatch() -> ProjectWorkspaceActionError {
+        ProjectWorkspaceActionError(
+            code: .actionResultMismatch,
+            message: "A project Automation action did not return its staged execution result."
+        )
+    }
+
     private func executeDomainMutation(
-        _ plan: ProjectDomainCommandActionPlan
+        _ plan: ProjectDomainCommandActionPlan,
+        operationGuard: @escaping ProjectOperationGuard
     ) async throws -> DomainExecutionResult {
         try requireDomainMutationRoute(plan)
         let record: DomainCommandExecutionRecord
         let currentGeneration: DocumentGeneration
         let currentTransactionRevision: DocumentTransactionRevision
         if plan.dryRun {
-            let result = try await preview(plan.action)
+            let result = try await preview(
+                plan.action,
+                operationGuard: operationGuard
+            )
             record = domainRecord(for: result, plan: plan)
             currentGeneration = plan.baseGeneration
             currentTransactionRevision = plan.baseTransactionRevision
         } else {
-            let result = try await perform(plan.action)
+            let result = try await perform(
+                plan.action,
+                operationGuard: operationGuard
+            )
             record = domainRecord(for: result, plan: plan)
             currentGeneration = result.view.documentGeneration
             currentTransactionRevision = result.view.transactionRevision
@@ -300,8 +584,10 @@ public final class ProjectWorkspace {
     }
 
     private func executeDomainRead(
-        _ plan: ProjectDomainCommandReadPlan
+        _ plan: ProjectDomainCommandReadPlan,
+        operationGuard: @escaping ProjectOperationGuard
     ) async throws -> DomainExecutionResult {
+        try operationGuard()
         let initialState = try await project.currentState()
         try requireDomainReadCoordinates(plan, state: initialState)
         try Task.checkCancellation()
@@ -330,6 +616,7 @@ public final class ProjectWorkspace {
             }
             try Task.checkCancellation()
             let currentState = try await project.currentState()
+            try operationGuard()
             try requireDomainReadCoordinates(plan, state: currentState)
             record = DomainCommandExecutionRecord(
                 message: result.message,
@@ -356,7 +643,8 @@ public final class ProjectWorkspace {
             let execution = try await project.executeReadOnlyAutomation(
                 automation,
                 expectedProjectID: plan.baseProjectID,
-                expectedPublicationSequence: plan.basePublicationSequence
+                expectedPublicationSequence: plan.basePublicationSequence,
+                operationGuard: operationGuard
             )
             record = DomainCommandExecutionRecord(
                 baseGeneration: execution.baseGeneration,
@@ -376,6 +664,7 @@ public final class ProjectWorkspace {
                 message: "A domain document transaction cannot execute through the read route."
             )
         }
+        try operationGuard()
         return try domainResultProjector.project(
             resolution: plan.resolution,
             record: record,

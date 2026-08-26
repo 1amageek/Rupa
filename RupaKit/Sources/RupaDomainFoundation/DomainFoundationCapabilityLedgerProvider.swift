@@ -128,7 +128,7 @@ public enum DomainFoundationCapabilityLedgerProvider {
                             "RupaKit/Sources/RupaDomainFoundation/DomainCommandExecutor.swift",
                             "RupaKit/Sources/RupaDomainFoundation/DomainCommandParameterDescriptor.swift",
                             "RupaKit/Sources/RupaDomainFoundation/DomainCommandPayloadBuilder.swift",
-                            "RupaKit/Sources/RupaAgentRuntime/AgentCommandController.swift",
+                            "RupaKit/Sources/RupaAgentRuntime/ProjectAgentCommandController.swift",
                             "RupaKit/Sources/RupaCLIKit/CLIService.swift",
                             "RupaKit/Sources/RupaUI/WorkspaceCommandCatalog.swift",
                             "RupaKit/Sources/RupaUI/WorkspaceDomainCommandPanel.swift",

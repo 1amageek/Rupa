@@ -4,12 +4,7 @@
 - [x] T06A-2 MeshSource-native Viewport (commit: Add MeshSource-native viewport presentation boundary) `depends:T06A-1` `parallel:none`
 - [x] T06A-3 ProjectWorkspace command parity (commit: Define ProjectWorkspace command boundary) `depends:T06A-1` `parallel:none`
 - [x] T06A-4 MainView cutover (commit: Cut MainView over to ProjectWorkspace) `depends:T06A-2,T06A-3` `parallel:none`
-- [ ] T06A-5 Agent production registration cutover `depends:T06A-3,T06A-4` `parallel:none`
-  - [ ] T06A-5.1 Enumerate production-registered Agent commands and map read, source, interaction, export, and failure behavior to the project-operation boundary `depends:T06A-3,T06A-4` `parallel:none`
-  - [ ] T06A-5.2 Replace EditorSession publication with a ProjectOperating-backed registration that shares ProjectController staging, revision, package, evaluation, and publication authority `depends:T06A-5.1` `parallel:none`
-  - [ ] T06A-5.3 Preserve reachable behavior or return explicit typed unsupported failures for independently specified commands without silent fallback or a shadow session `depends:T06A-5.2` `parallel:none`
-  - [ ] T06A-5.4 Prove UI and Agent interleaving, stale rejection, rollback, load replacement, unregister lifecycle, and absence of a second production authority `depends:T06A-5.3` `parallel:none`
-  - [ ] T06A-5.5 Pass task-designer review, focused verification, and commit the reviewed Agent cutover `depends:T06A-5.4` `parallel:none`
+- [x] T06A-5 Agent production registration cutover (commit: Cut Agent over to ProjectWorkspace) `depends:T06A-3,T06A-4` `parallel:none`
 - [ ] T06A-6 ApplicationRoot file and history integration `depends:T06A-4,T06A-5` `parallel:none`
   - [ ] T06A-6.1 Compose exactly one ProjectController and one MainActor ProjectWorkspace at ApplicationRoot and publish an evaluated initial view or visible typed launch failure `depends:T06A-4,T06A-5` `parallel:none`
   - [ ] T06A-6.2 Route production undo, redo, load, and save through ProjectWorkspace with explicit URL ownership, cancellation, dirty state, stale publication, and failure presentation `depends:T06A-6.1` `parallel:none`

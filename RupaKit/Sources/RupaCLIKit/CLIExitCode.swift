@@ -14,6 +14,9 @@ public enum CLIExitCode: Int32, Codable, Equatable, Sendable {
         if error is ValidationError {
             return .usage
         }
+        if error is CLICommittedMutationError {
+            return .data
+        }
 
         guard let error = error as? EditorError else {
             return .software
@@ -27,6 +30,8 @@ public enum CLIExitCode: Int32, Codable, Equatable, Sendable {
              .documentTransactionRevisionMismatch,
              .workspaceRevisionMismatch,
              .sourceIdentityMismatch,
+             .projectMismatch,
+             .projectPublicationMismatch,
              .sessionNotFound,
              .referenceUnresolved:
             return .data
@@ -34,7 +39,8 @@ public enum CLIExitCode: Int32, Codable, Equatable, Sendable {
              .documentSaveFailed:
             return .inputOutput
         case .agentUnavailable,
-             .agentConnectionFailed:
+             .agentConnectionFailed,
+             .commandUnsupported:
             return .unavailable
         case .commandFailed,
              .evaluationFailed,

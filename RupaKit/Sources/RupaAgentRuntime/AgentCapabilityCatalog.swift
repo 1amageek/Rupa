@@ -4,7 +4,7 @@ import RupaCapabilities
 import RupaCore
 import RupaDomainFoundation
 
-enum AgentCapabilityCatalog {
+public enum AgentCapabilityCatalog {
     private static let workspaceFeedbackOptionAxis = AgentCapabilityDescriptor.OptionAxis(
         name: "workspaceFeedback",
         supportedValues: [
@@ -2173,45 +2173,45 @@ enum AgentCapabilityCatalog {
         capability(
             "createDocument",
             category: .persistence,
-            summary: "Create and register a new document session, optionally persisting it to a new package path.",
+            summary: "Currently unavailable: application-owned project creation and registration is not yet connected to the Agent project route.",
             access: .agentRequest,
             stateEffect: .workspaceMutation,
             requiresSession: false,
             requiresExpectedSourceGeneration: false,
             requiresExpectedWorkspaceRevision: false,
             targets: [.document],
-            failureMode: "Rejects empty names, duplicate open paths, existing output paths, and save failures before registering the session."
+            failureMode: "Returns commandUnsupported until application project lifecycle ownership is integrated."
         ),
         capability(
             "openDocument",
             category: .persistence,
-            summary: "Load a document package and register a clean Agent session for it.",
+            summary: "Currently unavailable: application-owned package opening and project registration is not yet connected to the Agent project route.",
             access: .agentRequest,
             stateEffect: .workspaceMutation,
             requiresSession: false,
             requiresExpectedSourceGeneration: false,
             requiresExpectedWorkspaceRevision: false,
             targets: [.document],
-            failureMode: "Rejects empty paths, duplicate open documents, and invalid or unreadable document packages."
+            failureMode: "Returns commandUnsupported until application project lifecycle ownership is integrated."
         ),
         capability(
             "closeDocument",
             category: .persistence,
-            summary: "Close an Agent document session after validating its current generation and dirty-state policy.",
+            summary: "Currently unavailable: application-owned project closing is not yet connected to the Agent project route.",
             access: .agentRequest,
             stateEffect: .workspaceMutation,
             requiresExpectedWorkspaceRevision: false,
             targets: [.document],
-            failureMode: "Rejects missing sessions, stale generations, and dirty sessions unless unsaved changes are explicitly discarded."
+            failureMode: "Returns commandUnsupported until application project lifecycle ownership is integrated."
         ),
         capability(
             "resetDocument",
             category: .document,
-            summary: "Reset the current document to an empty named document through the undoable command pipeline.",
+            summary: "Currently unavailable: project reset must preserve the registered ProjectID before it can use the shared project route.",
             access: .agentRequest,
             stateEffect: .sourceMutation,
             targets: [.document],
-            failureMode: "Rejects empty names and stale generations; the completed reset remains undoable."
+            failureMode: "Returns commandUnsupported until reset preserves project identity."
         ),
         capability(
             "undo",
@@ -2234,25 +2234,30 @@ enum AgentCapabilityCatalog {
         capability(
             "saveDocument",
             category: .persistence,
-            summary: "Persist the open document back to its registered path and mark the session clean.",
+            summary: "Currently unavailable: application-owned project save is not yet connected to the Agent project route.",
             access: .agentRequest,
             stateEffect: .readOnly,
             targets: [.document],
-            failureMode: "Rejects pathless sessions, stale generations, and save errors before reporting success."
+            failureMode: "Returns commandUnsupported until application project lifecycle ownership is integrated."
         ),
         capability(
             "exportDocument",
             category: .persistence,
-            summary: "Evaluate and export the document with a named preset or explicit export options.",
+            summary: "Evaluate and export CAD-only project authority with a named preset or explicit export options; Mesh, mixed, and external authority are currently unavailable.",
             access: .agentRequest,
             stateEffect: .readOnly,
+            supportsDryRun: true,
+            semanticSupportsCancellation: true,
             targets: [.document],
-            failureMode: "Rejects stale generations, unsupported formats, evaluation failures, and destination policy errors."
+            failureMode: "Returns commandUnsupported for Mesh-only, mixed CAD/Mesh, or external geometry authority; rejects stale generations, cancellation, unsupported formats, evaluation failures, and destination policy errors before atomically publishing staged output.",
+            semanticEffect: .export,
+            semanticResult: CapabilityResultDescriptor(kind: .exportArtifact),
+            semanticRetrySafe: false
         ),
         capability(
             "validateDocument",
             category: .read,
-            summary: "Run the validation command and publish the resulting diagnostics.",
+            summary: "Validate the current immutable project snapshot and return diagnostics without publishing project state.",
             access: .automationCommand,
             stateEffect: .readOnly,
             targets: [.document],
@@ -2260,11 +2265,15 @@ enum AgentCapabilityCatalog {
         ),
     ]
 
-    static func descriptors(domainRegistry: DomainRegistry) -> [AgentCapabilityDescriptor] {
+    public static func descriptors(
+        domainRegistry: DomainRegistry
+    ) -> [AgentCapabilityDescriptor] {
         descriptors + domainRegistry.sortedCapabilityDescriptors().map(domainCapability)
     }
 
-    static func capabilityRegistry(domainRegistry: DomainRegistry) throws -> CapabilityRegistry {
+    public static func capabilityRegistry(
+        domainRegistry: DomainRegistry
+    ) throws -> CapabilityRegistry {
         try CapabilityRegistry(
             descriptors: descriptors(domainRegistry: domainRegistry).map {
                 try $0.capabilityDescriptor()
@@ -2281,10 +2290,15 @@ enum AgentCapabilityCatalog {
         requiresSession: Bool = true,
         requiresExpectedSourceGeneration: Bool = true,
         requiresExpectedWorkspaceRevision: Bool? = nil,
+        supportsDryRun: Bool = false,
+        semanticSupportsCancellation: Bool? = nil,
         discovery: [AgentCapabilityDescriptor.Discovery] = [],
         targets: [AgentCapabilityDescriptor.Target] = [],
         failureMode: String,
-        optionMatrix: [AgentCapabilityDescriptor.OptionAxis] = []
+        optionMatrix: [AgentCapabilityDescriptor.OptionAxis] = [],
+        semanticEffect: CapabilityEffect? = nil,
+        semanticResult: CapabilityResultDescriptor? = nil,
+        semanticRetrySafe: Bool? = nil
     ) -> AgentCapabilityDescriptor {
         AgentCapabilityDescriptor(
             name: name,
@@ -2296,10 +2310,15 @@ enum AgentCapabilityCatalog {
             requiresExpectedSourceGeneration: requiresExpectedSourceGeneration,
             requiresExpectedWorkspaceRevision: requiresExpectedWorkspaceRevision
                 ?? (stateEffect == .workspaceMutation),
+            supportsDryRun: supportsDryRun,
             discovery: discovery,
             targets: targets,
             failureMode: failureMode,
-            optionMatrix: optionMatrix
+            optionMatrix: optionMatrix,
+            semanticEffect: semanticEffect,
+            semanticResult: semanticResult,
+            semanticRetrySafe: semanticRetrySafe,
+            semanticSupportsCancellation: semanticSupportsCancellation
         )
     }
 

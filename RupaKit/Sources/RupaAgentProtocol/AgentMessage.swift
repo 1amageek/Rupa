@@ -267,6 +267,7 @@ public enum AgentResponse: Codable, Equatable, Sendable {
     case selection(SelectionStateResult)
     case save(SaveResult)
     case export(ExportResult)
+    case committedMutation(AgentCommittedMutationOutcome)
     case failure(EditorError)
 }
 

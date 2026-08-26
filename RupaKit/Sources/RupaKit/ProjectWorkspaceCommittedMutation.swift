@@ -4,6 +4,9 @@ import RupaProject
 public enum ProjectWorkspaceCommittedMutation: Sendable {
     case source(ProjectSourceCommitResult)
     case interaction(ProjectInteractionCommitResult)
+    case undo(ProjectStateSnapshot)
+    case redo(ProjectStateSnapshot)
+    case evaluation(ProjectStateSnapshot)
 
     public var state: ProjectStateSnapshot {
         switch self {
@@ -11,6 +14,10 @@ public enum ProjectWorkspaceCommittedMutation: Sendable {
             result.state
         case .interaction(let result):
             result.state
+        case .undo(let state),
+             .redo(let state),
+             .evaluation(let state):
+            state
         }
     }
 }

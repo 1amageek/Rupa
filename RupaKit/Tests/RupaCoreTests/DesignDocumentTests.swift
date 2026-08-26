@@ -3222,6 +3222,46 @@ func objectTypeRegistryReusesPreorderedDefinitionStorage() {
     #expect(!FileManager.default.fileExists(atPath: outputURL.path))
 }
 
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func documentExportPreparationDoesNotReplaceDestinationUntilPublish() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let session = EditorSession()
+    _ = try session.execute(
+        .createExtrudedRectangle(
+            name: "Staged Export Box",
+            plane: .xy,
+            width: .length(10.0, .millimeter),
+            height: .length(10.0, .millimeter),
+            depth: .length(10.0, .millimeter),
+            direction: .normal
+        )
+    )
+    let outputURL = temporaryDirectory.appendingPathComponent("staged-box.stl")
+    let retainedBytes = Data("retained-destination".utf8)
+    try retainedBytes.write(to: outputURL)
+
+    let prepared = try DocumentExportService().prepareExport(
+        document: session.document,
+        generation: session.generation,
+        to: outputURL,
+        options: ExportOptions(destinationPolicy: .overwrite)
+    )
+
+    #expect(try Data(contentsOf: outputURL) == retainedBytes)
+    #expect(prepared.result.byteCount > 84)
+    let result = try prepared.publish()
+    #expect(result.outputPath == outputURL.path)
+    #expect(try Data(contentsOf: outputURL) != retainedBytes)
+    #expect(
+        try FileManager.default.contentsOfDirectory(atPath: temporaryDirectory.path)
+            .allSatisfy { !$0.hasPrefix(".rupa-export-") }
+    )
+}
+
 private func sketchBounds(
     _ sketch: Sketch,
     parameters: ParameterTable

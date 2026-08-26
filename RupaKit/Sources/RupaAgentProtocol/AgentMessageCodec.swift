@@ -66,7 +66,8 @@ public struct AgentMessageCodec {
     ) throws -> AgentResponse {
         let envelope = try decodeResponseEnvelope(from: data)
         guard envelope.id == expectedID else {
-            if envelope.error != nil {
+            if envelope.error != nil,
+               envelope.error?.committedMutation == nil {
                 return try envelope.decodedResponse()
             }
             throw EditorError(

@@ -3,11 +3,12 @@ import RupaAgentProtocol
 import RupaAgentRuntime
 import RupaAutomation
 import RupaCore
+import RupaKit
 import SwiftCAD
 
 @main
 struct PerformanceBenchmark {
-    static func main() throws {
+    static func main() async throws {
         let options = try BenchmarkOptions(arguments: Array(CommandLine.arguments.dropFirst()))
         let transaction = makeBoxTransaction(bodyCount: options.bodyCount)
         let benchmarkSettings = DocumentModelingSettings.standard
@@ -27,8 +28,11 @@ struct PerformanceBenchmark {
             evaluator: evaluator
         )
         let coreEditBenchmark = try CoreEditBenchmark(transaction: transaction)
-        let agentEditBenchmark = try AgentEditBenchmark(transaction: transaction)
-        let availableTelemetryWorkloads: [(name: String, measure: () throws -> TimedTelemetry)] = [
+        let agentEditBenchmark = try await AgentEditBenchmark(transaction: transaction)
+        let availableTelemetryWorkloads: [(
+            name: String,
+            measure: () async throws -> TimedTelemetry
+        )] = [
             (
                 "kernel_create_bodies",
                 { try measureKernelCreate(
@@ -43,7 +47,7 @@ struct PerformanceBenchmark {
             ),
             (
                 "create_bodies",
-                { try measureCreate(transaction: transaction) }
+                { try await measureCreate(transaction: transaction) }
             ),
             (
                 "kernel_edit_one_body",
@@ -55,7 +59,7 @@ struct PerformanceBenchmark {
             ),
             (
                 "edit_one_body",
-                { try agentEditBenchmark.measure() }
+                { try await agentEditBenchmark.measure() }
             ),
         ]
         let telemetryWorkloads = availableTelemetryWorkloads.filter {
@@ -68,7 +72,7 @@ struct PerformanceBenchmark {
 
         for _ in 0..<options.warmupCount {
             for workload in telemetryWorkloads {
-                _ = try workload.measure()
+                _ = try await workload.measure()
             }
             if measuresEncoding {
                 _ = try measureEncoding(transaction: transaction)
@@ -87,7 +91,7 @@ struct PerformanceBenchmark {
 
         for _ in 0..<options.iterationCount {
             for workload in telemetryWorkloads {
-                let measurement = try workload.measure()
+                let measurement = try await workload.measure()
                 samplesByWorkload[workload.name, default: []].append(measurement.seconds)
                 telemetryByWorkload[workload.name] = measurement.telemetry
             }
@@ -190,23 +194,27 @@ struct PerformanceBenchmark {
         )
     }
 
+    @MainActor
     private static func measureCreate(
         transaction: FeatureGraphTransaction
-    ) throws -> TimedTelemetry {
-        let controller = AgentCommandController()
-        let session = EditorSession()
-        let sessionID = controller.register(session: session)
+    ) async throws -> TimedTelemetry {
+        let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
+        _ = try await workspace.evaluate()
+        let controller = ProjectAgentCommandController()
+        let sessionID = try await controller.register(workspace: workspace)
+        let generation = try requiredView(workspace).documentGeneration
         let start = ContinuousClock.now
-        let response = controller.handle(
+        let response = await controller.handle(
             .execute(
                 sessionID: sessionID,
                 command: .appendFeatureGraph(transaction),
-                expectedGeneration: DocumentGeneration()
+                expectedGeneration: generation
             )
         )
         let duration = start.duration(to: ContinuousClock.now)
         let result = try commandResult(from: response)
-        guard session.evaluatedBodyCount == transaction.presentations.lazy.filter({ presentation in
+        guard try requiredView(workspace).evaluationSnapshot.bodyCount
+            == transaction.presentations.lazy.filter({ presentation in
             if case .body = presentation.kind {
                 return true
             }
@@ -218,6 +226,16 @@ struct PerformanceBenchmark {
             seconds: duration.seconds,
             telemetry: result.executionMetrics.map(BenchmarkTelemetry.init)
         )
+    }
+
+    @MainActor
+    private static func requiredView(
+        _ workspace: ProjectWorkspace
+    ) throws -> ProjectViewSnapshot {
+        guard let view = workspace.view else {
+            throw BenchmarkError.unexpectedAgentResponse
+        }
+        return view
     }
 
     private static func measureEncoding(
@@ -394,44 +412,52 @@ private final class CoreEditBenchmark {
     }
 }
 
+@MainActor
 private final class AgentEditBenchmark {
-    private let controller: AgentCommandController
-    private let session: EditorSession
+    private let controller: ProjectAgentCommandController
+    private let workspace: ProjectWorkspace
     private let sessionID: UUID
     private let featureID: FeatureID
     private var usesExpandedDistance = false
 
-    init(transaction: FeatureGraphTransaction) throws {
+    init(transaction: FeatureGraphTransaction) async throws {
         guard let featureID = transaction.primaryFeatureID else {
             throw BenchmarkError.missingPrimaryFeature
         }
-        let controller = AgentCommandController()
-        let session = EditorSession()
-        let sessionID = controller.register(session: session)
-        _ = try Self.commandResult(from: controller.handle(
+        let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
+        _ = try await workspace.evaluate()
+        let controller = ProjectAgentCommandController()
+        let sessionID = try await controller.register(workspace: workspace)
+        guard let initialView = workspace.view else {
+            throw BenchmarkError.unexpectedAgentResponse
+        }
+        _ = try Self.commandResult(from: await controller.handle(
             .execute(
                 sessionID: sessionID,
                 command: .appendFeatureGraph(transaction),
-                expectedGeneration: DocumentGeneration()
+                expectedGeneration: initialView.documentGeneration
             )
         ))
         self.controller = controller
-        self.session = session
+        self.workspace = workspace
         self.sessionID = sessionID
         self.featureID = featureID
     }
 
-    func measure() throws -> TimedTelemetry {
+    func measure() async throws -> TimedTelemetry {
+        guard let view = workspace.view else {
+            throw BenchmarkError.unexpectedAgentResponse
+        }
         let distance = usesExpandedDistance ? 10.0 : 12.0
         let start = ContinuousClock.now
-        let response = controller.handle(
+        let response = await controller.handle(
             .execute(
                 sessionID: sessionID,
                 command: .setExtrudeDistance(
                     featureID: featureID,
                     distance: .length(distance, .millimeter)
                 ),
-                expectedGeneration: session.generation
+                expectedGeneration: view.documentGeneration
             )
         )
         let duration = start.duration(to: ContinuousClock.now)

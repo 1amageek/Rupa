@@ -2,6 +2,7 @@ import ArgumentParser
 import Foundation
 import Testing
 import RupaAgentProtocol
+import RupaAgentIntegrationTestFixtures
 import RupaAgentRuntime
 import RupaAgentTransport
 import RupaAutomation
@@ -7983,6 +7984,40 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliServicePreservesCommittedMutationReceiptAndRetryProhibition() throws {
+    let sessionID = UUID()
+    let outcome = AgentCommittedMutationOutcome(
+        stage: .viewProjection,
+        mutation: .source,
+        requestMethod: "command.apply",
+        projectID: ProjectID(rawValue: "project.cli-committed"),
+        documentGeneration: DocumentGeneration(4),
+        transactionRevision: DocumentTransactionRevision(3),
+        publicationSequence: 8,
+        workspaceRevision: WorkspaceRevision(2),
+        message: "The source committed before projection failed."
+    )
+    let client = CommittedMutationAgentClient(outcome: outcome)
+    var caught: CLICommittedMutationError?
+
+    do {
+        _ = try CLIService().renameLiveSession(
+            sessionID: sessionID,
+            name: "Must Not Retry",
+            expectedGeneration: DocumentGeneration(3),
+            client: client
+        )
+    } catch let error as CLICommittedMutationError {
+        caught = error
+    }
+
+    #expect(caught?.outcome == outcome)
+    #expect(caught?.errorDescription?.contains("retry is forbidden") == true)
+    #expect(CLIExitCode.value(for: try #require(caught)) == .data)
+    #expect(client.requestCount == 1)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliServiceExecutesDomainLiveSessionThroughAgent() throws {
     let sessionID = UUID()
     let request = cliDomainRenameRequest(name: "Domain Live")
@@ -10521,6 +10556,25 @@ private final class DomainExecutionAgentClient: AgentClientProtocol {
             )
         }
         return .domainExecution(result)
+    }
+}
+
+private final class CommittedMutationAgentClient: AgentClientProtocol {
+    let outcome: AgentCommittedMutationOutcome
+    private(set) var requestCount = 0
+
+    init(outcome: AgentCommittedMutationOutcome) {
+        self.outcome = outcome
+    }
+
+    func send(_ request: AgentRequest) throws -> AgentResponse {
+        requestCount += 1
+        return .committedMutation(outcome)
+    }
+
+    func send(_ request: AgentRequest) async throws -> AgentResponse {
+        requestCount += 1
+        return .committedMutation(outcome)
     }
 }
 

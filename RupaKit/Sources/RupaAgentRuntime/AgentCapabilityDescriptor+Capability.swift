@@ -23,12 +23,14 @@ public extension AgentCapabilityDescriptor {
             parameters: try inputParameters.map { try $0.capabilityParameterDescriptor() },
             execution: CapabilityExecutionContract(
                 supportsDryRun: supportsDryRun,
-                supportsCancellation: domainContract?.supportsCancellation ?? false,
+                supportsCancellation: semanticSupportsCancellation
+                    ?? domainContract?.supportsCancellation
+                    ?? false,
                 reportsProgress: domainContract?.reportsProgress ?? false,
                 determinism: capabilityDeterminism,
                 requiresTransactionRevision: requiresExpectedSourceGeneration,
                 requiresWorkspaceRevision: requiresExpectedWorkspaceRevision,
-                retrySafe: stateEffect == .readOnly
+                retrySafe: capabilityRetrySafe
             ),
             availability: CapabilityAvailability(surfaces: [.agent]),
             knownErrorCodes: domainContract?.knownErrorCodes.map(\.rawValue) ?? ["command.invalid"],
@@ -39,6 +41,9 @@ public extension AgentCapabilityDescriptor {
     }
 
     private var capabilityEffect: CapabilityEffect {
+        if let semanticEffect {
+            return semanticEffect
+        }
         if let domainContract {
             switch domainContract.effect {
             case .query:
@@ -64,6 +69,9 @@ public extension AgentCapabilityDescriptor {
     }
 
     private var capabilityResult: CapabilityResultDescriptor {
+        if let semanticResult {
+            return semanticResult
+        }
         if let domainContract {
             return CapabilityResultDescriptor(
                 kind: capabilityResultKind(domainContract.resultKind),
@@ -78,6 +86,16 @@ public extension AgentCapabilityDescriptor {
         case .workspaceMutation:
             return CapabilityResultDescriptor(kind: .workspaceTransaction)
         }
+    }
+
+    private var capabilityRetrySafe: Bool {
+        if let semanticRetrySafe {
+            return semanticRetrySafe
+        }
+        if let domainContract {
+            return domainContract.effect == .query
+        }
+        return stateEffect == .readOnly
     }
 
     private var capabilityDeterminism: CapabilityDeterminism {

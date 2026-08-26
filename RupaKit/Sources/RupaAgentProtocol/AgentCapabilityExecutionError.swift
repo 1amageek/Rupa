@@ -7,6 +7,7 @@ public struct AgentCapabilityExecutionError: Error, Equatable, LocalizedError, S
         case invalidResult
         case effectMismatch
         case staleRevision
+        case staleWorkspaceRevision
     }
 
     public var code: Code

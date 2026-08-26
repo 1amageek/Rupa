@@ -3,7 +3,7 @@ import RupaAgentRuntime
 import RupaAgentTransport
 import RupaCore
 import RupaDomainFoundation
-import RupaUI
+import RupaKit
 
 public enum AgentHostState: Equatable, Sendable {
     case stopped
@@ -13,10 +13,10 @@ public enum AgentHostState: Equatable, Sendable {
 }
 
 @MainActor
-public final class AgentHost: WorkspaceAgentSessionPublishing {
+public final class AgentHost {
     public private(set) var state: AgentHostState
 
-    private let bridge: MainActorAgentBridge
+    private let controller: ProjectAgentCommandController
     private let listener: any AgentHostListening
     private let socketPath: AgentSocketPath
     private var lifecycleGeneration: Int
@@ -27,14 +27,12 @@ public final class AgentHost: WorkspaceAgentSessionPublishing {
         domainRegistry: DomainRegistry = DomainRegistry()
     ) {
         self.socketPath = socketPath
-        self.bridge = MainActorAgentBridge(
-            controller: AgentCommandController(
-                exportService: exportService,
-                domainRegistry: domainRegistry
-            )
+        self.controller = ProjectAgentCommandController(
+            domainRegistry: domainRegistry,
+            exportExecutor: ProjectAgentExportExecutor(exportService: exportService)
         )
         self.listener = AgentSocketListener(
-            handler: bridge,
+            handler: controller,
             socketPath: socketPath
         )
         self.state = .stopped
@@ -48,11 +46,9 @@ public final class AgentHost: WorkspaceAgentSessionPublishing {
         domainRegistry: DomainRegistry = DomainRegistry()
     ) {
         self.socketPath = socketPath
-        self.bridge = MainActorAgentBridge(
-            controller: AgentCommandController(
-                exportService: exportService,
-                domainRegistry: domainRegistry
-            )
+        self.controller = ProjectAgentCommandController(
+            domainRegistry: domainRegistry,
+            exportExecutor: ProjectAgentExportExecutor(exportService: exportService)
         )
         self.listener = listener
         self.state = .stopped
@@ -96,15 +92,15 @@ public final class AgentHost: WorkspaceAgentSessionPublishing {
 
     @discardableResult
     public func register(
-        session: EditorSession,
+        workspace: ProjectWorkspace,
         path: URL? = nil,
         id: UUID = UUID()
-    ) -> UUID {
-        bridge.register(session: session, path: path, id: id)
+    ) async throws -> UUID {
+        try await controller.register(workspace: workspace, path: path, id: id)
     }
 
-    public func unregister(id: UUID) {
-        bridge.unregister(id: id)
+    public func unregister(id: UUID) async {
+        await controller.unregister(id: id)
     }
 
     private func advanceLifecycleGeneration() {

@@ -64,7 +64,7 @@ public struct CLIService {
     }
 
     public func capabilities() -> [String] {
-        AgentCommandController(domainRegistry: domainRegistry).capabilities()
+        AgentCapabilityCatalog.descriptors(domainRegistry: domainRegistry).map(\.name)
     }
 
     public func agentStatus(
@@ -75,6 +75,8 @@ public struct CLIService {
             return CLIAgentStatusResponse(status: status)
         case .failure(let error):
             throw error
+        case .committedMutation(let outcome):
+            throw CLICommittedMutationError(outcome: outcome)
         default:
             throw unexpectedResponse("Agent status request returned an unexpected response.")
         }
@@ -88,6 +90,8 @@ public struct CLIService {
             return CLISessionsResponse(sessions: sessions)
         case .failure(let error):
             throw error
+        case .committedMutation(let outcome):
+            throw CLICommittedMutationError(outcome: outcome)
         default:
             throw unexpectedResponse("Sessions request returned an unexpected response.")
         }
@@ -3099,6 +3103,8 @@ public struct CLIService {
             )
         case .failure(let error):
             throw error
+        case .committedMutation(let outcome):
+            throw CLICommittedMutationError(outcome: outcome)
         default:
             throw unexpectedResponse("Evaluation request returned an unexpected response.")
         }
@@ -3127,6 +3133,8 @@ public struct CLIService {
             )
         case .failure(let error):
             throw error
+        case .committedMutation(let outcome):
+            throw CLICommittedMutationError(outcome: outcome)
         default:
             throw unexpectedResponse("Measurement request returned an unexpected response.")
         }
@@ -5294,6 +5302,8 @@ public struct CLIService {
             return result
         case .failure(let error):
             throw error
+        case .committedMutation(let outcome):
+            throw CLICommittedMutationError(outcome: outcome)
         default:
             throw unexpectedResponse("Command request returned an unexpected response.")
         }
@@ -5305,6 +5315,8 @@ public struct CLIService {
             return result
         case .failure(let error):
             throw error
+        case .committedMutation(let outcome):
+            throw CLICommittedMutationError(outcome: outcome)
         default:
             throw unexpectedResponse("Batch request returned an unexpected response.")
         }
@@ -5316,6 +5328,8 @@ public struct CLIService {
             return result
         case .failure(let error):
             throw error
+        case .committedMutation(let outcome):
+            throw CLICommittedMutationError(outcome: outcome)
         default:
             throw unexpectedResponse("Domain execution request returned an unexpected response.")
         }
@@ -5327,6 +5341,8 @@ public struct CLIService {
             return result
         case .failure(let error):
             throw error
+        case .committedMutation(let outcome):
+            throw CLICommittedMutationError(outcome: outcome)
         default:
             throw unexpectedResponse("Selection request returned an unexpected response.")
         }

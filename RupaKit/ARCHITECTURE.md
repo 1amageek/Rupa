@@ -55,6 +55,7 @@ flowchart LR
     Rendering --> ViewportScene
     Rendering --> SwiftCAD
     UI[RupaUI] --> Core
+    UI --> Kit
     UI --> Domain
     UI --> Preview[RupaPreview]
     UI --> Rendering
@@ -68,6 +69,7 @@ flowchart LR
     Kit --> Evaluation
     Kit --> Geometry
     Kit --> ProjectModel
+    Kit --> Project
     Kit --> ViewportScene
     Kit --> SwiftCAD
     AgentProtocol[RupaAgentProtocol] --> Core
@@ -81,9 +83,11 @@ flowchart LR
     AgentRuntime --> Automation
     AgentRuntime --> Capabilities
     AgentRuntime --> Domain
+    AgentRuntime --> Kit
+    AgentRuntime --> ProjectModel
     AgentTransport[RupaAgentTransport] --> CoreTypes
     AgentTransport --> AgentProtocol
-    AgentUI[RupaAgentUI] --> UI
+    AgentUI[RupaAgentUI] --> Kit
     AgentUI --> Core
     AgentUI --> Domain
     AgentUI --> AgentRuntime
@@ -117,13 +121,13 @@ flowchart LR
 | `RupaCore/Surface` | Surface analysis, PolySpline editing, UVN frame and source summaries | Viewport drawing or Agent request routing |
 | `RupaAutomation` | Stable command vocabulary and command execution bridge | Agent protocol envelopes or view-specific state |
 | `RupaAgentProtocol` | Agent-facing request/response schema, envelopes, codec, request-handler and socket-service ports, capabilities, and protocol summaries | Workspace registry, socket IO, CAD mutation logic |
-| `RupaAgentRuntime` | Workspace registry, main-actor bridge, and request handling through Automation/Core | Unix socket IO, SwiftUI workspace layout |
+| `RupaAgentRuntime` | Main-actor registry of shared `ProjectWorkspace` instances, immutable project snapshot reads, capability/domain dispatch, and Agent request routing through the project-operation boundary | Independent editor sessions, package/source authority, Unix socket IO, SwiftUI workspace layout |
 | `RupaAgentTransport` | Bounded framed Unix socket IO, listener/client connection ownership, deadlines, and socket path/address utilities | Agent command semantics or CAD mutation logic |
 | `RupaAgent` | Compatibility facade that re-exports protocol, runtime, and transport | New implementation ownership |
 | `RupaViewportScene` | Viewport scene data model, scene construction, projection basis, hit policy, identity pick index, and viewport transform utilities | SwiftUI view layout, Metal drawing backend |
 | `RupaRendering` | SwiftUI viewport, drawing backend, interaction geometry, and rendering affordance services | Persistent document mutation |
-| `RupaUI` | SwiftUI workspace state, command panels, inspectors, and `WorkspaceAgentSessionPublishing` publication abstraction | Agent socket/runtime implementation or Core CAD algorithms |
-| `RupaAgentUI` | Concrete Agent host composition for SwiftUI workspaces | Workspace editing UI or Agent protocol schema |
+| `RupaUI` | SwiftUI workspace state, command panels, inspectors, and project-view presentation | Agent registration, socket/runtime implementation, or Core CAD algorithms |
+| `RupaAgentUI` | Concrete Agent socket-host composition and registration of application-owned `ProjectWorkspace` instances | A second editor/source authority, workspace editing UI, or Agent protocol schema |
 | `RupaCLIKit` | Argument parsing and terminal response formatting | Core editing behavior |
 
 ## Dependency Rules
@@ -144,7 +148,9 @@ flowchart LR
 | `RupaAgentProtocol` must not depend on `RupaAgentRuntime` or `RupaAgentTransport`. | Tooling can encode/decode requests without loading workspace registries or socket code. |
 | `RupaAgentTransport` depends only on `RupaAgentProtocol` and `RupaCoreTypes`; runtime handlers implement the protocol-owned request port. | Socket ownership remains independent from workspace registries and command execution. |
 | Agent transport messages use an unsigned 64-bit network-order length prefix, a 16 MiB payload limit, and total monotonic IO deadlines; the listener tracks bounded concurrent connections and shuts them down before awaiting handler ownership during stop. | Message boundaries do not depend on peer EOF, malformed or stalled peers cannot allocate unbounded memory, and listener shutdown converges for half-open connections. |
-| `RupaUI` depends on `WorkspaceAgentSessionPublishing`, not concrete `AgentHost`. | The CAD workspace can publish UI-owned sessions without depending on Agent server lifecycle details. |
+| `RupaAgentRuntime` registers the same `ProjectWorkspace` observed by UI and routes reads, source mutations, interaction mutations, history, evaluation, capability, and domain requests through it. File create/open/close/save stay typed unsupported until application lifecycle ownership is integrated; export accepts only CAD-only authority. | Agent execution cannot create a shadow `EditorSession`, silently bypass package/evaluation publication, or infer an export source from Mesh or mixed representations. |
+| `ProjectWorkspaceRegistry` validates the exact published project coordinates before registration and identity reconciliation. A project-identity collision is a non-destructive typed rejection. Unregister stops new operations, waits for every previously acquired operation lease to finish, and only then removes the registration. | A load that changes project identity cannot leave a stale registry owner, transient view publication gaps cannot invalidate a valid registration, and socket teardown cannot race an already accepted mutation or export. |
+| `RupaAgentUI.AgentHost` owns socket lifecycle and registration only; application composition owns the registered workspace lifetime. | Agent availability and workspace source authority remain independent responsibilities. |
 | `RupaRendering` consumes `RupaViewportScene`; scene construction must remain SwiftUI-free. | Viewport scene, projection, and hit policy can be tested without UI composition. |
 
 ## Project Source Boundary
@@ -199,15 +205,18 @@ flowchart LR
 |---|---|---|
 | Saved baseline | `EditorSession.markClean()` | Saving a document must mark the current store and the current command-history cursor as clean. Callers must not call `CADDocumentStore.markClean()` directly after a save because undo/redo snapshots would keep stale dirty flags. |
 | Non-mutating command errors | `EditorSession.record(_:)` | UI-friendly command wrappers may record diagnostics, but they must preserve the existing evaluation status and cache generation when the document did not mutate. A command error is not a geometry evaluation failure. |
-| Live mutation dry-run | `RupaCLIKit` | File dry-run means "execute without saving". Live session mutation has no safe dry-run because the app document would be mutated through Agent transport, so live dry-run must be rejected before dispatch. |
+| CLI live mutation dry-run | `RupaCLIKit` | File dry-run means "execute without saving". CLI live-session mutation remains rejected before dispatch; project-backed capability dry-run uses `ProjectWorkspace.preview` and does not publish source, package, evaluation, or workspace state. |
 | CLI process tests | `RupaCLITests` | Process E2E tests must execute the current Xcode build product only, must have bounded process timeouts, and must not fall back to package `.build` executables that could be stale. |
-| Agent source batch | `EditorSession.withSourceCommandGroup` | Related source commands defer document evaluation, publish one valid final state, and create one undo entry. A failed final evaluation restores source, history, selection, workspace state, diagnostics, and the evaluation cache. |
+| Agent source batch | `ProjectWorkspace.executeAutomation` and `ProjectController` | Related source commands are prepared from one published project snapshot, staged as one project transaction, evaluated and packaged before publication, and create one undo entry. Stale coordinates or any staging/evaluation/package failure leave the previous source, package, evaluation, history, selection, and workspace publication unchanged. |
+| Agent committed-mutation receipt | `ProjectWorkspacePostCommitError` and `AgentCommittedMutationOutcome` | If source, interaction, history, or evaluation authority commits but the response projection fails, the Agent returns the exact committed coordinates with a mandatory no-retry outcome and attempts view-only recovery without replaying the mutation. CLI callers preserve this outcome as a typed error. |
+| Agent export publication | `ProjectAgentExportExecutor` and `PreparedDocumentExport` | CAD-only export evaluates into a same-filesystem staging file. The registered operation lease and exact project coordinates are revalidated before atomic destination publication; cancellation, stale coordinates, unregister, or publication failure discard the staging file. Mesh, mixed, and external authority fail explicitly. |
+| Agent capability semantics | `AgentCapabilityCatalog` | Static command descriptors map one serialized Automation discriminant to one capability name. Export advertises export effect/result, dry-run, cancellation, and non-retry safety; validation advertises immutable snapshot diagnostics. Invocation rejects payloads whose discriminant does not match the descriptor. |
 | Batch response context | `RupaAutomation` | Mutation results are compact command receipts. Workspace measurement context is generated only when `describeDocument` is the final batch command. |
 | Validated source capability | `ValidatedDesignDocument` and `ValidatedCADDocument` | Full validation produces an immutable capability. Graph-stable feature edits may derive a new capability only when inputs, outputs, and suppression are unchanged and the edited operation and expressions validate locally. The evaluation cache carries the capability so Core does not repeat whole-document validation. |
 | Incremental exact evaluation | `SwiftCAD.DocumentEvaluationEngine` | A changed feature invalidates its dependency closure. Unchanged profiles, curves, BRep deltas, generated names, and meshes are reused; rebuilt feature results are validated before deterministic delta merge. |
 | Universal CAD evaluation reuse | `CADDocumentEvaluationCache` owned by `DefaultDesignDocumentProjectEvaluatorFactory` | A matching `DocumentEvaluationContext` seeds the current revision so migration does not evaluate the same CAD source twice. An exact revision returns the cached immutable evaluation without invoking Swift-CAD; a later revision receives it for incremental execution. Equal revisions with different source fingerprints fail as `sourceRevisionConflict`, stale contexts fail explicitly, and an older completion cannot replace a newer cache entry. A multi-source provider request stages all entries and validates conflicts before one atomic publication. Mutex sections contain only in-memory lookup/publication; validation, evaluation, fingerprinting, and mesh conversion run outside the lock. |
 | Project operation publication | `RupaProject.ProjectOperating` and `ProjectController` | Evaluate, commit, undo, redo, load, and save publish one coherent state only after their complete source, package, evaluation, and history work succeeds. Save marks the session clean only after atomic file replacement. Competing completions recheck transaction revision and publication sequence before publication. |
-| Application migration route | `RupaKit.ProjectWorkspace` and `ProjectViewSnapshot` | New UI composition consumes the presentation `UniversalViewportScene`, same-generation optional CAD interaction context, explicit navigation index, selection, workspace state, dirty state, and history flags from one project publication. View construction runs outside the main actor and the main actor rejects non-increasing publication sequences. An initial package load uses the project owner's current revision without creating a placeholder view. The existing production `Viewport` route remains until the separate application cutover; no second evaluator or generation-derived source revision is introduced. |
+| Application project route | `RupaKit.ProjectWorkspace` and `ProjectViewSnapshot` | `MainView` and production Agent registration consume the same presentation `UniversalViewportScene`, same-generation optional CAD interaction context, navigation index, selection, workspace state, dirty state, and history flags from one project publication. View construction runs outside the main actor and rejects non-increasing publication sequences. ApplicationRoot file/history composition remains the next integration boundary; no second evaluator, editor session, or generation-derived source revision is introduced. |
 
 ## Surface M3 Status
 

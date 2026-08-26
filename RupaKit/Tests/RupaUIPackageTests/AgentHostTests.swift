@@ -4,6 +4,7 @@ import RupaAgentTransport
 import RupaAutomation
 import RupaCore
 import RupaDomainFoundation
+import RupaKit
 import RupaUI
 import Testing
 @testable import RupaAgentUI
@@ -22,10 +23,11 @@ import Testing
     )
     let host = AgentHost(socketPath: socketPath)
     let sessionID = UUID()
-    host.register(
-        session: EditorSession(document: .empty(named: "Host Open")),
-        id: sessionID
+    let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
+        document: .empty(named: "Host Open")
     )
+    _ = try await workspace.evaluate()
+    try await host.register(workspace: workspace, id: sessionID)
 
     await host.start()
     do {
@@ -53,6 +55,67 @@ import Testing
         }
         #expect(summaries.first?.id == sessionID)
         #expect(summaries.first?.displayName == "Host Open")
+
+        guard let initial = summaries.first else {
+            #expect(Bool(false))
+            await host.stop()
+            return
+        }
+        let sourceResponse = try await sendThroughDetachedClient(
+            .execute(
+                sessionID: sessionID,
+                command: .renameDocument(name: "Agent Renamed"),
+                expectedGeneration: initial.generation
+            ),
+            socketPath: socketPath
+        )
+        guard case .command(let sourceResult) = sourceResponse else {
+            #expect(Bool(false))
+            await host.stop()
+            return
+        }
+        #expect(sourceResult.didMutate)
+
+        let interactionResponse = try await sendThroughDetachedClient(
+            .execute(
+                sessionID: sessionID,
+                command: .setDisplayUnit(.millimeter),
+                expectedGeneration: sourceResult.generation,
+                expectedWorkspaceRevision: sourceResult.workspaceRevision
+            ),
+            socketPath: socketPath
+        )
+        guard case .command(let interactionResult) = interactionResponse else {
+            #expect(Bool(false))
+            await host.stop()
+            return
+        }
+        #expect(interactionResult.workspaceRevision != sourceResult.workspaceRevision)
+
+        let readResponse = try await sendThroughDetachedClient(
+            .measure(
+                sessionID: sessionID,
+                expectedGeneration: sourceResult.generation
+            ),
+            socketPath: socketPath
+        )
+        guard case .measurement(let measurement) = readResponse else {
+            #expect(Bool(false))
+            await host.stop()
+            return
+        }
+        #expect(measurement.displayUnit == .millimeter)
+
+        let renamedSessions = try await sendThroughDetachedClient(
+            .sessions,
+            socketPath: socketPath
+        )
+        guard case .sessions(let renamedSummaries) = renamedSessions else {
+            #expect(Bool(false))
+            await host.stop()
+            return
+        }
+        #expect(renamedSummaries.first?.displayName == "Agent Renamed")
 
         await host.stop()
         #expect(host.state == .stopped)

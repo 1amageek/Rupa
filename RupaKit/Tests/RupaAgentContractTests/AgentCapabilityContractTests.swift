@@ -2,6 +2,7 @@ import Testing
 import Darwin
 import Foundation
 import RupaCapabilities
+import RupaAgentIntegrationTestFixtures
 import RupaAutomation
 import RupaCore
 import RupaDomainFoundation

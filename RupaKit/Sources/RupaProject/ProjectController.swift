@@ -172,19 +172,49 @@ public actor ProjectController: ProjectOperating {
         )
     }
 
+    public func withValidatedCoordinates<Result: Sendable>(
+        expectedProjectID: ProjectID,
+        expectedDocumentGeneration: DocumentGeneration,
+        expectedTransactionRevision: DocumentTransactionRevision,
+        expectedPublicationSequence: UInt64,
+        expectedWorkspaceRevision: WorkspaceRevision,
+        operationGuard: @escaping ProjectOperationGuard,
+        _ body: @Sendable () throws -> Result
+    ) throws -> Result {
+        try Task.checkCancellation()
+        try operationGuard()
+        try requireProjectID(expectedProjectID)
+        try requireTransactionRevision(expectedTransactionRevision)
+        try requirePublicationSequence(expectedPublicationSequence)
+        do {
+            try session.store.requireGeneration(expectedDocumentGeneration)
+            try session.workspaceState.requireRevision(expectedWorkspaceRevision)
+        } catch let error as EditorError {
+            throw projectError(for: error)
+        }
+        try Task.checkCancellation()
+        return try body()
+    }
+
     public func applyInteraction(
-        _ transaction: ProjectInteractionTransaction
+        _ transaction: ProjectInteractionTransaction,
+        operationGuard: @escaping ProjectOperationGuard = {}
     ) async throws -> ProjectInteractionCommitResult {
+        try operationGuard()
         let prepared = try prepareInteractionMutation(transaction)
         try Task.checkCancellation()
+        try operationGuard()
         return try publishInteractionMutation(prepared, transaction: transaction)
     }
 
     public func previewInteraction(
-        _ transaction: ProjectInteractionTransaction
+        _ transaction: ProjectInteractionTransaction,
+        operationGuard: @escaping ProjectOperationGuard = {}
     ) async throws -> ProjectInteractionPreviewResult {
+        try operationGuard()
         let prepared = try prepareInteractionMutation(transaction)
         try Task.checkCancellation()
+        try operationGuard()
         try requireProjectID(transaction.expectedProjectID)
         try requireTransactionRevision(transaction.expectedTransactionRevision)
         try requirePublicationSequence(transaction.expectedPublicationSequence)
@@ -204,19 +234,47 @@ public actor ProjectController: ProjectOperating {
     }
 
     public func evaluateCurrent() async throws -> EvaluatedProjectSnapshot {
-        let baseRevision = session.transactionRevision
+        let state = try await evaluateCurrent(operationGuard: {})
+        return state.evaluation
+    }
+
+    public func evaluateCurrent(
+        operationGuard: @escaping ProjectOperationGuard
+    ) async throws -> ProjectStateSnapshot {
+        try await evaluateCurrent(
+            expectedProjectID: session.document.projectID,
+            expectedTransactionRevision: session.transactionRevision,
+            expectedPublicationSequence: publicationSequence,
+            operationGuard: operationGuard
+        )
+    }
+
+    public func evaluateCurrent(
+        expectedProjectID: ProjectID,
+        expectedTransactionRevision: DocumentTransactionRevision,
+        expectedPublicationSequence: UInt64,
+        operationGuard: @escaping ProjectOperationGuard
+    ) async throws -> ProjectStateSnapshot {
+        try operationGuard()
+        try requireProjectID(expectedProjectID)
+        try requireTransactionRevision(expectedTransactionRevision)
+        try requirePublicationSequence(expectedPublicationSequence)
         let stagedEvaluation = try await evaluate(
             document: session.document,
             source: evaluationSource,
             purpose: .presentation,
-            revision: baseRevision,
+            revision: expectedTransactionRevision,
             reusing: session.currentEvaluation
         )
-        try requireTransactionRevision(baseRevision)
+        try Task.checkCancellation()
+        try operationGuard()
+        try requireProjectID(expectedProjectID)
+        try requireTransactionRevision(expectedTransactionRevision)
+        try requirePublicationSequence(expectedPublicationSequence)
         let nextPublicationSequence = try advancedPublicationSequence()
         evaluation = stagedEvaluation
         publicationSequence = nextPublicationSequence
-        return stagedEvaluation
+        return try currentState()
     }
 
     /// Prepares an explicit source command that promotes the selected modeling
@@ -335,10 +393,13 @@ public actor ProjectController: ProjectOperating {
     }
 
     public func commit(
-        _ transaction: ProjectSourceTransaction
+        _ transaction: ProjectSourceTransaction,
+        operationGuard: @escaping ProjectOperationGuard = {}
     ) async throws -> ProjectSourceCommitResult {
+        try operationGuard()
         let staged = try await prepareSourceMutation(transaction)
         try Task.checkCancellation()
+        try operationGuard()
         do {
             try requireProjectID(transaction.expectedProjectID)
             try requireTransactionRevision(transaction.expectedTransactionRevision)
@@ -370,10 +431,13 @@ public actor ProjectController: ProjectOperating {
     }
 
     public func previewSource(
-        _ transaction: ProjectSourceTransaction
+        _ transaction: ProjectSourceTransaction,
+        operationGuard: @escaping ProjectOperationGuard = {}
     ) async throws -> ProjectSourcePreviewResult {
+        try operationGuard()
         let staged = try await prepareSourceMutation(transaction)
         try Task.checkCancellation()
+        try operationGuard()
         do {
             try requireProjectID(transaction.expectedProjectID)
             try requireTransactionRevision(transaction.expectedTransactionRevision)
@@ -412,8 +476,10 @@ public actor ProjectController: ProjectOperating {
     public func executeReadOnlyAutomation(
         _ automation: PreparedAutomationBatch,
         expectedProjectID: ProjectID,
-        expectedPublicationSequence: UInt64
+        expectedPublicationSequence: UInt64,
+        operationGuard: @escaping ProjectOperationGuard = {}
     ) throws -> AutomationBatchExecution {
+        try operationGuard()
         guard automation.effect == .readOnly else {
             throw ProjectControllerError(
                 code: .transactionInvalid,
@@ -441,6 +507,7 @@ public actor ProjectController: ProjectOperating {
             try session.store.requireGeneration(batch.expectedGeneration)
             try session.requireTransactionRevision(batch.expectedTransactionRevision)
             try session.workspaceState.requireRevision(batch.expectedWorkspaceRevision)
+            try operationGuard()
             return execution
         } catch let error as EditorError {
             throw projectError(for: error)
@@ -665,7 +732,25 @@ public actor ProjectController: ProjectOperating {
     ) async throws -> ProjectStateSnapshot {
         try await performHistoryTransaction(
             direction: .undo,
-            expectedTransactionRevision: expectedTransactionRevision
+            expectedProjectID: session.document.projectID,
+            expectedTransactionRevision: expectedTransactionRevision,
+            expectedPublicationSequence: publicationSequence,
+            operationGuard: {}
+        )
+    }
+
+    public func undo(
+        expectedProjectID: ProjectID,
+        expectedTransactionRevision: DocumentTransactionRevision,
+        expectedPublicationSequence: UInt64,
+        operationGuard: @escaping ProjectOperationGuard
+    ) async throws -> ProjectStateSnapshot {
+        try await performHistoryTransaction(
+            direction: .undo,
+            expectedProjectID: expectedProjectID,
+            expectedTransactionRevision: expectedTransactionRevision,
+            expectedPublicationSequence: expectedPublicationSequence,
+            operationGuard: operationGuard
         )
     }
 
@@ -674,7 +759,25 @@ public actor ProjectController: ProjectOperating {
     ) async throws -> ProjectStateSnapshot {
         try await performHistoryTransaction(
             direction: .redo,
-            expectedTransactionRevision: expectedTransactionRevision
+            expectedProjectID: session.document.projectID,
+            expectedTransactionRevision: expectedTransactionRevision,
+            expectedPublicationSequence: publicationSequence,
+            operationGuard: {}
+        )
+    }
+
+    public func redo(
+        expectedProjectID: ProjectID,
+        expectedTransactionRevision: DocumentTransactionRevision,
+        expectedPublicationSequence: UInt64,
+        operationGuard: @escaping ProjectOperationGuard
+    ) async throws -> ProjectStateSnapshot {
+        try await performHistoryTransaction(
+            direction: .redo,
+            expectedProjectID: expectedProjectID,
+            expectedTransactionRevision: expectedTransactionRevision,
+            expectedPublicationSequence: expectedPublicationSequence,
+            operationGuard: operationGuard
         )
     }
 
@@ -773,10 +876,15 @@ public actor ProjectController: ProjectOperating {
 
     private func performHistoryTransaction(
         direction: HistoryDirection,
-        expectedTransactionRevision: DocumentTransactionRevision
+        expectedProjectID: ProjectID,
+        expectedTransactionRevision: DocumentTransactionRevision,
+        expectedPublicationSequence: UInt64,
+        operationGuard: @escaping ProjectOperationGuard
     ) async throws -> ProjectStateSnapshot {
+        try operationGuard()
+        try requireProjectID(expectedProjectID)
         try requireTransactionRevision(expectedTransactionRevision)
-        let basePublicationSequence = publicationSequence
+        try requirePublicationSequence(expectedPublicationSequence)
         let historyIsAvailable: Bool
         switch direction {
         case .undo:
@@ -860,9 +968,14 @@ public actor ProjectController: ProjectOperating {
             reusing: prepared.stagedEvaluation
         )
 
+        try Task.checkCancellation()
+        try operationGuard()
+        try requireProjectID(expectedProjectID)
+        try requireTransactionRevision(expectedTransactionRevision)
+        try requirePublicationSequence(expectedPublicationSequence)
         do {
             try requireTransactionRevision(prepared.baseTransactionRevision)
-            try requirePublicationSequence(basePublicationSequence)
+            try requirePublicationSequence(expectedPublicationSequence)
             let nextPublicationSequence = try advancedPublicationSequence()
             try session.commitPreparedHistoryTransaction(prepared)
             packageDocument = stagedPackage
