@@ -743,15 +743,14 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "WorkspaceCanvasPlaneInputMapper owns view-ray plane intersection for standard and custom construction planes, rejects parallel view rays instead of fabricating a point, and WorkspaceCanvasCommandPlanner produces explicit EditorCommand values from the immutable project snapshot without mutating a shadow session.",
                         "Selected saved construction planes expose viewport Origin and Normal handles that preview a bounded plane frame and commit through the same setConstructionPlane source mutation path used by Inspector edits.",
                         "Viewport construction-plane handle drags share the SnapResolver candidate contract instead of viewport-local snapping: origin handles may use planar fallback, while normal handles require explicit world-point candidates to avoid flattening the normal onto a 2D grid.",
-                        "MainView reads one immutable ProjectViewSnapshot and submits construction-plane source and interaction actions through ProjectWorkspace; ApplicationRoot composition and app-level file/history verification remain owned by T06A-6.",
+                        "ApplicationRoot owns one ProjectWorkspace shared by MainView and Agent registration; app-level tests cover initial publication, file/history operations, CAD-only, Mesh-only, and mixed project restoration through that authority.",
                     ]
                 ),
             ],
             openWork: [
-                "Compose the ProjectWorkspace-backed MainView at ApplicationRoot and verify the arbitrary-plane workflow through the actual app route.",
                 "Broaden app UI automation from active-plane sketch/solid creation into saved-plane creation, rename, viewport handle drag, and edit workflows.",
             ],
-            next: "Complete T06A-6 ApplicationRoot composition, then verify active-plane and saved-plane workflows through the same ProjectWorkspace authority."
+            next: "Broaden active-plane and saved-plane UI automation while preserving the shared ProjectWorkspace authority."
         ),
         entry(
             area: .selection,

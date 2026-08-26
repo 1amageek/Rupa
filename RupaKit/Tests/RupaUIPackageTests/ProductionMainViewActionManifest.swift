@@ -67,6 +67,7 @@ enum ProductionMainViewActionManifest {
         "Sources/RupaUI/PatternArrayEditingService.swift",
         "Sources/RupaUI/PatternArrayExpressionWritebackService.swift",
         "Sources/RupaUI/PatternArrayCurvePathPickService.swift",
+        "Sources/RupaUI/WorkspaceLaunchProjectFixture.swift",
         "Sources/RupaUI/WorkspaceCanvasCommandPlanner.swift",
         "Sources/RupaCore/SweepSelectionPlanningService.swift",
     ]
@@ -76,11 +77,10 @@ enum ProductionMainViewActionManifest {
         "Sources/RupaKit",
         "Sources/RupaRendering",
         "Sources/RupaViewportScene",
+        "../Rupa/Rupa/Rupa",
     ]
 
-    static let legacyExcludedSourceFiles: Set<String> = [
-        "Sources/RupaUI/WorkspaceLaunchSessionFactory.swift",
-    ]
+    static let legacyExcludedSourceFiles: Set<String> = []
 
     static let forbiddenProductionReferences = [
         "EditorSession",
@@ -96,6 +96,7 @@ enum ProductionMainViewActionManifest {
         "chamferBodyEdges",
         "convertSketchLineToArc",
         "convertSketchLineToSpline",
+        "createConstructionPlane",
         "createConstructionPlaneFromTargets",
         "createSavedView",
         "createViewAlignedConstructionPlane",
@@ -131,7 +132,6 @@ enum ProductionMainViewActionManifest {
         "removeSavedView",
         "renameConstructionPlane",
         "renameParameter",
-        "resetDocument",
         "reverseSketchCurve",
         "setBridgeCurveParameters",
         "setComponentInstanceLock",
@@ -376,7 +376,7 @@ enum ProductionMainViewActionManifest {
         let root = try repositoryRoot(filePath: filePath)
         var result: [String] = []
         for relativeDirectory in productionSourceDirectories {
-            let directory = root.appendingPathComponent(relativeDirectory)
+            let directory = root.appendingPathComponent(relativeDirectory).standardizedFileURL
             guard let enumerator = FileManager.default.enumerator(
                 at: directory,
                 includingPropertiesForKeys: [.isRegularFileKey],
@@ -385,7 +385,10 @@ enum ProductionMainViewActionManifest {
                 throw SourceAuditError.sourceDirectoryNotFound(relativeDirectory)
             }
             for case let url as URL in enumerator where url.pathExtension == "swift" {
-                let relativePath = String(url.path.dropFirst(root.path.count + 1))
+                let fileName = String(url.path.dropFirst(directory.path.count + 1))
+                let relativePath = relativeDirectory.hasPrefix("../")
+                    ? "\(relativeDirectory)/\(fileName)"
+                    : String(url.path.dropFirst(root.path.count + 1))
                 if legacyExcludedSourceFiles.contains(relativePath) == false {
                     result.append(relativePath)
                 }
@@ -491,7 +494,7 @@ enum ProductionMainViewActionManifest {
         let root = try repositoryRoot(filePath: filePath)
         var contents: [String: String] = [:]
         for relativePath in try auditedProductionSourceFiles(filePath: filePath) {
-            let url = root.appendingPathComponent(relativePath)
+            let url = root.appendingPathComponent(relativePath).standardizedFileURL
             guard FileManager.default.fileExists(atPath: url.path) else {
                 throw SourceAuditError.sourceFileNotFound(relativePath)
             }

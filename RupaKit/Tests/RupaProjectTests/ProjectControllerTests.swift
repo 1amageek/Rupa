@@ -1099,6 +1099,44 @@ func projectControllerRejectsStalePublicationBeforeSourceStaging() async throws 
 }
 
 @Test(.timeLimit(.minutes(1)))
+func projectControllerReplacementEvaluationFailureDoesNotPublish() async throws {
+    let controller = try makeController(
+        document: .empty(named: "Retained Project"),
+        evaluatorPreparer: NameRejectingProjectEvaluatorPreparer(
+            rejectedName: "Rejected Replacement"
+        )
+    )
+    _ = try await controller.evaluateCurrent()
+    let initial = try await controller.currentState()
+    var caught: ProjectControllerError?
+
+    do {
+        _ = try await controller.replace(
+            with: .empty(named: "Rejected Replacement"),
+            expectedProjectID: initial.document.projectID,
+            expectedTransactionRevision: initial.transactionRevision,
+            expectedPublicationSequence: initial.publicationSequence,
+            operationGuard: {}
+        )
+    } catch let error as ProjectControllerError {
+        caught = error
+    }
+    let retained = try await controller.currentState()
+
+    #expect(caught?.code == .evaluationFailed)
+    #expect(retained.document.projectID == initial.document.projectID)
+    #expect(retained.document.cadDocument.metadata.name == "Retained Project")
+    #expect(retained.transactionRevision == initial.transactionRevision)
+    #expect(retained.publicationSequence == initial.publicationSequence)
+    #expect(retained.package.documentID == initial.package.documentID)
+    #expect(retained.package.productSource.data == initial.package.productSource.data)
+    #expect(retained.package.cadSource?.data == initial.package.cadSource?.data)
+    #expect(retained.package.authoredMeshAssets.keys == initial.package.authoredMeshAssets.keys)
+    #expect(retained.evaluation.id == initial.evaluation.id)
+    #expect(retained.evaluation.occurrences.count == initial.evaluation.occurrences.count)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func projectControllerRejectsPublicationWhenConcurrentCallerWins() async throws {
     let gate = BlockingEvaluationGate()
     let controller = try makeController(

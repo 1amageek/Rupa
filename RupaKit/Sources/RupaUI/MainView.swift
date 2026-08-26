@@ -11,15 +11,19 @@ import SwiftUI
 public struct MainView: View {
     private let workspace: ProjectWorkspace
     private let domainRegistry: DomainRegistry
-    @State private var launchFailureMessage: String?
+    private let operationSequencer: ProjectWorkspaceOperationSequencer
+    private let newProject: @MainActor () -> Void
 
     public init(
         workspace: ProjectWorkspace,
-        domainRegistry: DomainRegistry = DomainRegistry()
+        domainRegistry: DomainRegistry = DomainRegistry(),
+        operationSequencer: ProjectWorkspaceOperationSequencer,
+        newProject: @escaping @MainActor () -> Void = {}
     ) {
         self.workspace = workspace
         self.domainRegistry = domainRegistry
-        self._launchFailureMessage = State(initialValue: nil)
+        self.operationSequencer = operationSequencer
+        self.newProject = newProject
     }
 
     public var body: some View {
@@ -28,28 +32,14 @@ public struct MainView: View {
                 ProjectMainViewContent(
                     workspace: workspace,
                     snapshot: snapshot,
-                    domainRegistry: domainRegistry
+                    domainRegistry: domainRegistry,
+                    operationSequencer: operationSequencer,
+                    newProject: newProject
                 )
-            } else if let launchFailureMessage {
-                ContentUnavailableView(
-                    "Project Unavailable",
-                    systemImage: "exclamationmark.triangle",
-                    description: Text(launchFailureMessage)
-                )
+                .id(snapshot.documentLifetimeID)
             } else {
-                ProgressView("Evaluating Project")
+                ProgressView("Loading Project")
                     .frame(minWidth: 1_120, minHeight: 720)
-            }
-        }
-        .task {
-            guard workspace.view == nil else {
-                return
-            }
-            do {
-                _ = try await workspace.evaluate()
-                launchFailureMessage = nil
-            } catch {
-                launchFailureMessage = error.localizedDescription
             }
         }
     }
@@ -138,7 +128,7 @@ private struct ProjectMainViewContent: View {
     @State private var constructionPlaneRenameText: String
     @State private var hoveredViewportPickingBackend: ViewportPickingBackend?
     @State private var viewportHoverClearSignal: Int
-    @State private var operationSequencer: ProjectWorkspaceOperationSequencer
+    private let operationSequencer: ProjectWorkspaceOperationSequencer
     @FocusState private var isWorkspaceFocused: Bool
 
     private let objectRegistry: ObjectTypeRegistry
@@ -147,6 +137,7 @@ private struct ProjectMainViewContent: View {
     private let domainCommandDispatcher: ProjectDomainCommandDispatcher
     private let exactPresentationCADSceneNodeIDs: Set<SceneNodeID>
     private let selectedPresentationHasExactCADAffordanceContext: Bool
+    private let newProject: @MainActor () -> Void
 
     init(
         workspace: ProjectWorkspace,
@@ -155,12 +146,16 @@ private struct ProjectMainViewContent: View {
         columnVisibility: NavigationSplitViewVisibility = .all,
         isInspectorPresented: Bool = false,
         isUtilityRailExpanded: Bool = false,
-        domainRegistry: DomainRegistry = DomainRegistry()
+        domainRegistry: DomainRegistry = DomainRegistry(),
+        operationSequencer: ProjectWorkspaceOperationSequencer,
+        newProject: @escaping @MainActor () -> Void = {}
     ) {
         let editingDefaults = WorkspaceInteractionScaleDefaults(ruler: snapshot.workspaceState.ruler)
         let ruler = snapshot.workspaceState.ruler.normalizedForWorkspaceScale()
         self.workspace = workspace
         self.snapshot = snapshot
+        self.operationSequencer = operationSequencer
+        self.newProject = newProject
         self._selectedTool = State(initialValue: .select)
         self._polygonToolState = State(initialValue: .standard)
         self._sketchInputState = State(initialValue: .standard)
@@ -243,7 +238,6 @@ private struct ProjectMainViewContent: View {
         self._constructionPlaneRenameTargetID = State(initialValue: nil)
         self._constructionPlaneRenameText = State(initialValue: "")
         self._viewportHoverClearSignal = State(initialValue: 0)
-        self._operationSequencer = State(initialValue: ProjectWorkspaceOperationSequencer())
         self.objectRegistry = snapshot.objectRegistry
         self.viewportObjectSelectionIndex = ViewportObjectSelectionIndex(
             document: snapshot.document.document,
@@ -316,10 +310,38 @@ private struct ProjectMainViewContent: View {
         )
     }
 
+    private func enqueueWorkspaceOperation<Result: Sendable>(
+        _ operation: @escaping @MainActor @Sendable () async throws -> Result
+    ) -> Task<Result, Error> {
+        let expectedDocumentLifetimeID = snapshot.documentLifetimeID
+        return operationSequencer.enqueue(
+            operationGuard: {
+                guard workspace.view?.documentLifetimeID == expectedDocumentLifetimeID else {
+                    throw ProjectWorkspaceActionError(
+                        code: .documentLifetimeMismatch,
+                        message: "The queued UI operation belongs to a replaced project document."
+                    )
+                }
+            },
+            operation
+        )
+    }
+
+    private func runWorkspaceOperation<Result: Sendable>(
+        _ operation: @escaping @MainActor @Sendable () async throws -> Result
+    ) async throws -> Result {
+        let task = enqueueWorkspaceOperation(operation)
+        return try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
     private func clearSelection(
         completion: @escaping @MainActor @Sendable (ProjectViewSnapshot) -> Void = { _ in }
     ) {
-        let task = operationSequencer.enqueue {
+        let task = enqueueWorkspaceOperation {
             let published = try await workspace.applySelection(.clear)
             completion(published)
             return published
@@ -341,7 +363,7 @@ private struct ProjectMainViewContent: View {
         ) throws -> Void,
         completion: @escaping @MainActor @Sendable (ProjectViewSnapshot) -> Void = { _ in }
     ) {
-        let task = operationSequencer.enqueue {
+        let task = enqueueWorkspaceOperation {
             guard let current = workspace.view else {
                 throw ProjectWorkspaceActionError(
                     code: .snapshotUnavailable,
@@ -477,7 +499,7 @@ private struct ProjectMainViewContent: View {
         commands: @escaping @MainActor @Sendable (ProjectViewSnapshot) throws -> [WorkspaceCommand],
         completion: @escaping @MainActor @Sendable (ProjectViewSnapshot) -> Void = { _ in }
     ) {
-        let task = operationSequencer.enqueue {
+        let task = enqueueWorkspaceOperation {
             guard let current = workspace.view else {
                 throw ProjectWorkspaceActionError(
                     code: .snapshotUnavailable,
@@ -524,7 +546,7 @@ private struct ProjectMainViewContent: View {
         commands: @escaping @MainActor @Sendable (ProjectViewSnapshot) throws -> [EditorCommand],
         completion: @escaping @MainActor ([CommandExecutionResult]) async throws -> Void = { _ in }
     ) {
-        let task = operationSequencer.enqueue {
+        let task = enqueueWorkspaceOperation {
             let results = try await executeSource(name: name, commands: commands)
             try await completion(results)
             return results
@@ -556,7 +578,7 @@ private struct ProjectMainViewContent: View {
         name: String,
         commands: @escaping @MainActor @Sendable (ProjectViewSnapshot) throws -> [EditorCommand]
     ) async -> [CommandExecutionResult] {
-        let task = operationSequencer.enqueue {
+        let task = enqueueWorkspaceOperation {
             try await executeSource(name: name, commands: commands)
         }
         do {
@@ -2080,12 +2102,7 @@ private struct ProjectMainViewContent: View {
     private var editorToolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
             Button {
-                submitSource(.resetDocument(name: "Untitled")) { result in
-                    if result?.didMutate == true {
-                        selectedTool = .select
-                        _ = try await workspace.applySelection(.clear)
-                    }
-                }
+                newProject()
             } label: {
                 Image(systemName: "doc.badge.plus")
             }
@@ -2341,7 +2358,7 @@ private struct ProjectMainViewContent: View {
                                     displayUnit: snapshot.workspaceState.displayUnit,
                                     generation: snapshot.documentGeneration
                                 ) { request in
-                                    try await operationSequencer.run {
+                                    try await runWorkspaceOperation {
                                         guard let current = workspace.view else {
                                             throw ProjectWorkspaceActionError(
                                                 code: .snapshotUnavailable,
@@ -3526,7 +3543,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func measureCanvasTarget(_ targetSceneNodeID: SceneNodeID?) {
-        let task = operationSequencer.enqueue {
+        let task = enqueueWorkspaceOperation {
             guard let current = workspace.view else {
                 throw ProjectWorkspaceActionError(
                     code: .snapshotUnavailable,
@@ -3551,7 +3568,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func inspectCanvasMesh(_ targetSceneNodeID: SceneNodeID?) {
-        let task = operationSequencer.enqueue {
+        let task = enqueueWorkspaceOperation {
             guard var current = workspace.view else {
                 throw ProjectWorkspaceActionError(
                     code: .snapshotUnavailable,
@@ -8921,7 +8938,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func fitWorkspaceScaleToModel() {
-        let task = operationSequencer.enqueue {
+        let task = enqueueWorkspaceOperation {
             guard let current = workspace.view else {
                 throw ProjectWorkspaceActionError(
                     code: .snapshotUnavailable,

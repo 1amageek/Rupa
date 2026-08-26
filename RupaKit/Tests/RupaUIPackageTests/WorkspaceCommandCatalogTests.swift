@@ -56,7 +56,8 @@ func mainViewAcceptsInjectedDomainRegistry() throws {
     let registry = try workspaceCommandCatalogDomainRegistry()
     _ = MainView(
         workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
-        domainRegistry: registry
+        domainRegistry: registry,
+        operationSequencer: ProjectWorkspaceOperationSequencer()
     )
 }
 

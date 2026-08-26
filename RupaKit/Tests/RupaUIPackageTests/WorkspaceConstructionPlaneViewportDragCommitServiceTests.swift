@@ -6,11 +6,8 @@ import Testing
 
 @MainActor
 @Test func constructionPlaneViewportOriginDragEditCommitsThroughSession() throws {
-    let session = WorkspaceLaunchSessionFactory.makeSession(
-        arguments: [
-            WorkspaceLaunchSessionFactory.selectedCustomConstructionPlaneFixtureArgument,
-        ]
-    )
+    let session = try WorkspaceLaunchSessionTestFixture
+        .makeSelectedCustomConstructionPlaneSession()
     let entry = try #require(
         ConstructionPlaneSummaryService().summarize(
             document: session.document,
@@ -50,11 +47,8 @@ import Testing
 
 @MainActor
 @Test func constructionPlaneViewportNormalDragEditCommitsThroughSession() throws {
-    let session = WorkspaceLaunchSessionFactory.makeSession(
-        arguments: [
-            WorkspaceLaunchSessionFactory.selectedCustomConstructionPlaneFixtureArgument,
-        ]
-    )
+    let session = try WorkspaceLaunchSessionTestFixture
+        .makeSelectedCustomConstructionPlaneSession()
     let entry = try #require(
         ConstructionPlaneSummaryService().summarize(
             document: session.document,
@@ -97,11 +91,8 @@ import Testing
 
 @MainActor
 @Test func constructionPlaneViewportDragEditIgnoresMismatchedPlaneTarget() throws {
-    let session = WorkspaceLaunchSessionFactory.makeSession(
-        arguments: [
-            WorkspaceLaunchSessionFactory.selectedCustomConstructionPlaneFixtureArgument,
-        ]
-    )
+    let session = try WorkspaceLaunchSessionTestFixture
+        .makeSelectedCustomConstructionPlaneSession()
     let entry = try #require(
         ConstructionPlaneSummaryService().summarize(
             document: session.document,

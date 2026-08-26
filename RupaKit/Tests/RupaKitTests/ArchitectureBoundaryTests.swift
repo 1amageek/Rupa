@@ -175,18 +175,20 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
             "RupaViewportScene",
         ],
         "RupaUI": [
+            "RupaKit",
             "RupaCore",
             "RupaDomainFoundation",
+            "RupaProject",
             "RupaRendering",
             "RupaPreview",
             "RupaViewportScene",
         ],
         "RupaAgentUI": [
+            "RupaKit",
             "RupaAgentRuntime",
             "RupaAgentTransport",
             "RupaCore",
             "RupaDomainFoundation",
-            "RupaUI",
         ],
         "RupaViewportScene": [
             "RupaCore",
@@ -228,12 +230,15 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
             "RupaDomainFoundation",
         ],
         "RupaAgentRuntime": [
+            "RupaKit",
             "RupaCore",
             "RupaCoreTypes",
             "RupaAutomation",
             "RupaCapabilities",
             "RupaDomainFoundation",
             "RupaAgentProtocol",
+            "RupaProject",
+            "RupaProjectModel",
         ],
         "RupaAgentTransport": [
             "RupaCoreTypes",
@@ -256,6 +261,7 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
             "RupaCLIKit",
         ],
         "RupaPerformanceBenchmark": [
+            "RupaKit",
             "RupaCore",
             "RupaAutomation",
             "RupaAgentProtocol",

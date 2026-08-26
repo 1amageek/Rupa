@@ -374,6 +374,46 @@ func projectAgentRegistryRejectsDuplicatesAndUnregistersExactly() async throws {
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
+func projectAgentRegistrationPathRebindsWithoutReplacingTheWorkspace() async throws {
+    let firstWorkspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
+    let secondWorkspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
+        document: .empty(named: "Second Path")
+    )
+    _ = try await firstWorkspace.evaluate()
+    _ = try await secondWorkspace.evaluate()
+    let controller = ProjectAgentCommandController()
+    let firstID = UUID()
+    let firstPath = URL(fileURLWithPath: "/tmp/first-\(UUID().uuidString).rupa")
+    let reboundPath = URL(fileURLWithPath: "/tmp/rebound-\(UUID().uuidString).rupa")
+    try await controller.register(
+        workspace: firstWorkspace,
+        path: firstPath,
+        id: firstID
+    )
+
+    try await controller.updatePath(id: firstID, path: reboundPath)
+    guard case .sessions(let reboundSummaries) = await controller.handle(.sessions) else {
+        Issue.record("Expected the rebound Agent session summary.")
+        return
+    }
+    let reboundSummary = try #require(reboundSummaries.first)
+    #expect(reboundSummary.id == firstID)
+    #expect(reboundSummary.path == reboundPath.standardizedFileURL.path)
+
+    await #expect(throws: EditorError.self) {
+        try await controller.register(workspace: secondWorkspace, path: reboundPath)
+    }
+
+    try await controller.updatePath(id: firstID, path: nil)
+    let secondID = try await controller.register(
+        workspace: secondWorkspace,
+        path: reboundPath
+    )
+    #expect(secondID != firstID)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
 func projectAgentRegistrationRejectsAStalePublishedView() async throws {
     let project = try ProjectController(
         document: .empty(named: "Registration Base"),
@@ -441,8 +481,10 @@ func staleViewCannotHideDuplicateCurrentProjectIdentityAtRegistration() async th
     do {
         _ = try await staleWorkspace.load(from: packageURL)
         Issue.record("Expected the loaded authority view projection to fail.")
-    } catch is ProjectAgentTestError {
+    } catch let error as ProjectWorkspacePersistencePublicationError {
         // The old project ID remains visible while authority now owns the loaded ID.
+        #expect(error.operation == .load)
+        #expect(error.state.document.projectID == authoritativeWorkspace.view?.projectID)
     }
     #expect(staleWorkspace.view?.projectID == visibleBeforeLoad.projectID)
 

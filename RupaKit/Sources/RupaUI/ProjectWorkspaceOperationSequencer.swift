@@ -1,9 +1,12 @@
 @MainActor
-final class ProjectWorkspaceOperationSequencer {
+public final class ProjectWorkspaceOperationSequencer {
     private var tail: Task<Void, Never>?
 
+    public init() {}
+
     @discardableResult
-    func enqueue<Result: Sendable>(
+    public func enqueue<Result: Sendable>(
+        operationGuard: @escaping @MainActor @Sendable () throws -> Void = {},
         _ operation: @escaping @MainActor @Sendable () async throws -> Result
     ) -> Task<Result, Error> {
         let predecessor = tail
@@ -12,6 +15,7 @@ final class ProjectWorkspaceOperationSequencer {
                 await predecessor.value
             }
             try Task.checkCancellation()
+            try operationGuard()
             return try await operation()
         }
         tail = Task { @MainActor in
@@ -20,9 +24,15 @@ final class ProjectWorkspaceOperationSequencer {
         return task
     }
 
-    func run<Result: Sendable>(
+    public func run<Result: Sendable>(
+        operationGuard: @escaping @MainActor @Sendable () throws -> Void = {},
         _ operation: @escaping @MainActor @Sendable () async throws -> Result
     ) async throws -> Result {
-        try await enqueue(operation).value
+        let task = enqueue(operationGuard: operationGuard, operation)
+        return try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
+        }
     }
 }

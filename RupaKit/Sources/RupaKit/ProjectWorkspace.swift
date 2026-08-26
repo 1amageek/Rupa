@@ -462,29 +462,95 @@ public final class ProjectWorkspace {
     }
 
     @discardableResult
-    public func load(from url: URL) async throws -> ProjectViewSnapshot {
-        let revision: DocumentTransactionRevision
+    public func load(
+        from url: URL,
+        operationGuard: @escaping ProjectOperationGuard = {}
+    ) async throws -> ProjectViewSnapshot {
+        let state: ProjectStateSnapshot
         if let view {
-            revision = view.transactionRevision
-        } else {
-            revision = await project.currentTransactionRevision()
-        }
-        return try await publish(
-            try await project.load(
+            state = try await project.load(
                 from: url,
-                expectedTransactionRevision: revision
+                expectedProjectID: view.projectID,
+                expectedTransactionRevision: view.transactionRevision,
+                expectedPublicationSequence: view.publicationSequence,
+                operationGuard: operationGuard
             )
-        )
+        } else {
+            let coordinate = await project.currentAuthorityCoordinate()
+            state = try await project.load(
+                from: url,
+                expectedProjectID: coordinate.projectID,
+                expectedTransactionRevision: coordinate.transactionRevision,
+                expectedPublicationSequence: coordinate.publicationSequence,
+                operationGuard: operationGuard
+            )
+        }
+        do {
+            return try await buildExactViewAndPublishIfNewer(state)
+        } catch {
+            throw ProjectWorkspacePersistencePublicationError(
+                operation: .load,
+                state: state,
+                message: "The project loaded, but its project view could not be built: \(error)."
+            )
+        }
     }
 
     @discardableResult
-    public func save(to url: URL) async throws -> ProjectViewSnapshot {
-        let revision = try currentTransactionRevision()
-        _ = try await project.save(
-            to: url,
-            expectedTransactionRevision: revision
+    public func replace(
+        with document: DesignDocument,
+        operationGuard: @escaping ProjectOperationGuard = {}
+    ) async throws -> ProjectViewSnapshot {
+        let coordinate: ProjectAuthorityCoordinate
+        if let view {
+            coordinate = ProjectAuthorityCoordinate(
+                projectID: view.projectID,
+                transactionRevision: view.transactionRevision,
+                publicationSequence: view.publicationSequence
+            )
+        } else {
+            coordinate = await project.currentAuthorityCoordinate()
+        }
+        let state = try await project.replace(
+            with: document,
+            expectedProjectID: coordinate.projectID,
+            expectedTransactionRevision: coordinate.transactionRevision,
+            expectedPublicationSequence: coordinate.publicationSequence,
+            operationGuard: operationGuard
         )
-        return try await publish(try await project.currentState())
+        do {
+            return try await buildExactViewAndPublishIfNewer(state)
+        } catch {
+            throw ProjectWorkspacePersistencePublicationError(
+                operation: .newProject,
+                state: state,
+                message: "The new project was created, but its project view could not be built: \(error)."
+            )
+        }
+    }
+
+    @discardableResult
+    public func save(
+        to url: URL,
+        operationGuard: @escaping ProjectOperationGuard = {}
+    ) async throws -> ProjectViewSnapshot {
+        let snapshot = try currentInteractionCoordinates()
+        let commit = try await project.save(
+            to: url,
+            expectedProjectID: snapshot.projectID,
+            expectedTransactionRevision: snapshot.transactionRevision,
+            expectedPublicationSequence: snapshot.publicationSequence,
+            operationGuard: operationGuard
+        )
+        do {
+            return try await buildExactViewAndPublishIfNewer(commit.state)
+        } catch {
+            throw ProjectWorkspacePersistencePublicationError(
+                operation: .save,
+                state: commit.state,
+                message: "The project saved, but its project view could not be built: \(error)."
+            )
+        }
     }
 
     @discardableResult

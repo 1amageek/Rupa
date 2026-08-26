@@ -60,6 +60,10 @@ public final class ProjectAgentCommandController: AgentSocketServing {
         await registry.unregister(id: id)
     }
 
+    public func updatePath(id: UUID, path: URL?) async throws {
+        try await registry.updatePath(id: id, path: path)
+    }
+
     public func setSocketPath(_ path: String?) async {
         socketPath = path
     }
@@ -179,7 +183,7 @@ public final class ProjectAgentCommandController: AgentSocketServing {
         case .createDocument, .openDocument, .closeDocument, .save:
             throw EditorError(
                 code: .commandUnsupported,
-                message: "Agent file and window ownership is unavailable until the application project lifecycle is integrated."
+                message: "Application-owned file and window lifecycle is outside the Agent project route."
             )
 
         case .parameters,

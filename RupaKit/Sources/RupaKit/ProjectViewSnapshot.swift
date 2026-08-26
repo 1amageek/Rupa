@@ -1,11 +1,13 @@
 import RupaCore
 import RupaCoreTypes
+import RupaProject
 import RupaViewportScene
 
 /// The immutable, read-only state consumed by project UI.
 ///
 /// Source bytes and mutation authority remain owned by `ProjectOperating`.
 public struct ProjectViewSnapshot: Sendable {
+    public let documentLifetimeID: ProjectDocumentLifetimeID
     public let projectID: ProjectID
     public let projectName: String
     public let document: ProjectReadDocument

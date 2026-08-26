@@ -8,6 +8,7 @@ import RupaProjectPackage
 import SwiftCAD
 
 public actor ProjectController: ProjectOperating {
+    private var documentLifetimeID: ProjectDocumentLifetimeID
     private var session: EditorSession
     private var packageDocument: ProjectPackageDocument
     private var evaluationSource: ProjectSourceModel
@@ -50,6 +51,7 @@ public actor ProjectController: ProjectOperating {
             packageValidator: packageValidator,
             objectRegistry: objectRegistry
         )
+        documentLifetimeID = ProjectDocumentLifetimeID()
         session = EditorSession(
             document: document,
             objectRegistry: objectRegistry,
@@ -104,6 +106,7 @@ public actor ProjectController: ProjectOperating {
             cadSourceCodec: cadSourceCodec,
             objectRegistry: objectRegistry
         )
+        documentLifetimeID = ProjectDocumentLifetimeID()
         session = EditorSession(
             document: initial.document,
             objectRegistry: objectRegistry,
@@ -142,6 +145,14 @@ public actor ProjectController: ProjectOperating {
         session.transactionRevision
     }
 
+    public func currentAuthorityCoordinate() -> ProjectAuthorityCoordinate {
+        ProjectAuthorityCoordinate(
+            projectID: session.document.projectID,
+            transactionRevision: session.transactionRevision,
+            publicationSequence: publicationSequence
+        )
+    }
+
     public func currentEvaluation() throws -> EvaluatedProjectSnapshot {
         guard let evaluation else {
             throw ProjectControllerError(
@@ -154,6 +165,7 @@ public actor ProjectController: ProjectOperating {
 
     public func currentState() throws -> ProjectStateSnapshot {
         ProjectStateSnapshot(
+            documentLifetimeID: documentLifetimeID,
             document: session.document,
             package: packageDocument,
             documentGeneration: session.generation,
@@ -785,7 +797,27 @@ public actor ProjectController: ProjectOperating {
         from url: URL,
         expectedTransactionRevision: DocumentTransactionRevision
     ) async throws -> ProjectStateSnapshot {
+        try await load(
+            from: url,
+            expectedProjectID: session.document.projectID,
+            expectedTransactionRevision: expectedTransactionRevision,
+            expectedPublicationSequence: publicationSequence,
+            operationGuard: {}
+        )
+    }
+
+    public func load(
+        from url: URL,
+        expectedProjectID: ProjectID,
+        expectedTransactionRevision: DocumentTransactionRevision,
+        expectedPublicationSequence: UInt64,
+        operationGuard: @escaping ProjectOperationGuard
+    ) async throws -> ProjectStateSnapshot {
+        try Task.checkCancellation()
+        try operationGuard()
+        try requireProjectID(expectedProjectID)
         try requireTransactionRevision(expectedTransactionRevision)
+        try requirePublicationSequence(expectedPublicationSequence)
         let basePublicationSequence = publicationSequence
         let reader = packageReader
         let loadedPackage: ProjectPackageDocument
@@ -819,10 +851,15 @@ public actor ProjectController: ProjectOperating {
             revision: loadedRevision,
             reusing: nil
         )
+        try Task.checkCancellation()
+        try operationGuard()
+        try requireProjectID(expectedProjectID)
         try requireTransactionRevision(expectedTransactionRevision)
+        try requirePublicationSequence(expectedPublicationSequence)
         try requirePublicationSequence(basePublicationSequence)
         let nextPublicationSequence = try advancedPublicationSequence()
 
+        documentLifetimeID = ProjectDocumentLifetimeID()
         session = EditorSession(
             document: reconstructed.document,
             transactionRevision: loadedRevision,
@@ -834,6 +871,7 @@ public actor ProjectController: ProjectOperating {
         evaluation = loadedEvaluation
         publicationSequence = nextPublicationSequence
         return ProjectStateSnapshot(
+            documentLifetimeID: documentLifetimeID,
             document: reconstructed.document,
             package: loadedPackage,
             documentGeneration: session.generation,
@@ -852,13 +890,110 @@ public actor ProjectController: ProjectOperating {
         )
     }
 
+    public func replace(
+        with document: DesignDocument,
+        expectedProjectID: ProjectID,
+        expectedTransactionRevision: DocumentTransactionRevision,
+        expectedPublicationSequence: UInt64,
+        operationGuard: @escaping ProjectOperationGuard
+    ) async throws -> ProjectStateSnapshot {
+        try Task.checkCancellation()
+        try operationGuard()
+        try requireProjectID(expectedProjectID)
+        try requireTransactionRevision(expectedTransactionRevision)
+        try requirePublicationSequence(expectedPublicationSequence)
+
+        let initial = try Self.makeInitialState(
+            document: document,
+            projector: projector,
+            productSourceCodec: productSourceCodec,
+            cadSourceCodec: cadSourceCodec,
+            packageValidator: packageValidator,
+            objectRegistry: objectRegistry
+        )
+        let replacementRevision: DocumentTransactionRevision
+        do {
+            replacementRevision = try expectedTransactionRevision.advanced()
+        } catch let error as EditorError {
+            throw projectError(for: error)
+        }
+        let replacementEvaluation = try await evaluate(
+            document: document,
+            source: initial.evaluationSource,
+            purpose: .presentation,
+            revision: replacementRevision,
+            reusing: nil
+        )
+
+        try Task.checkCancellation()
+        try operationGuard()
+        try requireProjectID(expectedProjectID)
+        try requireTransactionRevision(expectedTransactionRevision)
+        try requirePublicationSequence(expectedPublicationSequence)
+        let nextPublicationSequence = try advancedPublicationSequence()
+
+        documentLifetimeID = ProjectDocumentLifetimeID()
+        session = EditorSession(
+            document: document,
+            transactionRevision: replacementRevision,
+            objectRegistry: objectRegistry,
+            commandContextResolver: commandContextResolver
+        )
+        packageDocument = initial.package
+        evaluationSource = initial.evaluationSource
+        evaluation = replacementEvaluation
+        publicationSequence = nextPublicationSequence
+        return try currentState()
+    }
+
     /// Saves synchronously inside actor isolation so no source transaction can
     /// pass the revision check before the atomic file replacement completes.
     public func save(
         to url: URL,
         expectedTransactionRevision: DocumentTransactionRevision
     ) throws -> ProjectPackageSaveResult {
+        try savePackage(
+            to: url,
+            expectedProjectID: session.document.projectID,
+            expectedTransactionRevision: expectedTransactionRevision,
+            expectedPublicationSequence: publicationSequence,
+            operationGuard: {}
+        )
+    }
+
+    public func save(
+        to url: URL,
+        expectedProjectID: ProjectID,
+        expectedTransactionRevision: DocumentTransactionRevision,
+        expectedPublicationSequence: UInt64,
+        operationGuard: @escaping ProjectOperationGuard
+    ) throws -> ProjectSaveCommitResult {
+        _ = try currentEvaluation()
+        let package = try savePackage(
+            to: url,
+            expectedProjectID: expectedProjectID,
+            expectedTransactionRevision: expectedTransactionRevision,
+            expectedPublicationSequence: expectedPublicationSequence,
+            operationGuard: operationGuard
+        )
+        return ProjectSaveCommitResult(
+            package: package,
+            state: try currentState()
+        )
+    }
+
+    private func savePackage(
+        to url: URL,
+        expectedProjectID: ProjectID,
+        expectedTransactionRevision: DocumentTransactionRevision,
+        expectedPublicationSequence: UInt64,
+        operationGuard: @escaping ProjectOperationGuard
+    ) throws -> ProjectPackageSaveResult {
+        try Task.checkCancellation()
+        try operationGuard()
+        try requireProjectID(expectedProjectID)
         try requireTransactionRevision(expectedTransactionRevision)
+        try requirePublicationSequence(expectedPublicationSequence)
         let nextPublicationSequence = try advancedPublicationSequence()
         do {
             let result = try packageWriter.save(packageDocument, to: url)

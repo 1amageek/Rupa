@@ -215,6 +215,7 @@ let package = Package(
                 "RupaKit",
                 "RupaCore",
                 "RupaDomainFoundation",
+                "RupaProject",
                 "RupaRendering",
                 "RupaPreview",
                 "RupaViewportScene",

@@ -103,6 +103,10 @@ public final class AgentHost {
         await controller.unregister(id: id)
     }
 
+    public func updatePath(id: UUID, path: URL?) async throws {
+        try await controller.updatePath(id: id, path: path)
+    }
+
     private func advanceLifecycleGeneration() {
         if lifecycleGeneration == Int.max {
             lifecycleGeneration = 1

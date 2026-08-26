@@ -66,6 +66,8 @@ func productionMainViewGraphAuditIncludesEveryNonLegacyUIAndPresentationSource()
     #expect(audited.contains("Sources/RupaRendering/MeshSourcePresentationSectionGeometryCache.swift"))
     #expect(audited.contains("Sources/RupaRendering/ViewportSectionMeshClipper.swift"))
     #expect(audited.contains("Sources/RupaViewportScene/UniversalViewportScene.swift"))
+    #expect(audited.contains("../Rupa/Rupa/Rupa/ApplicationRoot.swift"))
+    #expect(audited.contains("../Rupa/Rupa/Rupa/ApplicationProjectCoordinator.swift"))
     #expect(Set(audited).isDisjoint(with: ProductionMainViewActionManifest.legacyExcludedSourceFiles))
 }
 

@@ -2,6 +2,7 @@ import RupaCore
 import RupaKit
 import RupaProject
 import RupaRendering
+import Synchronization
 import Testing
 @testable import RupaUI
 
@@ -64,6 +65,49 @@ func projectWorkspaceOperationSequencerReservesSameTurnEnqueueOrder() async thro
     #expect(try await first.value == 1)
     #expect(try await second.value == 2)
     #expect(events == ["first", "second"])
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspaceOperationSequencerRejectsQueuedIntentAfterLifetimeGuardChanges() async throws {
+    let sequencer = ProjectWorkspaceOperationSequencer()
+    var releaseFirst: CheckedContinuation<Void, Never>?
+    let acceptsQueuedIntent = Mutex(true)
+    let queuedIntentDidRun = Mutex(false)
+
+    let first = sequencer.enqueue {
+        await withCheckedContinuation { continuation in
+            releaseFirst = continuation
+        }
+    }
+    while releaseFirst == nil {
+        await Task.yield()
+    }
+    let queued = sequencer.enqueue(
+        operationGuard: {
+            guard acceptsQueuedIntent.withLock({ $0 }) else {
+                throw ProjectWorkspaceActionError(
+                    code: .documentLifetimeMismatch,
+                    message: "Fixture document lifetime changed."
+                )
+            }
+        }
+    ) {
+        queuedIntentDidRun.withLock { $0 = true }
+    }
+
+    acceptsQueuedIntent.withLock { $0 = false }
+    releaseFirst?.resume()
+    _ = try await first.value
+    var caught: ProjectWorkspaceActionError?
+    do {
+        _ = try await queued.value
+    } catch let error as ProjectWorkspaceActionError {
+        caught = error
+    }
+
+    #expect(caught?.code == .documentLifetimeMismatch)
+    #expect(queuedIntentDidRun.withLock { $0 } == false)
 }
 
 @MainActor

@@ -9,6 +9,8 @@ import RupaProjectPackage
 public protocol ProjectOperating: Actor {
     func currentTransactionRevision() -> DocumentTransactionRevision
 
+    func currentAuthorityCoordinate() -> ProjectAuthorityCoordinate
+
     func currentState() throws -> ProjectStateSnapshot
 
     func withValidatedCoordinates<Result: Sendable>(
@@ -78,8 +80,32 @@ public protocol ProjectOperating: Actor {
         expectedTransactionRevision: DocumentTransactionRevision
     ) async throws -> ProjectStateSnapshot
 
+    func replace(
+        with document: DesignDocument,
+        expectedProjectID: ProjectID,
+        expectedTransactionRevision: DocumentTransactionRevision,
+        expectedPublicationSequence: UInt64,
+        operationGuard: @escaping ProjectOperationGuard
+    ) async throws -> ProjectStateSnapshot
+
+    func load(
+        from url: URL,
+        expectedProjectID: ProjectID,
+        expectedTransactionRevision: DocumentTransactionRevision,
+        expectedPublicationSequence: UInt64,
+        operationGuard: @escaping ProjectOperationGuard
+    ) async throws -> ProjectStateSnapshot
+
     func save(
         to url: URL,
         expectedTransactionRevision: DocumentTransactionRevision
     ) throws -> ProjectPackageSaveResult
+
+    func save(
+        to url: URL,
+        expectedProjectID: ProjectID,
+        expectedTransactionRevision: DocumentTransactionRevision,
+        expectedPublicationSequence: UInt64,
+        operationGuard: @escaping ProjectOperationGuard
+    ) throws -> ProjectSaveCommitResult
 }

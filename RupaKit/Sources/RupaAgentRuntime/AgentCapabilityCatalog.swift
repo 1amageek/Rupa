@@ -2173,36 +2173,36 @@ public enum AgentCapabilityCatalog {
         capability(
             "createDocument",
             category: .persistence,
-            summary: "Currently unavailable: application-owned project creation and registration is not yet connected to the Agent project route.",
+            summary: "Unavailable from Agent requests: project creation, registration, and window ownership belong to the application lifecycle.",
             access: .agentRequest,
             stateEffect: .workspaceMutation,
             requiresSession: false,
             requiresExpectedSourceGeneration: false,
             requiresExpectedWorkspaceRevision: false,
             targets: [.document],
-            failureMode: "Returns commandUnsupported until application project lifecycle ownership is integrated."
+            failureMode: "Returns commandUnsupported because application-owned file and window lifecycle is outside the Agent project route."
         ),
         capability(
             "openDocument",
             category: .persistence,
-            summary: "Currently unavailable: application-owned package opening and project registration is not yet connected to the Agent project route.",
+            summary: "Unavailable from Agent requests: package opening, project registration, and window ownership belong to the application lifecycle.",
             access: .agentRequest,
             stateEffect: .workspaceMutation,
             requiresSession: false,
             requiresExpectedSourceGeneration: false,
             requiresExpectedWorkspaceRevision: false,
             targets: [.document],
-            failureMode: "Returns commandUnsupported until application project lifecycle ownership is integrated."
+            failureMode: "Returns commandUnsupported because application-owned file and window lifecycle is outside the Agent project route."
         ),
         capability(
             "closeDocument",
             category: .persistence,
-            summary: "Currently unavailable: application-owned project closing is not yet connected to the Agent project route.",
+            summary: "Unavailable from Agent requests: project closing and window ownership belong to the application lifecycle.",
             access: .agentRequest,
             stateEffect: .workspaceMutation,
             requiresExpectedWorkspaceRevision: false,
             targets: [.document],
-            failureMode: "Returns commandUnsupported until application project lifecycle ownership is integrated."
+            failureMode: "Returns commandUnsupported because application-owned file and window lifecycle is outside the Agent project route."
         ),
         capability(
             "resetDocument",
@@ -2234,11 +2234,11 @@ public enum AgentCapabilityCatalog {
         capability(
             "saveDocument",
             category: .persistence,
-            summary: "Currently unavailable: application-owned project save is not yet connected to the Agent project route.",
+            summary: "Unavailable from Agent requests: package destination and save lifecycle belong to the application.",
             access: .agentRequest,
             stateEffect: .readOnly,
             targets: [.document],
-            failureMode: "Returns commandUnsupported until application project lifecycle ownership is integrated."
+            failureMode: "Returns commandUnsupported because application-owned file lifecycle is outside the Agent project route."
         ),
         capability(
             "exportDocument",

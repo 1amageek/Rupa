@@ -154,7 +154,7 @@ struct ProjectWorkspaceRegistrationLease {
 public final class ProjectWorkspaceRegistry {
     private struct Entry {
         let workspace: ProjectWorkspace
-        let path: URL?
+        var path: URL?
         let token: ProjectWorkspaceRegistrationToken
         var registeredProjectID: ProjectID
     }
@@ -220,6 +220,31 @@ public final class ProjectWorkspaceRegistry {
         if entries[id]?.token === entry.token {
             entries.removeValue(forKey: id)
         }
+    }
+
+    public func updatePath(id: UUID, path: URL?) async throws {
+        var entry = try await reconciledEntry(id: id)
+        let operation = try entry.token.acquireOperation()
+        defer { operation.finish() }
+        try operation.validate()
+
+        let normalizedPath = path?.standardizedFileURL
+        if let normalizedPath,
+           let existingID = registeredSessionID(for: normalizedPath),
+           existingID != id {
+            throw EditorError(
+                code: .documentOpenInApp,
+                message: "Project \(normalizedPath.path) is already registered as session \(existingID.uuidString)."
+            )
+        }
+        guard let retained = entries[id], retained.token === entry.token else {
+            throw EditorError(
+                code: .sessionNotFound,
+                message: "Project session \(id.uuidString) was unregistered before its path could be updated."
+            )
+        }
+        entry.path = normalizedPath
+        entries[id] = entry
     }
 
     func lease(id: UUID) async throws -> ProjectWorkspaceRegistrationLease {

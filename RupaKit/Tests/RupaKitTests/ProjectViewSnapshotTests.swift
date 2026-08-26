@@ -207,6 +207,7 @@ func projectViewBuilderRejectsAnEvaluationFromAnotherTransactionRevision() async
     _ = try await controller.evaluateCurrent()
     let state = try await controller.currentState()
     let mismatched = ProjectStateSnapshot(
+        documentLifetimeID: state.documentLifetimeID,
         document: state.document,
         package: state.package,
         documentGeneration: state.documentGeneration,
@@ -260,6 +261,7 @@ func projectViewBuilderRejectsCADInteractionFromAnotherDocumentGeneration() asyn
     let state = try await controller.currentState()
     _ = try #require(state.cadInteraction)
     let mismatched = ProjectStateSnapshot(
+        documentLifetimeID: state.documentLifetimeID,
         document: state.document,
         package: state.package,
         documentGeneration: try state.documentGeneration.advanced(),
@@ -438,7 +440,7 @@ func projectWorkspaceRequiresAnInitialViewBeforeHistoryMutation() async throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
-func projectWorkspaceRejectsLateViewPublication() async throws {
+func projectWorkspaceReturnsLateExactViewWithoutRegressingPublication() async throws {
     let controller = try projectViewController(
         document: .empty(named: "Older View")
     )
@@ -458,9 +460,10 @@ func projectWorkspaceRejectsLateViewPublication() async throws {
     let retained = try await workspace.publish(olderState)
     let published = await workspace.view
 
-    #expect(retained.publicationSequence == newer.publicationSequence)
-    #expect(retained.projectName == "Newer View")
+    #expect(retained.publicationSequence == olderState.publicationSequence)
+    #expect(retained.projectName == "Older View")
     #expect(published?.publicationSequence == newer.publicationSequence)
+    #expect(published?.projectName == "Newer View")
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -493,6 +496,104 @@ func projectWorkspaceSavesAndLoadsWithoutAnInitialTargetView() async throws {
         )
         #expect(await targetWorkspace.view?.publicationSequence == loaded.publicationSequence)
     }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspaceSameProjectIDLoadChangesDocumentLifetime() async throws {
+    try await withProjectViewTemporaryDirectory { directory in
+        let original = try projectViewMeshOnlyDocument(named: "Before Reload")
+        let sourceController = try projectViewController(document: original)
+        let sourceWorkspace = await ProjectWorkspace(project: sourceController)
+        let sourceInitial = try await sourceWorkspace.evaluate()
+        let renamed = try await sourceWorkspace.commit(
+            ProjectSourceTransaction(
+                name: "view.prepare-same-project-reload",
+                commands: [.renameDocument(name: "After Reload")],
+                expectedProjectID: sourceInitial.projectID,
+                expectedTransactionRevision: sourceInitial.transactionRevision,
+                expectedPublicationSequence: sourceInitial.publicationSequence
+            )
+        )
+        #expect(renamed.documentLifetimeID == sourceInitial.documentLifetimeID)
+        let packageURL = directory.appendingPathComponent("same-project.rupa")
+        _ = try await sourceWorkspace.save(to: packageURL)
+
+        let targetController = try projectViewController(document: original)
+        let targetWorkspace = await ProjectWorkspace(project: targetController)
+        let visibleBeforeLoad = try await targetWorkspace.evaluate()
+        let loaded = try await targetWorkspace.load(from: packageURL)
+
+        #expect(loaded.projectID == visibleBeforeLoad.projectID)
+        #expect(loaded.projectName == "After Reload")
+        #expect(loaded.documentLifetimeID != visibleBeforeLoad.documentLifetimeID)
+        #expect(await targetWorkspace.view?.documentLifetimeID == loaded.documentLifetimeID)
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspaceReplacesProjectAuthorityWithoutReplacingTheWorkspace() async throws {
+    let controller = try projectViewController(document: .empty(named: "Original"))
+    let workspace = await ProjectWorkspace(project: controller)
+    let initial = try await workspace.evaluate()
+    let replacementDocument = try projectViewMeshOnlyDocument(named: "Replacement")
+
+    let replacement = try await workspace.replace(with: replacementDocument)
+    let item = try #require(replacement.viewport.items.first)
+    let source = try #require(
+        replacement.document.document.authoredMeshAssets.values.first?.source
+    )
+
+    #expect(replacement.projectID == replacementDocument.projectID)
+    #expect(replacement.projectID != initial.projectID)
+    #expect(replacement.documentLifetimeID != initial.documentLifetimeID)
+    #expect(replacement.transactionRevision == DocumentTransactionRevision(1))
+    #expect(replacement.publicationSequence == initial.publicationSequence + 1)
+    #expect(replacement.projectName == "Replacement")
+    #expect(replacement.canUndo == false)
+    #expect(replacement.canRedo == false)
+    expectProjectViewSharedStorage(item.mesh, source)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspaceInitialLoadRejectsAConcurrentAuthorityPublication() async throws {
+    let loadedDocument = try projectViewMeshOnlyDocument(named: "Loaded Without View")
+    let sourceController = try projectViewController(document: loadedDocument)
+    let loadedPackage = await sourceController.currentPackage()
+    let gate = ProjectPackageLoadGate()
+    let controller = try ProjectController(
+        document: .empty(named: "Retained Without View"),
+        evaluatorPreparer: DefaultDesignDocumentProjectEvaluatorFactory(),
+        projector: DesignDocumentProjectBridge(),
+        packageReader: BlockingProjectPackageReader(
+            package: loadedPackage,
+            gate: gate
+        )
+    )
+    let workspace = await ProjectWorkspace(project: controller)
+
+    let load = Task {
+        try await workspace.load(
+            from: URL(fileURLWithPath: "/ignored/initial-load-race.rupa")
+        )
+    }
+    while !gate.didStart {
+        try await Task.sleep(for: .milliseconds(1))
+    }
+    _ = try await controller.evaluateCurrent(operationGuard: {})
+    gate.release()
+
+    var loadError: ProjectControllerError?
+    do {
+        _ = try await load.value
+    } catch let caught as ProjectControllerError {
+        loadError = caught
+    }
+    let retained = try await controller.currentState()
+
+    #expect(loadError?.code == .publicationConflict)
+    #expect(retained.document.cadDocument.metadata.name == "Retained Without View")
+    #expect(retained.publicationSequence == 1)
+    #expect(await workspace.view == nil)
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -1056,6 +1157,7 @@ private func projectViewState(
     evaluation: EvaluatedProjectSnapshot? = nil
 ) -> ProjectStateSnapshot {
     ProjectStateSnapshot(
+        documentLifetimeID: state.documentLifetimeID,
         document: state.document,
         package: state.package,
         documentGeneration: state.documentGeneration,

@@ -83,6 +83,7 @@ public struct ProjectViewSnapshotBuilder: ProjectViewSnapshotBuilding, Sendable 
         }
 
         return ProjectViewSnapshot(
+            documentLifetimeID: state.documentLifetimeID,
             projectID: state.evaluationSource.id,
             projectName: state.evaluationSource.name,
             document: document,

@@ -5,6 +5,7 @@ import RupaProjectModel
 import RupaProjectPackage
 
 public struct ProjectStateSnapshot: Sendable {
+    public let documentLifetimeID: ProjectDocumentLifetimeID
     public let document: DesignDocument
     public let package: ProjectPackageDocument
     public let documentGeneration: DocumentGeneration
@@ -22,6 +23,7 @@ public struct ProjectStateSnapshot: Sendable {
     public let evaluation: EvaluatedProjectSnapshot
 
     public init(
+        documentLifetimeID: ProjectDocumentLifetimeID,
         document: DesignDocument,
         package: ProjectPackageDocument,
         documentGeneration: DocumentGeneration,
@@ -38,6 +40,7 @@ public struct ProjectStateSnapshot: Sendable {
         cadInteraction: DocumentEvaluationContext?,
         evaluation: EvaluatedProjectSnapshot
     ) {
+        self.documentLifetimeID = documentLifetimeID
         self.document = document
         self.package = package
         self.documentGeneration = documentGeneration

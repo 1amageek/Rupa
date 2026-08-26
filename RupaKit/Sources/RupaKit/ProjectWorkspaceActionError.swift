@@ -3,6 +3,7 @@ import Foundation
 public struct ProjectWorkspaceActionError: Error, Equatable, LocalizedError, Sendable {
     public enum Code: String, Equatable, Sendable {
         case snapshotUnavailable
+        case documentLifetimeMismatch
         case actionResultMismatch
         case readRouteRequired
     }
