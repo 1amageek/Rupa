@@ -140,6 +140,17 @@ public actor ProjectController: ProjectOperating {
         )
     }
 
+    public func applyInteraction(
+        _ transaction: ProjectInteractionTransaction
+    ) async throws -> ProjectStateSnapshot {
+        try await stageAndPublishInteraction(
+            selection: transaction.selection,
+            workspaceCommands: transaction.workspaceCommands,
+            expectedTransactionRevision: transaction.expectedTransactionRevision,
+            expectedPublicationSequence: transaction.expectedPublicationSequence
+        )
+    }
+
     public func evaluateCurrent() async throws -> EvaluatedProjectSnapshot {
         let baseRevision = session.transactionRevision
         let stagedEvaluation = try await evaluate(
@@ -415,6 +426,7 @@ public actor ProjectController: ProjectOperating {
         expectedTransactionRevision: DocumentTransactionRevision
     ) async throws -> ProjectStateSnapshot {
         try requireTransactionRevision(expectedTransactionRevision)
+        let basePublicationSequence = publicationSequence
         let reader = packageReader
         let loadedPackage: ProjectPackageDocument
         do {
@@ -448,6 +460,7 @@ public actor ProjectController: ProjectOperating {
             reusing: nil
         )
         try requireTransactionRevision(expectedTransactionRevision)
+        try requirePublicationSequence(basePublicationSequence)
         let nextPublicationSequence = try advancedPublicationSequence()
 
         session = EditorSession(
@@ -620,6 +633,137 @@ public actor ProjectController: ProjectOperating {
                 message: "Expected project publication sequence \(expectedPublicationSequence), but current sequence is \(publicationSequence)."
             )
         }
+    }
+
+    private func stageAndPublishInteraction(
+        selection requestedSelection: ProjectSelectionOperation?,
+        workspaceCommands: [WorkspaceCommand],
+        expectedTransactionRevision: DocumentTransactionRevision,
+        expectedPublicationSequence: UInt64
+    ) async throws -> ProjectStateSnapshot {
+        try requireTransactionRevision(expectedTransactionRevision)
+        try requirePublicationSequence(expectedPublicationSequence)
+        _ = try currentEvaluation()
+
+        let basePublicationSequence = publicationSequence
+        let baseSessionSnapshot = session.transactionSnapshot()
+        var stagedSelection = baseSessionSnapshot.selection
+        if let requestedSelection {
+            stagedSelection = try validatedSelection(for: requestedSelection)
+        }
+
+        var stagedWorkspaceState = baseSessionSnapshot.workspaceState
+        if !workspaceCommands.isEmpty {
+            do {
+                for workspaceCommand in workspaceCommands {
+                    _ = try stagedWorkspaceState.apply(
+                        workspaceCommand,
+                        document: session.document
+                    )
+                }
+                try stagedWorkspaceState.validate(against: session.document)
+            } catch let error as EditorError {
+                throw projectError(for: error)
+            } catch {
+                throw ProjectControllerError(
+                    code: .transactionInvalid,
+                    message: "Persistent workspace staging failed: \(error)."
+                )
+            }
+        }
+
+        var stagedSessionSnapshot = baseSessionSnapshot
+        stagedSessionSnapshot.selection = stagedSelection
+        let selectionChanged = stagedSelection != baseSessionSnapshot.selection
+        let workspaceChanged = hasSemanticWorkspaceChange(
+            from: baseSessionSnapshot.workspaceState,
+            to: stagedWorkspaceState
+        )
+        stagedSessionSnapshot.workspaceState = workspaceChanged
+            ? stagedWorkspaceState
+            : baseSessionSnapshot.workspaceState
+        if !selectionChanged && !workspaceChanged {
+            return try currentState()
+        }
+        let nextPublicationSequence = try advancedPublicationSequence()
+
+        do {
+            session.restoreTransactionSnapshot(stagedSessionSnapshot)
+            publicationSequence = nextPublicationSequence
+            return try currentState()
+        } catch {
+            session.restoreTransactionSnapshot(baseSessionSnapshot)
+            publicationSequence = basePublicationSequence
+            throw error
+        }
+    }
+
+    private func validatedSelection(
+        for operation: ProjectSelectionOperation
+    ) throws -> SelectionModel {
+        let requestedSelection: SelectionModel
+        switch operation {
+        case .replace(let selection):
+            requestedSelection = selection
+        case .clear:
+            return .empty
+        }
+        guard requestedSelection.selectedTargets.isEmpty
+                || requestedSelection.selectedReferences.isEmpty else {
+            throw ProjectControllerError(
+                code: .transactionInvalid,
+                message: "A selection transaction cannot contain object targets and subshape references together."
+            )
+        }
+        guard requestedSelection.hoveredTarget == nil,
+              requestedSelection.hoveredReference == nil else {
+            throw ProjectControllerError(
+                code: .transactionInvalid,
+                message: "Selection hover state is transient and cannot be committed by a project interaction transaction."
+            )
+        }
+
+        var validated = SelectionModel.empty
+        do {
+            if !requestedSelection.selectedTargets.isEmpty {
+                try validated.selectTargets(
+                    requestedSelection.selectedTargets,
+                    in: session.document
+                )
+            } else if !requestedSelection.selectedReferences.isEmpty {
+                try validated.selectReferences(
+                    requestedSelection.selectedReferences,
+                    in: session.document
+                )
+            }
+        } catch let error as EditorError {
+            throw projectError(for: error)
+        } catch {
+            throw ProjectControllerError(
+                code: .transactionInvalid,
+                message: "Selection staging failed: \(error)."
+            )
+        }
+        guard validated == requestedSelection else {
+            throw ProjectControllerError(
+                code: .transactionInvalid,
+                message: "The selection transaction is not in canonical form."
+            )
+        }
+        return validated
+    }
+
+    private func hasSemanticWorkspaceChange(
+        from base: WorkspaceState,
+        to staged: WorkspaceState
+    ) -> Bool {
+        base.ruler != staged.ruler
+            || base.viewportGridSettings != staged.viewportGridSettings
+            || base.activeConstructionPlaneID != staged.activeConstructionPlaneID
+            || base.curveCurvatureDisplays != staged.curveCurvatureDisplays
+            || base.pointDisplays != staged.pointDisplays
+            || base.surfaceControlPointDisplays != staged.surfaceControlPointDisplays
+            || base.surfaceFrameDisplays != staged.surfaceFrameDisplays
     }
 
     private func encodeProductSource(

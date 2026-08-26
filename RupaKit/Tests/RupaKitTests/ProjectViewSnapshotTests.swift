@@ -5,6 +5,8 @@ import RupaCoreTypes
 import RupaEvaluation
 import RupaProject
 import RupaProjectModel
+import RupaProjectPackage
+import Synchronization
 import SwiftCAD
 import Testing
 @testable import RupaGeometry
@@ -396,6 +398,406 @@ func projectWorkspaceSavesAndLoadsWithoutAnInitialTargetView() async throws {
     }
 }
 
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspacePublishesAtomicInteractionWithoutSourceRevisionOrEvaluation() async throws {
+    let document = try projectViewMeshOnlyDocument(named: "Interaction View")
+    let probe = ProjectInteractionEvaluationProbe()
+    let controller = try ProjectController(
+        document: document,
+        evaluatorPreparer: ProjectInteractionCountingPreparer(probe: probe),
+        projector: DesignDocumentProjectBridge()
+    )
+    let workspace = await ProjectWorkspace(project: controller)
+    let initial = try await workspace.evaluate()
+    let sourceMesh = try #require(initial.document.document.authoredMeshAssets.values.first?.source)
+    let sceneNodeID = try #require(document.productMetadata.sceneNodes.first {
+        $0.value.object != nil
+    }?.key)
+    let selection = SelectionModel(
+        selectedTargets: [SelectionTarget(sceneNodeID: sceneNodeID)]
+    )
+
+    let published = try await workspace.applyInteraction(
+        try ProjectInteractionTransaction(
+            selection: .replace(selection),
+            workspaceCommands: [
+                .setViewportGridSettings(
+                    ViewportGridSettings(visualSpacingMode: .fixed)
+                ),
+            ],
+            expectedTransactionRevision: initial.transactionRevision,
+            expectedPublicationSequence: initial.publicationSequence
+        )
+    )
+
+    #expect(published.selection == selection)
+    #expect(published.workspaceState.viewportGridSettings.visualSpacingMode == .fixed)
+    #expect(published.workspaceState.revision == WorkspaceRevision(1))
+    #expect(published.transactionRevision == initial.transactionRevision)
+    #expect(published.documentGeneration == initial.documentGeneration)
+    #expect(published.publicationSequence == initial.publicationSequence + 1)
+    #expect(published.viewport.snapshotID == initial.viewport.snapshotID)
+    #expect(probe.evaluationCount == 1)
+
+    let publishedMesh = try #require(published.viewport.items.first?.mesh)
+    expectProjectViewSharedStorage(publishedMesh, sourceMesh)
+    var callerOwnedDocument = published.document.document
+    callerOwnedDocument.rename("Caller Mutation")
+    #expect(published.document.name == "Interaction View")
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspaceRejectsInvalidInteractionWithoutPublicationOrPartialState() async throws {
+    let document = try projectViewMeshOnlyDocument(named: "Interaction Failure")
+    let controller = try projectViewController(document: document)
+    let workspace = await ProjectWorkspace(project: controller)
+    let initial = try await workspace.evaluate()
+    let initialState = try await controller.currentState()
+    let initialSourceMesh = try #require(
+        initialState.document.authoredMeshAssets.values.first?.source
+    )
+    let initialEvaluatedMesh = try #require(
+        initialState.evaluation.occurrences.values.first?.mesh
+    )
+    let sceneNodeID = try #require(document.productMetadata.sceneNodes.first {
+        $0.value.object != nil
+    }?.key)
+    let selection = SelectionModel(
+        selectedTargets: [SelectionTarget(sceneNodeID: sceneNodeID)]
+    )
+    let invalidPlane = ConstructionPlaneSourceID()
+    var error: ProjectControllerError?
+
+    do {
+        _ = try await workspace.applyInteraction(
+            try ProjectInteractionTransaction(
+                selection: .replace(selection),
+                workspaceCommands: [
+                    .setViewportGridSettings(
+                        ViewportGridSettings(visualSpacingMode: .fixed)
+                    ),
+                    .setActiveConstructionPlane(invalidPlane),
+                ],
+                expectedTransactionRevision: initial.transactionRevision,
+                expectedPublicationSequence: initial.publicationSequence
+            )
+        )
+    } catch let caught as ProjectControllerError {
+        error = caught
+    }
+
+    let retained = try #require(await workspace.view)
+    #expect(error?.code == .transactionInvalid)
+    #expect(retained.selection == initial.selection)
+    #expect(retained.workspaceState.revision == initial.workspaceState.revision)
+    #expect(retained.workspaceState.viewportGridSettings == initial.workspaceState.viewportGridSettings)
+    #expect(retained.workspaceState.ruler == initial.workspaceState.ruler)
+    #expect(retained.transactionRevision == initial.transactionRevision)
+    #expect(retained.publicationSequence == initial.publicationSequence)
+
+    let retainedState = try await controller.currentState()
+    #expect(retainedState.selection == initialState.selection)
+    #expect(retainedState.workspaceState.revision == initialState.workspaceState.revision)
+    #expect(
+        retainedState.workspaceState.viewportGridSettings
+            == initialState.workspaceState.viewportGridSettings
+    )
+    #expect(retainedState.workspaceState.ruler == initialState.workspaceState.ruler)
+    #expect(retainedState.transactionRevision == initialState.transactionRevision)
+    #expect(retainedState.documentGeneration == initialState.documentGeneration)
+    #expect(retainedState.publicationSequence == initialState.publicationSequence)
+    #expect(retainedState.evaluation.id == initialState.evaluation.id)
+    #expect(
+        retainedState.evaluation.copyTelemetry
+            == initialState.evaluation.copyTelemetry
+    )
+    let retainedEvaluatedMesh = try #require(
+        retainedState.evaluation.occurrences.values.first?.mesh
+    )
+    expectProjectViewSharedStorage(retainedEvaluatedMesh, initialEvaluatedMesh)
+    expectProjectViewSharedStorage(retainedEvaluatedMesh, initialSourceMesh)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspaceDoesNotPublishSemanticWorkspaceNoOps() async throws {
+    let document = try projectViewMeshOnlyDocument(named: "Workspace No Op")
+    let controller = try projectViewController(document: document)
+    let workspace = await ProjectWorkspace(project: controller)
+    let initial = try await workspace.evaluate()
+
+    let sameValue = try await workspace.applyWorkspace(
+        .setViewportGridSettings(.standard)
+    )
+    #expect(sameValue.publicationSequence == initial.publicationSequence)
+    #expect(sameValue.workspaceState.revision == initial.workspaceState.revision)
+    #expect(
+        sameValue.workspaceState.viewportGridSettings
+            == initial.workspaceState.viewportGridSettings
+    )
+
+    let sceneNodeID = try #require(document.productMetadata.sceneNodes.first {
+        $0.value.object != nil
+    }?.key)
+    let selected = SelectionModel(
+        selectedTargets: [SelectionTarget(sceneNodeID: sceneNodeID)]
+    )
+    let selectionWithSameValueWorkspace = try await workspace.applyInteraction(
+        try ProjectInteractionTransaction(
+            selection: .replace(selected),
+            workspaceCommands: [.setViewportGridSettings(.standard)],
+            expectedTransactionRevision: initial.transactionRevision,
+            expectedPublicationSequence: initial.publicationSequence
+        )
+    )
+    #expect(selectionWithSameValueWorkspace.selection == selected)
+    #expect(
+        selectionWithSameValueWorkspace.workspaceState.revision
+            == initial.workspaceState.revision
+    )
+    #expect(
+        selectionWithSameValueWorkspace.workspaceState.viewportGridSettings
+            == initial.workspaceState.viewportGridSettings
+    )
+    #expect(
+        selectionWithSameValueWorkspace.publicationSequence
+            == initial.publicationSequence + 1
+    )
+
+    let changeThenRevert = try await workspace.applyWorkspace([
+        .setViewportGridSettings(
+            ViewportGridSettings(visualSpacingMode: .fixed)
+        ),
+        .setViewportGridSettings(.standard),
+    ])
+    #expect(
+        changeThenRevert.publicationSequence
+            == selectionWithSameValueWorkspace.publicationSequence
+    )
+    #expect(changeThenRevert.workspaceState.revision == initial.workspaceState.revision)
+    #expect(
+        changeThenRevert.workspaceState.viewportGridSettings
+            == initial.workspaceState.viewportGridSettings
+    )
+
+    let selectionWithNetZeroWorkspace = try await workspace.applyInteraction(
+        try ProjectInteractionTransaction(
+            selection: .clear,
+            workspaceCommands: [
+                .setViewportGridSettings(
+                    ViewportGridSettings(visualSpacingMode: .fixed)
+                ),
+                .setViewportGridSettings(.standard),
+            ],
+            expectedTransactionRevision: initial.transactionRevision,
+            expectedPublicationSequence: selectionWithSameValueWorkspace.publicationSequence
+        )
+    )
+    #expect(selectionWithNetZeroWorkspace.selection == initial.selection)
+    #expect(
+        selectionWithNetZeroWorkspace.workspaceState.revision
+            == initial.workspaceState.revision
+    )
+    #expect(
+        selectionWithNetZeroWorkspace.workspaceState.viewportGridSettings
+            == initial.workspaceState.viewportGridSettings
+    )
+    #expect(
+        selectionWithNetZeroWorkspace.publicationSequence
+            == selectionWithSameValueWorkspace.publicationSequence + 1
+    )
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspaceRejectsLoadThatRacesWithInteractionPublication() async throws {
+    let loadedDocument = try projectViewMeshOnlyDocument(named: "Loaded During Interaction")
+    let sourceController = try projectViewController(document: loadedDocument)
+    let loadedPackage = await sourceController.currentPackage()
+    let gate = ProjectPackageLoadGate()
+    let controller = try ProjectController(
+        document: try projectViewMeshOnlyDocument(named: "Retained During Load"),
+        evaluatorPreparer: DefaultDesignDocumentProjectEvaluatorFactory(),
+        projector: DesignDocumentProjectBridge(),
+        packageReader: BlockingProjectPackageReader(
+            package: loadedPackage,
+            gate: gate
+        )
+    )
+    let workspace = await ProjectWorkspace(project: controller)
+    let initial = try await workspace.evaluate()
+    let initialState = try await controller.currentState()
+    let initialSourceMesh = try #require(
+        initialState.document.authoredMeshAssets.values.first?.source
+    )
+    let sceneNodeID = try #require(initial.document.document.productMetadata.sceneNodes.first {
+        $0.value.object != nil
+    }?.key)
+    let selection = SelectionModel(
+        selectedTargets: [SelectionTarget(sceneNodeID: sceneNodeID)]
+    )
+
+    let load = Task {
+        try await workspace.load(
+            from: URL(fileURLWithPath: "/ignored/load-race.rupa")
+        )
+    }
+    while !gate.didStart {
+        try await Task.sleep(for: .milliseconds(1))
+    }
+    defer { gate.release() }
+
+    let interaction = try await workspace.applyInteraction(
+        try ProjectInteractionTransaction(
+            selection: .replace(selection),
+            workspaceCommands: [
+                .setViewportGridSettings(
+                    ViewportGridSettings(visualSpacingMode: .fixed)
+                ),
+            ],
+            expectedTransactionRevision: initial.transactionRevision,
+            expectedPublicationSequence: initial.publicationSequence
+        )
+    )
+    gate.release()
+
+    var loadError: ProjectControllerError?
+    do {
+        _ = try await load.value
+    } catch let caught as ProjectControllerError {
+        loadError = caught
+    }
+
+    let retainedView = try #require(await workspace.view)
+    let retainedState = try await controller.currentState()
+    #expect(loadError?.code == .publicationConflict)
+    #expect(retainedView.selection == interaction.selection)
+    expectProjectViewWorkspaceStateEqual(
+        retainedView.workspaceState,
+        interaction.workspaceState
+    )
+    #expect(retainedView.publicationSequence == interaction.publicationSequence)
+    #expect(retainedState.selection == interaction.selection)
+    expectProjectViewWorkspaceStateEqual(
+        retainedState.workspaceState,
+        interaction.workspaceState
+    )
+    #expect(retainedState.transactionRevision == initialState.transactionRevision)
+    #expect(retainedState.documentGeneration == initialState.documentGeneration)
+    #expect(retainedState.publicationSequence == interaction.publicationSequence)
+    #expect(retainedState.evaluation.id == initialState.evaluation.id)
+    #expect(
+        retainedState.evaluation.copyTelemetry
+            == initialState.evaluation.copyTelemetry
+    )
+    let retainedEvaluatedMesh = try #require(
+        retainedState.evaluation.occurrences.values.first?.mesh
+    )
+    expectProjectViewSharedStorage(retainedEvaluatedMesh, initialSourceMesh)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspaceDoesNotPublishSelectionNoOpOrAcceptHoverAuthority() async throws {
+    let document = try projectViewMeshOnlyDocument(named: "Interaction No Op")
+    let controller = try projectViewController(document: document)
+    let workspace = await ProjectWorkspace(project: controller)
+    let initial = try await workspace.evaluate()
+
+    let noOp = try await workspace.applySelection(.replace(.empty))
+    #expect(noOp.publicationSequence == initial.publicationSequence)
+
+    var hovered = SelectionModel.empty
+    let sceneNodeID = try #require(document.productMetadata.sceneNodes.first {
+        $0.value.object != nil
+    }?.key)
+    try hovered.hoverSceneNode(sceneNodeID, in: document)
+    var error: ProjectControllerError?
+    do {
+        _ = try await workspace.applySelection(.replace(hovered))
+    } catch let caught as ProjectControllerError {
+        error = caught
+    }
+    let retained = try #require(await workspace.view)
+    #expect(error?.code == .transactionInvalid)
+    #expect(retained.publicationSequence == initial.publicationSequence)
+    #expect(retained.selection == initial.selection)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspaceRejectsInteractionFromStaleSourceRevision() async throws {
+    let controller = try projectViewController(
+        document: try projectViewMeshOnlyDocument(named: "Stale Source Revision")
+    )
+    let workspace = await ProjectWorkspace(project: controller)
+    let initial = try await workspace.evaluate()
+    let staleRevision = try initial.transactionRevision.advanced()
+    let sceneNodeID = try #require(initial.document.document.productMetadata.sceneNodes.first {
+        $0.value.object != nil
+    }?.key)
+    var error: ProjectControllerError?
+
+    do {
+        _ = try await workspace.applyInteraction(
+            try ProjectInteractionTransaction(
+                selection: .replace(
+                    SelectionModel(
+                        selectedTargets: [SelectionTarget(sceneNodeID: sceneNodeID)]
+                    )
+                ),
+                expectedTransactionRevision: staleRevision,
+                expectedPublicationSequence: initial.publicationSequence
+            )
+        )
+    } catch let caught as ProjectControllerError {
+        error = caught
+    }
+
+    let retained = try #require(await workspace.view)
+    #expect(error?.code == .revisionConflict)
+    #expect(retained.transactionRevision == initial.transactionRevision)
+    #expect(retained.publicationSequence == initial.publicationSequence)
+    #expect(retained.selection == initial.selection)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspaceRejectsInteractionFromStalePublicationSequence() async throws {
+    let controller = try projectViewController(
+        document: try projectViewMeshOnlyDocument(named: "Stale Publication")
+    )
+    let workspace = await ProjectWorkspace(project: controller)
+    let initial = try await workspace.evaluate()
+    let current = try await workspace.applyWorkspace(
+        .setViewportGridSettings(
+            ViewportGridSettings(visualSpacingMode: .fixed)
+        )
+    )
+    let sceneNodeID = try #require(initial.document.document.productMetadata.sceneNodes.first {
+        $0.value.object != nil
+    }?.key)
+    var error: ProjectControllerError?
+
+    do {
+        _ = try await workspace.applyInteraction(
+            try ProjectInteractionTransaction(
+                selection: .replace(
+                    SelectionModel(
+                        selectedTargets: [SelectionTarget(sceneNodeID: sceneNodeID)]
+                    )
+                ),
+                expectedTransactionRevision: initial.transactionRevision,
+                expectedPublicationSequence: initial.publicationSequence
+            )
+        )
+    } catch let caught as ProjectControllerError {
+        error = caught
+    }
+
+    let retained = try #require(await workspace.view)
+    #expect(error?.code == .publicationConflict)
+    #expect(retained.transactionRevision == current.transactionRevision)
+    #expect(retained.publicationSequence == current.publicationSequence)
+    #expect(retained.selection == current.selection)
+    #expect(retained.workspaceState.viewportGridSettings.visualSpacingMode == .fixed)
+}
+
 private func projectViewController(
     document: DesignDocument
 ) throws -> ProjectController {
@@ -404,6 +806,93 @@ private func projectViewController(
         evaluatorPreparer: DefaultDesignDocumentProjectEvaluatorFactory(),
         projector: DesignDocumentProjectBridge()
     )
+}
+
+private final class ProjectInteractionEvaluationProbe: Sendable {
+    private let count = Mutex(0)
+
+    var evaluationCount: Int {
+        count.withLock { $0 }
+    }
+
+    func recordEvaluation() {
+        count.withLock { $0 += 1 }
+    }
+}
+
+private struct ProjectInteractionCountingPreparer: ProjectEvaluatorPreparing {
+    let probe: ProjectInteractionEvaluationProbe
+    private let base = DefaultDesignDocumentProjectEvaluatorFactory()
+
+    func makeEvaluator(
+        for document: DesignDocument,
+        reusing currentEvaluation: DocumentEvaluationContext?
+    ) throws -> any ProjectEvaluating {
+        let evaluator = try base.makeEvaluator(
+            for: document,
+            reusing: currentEvaluation
+        )
+        return ProjectInteractionCountingEvaluator(
+            base: evaluator,
+            probe: probe
+        )
+    }
+}
+
+private struct ProjectInteractionCountingEvaluator: ProjectEvaluating {
+    let base: any ProjectEvaluating
+    let probe: ProjectInteractionEvaluationProbe
+
+    func evaluate(
+        project: ProjectSourceModel,
+        purpose: GeometryRepresentationPurpose,
+        revision: DocumentTransactionRevision
+    ) throws -> EvaluatedProjectSnapshot {
+        probe.recordEvaluation()
+        return try base.evaluate(
+            project: project,
+            purpose: purpose,
+            revision: revision
+        )
+    }
+}
+
+private final class ProjectPackageLoadGate: Sendable {
+    private struct State {
+        var didStart = false
+        var isReleased = false
+    }
+
+    private let state = Mutex(State())
+
+    var didStart: Bool {
+        state.withLock { $0.didStart }
+    }
+
+    func markStarted() {
+        state.withLock { $0.didStart = true }
+    }
+
+    func waitUntilReleased() {
+        while !state.withLock({ $0.isReleased }) {
+            Thread.sleep(forTimeInterval: 0.001)
+        }
+    }
+
+    func release() {
+        state.withLock { $0.isReleased = true }
+    }
+}
+
+private struct BlockingProjectPackageReader: ProjectPackageReading {
+    let package: ProjectPackageDocument
+    let gate: ProjectPackageLoadGate
+
+    func load(from _: URL) throws -> ProjectPackageDocument {
+        gate.markStarted()
+        gate.waitUntilReleased()
+        return package
+    }
 }
 
 private func projectViewState(
@@ -533,6 +1022,20 @@ private func expectProjectViewSharedStorage(
         evaluated.cornerVertexIDs.storage.chunkIdentities
             == source.cornerVertexIDs.storage.chunkIdentities
     )
+}
+
+private func expectProjectViewWorkspaceStateEqual(
+    _ lhs: WorkspaceState,
+    _ rhs: WorkspaceState
+) {
+    #expect(lhs.revision == rhs.revision)
+    #expect(lhs.ruler == rhs.ruler)
+    #expect(lhs.viewportGridSettings == rhs.viewportGridSettings)
+    #expect(lhs.activeConstructionPlaneID == rhs.activeConstructionPlaneID)
+    #expect(lhs.curveCurvatureDisplays == rhs.curveCurvatureDisplays)
+    #expect(lhs.pointDisplays == rhs.pointDisplays)
+    #expect(lhs.surfaceControlPointDisplays == rhs.surfaceControlPointDisplays)
+    #expect(lhs.surfaceFrameDisplays == rhs.surfaceFrameDisplays)
 }
 
 private func withProjectViewTemporaryDirectory<Result: Sendable>(

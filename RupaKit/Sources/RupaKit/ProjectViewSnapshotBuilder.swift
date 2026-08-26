@@ -50,6 +50,7 @@ public struct ProjectViewSnapshotBuilder: Sendable {
             from: state.evaluation,
             project: state.evaluationSource
         )
+        let document = try ProjectReadDocument(document: state.document)
         let sceneNodeIDByOccurrenceID = bridge.sceneNodeNavigationIndex(
             for: state.document
         )
@@ -76,6 +77,7 @@ public struct ProjectViewSnapshotBuilder: Sendable {
         return ProjectViewSnapshot(
             projectID: state.evaluationSource.id,
             projectName: state.evaluationSource.name,
+            document: document,
             documentGeneration: state.documentGeneration,
             transactionRevision: state.transactionRevision,
             publicationSequence: state.publicationSequence,

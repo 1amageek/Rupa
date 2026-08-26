@@ -9,6 +9,10 @@ public protocol ProjectOperating: Actor {
 
     func currentState() throws -> ProjectStateSnapshot
 
+    func applyInteraction(
+        _ transaction: ProjectInteractionTransaction
+    ) async throws -> ProjectStateSnapshot
+
     func evaluateCurrent() async throws -> EvaluatedProjectSnapshot
 
     func commit(

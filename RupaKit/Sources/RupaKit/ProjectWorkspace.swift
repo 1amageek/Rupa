@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import RupaCore
 import RupaCoreTypes
 import RupaProject
 
@@ -39,6 +40,46 @@ public final class ProjectWorkspace {
     ) async throws -> ProjectViewSnapshot {
         _ = try await project.commit(transaction)
         return try await publish(try await project.currentState())
+    }
+
+    @discardableResult
+    public func applyInteraction(
+        _ transaction: ProjectInteractionTransaction
+    ) async throws -> ProjectViewSnapshot {
+        try await publish(try await project.applyInteraction(transaction))
+    }
+
+    @discardableResult
+    public func applySelection(
+        _ operation: ProjectSelectionOperation
+    ) async throws -> ProjectViewSnapshot {
+        let expected = try currentInteractionCoordinates()
+        let transaction = try ProjectInteractionTransaction(
+            selection: operation,
+            expectedTransactionRevision: expected.transactionRevision,
+            expectedPublicationSequence: expected.publicationSequence
+        )
+        return try await applyInteraction(transaction)
+    }
+
+    @discardableResult
+    public func applyWorkspace(
+        _ commands: [WorkspaceCommand]
+    ) async throws -> ProjectViewSnapshot {
+        let expected = try currentInteractionCoordinates()
+        let transaction = try ProjectInteractionTransaction(
+            workspaceCommands: commands,
+            expectedTransactionRevision: expected.transactionRevision,
+            expectedPublicationSequence: expected.publicationSequence
+        )
+        return try await applyInteraction(transaction)
+    }
+
+    @discardableResult
+    public func applyWorkspace(
+        _ command: WorkspaceCommand
+    ) async throws -> ProjectViewSnapshot {
+        try await applyWorkspace([command])
     }
 
     @discardableResult
@@ -99,6 +140,16 @@ public final class ProjectWorkspace {
         }
         view = candidate
         return candidate
+    }
+
+    private func currentInteractionCoordinates() throws -> ProjectViewSnapshot {
+        guard let view else {
+            throw ProjectViewSnapshotError(
+                code: .snapshotUnavailable,
+                message: "The project workspace has no published view snapshot."
+            )
+        }
+        return view
     }
 
     private func currentTransactionRevision() throws -> DocumentTransactionRevision {

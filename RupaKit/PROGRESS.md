@@ -1,182 +1,38 @@
 # Progress
 
-- [x] G02-A persistent mesh-source contract
-  - [x] Define MeshSource ownership, topology invariants, monotonic element allocation, and copy budgets
-  - [x] Implement persistent allocation state and complete topology validation
-  - [x] Implement single-copy source construction including loose topology
-  - [x] Preserve the new source contract through the existing MeshEditBuffer compatibility path
-  - [x] Add success, failure, compaction, storage-sharing, and copy-telemetry tests
-  - [x] Review G02-A, run focused verification, and commit the sprint
-- [x] G02-B bounded streaming mesh-source codec
-  - [x] Define the versioned source-blob framing, limits, streaming ports, and error contract
-  - [x] Implement bounded chunk encoding without source-array materialization
-  - [x] Implement bounded chunk decoding directly into owned geometry storage
-  - [x] Cover attributes, corruption, truncation, limits, deterministic encoding, and round trips
-  - [x] Measure chunk bounds and copy telemetry on a large fixture
-  - [x] Review G02-B, run focused verification, and commit the sprint
-- [x] Integrated G02 verification
-  - [x] Re-run incomplete-marker, synchronization, ownership, and zero-copy audits
-  - [x] Verify RupaGeometry and direct downstream macOS paths from a clean worktree
-  - [x] Verify supported ordinary WASM compile, link, and runtime behavior
-  - [x] Review cumulative changes and record completion evidence
-- [x] F05-A source-blob package contracts
-  - [x] Freeze the package I/O owner, dependency boundary, and final public usage
-  - [x] Define validated source-entry, blob-reference, manifest, limits, and typed-error contracts
-  - [x] Add borrowed-span incremental hashing and deterministic document content identity
-  - [x] Plan mesh source blobs without whole-blob materialization
-  - [x] Review F05-A, run focused verification, and commit the sprint
-- [x] F05-B bounded project package I/O
-  - [x] Implement bounded stored-archive indexing and writing without eager blob materialization
-  - [x] Stream MeshSourceCodec into and out of declared content-addressed entries
-  - [x] Preserve unknown adjunct entries and reuse unchanged source blobs byte-for-byte
-  - [x] Implement validated adjacent-file atomic save and explicit source-blob garbage collection
-  - [x] Cover corruption, traversal, duplicates, limits, failed save, large resources, and save-load identity
-  - [x] Measure package read/write chunk bounds and copy telemetry
-  - [x] Review F05-B, run focused verification, and commit the sprint
-- [x] Integrated F05 verification
-  - [x] Re-run incomplete-marker, synchronization, ownership, and zero-copy audits
-  - [x] Verify focused package contracts and direct downstream macOS paths from a clean snapshot
-  - [x] Verify ordinary WASM compile, link, and runtime package round trip
-  - [x] Review cumulative changes and record completion evidence
-- [x] T01-CAD/project coherent source transaction
-  - [x] Freeze the source aggregate, transaction-revision, staging, history, and publication ownership contracts
-  - [x] Add one session-owned transaction revision independent from internal document generations
-  - [x] Stage and publish CAD source, history, selection pruning, and transaction revision as one coherent session state
-  - [x] Cover success, stale revision, failure, dry run, one revision increment, and undo restoration
-  - [x] Review T01 integration and run focused verification
-  - [x] Commit the reviewed T01 sprint
-- [x] F05-C CAD source in the project package aggregate
-  - [x] Define package-owned CAD source entry metadata without moving CAD encoding semantics into the package target
-  - [x] Establish opaque CAD source bytes and aggregate identity as a precursor to role-separated persistence
-  - [x] Preserve CAD source bytes and identity through replacement, adjunct preservation, and failed atomic saves
-  - [x] Cover round trip, corruption, missing CAD source, identity, reuse, and bounded I/O
-  - [x] Review F05-C and run focused verification
-  - [x] Commit the reviewed F05-C sprint
-- [x] T03-A bounded ProjectController integration
-  - [x] Require caller-provided expected transaction revisions before staging and before publication
-  - [x] Own one editable session and retained project-package aggregate without absorbing CAD semantics
-  - [x] Project and evaluate the staged CAD source before publishing CAD and the development project projection
-  - [x] Route source commit and package load/save through the same ordered project boundary
-  - [x] Cover concurrent callers, stale requests, failed evaluation, failed save, and retained aggregate publication
-  - [x] Review T03-A and run focused verification
-  - [x] Commit the reviewed T03-A sprint
-  - [x] Preserve monotonic transaction revisions across package loads and reject late pre-load publications
-  - [x] Review, verify, and commit the T03-A concurrency correction
-- [x] Integrated CAD/project transaction verification
-  - [x] Re-run incomplete-marker, synchronization, ownership, and zero-copy audits
-  - [x] Verify focused Core, DomainFoundation, Project, CAD integration, package, and bridge tests
-  - [x] Verify the direct ProjectController transaction and package routes without changing the deferred RupaKit application composition
-  - [x] Review cumulative changes, remove obsolete status text, and record completion evidence
-- [x] T04 prerequisite: current kernel geometry compatibility
-  - [x] Adopt the reviewed RupaKit compatibility changes without importing unrelated swift-CAD work in progress
-  - [x] Classify rigid, affine, offset-image, and procedural geometry through explicit source and failure contracts
-  - [x] Verify the Project build path and focused curve-path behavior
-  - [x] Review, verify, and commit the prerequisite
-- [x] T04-A multi-representation authority contract
-  - [x] Define representation identity, purpose, source, selection, and authored-Mesh provenance contracts
-  - [x] Make Product objects and DesignDocument own representation sets and authored-Mesh assets
-  - [x] Replace stored CAD source duplication with a derived compatibility accessor and explicit remapping
-  - [x] Validate CAD-only, CAD-plus-Mesh, Mesh-only, missing-source, and non-geometry boundaries
-  - [x] Replace obsolete single-source and CAD-required documentation
-  - [x] Review, verify, and commit T04-A
-- [x] T04-B purpose-aware projection and evaluation
-  - [x] Project all retained representations and authored-Mesh assets into the immutable evaluation model
-  - [x] Select modeling or presentation representations explicitly during evaluation
-  - [x] Include purpose and representation identity in evaluated snapshot identity and occurrence evidence
-  - [x] Prove authored-Mesh evaluation shares source storage without materialization
-  - [x] Review, verify, and commit T04-B
-- [x] T04-C disjoint project package schema v3
-  - [x] Store required Product, optional CAD, and optional Mesh catalog source regions without a persisted evaluation projection
-  - [x] Reject schema v2 without a compatibility fallback
-  - [x] Preserve bounded streaming, content-addressed reuse, atomic save, adjunct preservation, and garbage collection
-  - [x] Verify CAD-only, CAD-plus-Mesh, Mesh-only, corruption, deterministic identity, and copy-budget paths
-  - [x] Review, verify, and commit T04-C
-- [x] T04-D atomic ProjectController integration
-  - [x] Split Product and CAD codecs and derive evaluation projections from retained sources
-  - [x] Commit and load Product, optional CAD, Mesh assets, projection, and presentation evaluation atomically
-  - [x] Reconstruct a non-authoritative empty runtime CAD adapter for Mesh-only packages
-  - [x] Preserve revision, cancellation, stale-publication, rollback, and save failure contracts
-  - [x] Review, verify, and commit T04-D
-- [x] Integrated T04 representation source-authority verification
-  - [x] Re-run incomplete-marker, synchronization, ownership, and zero-copy audits
-  - [x] Verify CAD-only, CAD-plus-Mesh, Mesh-only, package, transaction, and failure paths
-  - [x] Verify supported Native, ordinary WASM, and Embedded WASM compile or runtime evidence without overgeneralizing target coverage
-  - [x] Review cumulative changes, remove obsolete T04 records, and commit completion evidence
-- [x] P1-1 authoritative source fidelity
-  - [x] Define Product, CAD, and Authored-Mesh authority identity without using the evaluation projection as source evidence
-  - [x] Reject lossy Product and CAD codec round trips before publishing staged state
-  - [x] Preserve Mesh buffer ownership without rematerialization during authority comparison
-  - [x] Cover complete Product and CAD loss, rollback, Mesh-only, and CAD-plus-Mesh boundaries
-  - [x] Review, verify, and commit P1-1
-- [x] P1-2 document-bound project evaluation
-  - [x] Define the RupaProject-owned evaluator-preparation port
-  - [x] Bind every current, commit, and load evaluation to the matching immutable DesignDocument
-  - [x] Adapt the RupaKit provider composition while preserving the shared CAD evaluation cache
-  - [x] Cover changed CAD content with stable IDs and loaded CAD replacement through the real provider path
-  - [x] Review, verify, and commit P1-2
-- [x] Integrated P1 verification
-  - [x] Verify real Product, CAD, Mesh, package, projection, and presentation-evaluation paths
-  - [x] Re-run rollback, cancellation, stale-publication, synchronization, ownership, incomplete-marker, and zero-copy audits
-  - [x] Review cumulative changes and commit completion evidence
-- [x] T05-0 project source-authority baseline stabilization
-  - [x] Classify every current RupaCore test failure against the implemented kernel contract
-  - [x] Correct implementation regressions or stale expectations without weakening failure contracts
-  - [x] Remove the deprecated projection-only Mesh compatibility API
-  - [x] Reconcile normative package and implementation-status documents with the production application route
-  - [x] Re-run the Core baseline and the T04/P1 focused verification
-  - [x] Review, verify, and commit T05-0
-- [x] T05-A authored-Mesh source command contract
-  - [x] Define typed authored-Mesh edit and representation-selection commands in the Core owner
-  - [x] Apply vertex and supported face edits through MeshEditBuffer with stale-source rejection
-  - [x] Preserve CAD authority, Mesh provenance, representation references, and no-op identity
-  - [x] Reject unsupported attribute remapping and invalid source/object/representation combinations explicitly
-  - [x] Prove unchanged buffer storage sharing and bounded copy telemetry
-  - [x] Review, verify, and commit T05-A
-- [x] T05-B atomic authored-Mesh project transactions
-  - [x] Extend ProjectSourceTransaction without making the evaluation projection a mutation source
-  - [x] Stage CAD and authored-Mesh commands in a deterministic order and validate the complete authority aggregate
-  - [x] Encode, evaluate, save, and publish the staged Mesh source atomically
-  - [x] Preserve unchanged package blobs and collect superseded blobs only after successful publication
-  - [x] Cover validation, codec, evaluation, save, cancellation, stale-revision, and late-publication rollback
-  - [x] Review, verify, and commit T05-B
-- [x] T05-C explicit Make Editable from CAD
-  - [x] Define a source command that binds CAD representation, snapshot, revision, and content identity
-  - [x] Promote the validated CAD evaluation snapshot to an authored-Mesh asset with derived-from-CAD provenance
-  - [x] Retain CAD authority and modeling selection while optionally switching presentation selection
-  - [x] Reject stale, wrong-purpose, mismatched-representation, and duplicate requests explicitly
-  - [x] Prove save-load restoration, CAD-edit independence, rollback, and bounded materialization
-  - [x] Reject caller-forged Mesh payloads by revalidating the current modeling evaluation at commit
-  - [x] Review, verify, and commit T05-C
-- [x] Integrated T05 authored-Mesh source workflow verification
-  - [x] Verify CAD-only, Mesh-only edit, CAD-plus-Mesh edit, and Make Editable end-to-end workflows
-  - [x] Re-run package, rollback, cancellation, stale-publication, zero-copy, and blob-reuse evidence
-  - [x] Verify Native and ordinary WASM evidence and confirm Embedded WASM stops at the pre-existing Foundation capability boundary
-  - [x] Re-run incomplete-implementation, synchronization, ownership, unsafe-memory, and target-branch audits
-  - [x] Synchronize architecture, source-authority contracts, and PROGRESS with the verified implementation
-  - [x] Review cumulative changes and commit integrated T05 evidence
-- [x] T06-0A coherent project state and evaluation reuse
-  - [x] Define the minimal project-operation contract and one coherent immutable state snapshot
-  - [x] Keep document generation, source transaction revision, and publication sequence distinct
-  - [x] Reuse the staged validated CAD evaluation without equating generation and transaction revision
-  - [x] Cover initial evaluation, commit, load, stale reuse, and publication-order boundaries
-  - [x] Review, verify, and commit T06-0A
-- [x] T06-0B atomic history and save state
-  - [x] Stage undo and redo without publishing EditorSession state early
-  - [x] Rebuild Product, CAD, Mesh, package, and presentation evaluation before history publication
-  - [x] Mark the session clean only after atomic save succeeds
-  - [x] Cover history success, empty history, evaluation failure, save failure, and rollback
-  - [x] Review, verify, and commit T06-0B
-- [x] T06-0C revision-safe project view boundary
-  - [x] Bind presentation geometry and optional CAD interaction data to one state revision
-  - [x] Preserve explicit occurrence-to-scene-node navigation without parsing identifier strings
-  - [x] Add a MainActor observation adapter that rejects late snapshot publication
-  - [x] Keep package bytes and source mutation authority outside the UI view state
-  - [x] Cover CAD-only, Mesh-only, mixed representation, stale publication, and storage-sharing paths
-  - [x] Allow an initial package load without manufacturing a placeholder view
-  - [x] Review, verify, and commit T06-0C
-- [x] Integrated T06-0 project-path foundation verification
-  - [x] Verify source, workspace, history, load, save, evaluation, and view-snapshot paths
-  - [x] Re-run cancellation, rollback, stale-publication, zero-copy, and package-integrity evidence
-  - [x] Re-run incomplete-implementation, synchronization, ownership, unsafe-memory, and target-branch audits
-  - [x] Synchronize architecture and state contracts with the verified production-path foundation
-  - [x] Review cumulative changes and commit integrated T06-0 evidence
+- [x] T06A-1 read and interaction contract (commit: Define project read and interaction boundary) `depends:none` `parallel:none`
+- [ ] T06A-2 MeshSource-native Viewport `depends:T06A-1` `parallel:none`
+  - [ ] T06A-2.1 Define the Viewport presentation input by occurrence, representation, source reference, transform, bounds, and borrowed MeshSource storage `depends:T06A-1` `parallel:none`
+  - [ ] T06A-2.2 Display CAD-only, Mesh-only, and mixed presentation selections without fabricated FeatureID, modeling-source substitution, or MeshSource rematerialization `depends:T06A-2.1` `parallel:none`
+  - [ ] T06A-2.3 Resolve object picking and navigation by occurrence identity while enabling CAD topology affordances only for an exact CAD interaction context `depends:T06A-2.2` `parallel:none`
+  - [ ] T06A-2.4 Prove representation authority, selection/navigation, CAD-affordance gating, storage identity, copy telemetry, and typed failures `depends:T06A-2.3` `parallel:none`
+  - [ ] T06A-2.5 Pass task-designer review, focused verification, and commit the reviewed Viewport boundary `depends:T06A-2.4` `parallel:none`
+- [ ] T06A-3 ProjectWorkspace command parity `depends:T06A-1` `parallel:none`
+  - [ ] T06A-3.1 Enumerate every source, selection, workspace, navigation, and transient action transitively reachable from production MainView and assign one authoritative owner and route `depends:T06A-1` `parallel:none`
+  - [ ] T06A-3.2 Add the minimal typed command-planning and ordered-dispatch boundary needed to translate every reachable source mutation into ProjectSourceTransaction without exposing EditorSession `depends:T06A-3.1` `parallel:none`
+  - [ ] T06A-3.3 Implement ProjectWorkspace action parity with stale-request rejection, visible typed failures, rollback, and deterministic ordering `depends:T06A-3.2` `parallel:none`
+  - [ ] T06A-3.4 Prove the complete audited action matrix through the real ProjectController and ProjectWorkspace path `depends:T06A-3.3` `parallel:none`
+  - [ ] T06A-3.5 Pass task-designer review, focused verification, and commit the reviewed command boundary `depends:T06A-3.4` `parallel:none`
+- [ ] T06A-4 MainView cutover `depends:T06A-2,T06A-3` `parallel:none`
+  - [ ] T06A-4.1 Replace MainView and its production-reachable helpers with ProjectViewSnapshot reads and ProjectWorkspace actions `depends:T06A-2,T06A-3` `parallel:none`
+  - [ ] T06A-4.2 Keep only non-authoritative transient tool, hover, preview, focus, and camera state in the MainActor UI layer `depends:T06A-4.1` `parallel:none`
+  - [ ] T06A-4.3 Connect the MeshSource-native Viewport, occurrence selection/navigation, and exact-context CAD affordances to one published snapshot `depends:T06A-4.2` `parallel:none`
+  - [ ] T06A-4.4 Prove the audited production action matrix and verify the transitive MainView graph neither owns nor mutates EditorSession `depends:T06A-4.3` `parallel:none`
+  - [ ] T06A-4.5 Pass task-designer review, focused verification, and commit the reviewed MainView cutover `depends:T06A-4.4` `parallel:none`
+- [ ] T06A-5 Agent production registration cutover `depends:T06A-3,T06A-4` `parallel:none`
+  - [ ] T06A-5.1 Enumerate production-registered Agent commands and map read, source, interaction, export, and failure behavior to the project-operation boundary `depends:T06A-3,T06A-4` `parallel:none`
+  - [ ] T06A-5.2 Replace EditorSession publication with a ProjectOperating-backed registration that shares ProjectController staging, revision, package, evaluation, and publication authority `depends:T06A-5.1` `parallel:none`
+  - [ ] T06A-5.3 Preserve reachable behavior or return explicit typed unsupported failures for independently specified commands without silent fallback or a shadow session `depends:T06A-5.2` `parallel:none`
+  - [ ] T06A-5.4 Prove UI and Agent interleaving, stale rejection, rollback, load replacement, unregister lifecycle, and absence of a second production authority `depends:T06A-5.3` `parallel:none`
+  - [ ] T06A-5.5 Pass task-designer review, focused verification, and commit the reviewed Agent cutover `depends:T06A-5.4` `parallel:none`
+- [ ] T06A-6 ApplicationRoot file and history integration `depends:T06A-4,T06A-5` `parallel:none`
+  - [ ] T06A-6.1 Compose exactly one ProjectController and one MainActor ProjectWorkspace at ApplicationRoot and publish an evaluated initial view or visible typed launch failure `depends:T06A-4,T06A-5` `parallel:none`
+  - [ ] T06A-6.2 Route production undo, redo, load, and save through ProjectWorkspace with explicit URL ownership, cancellation, dirty state, stale publication, and failure presentation `depends:T06A-6.1` `parallel:none`
+  - [ ] T06A-6.3 Prove the actual app route can display, select, navigate, mutate, undo, redo, save, load, and redisplay CAD-only, Mesh-only, and mixed projects `depends:T06A-6.2` `parallel:none`
+  - [ ] T06A-6.4 Audit app entry points, package dependencies, previews, tests, and source references so no production branch selects the legacy EditorSession route `depends:T06A-6.3` `parallel:none`
+  - [ ] T06A-6.5 Pass task-designer review, focused app verification, and commit the reviewed production integration `depends:T06A-6.4` `parallel:none`
+- [ ] T06A-IV integration verification `depends:T06A-1,T06A-2,T06A-3,T06A-4,T06A-5,T06A-6` `parallel:none`
+  - [ ] T06A-IV.1 Verify the real ApplicationRoot-to-ProjectController-to-ProjectWorkspace-to-MainView-to-Viewport success and failure paths for CAD-only, Mesh-only, and mixed projects `depends:T06A-1,T06A-2,T06A-3,T06A-4,T06A-5,T06A-6` `parallel:none`
+  - [ ] T06A-IV.2 Re-run command parity, source authority, revision, cancellation, rollback, late publication, package integrity, zero-copy, copy telemetry, and UI-Agent interleaving evidence `depends:T06A-IV.1` `parallel:none`
+  - [ ] T06A-IV.3 Re-run incomplete-implementation, synchronization, ownership, unsafe-memory, target-branch, production-entry, and legacy-route audits and reject structure-only evidence `depends:T06A-IV.2` `parallel:none`
+  - [ ] T06A-IV.4 Synchronize normative architecture and state-contract documents, remove obsolete production-route claims, pass final task-designer review, and commit integrated evidence `depends:T06A-IV.3` `parallel:none`

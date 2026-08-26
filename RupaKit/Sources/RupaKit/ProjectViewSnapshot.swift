@@ -8,6 +8,7 @@ import RupaViewportScene
 public struct ProjectViewSnapshot: Sendable {
     public let projectID: ProjectID
     public let projectName: String
+    public let document: ProjectReadDocument
     public let documentGeneration: DocumentGeneration
     public let transactionRevision: DocumentTransactionRevision
     public let publicationSequence: UInt64
