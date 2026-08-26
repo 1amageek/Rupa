@@ -30,7 +30,9 @@ func projectControllerEvaluatesCADCreatedAfterInitialization() async throws {
                     direction: .normal
                 ),
             ],
-            expectedTransactionRevision: DocumentTransactionRevision(0)
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: DocumentTransactionRevision(0),
+            expectedPublicationSequence: 0
         )
     )
 
@@ -63,7 +65,9 @@ func projectControllerReusesStagedCADEvaluationForProjectPublication() async thr
                     direction: .normal
                 ),
             ],
-            expectedTransactionRevision: DocumentTransactionRevision(0)
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: DocumentTransactionRevision(0),
+            expectedPublicationSequence: 0
         )
     )
     let state = try await controller.currentState()
@@ -95,7 +99,9 @@ func projectControllerEvaluatesChangedCADContentWithStableRepresentationIDs() as
                     distance: .length(2.0, .meter)
                 ),
             ],
-            expectedTransactionRevision: DocumentTransactionRevision(0)
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: DocumentTransactionRevision(0),
+            expectedPublicationSequence: 1
         )
     )
     let afterOccurrence = try #require(result.evaluation.occurrences.values.first {
@@ -130,7 +136,9 @@ func projectControllerUndoAndRedoRebuildCADEvaluationAtomically() async throws {
                     distance: .length(2.0, .meter)
                 ),
             ],
-            expectedTransactionRevision: DocumentTransactionRevision(0)
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: DocumentTransactionRevision(0),
+            expectedPublicationSequence: 1
         )
     )
     let committedOccurrence = try #require(committed.evaluation.occurrences.values.first {
@@ -241,7 +249,9 @@ func projectControllerMakesCADRepresentationEditableThroughModelingEvaluation() 
         ProjectSourceTransaction(
             name: "integration.make-editable",
             geometrySourceCommands: [prepared],
-            expectedTransactionRevision: DocumentTransactionRevision(0)
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: DocumentTransactionRevision(0),
+            expectedPublicationSequence: 0
         )
     )
     let asset = try #require(result.document.authoredMeshAssets[sourceID])
@@ -328,7 +338,9 @@ func projectControllerRejectsForgedMakeEditableMeshPayloadWithoutPublication() a
             ProjectSourceTransaction(
                 name: "integration.reject-forged-make-editable",
                 geometrySourceCommands: [.makeCADRepresentationEditable(forgedCommand)],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 0
             )
         )
     } catch let caught as ProjectControllerError {
@@ -370,7 +382,9 @@ func makeEditableValidationRejectsLatePublicationAfterConcurrentCommit() async t
             ProjectSourceTransaction(
                 name: "integration.make-editable.concurrent",
                 geometrySourceCommands: [prepared],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 0
             )
         )
     }
@@ -382,7 +396,9 @@ func makeEditableValidationRejectsLatePublicationAfterConcurrentCommit() async t
         ProjectSourceTransaction(
             name: "integration.concurrent-winner",
             commands: [.renameDocument(name: "Concurrent Winner")],
-            expectedTransactionRevision: DocumentTransactionRevision(0)
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: DocumentTransactionRevision(0),
+            expectedPublicationSequence: 0
         )
     )
     gate.releaseBlockedEvaluation()
@@ -422,7 +438,9 @@ func madeEditableMeshSurvivesSaveLoadAndRemainsIndependentFromLaterCADEdits() as
             ProjectSourceTransaction(
                 name: "integration.make-editable.save",
                 geometrySourceCommands: [prepared],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 0
             )
         )
         let retainedAsset = try #require(madeEditable.document.authoredMeshAssets[sourceID])
@@ -444,7 +462,9 @@ func madeEditableMeshSurvivesSaveLoadAndRemainsIndependentFromLaterCADEdits() as
                         distance: .length(3, .meter)
                     ),
                 ],
-                expectedTransactionRevision: DocumentTransactionRevision(1)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(1),
+                expectedPublicationSequence: 2
             )
         )
         let editedObject = try #require(
@@ -512,7 +532,9 @@ func makeEditableRejectsStaleRevisionAndRollsBackMixedCADMutation() async throws
                     ),
                 ],
                 geometrySourceCommands: [prepared],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 0
             )
         )
     } catch let error as ProjectControllerError {
@@ -538,7 +560,9 @@ func makeEditableRejectsStaleRevisionAndRollsBackMixedCADMutation() async throws
                     distance: .length(2, .meter)
                 ),
             ],
-            expectedTransactionRevision: DocumentTransactionRevision(0)
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: DocumentTransactionRevision(0),
+            expectedPublicationSequence: 0
         )
     )
     let beforeStaleAttempt = await controller.currentDocument()
@@ -548,7 +572,9 @@ func makeEditableRejectsStaleRevisionAndRollsBackMixedCADMutation() async throws
             ProjectSourceTransaction(
                 name: "integration.make-editable.stale",
                 geometrySourceCommands: [prepared],
-                expectedTransactionRevision: DocumentTransactionRevision(1)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(1),
+                expectedPublicationSequence: 1
             )
         )
     } catch let error as ProjectControllerError {

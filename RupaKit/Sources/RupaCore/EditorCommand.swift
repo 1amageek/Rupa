@@ -11,6 +11,10 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case resetDocument(name: String)
     case replaceProductMetadata(ProductMetadata)
     case applySemanticExtensionMutations([SemanticExtensionMutation])
+    case applyNamespacedSemanticExtensionMutations(
+        namespace: SemanticNamespaceID,
+        mutations: [SemanticExtensionMutation]
+    )
     case upsertParameter(name: String, expression: CADExpression, kind: QuantityKind)
     case renameParameter(currentName: String, newName: String)
     case deleteParameter(name: String)
@@ -422,6 +426,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "replaceProductMetadata"
         case .applySemanticExtensionMutations:
             "applySemanticExtensionMutations"
+        case .applyNamespacedSemanticExtensionMutations:
+            "applyNamespacedSemanticExtensionMutations"
         case .upsertParameter:
             "upsertParameter"
         case .renameParameter:
@@ -659,6 +665,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .resetDocument,
              .replaceProductMetadata,
              .applySemanticExtensionMutations,
+             .applyNamespacedSemanticExtensionMutations,
              .upsertParameter,
              .renameParameter,
              .deleteParameter,

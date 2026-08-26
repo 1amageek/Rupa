@@ -1,4 +1,5 @@
 import Foundation
+import RupaAutomation
 import RupaCore
 import RupaCoreTypes
 import RupaEvaluation
@@ -12,6 +13,9 @@ public actor ProjectController: ProjectOperating {
     private var evaluationSource: ProjectSourceModel
     private var evaluation: EvaluatedProjectSnapshot?
     private var publicationSequence: UInt64
+    private let objectRegistry: ObjectTypeRegistry
+    private let commandContextResolver: any EditorCommandContextResolving
+    private let automationExecutor: any AutomationStagedBatchExecuting
     private let evaluatorPreparer: any ProjectEvaluatorPreparing
     private let projector: any ProjectSourceProjecting
     private let productSourceCodec: any ProjectProductSourceCoding
@@ -31,20 +35,33 @@ public actor ProjectController: ProjectOperating {
         packageWriter: any ProjectPackageWriting = ProjectPackageStore(),
         packageValidator: any ProjectPackageValidating = ProjectPackageStore(),
         geometrySourceCommandApplier: any GeometrySourceCommandApplying =
-            DefaultGeometrySourceCommandApplier()
+            DefaultGeometrySourceCommandApplier(),
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        commandContextResolver: any EditorCommandContextResolving =
+            DefaultEditorCommandContextResolver(),
+        automationExecutor: any AutomationStagedBatchExecuting =
+            AutomationStagedBatchExecutor()
     ) throws {
         let initial = try Self.makeInitialState(
             document: document,
             projector: projector,
             productSourceCodec: productSourceCodec,
             cadSourceCodec: cadSourceCodec,
-            packageValidator: packageValidator
+            packageValidator: packageValidator,
+            objectRegistry: objectRegistry
         )
-        session = EditorSession(document: document)
+        session = EditorSession(
+            document: document,
+            objectRegistry: objectRegistry,
+            commandContextResolver: commandContextResolver
+        )
         packageDocument = initial.package
         evaluationSource = initial.evaluationSource
         evaluation = nil
         publicationSequence = 0
+        self.objectRegistry = objectRegistry
+        self.commandContextResolver = commandContextResolver
+        self.automationExecutor = automationExecutor
         self.evaluatorPreparer = evaluatorPreparer
         self.projector = projector
         self.productSourceCodec = productSourceCodec
@@ -65,7 +82,12 @@ public actor ProjectController: ProjectOperating {
         packageWriter: any ProjectPackageWriting = ProjectPackageStore(),
         packageValidator: any ProjectPackageValidating = ProjectPackageStore(),
         geometrySourceCommandApplier: any GeometrySourceCommandApplying =
-            DefaultGeometrySourceCommandApplier()
+            DefaultGeometrySourceCommandApplier(),
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        commandContextResolver: any EditorCommandContextResolving =
+            DefaultEditorCommandContextResolver(),
+        automationExecutor: any AutomationStagedBatchExecuting =
+            AutomationStagedBatchExecutor()
     ) throws {
         do {
             try packageValidator.validateForSave(package)
@@ -79,13 +101,21 @@ public actor ProjectController: ProjectOperating {
             package: package,
             projector: projector,
             productSourceCodec: productSourceCodec,
-            cadSourceCodec: cadSourceCodec
+            cadSourceCodec: cadSourceCodec,
+            objectRegistry: objectRegistry
         )
-        session = EditorSession(document: initial.document)
+        session = EditorSession(
+            document: initial.document,
+            objectRegistry: objectRegistry,
+            commandContextResolver: commandContextResolver
+        )
         packageDocument = package
         evaluationSource = initial.evaluationSource
         evaluation = nil
         publicationSequence = 0
+        self.objectRegistry = objectRegistry
+        self.commandContextResolver = commandContextResolver
+        self.automationExecutor = automationExecutor
         self.evaluatorPreparer = evaluatorPreparer
         self.projector = projector
         self.productSourceCodec = productSourceCodec
@@ -134,6 +164,8 @@ public actor ProjectController: ProjectOperating {
             canRedo: session.commandStack.canRedo,
             selection: session.selection,
             workspaceState: session.workspaceState,
+            objectRegistry: session.objectRegistry,
+            evaluationSnapshot: session.evaluationSnapshot,
             evaluationSource: evaluationSource,
             cadInteraction: session.currentEvaluation,
             evaluation: try currentEvaluation()
@@ -142,12 +174,32 @@ public actor ProjectController: ProjectOperating {
 
     public func applyInteraction(
         _ transaction: ProjectInteractionTransaction
-    ) async throws -> ProjectStateSnapshot {
-        try await stageAndPublishInteraction(
-            selection: transaction.selection,
-            workspaceCommands: transaction.workspaceCommands,
-            expectedTransactionRevision: transaction.expectedTransactionRevision,
-            expectedPublicationSequence: transaction.expectedPublicationSequence
+    ) async throws -> ProjectInteractionCommitResult {
+        let prepared = try prepareInteractionMutation(transaction)
+        try Task.checkCancellation()
+        return try publishInteractionMutation(prepared, transaction: transaction)
+    }
+
+    public func previewInteraction(
+        _ transaction: ProjectInteractionTransaction
+    ) async throws -> ProjectInteractionPreviewResult {
+        let prepared = try prepareInteractionMutation(transaction)
+        try Task.checkCancellation()
+        try requireProjectID(transaction.expectedProjectID)
+        try requireTransactionRevision(transaction.expectedTransactionRevision)
+        try requirePublicationSequence(transaction.expectedPublicationSequence)
+        try requirePublicationSequence(prepared.basePublicationSequence)
+        return ProjectInteractionPreviewResult(
+            base: ProjectPreviewBaseCoordinate(
+                projectID: transaction.expectedProjectID,
+                transactionRevision: prepared.baseSessionSnapshot.transactionRevision,
+                publicationSequence: prepared.basePublicationSequence,
+                documentGeneration: prepared.baseSessionSnapshot.store.document.generation
+            ),
+            proposedSelection: prepared.proposedSelection,
+            proposedWorkspaceState: prepared.proposedWorkspaceState,
+            wouldPublish: prepared.wouldPublish,
+            automationExecution: prepared.automationExecution
         )
     }
 
@@ -285,9 +337,134 @@ public actor ProjectController: ProjectOperating {
     public func commit(
         _ transaction: ProjectSourceTransaction
     ) async throws -> ProjectSourceCommitResult {
+        let staged = try await prepareSourceMutation(transaction)
+        try Task.checkCancellation()
+        do {
+            try requireProjectID(transaction.expectedProjectID)
+            try requireTransactionRevision(transaction.expectedTransactionRevision)
+            try requirePublicationSequence(transaction.expectedPublicationSequence)
+            try requireTransactionRevision(staged.source.baseTransactionRevision)
+            try requirePublicationSequence(staged.basePublicationSequence)
+            try session.store.requireGeneration(staged.source.baseGeneration)
+            let nextPublicationSequence = try advancedPublicationSequence()
+            try session.commitPreparedSourceTransaction(staged.source)
+            publicationSequence = nextPublicationSequence
+        } catch let error as EditorError {
+            throw projectError(for: error)
+        }
+        packageDocument = staged.package
+        evaluationSource = staged.evaluationSource
+        evaluation = staged.evaluation
+        let committedState = try currentState()
+        return ProjectSourceCommitResult(
+            baseTransactionRevision: staged.source.baseTransactionRevision,
+            state: committedState,
+            commandResults: staged.source.value.commandResults,
+            geometrySourceCommandResults: staged.source.value.geometrySourceCommandResults,
+            automationExecution: committedAutomationExecution(
+                staged.source.value.automationExecution,
+                state: committedState,
+                didCommit: staged.source.wouldMutate
+            )
+        )
+    }
+
+    public func previewSource(
+        _ transaction: ProjectSourceTransaction
+    ) async throws -> ProjectSourcePreviewResult {
+        let staged = try await prepareSourceMutation(transaction)
+        try Task.checkCancellation()
+        do {
+            try requireProjectID(transaction.expectedProjectID)
+            try requireTransactionRevision(transaction.expectedTransactionRevision)
+            try requirePublicationSequence(transaction.expectedPublicationSequence)
+            try requireTransactionRevision(staged.source.baseTransactionRevision)
+            try requirePublicationSequence(staged.basePublicationSequence)
+            try session.store.requireGeneration(staged.source.baseGeneration)
+        } catch let error as EditorError {
+            throw projectError(for: error)
+        }
+        let automationExecution = previewAutomationExecution(
+            staged.source.value.automationExecution,
+            source: staged.source
+        )
+        return ProjectSourcePreviewResult(
+            base: ProjectPreviewBaseCoordinate(
+                projectID: transaction.expectedProjectID,
+                transactionRevision: staged.source.baseTransactionRevision,
+                publicationSequence: staged.basePublicationSequence,
+                documentGeneration: staged.source.baseGeneration
+            ),
+            proposedTransactionRevision: staged.source.proposedTransactionRevision,
+            proposedDocumentGeneration: staged.source.proposedGeneration,
+            wouldMutate: staged.source.wouldMutate,
+            commandResults: staged.source.value.commandResults,
+            geometrySourceCommandResults: staged.source.value.geometrySourceCommandResults,
+            automationExecution: automationExecution,
+            diagnostics: EditorDiagnostic.stableMerged([
+                staged.source.value.commandResults.flatMap(\.diagnostics),
+                automationExecution?.diagnostics ?? [],
+                staged.source.stagedDocumentState.diagnostics,
+            ])
+        )
+    }
+
+    public func executeReadOnlyAutomation(
+        _ automation: PreparedAutomationBatch,
+        expectedProjectID: ProjectID,
+        expectedPublicationSequence: UInt64
+    ) throws -> AutomationBatchExecution {
+        guard automation.effect == .readOnly else {
+            throw ProjectControllerError(
+                code: .transactionInvalid,
+                message: "The project read route accepts only read-only Automation batches."
+            )
+        }
+        let batch = automation.batch
+        do {
+            try Task.checkCancellation()
+            try requireProjectID(expectedProjectID)
+            try requirePublicationSequence(expectedPublicationSequence)
+            try session.store.requireGeneration(batch.expectedGeneration)
+            try session.requireTransactionRevision(batch.expectedTransactionRevision)
+            try session.workspaceState.requireRevision(batch.expectedWorkspaceRevision)
+            let execution = try session.executeIsolatedReadTransaction { stagedSession in
+                try Task.checkCancellation()
+                return try automationExecutor.execute(
+                    automation,
+                    in: stagedSession
+                )
+            }
+            try Task.checkCancellation()
+            try requireProjectID(expectedProjectID)
+            try requirePublicationSequence(expectedPublicationSequence)
+            try session.store.requireGeneration(batch.expectedGeneration)
+            try session.requireTransactionRevision(batch.expectedTransactionRevision)
+            try session.workspaceState.requireRevision(batch.expectedWorkspaceRevision)
+            return execution
+        } catch let error as EditorError {
+            throw projectError(for: error)
+        }
+    }
+
+    private func prepareSourceMutation(
+        _ transaction: ProjectSourceTransaction
+    ) async throws -> PreparedProjectSourceMutation {
+        try requireProjectID(transaction.expectedProjectID)
         try requireTransactionRevision(transaction.expectedTransactionRevision)
+        try requirePublicationSequence(transaction.expectedPublicationSequence)
+        do {
+            try commandContextResolver.requireFullyResolved(transaction.commands)
+        } catch let error as EditorError {
+            throw projectError(for: error)
+        }
         let basePublicationSequence = publicationSequence
+        try Task.checkCancellation()
         try await validateMakeEditableEvaluationBindings(in: transaction)
+        try Task.checkCancellation()
+        try requireProjectID(transaction.expectedProjectID)
+        try requireTransactionRevision(transaction.expectedTransactionRevision)
+        try requirePublicationSequence(transaction.expectedPublicationSequence)
 
         let prepared: PreparedEditorSourceTransaction<StagedCommandResults>
         do {
@@ -295,10 +472,24 @@ public actor ProjectController: ProjectOperating {
                 commandName: transaction.name,
                 expectedTransactionRevision: transaction.expectedTransactionRevision
             ) { stagedSession in
-                try stagedSession.withSourceCommandGroup(named: transaction.name) {
+                let initialEvaluationPassCount = stagedSession.store.completedEvaluationPassCount
+                let initialHistoryEntryCount = stagedSession.commandStack.undoEntries.count
+                var stagedResults = try stagedSession.withSourceCommandGroup(named: transaction.name) {
                     groupedSession in
-                    let commandResults = try transaction.commands.map { command in
-                        try groupedSession.execute(command)
+                    let commandResults: [CommandExecutionResult]
+                    let automationExecution: AutomationBatchExecution?
+                    switch transaction.mutation {
+                    case .commands(let commands):
+                        commandResults = try commands.map { command in
+                            try groupedSession.execute(command)
+                        }
+                        automationExecution = nil
+                    case .automation(let automation):
+                        commandResults = []
+                        automationExecution = try automationExecutor.execute(
+                            automation,
+                            in: groupedSession
+                        )
                     }
                     let geometrySourceCommandResults = try transaction
                         .geometrySourceCommands.map { command in
@@ -309,9 +500,19 @@ public actor ProjectController: ProjectOperating {
                         }
                     return StagedCommandResults(
                         commandResults: commandResults,
-                        geometrySourceCommandResults: geometrySourceCommandResults
+                        geometrySourceCommandResults: geometrySourceCommandResults,
+                        automationExecution: automationExecution
                     )
                 }
+                if let automationExecution = stagedResults.automationExecution {
+                    stagedResults.automationExecution = automationExecutor.finalizingSourceMetrics(
+                        automationExecution,
+                        initialEvaluationPassCount: initialEvaluationPassCount,
+                        initialHistoryEntryCount: initialHistoryEntryCount,
+                        in: stagedSession
+                    )
+                }
+                return stagedResults
             }
         } catch let error as EditorError {
             throw projectError(for: error)
@@ -326,10 +527,13 @@ public actor ProjectController: ProjectOperating {
             for: prepared.stagedDocument,
             includesCADSource: prepared.stagedDocument.hasAuthoritativeCADSource
         )
+        try Task.checkCancellation()
         let stagedProductSource = try await encodeProductSource(prepared.stagedDocument)
+        try Task.checkCancellation()
         let stagedCADSource = try await encodeCADSourceIfAuthoritative(
             prepared.stagedDocument
         )
+        try Task.checkCancellation()
         let stagedEvaluationSource = try await projectSource(prepared.stagedDocument)
         guard stagedEvaluationSource.id == packageDocument.documentID else {
             throw ProjectControllerError(
@@ -355,7 +559,9 @@ public actor ProjectController: ProjectOperating {
             )
         }
         try await validatePackageForSave(stagedPackage)
+        try Task.checkCancellation()
         let reconstructed = try await reconstructState(from: stagedPackage)
+        try Task.checkCancellation()
         let reconstructedAuthority = try await sourceAuthoritySnapshot(
             for: reconstructed.document,
             includesCADSource: stagedPackage.cadSource != nil
@@ -378,29 +584,80 @@ public actor ProjectController: ProjectOperating {
             revision: prepared.proposedTransactionRevision,
             reusing: prepared.stagedEvaluation
         )
-
-        do {
-            try requireTransactionRevision(prepared.baseTransactionRevision)
-            try requirePublicationSequence(basePublicationSequence)
-            let nextPublicationSequence = try advancedPublicationSequence()
-            try session.commitPreparedSourceTransaction(prepared)
-            publicationSequence = nextPublicationSequence
-        } catch let error as EditorError {
-            throw projectError(for: error)
-        }
-        packageDocument = stagedPackage
-        evaluationSource = reconstructed.evaluationSource
-        evaluation = stagedEvaluation
-        return ProjectSourceCommitResult(
-            baseTransactionRevision: prepared.baseTransactionRevision,
-            transactionRevision: prepared.proposedTransactionRevision,
-            documentGeneration: prepared.proposedGeneration,
-            document: prepared.stagedDocument,
+        try Task.checkCancellation()
+        return PreparedProjectSourceMutation(
+            basePublicationSequence: basePublicationSequence,
+            source: prepared,
             package: stagedPackage,
-            evaluation: stagedEvaluation,
-            commandResults: prepared.value.commandResults,
-            geometrySourceCommandResults: prepared.value.geometrySourceCommandResults
+            evaluationSource: reconstructed.evaluationSource,
+            evaluation: stagedEvaluation
         )
+    }
+
+    private func committedAutomationExecution(
+        _ execution: AutomationBatchExecution?,
+        state: ProjectStateSnapshot,
+        didCommit: Bool
+    ) -> AutomationBatchExecution? {
+        execution.map { execution in
+            var committed = execution
+            committed.proposedGeneration = state.documentGeneration
+            committed.proposedTransactionRevision = state.transactionRevision
+            committed.proposedWorkspaceRevision = state.workspaceState.revision
+            committed.didCommit = didCommit
+            committed.finalContext = AutomationBatchFinalContext(
+                document: state.document,
+                generation: state.documentGeneration,
+                transactionRevision: state.transactionRevision,
+                selection: state.selection,
+                workspaceState: state.workspaceState,
+                objectRegistry: state.objectRegistry,
+                evaluationSnapshot: state.evaluationSnapshot,
+                currentEvaluation: state.cadInteraction,
+                isDirty: state.isDirty,
+                diagnostics: EditorDiagnostic.stableMerged([
+                    execution.finalContext.diagnostics,
+                    state.evaluationSnapshot.diagnostics,
+                ])
+            )
+            return committed
+        }
+    }
+
+    private func previewAutomationExecution(
+        _ execution: AutomationBatchExecution?,
+        source: PreparedEditorSourceTransaction<StagedCommandResults>
+    ) -> AutomationBatchExecution? {
+        execution.map { execution in
+            let documentState = source.stagedDocumentState
+            var preview = execution
+            preview.proposedGeneration = source.proposedGeneration
+            preview.proposedTransactionRevision = source.proposedTransactionRevision
+            preview.proposedWorkspaceRevision = source.stagedWorkspaceState.revision
+            preview.didCommit = false
+            preview.finalContext = AutomationBatchFinalContext(
+                document: documentState.document,
+                generation: documentState.generation,
+                transactionRevision: source.proposedTransactionRevision,
+                selection: source.stagedSelection,
+                workspaceState: source.stagedWorkspaceState,
+                objectRegistry: objectRegistry,
+                evaluationSnapshot: EvaluationSnapshot(
+                    status: documentState.evaluationStatus,
+                    evaluatedGeneration: documentState.evaluatedGeneration,
+                    renderInvalidation: documentState.renderInvalidation,
+                    bodyCount: documentState.evaluatedBodyCount,
+                    diagnostics: documentState.diagnostics
+                ),
+                currentEvaluation: source.stagedEvaluation,
+                isDirty: documentState.isDirty,
+                diagnostics: EditorDiagnostic.stableMerged([
+                    execution.finalContext.diagnostics,
+                    documentState.diagnostics,
+                ])
+            )
+            return preview
+        }
     }
 
     public func undo(
@@ -465,7 +722,9 @@ public actor ProjectController: ProjectOperating {
 
         session = EditorSession(
             document: reconstructed.document,
-            transactionRevision: loadedRevision
+            transactionRevision: loadedRevision,
+            objectRegistry: objectRegistry,
+            commandContextResolver: commandContextResolver
         )
         packageDocument = loadedPackage
         evaluationSource = reconstructed.evaluationSource
@@ -482,6 +741,8 @@ public actor ProjectController: ProjectOperating {
             canRedo: session.commandStack.canRedo,
             selection: session.selection,
             workspaceState: session.workspaceState,
+            objectRegistry: session.objectRegistry,
+            evaluationSnapshot: session.evaluationSnapshot,
             evaluationSource: reconstructed.evaluationSource,
             cadInteraction: session.currentEvaluation,
             evaluation: loadedEvaluation
@@ -624,6 +885,15 @@ public actor ProjectController: ProjectOperating {
         }
     }
 
+    private func requireProjectID(_ expectedProjectID: ProjectID) throws {
+        guard session.document.projectID == expectedProjectID else {
+            throw ProjectControllerError(
+                code: .projectMismatch,
+                message: "The project transaction belongs to a different project."
+            )
+        }
+    }
+
     private func requirePublicationSequence(
         _ expectedPublicationSequence: UInt64
     ) throws {
@@ -635,65 +905,166 @@ public actor ProjectController: ProjectOperating {
         }
     }
 
-    private func stageAndPublishInteraction(
-        selection requestedSelection: ProjectSelectionOperation?,
-        workspaceCommands: [WorkspaceCommand],
-        expectedTransactionRevision: DocumentTransactionRevision,
-        expectedPublicationSequence: UInt64
-    ) async throws -> ProjectStateSnapshot {
-        try requireTransactionRevision(expectedTransactionRevision)
-        try requirePublicationSequence(expectedPublicationSequence)
+    private func prepareInteractionMutation(
+        _ transaction: ProjectInteractionTransaction
+    ) throws -> PreparedProjectInteractionMutation {
+        try requireProjectID(transaction.expectedProjectID)
+        try requireTransactionRevision(transaction.expectedTransactionRevision)
+        try requirePublicationSequence(transaction.expectedPublicationSequence)
         _ = try currentEvaluation()
 
         let basePublicationSequence = publicationSequence
         let baseSessionSnapshot = session.transactionSnapshot()
-        var stagedSelection = baseSessionSnapshot.selection
-        if let requestedSelection {
-            stagedSelection = try validatedSelection(for: requestedSelection)
-        }
+        let proposedSelection: SelectionModel
+        let proposedWorkspaceState: WorkspaceState
+        let automationExecution: AutomationBatchExecution?
 
-        var stagedWorkspaceState = baseSessionSnapshot.workspaceState
-        if !workspaceCommands.isEmpty {
-            do {
-                for workspaceCommand in workspaceCommands {
-                    _ = try stagedWorkspaceState.apply(
-                        workspaceCommand,
-                        document: session.document
+        switch transaction.mutation {
+        case .direct(let requestedSelection, let workspaceCommands):
+            if let requestedSelection {
+                proposedSelection = try validatedSelection(for: requestedSelection)
+            } else {
+                proposedSelection = baseSessionSnapshot.selection
+            }
+            var stagedWorkspaceState = baseSessionSnapshot.workspaceState
+            if !workspaceCommands.isEmpty {
+                do {
+                    for workspaceCommand in workspaceCommands {
+                        _ = try stagedWorkspaceState.apply(
+                            workspaceCommand,
+                            document: session.document
+                        )
+                    }
+                    try stagedWorkspaceState.validate(against: session.document)
+                } catch let error as EditorError {
+                    throw projectError(for: error)
+                } catch {
+                    throw ProjectControllerError(
+                        code: .transactionInvalid,
+                        message: "Persistent workspace staging failed: \(error)."
                     )
                 }
-                try stagedWorkspaceState.validate(against: session.document)
+            }
+            proposedWorkspaceState = stagedWorkspaceState
+            automationExecution = nil
+
+        case .automation(let automation):
+            let isolated: IsolatedWorkspaceTransactionExecution<AutomationBatchExecution>
+            do {
+                isolated = try session.executeIsolatedWorkspaceTransaction(
+                    commits: false
+                ) { stagedSession in
+                    try automationExecutor.execute(
+                        automation,
+                        in: stagedSession
+                    )
+                }
             } catch let error as EditorError {
                 throw projectError(for: error)
             } catch {
                 throw ProjectControllerError(
                     code: .transactionInvalid,
-                    message: "Persistent workspace staging failed: \(error)."
+                    message: "Project interaction Automation staging failed: \(error)."
                 )
             }
+            let finalContext = isolated.value.finalContext
+            guard finalContext.generation == session.generation,
+                  finalContext.transactionRevision == session.transactionRevision,
+                  finalContext.selection == baseSessionSnapshot.selection else {
+                throw ProjectControllerError(
+                    code: .sourceMismatch,
+                    message: "Project interaction Automation changed source or selection authority."
+                )
+            }
+            proposedSelection = finalContext.selection
+            proposedWorkspaceState = finalContext.workspaceState
+            automationExecution = isolated.value
         }
 
-        var stagedSessionSnapshot = baseSessionSnapshot
-        stagedSessionSnapshot.selection = stagedSelection
-        let selectionChanged = stagedSelection != baseSessionSnapshot.selection
         let workspaceChanged = hasSemanticWorkspaceChange(
             from: baseSessionSnapshot.workspaceState,
-            to: stagedWorkspaceState
+            to: proposedWorkspaceState
         )
-        stagedSessionSnapshot.workspaceState = workspaceChanged
-            ? stagedWorkspaceState
+        let canonicalWorkspaceState = workspaceChanged
+            ? proposedWorkspaceState
             : baseSessionSnapshot.workspaceState
-        if !selectionChanged && !workspaceChanged {
-            return try currentState()
+        let canonicalAutomationExecution = automationExecution.map { execution in
+            var preview = execution
+            preview.proposedGeneration = baseSessionSnapshot.store.document.generation
+            preview.proposedTransactionRevision = baseSessionSnapshot.transactionRevision
+            preview.proposedWorkspaceRevision = canonicalWorkspaceState.revision
+            preview.didCommit = false
+            preview.finalContext = AutomationBatchFinalContext(
+                document: baseSessionSnapshot.store.document.document,
+                generation: baseSessionSnapshot.store.document.generation,
+                transactionRevision: baseSessionSnapshot.transactionRevision,
+                selection: proposedSelection,
+                workspaceState: canonicalWorkspaceState,
+                objectRegistry: objectRegistry,
+                evaluationSnapshot: EvaluationSnapshot(
+                    status: baseSessionSnapshot.store.document.evaluationStatus,
+                    evaluatedGeneration: baseSessionSnapshot.store.document.evaluatedGeneration,
+                    renderInvalidation: baseSessionSnapshot.store.document.renderInvalidation,
+                    bodyCount: baseSessionSnapshot.store.document.evaluatedBodyCount,
+                    diagnostics: baseSessionSnapshot.store.document.diagnostics
+                ),
+                currentEvaluation: session.currentEvaluation,
+                isDirty: baseSessionSnapshot.store.document.isDirty,
+                diagnostics: execution.finalContext.diagnostics
+            )
+            return preview
         }
-        let nextPublicationSequence = try advancedPublicationSequence()
+        return PreparedProjectInteractionMutation(
+            basePublicationSequence: basePublicationSequence,
+            baseSessionSnapshot: baseSessionSnapshot,
+            proposedSelection: proposedSelection,
+            proposedWorkspaceState: canonicalWorkspaceState,
+            wouldPublish: proposedSelection != baseSessionSnapshot.selection
+                || workspaceChanged,
+            automationExecution: canonicalAutomationExecution
+        )
+    }
 
+    private func publishInteractionMutation(
+        _ prepared: PreparedProjectInteractionMutation,
+        transaction: ProjectInteractionTransaction
+    ) throws -> ProjectInteractionCommitResult {
+        try requireProjectID(transaction.expectedProjectID)
+        try requireTransactionRevision(transaction.expectedTransactionRevision)
+        try requirePublicationSequence(transaction.expectedPublicationSequence)
+        try requirePublicationSequence(prepared.basePublicationSequence)
+
+        guard prepared.wouldPublish else {
+            let state = try currentState()
+            return ProjectInteractionCommitResult(
+                state: state,
+                automationExecution: committedAutomationExecution(
+                    prepared.automationExecution,
+                    state: state,
+                    didCommit: false
+                )
+            )
+        }
+
+        var stagedSessionSnapshot = prepared.baseSessionSnapshot
+        stagedSessionSnapshot.selection = prepared.proposedSelection
+        stagedSessionSnapshot.workspaceState = prepared.proposedWorkspaceState
+        let nextPublicationSequence = try advancedPublicationSequence()
         do {
             session.restoreTransactionSnapshot(stagedSessionSnapshot)
             publicationSequence = nextPublicationSequence
-            return try currentState()
+            let state = try currentState()
+            return ProjectInteractionCommitResult(
+                state: state,
+                automationExecution: committedAutomationExecution(
+                    prepared.automationExecution,
+                    state: state,
+                    didCommit: true
+                )
+            )
         } catch {
-            session.restoreTransactionSnapshot(baseSessionSnapshot)
-            publicationSequence = basePublicationSequence
+            session.restoreTransactionSnapshot(prepared.baseSessionSnapshot)
+            publicationSequence = prepared.basePublicationSequence
             throw error
         }
     }
@@ -913,7 +1284,8 @@ public actor ProjectController: ProjectOperating {
         let document = try Self.assembleDocument(
             package: package,
             product: product,
-            cadDocument: cadDocument
+            cadDocument: cadDocument,
+            objectRegistry: objectRegistry
         )
         let source = try await projectSource(document)
         guard source.id == package.documentID else {
@@ -1084,10 +1456,11 @@ public actor ProjectController: ProjectOperating {
         projector: any ProjectSourceProjecting,
         productSourceCodec: any ProjectProductSourceCoding,
         cadSourceCodec: any ProjectCADSourceCoding,
-        packageValidator: any ProjectPackageValidating
+        packageValidator: any ProjectPackageValidating,
+        objectRegistry: ObjectTypeRegistry
     ) throws -> (package: ProjectPackageDocument, evaluationSource: ProjectSourceModel) {
         do {
-            _ = try document.validate()
+            _ = try document.validate(objectRegistry: objectRegistry)
         } catch {
             throw ProjectControllerError(
                 code: .sourceInvalid,
@@ -1162,7 +1535,8 @@ public actor ProjectController: ProjectOperating {
             package: package,
             projector: projector,
             productSourceCodec: productSourceCodec,
-            cadSourceCodec: cadSourceCodec
+            cadSourceCodec: cadSourceCodec,
+            objectRegistry: objectRegistry
         )
         let reconstructedAuthority: ProjectSourceAuthoritySnapshot
         do {
@@ -1219,7 +1593,8 @@ public actor ProjectController: ProjectOperating {
         package: ProjectPackageDocument,
         projector: any ProjectSourceProjecting,
         productSourceCodec: any ProjectProductSourceCoding,
-        cadSourceCodec: any ProjectCADSourceCoding
+        cadSourceCodec: any ProjectCADSourceCoding,
+        objectRegistry: ObjectTypeRegistry
     ) throws -> (document: DesignDocument, evaluationSource: ProjectSourceModel) {
         let product: ProjectProductSourceModel
         do {
@@ -1242,7 +1617,8 @@ public actor ProjectController: ProjectOperating {
         let document = try assembleDocument(
             package: package,
             product: product,
-            cadDocument: cadDocument
+            cadDocument: cadDocument,
+            objectRegistry: objectRegistry
         )
         let source: ProjectSourceModel
         do {
@@ -1266,7 +1642,8 @@ public actor ProjectController: ProjectOperating {
     private static func assembleDocument(
         package: ProjectPackageDocument,
         product: ProjectProductSourceModel,
-        cadDocument: CADDocument?
+        cadDocument: CADDocument?,
+        objectRegistry: ObjectTypeRegistry
     ) throws -> DesignDocument {
         guard product.projectID == package.documentID else {
             throw ProjectControllerError(
@@ -1300,7 +1677,7 @@ public actor ProjectController: ProjectOperating {
             authoredMeshAssets: package.authoredMeshAssets
         )
         do {
-            _ = try document.validate()
+            _ = try document.validate(objectRegistry: objectRegistry)
         } catch {
             throw ProjectControllerError(
                 code: .sourceInvalid,
@@ -1328,6 +1705,7 @@ private enum HistoryDirection {
 private struct StagedCommandResults: Sendable {
     let commandResults: [CommandExecutionResult]
     let geometrySourceCommandResults: [GeometrySourceCommandResult]
+    var automationExecution: AutomationBatchExecution?
 
     var didMutateAuthoredMesh: Bool {
         geometrySourceCommandResults.contains { result in
@@ -1339,4 +1717,21 @@ private struct StagedCommandResults: Sendable {
             }
         }
     }
+}
+
+private struct PreparedProjectSourceMutation: Sendable {
+    let basePublicationSequence: UInt64
+    let source: PreparedEditorSourceTransaction<StagedCommandResults>
+    let package: ProjectPackageDocument
+    let evaluationSource: ProjectSourceModel
+    let evaluation: EvaluatedProjectSnapshot
+}
+
+private struct PreparedProjectInteractionMutation: Sendable {
+    let basePublicationSequence: UInt64
+    let baseSessionSnapshot: EditorSessionTransactionSnapshot
+    let proposedSelection: SelectionModel
+    let proposedWorkspaceState: WorkspaceState
+    let wouldPublish: Bool
+    let automationExecution: AutomationBatchExecution?
 }

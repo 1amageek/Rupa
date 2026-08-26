@@ -144,6 +144,7 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
             "RupaProjectModel",
         ],
         "RupaProject": [
+            "RupaAutomation",
             "RupaCore",
             "RupaCoreTypes",
             "RupaEvaluation",
@@ -196,6 +197,9 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
         ],
         "RupaRendering": [
             "RupaCore",
+            "RupaCoreTypes",
+            "RupaGeometry",
+            "RupaProjectModel",
             "RupaViewportScene",
         ],
         "RupaPreview": [

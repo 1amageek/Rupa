@@ -15,6 +15,8 @@ public struct ProjectStateSnapshot: Sendable {
     public let canRedo: Bool
     public let selection: SelectionModel
     public let workspaceState: WorkspaceState
+    public let objectRegistry: ObjectTypeRegistry
+    public let evaluationSnapshot: EvaluationSnapshot
     public let evaluationSource: ProjectSourceModel
     public let cadInteraction: DocumentEvaluationContext?
     public let evaluation: EvaluatedProjectSnapshot
@@ -30,6 +32,8 @@ public struct ProjectStateSnapshot: Sendable {
         canRedo: Bool,
         selection: SelectionModel,
         workspaceState: WorkspaceState,
+        objectRegistry: ObjectTypeRegistry,
+        evaluationSnapshot: EvaluationSnapshot,
         evaluationSource: ProjectSourceModel,
         cadInteraction: DocumentEvaluationContext?,
         evaluation: EvaluatedProjectSnapshot
@@ -44,6 +48,8 @@ public struct ProjectStateSnapshot: Sendable {
         self.canRedo = canRedo
         self.selection = selection
         self.workspaceState = workspaceState
+        self.objectRegistry = objectRegistry
+        self.evaluationSnapshot = evaluationSnapshot
         self.evaluationSource = evaluationSource
         self.cadInteraction = cadInteraction
         self.evaluation = evaluation

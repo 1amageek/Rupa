@@ -197,6 +197,7 @@ func automationSourceBatchDryRunDoesNotPublishSource() async throws {
     #expect(execution.proposedGeneration == DocumentGeneration(1))
     #expect(execution.baseTransactionRevision == DocumentTransactionRevision(0))
     #expect(execution.proposedTransactionRevision == DocumentTransactionRevision(1))
+    #expect(execution.finalContext.transactionRevision == execution.proposedTransactionRevision)
     #expect(!execution.didCommit)
     #expect(execution.results.map(\.effect) == [.sourceMutation, .readOnly])
     #expect(execution.metrics.commandCount == 2)
@@ -293,6 +294,8 @@ func automationSourceBatchBuildsMultipleBodiesWithOneEvaluation() async throws {
     )
 
     #expect(execution.results.count == 8)
+    #expect(execution.finalContext.transactionRevision == execution.proposedTransactionRevision)
+    #expect(execution.finalContext.transactionRevision == session.transactionRevision)
     #expect(execution.metrics.commandCount == 8)
     #expect(execution.metrics.evaluationPassCount == 1)
     #expect(execution.metrics.historyEntryCount == 1)

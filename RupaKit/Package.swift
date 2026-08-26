@@ -200,6 +200,7 @@ let package = Package(
         .target(
             name: "RupaProject",
             dependencies: [
+                "RupaAutomation",
                 "RupaCore",
                 "RupaCoreTypes",
                 "RupaEvaluation",
@@ -234,6 +235,9 @@ let package = Package(
             name: "RupaRendering",
             dependencies: [
                 "RupaCore",
+                "RupaCoreTypes",
+                "RupaGeometry",
+                "RupaProjectModel",
                 "RupaViewportScene",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
             ]
@@ -571,7 +575,12 @@ let package = Package(
                 "RupaAgentProtocol",
                 "RupaAgentTransport",
                 "RupaAgentUI",
+                "RupaAutomation",
+                "RupaCore",
+                "RupaCoreTypes",
                 "RupaDomainFoundation",
+                "RupaKit",
+                "RupaProject",
                 "RupaUI",
             ]
         ),

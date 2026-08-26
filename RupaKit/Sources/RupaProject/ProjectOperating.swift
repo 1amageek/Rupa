@@ -1,4 +1,5 @@
 import Foundation
+import RupaAutomation
 import RupaCoreTypes
 import RupaEvaluation
 import RupaProjectPackage
@@ -11,13 +12,27 @@ public protocol ProjectOperating: Actor {
 
     func applyInteraction(
         _ transaction: ProjectInteractionTransaction
-    ) async throws -> ProjectStateSnapshot
+    ) async throws -> ProjectInteractionCommitResult
+
+    func previewInteraction(
+        _ transaction: ProjectInteractionTransaction
+    ) async throws -> ProjectInteractionPreviewResult
 
     func evaluateCurrent() async throws -> EvaluatedProjectSnapshot
 
     func commit(
         _ transaction: ProjectSourceTransaction
     ) async throws -> ProjectSourceCommitResult
+
+    func previewSource(
+        _ transaction: ProjectSourceTransaction
+    ) async throws -> ProjectSourcePreviewResult
+
+    func executeReadOnlyAutomation(
+        _ automation: PreparedAutomationBatch,
+        expectedProjectID: ProjectID,
+        expectedPublicationSequence: UInt64
+    ) throws -> AutomationBatchExecution
 
     func undo(
         expectedTransactionRevision: DocumentTransactionRevision

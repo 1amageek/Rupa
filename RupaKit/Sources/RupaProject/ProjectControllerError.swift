@@ -4,6 +4,7 @@ public struct ProjectControllerError: Error, Equatable, LocalizedError, Sendable
     public enum Code: String, Equatable, Sendable {
         case revisionConflict
         case publicationConflict
+        case projectMismatch
         case sourceInvalid
         case sourceMismatch
         case transactionInvalid

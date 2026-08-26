@@ -17,7 +17,9 @@ func projectControllerPublishesCADPackageAndEvaluationAfterValidation() async th
         ProjectSourceTransaction(
             name: "fixture.rename",
             commands: [.renameDocument(name: "After")],
-            expectedTransactionRevision: DocumentTransactionRevision(0)
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: DocumentTransactionRevision(0),
+            expectedPublicationSequence: 0
         )
     )
 
@@ -57,7 +59,9 @@ func projectControllerPublishesOneCoherentStateSnapshot() async throws {
         ProjectSourceTransaction(
             name: "fixture.coherent-state",
             commands: [.renameDocument(name: "After")],
-            expectedTransactionRevision: DocumentTransactionRevision(0)
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: DocumentTransactionRevision(0),
+            expectedPublicationSequence: 1
         )
     )
     let committed = try await controller.currentState()
@@ -80,7 +84,9 @@ func projectControllerPublishesUndoAndRedoAsCompleteSourceAggregates() async thr
         ProjectSourceTransaction(
             name: "fixture.history-source",
             commands: [.renameDocument(name: "After")],
-            expectedTransactionRevision: DocumentTransactionRevision(0)
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: DocumentTransactionRevision(0),
+            expectedPublicationSequence: 0
         )
     )
 
@@ -125,7 +131,9 @@ func projectControllerHistoryFailureDoesNotPublishStagedState() async throws {
         ProjectSourceTransaction(
             name: "fixture.history-evaluation-failure",
             commands: [.renameDocument(name: "After")],
-            expectedTransactionRevision: DocumentTransactionRevision(0)
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: DocumentTransactionRevision(0),
+            expectedPublicationSequence: 0
         )
     )
     let retained = try await controller.currentState()
@@ -186,7 +194,9 @@ func projectControllerUndoAndRedoRestoreAuthoredMeshAuthority() async throws {
                     position: GeometryPoint3D(x: 0, y: 0, z: 21)
                 ),
             ],
-            expectedTransactionRevision: DocumentTransactionRevision(0)
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: DocumentTransactionRevision(0),
+            expectedPublicationSequence: 0
         )
     )
     let editedAsset = try #require(commit.document.authoredMeshAssets[sourceAsset.id])
@@ -242,7 +252,9 @@ func projectControllerLoadsEvaluatesAndResavesMeshOnlyPackageWithoutCADAuthority
             ProjectSourceTransaction(
                 name: "fixture.rename-mesh-only",
                 commands: [.renameDocument(name: "Changed")],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 2
             )
         )
         let loaded = try await controller.load(
@@ -295,7 +307,9 @@ func projectControllerCADTransactionPreservesAuthoredMeshAuthorityAndPresentatio
         ProjectSourceTransaction(
             name: "fixture.rename-hybrid",
             commands: [.renameDocument(name: "Hybrid Renamed")],
-            expectedTransactionRevision: DocumentTransactionRevision(0)
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: DocumentTransactionRevision(0),
+            expectedPublicationSequence: 0
         )
     )
 
@@ -336,7 +350,9 @@ func projectControllerPublishesMeshOnlyEditPackageAndEvaluationAtomically() asyn
         ProjectSourceTransaction(
             name: "fixture.mesh-edit",
             geometrySourceCommands: [command],
-            expectedTransactionRevision: DocumentTransactionRevision(0)
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: DocumentTransactionRevision(0),
+            expectedPublicationSequence: 0
         )
     )
 
@@ -382,7 +398,9 @@ func projectControllerMeshNoOpPreservesRevisionPackageAndBufferIdentity() async 
                     position: originalPosition
                 ),
             ],
-            expectedTransactionRevision: DocumentTransactionRevision(0)
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: DocumentTransactionRevision(0),
+            expectedPublicationSequence: 0
         )
     )
 
@@ -421,7 +439,9 @@ func projectControllerAppliesCADCommandsBeforeGeometrySourceCommands() async thr
                     position: GeometryPoint3D(x: 0, y: 0, z: 5)
                 ),
             ],
-            expectedTransactionRevision: DocumentTransactionRevision(0)
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: DocumentTransactionRevision(0),
+            expectedPublicationSequence: 0
         )
     )
 
@@ -450,7 +470,9 @@ func projectControllerRejectsStaleMeshIdentityWithoutPublishing() async throws {
         ProjectSourceTransaction(
             name: "fixture.first-mesh-edit",
             geometrySourceCommands: [staleCommand],
-            expectedTransactionRevision: DocumentTransactionRevision(0)
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: DocumentTransactionRevision(0),
+            expectedPublicationSequence: 0
         )
     )
     let retainedDocument = await controller.currentDocument()
@@ -462,7 +484,9 @@ func projectControllerRejectsStaleMeshIdentityWithoutPublishing() async throws {
             ProjectSourceTransaction(
                 name: "fixture.stale-mesh-identity",
                 geometrySourceCommands: [staleCommand],
-                expectedTransactionRevision: DocumentTransactionRevision(1)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(1),
+                expectedPublicationSequence: 1
             )
         )
     } catch let error as ProjectControllerError {
@@ -497,7 +521,9 @@ func projectControllerMeshEvaluationFailureDoesNotPublishOrEnableBlobCollection(
                         position: GeometryPoint3D(x: 0, y: 0, z: 8)
                     ),
                 ],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 0
             )
         )
     } catch let error as ProjectControllerError {
@@ -533,7 +559,9 @@ func projectControllerMeshProductEncodingFailureDoesNotPublish() async throws {
                         position: GeometryPoint3D(x: 0, y: 0, z: 9)
                     ),
                 ],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 0
             )
         )
     } catch let error as ProjectControllerError {
@@ -568,7 +596,9 @@ func projectControllerMeshPackageValidationFailureDoesNotPublish() async throws 
                         position: GeometryPoint3D(x: 0, y: 0, z: 10)
                     ),
                 ],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 0
             )
         )
     } catch let error as ProjectControllerError {
@@ -595,7 +625,9 @@ func projectControllerRejectsLossyProductCodecBeforePublishing() async throws {
             ProjectSourceTransaction(
                 name: "fixture.lossy-product",
                 commands: [.renameDocument(name: "After")],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 0
             )
         )
     } catch let error as ProjectControllerError {
@@ -624,7 +656,9 @@ func projectControllerRejectsLossyCADCodecBeforePublishing() async throws {
             ProjectSourceTransaction(
                 name: "fixture.lossy-cad",
                 commands: [.renameDocument(name: "After")],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 0
             )
         )
     } catch let error as ProjectControllerError {
@@ -658,7 +692,9 @@ func projectControllerRejectsLostProductModelingSettingsBeforePublishing() async
             ProjectSourceTransaction(
                 name: "fixture.lossy-product-settings",
                 commands: [.renameDocument(name: "After")],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 0
             )
         )
     } catch let error as ProjectControllerError {
@@ -693,7 +729,9 @@ func projectControllerRejectsLostCADParametersBeforePublishing() async throws {
                         kind: .length
                     ),
                 ],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 0
             )
         )
     } catch let error as ProjectControllerError {
@@ -728,7 +766,9 @@ func projectControllerRejectsUnsavableStagedPackageBeforePublishing() async thro
             ProjectSourceTransaction(
                 name: "fixture.unsavable-package",
                 commands: [.renameDocument(name: "A much longer staged Product name")],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 0
             )
         )
     } catch let error as ProjectControllerError {
@@ -917,7 +957,9 @@ func projectControllerDoesNotPublishWhenEvaluationFails() async throws {
             ProjectSourceTransaction(
                 name: "fixture.failure",
                 commands: [.renameDocument(name: "Never Published")],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 0
             )
         )
     } catch let error as ProjectControllerError {
@@ -947,7 +989,9 @@ func projectControllerDoesNotPublishWhenEvaluatorPreparationFails() async throws
             ProjectSourceTransaction(
                 name: "fixture.preparation-failure",
                 commands: [.renameDocument(name: "After")],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 0
             )
         )
     } catch let error as ProjectControllerError {
@@ -968,7 +1012,9 @@ func projectControllerRejectsStaleRequestBeforeStaging() async throws {
         ProjectSourceTransaction(
             name: "fixture.first",
             commands: [.renameDocument(name: "Committed")],
-            expectedTransactionRevision: DocumentTransactionRevision(0)
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: DocumentTransactionRevision(0),
+            expectedPublicationSequence: 0
         )
     )
     var caught: ProjectControllerError?
@@ -978,7 +1024,9 @@ func projectControllerRejectsStaleRequestBeforeStaging() async throws {
             ProjectSourceTransaction(
                 name: "fixture.stale",
                 commands: [.renameDocument(name: "Rejected")],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 1
             )
         )
     } catch let error as ProjectControllerError {
@@ -989,6 +1037,65 @@ func projectControllerRejectsStaleRequestBeforeStaging() async throws {
     #expect(await controller.currentDocument().cadDocument.metadata.name == "Committed")
     #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(1))
     #expect(try await controller.currentState().publicationSequence == 1)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectSourceTransactionRejectsUnresolvedEdgeOffsetBeforeControllerStaging() async throws {
+    let controller = try makeController(document: .empty(named: "Unresolved Edge"))
+    _ = try await controller.evaluateCurrent()
+    var caught: ProjectControllerError?
+
+    do {
+        _ = try ProjectSourceTransaction(
+            name: "fixture.unresolved-edge-offset",
+            commands: [
+                .offsetCurve(
+                    target: SelectionTarget(
+                        sceneNodeID: SceneNodeID(),
+                        component: .edge(SelectionComponentID(rawValue: "missing-edge"))
+                    ),
+                    distance: .length(1.0, .meter),
+                    options: OffsetCurveOptions(),
+                    vertexHandle: nil
+                ),
+            ],
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: DocumentTransactionRevision(0),
+            expectedPublicationSequence: 1
+        )
+    } catch let error as ProjectControllerError {
+        caught = error
+    }
+
+    #expect(caught?.code == .transactionInvalid)
+    #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(0))
+    #expect(try await controller.currentState().publicationSequence == 1)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectControllerRejectsStalePublicationBeforeSourceStaging() async throws {
+    let controller = try makeController(document: .empty(named: "Publication Guard"))
+    _ = try await controller.evaluateCurrent()
+    let transaction = try ProjectSourceTransaction(
+        name: "fixture.stale-publication",
+        commands: [.renameDocument(name: "Must Not Stage")],
+        expectedProjectID: await controller.currentDocument().projectID,
+        expectedTransactionRevision: DocumentTransactionRevision(0),
+        expectedPublicationSequence: 0
+    )
+    var caught: ProjectControllerError?
+
+    do {
+        _ = try await controller.commit(transaction)
+    } catch let error as ProjectControllerError {
+        caught = error
+    }
+
+    let retained = try await controller.currentState()
+    #expect(caught?.code == .publicationConflict)
+    #expect(retained.document.cadDocument.metadata.name == "Publication Guard")
+    #expect(retained.transactionRevision == DocumentTransactionRevision(0))
+    #expect(retained.publicationSequence == 1)
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -1003,7 +1110,9 @@ func projectControllerRejectsPublicationWhenConcurrentCallerWins() async throws 
             ProjectSourceTransaction(
                 name: "fixture.first",
                 commands: [.renameDocument(name: "First")],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 0
             )
         )
     }
@@ -1015,7 +1124,9 @@ func projectControllerRejectsPublicationWhenConcurrentCallerWins() async throws 
         ProjectSourceTransaction(
             name: "fixture.second",
             commands: [.renameDocument(name: "Second")],
-            expectedTransactionRevision: DocumentTransactionRevision(0)
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: DocumentTransactionRevision(0),
+            expectedPublicationSequence: 0
         )
     )
     gate.releaseFirstEvaluation()
@@ -1035,6 +1146,131 @@ func projectControllerRejectsPublicationWhenConcurrentCallerWins() async throws 
 }
 
 @Test(.timeLimit(.minutes(1)))
+func projectSourcePreviewRejectsAConcurrentInteractionPublication() async throws {
+    let gate = BlockingEvaluationGate(blockedSourceName: "Preview")
+    defer { gate.releaseFirstEvaluation() }
+    let controller = try makeController(
+        document: .empty(named: "Before"),
+        evaluator: BlockingProjectEvaluator(gate: gate)
+    )
+    _ = try await controller.evaluateCurrent()
+    let preview = Task {
+        try await controller.previewSource(
+            ProjectSourceTransaction(
+                name: "fixture.preview-stale",
+                commands: [.renameDocument(name: "Preview")],
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 1
+            )
+        )
+    }
+    while !gate.didStartFirstEvaluation {
+        try await Task.sleep(for: .milliseconds(1))
+    }
+
+    let interaction = try await controller.applyInteraction(
+        ProjectInteractionTransaction(
+            workspaceCommands: [.setDisplayUnit(.meter)],
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: DocumentTransactionRevision(0),
+            expectedPublicationSequence: 1
+        )
+    )
+    gate.releaseFirstEvaluation()
+
+    var caught: ProjectControllerError?
+    do {
+        _ = try await preview.value
+    } catch let error as ProjectControllerError {
+        caught = error
+    }
+    let retained = try await controller.currentState()
+
+    #expect(caught?.code == .publicationConflict)
+    #expect(interaction.state.publicationSequence == 2)
+    #expect(retained.document.cadDocument.metadata.name == "Before")
+    #expect(retained.workspaceState.displayUnit == .meter)
+    #expect(retained.transactionRevision == DocumentTransactionRevision(0))
+    #expect(retained.publicationSequence == 2)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectSourcePreviewCancellationDiscardsTheStagedProposal() async throws {
+    let gate = BlockingEvaluationGate(blockedSourceName: "Preview")
+    defer { gate.releaseFirstEvaluation() }
+    let controller = try makeController(
+        document: .empty(named: "Before"),
+        evaluator: BlockingProjectEvaluator(gate: gate)
+    )
+    _ = try await controller.evaluateCurrent()
+    let preview = Task {
+        try await controller.previewSource(
+            ProjectSourceTransaction(
+                name: "fixture.preview-cancelled",
+                commands: [.renameDocument(name: "Preview")],
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 1
+            )
+        )
+    }
+    while !gate.didStartFirstEvaluation {
+        try await Task.sleep(for: .milliseconds(1))
+    }
+
+    preview.cancel()
+    gate.releaseFirstEvaluation()
+
+    var wasCancelled = false
+    do {
+        _ = try await preview.value
+    } catch is CancellationError {
+        wasCancelled = true
+    }
+    let retained = try await controller.currentState()
+
+    #expect(wasCancelled)
+    #expect(retained.document.cadDocument.metadata.name == "Before")
+    #expect(retained.transactionRevision == DocumentTransactionRevision(0))
+    #expect(retained.publicationSequence == 1)
+    #expect(!retained.canUndo)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectSourcePreviewReportsEvaluationFailureWithoutPublishing() async throws {
+    let controller = try makeController(
+        document: .empty(named: "Before"),
+        evaluator: NameRejectingProjectEvaluator(rejectedName: "Rejected")
+    )
+    _ = try await controller.evaluateCurrent()
+    let retained = try await controller.currentState()
+    var caught: ProjectControllerError?
+
+    do {
+        _ = try await controller.previewSource(
+            ProjectSourceTransaction(
+                name: "fixture.preview-evaluation-failure",
+                commands: [.renameDocument(name: "Rejected")],
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 1
+            )
+        )
+    } catch let error as ProjectControllerError {
+        caught = error
+    }
+    let current = try await controller.currentState()
+
+    #expect(caught?.code == .evaluationFailed)
+    #expect(current.document.cadDocument.metadata.name == "Before")
+    #expect(current.package.productSource == retained.package.productSource)
+    #expect(current.evaluation.id == retained.evaluation.id)
+    #expect(current.transactionRevision == retained.transactionRevision)
+    #expect(current.publicationSequence == retained.publicationSequence)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func projectControllerRejectsSourcePublicationAfterSaveChangesHistoryState() async throws {
     try await withTemporaryDirectory { directory in
         let gate = BlockingEvaluationGate(blockedSourceName: "After")
@@ -1049,7 +1285,9 @@ func projectControllerRejectsSourcePublicationAfterSaveChangesHistoryState() asy
                 ProjectSourceTransaction(
                     name: "fixture.commit-versus-save",
                     commands: [.renameDocument(name: "After")],
-                    expectedTransactionRevision: DocumentTransactionRevision(0)
+                    expectedProjectID: await controller.currentDocument().projectID,
+                    expectedTransactionRevision: DocumentTransactionRevision(0),
+                    expectedPublicationSequence: 1
                 )
             )
         }
@@ -1093,7 +1331,9 @@ func projectControllerRejectsHistoryPublicationAfterSaveChangesCleanMarker() asy
             ProjectSourceTransaction(
                 name: "fixture.history-versus-save-source",
                 commands: [.renameDocument(name: "After")],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 0
             )
         )
         let undo = Task {
@@ -1151,7 +1391,9 @@ func projectControllerCancelledMeshCommitDoesNotPublishStagedAuthority() async t
                         position: GeometryPoint3D(x: 0, y: 0, z: 11)
                     ),
                 ],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 0
             )
         )
     }
@@ -1195,7 +1437,9 @@ func projectControllerLateMeshPublicationLosesToNewerCommit() async throws {
                         position: GeometryPoint3D(x: 0, y: 0, z: 12)
                     ),
                 ],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 0
             )
         )
     }
@@ -1207,7 +1451,9 @@ func projectControllerLateMeshPublicationLosesToNewerCommit() async throws {
         ProjectSourceTransaction(
             name: "fixture.winning-cad",
             commands: [.renameDocument(name: "Second")],
-            expectedTransactionRevision: DocumentTransactionRevision(0)
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: DocumentTransactionRevision(0),
+            expectedPublicationSequence: 0
         )
     )
     gate.releaseFirstEvaluation()
@@ -1251,7 +1497,9 @@ func projectControllerMeshCommitReusesUnchangedBlobAndCollectsSupersededBlob() a
                         position: GeometryPoint3D(x: 0, y: 0, z: 13)
                     ),
                 ],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 1
             )
         )
         #expect(await controller.currentPackage().retainsUnreferencedSourceBlobs == false)
@@ -1288,7 +1536,9 @@ func projectControllerRoutesSaveAndLoadThroughCoherentPackageState() async throw
             ProjectSourceTransaction(
                 name: "fixture.change",
                 commands: [.renameDocument(name: "Changed")],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 1
             )
         )
         let loaded = try await controller.load(
@@ -1312,7 +1562,9 @@ func projectControllerMarksCleanOnlyAfterSuccessfulSave() async throws {
             ProjectSourceTransaction(
                 name: "fixture.save-clean-state",
                 commands: [.renameDocument(name: "Saved")],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 0
             )
         )
         let dirty = try await controller.currentState()
@@ -1354,7 +1606,9 @@ func projectControllerFailedSaveRetainsDirtyPublicationState() async throws {
             ProjectSourceTransaction(
                 name: "fixture.failed-save-clean-state",
                 commands: [.renameDocument(name: "Retained")],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 0
             )
         )
         let retained = try await controller.currentState()
@@ -1400,7 +1654,9 @@ func projectControllerLoadInvalidatesPreLoadTransactionRevisions() async throws 
                 ProjectSourceTransaction(
                     name: "fixture.stale-after-load",
                     commands: [.renameDocument(name: "Rejected")],
-                    expectedTransactionRevision: DocumentTransactionRevision(0)
+                    expectedProjectID: await controller.currentDocument().projectID,
+                    expectedTransactionRevision: DocumentTransactionRevision(0),
+                    expectedPublicationSequence: 2
                 )
             )
         } catch let error as ProjectControllerError {
@@ -1431,7 +1687,9 @@ func projectControllerRejectsLateCommitAfterPackageLoadPublishes() async throws 
                 ProjectSourceTransaction(
                     name: "fixture.late",
                     commands: [.renameDocument(name: "First")],
-                    expectedTransactionRevision: DocumentTransactionRevision(0)
+                    expectedProjectID: await controller.currentDocument().projectID,
+                    expectedTransactionRevision: DocumentTransactionRevision(0),
+                    expectedPublicationSequence: 1
                 )
             )
         }
@@ -1503,7 +1761,9 @@ func projectControllerFailedSaveRetainsPublishedMeshAuthority() async throws {
                         position: GeometryPoint3D(x: 0, y: 0, z: 14)
                     ),
                 ],
-                expectedTransactionRevision: DocumentTransactionRevision(0)
+                expectedProjectID: await controller.currentDocument().projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 0
             )
         )
         let retainedDocument = await controller.currentDocument()

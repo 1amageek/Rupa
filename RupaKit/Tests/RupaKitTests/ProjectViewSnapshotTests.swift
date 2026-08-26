@@ -33,7 +33,9 @@ func projectWorkspacePublishesOneCoherentCADViewAndHistoryState() async throws {
                     direction: .normal
                 ),
             ],
-            expectedTransactionRevision: initial.transactionRevision
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: initial.transactionRevision,
+            expectedPublicationSequence: initial.publicationSequence
         )
     )
     let document = await controller.currentDocument()
@@ -71,6 +73,65 @@ func projectWorkspacePublishesOneCoherentCADViewAndHistoryState() async throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
+func projectWorkspaceReturnsTheExactSourceViewWithoutRegressingNewerPublication() async throws {
+    let controller = try projectViewController(
+        document: .empty(named: "Initial")
+    )
+    let gate = NthProjectViewBuildGate(blockedBuildNumber: 2)
+    defer { gate.release() }
+    let workspace = await ProjectWorkspace(
+        project: controller,
+        viewBuilder: GatedProjectViewSnapshotBuilder(gate: gate)
+    )
+    let initial = try await workspace.evaluate()
+    let firstTransaction = try ProjectSourceTransaction(
+        name: "view.first-exact-result",
+        commands: [.renameDocument(name: "First")],
+        expectedProjectID: await controller.currentDocument().projectID,
+        expectedTransactionRevision: initial.transactionRevision,
+        expectedPublicationSequence: initial.publicationSequence
+    )
+
+    let firstTask = Task {
+        try await workspace.perform(.source(firstTransaction))
+    }
+    while !gate.didBlock {
+        await Task.yield()
+    }
+
+    let firstState = try await controller.currentState()
+    let secondCommit = try await controller.commit(
+        ProjectSourceTransaction(
+            name: "view.second-newer-result",
+            commands: [.renameDocument(name: "Second")],
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: firstState.transactionRevision,
+            expectedPublicationSequence: firstState.publicationSequence
+        )
+    )
+    let secondView = try await workspace.publish(secondCommit.state)
+    gate.release()
+
+    let firstResult = try await firstTask.value
+    guard case .source(let firstCommit, let firstView) = firstResult else {
+        Issue.record("The first source action must preserve its source result.")
+        return
+    }
+    let published = try #require(await workspace.view)
+
+    #expect(firstCommit.state.publicationSequence == firstView.publicationSequence)
+    #expect(
+        firstCommit.state.document.cadDocument.metadata.name
+            == firstView.document.name
+    )
+    #expect(firstCommit.state.transactionRevision == firstView.transactionRevision)
+    #expect(firstCommit.state.evaluation.id.sourceRevision == firstView.transactionRevision)
+    #expect(secondView.publicationSequence > firstView.publicationSequence)
+    #expect(published.publicationSequence == secondView.publicationSequence)
+    #expect(published.document.name == "Second")
+}
+
+@Test(.timeLimit(.minutes(1)))
 func projectViewPreservesMeshOnlyStorageAndExplicitNavigation() async throws {
     let document = try projectViewMeshOnlyDocument(named: "Mesh View")
     let asset = try #require(document.authoredMeshAssets.values.first)
@@ -87,6 +148,34 @@ func projectViewPreservesMeshOnlyStorageAndExplicitNavigation() async throws {
     #expect(item.reference == .authoredMesh(asset.id))
     expectProjectViewSharedStorage(item.mesh, asset.source)
     #expect(node.reference == .authoredMesh(asset.id))
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectStateAndViewSnapshotsRetainInjectedRegistryAndEvaluationSnapshot() async throws {
+    let customTypeID: ObjectTypeID = "custom.snapshot-registry"
+    let registry = try ObjectTypeRegistry(
+        definitions: [
+            ObjectTypeDefinition(
+                id: customTypeID,
+                title: "Snapshot Registry Type",
+                systemImage: "circle",
+                representation: .twoDimensional,
+                category: .annotation
+            ),
+        ]
+    )
+    let controller = try projectViewController(
+        document: .empty(named: "Injected Registry"),
+        objectRegistry: registry
+    )
+    let workspace = await ProjectWorkspace(project: controller)
+    let view = try await workspace.evaluate()
+    let state = try await controller.currentState()
+
+    #expect(state.objectRegistry.definitions == registry.definitions)
+    #expect(view.objectRegistry.definitions == registry.definitions)
+    #expect(view.evaluationSnapshot == state.evaluationSnapshot)
+    #expect(view.publicationSequence == state.publicationSequence)
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -128,6 +217,8 @@ func projectViewBuilderRejectsAnEvaluationFromAnotherTransactionRevision() async
         canRedo: state.canRedo,
         selection: state.selection,
         workspaceState: state.workspaceState,
+        objectRegistry: state.objectRegistry,
+        evaluationSnapshot: state.evaluationSnapshot,
         evaluationSource: state.evaluationSource,
         cadInteraction: state.cadInteraction,
         evaluation: state.evaluation
@@ -161,7 +252,9 @@ func projectViewBuilderRejectsCADInteractionFromAnotherDocumentGeneration() asyn
                     direction: .normal
                 ),
             ],
-            expectedTransactionRevision: DocumentTransactionRevision(0)
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: DocumentTransactionRevision(0),
+            expectedPublicationSequence: 0
         )
     )
     let state = try await controller.currentState()
@@ -177,6 +270,8 @@ func projectViewBuilderRejectsCADInteractionFromAnotherDocumentGeneration() asyn
         canRedo: state.canRedo,
         selection: state.selection,
         workspaceState: state.workspaceState,
+        objectRegistry: state.objectRegistry,
+        evaluationSnapshot: state.evaluationSnapshot,
         evaluationSource: state.evaluationSource,
         cadInteraction: state.cadInteraction,
         evaluation: state.evaluation
@@ -329,11 +424,11 @@ func projectWorkspaceRequiresAnInitialViewBeforeHistoryMutation() async throws {
         document: .empty(named: "Unavailable View")
     )
     let workspace = await ProjectWorkspace(project: controller)
-    var error: ProjectViewSnapshotError?
+    var error: ProjectWorkspaceActionError?
 
     do {
         _ = try await workspace.undo()
-    } catch let caught as ProjectViewSnapshotError {
+    } catch let caught as ProjectWorkspaceActionError {
         error = caught
     }
     let revision = await controller.currentTransactionRevision()
@@ -355,7 +450,9 @@ func projectWorkspaceRejectsLateViewPublication() async throws {
         ProjectSourceTransaction(
             name: "view.rename",
             commands: [.renameDocument(name: "Newer View")],
-            expectedTransactionRevision: olderState.transactionRevision
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: olderState.transactionRevision,
+            expectedPublicationSequence: olderState.publicationSequence
         )
     )
     let retained = try await workspace.publish(olderState)
@@ -425,6 +522,7 @@ func projectWorkspacePublishesAtomicInteractionWithoutSourceRevisionOrEvaluation
                     ViewportGridSettings(visualSpacingMode: .fixed)
                 ),
             ],
+            expectedProjectID: await controller.currentDocument().projectID,
             expectedTransactionRevision: initial.transactionRevision,
             expectedPublicationSequence: initial.publicationSequence
         )
@@ -478,6 +576,7 @@ func projectWorkspaceRejectsInvalidInteractionWithoutPublicationOrPartialState()
                     ),
                     .setActiveConstructionPlane(invalidPlane),
                 ],
+                expectedProjectID: await controller.currentDocument().projectID,
                 expectedTransactionRevision: initial.transactionRevision,
                 expectedPublicationSequence: initial.publicationSequence
             )
@@ -545,6 +644,7 @@ func projectWorkspaceDoesNotPublishSemanticWorkspaceNoOps() async throws {
         try ProjectInteractionTransaction(
             selection: .replace(selected),
             workspaceCommands: [.setViewportGridSettings(.standard)],
+            expectedProjectID: await controller.currentDocument().projectID,
             expectedTransactionRevision: initial.transactionRevision,
             expectedPublicationSequence: initial.publicationSequence
         )
@@ -588,6 +688,7 @@ func projectWorkspaceDoesNotPublishSemanticWorkspaceNoOps() async throws {
                 ),
                 .setViewportGridSettings(.standard),
             ],
+            expectedProjectID: await controller.currentDocument().projectID,
             expectedTransactionRevision: initial.transactionRevision,
             expectedPublicationSequence: selectionWithSameValueWorkspace.publicationSequence
         )
@@ -653,6 +754,7 @@ func projectWorkspaceRejectsLoadThatRacesWithInteractionPublication() async thro
                     ViewportGridSettings(visualSpacingMode: .fixed)
                 ),
             ],
+            expectedProjectID: await controller.currentDocument().projectID,
             expectedTransactionRevision: initial.transactionRevision,
             expectedPublicationSequence: initial.publicationSequence
         )
@@ -742,6 +844,7 @@ func projectWorkspaceRejectsInteractionFromStaleSourceRevision() async throws {
                         selectedTargets: [SelectionTarget(sceneNodeID: sceneNodeID)]
                     )
                 ),
+                expectedProjectID: await controller.currentDocument().projectID,
                 expectedTransactionRevision: staleRevision,
                 expectedPublicationSequence: initial.publicationSequence
             )
@@ -782,6 +885,7 @@ func projectWorkspaceRejectsInteractionFromStalePublicationSequence() async thro
                         selectedTargets: [SelectionTarget(sceneNodeID: sceneNodeID)]
                     )
                 ),
+                expectedProjectID: await controller.currentDocument().projectID,
                 expectedTransactionRevision: initial.transactionRevision,
                 expectedPublicationSequence: initial.publicationSequence
             )
@@ -799,12 +903,14 @@ func projectWorkspaceRejectsInteractionFromStalePublicationSequence() async thro
 }
 
 private func projectViewController(
-    document: DesignDocument
+    document: DesignDocument,
+    objectRegistry: ObjectTypeRegistry = .builtIn
 ) throws -> ProjectController {
     try ProjectController(
         document: document,
         evaluatorPreparer: DefaultDesignDocumentProjectEvaluatorFactory(),
-        projector: DesignDocumentProjectBridge()
+        projector: DesignDocumentProjectBridge(),
+        objectRegistry: objectRegistry
     )
 }
 
@@ -884,6 +990,55 @@ private final class ProjectPackageLoadGate: Sendable {
     }
 }
 
+private final class NthProjectViewBuildGate: Sendable {
+    private struct State {
+        var buildCount = 0
+        var didBlock = false
+        var isReleased = false
+    }
+
+    private let state = Mutex(State())
+    private let blockedBuildNumber: Int
+
+    init(blockedBuildNumber: Int) {
+        self.blockedBuildNumber = blockedBuildNumber
+    }
+
+    var didBlock: Bool {
+        state.withLock { $0.didBlock }
+    }
+
+    func waitIfNeeded() {
+        let shouldBlock = state.withLock { state in
+            state.buildCount += 1
+            guard state.buildCount == blockedBuildNumber else {
+                return false
+            }
+            state.didBlock = true
+            return true
+        }
+        guard shouldBlock else {
+            return
+        }
+        while !state.withLock({ $0.isReleased }) {
+            Thread.sleep(forTimeInterval: 0.001)
+        }
+    }
+
+    func release() {
+        state.withLock { $0.isReleased = true }
+    }
+}
+
+private struct GatedProjectViewSnapshotBuilder: ProjectViewSnapshotBuilding {
+    let gate: NthProjectViewBuildGate
+
+    func build(from state: ProjectStateSnapshot) throws -> ProjectViewSnapshot {
+        gate.waitIfNeeded()
+        return try ProjectViewSnapshotBuilder().build(from: state)
+    }
+}
+
 private struct BlockingProjectPackageReader: ProjectPackageReading {
     let package: ProjectPackageDocument
     let gate: ProjectPackageLoadGate
@@ -911,6 +1066,8 @@ private func projectViewState(
         canRedo: state.canRedo,
         selection: state.selection,
         workspaceState: state.workspaceState,
+        objectRegistry: state.objectRegistry,
+        evaluationSnapshot: state.evaluationSnapshot,
         evaluationSource: evaluationSource ?? state.evaluationSource,
         cadInteraction: state.cadInteraction,
         evaluation: evaluation ?? state.evaluation

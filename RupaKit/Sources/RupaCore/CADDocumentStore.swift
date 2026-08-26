@@ -384,6 +384,33 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .applyNamespacedSemanticExtensionMutations:
+            func run() throws {
+                guard case .applyNamespacedSemanticExtensionMutations(
+                    let namespace,
+                    let mutations
+                ) = command else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "Command dispatch expected applyNamespacedSemanticExtensionMutations."
+                    )
+                }
+                let proposedGeneration = try generation.advanced()
+                let canonicalMutations = try NamespacedSemanticExtensionMutationCanonicalizer()
+                    .canonicalize(
+                        mutations,
+                        namespace: namespace,
+                        generation: proposedGeneration,
+                        in: document
+                    )
+                try document.applySemanticExtensionMutations(
+                    canonicalMutations,
+                    objectRegistry: objectRegistry
+                )
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
+            try run()
         case .upsertParameter:
             func run() throws {
                 guard case .upsertParameter(let name, let expression, let kind) = command else {

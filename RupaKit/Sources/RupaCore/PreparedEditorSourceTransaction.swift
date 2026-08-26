@@ -16,6 +16,19 @@ public struct PreparedEditorSourceTransaction<Value> {
         after.store.evaluationCache.map(DocumentEvaluationContext.init(cache:))
     }
 
+    /// The complete staged document state retained by the isolated transaction.
+    public var stagedDocumentState: DocumentSnapshot {
+        after.store.document
+    }
+
+    public var stagedSelection: SelectionModel {
+        after.selection
+    }
+
+    public var stagedWorkspaceState: WorkspaceState {
+        after.workspaceState
+    }
+
     let ownerID: UUID
     let commandName: String
     let before: DocumentSnapshot

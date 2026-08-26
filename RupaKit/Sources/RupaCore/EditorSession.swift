@@ -15,6 +15,8 @@ public final class EditorSession {
 
     let transactionOwnerID: UUID
     private var documentState: DocumentState
+    @ObservationIgnored
+    private let commandContextResolver: any EditorCommandContextResolving
 
     public var store: CADDocumentStore {
         documentState.store
@@ -132,7 +134,8 @@ public final class EditorSession {
         workspaceState: WorkspaceState = WorkspaceState(),
         transactionRevision: DocumentTransactionRevision = DocumentTransactionRevision(),
         diagnostics: [EditorDiagnostic] = [],
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        commandContextResolver: any EditorCommandContextResolving = DefaultEditorCommandContextResolver()
     ) {
         let store = CADDocumentStore(
             document: document,
@@ -154,6 +157,7 @@ public final class EditorSession {
         self.selectedTool = selectedTool
         self.polygonToolState = polygonToolState
         self.sketchInputState = sketchInputState
+        self.commandContextResolver = commandContextResolver
     }
 
     public func transactionSnapshot() -> EditorSessionTransactionSnapshot {
@@ -210,7 +214,8 @@ public final class EditorSession {
             workspaceState: snapshot.workspaceState,
             transactionRevision: snapshot.transactionRevision,
             diagnostics: snapshot.store.document.diagnostics,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            commandContextResolver: commandContextResolver
         )
         stagedSession.restoreTransactionSnapshot(snapshot)
         return stagedSession
@@ -916,10 +921,37 @@ public final class EditorSession {
     ) throws -> CommandExecutionResult {
         try requireTransactionRevision(expectedTransactionRevision)
         let resolvedCommand = try commandResolvingSelectionContext(command)
+        return try executeResolvedCommand(
+            resolvedCommand,
+            expectedGeneration: expectedGeneration,
+            expectedTransactionRevision: expectedTransactionRevision
+        )
+    }
+
+    /// Executes the exact immutable command produced by a planning boundary.
+    @discardableResult
+    public func execute(
+        _ resolvedCommand: ContextResolvedEditorCommand,
+        expectedGeneration: DocumentGeneration? = nil,
+        expectedTransactionRevision: DocumentTransactionRevision? = nil
+    ) throws -> CommandExecutionResult {
+        try requireTransactionRevision(expectedTransactionRevision)
+        return try executeResolvedCommand(
+            resolvedCommand.command,
+            expectedGeneration: expectedGeneration,
+            expectedTransactionRevision: expectedTransactionRevision
+        )
+    }
+
+    private func executeResolvedCommand(
+        _ command: EditorCommand,
+        expectedGeneration: DocumentGeneration?,
+        expectedTransactionRevision: DocumentTransactionRevision?
+    ) throws -> CommandExecutionResult {
         guard command.mutatesDocument,
               !commandStack.isExecutingGroupedSourceCommands else {
             let result = try commandStack.execute(
-                resolvedCommand,
+                command,
                 in: store,
                 expectedGeneration: expectedGeneration
             )
@@ -933,9 +965,8 @@ public final class EditorSession {
             commits: true,
             expectedTransactionRevision: expectedTransactionRevision
         ) { stagedSession in
-            let stagedCommand = try stagedSession.commandResolvingSelectionContext(command)
             return try stagedSession.commandStack.execute(
-                stagedCommand,
+                command,
                 in: stagedSession.store,
                 expectedGeneration: expectedGeneration
             )
@@ -1018,40 +1049,13 @@ public final class EditorSession {
     }
 
     private func commandResolvingSelectionContext(_ command: EditorCommand) throws -> EditorCommand {
-        switch command {
-        case .offsetCurve(let target, let distance, var options, let vertexHandle):
-            guard options.supportTarget == nil,
-                  case .edge = target.component,
-                  let supportTarget = try supportFaceTargetResolvingSelectionContext(for: target) else {
-                return command
-            }
-            options.supportTarget = supportTarget
-            return .offsetCurve(
-                target: target,
-                distance: distance,
-                options: options,
-                vertexHandle: vertexHandle
-            )
-        default:
-            return command
-        }
-    }
-
-    private func supportFaceTargetResolvingSelectionContext(for edgeTarget: SelectionTarget) throws -> SelectionTarget? {
-        let resolution = try EdgeOffsetSupportFaceResolver().resolve(
-            edgeTarget: edgeTarget,
-            selection: selection,
+        let context = EditorCommandPlanningContext(
             document: document,
-            objectRegistry: objectRegistry
+            selection: selection,
+            objectRegistry: objectRegistry,
+            evaluationSnapshot: evaluationSnapshot
         )
-        if resolution.status == .ambiguous,
-           let message = resolution.diagnosticMessage {
-            throw EditorError(
-                code: .commandInvalid,
-                message: message
-            )
-        }
-        return resolution.supportTarget
+        return try commandContextResolver.resolve(command, in: context)
     }
 
     public func setDisplayUnit(_ unit: LengthDisplayUnit) {

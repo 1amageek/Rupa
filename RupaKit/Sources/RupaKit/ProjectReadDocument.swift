@@ -10,8 +10,14 @@ import SwiftCAD
 public struct ProjectReadDocument: Sendable {
     private let validatedDocument: ValidatedDesignDocument
 
-    public init(document: DesignDocument) throws {
-        validatedDocument = try ValidatedDesignDocument(document)
+    public init(
+        document: DesignDocument,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        validatedDocument = try ValidatedDesignDocument(
+            document,
+            objectRegistry: objectRegistry
+        )
     }
 
     public var document: DesignDocument {

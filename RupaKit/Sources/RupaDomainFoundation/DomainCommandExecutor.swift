@@ -3,14 +3,19 @@ import RupaCore
 import RupaCoreTypes
 
 public struct DomainCommandExecutor {
-    private let registry: DomainRegistry
+    private let planResolver: any DomainCommandPlanResolving
+    private let resultProjector: any DomainCommandResultProjecting
     private let automationRunner: AutomationRunner
 
     public init(
         registry: DomainRegistry,
-        automationRunner: AutomationRunner = AutomationRunner()
+        automationRunner: AutomationRunner = AutomationRunner(),
+        planResolver: (any DomainCommandPlanResolving)? = nil,
+        resultProjector: any DomainCommandResultProjecting =
+            DefaultDomainCommandResultProjector()
     ) {
-        self.registry = registry
+        self.planResolver = planResolver ?? DefaultDomainCommandPlanResolver(registry: registry)
+        self.resultProjector = resultProjector
         self.automationRunner = automationRunner
     }
 
@@ -18,210 +23,123 @@ public struct DomainCommandExecutor {
         _ request: DomainCommandRequest,
         in session: EditorSession
     ) throws -> DomainExecutionResult {
-        let descriptor = try descriptor(for: request)
-        try validateDryRunSupport(request: request, descriptor: descriptor)
-        let plan = try registry.lower(request)
-        try validate(plan: plan, for: descriptor)
+        try Task.checkCancellation()
+        let resolution = try planResolver.resolve(request)
         let baseGeneration = session.generation
         let baseTransactionRevision = session.transactionRevision
-        let result: DomainExecutionResult
-        switch plan {
+        let record: DomainCommandExecutionRecord
+        switch resolution.plan {
         case .automationBatch(let batch):
-            result = try executeAutomationBatch(
+            record = try executeAutomationBatch(
                 batch,
-                request: request,
+                resolution: resolution,
                 in: session
             )
         case .documentTransaction(let transaction):
-            result = try executeDocumentTransaction(
+            record = try executeDocumentTransaction(
                 transaction,
-                request: request,
+                resolution: resolution,
                 in: session
             )
         case .query(let query):
-            result = try executeQuery(
+            record = try executeQuery(
                 query,
-                request: request,
+                resolution: resolution,
                 in: session
             )
         }
-        try validate(
-            result: result,
-            request: request,
-            descriptor: descriptor,
-            baseGeneration: baseGeneration,
-            currentGeneration: session.generation,
-            baseTransactionRevision: baseTransactionRevision,
-            currentTransactionRevision: session.transactionRevision
-        )
-        return result
-    }
-
-    private func descriptor(for request: DomainCommandRequest) throws -> DomainCapabilityDescriptor {
-        guard let descriptor = registry.capabilityDescriptor(for: request.capabilityID) else {
-            throw DomainRegistryError(
-                code: .missingCapability,
-                message: "No domain capability is registered for \(request.capabilityID.rawValue)."
-            )
-        }
-        guard descriptor.namespace == request.namespace else {
-            throw DomainRegistryError(
-                code: .invalidRegistration,
-                message: "Domain command request namespace does not match the capability namespace."
-            )
-        }
-        return descriptor
-    }
-
-    private func validateDryRunSupport(
-        request: DomainCommandRequest,
-        descriptor: DomainCapabilityDescriptor
-    ) throws {
-        guard !request.dryRun || descriptor.supportsDryRun else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Domain capability \(request.capabilityID.rawValue) does not support dry-run execution."
-            )
-        }
-    }
-
-    private func validate(
-        plan: DomainCommandPlan,
-        for descriptor: DomainCapabilityDescriptor
-    ) throws {
-        let isCompatible: Bool
-        switch (descriptor.effect, plan) {
-        case (.query, .query),
-             (.documentMutation, .automationBatch),
-             (.documentMutation, .documentTransaction):
-            isCompatible = true
-        default:
-            isCompatible = false
-        }
-        guard isCompatible else {
-            throw DomainRegistryError(
-                code: .invalidRegistration,
-                message: "Domain capability effect is incompatible with its lowered execution plan."
-            )
-        }
-    }
-
-    private func validate(
-        result: DomainExecutionResult,
-        request: DomainCommandRequest,
-        descriptor: DomainCapabilityDescriptor,
-        baseGeneration: DocumentGeneration,
-        currentGeneration: DocumentGeneration,
-        baseTransactionRevision: DocumentTransactionRevision,
-        currentTransactionRevision: DocumentTransactionRevision
-    ) throws {
-        guard result.capabilityID == request.capabilityID,
-              result.namespace == request.namespace,
-              result.dryRun == request.dryRun else {
+        guard baseGeneration == record.baseGeneration,
+              baseTransactionRevision == record.baseTransactionRevision else {
             throw EditorError(
                 code: .commandFailed,
-                message: "Domain execution returned an identity that does not match its request."
+                message: "Domain execution returned a base revision that does not match the session."
             )
         }
-        guard result.baseGeneration == baseGeneration,
-              result.generation == currentGeneration,
-              result.baseTransactionRevision == baseTransactionRevision,
-              result.transactionRevision == currentTransactionRevision else {
-            throw EditorError(
-                code: .commandFailed,
-                message: "Domain execution returned inconsistent document revisions."
+        do {
+            try Task.checkCancellation()
+            return try resultProjector.project(
+                resolution: resolution,
+                record: record,
+                currentGeneration: session.generation,
+                currentTransactionRevision: session.transactionRevision
             )
-        }
-        if descriptor.effect == .query {
-            guard !result.didMutate,
-                  !result.wouldMutate,
-                  result.proposedGeneration == baseGeneration,
-                  result.proposedTransactionRevision == baseTransactionRevision else {
-                throw EditorError(
-                    code: .commandFailed,
-                    message: "Query domain capabilities must not propose or commit document mutations."
-                )
+        } catch {
+            guard record.didMutate else {
+                throw error
             }
+            throw DomainCommandPostCommitError(
+                record: record,
+                finalContext: AutomationBatchFinalContext(session: session),
+                message: "The domain mutation committed, but its result could not be projected: \(error)."
+            )
         }
     }
 
     private func executeAutomationBatch(
         _ batch: AutomationBatch,
-        request: DomainCommandRequest,
+        resolution: DomainCommandPlanResolution,
         in session: EditorSession
-    ) throws -> DomainExecutionResult {
-        let effectiveBatch = try batchApplyingExpectedGeneration(
-            batch,
-            requestExpectedGeneration: request.expectedGeneration,
-            requestExpectedTransactionRevision: request.expectedTransactionRevision
+    ) throws -> DomainCommandExecutionRecord {
+        let effectiveBatch = AutomationBatch(
+            commands: batch.commands,
+            expectedGeneration: resolution.expectedGeneration,
+            expectedTransactionRevision: resolution.expectedTransactionRevision,
+            expectedWorkspaceRevision: batch.expectedWorkspaceRevision
         )
         let execution = try automationRunner.executeBatchTransaction(
             effectiveBatch,
             in: session,
-            commits: !request.dryRun
+            commits: !resolution.request.dryRun
         )
-        return DomainExecutionResult(
-            capabilityID: request.capabilityID,
-            namespace: request.namespace,
-            message: message(for: request),
+        return DomainCommandExecutionRecord(
             baseGeneration: execution.baseGeneration,
-            generation: request.dryRun ? execution.baseGeneration : execution.proposedGeneration,
+            generation: resolution.request.dryRun
+                ? execution.baseGeneration
+                : execution.proposedGeneration,
             proposedGeneration: execution.proposedGeneration,
             baseTransactionRevision: execution.baseTransactionRevision,
-            transactionRevision: request.dryRun
+            transactionRevision: resolution.request.dryRun
                 ? execution.baseTransactionRevision
                 : execution.proposedTransactionRevision,
             proposedTransactionRevision: execution.proposedTransactionRevision,
             didMutate: execution.didCommit && execution.results.contains { $0.didMutate },
             wouldMutate: execution.results.contains { $0.didMutate },
-            dryRun: request.dryRun,
-            diagnostics: execution.results.flatMap(\.diagnostics),
+            diagnostics: execution.diagnostics,
             automationResults: execution.results
         )
     }
 
     private func executeDocumentTransaction(
         _ transaction: DomainDocumentTransaction,
-        request: DomainCommandRequest,
+        resolution: DomainCommandPlanResolution,
         in session: EditorSession
-    ) throws -> DomainExecutionResult {
-        try transaction.validate()
-        let effectiveExpectedGeneration = try mergedExpectedGeneration(
-            planExpectedGeneration: transaction.expectedGeneration,
-            requestExpectedGeneration: request.expectedGeneration
-        )
-        let effectiveExpectedTransactionRevision = try mergedExpectedTransactionRevision(
-            planExpectedTransactionRevision: transaction.expectedTransactionRevision,
-            requestExpectedTransactionRevision: request.expectedTransactionRevision
-        )
-        try session.store.requireGeneration(effectiveExpectedGeneration)
-        try session.requireTransactionRevision(effectiveExpectedTransactionRevision)
-        let expectedProposedGeneration = try proposedGeneration(
-            from: session.generation,
-            mutationCount: transaction.sourceCommands.count + 1
+    ) throws -> DomainCommandExecutionRecord {
+        let expectedGeneration = resolution.expectedGeneration
+        let expectedTransactionRevision = resolution.expectedTransactionRevision
+        try session.store.requireGeneration(expectedGeneration)
+        try session.requireTransactionRevision(expectedTransactionRevision)
+        let expectedProposedGeneration = try transaction.proposedGeneration(
+            from: session.generation
         )
         let execution = try session.executeIsolatedSourceTransaction(
             commandName: transaction.name,
-            commits: !request.dryRun,
-            expectedTransactionRevision: effectiveExpectedTransactionRevision
+            commits: !resolution.request.dryRun,
+            expectedTransactionRevision: expectedTransactionRevision
         ) { stagedSession in
             let sourceCommandResults = try stagedSession.withSourceCommandGroup(
                 named: transaction.name
             ) { groupedSession in
                 var sourceCommandResults: [CommandExecutionResult] = []
                 for command in transaction.sourceCommands {
+                    try Task.checkCancellation()
                     sourceCommandResults.append(try groupedSession.execute(command))
                 }
-                let semanticMutations = try transaction.semanticMutations.map { mutation in
-                    try canonicalSemanticMutation(
-                        mutation,
-                        namespace: request.namespace,
-                        generation: expectedProposedGeneration,
-                        in: groupedSession
-                    )
-                }
+                try Task.checkCancellation()
                 _ = try groupedSession.execute(
-                    .applySemanticExtensionMutations(semanticMutations)
+                    .applyNamespacedSemanticExtensionMutations(
+                        namespace: resolution.request.namespace,
+                        mutations: transaction.semanticMutations
+                    )
                 )
                 guard groupedSession.generation == expectedProposedGeneration else {
                     throw EditorError(
@@ -233,24 +151,26 @@ public struct DomainCommandExecutor {
             }
             return StagedDocumentTransactionResult(
                 sourceCommandResults: sourceCommandResults,
-                diagnostics: stagedSession.diagnostics
+                diagnostics: EditorDiagnostic.stableMerged([
+                    sourceCommandResults.flatMap(\.diagnostics),
+                    stagedSession.diagnostics,
+                    stagedSession.evaluationSnapshot.diagnostics,
+                ])
             )
         }
-        return DomainExecutionResult(
-            capabilityID: request.capabilityID,
-            namespace: request.namespace,
-            message: message(for: request),
+        return DomainCommandExecutionRecord(
             baseGeneration: execution.baseGeneration,
-            generation: request.dryRun ? execution.baseGeneration : execution.proposedGeneration,
+            generation: resolution.request.dryRun
+                ? execution.baseGeneration
+                : execution.proposedGeneration,
             proposedGeneration: execution.proposedGeneration,
             baseTransactionRevision: execution.baseTransactionRevision,
-            transactionRevision: request.dryRun
+            transactionRevision: resolution.request.dryRun
                 ? execution.baseTransactionRevision
                 : execution.proposedTransactionRevision,
             proposedTransactionRevision: execution.proposedTransactionRevision,
             didMutate: execution.didCommit,
             wouldMutate: execution.proposedGeneration != execution.baseGeneration,
-            dryRun: request.dryRun,
             diagnostics: execution.value.diagnostics,
             sourceCommandResults: execution.value.sourceCommandResults,
             commandName: transaction.name,
@@ -260,15 +180,16 @@ public struct DomainCommandExecutor {
 
     private func executeQuery(
         _ query: any DomainCommandQuery,
-        request: DomainCommandRequest,
+        resolution: DomainCommandPlanResolution,
         in session: EditorSession
-    ) throws -> DomainExecutionResult {
-        try session.store.requireGeneration(request.expectedGeneration)
-        try session.requireTransactionRevision(request.expectedTransactionRevision)
+    ) throws -> DomainCommandExecutionRecord {
+        try session.store.requireGeneration(resolution.expectedGeneration)
+        try session.requireTransactionRevision(resolution.expectedTransactionRevision)
         let generation = session.generation
         let transactionRevision = session.transactionRevision
+        try Task.checkCancellation()
         let queryResult = try query.execute(
-            request,
+            resolution.request,
             in: DomainQueryContext(
                 document: session.document,
                 generation: generation,
@@ -278,9 +199,8 @@ public struct DomainCommandExecutor {
             )
         )
         try queryResult.validate()
-        return DomainExecutionResult(
-            capabilityID: request.capabilityID,
-            namespace: request.namespace,
+        try Task.checkCancellation()
+        return DomainCommandExecutionRecord(
             message: queryResult.message,
             baseGeneration: generation,
             generation: generation,
@@ -290,125 +210,11 @@ public struct DomainCommandExecutor {
             proposedTransactionRevision: transactionRevision,
             didMutate: false,
             wouldMutate: false,
-            dryRun: request.dryRun,
             diagnostics: queryResult.diagnostics,
             validationFindings: queryResult.validationFindings,
             validationRegions: queryResult.validationRegions,
             payload: queryResult.payload
         )
-    }
-
-    private func canonicalSemanticMutation(
-        _ mutation: SemanticExtensionMutation,
-        namespace: SemanticNamespaceID,
-        generation: DocumentGeneration,
-        in session: EditorSession
-    ) throws -> SemanticExtensionMutation {
-        switch mutation {
-        case .upsert(var envelope):
-            guard envelope.namespace == namespace else {
-                throw crossNamespaceMutationError()
-            }
-            for index in envelope.projection.semanticEntities.indices {
-                let semanticEntityID = envelope.projection.semanticEntities[index].id
-                envelope.projection.semanticEntities[index].dependencyIdentity = envelope.projection
-                    .hasSourceBoundReferences(for: semanticEntityID)
-                    ? try ProjectionDependencyIdentityBuilder().identity(
-                        for: semanticEntityID,
-                        in: envelope,
-                        document: session.document,
-                        generation: generation
-                    )
-                    : nil
-            }
-            return .upsert(envelope)
-        case .remove(let extensionID):
-            guard let envelope = session.document.productMetadata.semanticExtensions[extensionID] else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Semantic extension \(extensionID.rawValue.uuidString) does not exist."
-                )
-            }
-            guard envelope.namespace == namespace else {
-                throw crossNamespaceMutationError()
-            }
-            return mutation
-        }
-    }
-
-    private func crossNamespaceMutationError() -> EditorError {
-        EditorError(
-            code: .commandInvalid,
-            message: "Domain transactions cannot mutate another semantic namespace."
-        )
-    }
-
-    private func proposedGeneration(
-        from baseGeneration: DocumentGeneration,
-        mutationCount: Int
-    ) throws -> DocumentGeneration {
-        var generation = baseGeneration
-        for _ in 0..<mutationCount {
-            generation = try generation.advanced()
-        }
-        return generation
-    }
-
-    private func batchApplyingExpectedGeneration(
-        _ batch: AutomationBatch,
-        requestExpectedGeneration: DocumentGeneration?,
-        requestExpectedTransactionRevision: DocumentTransactionRevision?
-    ) throws -> AutomationBatch {
-        let expectedGeneration = try mergedExpectedGeneration(
-            planExpectedGeneration: batch.expectedGeneration,
-            requestExpectedGeneration: requestExpectedGeneration
-        )
-        return AutomationBatch(
-            commands: batch.commands,
-            expectedGeneration: expectedGeneration,
-            expectedTransactionRevision: try mergedExpectedTransactionRevision(
-                planExpectedTransactionRevision: batch.expectedTransactionRevision,
-                requestExpectedTransactionRevision: requestExpectedTransactionRevision
-            ),
-            expectedWorkspaceRevision: batch.expectedWorkspaceRevision
-        )
-    }
-
-    private func mergedExpectedGeneration(
-        planExpectedGeneration: DocumentGeneration?,
-        requestExpectedGeneration: DocumentGeneration?
-    ) throws -> DocumentGeneration? {
-        if let planExpectedGeneration,
-           let requestExpectedGeneration,
-           planExpectedGeneration != requestExpectedGeneration {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Domain command lowering returned an expected generation that conflicts with the request."
-            )
-        }
-        return planExpectedGeneration ?? requestExpectedGeneration
-    }
-
-    private func mergedExpectedTransactionRevision(
-        planExpectedTransactionRevision: DocumentTransactionRevision?,
-        requestExpectedTransactionRevision: DocumentTransactionRevision?
-    ) throws -> DocumentTransactionRevision? {
-        if let planExpectedTransactionRevision,
-           let requestExpectedTransactionRevision,
-           planExpectedTransactionRevision != requestExpectedTransactionRevision {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Domain command lowering returned a transaction revision that conflicts with the request."
-            )
-        }
-        return planExpectedTransactionRevision ?? requestExpectedTransactionRevision
-    }
-
-    private func message(for request: DomainCommandRequest) -> String {
-        if request.dryRun {
-            return "Domain capability \(request.capabilityID.rawValue) dry-run completed."
-        }
-        return "Domain capability \(request.capabilityID.rawValue) executed."
     }
 
     private struct StagedDocumentTransactionResult {

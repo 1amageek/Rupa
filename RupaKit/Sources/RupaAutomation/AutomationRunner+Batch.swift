@@ -21,28 +21,27 @@ public extension AutomationRunner {
         try session.store.requireGeneration(batch.expectedGeneration)
         try session.requireTransactionRevision(batch.expectedTransactionRevision)
         try session.workspaceState.requireRevision(batch.expectedWorkspaceRevision)
+        let prepared = PreparedAutomationBatch(batch: batch, effect: effect)
 
         switch effect {
         case .readOnly:
-            return try executeReadOnlyBatch(batch, in: session)
+            return try executeReadOnlyBatch(prepared, in: session)
         case .sourceMutation:
-            return try executeSourceBatch(batch, in: session, commits: commits)
+            return try executeSourceBatch(prepared, in: session, commits: commits)
         case .workspaceMutation:
-            return try executeWorkspaceBatch(batch, in: session, commits: commits)
+            return try executeWorkspaceBatch(prepared, in: session, commits: commits)
         }
     }
 
     private func executeReadOnlyBatch(
-        _ batch: AutomationBatch,
+        _ prepared: PreparedAutomationBatch,
         in session: EditorSession
     ) throws -> AutomationBatchExecution {
         let baseGeneration = session.generation
         let transactionRevision = session.transactionRevision
         let baseWorkspaceRevision = session.workspaceState.revision
         let stage = try session.executeIsolatedReadTransaction { stagedSession in
-            try executeStage(batch.commands, in: stagedSession) {
-                try executeCommandsWithRequestedContext(batch.commands, in: stagedSession)
-            }
+            try AutomationStagedBatchExecutor().execute(prepared, in: stagedSession)
         }
         return AutomationBatchExecution(
             results: stage.results,
@@ -54,33 +53,40 @@ public extension AutomationRunner {
             baseWorkspaceRevision: baseWorkspaceRevision,
             proposedWorkspaceRevision: baseWorkspaceRevision,
             didCommit: false,
-            metrics: stage.metrics
+            metrics: stage.metrics,
+            finalContext: stage.finalContext
         )
     }
 
     private func executeSourceBatch(
-        _ batch: AutomationBatch,
+        _ prepared: PreparedAutomationBatch,
         in session: EditorSession,
         commits: Bool
     ) throws -> AutomationBatchExecution {
+        let batch = prepared.batch
         let workspaceRevision = session.workspaceState.revision
         let execution = try session.executeIsolatedSourceTransaction(
             commandName: "automationBatch.source",
             commits: commits,
             expectedTransactionRevision: batch.expectedTransactionRevision
         ) { stagedSession in
-            try executeStage(batch.commands, in: stagedSession) {
-                let results = try stagedSession.withSourceCommandGroup(
-                    named: "automationBatch.source"
-                ) { groupedSession in
-                    try executeCommandOnlyResults(batch.commands, in: groupedSession)
-                }
-                return addingRequestedFinalContext(
-                    to: results,
-                    commands: batch.commands,
-                    in: stagedSession
+            let initialEvaluationPassCount = stagedSession.store.completedEvaluationPassCount
+            let initialHistoryEntryCount = stagedSession.commandStack.undoEntries.count
+            var stagedExecution = try stagedSession.withSourceCommandGroup(
+                named: "automationBatch.source"
+            ) { groupedSession in
+                try AutomationStagedBatchExecutor().execute(
+                    prepared,
+                    in: groupedSession
                 )
             }
+            stagedExecution = AutomationStagedBatchExecutor().finalizingSourceMetrics(
+                stagedExecution,
+                initialEvaluationPassCount: initialEvaluationPassCount,
+                initialHistoryEntryCount: initialHistoryEntryCount,
+                in: stagedSession
+            )
+            return stagedExecution
         }
         return AutomationBatchExecution(
             results: execution.value.results,
@@ -92,12 +98,16 @@ public extension AutomationRunner {
             baseWorkspaceRevision: workspaceRevision,
             proposedWorkspaceRevision: workspaceRevision,
             didCommit: execution.didCommit,
-            metrics: execution.value.metrics
+            metrics: execution.value.metrics,
+            finalContext: AutomationBatchFinalContext(
+                copying: execution.value.finalContext,
+                transactionRevision: execution.proposedTransactionRevision
+            )
         )
     }
 
     private func executeWorkspaceBatch(
-        _ batch: AutomationBatch,
+        _ prepared: PreparedAutomationBatch,
         in session: EditorSession,
         commits: Bool
     ) throws -> AutomationBatchExecution {
@@ -106,9 +116,7 @@ public extension AutomationRunner {
         let execution = try session.executeIsolatedWorkspaceTransaction(
             commits: commits
         ) { stagedSession in
-            try executeStage(batch.commands, in: stagedSession) {
-                try executeCommandsWithRequestedContext(batch.commands, in: stagedSession)
-            }
+            try AutomationStagedBatchExecutor().execute(prepared, in: stagedSession)
         }
         return AutomationBatchExecution(
             results: execution.value.results,
@@ -120,75 +128,8 @@ public extension AutomationRunner {
             baseWorkspaceRevision: execution.baseRevision,
             proposedWorkspaceRevision: execution.proposedRevision,
             didCommit: execution.didCommit,
-            metrics: execution.value.metrics
+            metrics: execution.value.metrics,
+            finalContext: execution.value.finalContext
         )
     }
-
-    private func executeCommandsWithRequestedContext(
-        _ commands: [AutomationCommand],
-        in session: EditorSession
-    ) throws -> [AutomationResult] {
-        addingRequestedFinalContext(
-            to: try executeCommandOnlyResults(commands, in: session),
-            commands: commands,
-            in: session
-        )
-    }
-
-    private func executeCommandOnlyResults(
-        _ commands: [AutomationCommand],
-        in session: EditorSession
-    ) throws -> [AutomationResult] {
-        let commandRunner = AutomationRunner(resultDetail: .commandOnly)
-        return try commands.map { command in
-            try commandRunner.execute(command, in: session)
-        }
-    }
-
-    private func addingRequestedFinalContext(
-        to results: [AutomationResult],
-        commands: [AutomationCommand],
-        in session: EditorSession
-    ) -> [AutomationResult] {
-        guard commands.last?.requestsWorkspaceContext == true,
-              let lastIndex = results.indices.last else {
-            return results
-        }
-        var contextualResults = results
-        contextualResults[lastIndex] = addingWorkspaceContext(
-            to: contextualResults[lastIndex],
-            in: session
-        )
-        return contextualResults
-    }
-
-    private func executeStage(
-        _ commands: [AutomationCommand],
-        in session: EditorSession,
-        _ operation: () throws -> [AutomationResult]
-    ) throws -> AutomationBatchStageExecution {
-        let initialEvaluationCount = session.store.completedEvaluationPassCount
-        let initialHistoryCount = session.commandStack.undoEntries.count
-        let results = try operation()
-        let evaluationPassCount = session.store.completedEvaluationPassCount
-            - initialEvaluationCount
-        return AutomationBatchStageExecution(
-            results: results,
-            metrics: AutomationBatchMetrics(
-                commandCount: commands.count,
-                evaluationPassCount: evaluationPassCount,
-                historyEntryCount: session.commandStack.undoEntries.count
-                    - initialHistoryCount,
-                richResultCount: results.filter { $0.workspaceScale != nil }.count,
-                modelingEvaluation: evaluationPassCount == 0
-                    ? nil
-                    : session.store.currentModelingEvaluationMetrics
-            )
-        )
-    }
-}
-
-private struct AutomationBatchStageExecution {
-    var results: [AutomationResult]
-    var metrics: AutomationBatchMetrics
 }

@@ -2,12 +2,7 @@
 
 - [x] T06A-1 read and interaction contract (commit: Define project read and interaction boundary) `depends:none` `parallel:none`
 - [x] T06A-2 MeshSource-native Viewport (commit: Add MeshSource-native viewport presentation boundary) `depends:T06A-1` `parallel:none`
-- [ ] T06A-3 ProjectWorkspace command parity `depends:T06A-1` `parallel:none`
-  - [ ] T06A-3.1 Enumerate every source, selection, workspace, navigation, and transient action transitively reachable from production MainView and assign one authoritative owner and route `depends:T06A-1` `parallel:none`
-  - [ ] T06A-3.2 Add the minimal typed command-planning and ordered-dispatch boundary needed to translate every reachable source mutation into ProjectSourceTransaction without exposing EditorSession `depends:T06A-3.1` `parallel:none`
-  - [ ] T06A-3.3 Implement ProjectWorkspace action parity with stale-request rejection, visible typed failures, rollback, and deterministic ordering `depends:T06A-3.2` `parallel:none`
-  - [ ] T06A-3.4 Prove the complete audited action matrix through the real ProjectController and ProjectWorkspace path `depends:T06A-3.3` `parallel:none`
-  - [ ] T06A-3.5 Pass task-designer review, focused verification, and commit the reviewed command boundary `depends:T06A-3.4` `parallel:none`
+- [x] T06A-3 ProjectWorkspace command parity (commit: Define ProjectWorkspace command boundary) `depends:T06A-1` `parallel:none`
 - [ ] T06A-4 MainView cutover `depends:T06A-2,T06A-3` `parallel:none`
   - [ ] T06A-4.1 Replace MainView and its production-reachable helpers with ProjectViewSnapshot reads and ProjectWorkspace actions `depends:T06A-2,T06A-3` `parallel:none`
   - [ ] T06A-4.2 Keep only non-authoritative transient tool, hover, preview, focus, and camera state in the MainActor UI layer `depends:T06A-4.1` `parallel:none`

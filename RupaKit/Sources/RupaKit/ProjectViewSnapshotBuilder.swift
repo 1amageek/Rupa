@@ -2,7 +2,7 @@ import RupaCoreTypes
 import RupaProject
 import RupaViewportScene
 
-public struct ProjectViewSnapshotBuilder: Sendable {
+public struct ProjectViewSnapshotBuilder: ProjectViewSnapshotBuilding, Sendable {
     private let bridge: DesignDocumentProjectBridge
     private let viewportBuilder: UniversalViewportSceneBuilder
 
@@ -46,11 +46,19 @@ public struct ProjectViewSnapshotBuilder: Sendable {
             )
         }
 
-        let viewport = try viewportBuilder.build(
-            from: state.evaluation,
-            project: state.evaluationSource
+        let viewport: UniversalViewportScene
+        do {
+            viewport = try viewportBuilder.build(
+                from: state.evaluation,
+                project: state.evaluationSource
+            )
+        } catch let error as UniversalViewportSceneError {
+            throw projectViewError(for: error)
+        }
+        let document = try ProjectReadDocument(
+            document: state.document,
+            objectRegistry: state.objectRegistry
         )
-        let document = try ProjectReadDocument(document: state.document)
         let sceneNodeIDByOccurrenceID = bridge.sceneNodeNavigationIndex(
             for: state.document
         )
@@ -86,9 +94,33 @@ public struct ProjectViewSnapshotBuilder: Sendable {
             canRedo: state.canRedo,
             selection: state.selection,
             workspaceState: state.workspaceState,
+            objectRegistry: state.objectRegistry,
+            evaluationSnapshot: state.evaluationSnapshot,
             viewport: viewport,
             cadInteraction: state.cadInteraction,
             sceneNodeIDByOccurrenceID: sceneNodeIDByOccurrenceID
         )
+    }
+
+    private func projectViewError(
+        for error: UniversalViewportSceneError
+    ) -> ProjectViewSnapshotError {
+        switch error.code {
+        case .purposeMismatch:
+            return ProjectViewSnapshotError(
+                code: .purposeMismatch,
+                message: error.message
+            )
+        case .missingDefinition,
+             .projectMismatch,
+             .occurrenceMismatch,
+             .sourceMismatch,
+             .invalidIdentifier,
+             .sourceIdentityMismatch:
+            return ProjectViewSnapshotError(
+                code: .sourceMismatch,
+                message: error.message
+            )
+        }
     }
 }

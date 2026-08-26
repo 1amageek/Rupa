@@ -17,6 +17,8 @@ public struct ProjectViewSnapshot: Sendable {
     public let canRedo: Bool
     public let selection: SelectionModel
     public let workspaceState: WorkspaceState
+    public let objectRegistry: ObjectTypeRegistry
+    public let evaluationSnapshot: EvaluationSnapshot
     public let viewport: UniversalViewportScene
     public let cadInteraction: DocumentEvaluationContext?
     public let sceneNodeIDByOccurrenceID: [SceneOccurrenceID: SceneNodeID]
