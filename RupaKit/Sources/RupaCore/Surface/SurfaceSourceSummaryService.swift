@@ -780,7 +780,8 @@ public struct SurfaceSourceSummaryService: Sendable {
             document: document,
             objectRegistry: objectRegistry,
             currentEvaluation: currentEvaluation,
-            currentGeneration: currentGeneration
+            currentGeneration: currentGeneration,
+            metricPolicy: .omit
         )
         return Dictionary(uniqueKeysWithValues: summary.entries.map { ($0.subshapeID, $0) })
     }

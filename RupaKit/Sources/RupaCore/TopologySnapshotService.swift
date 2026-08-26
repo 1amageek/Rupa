@@ -3,6 +3,13 @@ import SwiftCAD
 import RupaCoreTypes
 
 public struct TopologySnapshotService: Sendable {
+    public enum MetricPolicy: Equatable, Sendable {
+        /// Computes optional face-area and edge-length fields.
+        case include
+        /// Leaves optional metric fields unset while preserving topology and selection geometry.
+        case omit
+    }
+
     private let exactEvaluatorOverride: (any ExactDocumentEvaluating)?
     private let edgeLengthEvaluator: any BRepEdgeLengthEvaluating
 
@@ -44,7 +51,8 @@ public struct TopologySnapshotService: Sendable {
         document: DesignDocument,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
-        currentGeneration: DocumentGeneration? = nil
+        currentGeneration: DocumentGeneration? = nil,
+        metricPolicy: MetricPolicy = .include
     ) throws -> TopologySnapshot {
         do {
             try document.validate(objectRegistry: objectRegistry)
@@ -76,7 +84,8 @@ public struct TopologySnapshotService: Sendable {
                     subshapeID: subshapeID,
                     reference: reference,
                     evaluatedDocument: evaluatedDocument,
-                    sceneNodeIDsByFeatureID: sceneNodeIDsByFeatureID
+                    sceneNodeIDsByFeatureID: sceneNodeIDsByFeatureID,
+                    metricPolicy: metricPolicy
                 )
             }
             .sorted {
@@ -101,7 +110,8 @@ public struct TopologySnapshotService: Sendable {
         subshapeID: SubshapeID,
         reference: TopologyReference,
         evaluatedDocument: EvaluatedDocument,
-        sceneNodeIDsByFeatureID: [FeatureID: SceneNodeID]
+        sceneNodeIDsByFeatureID: [FeatureID: SceneNodeID],
+        metricPolicy: MetricPolicy
     ) throws -> TopologySummaryResult.Entry {
         let identity = GeneratedSubshapeIdentity.string(for: subshapeID)
         let stableReference = try evaluatedDocument.stableSubshapeReference(for: subshapeID)
@@ -149,9 +159,9 @@ public struct TopologySnapshotService: Sendable {
                 surfaceVDegree: surfaceInfo?.vDegree,
                 surfaceUControlPointCount: surfaceInfo?.uControlPointCount,
                 surfaceVControlPointCount: surfaceInfo?.vControlPointCount,
-                areaSquareMeters: face.flatMap {
-                    faceAreaSquareMeters($0, in: evaluatedDocument.brep)
-                },
+                areaSquareMeters: metricPolicy == .include
+                    ? face.flatMap { faceAreaSquareMeters($0, in: evaluatedDocument.brep) }
+                    : nil,
                 center: center,
                 normal: normal,
                 loopCount: face?.loops.count,
@@ -196,9 +206,9 @@ public struct TopologySnapshotService: Sendable {
                 curveControlPointCount: curveInfo?.controlPointCount,
                 curveIsRational: curveInfo?.isRational,
                 edgeParameterRange: edgeParameterRange,
-                lengthMeters: edge.flatMap {
-                    edgeLengthMeters($0, in: evaluatedDocument.brep)
-                },
+                lengthMeters: metricPolicy == .include
+                    ? edge.flatMap { edgeLengthMeters($0, in: evaluatedDocument.brep) }
+                    : nil,
                 start: start,
                 end: end
             )

@@ -917,7 +917,10 @@ public struct SnapResolver: Sendable {
         guard searchRadiusMeters > 0.0 || measurementsRequireTopology(in: document) else {
             return nil
         }
-        return try TopologySnapshotService().snapshot(document: document)
+        return try TopologySnapshotService().snapshot(
+            document: document,
+            metricPolicy: .omit
+        )
     }
 
     private func measurementsRequireTopology(in document: DesignDocument) -> Bool {

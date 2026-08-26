@@ -3,6 +3,17 @@ import Testing
 import SwiftCAD
 @testable import RupaCore
 
+private struct UnexpectedEdgeLengthEvaluator: BRepEdgeLengthEvaluating {
+    func lengthEnclosure(
+        of edge: Edge,
+        in model: BRepModel,
+        tolerance: ModelingTolerance
+    ) throws -> CurveArcLengthEnclosure {
+        Issue.record("Omitted topology metrics must not evaluate edge lengths.")
+        return try CurveArcLengthEnclosure(lowerBound: 1.0, upperBound: 1.0)
+    }
+}
+
 @MainActor
 @Test func topologySummaryServiceReportsPersistentGeneratedReferences() async throws {
     let session = EditorSession()
@@ -65,6 +76,32 @@ import SwiftCAD
         return
     }
     #expect(vertexComponentID.generatedTopologySubshapeID.map(GeneratedSubshapeIdentity.string(for:)) == vertexEntry.subshapeID)
+}
+
+@MainActor
+@Test func topologySnapshotOmitsMetricsWithoutLosingSelectionGeometry() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+
+    let result = try TopologySnapshotService(
+        edgeLengthEvaluator: UnexpectedEdgeLengthEvaluator()
+    ).snapshot(
+        document: session.document,
+        metricPolicy: .omit
+    )
+
+    #expect(result.counts.bodyCount == 1)
+    #expect(result.counts.faceCount == 6)
+    #expect(result.counts.edgeCount == 12)
+    #expect(result.counts.vertexCount == 8)
+    #expect(result.entries.allSatisfy { $0.areaSquareMeters == nil })
+    #expect(result.entries.allSatisfy { $0.lengthMeters == nil })
+    #expect(result.entries.filter { $0.kind == .face }.allSatisfy {
+        $0.center != nil && $0.selectionTarget() != nil
+    })
+    #expect(result.entries.filter { $0.kind == .edge }.allSatisfy {
+        $0.start != nil && $0.end != nil && $0.selectionTarget() != nil
+    })
 }
 
 @MainActor
