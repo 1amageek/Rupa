@@ -3,6 +3,12 @@ import SwiftCAD
 import RupaCoreTypes
 
 public struct SelectionModel: Codable, Equatable, Sendable {
+    public enum Hover: Equatable, Sendable {
+        case none
+        case target(SelectionTarget)
+        case reference(SelectionReference)
+    }
+
     public private(set) var selectedTargets: [SelectionTarget]
     public private(set) var selectedReferences: [SelectionReference]
     public private(set) var hoveredTarget: SelectionTarget?
@@ -79,6 +85,19 @@ public struct SelectionModel: Codable, Equatable, Sendable {
 
     public static var empty: SelectionModel {
         SelectionModel()
+    }
+
+    public func replacingHover(with hover: Hover) -> SelectionModel {
+        var copy = self
+        switch hover {
+        case .none:
+            copy.clearHover()
+        case .target(let target):
+            copy.setValidatedHover(target)
+        case .reference(let reference):
+            copy.setValidatedHoverReference(reference)
+        }
+        return copy
     }
 
     public func containsSceneNode(_ id: SceneNodeID) -> Bool {

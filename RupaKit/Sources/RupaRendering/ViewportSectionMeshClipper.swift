@@ -2,6 +2,70 @@ import RupaCore
 import RupaViewportScene
 
 public struct ViewportSectionMeshClipper: Sendable {
+    private struct ClippedVertexBuffer {
+        private var first: Vertex?
+        private var second: Vertex?
+        private var third: Vertex?
+        private var fourth: Vertex?
+        private(set) var count = 0
+
+        mutating func append(_ vertex: Vertex) {
+            if let last,
+               Self.pointsAreEquivalent(last.point, vertex.point) {
+                return
+            }
+            switch count {
+            case 0:
+                first = vertex
+            case 1:
+                second = vertex
+            case 2:
+                third = vertex
+            case 3:
+                fourth = vertex
+            default:
+                preconditionFailure("Clipping one triangle by one plane cannot create more than four vertices.")
+            }
+            count += 1
+        }
+
+        var last: Vertex? {
+            switch count {
+            case 0:
+                nil
+            case 1:
+                first
+            case 2:
+                second
+            case 3:
+                third
+            default:
+                fourth
+            }
+        }
+
+        var polygon: ViewportTrianglePolygon? {
+            guard count >= 3,
+                  let first,
+                  let second,
+                  let third else {
+                return nil
+            }
+            return ViewportTrianglePolygon(
+                first: first.point,
+                second: second.point,
+                third: third.point,
+                fourth: fourth?.point
+            )
+        }
+
+        private static func pointsAreEquivalent(_ lhs: Point3D, _ rhs: Point3D) -> Bool {
+            abs(lhs.x - rhs.x) <= 1.0e-12
+                && abs(lhs.y - rhs.y) <= 1.0e-12
+                && abs(lhs.z - rhs.z) <= 1.0e-12
+        }
+    }
+
     public struct Vertex: Equatable, Sendable {
         public var point: Point3D
         public var signedDistance: Double
@@ -55,15 +119,14 @@ public struct ViewportSectionMeshClipper: Sendable {
         retaining retainedSide: SectionAnalysisRetainedSide,
         toleranceMeters: Double
     ) -> Bool {
-        clippedTriangle(
-            first: first,
-            second: second,
-            third: third,
-            item: item,
+        clippedWorldTrianglePolygon(
+            first: ViewportLayout.transformedPoint(first, by: item.modelTransform),
+            second: ViewportLayout.transformedPoint(second, by: item.modelTransform),
+            third: ViewportLayout.transformedPoint(third, by: item.modelTransform),
             plane: plane,
             retaining: retainedSide,
             toleranceMeters: toleranceMeters
-        ).count >= 3
+        ) != nil
     }
 
     public func clippedTriangle(
@@ -75,77 +138,117 @@ public struct ViewportSectionMeshClipper: Sendable {
         retaining retainedSide: SectionAnalysisRetainedSide,
         toleranceMeters: Double
     ) -> [Point3D] {
-        let tolerance = max(toleranceMeters, 0.0)
-        let points = [
-            ViewportLayout.transformedPoint(first, by: item.modelTransform),
-            ViewportLayout.transformedPoint(second, by: item.modelTransform),
-            ViewportLayout.transformedPoint(third, by: item.modelTransform),
-        ]
-        let vertices = points.map { point in
-            Vertex(point: point, signedDistance: signedDistance(point, to: plane))
-        }
-        return clippedPolygon(
-            vertices,
-            retaining: retainedSide,
-            toleranceMeters: tolerance
-        ).map(\.point)
-    }
-
-    private func clippedPolygon(
-        _ vertices: [Vertex],
-        retaining retainedSide: SectionAnalysisRetainedSide,
-        toleranceMeters: Double
-    ) -> [Vertex] {
-        guard vertices.count >= 3 else {
-            return []
-        }
-        var output: [Vertex] = []
-        var previous = vertices[vertices.count - 1]
-        var previousInside = isInside(
-            previous.signedDistance,
+        clippedWorldTriangle(
+            first: ViewportLayout.transformedPoint(first, by: item.modelTransform),
+            second: ViewportLayout.transformedPoint(second, by: item.modelTransform),
+            third: ViewportLayout.transformedPoint(third, by: item.modelTransform),
+            plane: plane,
             retaining: retainedSide,
             toleranceMeters: toleranceMeters
         )
-        for current in vertices {
-            let currentInside = isInside(
-                current.signedDistance,
-                retaining: retainedSide,
-                toleranceMeters: toleranceMeters
-            )
-            if previousInside, currentInside {
-                append(current, to: &output)
-            } else if previousInside, !currentInside {
-                append(
-                    intersection(
-                        from: previous,
-                        to: current,
-                        retaining: retainedSide,
-                        toleranceMeters: toleranceMeters
-                    ),
-                    to: &output
+    }
+
+    public func clippedWorldTriangle(
+        first: Point3D,
+        second: Point3D,
+        third: Point3D,
+        plane: SectionAnalysisResult.Plane,
+        retaining retainedSide: SectionAnalysisRetainedSide,
+        toleranceMeters: Double
+    ) -> [Point3D] {
+        clippedWorldTrianglePolygon(
+            first: first,
+            second: second,
+            third: third,
+            plane: plane,
+            retaining: retainedSide,
+            toleranceMeters: toleranceMeters
+        )?.points ?? []
+    }
+
+    func clippedWorldTrianglePolygon(
+        first: Point3D,
+        second: Point3D,
+        third: Point3D,
+        plane: SectionAnalysisResult.Plane,
+        retaining retainedSide: SectionAnalysisRetainedSide,
+        toleranceMeters: Double
+    ) -> ViewportTrianglePolygon? {
+        let tolerance = max(toleranceMeters, 0.0)
+        let firstVertex = Vertex(point: first, signedDistance: signedDistance(first, to: plane))
+        let secondVertex = Vertex(point: second, signedDistance: signedDistance(second, to: plane))
+        let thirdVertex = Vertex(point: third, signedDistance: signedDistance(third, to: plane))
+        var output = ClippedVertexBuffer()
+        var previous = thirdVertex
+        var previousInside = isInside(
+            previous.signedDistance,
+            retaining: retainedSide,
+            toleranceMeters: tolerance
+        )
+        appendClippedEdge(
+            current: firstVertex,
+            previous: &previous,
+            previousInside: &previousInside,
+            output: &output,
+            retaining: retainedSide,
+            toleranceMeters: tolerance
+        )
+        appendClippedEdge(
+            current: secondVertex,
+            previous: &previous,
+            previousInside: &previousInside,
+            output: &output,
+            retaining: retainedSide,
+            toleranceMeters: tolerance
+        )
+        appendClippedEdge(
+            current: thirdVertex,
+            previous: &previous,
+            previousInside: &previousInside,
+            output: &output,
+            retaining: retainedSide,
+            toleranceMeters: tolerance
+        )
+        return output.polygon
+    }
+
+    private func appendClippedEdge(
+        current: Vertex,
+        previous: inout Vertex,
+        previousInside: inout Bool,
+        output: inout ClippedVertexBuffer,
+        retaining retainedSide: SectionAnalysisRetainedSide,
+        toleranceMeters: Double
+    ) {
+        let currentInside = isInside(
+            current.signedDistance,
+            retaining: retainedSide,
+            toleranceMeters: toleranceMeters
+        )
+        if previousInside, currentInside {
+            output.append(current)
+        } else if previousInside, !currentInside {
+            output.append(
+                intersection(
+                    from: previous,
+                    to: current,
+                    retaining: retainedSide,
+                    toleranceMeters: toleranceMeters
                 )
-            } else if !previousInside, currentInside {
-                append(
-                    intersection(
-                        from: previous,
-                        to: current,
-                        retaining: retainedSide,
-                        toleranceMeters: toleranceMeters
-                    ),
-                    to: &output
-                )
-                append(current, to: &output)
-            }
-            previous = current
-            previousInside = currentInside
-        }
-        return output.filter { vertex in
-            isInside(
-                vertex.signedDistance,
-                retaining: retainedSide,
-                toleranceMeters: toleranceMeters
             )
+        } else if !previousInside, currentInside {
+            output.append(
+                intersection(
+                    from: previous,
+                    to: current,
+                    retaining: retainedSide,
+                    toleranceMeters: toleranceMeters
+                )
+            )
+            output.append(current)
         }
+        previous = current
+        previousInside = currentInside
     }
 
     private func isInside(
@@ -177,17 +280,6 @@ public struct ViewportSectionMeshClipper: Sendable {
         return Vertex(point: point, signedDistance: boundary)
     }
 
-    private func append(_ vertex: Vertex, to vertices: inout [Vertex]) {
-        guard let last = vertices.last else {
-            vertices.append(vertex)
-            return
-        }
-        if pointsAreEquivalent(last.point, vertex.point) {
-            return
-        }
-        vertices.append(vertex)
-    }
-
     private func interpolatedPoint(
         from start: Point3D,
         to end: Point3D,
@@ -198,12 +290,6 @@ public struct ViewportSectionMeshClipper: Sendable {
             y: start.y + (end.y - start.y) * fraction,
             z: start.z + (end.z - start.z) * fraction
         )
-    }
-
-    private func pointsAreEquivalent(_ lhs: Point3D, _ rhs: Point3D) -> Bool {
-        abs(lhs.x - rhs.x) <= 1.0e-12
-            && abs(lhs.y - rhs.y) <= 1.0e-12
-            && abs(lhs.z - rhs.z) <= 1.0e-12
     }
 
     private func signedDistance(

@@ -1,7 +1,8 @@
 import Foundation
 
 public struct ObjectTypeRegistry: Sendable {
-    public var definitions: [ObjectTypeID: ObjectTypeDefinition]
+    public let definitions: [ObjectTypeID: ObjectTypeDefinition]
+    public let orderedDefinitions: [ObjectTypeDefinition]
 
     public static let builtIn = ObjectTypeRegistry(
         validatedBuiltInDefinitions: ObjectTypeCatalog.builtInDefinitions
@@ -17,6 +18,9 @@ public struct ObjectTypeRegistry: Sendable {
             registeredDefinitions[definition.id] = definition
         }
         self.definitions = registeredDefinitions
+        self.orderedDefinitions = definitions.sorted { lhs, rhs in
+            lhs.id.rawValue < rhs.id.rawValue
+        }
     }
 
     public init(registrations: [ObjectTypeRegistration]) throws {
@@ -29,6 +33,9 @@ public struct ObjectTypeRegistry: Sendable {
             registeredDefinitions[definition.id] = definition
         }
         self.definitions = registeredDefinitions
+        self.orderedDefinitions = definitions.sorted { lhs, rhs in
+            lhs.id.rawValue < rhs.id.rawValue
+        }
     }
 
     public func definition(for id: ObjectTypeID?) -> ObjectTypeDefinition? {

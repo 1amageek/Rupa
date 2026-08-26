@@ -1798,15 +1798,24 @@ public struct ViewportModelCoordinateMapper {
         size: CGSize,
         camera: ViewportCamera = .identity,
         basis: ViewportProjectionBasis = .isometric,
+        geometryBoundsSource: ViewportGeometryBoundsSource = .scene,
         fittingInsets: ViewportLayout.FittingInsets = .zero
     ) {
-        let modelBounds = Self.modelBounds(for: scene, ruler: ruler)
+        let modelBounds = Self.modelBounds(
+            for: scene,
+            ruler: ruler,
+            geometryBoundsSource: geometryBoundsSource
+        )
+        let verticalBounds = Self.verticalBounds(
+            for: scene,
+            geometryBoundsSource: geometryBoundsSource
+        )
         let identityLayout = ViewportLayout(
             modelBounds: modelBounds,
             size: size,
             camera: .identity,
             basis: basis,
-            verticalBounds: scene.verticalBounds,
+            verticalBounds: verticalBounds,
             fittingInsets: fittingInsets
         )
         let maximumZoom = ViewportCameraZoomPolicy.maximumZoom(
@@ -1819,7 +1828,7 @@ public struct ViewportModelCoordinateMapper {
             camera: camera,
             basis: basis,
             maximumZoom: maximumZoom,
-            verticalBounds: scene.verticalBounds,
+            verticalBounds: verticalBounds,
             fittingInsets: fittingInsets
         )
     }
@@ -1902,17 +1911,44 @@ public struct ViewportModelCoordinateMapper {
 
     private static func modelBounds(
         for scene: ViewportScene,
-        ruler: RulerConfiguration
+        ruler: RulerConfiguration,
+        geometryBoundsSource: ViewportGeometryBoundsSource
     ) -> CGRect {
         let baseBounds = emptyModelBounds(ruler: ruler)
-        guard let sceneBounds = scene.modelBounds else {
+        let rawBounds: CGRect?
+        switch geometryBoundsSource {
+        case .scene:
+            rawBounds = scene.modelBounds
+        case .geometry(let bounds):
+            rawBounds = bounds.map {
+                CGRect(
+                    x: $0.minimum.x,
+                    y: $0.minimum.z,
+                    width: $0.maximum.x - $0.minimum.x,
+                    height: $0.maximum.z - $0.minimum.z
+                )
+            }
+        }
+        guard let rawBounds else {
             return baseBounds
         }
-        let framedBounds = framedSceneBounds(sceneBounds, ruler: ruler)
-        if baseBounds.intersects(sceneBounds) {
+        let framedBounds = framedSceneBounds(rawBounds, ruler: ruler)
+        if baseBounds.intersects(rawBounds) {
             return baseBounds.union(framedBounds)
         }
         return framedBounds
+    }
+
+    private static func verticalBounds(
+        for scene: ViewportScene,
+        geometryBoundsSource: ViewportGeometryBoundsSource
+    ) -> ClosedRange<Double>? {
+        switch geometryBoundsSource {
+        case .scene:
+            return scene.verticalBounds
+        case .geometry(let bounds):
+            return bounds.map { $0.minimum.y ... $0.maximum.y }
+        }
     }
 }
 
@@ -1930,6 +1966,7 @@ public struct ViewportSceneContext {
         size: CGSize,
         camera: ViewportCamera = .identity,
         basis: ViewportProjectionBasis = .isometric,
+        geometryBoundsSource: ViewportGeometryBoundsSource = .scene,
         fittingInsets: ViewportLayout.FittingInsets = .zero
     ) {
         self.scene = scene
@@ -1939,6 +1976,7 @@ public struct ViewportSceneContext {
             size: size,
             camera: camera,
             basis: basis,
+            geometryBoundsSource: geometryBoundsSource,
             fittingInsets: fittingInsets
         )
     }
@@ -2342,28 +2380,31 @@ public struct ViewportCanvasTarget: Equatable, Sendable {
 
 public struct ViewportSelectionDragTarget: Equatable, Sendable {
     public var hits: [ViewportHit]
+    public var presentationOccurrenceIDs: [SceneOccurrenceID]
     public var selectionIntent: ViewportSelectionIntent
 
     public init(
         hits: [ViewportHit],
+        presentationOccurrenceIDs: [SceneOccurrenceID] = [],
         selectionIntent: ViewportSelectionIntent = .replace
     ) {
         self.hits = hits
+        self.presentationOccurrenceIDs = presentationOccurrenceIDs
         self.selectionIntent = selectionIntent
     }
 }
 
 public struct ViewportBodyMoveDragTarget: Equatable, Sendable {
-    public var featureID: FeatureID
+    public var target: SelectionTarget
     public var deltaX: Double
     public var deltaY: Double
 
     public init(
-        featureID: FeatureID,
+        target: SelectionTarget,
         deltaX: Double,
         deltaY: Double
     ) {
-        self.featureID = featureID
+        self.target = target
         self.deltaX = deltaX
         self.deltaY = deltaY
     }

@@ -4,45 +4,66 @@ import RupaCore
 struct PatternArrayCurvePathPickService {
     enum Outcome: Equatable, Sendable {
         case waitingForCurve
-        case applied(PatternArrayCurvePathCandidate)
+        case submitted(PatternArrayCurvePathCandidate)
         case failed(String)
     }
 
-    let session: EditorSession
+    let document: DesignDocument
+    let submit: (EditorCommand) -> Void
+    let submitPath: ((PatternArrayCurvePath) -> Void)?
+    let report: (String, EditorDiagnostic.Severity) -> Void
     let sourceID: PatternArraySourceID
+
+    init(
+        document: DesignDocument,
+        submit: @escaping (EditorCommand) -> Void,
+        submitPath: ((PatternArrayCurvePath) -> Void)? = nil,
+        report: @escaping (String, EditorDiagnostic.Severity) -> Void,
+        sourceID: PatternArraySourceID
+    ) {
+        self.document = document
+        self.submit = submit
+        self.submitPath = submitPath
+        self.report = report
+        self.sourceID = sourceID
+    }
 
     @discardableResult
     func apply(targets: [SelectionTarget]) -> Outcome {
         guard let target = targets.last else {
             let message = "Pick a sketch line, circle, arc, or spline for the Curve Array path."
-            session.reportToolStatus(message, severity: .warning)
+            report(message, .warning)
             return .waitingForCurve
         }
         guard let candidate = PatternArrayCurvePathCandidate(
             target: target,
-            document: session.document
+            document: document
         ) else {
             let message = "Curve Array path pick requires a sketch line, circle, arc, or spline."
-            session.reportToolStatus(message, severity: .warning)
+            report(message, .warning)
             return .waitingForCurve
         }
-        guard session.document.productMetadata.patternArrays[sourceID] != nil else {
+        if let submitPath {
+            submitPath(candidate.path)
+            return .submitted(candidate)
+        }
+        guard let source = document.productMetadata.patternArrays[sourceID],
+              case .curve(var curve) = source.distribution else {
             let message = "Curve Array path pick requires an existing Pattern Array source."
-            session.reportToolStatus(message, severity: .warning)
+            report(message, .warning)
             return .failed(message)
         }
 
-        let result = PatternArrayEditingService(
-            session: session,
-            sourceID: sourceID
-        ).setCurvePath(candidate.path)
-        guard result != nil else {
-            let message = "Curve Array path pick could not update the selected Pattern Array."
-            session.reportToolStatus(message, severity: .warning)
-            return .failed(message)
-        }
-
-        session.reportToolStatus("Curve Array path set to \(candidate.title).")
-        return .applied(candidate)
+        curve.path = candidate.path
+        submit(
+            .updatePatternArray(
+                id: sourceID,
+                name: nil,
+                definitionID: nil,
+                distribution: .curve(curve),
+                outputMode: nil
+            )
+        )
+        return .submitted(candidate)
     }
 }

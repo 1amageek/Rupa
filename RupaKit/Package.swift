@@ -212,6 +212,7 @@ let package = Package(
         .target(
             name: "RupaUI",
             dependencies: [
+                "RupaKit",
                 "RupaCore",
                 "RupaDomainFoundation",
                 "RupaRendering",

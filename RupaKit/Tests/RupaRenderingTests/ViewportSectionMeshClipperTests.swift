@@ -128,6 +128,34 @@ import RupaViewportScene
     #expect(polygon.contains { abs($0.x - 11.0) <= 1.0e-12 && abs($0.y - 0.5) <= 1.0e-12 })
 }
 
+@Test(.timeLimit(.minutes(1)))
+func viewportSectionMeshClipperClipsPresentationWorldTriangleWithoutRetransforming() {
+    let clipper = ViewportSectionMeshClipper()
+    let fixedPolygon = clipper.clippedWorldTrianglePolygon(
+        first: Point3D(x: 9.0, y: 0.0, z: 0.0),
+        second: Point3D(x: 11.0, y: 0.0, z: 0.0),
+        third: Point3D(x: 11.0, y: 1.0, z: 0.0),
+        plane: SectionAnalysisResult.Plane(
+            sourceKind: .sketchPlane,
+            sourceID: nil,
+            sourceName: nil,
+            origin: Point3D(x: 10.0, y: 0.0, z: 0.0),
+            normal: .unitX,
+            u: .unitY,
+            v: .unitZ
+        ),
+        retaining: .front,
+        toleranceMeters: 0.0
+    )
+    let polygon = fixedPolygon?.points ?? []
+
+    #expect(fixedPolygon?.count == 4)
+    #expect(polygon.count == 4)
+    #expect(polygon.allSatisfy { $0.x >= 10.0 - 1.0e-12 })
+    #expect(polygon.contains { abs($0.x - 10.0) <= 1.0e-12 && abs($0.y) <= 1.0e-12 })
+    #expect(polygon.contains { abs($0.x - 10.0) <= 1.0e-12 && abs($0.y - 0.5) <= 1.0e-12 })
+}
+
 private func viewportSectionMeshClipperBodyItem() -> ViewportSceneItem {
     ViewportSceneItem(
         id: "mesh-body",

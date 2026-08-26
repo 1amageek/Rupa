@@ -1,6 +1,7 @@
 import RupaAutomation
 import RupaCore
 import RupaDomainFoundation
+import RupaKit
 import Testing
 @testable import RupaUI
 
@@ -54,7 +55,7 @@ func workspaceDomainCommandDraftBuildsGenerationSafeUnitNormalizedRequest() thro
 func mainViewAcceptsInjectedDomainRegistry() throws {
     let registry = try workspaceCommandCatalogDomainRegistry()
     _ = MainView(
-        session: EditorSession(),
+        workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
         domainRegistry: registry
     )
 }

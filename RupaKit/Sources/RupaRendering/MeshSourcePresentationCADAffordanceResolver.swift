@@ -15,13 +15,29 @@ public struct MeshSourcePresentationCADAffordanceResolver: MeshSourcePresentatio
         generation: DocumentGeneration,
         cadInteraction: DocumentEvaluationContext?
     ) -> MeshSourcePresentationCADAffordanceAvailability {
+        guard let sceneNodeID = navigation.sceneNodeID(for: item.occurrenceID) else {
+            return .unavailable(.missingNavigation)
+        }
+        return resolve(
+            item: item,
+            sceneNodeID: sceneNodeID,
+            document: document,
+            generation: generation,
+            cadInteraction: cadInteraction
+        )
+    }
+
+    public func resolve(
+        item: UniversalViewportSceneItem,
+        sceneNodeID: SceneNodeID,
+        document: DesignDocument,
+        generation: DocumentGeneration,
+        cadInteraction: DocumentEvaluationContext?
+    ) -> MeshSourcePresentationCADAffordanceAvailability {
         guard case let .cad(sourceID, outputID) = item.reference else {
             return .unavailable(.nonCADPresentation)
         }
 
-        guard let sceneNodeID = navigation.sceneNodeID(for: item.occurrenceID) else {
-            return .unavailable(.missingNavigation)
-        }
         guard let sceneNode = document.productMetadata.sceneNodes[sceneNodeID] else {
             return .unavailable(.missingSceneNode)
         }
@@ -43,6 +59,9 @@ public struct MeshSourcePresentationCADAffordanceResolver: MeshSourcePresentatio
         let featureID = FeatureID(outputUUID)
         guard document.cadDocument.designGraph.nodes[featureID] != nil else {
             return .unavailable(.missingFeature)
+        }
+        guard sceneNode.reference == .body(featureID) else {
+            return .unavailable(.sceneNodeReferenceMismatch)
         }
         guard let cadInteraction else {
             return .unavailable(.missingCADInteractionContext)

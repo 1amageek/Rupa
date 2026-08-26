@@ -327,8 +327,8 @@ public struct ViewportSceneBuilder {
                 )
             }
         }
-        let resolvedBaseItems = baseItems.map { item in
-            itemWithSceneNodeIdentity(item, in: document)
+        let resolvedBaseItems = baseItems.flatMap { item in
+            itemsWithSceneNodeIdentity(item, in: document)
         }
         let sceneTransformIndex = ViewportSceneTransformIndex(metadata: document.productMetadata)
         let rootItems = resolvedBaseItems.compactMap { resolvedItem -> ViewportSceneItem? in
@@ -401,24 +401,33 @@ public struct ViewportSceneBuilder {
         }
     }
 
-    private func itemWithSceneNodeIdentity(
+    private func itemsWithSceneNodeIdentity(
         _ item: ViewportSceneItem,
         in document: DesignDocument
-    ) -> ViewportSceneItem {
-        var resolvedItem = item
-        resolvedItem.sceneNodeID = sceneNodeID(
+    ) -> [ViewportSceneItem] {
+        let sceneNodeIDs = sceneNodeIDs(
             featureID: item.featureID,
             kind: item.kind.selectableKind,
             in: document
         )
-        return resolvedItem
+        guard sceneNodeIDs.isEmpty == false else {
+            return [item]
+        }
+        return sceneNodeIDs.map { sceneNodeID in
+            var resolvedItem = item
+            resolvedItem.sceneNodeID = sceneNodeID
+            if sceneNodeIDs.count > 1 {
+                resolvedItem.id = "\(item.id).scene-node.\(sceneNodeID.description)"
+            }
+            return resolvedItem
+        }
     }
 
-    private func sceneNodeID(
+    private func sceneNodeIDs(
         featureID: FeatureID,
         kind: ViewportSelectableKind,
         in document: DesignDocument
-    ) -> SceneNodeID? {
+    ) -> [SceneNodeID] {
         let referenceKind: SceneNodeReference.Kind = switch kind {
         case .sketch:
             .sketch
@@ -427,14 +436,18 @@ public struct ViewportSceneBuilder {
         case .curve:
             .feature
         }
-        if let matchedNode = document.productMetadata.sceneNodes.first(where: { _, node in
+        let matchingIDs = document.productMetadata.sceneNodes.compactMap { sceneNodeID, node in
             node.reference?.kind == referenceKind && node.reference?.featureID == featureID
-        }) {
-            return matchedNode.key
+                ? sceneNodeID
+                : nil
         }
-        return document.productMetadata.sceneNodes.first { _, node in
-            node.reference?.featureID == featureID
-        }?.key
+        if matchingIDs.isEmpty == false {
+            return matchingIDs.sorted { $0.description < $1.description }
+        }
+        return document.productMetadata.sceneNodes.compactMap { sceneNodeID, node in
+            node.reference?.featureID == featureID ? sceneNodeID : nil
+        }
+        .sorted { $0.description < $1.description }
     }
 
     private func componentInstanceItems(

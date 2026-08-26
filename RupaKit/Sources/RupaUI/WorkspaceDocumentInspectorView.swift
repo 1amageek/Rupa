@@ -79,9 +79,9 @@ struct WorkspaceDocumentInspectorView: View {
     var setMinorTickMeters: (Double) -> Void
     var setMajorTickMeters: (Double) -> Void
     var setVisibleSpanMeters: (Double) -> Void
-    var renameParameter: (String, String) -> Bool
-    var upsertParameterExpression: (String, String, QuantityKind) -> Bool
-    var deleteParameter: (String) -> Bool
+    var renameParameter: (String, String) async -> Bool
+    var upsertParameterExpression: (String, String, QuantityKind) async -> Bool
+    var deleteParameter: (String) async -> Bool
 
     var body: some View {
         inspectorSection("Document") {

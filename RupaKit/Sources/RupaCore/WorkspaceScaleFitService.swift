@@ -20,6 +20,27 @@ public struct WorkspaceScaleFitService: Sendable {
             currentGeneration: currentGeneration
         )
 
+        return plan(measurement: measurement)
+    }
+
+    public func plan(
+        bounds: MeasurementResult.Bounds?,
+        ruler: RulerConfiguration
+    ) -> WorkspaceScaleFitPlan {
+        let recommendation = WorkspaceScaleRecommendationService().recommendation(
+            for: bounds,
+            currentRuler: ruler
+        )
+        return plan(
+            measurement: MeasurementResult(
+                displayUnit: ruler.displayUnit,
+                bounds: bounds,
+                workspaceScaleRecommendation: recommendation
+            )
+        )
+    }
+
+    private func plan(measurement: MeasurementResult) -> WorkspaceScaleFitPlan {
         guard let recommendation = measurement.workspaceScaleRecommendation else {
             return WorkspaceScaleFitPlan(
                 action: .alreadyFits,

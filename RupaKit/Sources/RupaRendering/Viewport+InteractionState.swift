@@ -786,7 +786,18 @@ struct ViewportSketchVertexOffsetHandleIdentity: Equatable {
 
 struct ViewportAffordanceTarget: Equatable {
     var featureID: FeatureID
+    var selectionTarget: SelectionTarget?
     var action: ViewportAffordanceAction
+
+    init(
+        featureID: FeatureID,
+        selectionTarget: SelectionTarget? = nil,
+        action: ViewportAffordanceAction
+    ) {
+        self.featureID = featureID
+        self.selectionTarget = selectionTarget
+        self.action = action
+    }
 }
 
 enum ViewportInteractionTarget: Equatable {

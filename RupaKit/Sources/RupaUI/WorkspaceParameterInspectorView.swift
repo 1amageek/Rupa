@@ -3,23 +3,24 @@ import SwiftUI
 
 struct WorkspaceParameterInspectorView: View {
     var state: WorkspaceParameterInspectorState
-    var onRename: (String, String) -> Bool
-    var onUpsert: (String, String, QuantityKind) -> Bool
-    var onDelete: (String) -> Bool
+    var onRename: (String, String) async -> Bool
+    var onUpsert: (String, String, QuantityKind) async -> Bool
+    var onDelete: (String) async -> Bool
 
     @State private var nameDrafts: [String: String] = [:]
     @State private var expressionDrafts: [String: String] = [:]
     @State private var newName = ""
     @State private var newExpression = ""
     @State private var newKindRawValue = QuantityKind.length.rawValue
+    @State private var isSubmitting = false
 
     private let supportedKinds: [QuantityKind] = [.length, .angle, .scalar]
 
     init(
         state: WorkspaceParameterInspectorState,
-        onRename: @escaping (String, String) -> Bool,
-        onUpsert: @escaping (String, String, QuantityKind) -> Bool,
-        onDelete: @escaping (String) -> Bool
+        onRename: @escaping (String, String) async -> Bool,
+        onUpsert: @escaping (String, String, QuantityKind) async -> Bool,
+        onDelete: @escaping (String) async -> Bool
     ) {
         self.state = state
         self.onRename = onRename
@@ -90,14 +91,19 @@ struct WorkspaceParameterInspectorView: View {
         }
         inspectorActionRow {
             Button(role: .destructive) {
-                if onDelete(row.name) {
-                    nameDrafts[row.id] = nil
-                    expressionDrafts[row.id] = nil
+                Task { @MainActor in
+                    isSubmitting = true
+                    defer { isSubmitting = false }
+                    if await onDelete(row.name) {
+                        nameDrafts[row.id] = nil
+                        expressionDrafts[row.id] = nil
+                    }
                 }
             } label: {
                 Label("Delete", systemImage: "trash")
             }
             .controlSize(.small)
+            .disabled(isSubmitting)
             .accessibilityIdentifier("WorkspaceParameter.\(row.name).delete")
         }
     }
@@ -176,8 +182,12 @@ struct WorkspaceParameterInspectorView: View {
             nameDrafts[row.id] = nil
             return
         }
-        if onRename(row.name, trimmedName) {
-            nameDrafts[row.id] = nil
+        Task { @MainActor in
+            isSubmitting = true
+            defer { isSubmitting = false }
+            if await onRename(row.name, trimmedName) {
+                nameDrafts[row.id] = nil
+            }
         }
     }
 
@@ -186,8 +196,12 @@ struct WorkspaceParameterInspectorView: View {
         guard expression.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
             return
         }
-        if onUpsert(row.name, expression, row.kind) {
-            expressionDrafts[row.id] = nil
+        Task { @MainActor in
+            isSubmitting = true
+            defer { isSubmitting = false }
+            if await onUpsert(row.name, expression, row.kind) {
+                expressionDrafts[row.id] = nil
+            }
         }
     }
 
@@ -198,10 +212,14 @@ struct WorkspaceParameterInspectorView: View {
               trimmedExpression.isEmpty == false else {
             return
         }
-        if onUpsert(trimmedName, trimmedExpression, kind(rawValue: newKindRawValue)) {
-            newName = ""
-            newExpression = ""
-            newKindRawValue = QuantityKind.length.rawValue
+        Task { @MainActor in
+            isSubmitting = true
+            defer { isSubmitting = false }
+            if await onUpsert(trimmedName, trimmedExpression, kind(rawValue: newKindRawValue)) {
+                newName = ""
+                newExpression = ""
+                newKindRawValue = QuantityKind.length.rawValue
+            }
         }
     }
 

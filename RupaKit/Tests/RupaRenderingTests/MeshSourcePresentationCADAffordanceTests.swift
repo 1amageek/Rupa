@@ -34,8 +34,19 @@ func meshSourcePresentationCADAffordanceUsesBridgeSceneAndExactCADContext() thro
         generation: fixture.generation,
         cadInteraction: fixture.cadInteraction
     )
+    let directAvailability = MeshSourcePresentationCADAffordanceResolver().resolve(
+        item: item,
+        sceneNodeID: navigationNodeID,
+        document: fixture.document,
+        generation: fixture.generation,
+        cadInteraction: fixture.cadInteraction
+    )
     guard case let .available(context) = availability else {
         Issue.record("The bridge-produced CAD body must resolve to an exact context.")
+        return
+    }
+    guard case let .available(directContext) = directAvailability else {
+        Issue.record("The direct scene-node CAD gate must resolve the same exact context.")
         return
     }
 
@@ -61,10 +72,38 @@ func meshSourcePresentationCADAffordanceUsesBridgeSceneAndExactCADContext() thro
     #expect(context.representationID == item.representationID)
     #expect(context.representationID == presentation.id)
     #expect(context.sourceReference == item.reference)
+    #expect(directContext == context)
     #expect(cadInteraction.matches(document: fixture.document, generation: fixture.generation))
     #expect(fixture.scene.copyTelemetry == initialSceneTelemetry)
     #expect(item.copyTelemetry == initialItemTelemetry)
     #expect(sourceChunkIdentitySummary(item.mesh) == initialChunkIdentities)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func meshSourcePresentationCADAffordanceRejectsModelingAndPresentationCADFeatureMismatch() throws {
+    let fixture = try bridgeMixedCADAuthorityFixture()
+    let item = try #require(fixture.scene.items.first { item in
+        guard let sceneNodeID = fixture.navigation.sceneNodeID(for: item.occurrenceID),
+              let sceneNode = fixture.document.productMetadata.sceneNodes[sceneNodeID],
+              case let .cad(_, outputID) = item.reference,
+              let outputUUID = UUID(uuidString: outputID) else {
+            return false
+        }
+        return sceneNode.reference?.featureID != FeatureID(outputUUID)
+    })
+
+    #expect(
+        unavailableReason(
+            MeshSourcePresentationCADAffordanceResolver().resolve(
+                item: item,
+                navigation: fixture.navigation,
+                document: fixture.document,
+                generation: fixture.generation,
+                cadInteraction: fixture.cadInteraction
+            )
+        ) == .sceneNodeReferenceMismatch
+    )
 }
 
 @MainActor
@@ -377,7 +416,7 @@ func meshSourcePresentationCADAffordanceReportsTypedNavigationAuthorityAndContex
                 generation: fixture.generation,
                 cadInteraction: fixture.cadInteraction
             )
-        ) == .missingEvaluatedBody
+        ) == .sceneNodeReferenceMismatch
     )
     #expect(fixture.scene.copyTelemetry == initialSceneTelemetry)
     #expect(item.copyTelemetry == initialItemTelemetry)
@@ -454,6 +493,54 @@ private func bridgeMixedMeshFixture() throws -> BridgeFixture {
         provenance: .created
     )
     document.productMetadata.sceneNodes[bodyEntry.key] = bodyNode
+    return try evaluateBridge(
+        document: document,
+        generation: session.generation,
+        revision: session.transactionRevision,
+        cadInteraction: session.currentEvaluation
+    )
+}
+
+@MainActor
+private func bridgeMixedCADAuthorityFixture() throws -> BridgeFixture {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let modelingFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let modelingNodeEntry = try #require(session.document.productMetadata.sceneNodes.first { entry in
+        entry.value.reference == .body(modelingFeatureID)
+    })
+    _ = try session.execute(
+        .createExtrudedCircle(
+            name: "Presentation CAD",
+            plane: .xy,
+            center: SketchPoint(x: .length(0.0, .meter), y: .length(0.0, .meter)),
+            radius: .length(0.01, .meter),
+            depth: .length(0.02, .meter),
+            direction: .normal
+        )
+    )
+    let presentationFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    var modelingNode = modelingNodeEntry.value
+    var modelingObject = try #require(modelingNode.object)
+    let modelingRepresentation = try #require(
+        modelingObject.geometryRepresentations.representation(for: .modeling)
+    )
+    let presentationID = GeometryRepresentationID(rawValue: "bridge.presentation.cad.secondary")
+    let presentationReference = GeometrySourceReference.cad(
+        sourceID: session.document.id.description,
+        outputID: presentationFeatureID.description
+    )
+    modelingObject.geometryRepresentations.representations[presentationID] = GeometryRepresentation(
+        id: presentationID,
+        source: presentationReference
+    )
+    modelingObject.geometryRepresentations.selection = GeometryRepresentationSelection(
+        modeling: modelingRepresentation.id,
+        presentation: presentationID
+    )
+    modelingNode.object = modelingObject
+    var document = session.document
+    document.productMetadata.sceneNodes[modelingNodeEntry.key] = modelingNode
     return try evaluateBridge(
         document: document,
         generation: session.generation,

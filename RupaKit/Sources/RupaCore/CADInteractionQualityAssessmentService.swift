@@ -720,9 +720,9 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaUI/WorkspacePlaneModeControl.swift",
                         "RupaKit/Sources/RupaRendering/WorkspaceCanvasPlaneInputMapper.swift",
                         "RupaKit/Sources/RupaUI/WorkspaceConstructionPlaneEditBuilder.swift",
-                        "RupaKit/Sources/RupaUI/WorkspaceLaunchSessionFactory.swift",
+                        "RupaKit/Sources/RupaUI/WorkspaceCanvasCommandPlanner.swift",
                         "RupaKit/Sources/RupaUI/MainView.swift",
-                        "Rupa/Rupa/Rupa/ApplicationRoot.swift",
+                        "RupaKit/Sources/RupaKit/ProjectWorkspace.swift",
                     ],
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/ConstructionPlaneTargetResolverTests.swift",
@@ -732,27 +732,26 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaRenderingTests/ViewportConstructionPlaneDragSnapResolverTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportSceneTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/WorkspaceCanvasPlaneInputMapperTests.swift",
+                        "RupaKit/Tests/RupaUIPackageTests/WorkspaceCanvasCommandPlannerTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/WorkspaceConstructionPlaneEditBuilderTests.swift",
-                        "RupaKit/Tests/RupaUIPackageTests/WorkspaceLaunchSessionFactoryTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/WorkspaceSnapOverrideStateTests.swift",
                         "RupaKit/Tests/RupaAgentTests/AgentConstructionPlaneIntegrationTests.swift",
-                        "Rupa/Rupa/RupaUITests/AppUITests.swift",
                     ],
                     notes: [
                         "Canvas click and drag sketch tools create rectangle, polygon, arc, spline, and circle sketches on the active saved custom construction plane instead of falling back to the default XY plane.",
                         "ViewportCanvasPlane defines the displayed grid plane once, and ViewportLayout exposes the matching displayed-canvas world anchor so hover, snap preview, drag preview, and click or drag commit share the same coordinate source.",
-                        "WorkspaceCanvasPlaneInputMapper owns view-ray plane intersection for standard and custom construction planes, rejects parallel view rays instead of fabricating a point, and RupaUIPackageTests cover the mapper feeding EditorSession rectangle, polygon, arc, spline, circle, and solid creation on the active custom construction plane.",
+                        "WorkspaceCanvasPlaneInputMapper owns view-ray plane intersection for standard and custom construction planes, rejects parallel view rays instead of fabricating a point, and WorkspaceCanvasCommandPlanner produces explicit EditorCommand values from the immutable project snapshot without mutating a shadow session.",
                         "Selected saved construction planes expose viewport Origin and Normal handles that preview a bounded plane frame and commit through the same setConstructionPlane source mutation path used by Inspector edits.",
                         "Viewport construction-plane handle drags share the SnapResolver candidate contract instead of viewport-local snapping: origin handles may use planar fallback, while normal handles require explicit world-point candidates to avoid flattening the normal onto a 2D grid.",
-                        "WorkspaceLaunchSessionFactory installs an active arbitrary construction-plane launch fixture through the same EditorSession command path, ApplicationRoot injects the resulting session into MainView once, and AppUITests now cover the app-level active-plane readback plus sketch and solid canvas creation path.",
+                        "MainView reads one immutable ProjectViewSnapshot and submits construction-plane source and interaction actions through ProjectWorkspace; ApplicationRoot composition and app-level file/history verification remain owned by T06A-6.",
                     ]
                 ),
             ],
             openWork: [
-                "Execute the focused arbitrary-plane AppUITests workflow on a runner where the macOS UI testing authorization prompt is not blocking initialization.",
+                "Compose the ProjectWorkspace-backed MainView at ApplicationRoot and verify the arbitrary-plane workflow through the actual app route.",
                 "Broaden app UI automation from active-plane sketch/solid creation into saved-plane creation, rename, viewport handle drag, and edit workflows.",
             ],
-            next: "Run the focused arbitrary-plane AppUITests workflow on an authorized UI runner, then broaden the same app-level coverage into saved-plane creation and edit workflows."
+            next: "Complete T06A-6 ApplicationRoot composition, then verify active-plane and saved-plane workflows through the same ProjectWorkspace authority."
         ),
         entry(
             area: .selection,

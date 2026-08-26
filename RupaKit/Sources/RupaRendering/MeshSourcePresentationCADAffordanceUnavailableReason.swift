@@ -3,6 +3,7 @@ public enum MeshSourcePresentationCADAffordanceUnavailableReason: Equatable, Sen
     case missingNavigation
     case missingSceneNode
     case presentationSelectionMismatch
+    case sceneNodeReferenceMismatch
     case sourceDocumentMismatch
     case invalidOutputIdentifier
     case missingFeature

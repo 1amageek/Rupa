@@ -2,13 +2,69 @@ import Foundation
 import MacComponent
 import RupaCore
 import RupaDomainFoundation
+import RupaKit
 import RupaPreview
 import RupaRendering
 import SwiftUI
 
 @MainActor
 public struct MainView: View {
-    @State private var session: EditorSession
+    private let workspace: ProjectWorkspace
+    private let domainRegistry: DomainRegistry
+    @State private var launchFailureMessage: String?
+
+    public init(
+        workspace: ProjectWorkspace,
+        domainRegistry: DomainRegistry = DomainRegistry()
+    ) {
+        self.workspace = workspace
+        self.domainRegistry = domainRegistry
+        self._launchFailureMessage = State(initialValue: nil)
+    }
+
+    public var body: some View {
+        Group {
+            if let snapshot = workspace.view {
+                ProjectMainViewContent(
+                    workspace: workspace,
+                    snapshot: snapshot,
+                    domainRegistry: domainRegistry
+                )
+            } else if let launchFailureMessage {
+                ContentUnavailableView(
+                    "Project Unavailable",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text(launchFailureMessage)
+                )
+            } else {
+                ProgressView("Evaluating Project")
+                    .frame(minWidth: 1_120, minHeight: 720)
+            }
+        }
+        .task {
+            guard workspace.view == nil else {
+                return
+            }
+            do {
+                _ = try await workspace.evaluate()
+                launchFailureMessage = nil
+            } catch {
+                launchFailureMessage = error.localizedDescription
+            }
+        }
+    }
+}
+
+@MainActor
+private struct ProjectMainViewContent: View {
+    private let workspace: ProjectWorkspace
+    private let snapshot: ProjectViewSnapshot
+    @State private var selectedTool: ModelingTool
+    @State private var polygonToolState: PolygonToolState
+    @State private var sketchInputState: SketchInputState
+    @State private var transientDiagnostics: [EditorDiagnostic]
+    @State private var hoveredTarget: SelectionTarget?
+    @State private var hoveredReference: SelectionReference?
     @State private var isPreviewExpanded: Bool
     @State private var columnVisibility: NavigationSplitViewVisibility
     @State private var isInspectorPresented: Bool
@@ -16,6 +72,7 @@ public struct MainView: View {
     @State private var workspacePlaneMode: WorkspacePlaneMode
     @State private var selectionScope: WorkspaceSelectionScope
     @State private var selectionDragPreviewTargets: [SelectionTarget]
+    @State private var selectionDragPreviewSceneNodeIDs: Set<SceneNodeID>
     @State private var patternArrayCurvePathPickState: PatternArrayCurvePathPickState
     @State private var patternArrayCurvePathPreviewCandidate: PatternArrayCurvePathCandidate?
     @State private var patternArraySummaryCache: PatternArraySummaryCache
@@ -81,28 +138,35 @@ public struct MainView: View {
     @State private var constructionPlaneRenameText: String
     @State private var hoveredViewportPickingBackend: ViewportPickingBackend?
     @State private var viewportHoverClearSignal: Int
+    @State private var operationSequencer: ProjectWorkspaceOperationSequencer
     @FocusState private var isWorkspaceFocused: Bool
 
     private let objectRegistry: ObjectTypeRegistry
+    private let viewportObjectSelectionIndex: ViewportObjectSelectionIndex
     private let commandCatalog: WorkspaceCommandCatalog
-    private let domainCommandExecutor: DomainCommandExecutor
-    private let agentSessionPublisher: (any WorkspaceAgentSessionPublishing)?
-    private let documentURL: URL?
+    private let domainCommandDispatcher: ProjectDomainCommandDispatcher
+    private let exactPresentationCADSceneNodeIDs: Set<SceneNodeID>
+    private let selectedPresentationHasExactCADAffordanceContext: Bool
 
-    public init(
-        session: EditorSession = EditorSession(),
+    init(
+        workspace: ProjectWorkspace,
+        snapshot: ProjectViewSnapshot,
         isPreviewExpanded: Bool = false,
         columnVisibility: NavigationSplitViewVisibility = .all,
         isInspectorPresented: Bool = false,
         isUtilityRailExpanded: Bool = false,
-        objectRegistry: ObjectTypeRegistry = .builtIn,
-        domainRegistry: DomainRegistry = DomainRegistry(),
-        agentSessionPublisher: (any WorkspaceAgentSessionPublishing)? = nil,
-        documentURL: URL? = nil
+        domainRegistry: DomainRegistry = DomainRegistry()
     ) {
-        let editingDefaults = WorkspaceInteractionScaleDefaults(ruler: session.workspaceState.ruler)
-        let ruler = session.workspaceState.ruler.normalizedForWorkspaceScale()
-        self._session = State(initialValue: session)
+        let editingDefaults = WorkspaceInteractionScaleDefaults(ruler: snapshot.workspaceState.ruler)
+        let ruler = snapshot.workspaceState.ruler.normalizedForWorkspaceScale()
+        self.workspace = workspace
+        self.snapshot = snapshot
+        self._selectedTool = State(initialValue: .select)
+        self._polygonToolState = State(initialValue: .standard)
+        self._sketchInputState = State(initialValue: .standard)
+        self._transientDiagnostics = State(initialValue: [])
+        self._hoveredTarget = State(initialValue: nil)
+        self._hoveredReference = State(initialValue: nil)
         self._isPreviewExpanded = State(initialValue: isPreviewExpanded)
         self._columnVisibility = State(initialValue: columnVisibility)
         self._isInspectorPresented = State(initialValue: isInspectorPresented)
@@ -110,6 +174,7 @@ public struct MainView: View {
         self._workspacePlaneMode = State(initialValue: .adaptive)
         self._selectionScope = State(initialValue: .object)
         self._selectionDragPreviewTargets = State(initialValue: [])
+        self._selectionDragPreviewSceneNodeIDs = State(initialValue: [])
         self._patternArrayCurvePathPickState = State(initialValue: .inactive)
         self._patternArrayCurvePathPreviewCandidate = State(initialValue: nil)
         self._patternArraySummaryCache = State(initialValue: PatternArraySummaryCache())
@@ -178,11 +243,23 @@ public struct MainView: View {
         self._constructionPlaneRenameTargetID = State(initialValue: nil)
         self._constructionPlaneRenameText = State(initialValue: "")
         self._viewportHoverClearSignal = State(initialValue: 0)
-        self.objectRegistry = objectRegistry
+        self._operationSequencer = State(initialValue: ProjectWorkspaceOperationSequencer())
+        self.objectRegistry = snapshot.objectRegistry
+        self.viewportObjectSelectionIndex = ViewportObjectSelectionIndex(
+            document: snapshot.document.document,
+            selection: snapshot.selection
+        )
         self.commandCatalog = WorkspaceCommandCatalog(domainRegistry: domainRegistry)
-        self.domainCommandExecutor = DomainCommandExecutor(registry: domainRegistry)
-        self.agentSessionPublisher = agentSessionPublisher
-        self.documentURL = documentURL
+        self.domainCommandDispatcher = ProjectDomainCommandDispatcher(registry: domainRegistry)
+        let exactPresentationCADSceneNodeIDs = Self.makeExactPresentationCADSceneNodeIDs(
+            snapshot: snapshot
+        )
+        self.exactPresentationCADSceneNodeIDs = exactPresentationCADSceneNodeIDs
+        self.selectedPresentationHasExactCADAffordanceContext =
+            MeshSourcePresentationExactCADSelectionResolver(
+                availableSceneNodeIDs: exactPresentationCADSceneNodeIDs
+            )
+            .hasExactContext(for: snapshot.selection)
     }
 
     public var body: some View {
@@ -198,11 +275,535 @@ public struct MainView: View {
         }
         .navigationSplitViewStyle(.balanced)
         .frame(minWidth: 1_120, minHeight: 720)
-        .workspaceAgentSessionPublisher(
-            publisher: agentSessionPublisher,
-            session: session,
-            path: documentURL
+    }
+
+    private var diagnostics: [EditorDiagnostic] {
+        EditorDiagnostic.stableMerged([
+            snapshot.evaluationSnapshot.diagnostics,
+            transientDiagnostics,
+        ])
+    }
+
+    private var activeConstructionPlane: ConstructionPlaneSource? {
+        guard let id = snapshot.workspaceState.activeConstructionPlaneID else {
+            return nil
+        }
+        return snapshot.document.document.productMetadata.constructionPlanes[id]
+    }
+
+    private func activeSketchPlane(fallback: SketchPlane = .xy) -> SketchPlane {
+        activeConstructionPlane?.plane ?? fallback
+    }
+
+    private var displaySelection: SelectionModel {
+        let hover: SelectionModel.Hover
+        if let hoveredTarget {
+            hover = .target(hoveredTarget)
+        } else if let hoveredReference {
+            hover = .reference(hoveredReference)
+        } else {
+            hover = .none
+        }
+        return snapshot.selection.replacingHover(with: hover)
+    }
+
+    private func reportToolStatus(
+        _ message: String,
+        severity: EditorDiagnostic.Severity = .info
+    ) {
+        transientDiagnostics.append(
+            EditorDiagnostic(severity: severity, message: message)
         )
+    }
+
+    private func clearSelection(
+        completion: @escaping @MainActor @Sendable (ProjectViewSnapshot) -> Void = { _ in }
+    ) {
+        let task = operationSequencer.enqueue {
+            let published = try await workspace.applySelection(.clear)
+            completion(published)
+            return published
+        }
+        Task { @MainActor in
+            do {
+                _ = try await task.value
+            } catch {
+                reportToolStatus(error.localizedDescription, severity: .warning)
+                isPreviewExpanded = true
+            }
+        }
+    }
+
+    private func submitSelectionMutation(
+        _ mutation: @escaping @MainActor @Sendable (
+            inout SelectionModel,
+            DesignDocument
+        ) throws -> Void,
+        completion: @escaping @MainActor @Sendable (ProjectViewSnapshot) -> Void = { _ in }
+    ) {
+        let task = operationSequencer.enqueue {
+            guard let current = workspace.view else {
+                throw ProjectWorkspaceActionError(
+                    code: .snapshotUnavailable,
+                    message: "The project workspace has no published view snapshot."
+                )
+            }
+            var selection = current.selection
+            try mutation(&selection, current.document.document)
+            let published = try await workspace.applySelection(.replace(selection))
+            completion(published)
+            return published
+        }
+        Task { @MainActor in
+            do {
+                _ = try await task.value
+            } catch {
+                reportToolStatus(error.localizedDescription, severity: .warning)
+                isPreviewExpanded = true
+            }
+        }
+    }
+
+    @discardableResult
+    private func selectSceneNodes(_ ids: [SceneNodeID]) -> Bool {
+        updateSelection { selection, document in
+            try selection.selectSceneNodes(ids, in: document)
+        }
+    }
+
+    @discardableResult
+    private func selectTarget(_ target: SelectionTarget?) -> Bool {
+        updateSelection { selection, document in
+            try selection.selectTarget(target, in: document)
+        }
+    }
+
+    @discardableResult
+    private func selectTargets(_ targets: [SelectionTarget]) -> Bool {
+        updateSelection { selection, document in
+            try selection.selectTargets(targets, in: document)
+        }
+    }
+
+    @discardableResult
+    private func selectReference(_ reference: SelectionReference?) -> Bool {
+        updateSelection { selection, document in
+            try selection.selectReference(reference, in: document)
+        }
+    }
+
+    @discardableResult
+    private func selectReferences(_ references: [SelectionReference]) -> Bool {
+        updateSelection { selection, document in
+            try selection.selectReferences(references, in: document)
+        }
+    }
+
+    @discardableResult
+    private func updateSelection(
+        _ update: @escaping @MainActor @Sendable (
+            inout SelectionModel,
+            DesignDocument
+        ) throws -> Void
+    ) -> Bool {
+        var selection = snapshot.selection
+        do {
+            try update(&selection, snapshot.document.document)
+            submitSelectionMutation(update)
+            return true
+        } catch {
+            reportToolStatus(error.localizedDescription, severity: .warning)
+            return false
+        }
+    }
+
+    @discardableResult
+    private func hoverSceneNode(_ id: SceneNodeID?) -> Bool {
+        do {
+            var selection = displaySelection
+            try selection.hoverSceneNode(id, in: snapshot.document.document)
+            hoveredTarget = selection.hoveredTarget
+            hoveredReference = selection.hoveredReference
+            return true
+        } catch {
+            reportToolStatus(error.localizedDescription, severity: .warning)
+            return false
+        }
+    }
+
+    @discardableResult
+    private func hoverTarget(_ target: SelectionTarget?) -> Bool {
+        do {
+            var selection = displaySelection
+            try selection.hoverTarget(target, in: snapshot.document.document)
+            hoveredTarget = selection.hoveredTarget
+            hoveredReference = selection.hoveredReference
+            return true
+        } catch {
+            reportToolStatus(error.localizedDescription, severity: .warning)
+            return false
+        }
+    }
+
+    @discardableResult
+    private func hoverReference(_ reference: SelectionReference?) -> Bool {
+        do {
+            var selection = displaySelection
+            try selection.hoverReference(reference, in: snapshot.document.document)
+            hoveredTarget = selection.hoveredTarget
+            hoveredReference = selection.hoveredReference
+            return true
+        } catch {
+            reportToolStatus(error.localizedDescription, severity: .warning)
+            return false
+        }
+    }
+
+    private func applyWorkspace(
+        _ command: WorkspaceCommand,
+        completion: @escaping @MainActor @Sendable (ProjectViewSnapshot) -> Void = { _ in }
+    ) {
+        applyWorkspace([command], completion: completion)
+    }
+
+    private func applyWorkspace(
+        _ commands: [WorkspaceCommand],
+        completion: @escaping @MainActor @Sendable (ProjectViewSnapshot) -> Void = { _ in }
+    ) {
+        applyWorkspace(commands: { _ in commands }, completion: completion)
+    }
+
+    private func applyWorkspace(
+        commands: @escaping @MainActor @Sendable (ProjectViewSnapshot) throws -> [WorkspaceCommand],
+        completion: @escaping @MainActor @Sendable (ProjectViewSnapshot) -> Void = { _ in }
+    ) {
+        let task = operationSequencer.enqueue {
+            guard let current = workspace.view else {
+                throw ProjectWorkspaceActionError(
+                    code: .snapshotUnavailable,
+                    message: "The project workspace has no published view snapshot."
+                )
+            }
+            let currentCommands = try commands(current)
+            let published = if currentCommands.isEmpty {
+                current
+            } else {
+                try await workspace.applyWorkspace(currentCommands)
+            }
+            completion(published)
+            return published
+        }
+        Task { @MainActor in
+            do {
+                _ = try await task.value
+            } catch {
+                reportToolStatus(error.localizedDescription, severity: .warning)
+            }
+        }
+    }
+
+    private func submitSource(
+        _ command: EditorCommand,
+        completion: @escaping @MainActor (CommandExecutionResult?) async throws -> Void = { _ in }
+    ) {
+        submitSource([command], name: command.name) { results in
+            try await completion(results.last)
+        }
+    }
+
+    private func submitSource(
+        _ commands: [EditorCommand],
+        name: String,
+        completion: @escaping @MainActor ([CommandExecutionResult]) async throws -> Void = { _ in }
+    ) {
+        submitSource(name: name, commands: { _ in commands }, completion: completion)
+    }
+
+    private func submitSource(
+        name: String,
+        commands: @escaping @MainActor @Sendable (ProjectViewSnapshot) throws -> [EditorCommand],
+        completion: @escaping @MainActor ([CommandExecutionResult]) async throws -> Void = { _ in }
+    ) {
+        let task = operationSequencer.enqueue {
+            let results = try await executeSource(name: name, commands: commands)
+            try await completion(results)
+            return results
+        }
+        Task { @MainActor in
+            do {
+                _ = try await task.value
+            } catch {
+                reportToolStatus(error.localizedDescription, severity: .warning)
+                isPreviewExpanded = true
+            }
+        }
+    }
+
+    private func performSource(
+        _ command: EditorCommand
+    ) async -> CommandExecutionResult? {
+        await performSource([command], name: command.name).last
+    }
+
+    private func performSource(
+        _ commands: [EditorCommand],
+        name: String
+    ) async -> [CommandExecutionResult] {
+        await performSource(name: name, commands: { _ in commands })
+    }
+
+    private func performSource(
+        name: String,
+        commands: @escaping @MainActor @Sendable (ProjectViewSnapshot) throws -> [EditorCommand]
+    ) async -> [CommandExecutionResult] {
+        let task = operationSequencer.enqueue {
+            try await executeSource(name: name, commands: commands)
+        }
+        do {
+            return try await task.value
+        } catch {
+            reportToolStatus(error.localizedDescription, severity: .warning)
+            isPreviewExpanded = true
+            return []
+        }
+    }
+
+    private func executeSource(
+        name: String,
+        commands: @escaping @MainActor @Sendable (ProjectViewSnapshot) throws -> [EditorCommand]
+    ) async throws -> [CommandExecutionResult] {
+        guard let current = workspace.view else {
+            throw ProjectWorkspaceActionError(
+                code: .snapshotUnavailable,
+                message: "The project workspace has no published view snapshot."
+            )
+        }
+        let currentCommands = try commands(current)
+        guard currentCommands.isEmpty == false else {
+            return []
+        }
+        let action = try DefaultProjectWorkspaceActionPlanner().source(
+            name: name,
+            commands: currentCommands,
+            from: current
+        )
+        let result = try await workspace.perform(action)
+        guard case .source(let commit, _) = result else {
+            throw ProjectWorkspaceActionError(
+                code: .actionResultMismatch,
+                message: "The project returned an interaction result for a source command."
+            )
+        }
+        if commit.diagnostics.isEmpty == false {
+            isPreviewExpanded = true
+        }
+        return commit.commandResults
+    }
+
+    private func setRulerConfiguration(
+        _ ruler: RulerConfiguration,
+        completion: @escaping @MainActor @Sendable (ProjectViewSnapshot) -> Void = { _ in }
+    ) {
+        applyWorkspace(.setRulerConfiguration(ruler)) { published in
+            resetWorkspaceInteractionScaleDefaults(ruler: published.workspaceState.ruler)
+            completion(published)
+        }
+    }
+
+    private func setDisplayUnit(
+        _ unit: LengthDisplayUnit,
+        completion: @escaping @MainActor @Sendable (ProjectViewSnapshot) -> Void = { _ in }
+    ) {
+        applyWorkspace(.setDisplayUnit(unit), completion: completion)
+    }
+
+    private func setViewportGridSettings(_ settings: ViewportGridSettings) {
+        applyWorkspace(.setViewportGridSettings(settings))
+    }
+
+    private func setCurveCurvatureDisplay(
+        target: SelectionTarget,
+        isVisible: Bool?,
+        combScale: Double?
+    ) {
+        applyWorkspace(
+            .setCurveCurvatureDisplay(
+                target: target,
+                isVisible: isVisible,
+                combScale: combScale
+            )
+        )
+    }
+
+    private func setPointDisplay(
+        target: SelectionTarget,
+        isVisible: Bool?
+    ) {
+        applyWorkspace(.setPointDisplay(target: target, isVisible: isVisible))
+    }
+
+    private func setSurfaceControlPointDisplay(
+        target: SelectionReference,
+        isVisible: Bool?
+    ) {
+        applyWorkspace(
+            .setSurfaceControlPointDisplay(target: target, isVisible: isVisible)
+        )
+    }
+
+    private func setSurfaceFrameDisplay(
+        query: SurfaceFrameQuery,
+        isVisible: Bool?
+    ) {
+        applyWorkspace(.setSurfaceFrameDisplay(query: query, isVisible: isVisible))
+    }
+
+    @discardableResult
+    private func setActiveTool(_ tool: ModelingTool) -> ModelingToolActivationResult {
+        selectedTool = tool
+        if !keepsSketchInputState(for: tool) {
+            sketchInputState.clearTransientInput()
+        }
+        return ModelingToolActivationResult(
+            tool: tool,
+            selectedSceneNodeID: snapshot.selection.primarySceneNodeID
+        )
+    }
+
+    private func keepsSketchInputState(for tool: ModelingTool) -> Bool {
+        switch tool {
+        case .sketch, .polygon, .arc, .spline, .solid, .surface:
+            return true
+        case .select, .sweep, .mesh, .measure, .section:
+            return false
+        }
+    }
+
+    @discardableResult
+    private func adjustPolygonSideCount(by delta: Int) -> Bool {
+        do {
+            try polygonToolState.adjustSideCount(by: delta)
+            return true
+        } catch let failure as PolygonToolState.Failure {
+            reportToolStatus(failure.message, severity: .warning)
+        } catch {
+            reportToolStatus(error.localizedDescription, severity: .warning)
+        }
+        return false
+    }
+
+    @discardableResult
+    private func togglePolygonSizingMode() -> PolygonSizingMode {
+        polygonToolState.toggleSizingMode()
+        return polygonToolState.sizingMode
+    }
+
+    @discardableResult
+    private func togglePolygonInclinationMode() -> PolygonInclinationMode {
+        polygonToolState.toggleInclinationMode()
+        return polygonToolState.inclinationMode
+    }
+
+    @discardableResult
+    private func togglePolygonCutsFaces() -> Bool {
+        polygonToolState.toggleCutsFaces()
+        return polygonToolState.cutsFaces
+    }
+
+    @discardableResult
+    private func toggleSketchAxisConstraint(
+        _ axisConstraint: SketchAxisConstraint
+    ) -> SketchAxisConstraint? {
+        sketchInputState.toggleAxisConstraint(axisConstraint)
+        return sketchInputState.axisConstraint
+    }
+
+    @discardableResult
+    private func focusNextSketchDimensionInput(
+        availableFocuses: [SketchDimensionInputFocus] = SketchDimensionInputFocus.allCases
+    ) -> SketchDimensionInputFocus? {
+        sketchInputState.focusNextDimensionInput(availableFocuses: availableFocuses)
+    }
+
+    @discardableResult
+    private func setSketchDimensionInputLength(_ lengthMeters: Double?) -> Bool {
+        updateSketchInput {
+            try $0.setDimensionInputLengthMeters(lengthMeters)
+        }
+    }
+
+    @discardableResult
+    private func setSketchDimensionInputAngle(_ angleRadians: Double?) -> Bool {
+        updateSketchInput {
+            try $0.setDimensionInputAngleRadians(angleRadians)
+        }
+    }
+
+    @discardableResult
+    private func setSketchDimensionInputWidth(_ widthMeters: Double?) -> Bool {
+        updateSketchInput {
+            try $0.setDimensionInputWidthMeters(widthMeters)
+        }
+    }
+
+    @discardableResult
+    private func setSketchDimensionInputHeight(_ heightMeters: Double?) -> Bool {
+        updateSketchInput {
+            try $0.setDimensionInputHeightMeters(heightMeters)
+        }
+    }
+
+    @discardableResult
+    private func updateSketchInput(
+        _ update: (inout SketchInputState) throws -> Void
+    ) -> Bool {
+        do {
+            try update(&sketchInputState)
+            return true
+        } catch let error as SketchDimensionInputValueError {
+            reportToolStatus(error.message, severity: .warning)
+        } catch {
+            reportToolStatus(error.localizedDescription, severity: .warning)
+        }
+        return false
+    }
+
+    @discardableResult
+    private func addSketchReferenceLineAnchor(at point: Point2D) -> Bool {
+        guard point.x.isFinite, point.y.isFinite else {
+            reportToolStatus(
+                "Sketch reference line requires a finite model coordinate.",
+                severity: .warning
+            )
+            return false
+        }
+        sketchInputState.addReferenceLineAnchor(
+            SketchReferenceLineAnchor(point: point)
+        )
+        return true
+    }
+
+    private func nextSceneNodeName(
+        prefix: String,
+        in document: DesignDocument
+    ) -> String {
+        nextUniqueName(
+            prefix: prefix,
+            existing: Set(
+                document.productMetadata.sceneNodes.values.map(\.name)
+            )
+        )
+    }
+
+    private func nextUniqueName(prefix: String, existing: Set<String>) -> String {
+        guard existing.contains(prefix) else {
+            return prefix
+        }
+        var suffix = 2
+        while existing.contains("\(prefix) \(suffix)") {
+            suffix += 1
+        }
+        return "\(prefix) \(suffix)"
     }
 
     private var sidebar: some View {
@@ -252,19 +853,19 @@ public struct MainView: View {
     private var selectedSceneNodeIDsBinding: Binding<Set<SceneNodeID>> {
         Binding(
             get: {
-                Set(session.selection.selectedSceneNodeIDs)
+                Set(snapshot.selection.selectedSceneNodeIDs)
             },
             set: { ids in
                 let orderedIDs = sceneBrowserRows.map(\.id).filter { ids.contains($0) }
                 patternArrayCurvePathPickState.cancel()
-                _ = session.selectSceneNodes(orderedIDs)
+                _ = selectSceneNodes(orderedIDs)
                 dimensionCommandState.deactivate()
             }
         )
     }
 
     private var documentTitle: String {
-        guard let name = session.document.cadDocument.metadata.name,
+        guard let name = snapshot.document.document.cadDocument.metadata.name,
               !name.isEmpty else {
             return "Untitled"
         }
@@ -299,7 +900,7 @@ public struct MainView: View {
         if let explicitPlane = workspacePlaneMode.sketchPlane {
             return explicitPlane
         }
-        return session.activeConstructionPlane?.plane
+        return activeConstructionPlane?.plane
     }
 
     private var constructionPlaneSnapSummary: String {
@@ -309,7 +910,7 @@ public struct MainView: View {
         if workspacePlaneMode.sketchPlane != nil {
             return workspacePlaneMode.title
         }
-        if let activeConstructionPlane = session.activeConstructionPlane {
+        if let activeConstructionPlane = activeConstructionPlane {
             return activeConstructionPlane.name
         }
         return "No Plane"
@@ -317,8 +918,8 @@ public struct MainView: View {
 
     private var savedConstructionPlaneSummary: ConstructionPlaneSummaryResult {
         ConstructionPlaneSummaryService().summarize(
-            document: session.document,
-            activePlaneID: session.workspaceState.activeConstructionPlaneID
+            document: snapshot.document.document,
+            activePlaneID: snapshot.workspaceState.activeConstructionPlaneID
         )
     }
 
@@ -327,11 +928,11 @@ public struct MainView: View {
     }
 
     private var savedViews: [SavedView] {
-        savedViewBuilder.sortedSavedViews(in: session.document)
+        savedViewBuilder.sortedSavedViews(in: snapshot.document.document)
     }
 
     private var selectedConstructionPlaneEntry: ConstructionPlaneSummaryResult.Entry? {
-        let selectedPlaneIDs = session.selection.selectedTargets.compactMap { target in
+        let selectedPlaneIDs = snapshot.selection.selectedTargets.compactMap { target in
             if case .constructionPlane(let id) = target.component {
                 return id
             }
@@ -352,7 +953,7 @@ public struct MainView: View {
 
     private var sceneBrowserRows: [SceneBrowserRow] {
         var rows: [SceneBrowserRow] = []
-        let metadata = session.document.productMetadata
+        let metadata = snapshot.document.document.productMetadata
 
         func append(_ id: SceneNodeID, depth: Int, parent: SceneNode? = nil) {
             guard let node = metadata.sceneNodes[id] else {
@@ -386,7 +987,7 @@ public struct MainView: View {
         }
 
         return sceneBrowserRows.filter { row in
-            guard let node = session.document.productMetadata.sceneNodes[row.id] else {
+            guard let node = snapshot.document.document.productMetadata.sceneNodes[row.id] else {
                 return false
             }
             return matchesSidebarSearch(node.name, sceneNodeKindTitle(for: node.reference))
@@ -394,7 +995,7 @@ public struct MainView: View {
     }
 
     private var componentDefinitionIDs: [ComponentDefinitionID] {
-        session.document.productMetadata.componentDefinitions.values
+        snapshot.document.document.productMetadata.componentDefinitions.values
             .sorted { $0.name < $1.name }
             .map(\.id)
     }
@@ -405,7 +1006,7 @@ public struct MainView: View {
         }
 
         return componentDefinitionIDs.filter { id in
-            guard let definition = session.document.productMetadata.componentDefinitions[id] else {
+            guard let definition = snapshot.document.document.productMetadata.componentDefinitions[id] else {
                 return false
             }
             return matchesSidebarSearch(definition.name, "Component Definition")
@@ -413,7 +1014,7 @@ public struct MainView: View {
     }
 
     private var componentInstanceIDs: [ComponentInstanceID] {
-        session.document.productMetadata.componentInstances.values
+        snapshot.document.document.productMetadata.componentInstances.values
             .sorted { $0.name < $1.name }
             .map(\.id)
     }
@@ -424,7 +1025,7 @@ public struct MainView: View {
         }
 
         return componentInstanceIDs.filter { id in
-            guard let instance = session.document.productMetadata.componentInstances[id] else {
+            guard let instance = snapshot.document.document.productMetadata.componentInstances[id] else {
                 return false
             }
             return matchesSidebarSearch(instance.name, "Component Instance")
@@ -432,7 +1033,7 @@ public struct MainView: View {
     }
 
     private var materialAssetRows: [SidebarAssetRow] {
-        session.document.productMetadata.materialLibrary.materials.values
+        snapshot.document.document.productMetadata.materialLibrary.materials.values
             .sorted { $0.name < $1.name }
             .filter { matchesSidebarSearch($0.name, "Material") }
             .map {
@@ -446,7 +1047,7 @@ public struct MainView: View {
     }
 
     private var validationRuleAssetRows: [SidebarAssetRow] {
-        session.document.productMetadata.validationRules.values
+        snapshot.document.document.productMetadata.validationRules.values
             .sorted { $0.name < $1.name }
             .filter { matchesSidebarSearch($0.name, $0.category.rawValue, "Validation Rule") }
             .map {
@@ -460,7 +1061,7 @@ public struct MainView: View {
     }
 
     private var exportPresetAssetRows: [SidebarAssetRow] {
-        session.document.productMetadata.exportPresets.values
+        snapshot.document.document.productMetadata.exportPresets.values
             .sorted { $0.name < $1.name }
             .filter { matchesSidebarSearch($0.name, $0.format.rawValue, "Export Preset") }
             .map {
@@ -526,12 +1127,12 @@ public struct MainView: View {
             }
         } content: {
             PreviewSurface(
-                document: session.document,
-                ruler: session.workspaceState.ruler,
-                evaluationStatus: session.evaluationStatus,
-                evaluatedGeneration: session.evaluatedGeneration,
-                evaluatedBodyCount: session.evaluatedBodyCount,
-                diagnostics: session.diagnostics
+                document: snapshot.document.document,
+                ruler: snapshot.workspaceState.ruler,
+                evaluationStatus: snapshot.evaluationSnapshot.status,
+                evaluatedGeneration: snapshot.evaluationSnapshot.evaluatedGeneration,
+                evaluatedBodyCount: snapshot.evaluationSnapshot.bodyCount,
+                diagnostics: diagnostics
             )
         } header: {
             Label("Logs", systemImage: "list.bullet.rectangle")
@@ -553,7 +1154,7 @@ public struct MainView: View {
             handleWorkspaceKeyPress(keyPress)
         }
         .onChange(of: selectionScope) { _, newScope in
-            selectionDragPreviewTargets = []
+            clearSelectionDragPreview()
             if newScope != .region {
                 regionOffsetCommandState.deactivate()
             }
@@ -574,23 +1175,27 @@ public struct MainView: View {
         let scaleSummary = workspaceScaleSummary
         let scaleFitPromptState = workspaceScaleFitPromptState
         return Viewport(
-            document: session.document,
+            document: snapshot.document.document,
+            presentationScene: snapshot.viewport,
+            presentationSceneNodeIDByOccurrenceID: snapshot.sceneNodeIDByOccurrenceID,
             workspaceRenderState: ViewportWorkspaceRenderState(
-                revision: session.workspaceState.revision,
-                ruler: session.workspaceState.ruler,
+                revision: snapshot.workspaceState.revision,
+                ruler: snapshot.workspaceState.ruler,
                 sceneOverlayState: ViewportSceneOverlayState(
-                    curveCurvatureDisplays: session.workspaceState.curveCurvatureDisplays,
-                    pointDisplays: session.workspaceState.pointDisplays,
-                    surfaceControlPointDisplays: session.workspaceState.surfaceControlPointDisplays,
-                    surfaceFrameDisplays: session.workspaceState.surfaceFrameDisplays
+                    curveCurvatureDisplays: snapshot.workspaceState.curveCurvatureDisplays,
+                    pointDisplays: snapshot.workspaceState.pointDisplays,
+                    surfaceControlPointDisplays: snapshot.workspaceState.surfaceControlPointDisplays,
+                    surfaceFrameDisplays: snapshot.workspaceState.surfaceFrameDisplays
                 )
             ),
-            currentEvaluation: session.currentEvaluation,
-            documentGeneration: session.generation,
+            currentEvaluation: snapshot.cadInteraction,
+            documentGeneration: snapshot.documentGeneration,
             objectRegistry: objectRegistry,
-            renderInvalidation: session.renderInvalidation,
-            selection: session.selection,
+            renderInvalidation: snapshot.evaluationSnapshot.renderInvalidation,
+            selection: displaySelection,
+            objectSelectionIndex: viewportObjectSelectionIndex,
             selectionDragPreviewTargets: selectionDragPreviewTargets,
+            presentationPreviewSceneNodeIDs: selectionDragPreviewSceneNodeIDs,
             patternArrayCurvePathReplacementPreviewRequest: patternArrayCurvePathReplacementPreviewRequest,
             surfaceAnalysis: selectedSurfaceAnalysisSummary,
             surfaceAnalysisOptions: surfaceAnalysisOptions,
@@ -607,7 +1212,7 @@ public struct MainView: View {
             selectionHitPolicy: selectionScope.viewportSelectionHitPolicy,
             bottomChromeReservedHeight: viewportBottomChromeReservedHeight,
             canvasOverlayExclusions: viewportOverlayExclusions,
-            gridVisualSpacingMode: session.workspaceState.viewportGridSettings.visualSpacingMode,
+            gridVisualSpacingMode: snapshot.workspaceState.viewportGridSettings.visualSpacingMode,
             workspaceScalePresetTitle: scaleSummary.presetTitle,
             workspaceScalePresetOptions: WorkspaceScalePreset.profiles,
             canFitWorkspaceScaleToModel: scaleFitPromptState?.isActionable == true,
@@ -621,6 +1226,10 @@ public struct MainView: View {
             slotWidthMeters: slotProfileWidthMeters,
             sketchVertexOffsetDistanceMeters: sketchVertexOffsetDistanceMeters,
             edgeOffsetDistanceMeters: edgeOffsetDistanceMeters,
+            presentationCADInteractionSceneNodeIDs: exactPresentationCADSceneNodeIDs,
+            selectedPresentationHasExactCADContext: selectedPresentationHasExactCADAffordanceContext,
+            onPresentationOccurrencePick: presentationOccurrencePickHandler,
+            onPresentationOccurrenceHover: presentationOccurrenceHoverHandler,
             onPick: handleViewportPick,
             onCanvasDrag: handleViewportDrag,
             onShiftScroll: viewportShiftScrollHandler,
@@ -706,7 +1315,7 @@ public struct MainView: View {
     }
 
     private var viewportHoverHandler: ((ViewportHit?) -> Void)? {
-        guard session.selectedTool == .select else {
+        guard selectedTool == .select else {
             return nil
         }
         return { hit in
@@ -727,8 +1336,8 @@ public struct MainView: View {
     }
 
     private var viewportBodyMoveDragHandler: ((ViewportBodyMoveDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
-              selectionScope == .object else {
+        guard selectionScope.allowsPresentationOccurrencePick(for: selectedTool),
+              selectedPresentationHasExactCADAffordanceContext else {
             return nil
         }
         return { target in
@@ -737,8 +1346,9 @@ public struct MainView: View {
     }
 
     private var viewportVertexDragHandler: ((ViewportVertexDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
-              selectionScope == .vertex else {
+        guard selectedTool == .select,
+              selectionScope == .vertex,
+              selectedPresentationHasExactCADAffordanceContext else {
             return nil
         }
         return { target in
@@ -747,8 +1357,9 @@ public struct MainView: View {
     }
 
     private var viewportFaceDragHandler: ((ViewportFaceDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
-              selectionScope == .face else {
+        guard selectedTool == .select,
+              selectionScope == .face,
+              selectedPresentationHasExactCADAffordanceContext else {
             return nil
         }
         return { target in
@@ -757,8 +1368,9 @@ public struct MainView: View {
     }
 
     private var viewportEdgeChamferDragHandler: ((ViewportEdgeChamferDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
-              selectionScope == .edge else {
+        guard selectedTool == .select,
+              selectionScope == .edge,
+              selectedPresentationHasExactCADAffordanceContext else {
             return nil
         }
         return { target in
@@ -767,8 +1379,9 @@ public struct MainView: View {
     }
 
     private var viewportEdgeFilletDragHandler: ((ViewportEdgeFilletDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
-              selectionScope == .edge else {
+        guard selectedTool == .select,
+              selectionScope == .edge,
+              selectedPresentationHasExactCADAffordanceContext else {
             return nil
         }
         return { target in
@@ -777,7 +1390,7 @@ public struct MainView: View {
     }
 
     private var viewportRegionOffsetDragHandler: ((ViewportRegionOffsetDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .region,
               regionOffsetCommandState.isActive,
               selectedRegionTargets.isEmpty == false else {
@@ -789,8 +1402,9 @@ public struct MainView: View {
     }
 
     private var viewportEdgeOffsetDragHandler: ((ViewportEdgeOffsetDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .edge,
+              selectedPresentationHasExactCADAffordanceContext,
               edgeOffsetCommandState.isActive,
               selectedEdgeOffsetSupportResolution.isSupported else {
             return nil
@@ -801,7 +1415,7 @@ public struct MainView: View {
     }
 
     private var viewportSelectionDragPreviewHandler: ((ViewportSelectionDragTarget) -> Void)? {
-        guard session.selectedTool == .select else {
+        guard selectedTool == .select else {
             return nil
         }
         return { target in
@@ -810,7 +1424,7 @@ public struct MainView: View {
     }
 
     private var viewportSlotWidthDragHandler: ((ViewportSlotWidthDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .sketchEntity,
               slotProfileCommandState.isActive,
               selectedSlotSourceCurveTarget != nil else {
@@ -822,7 +1436,7 @@ public struct MainView: View {
     }
 
     private var viewportSketchVertexOffsetDragHandler: ((ViewportSketchVertexOffsetDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .sketchEntity,
               selectedSketchVertexOffsetTarget != nil else {
             return nil
@@ -833,7 +1447,8 @@ public struct MainView: View {
     }
 
     private var viewportPatternArrayLinearAxisDragHandler: ((ViewportPatternArrayLinearAxisDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
+              selectedPresentationHasExactCADAffordanceContext,
               patternArrayInspectorState(for: selectedSceneNodes) != nil else {
             return nil
         }
@@ -843,7 +1458,8 @@ public struct MainView: View {
     }
 
     private var viewportIndependentCopyExtrudeDistanceDragHandler: ((ViewportIndependentCopyExtrudeDistanceDragTarget) -> Void)? {
-        guard session.selectedTool == .select else {
+        guard selectedTool == .select,
+              selectedPresentationHasExactCADAffordanceContext else {
             return nil
         }
         return { target in
@@ -852,7 +1468,8 @@ public struct MainView: View {
     }
 
     private var viewportIndependentCopyBodyDimensionDragHandler: ((ViewportIndependentCopyBodyDimensionDragTarget) -> Void)? {
-        guard session.selectedTool == .select else {
+        guard selectedTool == .select,
+              selectedPresentationHasExactCADAffordanceContext else {
             return nil
         }
         return { target in
@@ -861,7 +1478,8 @@ public struct MainView: View {
     }
 
     private var viewportPatternArrayRadialAngleDragHandler: ((ViewportPatternArrayRadialAngleDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
+              selectedPresentationHasExactCADAffordanceContext,
               patternArrayInspectorState(for: selectedSceneNodes) != nil else {
             return nil
         }
@@ -871,7 +1489,8 @@ public struct MainView: View {
     }
 
     private var viewportPatternArrayCopyCountDragHandler: ((ViewportPatternArrayCopyCountDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
+              selectedPresentationHasExactCADAffordanceContext,
               patternArrayInspectorState(for: selectedSceneNodes) != nil else {
             return nil
         }
@@ -881,35 +1500,30 @@ public struct MainView: View {
     }
 
     private var viewportPatternArrayCurveExtentDragHandler: ((ViewportPatternArrayCurveExtentDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
+              selectedPresentationHasExactCADAffordanceContext,
               patternArrayInspectorState(for: selectedSceneNodes) != nil else {
             return nil
         }
         return { target in
-            guard session.selectedTool == .select,
+            guard selectedTool == .select,
                   let state = patternArrayInspectorState(for: selectedSceneNodes),
                   state.sourceID == target.sourceID else {
                 return
             }
-            let service = PatternArrayEditingService(
-                session: session,
-                sourceID: target.sourceID
-            )
-            let result: CommandExecutionResult?
+            let service = patternArrayEditingService(sourceID: target.sourceID)
             switch target.extent {
             case .distance(let meters):
-                result = service.setCurveExtentDistance(meters)
+                service.setCurveExtentDistance(meters)
             case .ratio(let ratio):
-                result = service.setCurveExtentRatio(ratio)
-            }
-            if result?.diagnostics.isEmpty == false {
-                isPreviewExpanded = true
+                service.setCurveExtentRatio(ratio)
             }
         }
     }
 
     private var viewportPatternArrayCurvePathPointDragHandler: ((ViewportPatternArrayCurvePathPointDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
+              selectedPresentationHasExactCADAffordanceContext,
               patternArrayInspectorState(for: selectedSceneNodes) != nil else {
             return nil
         }
@@ -919,7 +1533,8 @@ public struct MainView: View {
     }
 
     private var viewportPatternArrayOutputModeChangeHandler: ((ViewportPatternArrayOutputModeTarget) -> Void)? {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
+              selectedPresentationHasExactCADAffordanceContext,
               patternArrayInspectorState(for: selectedSceneNodes) != nil else {
             return nil
         }
@@ -929,7 +1544,7 @@ public struct MainView: View {
     }
 
     private var viewportSketchCurveHandleDragHandler: ((ViewportSketchCurveHandleDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .sketchEntity else {
             return nil
         }
@@ -939,7 +1554,7 @@ public struct MainView: View {
     }
 
     private var viewportSketchDimensionDragHandler: ((ViewportSketchDimensionDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .sketchEntity else {
             return nil
         }
@@ -949,7 +1564,7 @@ public struct MainView: View {
     }
 
     private var viewportSketchPointHandleDragHandler: ((ViewportSketchPointHandleDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .sketchEntity else {
             return nil
         }
@@ -959,7 +1574,7 @@ public struct MainView: View {
     }
 
     private var viewportSplineControlPointDragHandler: ((ViewportSplineControlPointDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .sketchEntity else {
             return nil
         }
@@ -969,7 +1584,7 @@ public struct MainView: View {
     }
 
     private var viewportBridgeCurveEndpointDragHandler: ((ViewportBridgeCurveEndpointDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .sketchEntity else {
             return nil
         }
@@ -979,7 +1594,7 @@ public struct MainView: View {
     }
 
     private var viewportSplineControlPointSlideDragHandler: ((ViewportSplineControlPointSlideDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .sketchEntity,
               slideCommandState.isCurveControlVerticesActive else {
             return nil
@@ -999,8 +1614,9 @@ public struct MainView: View {
     }
 
     private var viewportPolySplineSurfaceVertexDragHandler: ((ViewportPolySplineSurfaceVertexDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .vertex,
+              selectedPresentationHasExactCADAffordanceContext,
               slideCommandState.isSurfaceControlVerticesActive == false else {
             return nil
         }
@@ -1010,8 +1626,9 @@ public struct MainView: View {
     }
 
     private var viewportSurfaceControlPointDragHandler: ((ViewportSurfaceControlPointDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .vertex,
+              selectedPresentationHasExactCADAffordanceContext,
               slideCommandState.isSurfaceControlVerticesActive == false else {
             return nil
         }
@@ -1021,8 +1638,9 @@ public struct MainView: View {
     }
 
     private var viewportSurfaceTrimEndpointDragHandler: ((ViewportSurfaceTrimEndpointDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .vertex,
+              selectedPresentationHasExactCADAffordanceContext,
               slideCommandState.isSurfaceControlVerticesActive == false else {
             return nil
         }
@@ -1032,8 +1650,9 @@ public struct MainView: View {
     }
 
     private var viewportSurfaceTrimControlPointDragHandler: ((ViewportSurfaceTrimControlPointDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .vertex,
+              selectedPresentationHasExactCADAffordanceContext,
               slideCommandState.isSurfaceControlVerticesActive == false else {
             return nil
         }
@@ -1043,8 +1662,9 @@ public struct MainView: View {
     }
 
     private var viewportPolySplineSurfaceVertexSlideDragHandler: ((ViewportPolySplineSurfaceVertexSlideDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .vertex,
+              selectedPresentationHasExactCADAffordanceContext,
               slideCommandState.isSurfaceControlVerticesActive else {
             return nil
         }
@@ -1054,8 +1674,9 @@ public struct MainView: View {
     }
 
     private var viewportSurfaceControlPointSlideDragHandler: ((ViewportSurfaceControlPointSlideDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .vertex,
+              selectedPresentationHasExactCADAffordanceContext,
               slideCommandState.isSurfaceControlVerticesActive else {
             return nil
         }
@@ -1065,8 +1686,9 @@ public struct MainView: View {
     }
 
     private var viewportSurfaceFrameDragHandler: ((ViewportSurfaceFrameDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .vertex,
+              selectedPresentationHasExactCADAffordanceContext,
               slideCommandState.isSurfaceControlVerticesActive == false else {
             return nil
         }
@@ -1076,7 +1698,7 @@ public struct MainView: View {
     }
 
     private var viewportConstructionPlaneHandleDragHandler: ((ViewportConstructionPlaneDragTarget) -> Void)? {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectedConstructionPlaneEntry != nil else {
             return nil
         }
@@ -1086,7 +1708,7 @@ public struct MainView: View {
     }
 
     private var allowsSelectionRectangle: Bool {
-        session.selectedTool == .select && selectionScope.allowsSelectionRectangle
+        selectedTool == .select && selectionScope.allowsSelectionRectangle
     }
 
     private var hasActiveWorkspaceCommand: Bool {
@@ -1100,38 +1722,114 @@ public struct MainView: View {
     private func confirmActiveWorkspaceCommand() -> Bool {
         if slideCommandState.isCurveControlVerticesActive {
             slideCommandState.deactivate()
-            session.reportToolStatus("Slide Curve CV complete.")
+            reportToolStatus("Slide Curve CV complete.")
             return true
         }
         if slideCommandState.isSurfaceControlVerticesActive {
             slideCommandState.deactivate()
-            session.reportToolStatus("Slide Surface CV complete.")
+            reportToolStatus("Slide Surface CV complete.")
             return true
         }
         if regionOffsetCommandState.isActive {
             regionOffsetCommandState.deactivate()
-            session.reportToolStatus("Offset Region complete.")
+            reportToolStatus("Offset Region complete.")
             return true
         }
         if edgeOffsetCommandState.isActive {
             edgeOffsetCommandState.deactivate()
-            session.reportToolStatus("Offset Edge complete.")
+            reportToolStatus("Offset Edge complete.")
             return true
         }
         if slotProfileCommandState.isActive {
             slotProfileCommandState.deactivate()
-            session.reportToolStatus("Slot complete.")
+            reportToolStatus("Slot complete.")
             return true
         }
         return false
     }
 
     private var allowsObjectAffordances: Bool {
-        session.selectedTool == .select && selectionScope == .object
+        selectedTool == .select
+            && selectionScope == .object
+            && selectedPresentationHasExactCADAffordanceContext
+    }
+
+    private static func makeExactPresentationCADSceneNodeIDs(
+        snapshot: ProjectViewSnapshot
+    ) -> Set<SceneNodeID> {
+        let resolver = MeshSourcePresentationCADAffordanceResolver()
+        var availableCounts: [SceneNodeID: Int] = [:]
+        var unavailableSceneNodeIDs: Set<SceneNodeID> = []
+        for item in snapshot.viewport.items {
+            guard let sceneNodeID = snapshot.sceneNodeID(for: item.occurrenceID) else {
+                continue
+            }
+            guard case .available = resolver.resolve(
+                      item: item,
+                      sceneNodeID: sceneNodeID,
+                      document: snapshot.document.document,
+                      generation: snapshot.documentGeneration,
+                      cadInteraction: snapshot.cadInteraction
+                  ) else {
+                unavailableSceneNodeIDs.insert(sceneNodeID)
+                continue
+            }
+            availableCounts[sceneNodeID, default: 0] += 1
+        }
+        return Set(availableCounts.compactMap { sceneNodeID, count in
+            count == 1 && unavailableSceneNodeIDs.contains(sceneNodeID) == false
+                ? sceneNodeID
+                : nil
+        })
+    }
+
+    private var presentationOccurrencePickHandler: (
+        (SceneOccurrenceID, ViewportSelectionIntent) -> Void
+    )? {
+        guard selectedTool == .select,
+              selectionScope == .object else {
+            return nil
+        }
+        return handlePresentationOccurrencePick
+    }
+
+    private var presentationOccurrenceHoverHandler: ((SceneOccurrenceID?) -> Void)? {
+        guard selectedTool == .select,
+              selectionScope == .object else {
+            return nil
+        }
+        return handlePresentationOccurrenceHover
+    }
+
+    private func handlePresentationOccurrencePick(
+        _ occurrenceID: SceneOccurrenceID,
+        intent: ViewportSelectionIntent
+    ) {
+        guard let sceneNodeID = snapshot.sceneNodeID(for: occurrenceID) else {
+            reportToolStatus(
+                "Presentation occurrence has no scene-node navigation target.",
+                severity: .warning
+            )
+            isPreviewExpanded = true
+            return
+        }
+        applyViewportSelection(
+            targets: [SelectionTarget(sceneNodeID: sceneNodeID)],
+            intent: intent
+        )
+    }
+
+    private func handlePresentationOccurrenceHover(_ occurrenceID: SceneOccurrenceID?) {
+        guard let occurrenceID,
+              let sceneNodeID = snapshot.sceneNodeID(for: occurrenceID) else {
+            setHoveredTarget(nil)
+            return
+        }
+        setHoveredTarget(SelectionTarget(sceneNodeID: sceneNodeID))
     }
 
     private var canvasDragPreviewKind: ViewportCanvasDragPreviewKind? {
-        switch session.selectedTool {
+        switch selectedTool {
         case .sketch, .solid:
             .rectangle(
                 widthMeters: activeSketchWidthInputMeters,
@@ -1139,7 +1837,7 @@ public struct MainView: View {
             )
         case .polygon:
             .polygon(
-                session.polygonToolState,
+                polygonToolState,
                 radiusMeters: activeSketchLengthInputMeters,
                 rotationAngleRadians: activeSketchAngleInputRadians
             )
@@ -1158,7 +1856,7 @@ public struct MainView: View {
     }
 
     private var canvasPlacementPreviewKind: ViewportCanvasPlacementPreviewKind? {
-        switch session.selectedTool {
+        switch selectedTool {
         case .sketch:
             .rectangle(
                 widthMeters: activeSketchWidthInputMeters,
@@ -1173,7 +1871,7 @@ public struct MainView: View {
             )
         case .polygon:
             .polygon(
-                session.polygonToolState,
+                polygonToolState,
                 radiusMeters: activeSketchLengthInputMeters,
                 rotationAngleRadians: activeSketchAngleInputRadians
             )
@@ -1195,58 +1893,58 @@ public struct MainView: View {
         guard usesSketchAxisConstraint else {
             return nil
         }
-        return session.sketchInputState.axisConstraint
+        return sketchInputState.axisConstraint
     }
 
     private var activeSketchAxisTitle: String {
-        session.sketchInputState.axisConstraint?.statusTitle ?? "Free"
+        sketchInputState.axisConstraint?.statusTitle ?? "Free"
     }
 
     private var activeSketchDimensionInputTitle: String {
-        guard let focus = session.sketchInputState.dimensionInputFocus else {
+        guard let focus = sketchInputState.dimensionInputFocus else {
             return "Off"
         }
         switch focus {
         case .length:
-            guard let lengthMeters = session.sketchInputState.dimensionInputLengthMeters else {
+            guard let lengthMeters = sketchInputState.dimensionInputLengthMeters else {
                 return focus.statusTitle
             }
             let length = WorkspaceInspectorNumberText.lengthString(
                 fromMeters: lengthMeters,
-                unit: session.workspaceState.displayUnit
+                unit: snapshot.workspaceState.displayUnit
             )
             return "\(focus.statusTitle) \(length)"
         case .angle:
-            guard let angleRadians = session.sketchInputState.dimensionInputAngleRadians else {
+            guard let angleRadians = sketchInputState.dimensionInputAngleRadians else {
                 return focus.statusTitle
             }
             let degrees = (angleRadians * 180.0 / Double.pi)
                 .formatted(.number.precision(.fractionLength(0...2)))
             return "\(focus.statusTitle) \(degrees) deg"
         case .width:
-            guard let widthMeters = session.sketchInputState.dimensionInputWidthMeters else {
+            guard let widthMeters = sketchInputState.dimensionInputWidthMeters else {
                 return focus.statusTitle
             }
             let width = WorkspaceInspectorNumberText.lengthString(
                 fromMeters: widthMeters,
-                unit: session.workspaceState.displayUnit
+                unit: snapshot.workspaceState.displayUnit
             )
             return "\(focus.statusTitle) \(width)"
         case .height:
-            guard let heightMeters = session.sketchInputState.dimensionInputHeightMeters else {
+            guard let heightMeters = sketchInputState.dimensionInputHeightMeters else {
                 return focus.statusTitle
             }
             let height = WorkspaceInspectorNumberText.lengthString(
                 fromMeters: heightMeters,
-                unit: session.workspaceState.displayUnit
+                unit: snapshot.workspaceState.displayUnit
             )
             return "\(focus.statusTitle) \(height)"
         }
     }
 
     private var activeSketchLengthInputMeters: Double? {
-        guard session.sketchInputState.dimensionInputFocus == .length,
-              let lengthMeters = session.sketchInputState.dimensionInputLengthMeters,
+        guard sketchInputState.dimensionInputFocus == .length,
+              let lengthMeters = sketchInputState.dimensionInputLengthMeters,
               lengthMeters.isFinite,
               lengthMeters > 0.0 else {
             return nil
@@ -1255,8 +1953,8 @@ public struct MainView: View {
     }
 
     private var activeSketchAngleInputRadians: Double? {
-        guard session.sketchInputState.dimensionInputFocus == .angle,
-              let angleRadians = session.sketchInputState.dimensionInputAngleRadians,
+        guard sketchInputState.dimensionInputFocus == .angle,
+              let angleRadians = sketchInputState.dimensionInputAngleRadians,
               angleRadians.isFinite else {
             return nil
         }
@@ -1265,7 +1963,7 @@ public struct MainView: View {
 
     private var activeSketchWidthInputMeters: Double? {
         guard isRectangleDimensionInputActive,
-              let widthMeters = session.sketchInputState.dimensionInputWidthMeters,
+              let widthMeters = sketchInputState.dimensionInputWidthMeters,
               widthMeters.isFinite,
               widthMeters > 0.0 else {
             return nil
@@ -1275,7 +1973,7 @@ public struct MainView: View {
 
     private var activeSketchHeightInputMeters: Double? {
         guard isRectangleDimensionInputActive,
-              let heightMeters = session.sketchInputState.dimensionInputHeightMeters,
+              let heightMeters = sketchInputState.dimensionInputHeightMeters,
               heightMeters.isFinite,
               heightMeters > 0.0 else {
             return nil
@@ -1284,7 +1982,7 @@ public struct MainView: View {
     }
 
     private var isRectangleDimensionInputActive: Bool {
-        switch session.sketchInputState.dimensionInputFocus {
+        switch sketchInputState.dimensionInputFocus {
         case .width, .height:
             return true
         case .length, .angle, nil:
@@ -1293,7 +1991,7 @@ public struct MainView: View {
     }
 
     private var activeSketchDimensionInputFocuses: [SketchDimensionInputFocus] {
-        switch session.selectedTool {
+        switch selectedTool {
         case .sketch, .solid:
             [.width, .height]
         case .surface:
@@ -1308,7 +2006,7 @@ public struct MainView: View {
     }
 
     private var viewportShiftScrollHandler: ((ViewportScrollDirection) -> Bool)? {
-        guard session.selectedTool == .polygon else {
+        guard selectedTool == .polygon else {
             return nil
         }
         return { direction in
@@ -1321,12 +2019,12 @@ public struct MainView: View {
             return nil
         }
         return { point in
-            session.addSketchReferenceLineAnchor(at: point)
+            addSketchReferenceLineAnchor(at: point)
         }
     }
 
     private var usesSketchAxisConstraint: Bool {
-        switch session.selectedTool {
+        switch selectedTool {
         case .sketch, .polygon, .arc, .spline, .solid, .surface:
             true
         case .select, .sweep, .mesh, .measure, .section:
@@ -1335,7 +2033,7 @@ public struct MainView: View {
     }
 
     private var showsConstructionPlaneHover: Bool {
-        switch session.selectedTool {
+        switch selectedTool {
         case .sketch, .polygon, .arc, .spline, .solid, .surface, .section:
             true
         case .select, .sweep, .mesh, .measure:
@@ -1382,7 +2080,12 @@ public struct MainView: View {
     private var editorToolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
             Button {
-                session.resetDocument()
+                submitSource(.resetDocument(name: "Untitled")) { result in
+                    if result?.didMutate == true {
+                        selectedTool = .select
+                        _ = try await workspace.applySelection(.clear)
+                    }
+                }
             } label: {
                 Image(systemName: "doc.badge.plus")
             }
@@ -1397,7 +2100,7 @@ public struct MainView: View {
             .accessibilityIdentifier("WorkspaceCommand.logs")
 
             Button {
-                session.validateDocument()
+                submitSource(.validateDocument)
             } label: {
                 Image(systemName: "checkmark.seal")
             }
@@ -1415,17 +2118,27 @@ public struct MainView: View {
     }
 
     private var workspaceScaleSummary: WorkspaceScaleStatusSummary {
-        WorkspaceScaleStatusSummary(ruler: session.workspaceState.ruler)
+        WorkspaceScaleStatusSummary(ruler: snapshot.workspaceState.ruler)
     }
 
     private var currentWorkspaceScaleRecommendation: WorkspaceScaleRecommendation? {
-        let workspaceBounds = session.currentEvaluation.flatMap {
-            WorkspaceBoundsService().bounds(for: $0.evaluatedDocument)
-        }
         return WorkspaceScaleRecommendationService().recommendation(
-            for: workspaceBounds,
-            currentRuler: session.workspaceState.ruler
+            for: presentationMeasurementBounds,
+            currentRuler: snapshot.workspaceState.ruler
         )
+    }
+
+    private var presentationMeasurementBounds: MeasurementResult.Bounds? {
+        snapshot.viewport.worldBounds.map {
+            MeasurementResult.Bounds(
+                minX: $0.minimum.x,
+                minY: $0.minimum.y,
+                minZ: $0.minimum.z,
+                maxX: $0.maximum.x,
+                maxY: $0.maximum.y,
+                maxZ: $0.maximum.z
+            )
+        }
     }
 
     private var workspaceScaleFitPromptState: WorkspaceScaleFitPromptState? {
@@ -1435,7 +2148,7 @@ public struct MainView: View {
     private var fixedGridVisualSpacingBinding: Binding<Bool> {
         Binding(
             get: {
-                session.workspaceState.viewportGridSettings.visualSpacingMode == .fixed
+                snapshot.workspaceState.viewportGridSettings.visualSpacingMode == .fixed
             },
             set: { isFixed in
                 applyViewportGridVisualSpacingMode(isFixed ? .fixed : .adaptive)
@@ -1491,7 +2204,7 @@ public struct MainView: View {
 
     private var floatingToolPalette: some View {
         WorkspaceToolPalette(
-            selectedTool: session.selectedTool,
+            selectedTool: selectedTool,
             activate: { activateTool($0) },
             help: { toolHelp(for: $0) },
             accessibilityIdentifier: { canvasToolIdentifier(for: $0) }
@@ -1545,7 +2258,7 @@ public struct MainView: View {
                     }
                     let scaleSummary = workspaceScaleSummary
                     workspaceValueRow("Scale", "\(scaleSummary.presetTitle) · \(scaleSummary.displayUnitTitle)")
-                    workspaceValueRow("Grid", session.workspaceState.viewportGridSettings.visualSpacingMode.title)
+                    workspaceValueRow("Grid", snapshot.workspaceState.viewportGridSettings.visualSpacingMode.title)
                     workspaceValueRow("Step", scaleSummary.minorStepTitle)
                     workspaceValueRow("Major", scaleSummary.majorStepTitle)
                     workspaceValueRow("Visible", scaleSummary.visibleSpanTitle)
@@ -1591,7 +2304,7 @@ public struct MainView: View {
                         help: "2D Construction Plane Snap",
                         accessibilityIdentifier: "WorkspacePlane.twoDSnap"
                     )
-                    if let activeConstructionPlane = session.activeConstructionPlane {
+                    if let activeConstructionPlane = activeConstructionPlane {
                         workspaceValueRow("Active", activeConstructionPlane.name)
                             .accessibilityElement(children: .ignore)
                             .accessibilityLabel("Active Construction Plane")
@@ -1625,10 +2338,22 @@ public struct MainView: View {
                             ForEach(commandCatalog.domainCommands) { command in
                                 WorkspaceDomainCommandRow(
                                     command: command,
-                                    displayUnit: session.workspaceState.displayUnit,
-                                    generation: session.generation
+                                    displayUnit: snapshot.workspaceState.displayUnit,
+                                    generation: snapshot.documentGeneration
                                 ) { request in
-                                    try domainCommandExecutor.execute(request, in: session)
+                                    try await operationSequencer.run {
+                                        guard let current = workspace.view else {
+                                            throw ProjectWorkspaceActionError(
+                                                code: .snapshotUnavailable,
+                                                message: "The project workspace has no published view snapshot."
+                                            )
+                                        }
+                                        let plan = try domainCommandDispatcher.dispatch(
+                                            request,
+                                            from: current
+                                        )
+                                        return try await workspace.execute(plan)
+                                    }
                                 }
                             }
                         }
@@ -1637,8 +2362,8 @@ public struct MainView: View {
                 }
 
                 workspaceRailSection("Scene") {
-                    workspaceValueRow("Bodies", "\(session.evaluatedBodyCount)")
-                    workspaceValueRow("Nodes", "\(session.document.productMetadata.sceneNodes.count)")
+                    workspaceValueRow("Bodies", "\(snapshot.evaluationSnapshot.bodyCount)")
+                    workspaceValueRow("Nodes", "\(snapshot.document.document.productMetadata.sceneNodes.count)")
                     workspaceValueRow("Issues", diagnosticSummary)
                 }
             }
@@ -1678,13 +2403,13 @@ public struct MainView: View {
             isObjectTargetingEnabled: isObjectTargetingEnabled,
             constructionPlaneTitle: constructionPlaneSnapSummary,
             isConstructionPlaneActive: workspacePlaneMode != .adaptive
-                || session.activeConstructionPlane != nil
+                || activeConstructionPlane != nil
                 || viewAlignedConstructionPlaneRequest != nil,
             surfaceAnalysisTitle: surfaceAnalysisOverlaySummary,
             isSurfaceAnalysisActive: surfaceAnalysisOverlaySummary != "Off",
             savedViewCount: savedViews.count,
             diagnosticTitle: diagnosticSummary,
-            hasDiagnostics: !session.diagnostics.isEmpty
+            hasDiagnostics: !diagnostics.isEmpty
         ) {
             setUtilityRailExpanded(true)
         }
@@ -1698,9 +2423,9 @@ public struct MainView: View {
 
     private var isViewportContextPanelVisible: Bool {
         WorkspaceViewportContextPanelVisibility.isVisible(
-            selectedTool: session.selectedTool,
+            selectedTool: selectedTool,
             selectedTargetCount: selectedTargetCount,
-            selectedReferenceCount: session.selection.selectedReferences.count,
+            selectedReferenceCount: snapshot.selection.selectedReferences.count,
             isDimensionCommandActive: dimensionCommandState.isActive,
             hasViewAlignedConstructionPlaneRequest: viewAlignedConstructionPlaneRequest != nil
         )
@@ -1710,7 +2435,7 @@ public struct MainView: View {
         WorkspaceViewportContextPanelVisibility.selectionPresentation(
             selectedSceneNodeCount: selectedSceneNodes.count,
             selectedTargetCount: selectedTargetCount,
-            selectedReferenceCount: session.selection.selectedReferences.count
+            selectedReferenceCount: snapshot.selection.selectedReferences.count
         )
     }
 
@@ -1737,27 +2462,30 @@ public struct MainView: View {
 
     private var viewportContextPanelContent: some View {
         HStack(spacing: 8) {
-            if session.selectedTool == .sweep {
-                let preview = session.sweepSelectionPreview()
+            if selectedTool == .sweep {
+                let preview = SweepSelectionPlanningService(
+                    document: snapshot.document.document,
+                    selection: displaySelection
+                ).preview()
                 WorkspaceSweepContextPanel(
                     preview: preview,
                     sectionLabel: sweepPreviewSectionLabel(preview.section),
                     pathLabel: sweepPreviewFeatureLabel(preview.pathFeatureID)
                 )
-            } else if session.selectedTool == .polygon {
+            } else if selectedTool == .polygon {
                 WorkspacePolygonContextPanel(
-                    tool: session.selectedTool,
-                    state: session.polygonToolState,
+                    tool: selectedTool,
+                    state: polygonToolState,
                     planeTitle: workspacePlaneMode.title,
                     axisTitle: activeSketchAxisTitle,
-                    referenceLineAnchorCount: session.sketchInputState.referenceLineAnchors.count,
+                    referenceLineAnchorCount: sketchInputState.referenceLineAnchors.count,
                     dimensionInputTitle: activeSketchDimensionInputTitle,
                     isGridSnapEnabled: isGridSnapEnabled,
-                    decreaseSideCount: { _ = session.adjustPolygonSideCount(by: -1) },
-                    increaseSideCount: { _ = session.adjustPolygonSideCount(by: 1) },
-                    toggleSizingMode: { _ = session.togglePolygonSizingMode() },
-                    toggleInclinationMode: { _ = session.togglePolygonInclinationMode() },
-                    toggleKnifeMode: { _ = session.togglePolygonCutsFaces() }
+                    decreaseSideCount: { _ = adjustPolygonSideCount(by: -1) },
+                    increaseSideCount: { _ = adjustPolygonSideCount(by: 1) },
+                    toggleSizingMode: { _ = togglePolygonSizingMode() },
+                    toggleInclinationMode: { _ = togglePolygonInclinationMode() },
+                    toggleKnifeMode: { _ = togglePolygonCutsFaces() }
                 ) {
                     workspaceSketchDimensionInputField
                 }
@@ -1770,7 +2498,7 @@ public struct MainView: View {
                 case .targetSelection:
                     selectionContextPanelContent(selectedSceneNodes)
                 case .referenceSelection:
-                    referenceSelectionContextPanelContent(session.selection.selectedReferences)
+                    referenceSelectionContextPanelContent(snapshot.selection.selectedReferences)
                 }
             }
             if viewAlignedConstructionPlaneRequest != nil {
@@ -1789,8 +2517,8 @@ public struct MainView: View {
     @ViewBuilder
     private func idleViewportContextPanelContent() -> some View {
         workspaceStatusChip(
-            session.selectedTool.title,
-            systemImage: session.selectedTool.systemImage,
+            selectedTool.title,
+            systemImage: selectedTool.systemImage,
             tint: .accentColor
         )
         workspaceContextDivider
@@ -1801,10 +2529,10 @@ public struct MainView: View {
                 activeSketchAxisTitle,
                 accessibilityIdentifier: "WorkspaceSketch.axisConstraint"
             )
-            if session.sketchInputState.referenceLineAnchors.isEmpty == false {
+            if sketchInputState.referenceLineAnchors.isEmpty == false {
                 workspaceValuePill(
                     "Refs",
-                    "\(session.sketchInputState.referenceLineAnchors.count)",
+                    "\(sketchInputState.referenceLineAnchors.count)",
                     accessibilityIdentifier: "WorkspaceSketch.referenceLines"
                 )
             }
@@ -1938,8 +2666,17 @@ public struct MainView: View {
             help: primaryNode?.isVisible == false ? "Show Selection" : "Hide Selection",
             accessibilityIdentifier: "WorkspaceSelection.visible"
         ) {
-            for node in nodes {
-                session.setSceneNodeVisibility(node.id, isVisible: !node.isVisible)
+            let nodeIDs = nodes.map(\.id)
+            submitSource(name: "setSelectionVisibility") { current in
+                try nodeIDs.map { id in
+                    guard let node = current.document.document.productMetadata.sceneNodes[id] else {
+                        throw EditorError(
+                            code: .referenceUnresolved,
+                            message: "Selected scene node \(id) no longer exists."
+                        )
+                    }
+                    return .setSceneNodeVisibility(id: id, isVisible: !node.isVisible)
+                }
             }
         }
 
@@ -1948,8 +2685,17 @@ public struct MainView: View {
             help: primaryNode?.isLocked == true ? "Unlock Selection" : "Lock Selection",
             accessibilityIdentifier: "WorkspaceSelection.locked"
         ) {
-            for node in nodes {
-                session.setSceneNodeLock(node.id, isLocked: !node.isLocked)
+            let nodeIDs = nodes.map(\.id)
+            submitSource(name: "setSelectionLock") { current in
+                try nodeIDs.map { id in
+                    guard let node = current.document.document.productMetadata.sceneNodes[id] else {
+                        throw EditorError(
+                            code: .referenceUnresolved,
+                            message: "Selected scene node \(id) no longer exists."
+                        )
+                    }
+                    return .setSceneNodeLock(id: id, isLocked: !node.isLocked)
+                }
             }
         }
 
@@ -1958,9 +2704,12 @@ public struct MainView: View {
             help: "Reset Transform",
             accessibilityIdentifier: "WorkspaceSelection.resetTransform"
         ) {
-            for node in nodes {
-                session.setSceneNodeTransform(node.id, localTransform: .identity)
-            }
+            submitSource(
+                nodes.map { node in
+                    .setSceneNodeTransform(id: node.id, localTransform: .identity)
+                },
+                name: "resetSelectionTransform"
+            )
         }
         .disabled(nodes.allSatisfy { $0.localTransform.matrix == .identity })
     }
@@ -2140,7 +2889,7 @@ public struct MainView: View {
         _ entry: ConstructionPlaneSummaryResult.Entry
     ) -> some View {
         let isRenaming = constructionPlaneRenameTargetID == entry.id
-        let isSelected = entry.selectionTarget().map { session.selection.containsTarget($0) } ?? false
+        let isSelected = entry.selectionTarget().map { snapshot.selection.containsTarget($0) } ?? false
         let identifierSuffix = String(describing: entry.id)
         return HStack(spacing: 6) {
             Button {
@@ -2362,7 +3111,7 @@ public struct MainView: View {
 
     @ViewBuilder
     private var workspaceSketchDimensionInputField: some View {
-        if let focus = session.sketchInputState.dimensionInputFocus {
+        if let focus = sketchInputState.dimensionInputFocus {
             HStack(spacing: 5) {
                 Text(focus.statusTitle)
                     .foregroundStyle(.secondary)
@@ -2374,7 +3123,7 @@ public struct MainView: View {
                     )
                     .multilineTextAlignment(.trailing)
                     .frame(width: 64)
-                    Text(sketchDimensionLengthUnitSymbol(session.sketchInputState.dimensionInputLengthMeters))
+                    Text(sketchDimensionLengthUnitSymbol(sketchInputState.dimensionInputLengthMeters))
                         .foregroundStyle(.secondary)
                 case .angle:
                     TextField(
@@ -2393,7 +3142,7 @@ public struct MainView: View {
                     )
                     .multilineTextAlignment(.trailing)
                     .frame(width: 64)
-                    Text(sketchDimensionLengthUnitSymbol(session.sketchInputState.dimensionInputWidthMeters))
+                    Text(sketchDimensionLengthUnitSymbol(sketchInputState.dimensionInputWidthMeters))
                         .foregroundStyle(.secondary)
                 case .height:
                     TextField(
@@ -2402,7 +3151,7 @@ public struct MainView: View {
                     )
                     .multilineTextAlignment(.trailing)
                     .frame(width: 64)
-                    Text(sketchDimensionLengthUnitSymbol(session.sketchInputState.dimensionInputHeightMeters))
+                    Text(sketchDimensionLengthUnitSymbol(sketchInputState.dimensionInputHeightMeters))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -2422,12 +3171,12 @@ public struct MainView: View {
     private var workspaceSketchLengthInputBinding: Binding<String> {
         Binding<String>(
             get: {
-                sketchDimensionLengthInputText(session.sketchInputState.dimensionInputLengthMeters)
+                sketchDimensionLengthInputText(sketchInputState.dimensionInputLengthMeters)
             },
             set: { text in
                 setSketchDimensionInputLength(
                     text,
-                    currentMeters: session.sketchInputState.dimensionInputLengthMeters
+                    currentMeters: sketchInputState.dimensionInputLengthMeters
                 )
             }
         )
@@ -2436,13 +3185,13 @@ public struct MainView: View {
     private var workspaceSketchAngleInputBinding: Binding<Double> {
         Binding<Double>(
             get: {
-                guard let angleRadians = session.sketchInputState.dimensionInputAngleRadians else {
+                guard let angleRadians = sketchInputState.dimensionInputAngleRadians else {
                     return 0.0
                 }
                 return angleRadians * 180.0 / Double.pi
             },
             set: { value in
-                _ = session.setSketchDimensionInputAngle(value * Double.pi / 180.0)
+                _ = setSketchDimensionInputAngle(value * Double.pi / 180.0)
             }
         )
     }
@@ -2450,12 +3199,12 @@ public struct MainView: View {
     private var workspaceSketchWidthInputBinding: Binding<String> {
         Binding<String>(
             get: {
-                sketchDimensionLengthInputText(session.sketchInputState.dimensionInputWidthMeters)
+                sketchDimensionLengthInputText(sketchInputState.dimensionInputWidthMeters)
             },
             set: { text in
                 setSketchDimensionInputWidth(
                     text,
-                    currentMeters: session.sketchInputState.dimensionInputWidthMeters
+                    currentMeters: sketchInputState.dimensionInputWidthMeters
                 )
             }
         )
@@ -2464,12 +3213,12 @@ public struct MainView: View {
     private var workspaceSketchHeightInputBinding: Binding<String> {
         Binding<String>(
             get: {
-                sketchDimensionLengthInputText(session.sketchInputState.dimensionInputHeightMeters)
+                sketchDimensionLengthInputText(sketchInputState.dimensionInputHeightMeters)
             },
             set: { text in
                 setSketchDimensionInputHeight(
                     text,
-                    currentMeters: session.sketchInputState.dimensionInputHeightMeters
+                    currentMeters: sketchInputState.dimensionInputHeightMeters
                 )
             }
         )
@@ -2531,7 +3280,7 @@ public struct MainView: View {
     private func sketchDimensionLengthInputText(_ meters: Double?) -> String {
         workspaceLengthFieldPresentation(
             fromMeters: meters ?? 0.0,
-            preferredUnit: session.workspaceState.displayUnit
+            preferredUnit: snapshot.workspaceState.displayUnit
         ).text
     }
 
@@ -2541,11 +3290,11 @@ public struct MainView: View {
 
     private func sketchDimensionLengthDefaultUnit(_ meters: Double?) -> LengthDisplayUnit {
         guard let meters else {
-            return session.workspaceState.displayUnit
+            return snapshot.workspaceState.displayUnit
         }
         return workspaceLengthFieldPresentation(
             fromMeters: meters,
-            preferredUnit: session.workspaceState.displayUnit
+            preferredUnit: snapshot.workspaceState.displayUnit
         ).unit
     }
 
@@ -2559,7 +3308,7 @@ public struct MainView: View {
         ) else {
             return
         }
-        _ = session.setSketchDimensionInputLength(meters)
+        _ = setSketchDimensionInputLength(meters)
     }
 
     private func setSketchDimensionInputWidth(
@@ -2572,7 +3321,7 @@ public struct MainView: View {
         ) else {
             return
         }
-        _ = session.setSketchDimensionInputWidth(meters)
+        _ = setSketchDimensionInputWidth(meters)
     }
 
     private func setSketchDimensionInputHeight(
@@ -2585,7 +3334,7 @@ public struct MainView: View {
         ) else {
             return
         }
-        _ = session.setSketchDimensionInputHeight(meters)
+        _ = setSketchDimensionInputHeight(meters)
     }
 
     private func sweepPreviewFeatureLabel(_ featureID: FeatureID?) -> String {
@@ -2624,7 +3373,7 @@ public struct MainView: View {
     }
 
     private var evaluationStatusSystemImage: String {
-        switch session.evaluationStatus {
+        switch snapshot.evaluationSnapshot.status {
         case .notEvaluated:
             "circle.dashed"
         case .valid:
@@ -2635,7 +3384,7 @@ public struct MainView: View {
     }
 
     private var evaluationStatusTint: Color {
-        switch session.evaluationStatus {
+        switch snapshot.evaluationSnapshot.status {
         case .notEvaluated:
             .secondary
         case .valid:
@@ -2653,7 +3402,7 @@ public struct MainView: View {
             slotProfileCommandState.deactivate()
             viewAlignedConstructionPlaneRequest = nil
         }
-        let result = session.activateTool(tool)
+        let result = setActiveTool(tool)
         if result.revealsDiagnostics {
             isPreviewExpanded = true
         }
@@ -2696,7 +3445,7 @@ public struct MainView: View {
             return
         }
 
-        if session.selectedTool == .select {
+        if selectedTool == .select {
             applyViewportSelection(hit: target.hit, intent: target.selectionIntent)
             return
         }
@@ -2706,7 +3455,7 @@ public struct MainView: View {
         let targetSceneNodeID: SceneNodeID?
         if let hit = effectiveHit {
             guard let sceneNodeID = selectionTargetResolver.sceneNodeID(for: hit) else {
-                session.reportToolStatus(
+                reportToolStatus(
                     "Viewport selection could not resolve a scene node.",
                     severity: .warning
                 )
@@ -2728,21 +3477,156 @@ public struct MainView: View {
             return
         }
         let snappedInput = snappedModelInput(canvasInput.point, modifierFlags: target.modifierFlags)
-        let result = session.activateSelectedToolFromCanvas(
-            targetSceneNodeID: targetSceneNodeID,
-            modelPoint: snappedInput.point,
-            modelWorldPoint: resolvedCanvasWorldPoint(
-                for: snappedInput.point,
-                snappedWorldPoint: snappedInput.worldPoint,
-                fallbackWorldPoint: canvasInput.worldPoint,
-                sketchPlane: sketchPlane
-            ),
-            sketchPlane: sketchPlane,
-            placementCellMeters: viewportProjectedGridStepMeters
+        let worldPoint = resolvedCanvasWorldPoint(
+            for: snappedInput.point,
+            snappedWorldPoint: snappedInput.worldPoint,
+            fallbackWorldPoint: canvasInput.worldPoint,
+            sketchPlane: sketchPlane
         )
-        if result.revealsDiagnostics {
+        switch selectedTool {
+        case .measure:
+            measureCanvasTarget(targetSceneNodeID)
+        case .mesh:
+            inspectCanvasMesh(targetSceneNodeID)
+        default:
+            let tool = selectedTool
+            let polygonState = polygonToolState
+            let currentSketchInputState = sketchInputState
+            let placementCellMeters = viewportProjectedGridStepMeters
+            submitSource(name: "canvasClick") { current in
+                let planner = WorkspaceCanvasCommandPlanner(
+                    context: WorkspaceCanvasCommandPlanner.Context(
+                        document: current.document.document,
+                        selection: current.selection,
+                        workspaceState: current.workspaceState,
+                        objectRegistry: current.objectRegistry,
+                        polygonState: polygonState,
+                        sketchInputState: currentSketchInputState
+                    )
+                )
+                do {
+                    guard let command = try planner.clickCommand(
+                        tool: tool,
+                        targetSceneNodeID: targetSceneNodeID,
+                        modelPoint: snappedInput.point,
+                        modelWorldPoint: worldPoint,
+                        sketchPlane: sketchPlane,
+                        placementCellMeters: placementCellMeters
+                    ) else {
+                        return []
+                    }
+                    return [command]
+                } catch let failure as CanvasSketchCurveDrafts.Failure {
+                    throw EditorError(code: .commandInvalid, message: failure.message)
+                }
+            } completion: { results in
+                try await finishCanvasSourceCommand(results.last)
+            }
+        }
+    }
+
+    private func measureCanvasTarget(_ targetSceneNodeID: SceneNodeID?) {
+        let task = operationSequencer.enqueue {
+            guard let current = workspace.view else {
+                throw ProjectWorkspaceActionError(
+                    code: .snapshotUnavailable,
+                    message: "The project workspace has no published view snapshot."
+                )
+            }
+            var selection = current.selection
+            try selection.selectSceneNode(targetSceneNodeID, in: current.document.document)
+            let selected = try await workspace.applySelection(.replace(selection))
+            let result = try MeasurementService().measure(
+                document: selected.document.document,
+                selection: selected.selection,
+                ruler: selected.workspaceState.ruler,
+                objectRegistry: selected.objectRegistry,
+                currentEvaluation: selected.cadInteraction,
+                currentGeneration: selected.documentGeneration
+            )
+            reportToolStatus(result.message)
             isPreviewExpanded = true
         }
+        observeWorkspaceOperation(task)
+    }
+
+    private func inspectCanvasMesh(_ targetSceneNodeID: SceneNodeID?) {
+        let task = operationSequencer.enqueue {
+            guard var current = workspace.view else {
+                throw ProjectWorkspaceActionError(
+                    code: .snapshotUnavailable,
+                    message: "The project workspace has no published view snapshot."
+                )
+            }
+            if let targetSceneNodeID {
+                var selection = current.selection
+                try selection.selectSceneNode(targetSceneNodeID, in: current.document.document)
+                current = try await workspace.applySelection(.replace(selection))
+            }
+            let summary = try MeshSummaryService().summarize(
+                document: current.document.document,
+                ruler: current.workspaceState.ruler,
+                objectRegistry: current.objectRegistry,
+                currentEvaluation: current.cadInteraction,
+                currentGeneration: current.documentGeneration
+            )
+            reportToolStatus(summary.message)
+            isPreviewExpanded = true
+        }
+        observeWorkspaceOperation(task)
+    }
+
+    private func observeWorkspaceOperation<Result: Sendable>(
+        _ task: Task<Result, Error>
+    ) {
+        Task { @MainActor in
+            do {
+                _ = try await task.value
+            } catch {
+                reportToolStatus(error.localizedDescription, severity: .warning)
+                isPreviewExpanded = true
+            }
+        }
+    }
+
+    private func finishCanvasSourceCommand(_ result: CommandExecutionResult?) async throws {
+        guard result?.didMutate == true else {
+            return
+        }
+        setActiveTool(.select)
+        guard let current = workspace.view,
+              let newestSceneNodeID = newestVisibleSceneNodeID(
+                  in: current.document.document.productMetadata
+              ) else {
+            return
+        }
+        var selection = SelectionModel.empty
+        try selection.selectSceneNode(
+            newestSceneNodeID,
+            in: current.document.document
+        )
+        _ = try await workspace.applySelection(.replace(selection))
+    }
+
+    private func newestVisibleSceneNodeID(
+        in metadata: ProductMetadata
+    ) -> SceneNodeID? {
+        var newestID: SceneNodeID?
+        func visit(_ id: SceneNodeID) {
+            guard let node = metadata.sceneNodes[id] else {
+                return
+            }
+            if node.isVisible {
+                newestID = id
+            }
+            for childID in node.childIDs {
+                visit(childID)
+            }
+        }
+        for rootID in metadata.rootSceneNodeIDs {
+            visit(rootID)
+        }
+        return newestID
     }
 
     private func handleWorkspaceKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
@@ -2757,8 +3641,8 @@ public struct MainView: View {
 
     private var workspaceKeyboardContext: WorkspaceKeyboardContext {
         WorkspaceKeyboardContext(
-            isSelectToolActive: session.selectedTool == .select,
-            isPolygonToolActive: session.selectedTool == .polygon,
+            isSelectToolActive: selectedTool == .select,
+            isPolygonToolActive: selectedTool == .polygon,
             usesSketchAxisConstraint: usesSketchAxisConstraint,
             isDimensionCommandActive: dimensionCommandState.isActive,
             isSlotProfileCommandActive: slotProfileCommandState.isActive,
@@ -2800,7 +3684,7 @@ public struct MainView: View {
             dimensionCommandState.deactivate()
             return .handled
         case .focusNextSketchDimensionInput:
-            _ = session.focusNextSketchDimensionInput(
+            _ = focusNextSketchDimensionInput(
                 availableFocuses: activeSketchDimensionInputFocuses
             )
             return .handled
@@ -2840,7 +3724,7 @@ public struct MainView: View {
             regionOffsetCommandState.toggleCombinedRegions()
             if regionOffsetCommandState.usesCombinedRegions,
                selectedRegionTargets.count < 2 {
-                session.reportToolStatus(
+                reportToolStatus(
                     "Combined Offset Region requires multiple selected regions.",
                     severity: .warning
                 )
@@ -2873,19 +3757,19 @@ public struct MainView: View {
             slideSelectedPolySplineSurfaceVertices(vertexTargets, direction: direction)
             return .handled
         case .adjustPolygonSideCount(let offset):
-            _ = session.adjustPolygonSideCount(by: offset)
+            _ = adjustPolygonSideCount(by: offset)
             return .handled
         case .toggleSketchAxisConstraint(let axisConstraint):
-            _ = session.toggleSketchAxisConstraint(axisConstraint)
+            _ = toggleSketchAxisConstraint(axisConstraint)
             return .handled
         case .togglePolygonSizingMode:
-            _ = session.togglePolygonSizingMode()
+            _ = togglePolygonSizingMode()
             return .handled
         case .togglePolygonInclinationMode:
-            _ = session.togglePolygonInclinationMode()
+            _ = togglePolygonInclinationMode()
             return .handled
         case .togglePolygonCutsFaces:
-            _ = session.togglePolygonCutsFaces()
+            _ = togglePolygonCutsFaces()
             return .handled
         }
     }
@@ -2896,7 +3780,7 @@ public struct MainView: View {
         let targets = objectTargets + sketchTargets
         guard !targets.isEmpty else {
             dimensionCommandState.deactivate()
-            session.reportToolStatus(
+            reportToolStatus(
                 "Dimension requires a selected object, face, edge, or sketch curve target.",
                 severity: .warning
             )
@@ -2911,7 +3795,7 @@ public struct MainView: View {
             )
             guard !entries.isEmpty else {
                 dimensionCommandState.deactivate()
-                session.reportToolStatus(
+                reportToolStatus(
                     "Dimension found no editable values for the selected target.",
                     severity: .warning
                 )
@@ -2921,11 +3805,11 @@ public struct MainView: View {
             dimensionCommandState.activate(entries: entries)
         } catch let error as EditorError {
             dimensionCommandState.deactivate()
-            session.reportToolStatus(error.message, severity: .warning)
+            reportToolStatus(error.message, severity: .warning)
             isPreviewExpanded = true
         } catch {
             dimensionCommandState.deactivate()
-            session.reportToolStatus(String(describing: error), severity: .warning)
+            reportToolStatus(String(describing: error), severity: .warning)
             isPreviewExpanded = true
         }
     }
@@ -2937,9 +3821,9 @@ public struct MainView: View {
         var entries: [DimensionCommandEntry] = []
         if !objectTargets.isEmpty {
             let summary = try ObjectDimensionSummaryService().summarize(
-                document: session.document,
+                document: snapshot.document.document,
                 targets: objectTargets,
-                displayUnit: session.workspaceState.displayUnit,
+                displayUnit: snapshot.workspaceState.displayUnit,
                 objectRegistry: objectRegistry
             )
             entries += summary.entries.map(DimensionCommandEntry.init(object:))
@@ -2959,9 +3843,9 @@ public struct MainView: View {
             }
             if !sketchEntityTargets.isEmpty {
                 let summary = try SketchDimensionSummaryService().summarize(
-                    document: session.document,
+                    document: snapshot.document.document,
                     targets: sketchEntityTargets,
-                    displayUnit: session.workspaceState.displayUnit,
+                    displayUnit: snapshot.workspaceState.displayUnit,
                     objectRegistry: objectRegistry
                 )
                 entries += summary.entries.map(DimensionCommandEntry.init(sketch:))
@@ -2978,18 +3862,18 @@ public struct MainView: View {
     ) throws -> [DimensionCommandEntry] {
         do {
             let summary = try SketchDimensionSummaryService().summarize(
-                document: session.document,
+                document: snapshot.document.document,
                 targets: [target],
-                displayUnit: session.workspaceState.displayUnit,
+                displayUnit: snapshot.workspaceState.displayUnit,
                 objectRegistry: objectRegistry
             )
             return summary.entries.map(DimensionCommandEntry.init(sketch:))
         } catch let sketchError as EditorError {
             do {
                 let summary = try ObjectDimensionSummaryService().summarize(
-                    document: session.document,
+                    document: snapshot.document.document,
                     targets: [target],
-                    displayUnit: session.workspaceState.displayUnit,
+                    displayUnit: snapshot.workspaceState.displayUnit,
                     objectRegistry: objectRegistry
                 )
                 return summary.entries.map(DimensionCommandEntry.init(object:))
@@ -3008,7 +3892,7 @@ public struct MainView: View {
         guard let entry = dimensionCommandState.activeEntry,
               let value = dimensionCommandState.currentValue,
               value.isFinite else {
-            session.reportToolStatus(
+            reportToolStatus(
                 "Dimension value must be finite.",
                 severity: .warning
             )
@@ -3016,18 +3900,18 @@ public struct MainView: View {
             return
         }
 
-        let result: CommandExecutionResult?
+        let command: EditorCommand
         switch entry.source {
         case .object(let kind):
             guard value > 0.0 else {
-                session.reportToolStatus(
+                reportToolStatus(
                     "Dimension value must be a positive length.",
                     severity: .warning
                 )
                 isPreviewExpanded = true
                 return
             }
-            result = session.setObjectDimension(
+            command = .setObjectDimension(
                 target: entry.target,
                 kind: kind,
                 value: .length(value, .meter)
@@ -3037,7 +3921,7 @@ public struct MainView: View {
             switch entry.valueKind {
             case .length:
                 guard value > 0.0 else {
-                    session.reportToolStatus(
+                    reportToolStatus(
                         "Dimension value must be a positive length.",
                         severity: .warning
                     )
@@ -3048,38 +3932,55 @@ public struct MainView: View {
             case .angle:
                 expression = .angle(value, .radian)
             }
-            result = session.setSketchEntityDimension(
+            command = .setSketchEntityDimension(
                 target: entry.target,
                 kind: kind,
                 value: expression
             )
         }
-        if result?.diagnostics.isEmpty == false || result == nil {
-            isPreviewExpanded = true
+        submitSource(command) { result in
+            if result?.diagnostics.isEmpty == false || result == nil {
+                isPreviewExpanded = true
+            }
         }
         dimensionCommandState.deactivate()
     }
 
     private func createConstructionPlaneFromSelectedTargets(alignsView: Bool) -> KeyPress.Result {
-        guard let targets = selectedConstructionPlaneTargets else {
+        guard selectedConstructionPlaneTargets != nil else {
             return .ignored
         }
-        let result = session.createConstructionPlaneFromTargets(
-            targets,
-            viewNormal: viewportProjectionBasis.viewNormal
-        )
-        let activationResult = result?.createdConstructionPlaneID.flatMap { id in
-            session.setActiveConstructionPlane(id: id)
-        }
-        workspacePlaneMode = .adaptive
-        if result?.diagnostics.isEmpty == false || result == nil || activationResult == nil {
-            isPreviewExpanded = true
-        } else if alignsView {
-            if let activeConstructionPlane = session.activeConstructionPlane {
-                alignViewport(
-                    to: activeConstructionPlane.plane,
-                    name: activeConstructionPlane.name
+        let viewNormal = viewportProjectionBasis.viewNormal
+        submitSource(name: "createConstructionPlaneFromTargets") { current in
+            guard let targets = WorkspaceConstructionPlaneTargetSelectionBuilder(
+                document: current.document.document,
+                selection: current.selection
+            ).constructionPlaneTargets else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Construction plane creation requires a supported current selection."
                 )
+            }
+            return [
+                .createConstructionPlaneFromTargets(
+                    name: nextSceneNodeName(
+                        prefix: "Custom Plane",
+                        in: current.document.document
+                    ),
+                    targets: targets,
+                    viewNormal: viewNormal
+                ),
+            ]
+        } completion: { results in
+            guard let id = results.last?.createdConstructionPlaneID else {
+                isPreviewExpanded = true
+                return
+            }
+            let published = try await workspace.applyWorkspace([.setActiveConstructionPlane(id)])
+            workspacePlaneMode = .adaptive
+            if alignsView,
+               let plane = published.document.document.productMetadata.constructionPlanes[id] {
+                alignViewport(to: plane.plane, name: plane.name)
             }
         }
         return .handled
@@ -3101,7 +4002,7 @@ public struct MainView: View {
             return
         }
         if selectionScope == .vertex, selectedVertexTargets.isEmpty == false {
-            session.reportToolStatus(
+            reportToolStatus(
                 "Slide Surface CV requires generated PolySpline surface CV selections.",
                 severity: .warning
             )
@@ -3112,7 +4013,7 @@ public struct MainView: View {
             if selectionScope != .sketchEntity {
                 selectionScope = .sketchEntity
             }
-            session.reportToolStatus(
+            reportToolStatus(
                 entity.entityKind == "spline"
                     ? "Slide requires selected spline control vertices."
                     : "Slide Curve CV requires a spline curve target.",
@@ -3122,7 +4023,7 @@ public struct MainView: View {
             return
         }
         selectionScope = .sketchEntity
-        session.reportToolStatus(
+        reportToolStatus(
             "Slide requires selected curve CVs or surface CVs.",
             severity: .warning
         )
@@ -3135,7 +4036,7 @@ public struct MainView: View {
         edgeOffsetCommandState.deactivate()
         slotProfileCommandState.deactivate()
         slideCommandState.activateCurveControlVertices()
-        session.reportToolStatus("Slide Curve CV active.")
+        reportToolStatus("Slide Curve CV active.")
     }
 
     private func activateSlideSurfaceControlVerticesCommand() {
@@ -3144,39 +4045,48 @@ public struct MainView: View {
         edgeOffsetCommandState.deactivate()
         slotProfileCommandState.deactivate()
         slideCommandState.activateSurfaceControlVertices()
-        session.reportToolStatus("Slide Surface CV active.")
+        reportToolStatus("Slide Surface CV active.")
     }
 
-    @discardableResult
-    private func activateConstructionPlane(_ id: ConstructionPlaneSourceID) -> Bool {
-        if session.workspaceState.activeConstructionPlaneID == id {
-            return true
+    private func activateConstructionPlane(
+        _ id: ConstructionPlaneSourceID,
+        completion: @escaping @MainActor @Sendable (ProjectViewSnapshot) -> Void = { _ in }
+    ) {
+        applyWorkspace(commands: { current in
+            guard current.document.document.productMetadata.constructionPlanes[id] != nil else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Construction plane no longer exists."
+                )
+            }
+            return current.workspaceState.activeConstructionPlaneID == id
+                ? []
+                : [.setActiveConstructionPlane(id)]
+        }) { published in
+            workspacePlaneMode = .adaptive
+            if let activeName = published.document.document.productMetadata.constructionPlanes[id]?.name {
+                reportToolStatus("Active construction plane set to \(activeName).")
+            }
+            completion(published)
         }
-        let result = session.setActiveConstructionPlane(id: id)
-        workspacePlaneMode = .adaptive
-        if result?.diagnostics.isEmpty == false || result == nil {
-            isPreviewExpanded = true
-            return false
-        } else if let activeName = session.activeConstructionPlane?.name {
-            session.reportToolStatus("Active construction plane set to \(activeName).")
-        }
-        return true
     }
 
     private func activateAndAlignConstructionPlane(
         _ entry: ConstructionPlaneSummaryResult.Entry
     ) {
-        guard activateConstructionPlane(entry.id) else {
-            return
+        activateConstructionPlane(entry.id) { published in
+            guard let plane = published.document.document.productMetadata.constructionPlanes[entry.id] else {
+                return
+            }
+            alignViewport(to: plane.plane, name: plane.name)
         }
-        alignViewport(to: entry.plane, name: entry.name)
     }
 
     private func updateConstructionPlaneFromView(
         _ entry: ConstructionPlaneSummaryResult.Entry
     ) {
         guard let viewNormal = viewportProjectionBasis.viewNormal else {
-            session.reportToolStatus(
+            reportToolStatus(
                 "Construction plane update requires a resolved viewport normal.",
                 severity: .warning
             )
@@ -3184,45 +4094,33 @@ public struct MainView: View {
             return
         }
 
-        do {
-            let plane = try WorkspaceConstructionPlaneEditBuilder().planePreservingOrigin(
-                from: entry.plane,
+        commitConstructionPlaneEdit(
+            entry,
+            successMessage: "Updated construction plane \(entry.name) from current view."
+        ) { source, document in
+            try WorkspaceConstructionPlaneEditBuilder().planePreservingOrigin(
+                from: source.plane,
                 viewNormal: viewNormal,
-                tolerance: session.document.modelingSettings.tolerance
+                tolerance: document.modelingSettings.tolerance
             )
-            let result = session.setConstructionPlane(id: entry.id, plane: plane)
-            if result?.diagnostics.isEmpty == false || result == nil {
-                isPreviewExpanded = true
-            } else {
-                session.reportToolStatus("Updated construction plane \(entry.name) from current view.")
-            }
-        } catch let error as EditorError {
-            session.reportToolStatus(error.message, severity: .warning)
-            isPreviewExpanded = true
-        } catch {
-            session.reportToolStatus(
-                "Construction plane update failed.",
-                severity: .warning
-            )
-            isPreviewExpanded = true
         }
     }
 
     private func activateSelectedConstructionPlane() {
         guard let entry = selectedConstructionPlaneEntry else {
-            session.reportToolStatus(
+            reportToolStatus(
                 "Select one construction plane to activate it.",
                 severity: .warning
             )
             isPreviewExpanded = true
             return
         }
-        _ = activateConstructionPlane(entry.id)
+        activateConstructionPlane(entry.id)
     }
 
     private func updateSelectedConstructionPlaneFromView() {
         guard let entry = selectedConstructionPlaneEntry else {
-            session.reportToolStatus(
+            reportToolStatus(
                 "Select one construction plane to update it from the current view.",
                 severity: .warning
             )
@@ -3237,34 +4135,23 @@ public struct MainView: View {
         value: Double
     ) {
         guard let entry = selectedConstructionPlaneEntry else {
-            session.reportToolStatus(
+            reportToolStatus(
                 "Select one construction plane before editing its origin.",
                 severity: .warning
             )
             isPreviewExpanded = true
             return
         }
-        do {
-            let plane = try WorkspaceConstructionPlaneEditBuilder().planeSettingOriginComponent(
+        commitConstructionPlaneEdit(
+            entry,
+            successMessage: "Updated construction plane \(entry.name) origin."
+        ) { source, document in
+            try WorkspaceConstructionPlaneEditBuilder().planeSettingOriginComponent(
                 component,
                 value: value,
-                on: entry.plane,
-                tolerance: session.document.modelingSettings.tolerance
+                on: source.plane,
+                tolerance: document.modelingSettings.tolerance
             )
-            commitConstructionPlaneEdit(
-                entry,
-                plane: plane,
-                successMessage: "Updated construction plane \(entry.name) origin."
-            )
-        } catch let error as EditorError {
-            session.reportToolStatus(error.message, severity: .warning)
-            isPreviewExpanded = true
-        } catch {
-            session.reportToolStatus(
-                "Construction plane origin update failed.",
-                severity: .warning
-            )
-            isPreviewExpanded = true
         }
     }
 
@@ -3273,47 +4160,54 @@ public struct MainView: View {
         value: Double
     ) {
         guard let entry = selectedConstructionPlaneEntry else {
-            session.reportToolStatus(
+            reportToolStatus(
                 "Select one construction plane before editing its normal.",
                 severity: .warning
             )
             isPreviewExpanded = true
             return
         }
-        do {
-            let plane = try WorkspaceConstructionPlaneEditBuilder().planeSettingNormalComponent(
+        commitConstructionPlaneEdit(
+            entry,
+            successMessage: "Updated construction plane \(entry.name) normal."
+        ) { source, document in
+            try WorkspaceConstructionPlaneEditBuilder().planeSettingNormalComponent(
                 component,
                 value: value,
-                on: entry.plane,
-                tolerance: session.document.modelingSettings.tolerance
+                on: source.plane,
+                tolerance: document.modelingSettings.tolerance
             )
-            commitConstructionPlaneEdit(
-                entry,
-                plane: plane,
-                successMessage: "Updated construction plane \(entry.name) normal."
-            )
-        } catch let error as EditorError {
-            session.reportToolStatus(error.message, severity: .warning)
-            isPreviewExpanded = true
-        } catch {
-            session.reportToolStatus(
-                "Construction plane normal update failed.",
-                severity: .warning
-            )
-            isPreviewExpanded = true
         }
     }
 
     private func commitConstructionPlaneEdit(
         _ entry: ConstructionPlaneSummaryResult.Entry,
-        plane: SketchPlane,
-        successMessage: String
+        successMessage: String,
+        plane: @escaping @MainActor @Sendable (
+            ConstructionPlaneSource,
+            DesignDocument
+        ) throws -> SketchPlane
     ) {
-        let result = session.setConstructionPlane(id: entry.id, plane: plane)
-        if result?.diagnostics.isEmpty == false || result == nil {
-            isPreviewExpanded = true
-        } else {
-            session.reportToolStatus(successMessage)
+        submitSource(name: "setConstructionPlane") { current in
+            let document = current.document.document
+            guard let source = document.productMetadata.constructionPlanes[entry.id] else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Construction plane no longer exists."
+                )
+            }
+            return [
+                .setConstructionPlane(
+                    id: entry.id,
+                    plane: try plane(source, document)
+                ),
+            ]
+        } completion: { results in
+            if results.last == nil {
+                isPreviewExpanded = true
+            } else {
+                reportToolStatus(successMessage)
+            }
         }
     }
 
@@ -3321,18 +4215,18 @@ public struct MainView: View {
         _ entry: ConstructionPlaneSummaryResult.Entry
     ) {
         guard let target = entry.selectionTarget() else {
-            session.reportToolStatus(
+            reportToolStatus(
                 "Construction plane selection target is unavailable.",
                 severity: .warning
             )
             isPreviewExpanded = true
             return
         }
-        guard session.selectTarget(target) else {
-            isPreviewExpanded = true
-            return
+        submitSelectionMutation { selection, document in
+            try selection.selectTarget(target, in: document)
+        } completion: { _ in
+            reportToolStatus("Selected construction plane \(entry.name).")
         }
-        session.reportToolStatus("Selected construction plane \(entry.name).")
     }
 
     private func alignViewport(
@@ -3343,9 +4237,9 @@ public struct MainView: View {
             viewportProjectionRequest = ViewportProjectionRequest(
                 basis: try ViewportProjectionBasis.aligned(to: plane)
             )
-            session.reportToolStatus("View aligned to \(name).")
+            reportToolStatus("View aligned to \(name).")
         } catch {
-            session.reportToolStatus(
+            reportToolStatus(
                 "Construction plane view alignment failed.",
                 severity: .warning
             )
@@ -3354,75 +4248,82 @@ public struct MainView: View {
     }
 
     private func createSavedViewFromCurrentViewport() {
-        let savedView = savedViewBuilder.makeSavedView(
-            name: savedViewBuilder.nextSavedViewName(in: session.document),
-            workspaceState: session.workspaceState,
-            projectionBasis: viewportProjectionBasis,
-            cameraFrame: viewportCameraFrame
-        )
-        do {
-            let result = try session.execute(.createSavedView(savedView))
-            if result.diagnostics.isEmpty {
-                session.reportToolStatus("Saved view \(savedView.name) created.")
+        let projectionBasis = viewportProjectionBasis
+        let cameraFrame = viewportCameraFrame
+        submitSource(name: "createSavedView") { current in
+            let savedView = savedViewBuilder.makeSavedView(
+                name: savedViewBuilder.nextSavedViewName(in: current.document.document),
+                workspaceState: current.workspaceState,
+                projectionBasis: projectionBasis,
+                cameraFrame: cameraFrame
+            )
+            return [.createSavedView(savedView)]
+        } completion: { results in
+            if results.last != nil {
+                reportToolStatus("Saved view created.")
             } else {
                 isPreviewExpanded = true
             }
-        } catch let error as EditorError {
-            session.reportToolStatus(error.message, severity: .warning)
-            isPreviewExpanded = true
-        } catch {
-            session.reportToolStatus("Saved view creation failed.", severity: .warning)
-            isPreviewExpanded = true
         }
     }
 
     private func updateSavedViewFromCurrentViewport(_ savedView: SavedView) {
-        var updatedView = savedViewBuilder.makeSavedView(
-            name: savedView.name,
-            workspaceState: session.workspaceState,
-            projectionBasis: viewportProjectionBasis,
-            cameraFrame: viewportCameraFrame
-        )
-        updatedView.id = savedView.id
-        do {
-            let result = try session.execute(.updateSavedView(updatedView))
-            if result.diagnostics.isEmpty {
-                session.reportToolStatus("Saved view \(savedView.name) updated.")
+        let savedViewID = savedView.id
+        let projectionBasis = viewportProjectionBasis
+        let cameraFrame = viewportCameraFrame
+        submitSource(name: "updateSavedView") { current in
+            guard let currentSavedView = current.document.document.productMetadata.savedViews[savedViewID] else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Saved view \(savedViewID) does not exist."
+                )
+            }
+            var updatedView = savedViewBuilder.makeSavedView(
+                name: currentSavedView.name,
+                workspaceState: current.workspaceState,
+                projectionBasis: projectionBasis,
+                cameraFrame: cameraFrame
+            )
+            updatedView.id = savedViewID
+            return [.updateSavedView(updatedView)]
+        } completion: { results in
+            if results.last != nil {
+                reportToolStatus("Saved view \(savedView.name) updated.")
             } else {
                 isPreviewExpanded = true
             }
-        } catch let error as EditorError {
-            session.reportToolStatus(error.message, severity: .warning)
-            isPreviewExpanded = true
-        } catch {
-            session.reportToolStatus("Saved view update failed.", severity: .warning)
-            isPreviewExpanded = true
         }
     }
 
     private func applySavedView(_ savedView: SavedView) {
-        session.setRulerConfiguration(savedView.displayScale.rulerConfiguration)
-        resetWorkspaceInteractionScaleDefaults()
-        let cameraFrameRequest = savedViewBuilder.cameraFrameRequest(for: savedView)
-        viewportProjectionRequest = ViewportProjectionRequest(basis: cameraFrameRequest.basis)
-        viewportCameraFrameRequest = cameraFrameRequest
-        session.reportToolStatus("Saved view \(savedView.name) applied.")
+        let savedViewID = savedView.id
+        applyWorkspace(commands: { current in
+            guard let currentSavedView = current.document.document.productMetadata.savedViews[savedViewID] else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Saved view \(savedViewID) no longer exists."
+                )
+            }
+            return [.setRulerConfiguration(currentSavedView.displayScale.rulerConfiguration)]
+        }) { published in
+            guard let currentSavedView = published.document.document.productMetadata.savedViews[savedViewID] else {
+                return
+            }
+            resetWorkspaceInteractionScaleDefaults(ruler: published.workspaceState.ruler)
+            let cameraFrameRequest = savedViewBuilder.cameraFrameRequest(for: currentSavedView)
+            viewportProjectionRequest = ViewportProjectionRequest(basis: cameraFrameRequest.basis)
+            viewportCameraFrameRequest = cameraFrameRequest
+            reportToolStatus("Saved view \(currentSavedView.name) applied.")
+        }
     }
 
     private func removeSavedView(_ savedView: SavedView) {
-        do {
-            let result = try session.execute(.removeSavedView(id: savedView.id))
-            if result.diagnostics.isEmpty {
-                session.reportToolStatus("Saved view \(savedView.name) removed.")
+        submitSource(.removeSavedView(id: savedView.id)) { result in
+            if result != nil {
+                reportToolStatus("Saved view \(savedView.name) removed.")
             } else {
                 isPreviewExpanded = true
             }
-        } catch let error as EditorError {
-            session.reportToolStatus(error.message, severity: .warning)
-            isPreviewExpanded = true
-        } catch {
-            session.reportToolStatus("Saved view removal failed.", severity: .warning)
-            isPreviewExpanded = true
         }
     }
 
@@ -3444,7 +4345,7 @@ public struct MainView: View {
         }
         let trimmedName = constructionPlaneRenameText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
-            session.reportToolStatus(
+            reportToolStatus(
                 "Construction plane names must not be empty.",
                 severity: .warning
             )
@@ -3452,18 +4353,19 @@ public struct MainView: View {
             return
         }
 
-        let result = session.renameConstructionPlane(id: id, name: trimmedName)
-        if result?.diagnostics.isEmpty == false || result == nil {
-            isPreviewExpanded = true
-        } else {
-            cancelConstructionPlaneRename()
-            session.reportToolStatus("Construction plane renamed to \(trimmedName).")
+        submitSource(.renameConstructionPlane(id: id, name: trimmedName)) { result in
+            if result == nil {
+                isPreviewExpanded = true
+            } else {
+                cancelConstructionPlaneRename()
+                reportToolStatus("Construction plane renamed to \(trimmedName).")
+            }
         }
     }
 
     private func createViewAlignedConstructionPlaneFromKeyboard(pickOrigin: Bool) -> KeyPress.Result {
         guard let viewNormal = viewportProjectionBasis.viewNormal else {
-            session.reportToolStatus(
+            reportToolStatus(
                 "View-aligned construction plane requires a resolved viewport normal.",
                 severity: .warning
             )
@@ -3475,7 +4377,7 @@ public struct MainView: View {
             viewAlignedConstructionPlaneRequest = ViewAlignedConstructionPlaneRequest(
                 viewNormal: viewNormal
             )
-            session.reportToolStatus("Click a point to set the view-aligned construction plane origin.")
+            reportToolStatus("Click a point to set the view-aligned construction plane origin.")
             return .handled
         }
 
@@ -3522,18 +4424,25 @@ public struct MainView: View {
         origin: Point3D,
         viewNormal: Vector3D
     ) {
-        let result = session.createViewAlignedConstructionPlane(
-            origin: origin,
-            viewNormal: viewNormal
-        )
-        let activationResult = result?.createdConstructionPlaneID.flatMap { id in
-            session.setActiveConstructionPlane(id: id)
-        }
-        workspacePlaneMode = .adaptive
-        if result?.diagnostics.isEmpty == false || result == nil || activationResult == nil {
-            isPreviewExpanded = true
-        } else {
-            session.reportToolStatus("View-aligned construction plane created.")
+        submitSource(name: "createViewAlignedConstructionPlane") { current in
+            [
+                .createViewAlignedConstructionPlane(
+                    name: nextSceneNodeName(
+                        prefix: "View Plane",
+                        in: current.document.document
+                    ),
+                    origin: origin,
+                    viewNormal: viewNormal
+                ),
+            ]
+        } completion: { results in
+            guard let id = results.last?.createdConstructionPlaneID else {
+                isPreviewExpanded = true
+                return
+            }
+            _ = try await workspace.applyWorkspace([.setActiveConstructionPlane(id)])
+            workspacePlaneMode = .adaptive
+            reportToolStatus("View-aligned construction plane created.")
         }
     }
 
@@ -3542,7 +4451,7 @@ public struct MainView: View {
             if selectionScope != .region {
                 selectionScope = .region
             }
-            session.reportToolStatus(
+            reportToolStatus(
                 "Offset Region requires a selected sketch region.",
                 severity: .warning
             )
@@ -3561,7 +4470,7 @@ public struct MainView: View {
             if selectionScope != .edge {
                 selectionScope = .edge
             }
-            session.reportToolStatus(
+            reportToolStatus(
                 "Offset Edge requires a selected edge.",
                 severity: .warning
             )
@@ -3576,7 +4485,7 @@ public struct MainView: View {
         let supportResolution = edgeOffsetSupportStateResolver.resolution(for: selectedEdgeTargets)
         if supportResolution.isSupported == false,
            let message = supportResolution.diagnosticMessage {
-            session.reportToolStatus(message, severity: .warning)
+            reportToolStatus(message, severity: .warning)
             isPreviewExpanded = true
         }
     }
@@ -3586,7 +4495,7 @@ public struct MainView: View {
             if selectionScope != .sketchEntity {
                 selectionScope = .sketchEntity
             }
-            session.reportToolStatus(
+            reportToolStatus(
                 "Slot requires a selected open source curve.",
                 severity: .warning
             )
@@ -3601,139 +4510,151 @@ public struct MainView: View {
     }
 
     private func handleViewportShiftScroll(_ direction: ViewportScrollDirection) -> Bool {
-        guard session.selectedTool == .polygon else {
+        guard selectedTool == .polygon else {
             return false
         }
         switch direction {
         case .up:
-            _ = session.adjustPolygonSideCount(by: 1)
+            _ = adjustPolygonSideCount(by: 1)
         case .down:
-            _ = session.adjustPolygonSideCount(by: -1)
+            _ = adjustPolygonSideCount(by: -1)
         }
         return true
     }
 
     private func handleViewportSelectionDrag(_ target: ViewportSelectionDragTarget) {
-        selectionDragPreviewTargets = []
-        let targets = selectionTargets(for: target.hits)
+        clearSelectionDragPreview()
+        let targets = mergedSelectionTargets(for: target)
         applyViewportSelection(targets: targets, intent: target.selectionIntent)
     }
 
     private func handleViewportSelectionDragPreview(_ target: ViewportSelectionDragTarget) {
-        let targets = selectionTargets(for: target.hits)
+        let targets = mergedSelectionTargets(for: target)
         guard selectionDragPreviewTargets != targets else {
             return
         }
         selectionDragPreviewTargets = targets
+        selectionDragPreviewSceneNodeIDs = Set(targets.compactMap { target in
+            guard case .object = target.component else {
+                return nil
+            }
+            return target.sceneNodeID
+        })
+    }
+
+    private func clearSelectionDragPreview() {
+        selectionDragPreviewTargets = []
+        selectionDragPreviewSceneNodeIDs = []
+    }
+
+    private func mergedSelectionTargets(
+        for target: ViewportSelectionDragTarget
+    ) -> [SelectionTarget] {
+        var targets = selectionTargets(for: target.hits)
+        for occurrenceID in target.presentationOccurrenceIDs {
+            guard let sceneNodeID = snapshot.sceneNodeID(for: occurrenceID) else {
+                continue
+            }
+            let selectionTarget = SelectionTarget(sceneNodeID: sceneNodeID)
+            if targets.contains(selectionTarget) == false {
+                targets.append(selectionTarget)
+            }
+        }
+        return targets
     }
 
     private func handleViewportBodyMoveDrag(_ target: ViewportBodyMoveDragTarget) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .object else {
             return
         }
-        guard let bodyNodeID = session.document.productMetadata.sceneNodes.first(
-            where: { $0.value.reference == .body(target.featureID) }
-        )?.key else {
-            session.reportToolStatus(
-                "Body move could not resolve the body scene node.",
-                severity: .warning
+        submitSource(
+            .moveBody(
+                target: target.target,
+                deltaX: .length(target.deltaX, .meter),
+                deltaY: .length(target.deltaY, .meter)
             )
-            return
-        }
-        let result = session.moveBody(
-            target: SelectionTarget(sceneNodeID: bodyNodeID),
-            deltaX: .length(target.deltaX, .meter),
-            deltaY: .length(target.deltaY, .meter)
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func handleViewportVertexDrag(_ target: ViewportVertexDragTarget) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .vertex else {
             return
         }
-        let result = session.moveBodyVertex(
-            target: target.target,
-            deltaX: .length(target.deltaX, .meter),
-            deltaY: .length(target.deltaY, .meter)
+        submitSource(
+            .moveBodyVertex(
+                target: target.target,
+                deltaX: .length(target.deltaX, .meter),
+                deltaY: .length(target.deltaY, .meter)
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func handleViewportPolySplineSurfaceVertexDrag(_ target: ViewportPolySplineSurfaceVertexDragTarget) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .vertex else {
             return
         }
-        let result = session.movePolySplineSurfaceVertex(
-            target: target.target,
-            deltaX: .length(target.deltaX, .meter),
-            deltaY: .length(target.deltaY, .meter),
-            deltaZ: .length(target.deltaZ, .meter)
+        submitSource(
+            .movePolySplineSurfaceVertex(
+                target: target.target,
+                deltaX: .length(target.deltaX, .meter),
+                deltaY: .length(target.deltaY, .meter),
+                deltaZ: .length(target.deltaZ, .meter)
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func handleViewportSurfaceControlPointDrag(_ target: ViewportSurfaceControlPointDragTarget) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .vertex else {
             return
         }
-        let result = session.moveSurfaceControlPoint(
-            target: target.target,
-            deltaX: .length(target.deltaX, .meter),
-            deltaY: .length(target.deltaY, .meter),
-            deltaZ: .length(target.deltaZ, .meter)
+        submitSource(
+            .moveSurfaceControlPoint(
+                target: target.target,
+                deltaX: .length(target.deltaX, .meter),
+                deltaY: .length(target.deltaY, .meter),
+                deltaZ: .length(target.deltaZ, .meter)
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func handleViewportSurfaceTrimEndpointDrag(_ target: ViewportSurfaceTrimEndpointDragTarget) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .vertex else {
             return
         }
-        let result = session.moveSurfaceTrimEndpoint(
-            target: target.target,
-            endpoint: target.endpoint,
-            u: .scalar(target.u),
-            v: .scalar(target.v)
+        submitSource(
+            .moveSurfaceTrimEndpoint(
+                target: target.target,
+                endpoint: target.endpoint,
+                u: .scalar(target.u),
+                v: .scalar(target.v)
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func handleViewportSurfaceTrimControlPointDrag(_ target: ViewportSurfaceTrimControlPointDragTarget) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .vertex else {
             return
         }
-        let result = session.moveSurfaceTrimControlPoint(
-            target: target.target,
-            controlPointIndex: target.controlPointIndex,
-            u: .scalar(target.u),
-            v: .scalar(target.v)
+        submitSource(
+            .moveSurfaceTrimControlPoint(
+                target: target.target,
+                controlPointIndex: target.controlPointIndex,
+                u: .scalar(target.u),
+                v: .scalar(target.v)
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func handleViewportPolySplineSurfaceVertexSlideDrag(
         _ target: ViewportPolySplineSurfaceVertexSlideDragTarget
     ) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .vertex,
               slideCommandState.isSurfaceControlVerticesActive else {
             return
@@ -3749,7 +4670,7 @@ public struct MainView: View {
     private func handleViewportSurfaceControlPointSlideDrag(
         _ target: ViewportSurfaceControlPointSlideDragTarget
     ) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .vertex,
               slideCommandState.isSurfaceControlVerticesActive else {
             return
@@ -3765,7 +4686,7 @@ public struct MainView: View {
     private func handleViewportSurfaceFrameDrag(
         _ target: ViewportSurfaceFrameDragTarget
     ) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .vertex,
               slideCommandState.isSurfaceControlVerticesActive == false else {
             return
@@ -3785,7 +4706,7 @@ public struct MainView: View {
     private func handleViewportConstructionPlaneHandleDrag(
         _ target: ViewportConstructionPlaneDragTarget
     ) {
-        guard session.selectedTool == .select else {
+        guard selectedTool == .select else {
             return
         }
 
@@ -3793,20 +4714,34 @@ public struct MainView: View {
             guard let edit = try WorkspaceConstructionPlaneViewportDragCommitService().edit(
                 for: target,
                 entries: savedConstructionPlaneSummary.planes,
-                tolerance: session.document.modelingSettings.tolerance
+                tolerance: snapshot.document.document.modelingSettings.tolerance
             ) else {
                 return
             }
             commitConstructionPlaneEdit(
                 edit.entry,
-                plane: edit.plane,
                 successMessage: edit.successMessage
-            )
+            ) { source, document in
+                switch target.handle {
+                case .origin:
+                    try WorkspaceConstructionPlaneEditBuilder().planeSettingOrigin(
+                        target.origin,
+                        on: source.plane,
+                        tolerance: document.modelingSettings.tolerance
+                    )
+                case .normal:
+                    try WorkspaceConstructionPlaneEditBuilder().planeSettingNormal(
+                        target.normal,
+                        on: source.plane,
+                        tolerance: document.modelingSettings.tolerance
+                    )
+                }
+            }
         } catch let error as EditorError {
-            session.reportToolStatus(error.message, severity: .warning)
+            reportToolStatus(error.message, severity: .warning)
             isPreviewExpanded = true
         } catch {
-            session.reportToolStatus(
+            reportToolStatus(
                 "Construction plane viewport edit failed.",
                 severity: .warning
             )
@@ -3815,50 +4750,47 @@ public struct MainView: View {
     }
 
     private func handleViewportFaceDrag(_ target: ViewportFaceDragTarget) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .face else {
             return
         }
-        let result = session.offsetBodyFace(
-            target: target.target,
-            distance: .length(target.distance, .meter)
+        submitSource(
+            .offsetBodyFace(
+                target: target.target,
+                distance: .length(target.distance, .meter)
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func handleViewportEdgeChamferDrag(_ target: ViewportEdgeChamferDragTarget) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .edge else {
             return
         }
-        let result = session.chamferBodyEdges(
-            targets: [target.target],
-            distance: .length(target.distance, .meter)
+        submitSource(
+            .chamferBodyEdges(
+                targets: [target.target],
+                distance: .length(target.distance, .meter)
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func handleViewportEdgeFilletDrag(_ target: ViewportEdgeFilletDragTarget) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .edge else {
             return
         }
-        let result = session.filletBodyEdges(
-            targets: [target.target],
-            radius: .length(target.radius, .meter),
-            segmentCount: 8
+        submitSource(
+            .filletBodyEdges(
+                targets: [target.target],
+                radius: .length(target.radius, .meter),
+                segmentCount: 8
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func handleViewportRegionOffsetDrag(_ target: ViewportRegionOffsetDragTarget) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .region else {
             return
         }
@@ -3873,7 +4805,7 @@ public struct MainView: View {
     }
 
     private func handleViewportEdgeOffsetDrag(_ target: ViewportEdgeOffsetDragTarget) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .edge,
               edgeOffsetCommandState.isActive else {
             return
@@ -3887,7 +4819,7 @@ public struct MainView: View {
     }
 
     private func handleViewportSlotWidthDrag(_ target: ViewportSlotWidthDragTarget) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .sketchEntity,
               slotProfileCommandState.isActive else {
             return
@@ -3897,25 +4829,24 @@ public struct MainView: View {
     }
 
     private func handleViewportSketchVertexOffsetDrag(_ target: ViewportSketchVertexOffsetDragTarget) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .sketchEntity else {
             return
         }
         sketchVertexOffsetDistanceMeters = max(target.distance, 1.0e-9)
-        let result = session.offsetSketchVertex(
-            target: target.target,
-            handle: target.handle,
-            distance: .length(sketchVertexOffsetDistanceMeters, .meter)
+        submitSource(
+            .offsetSketchVertex(
+                target: target.target,
+                handle: target.handle,
+                distance: .length(sketchVertexOffsetDistanceMeters, .meter)
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func handleViewportPatternArrayLinearAxisDrag(
         _ target: ViewportPatternArrayLinearAxisDragTarget
     ) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               let state = patternArrayInspectorState(for: selectedSceneNodes),
               state.sourceID == target.sourceID else {
             return
@@ -3927,180 +4858,154 @@ public struct MainView: View {
         case .second:
             slot = .second
         case .radial:
-            let result = PatternArrayEditingService(
-                session: session,
-                sourceID: target.sourceID
-            ).setRadialAxisDistance(target.distance)
-            if result?.diagnostics.isEmpty == false {
-                isPreviewExpanded = true
-            }
+            patternArrayEditingService(sourceID: target.sourceID)
+                .setRadialAxisDistance(target.distance)
             return
         }
-        let result = PatternArrayEditingService(
-            session: session,
-            sourceID: target.sourceID
-        ).setRectangularAxisDistance(
+        patternArrayEditingService(sourceID: target.sourceID).setRectangularAxisDistance(
             slot: slot,
             meters: target.distance
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func handleViewportIndependentCopyExtrudeDistanceDrag(
         _ target: ViewportIndependentCopyExtrudeDistanceDragTarget
     ) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               target.distance.isFinite,
               target.distance > 0.0 else {
             return
         }
-        session.setExtrudeDistance(
-            featureID: target.featureID,
-            distance: .length(target.distance, .meter)
+        submitSource(
+            .setExtrudeDistance(
+                featureID: target.featureID,
+                distance: .length(target.distance, .meter)
+            )
         )
     }
 
     private func handleViewportIndependentCopyBodyDimensionDrag(
         _ target: ViewportIndependentCopyBodyDimensionDragTarget
     ) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               target.value.isFinite,
-              target.value > 0.0,
-              let bodySceneNodeID = sceneNodeID(forBodyFeatureID: target.featureID) else {
+              target.value > 0.0 else {
             return
         }
-        let summary: ObjectDimensionSummaryResult
-        do {
-            summary = try ObjectDimensionSummaryService().summarize(
-                document: session.document,
+        submitSource(name: "setIndependentCopyBodyDimension") { current in
+            guard let bodySceneNodeID = current.document.document.productMetadata.sceneNodes.first(
+                where: { $0.value.reference == .body(target.featureID) }
+            )?.key else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Independent copy body \(target.featureID) does not exist."
+                )
+            }
+            let summary = try ObjectDimensionSummaryService().summarize(
+                document: current.document.document,
                 targets: [SelectionTarget(sceneNodeID: bodySceneNodeID)],
-                displayUnit: session.workspaceState.displayUnit,
-                objectRegistry: objectRegistry
+                displayUnit: current.workspaceState.displayUnit,
+                objectRegistry: current.objectRegistry
             )
-        } catch {
-            isPreviewExpanded = true
-            return
-        }
-        func currentDimension(_ kind: ObjectDimensionKind) -> Double? {
-            summary.entries.first { $0.kind == kind }?.resolvedMeters
-        }
-        switch target.kind {
-        case .sizeX, .sizeZ:
-            guard let sizeX = currentDimension(.sizeX),
-                  let sizeY = currentDimension(.sizeY),
-                  let sizeZ = currentDimension(.sizeZ) else {
-                return
+            func currentDimension(_ kind: ObjectDimensionKind) -> Double? {
+                summary.entries.first { $0.kind == kind }?.resolvedMeters
             }
-            session.setCubeDimensions(
-                featureID: target.featureID,
-                sizeX: .length(target.kind == .sizeX ? target.value : sizeX, .meter),
-                sizeY: .length(sizeY, .meter),
-                sizeZ: .length(target.kind == .sizeZ ? target.value : sizeZ, .meter)
-            )
-        case .radius:
-            guard let sizeY = currentDimension(.sizeY) else {
-                return
+            switch target.kind {
+            case .sizeX, .sizeZ:
+                guard let sizeX = currentDimension(.sizeX),
+                      let sizeY = currentDimension(.sizeY),
+                      let sizeZ = currentDimension(.sizeZ) else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "Independent copy cube dimensions are unavailable."
+                    )
+                }
+                return [
+                    .setCubeDimensions(
+                        featureID: target.featureID,
+                        sizeX: .length(target.kind == .sizeX ? target.value : sizeX, .meter),
+                        sizeY: .length(sizeY, .meter),
+                        sizeZ: .length(target.kind == .sizeZ ? target.value : sizeZ, .meter)
+                    ),
+                ]
+            case .radius:
+                guard let sizeY = currentDimension(.sizeY) else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "Independent copy cylinder height is unavailable."
+                    )
+                }
+                return [
+                    .setCylinderDimensions(
+                        featureID: target.featureID,
+                        radius: .length(target.value, .meter),
+                        sizeY: .length(sizeY, .meter)
+                    ),
+                ]
             }
-            session.setCylinderDimensions(
-                featureID: target.featureID,
-                radius: .length(target.value, .meter),
-                sizeY: .length(sizeY, .meter)
-            )
         }
-    }
-
-    private func sceneNodeID(forBodyFeatureID featureID: FeatureID) -> SceneNodeID? {
-        session.document.productMetadata.sceneNodes.first { _, node in
-            node.reference == .body(featureID)
-        }?.key
     }
 
     private func handleViewportPatternArrayRadialAngleDrag(
         _ target: ViewportPatternArrayRadialAngleDragTarget
     ) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               let state = patternArrayInspectorState(for: selectedSceneNodes),
               state.sourceID == target.sourceID else {
             return
         }
-        let result = PatternArrayEditingService(
-            session: session,
-            sourceID: target.sourceID
-        ).setRadialAngle(degrees: target.angleRadians * 180.0 / .pi)
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
+        patternArrayEditingService(sourceID: target.sourceID)
+            .setRadialAngle(degrees: target.angleRadians * 180.0 / .pi)
     }
 
     private func handleViewportPatternArrayCopyCountDrag(
         _ target: ViewportPatternArrayCopyCountDragTarget
     ) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               let state = patternArrayInspectorState(for: selectedSceneNodes),
               state.sourceID == target.sourceID else {
             return
         }
-        let service = PatternArrayEditingService(
-            session: session,
-            sourceID: target.sourceID
-        )
-        let result: CommandExecutionResult?
+        let service = patternArrayEditingService(sourceID: target.sourceID)
         switch target.slot {
         case .rectangularFirst:
-            result = service.setRectangularAxisCopyCount(slot: .first, copyCount: target.copyCount)
+            service.setRectangularAxisCopyCount(slot: .first, copyCount: target.copyCount)
         case .rectangularSecond:
-            result = service.setRectangularAxisCopyCount(slot: .second, copyCount: target.copyCount)
+            service.setRectangularAxisCopyCount(slot: .second, copyCount: target.copyCount)
         case .radialAngular:
-            result = service.setRadialAngularCopyCount(target.copyCount)
+            service.setRadialAngularCopyCount(target.copyCount)
         case .radialAxis:
-            result = service.setRadialAxisCopyCount(target.copyCount)
+            service.setRadialAxisCopyCount(target.copyCount)
         case .curve:
-            result = service.setCurveCopyCount(target.copyCount)
-        }
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
+            service.setCurveCopyCount(target.copyCount)
         }
     }
 
     private func handleViewportPatternArrayOutputModeChange(_ target: ViewportPatternArrayOutputModeTarget) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               let state = patternArrayInspectorState(for: selectedSceneNodes),
               state.sourceID == target.sourceID else {
             return
         }
-        let result = PatternArrayEditingService(
-            session: session,
-            sourceID: target.sourceID
-        ).setOutputMode(target.outputMode)
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
+        patternArrayEditingService(sourceID: target.sourceID).setOutputMode(target.outputMode)
     }
 
     private func handleViewportPatternArrayCurvePathPointDrag(
         _ target: ViewportPatternArrayCurvePathPointDragTarget
     ) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               let state = patternArrayInspectorState(for: selectedSceneNodes),
               state.sourceID == target.sourceID else {
             return
         }
-        let result = PatternArrayEditingService(
-            session: session,
-            sourceID: target.sourceID
-        ).setCurvePathPoint(
+        patternArrayEditingService(sourceID: target.sourceID).setCurvePathPoint(
             index: target.pointIndex,
             point: target.point
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func handleViewportSketchCurveHandleDrag(_ target: ViewportSketchCurveHandleDragTarget) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .sketchEntity else {
             return
         }
@@ -4125,7 +5030,7 @@ public struct MainView: View {
     }
 
     private func handleViewportSketchDimensionDrag(_ target: ViewportSketchDimensionDragTarget) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .sketchEntity else {
             return
         }
@@ -4137,7 +5042,7 @@ public struct MainView: View {
     }
 
     private func handleViewportSketchPointHandleDrag(_ target: ViewportSketchPointHandleDragTarget) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .sketchEntity else {
             return
         }
@@ -4150,7 +5055,7 @@ public struct MainView: View {
     }
 
     private func handleViewportSplineControlPointDrag(_ target: ViewportSplineControlPointDragTarget) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .sketchEntity else {
             return
         }
@@ -4163,30 +5068,34 @@ public struct MainView: View {
     }
 
     private func handleViewportBridgeCurveEndpointDrag(_ target: ViewportBridgeCurveEndpointDragTarget) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .sketchEntity else {
             return
         }
-        let result: CommandExecutionResult?
         switch target.role {
         case .first:
-            result = session.setBridgeCurveParameters(
-                sourceID: target.sourceID,
-                firstEndpoint: target.endpoint
+            submitSource(
+                .setBridgeCurveParameters(
+                    sourceID: target.sourceID,
+                    firstEndpoint: target.endpoint,
+                    secondEndpoint: nil,
+                    continuity: nil
+                )
             )
         case .second:
-            result = session.setBridgeCurveParameters(
-                sourceID: target.sourceID,
-                secondEndpoint: target.endpoint
+            submitSource(
+                .setBridgeCurveParameters(
+                    sourceID: target.sourceID,
+                    firstEndpoint: nil,
+                    secondEndpoint: target.endpoint,
+                    continuity: nil
+                )
             )
-        }
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
         }
     }
 
     private func handleViewportSplineControlPointSlideDrag(_ target: ViewportSplineControlPointSlideDragTarget) {
-        guard session.selectedTool == .select,
+        guard selectedTool == .select,
               selectionScope == .sketchEntity else {
             return
         }
@@ -4226,28 +5135,50 @@ public struct MainView: View {
                 startWorldPoint: startCanvasInput.worldPoint,
                 endWorldPoint: endCanvasInput.worldPoint
             ),
-            document: session.document,
-            ruler: session.workspaceState.ruler,
+            document: snapshot.document.document,
+            ruler: snapshot.workspaceState.ruler,
             snapOptions: snapResolutionOptions(modifierFlags: drag.modifierFlags),
             axisConstraint: activeCanvasDragAxisConstraint
         )
         reportViewportDragSnapFailures(resolution)
         let resolvedDrag = resolution.drag
-        let result = session.activateSelectedToolFromCanvasDrag(
-            startModelPoint: resolvedDrag.start,
-            endModelPoint: resolvedDrag.end,
-            sketchPlane: resolvedDrag.sketchPlane,
-            startWorldPoint: resolvedDrag.startWorldPoint,
-            endWorldPoint: resolvedDrag.endWorldPoint
-        )
-        if result.revealsDiagnostics {
-            isPreviewExpanded = true
+        let tool = selectedTool
+        let polygonState = polygonToolState
+        let currentSketchInputState = sketchInputState
+        submitSource(name: "canvasDrag") { current in
+            let planner = WorkspaceCanvasCommandPlanner(
+                context: WorkspaceCanvasCommandPlanner.Context(
+                    document: current.document.document,
+                    selection: current.selection,
+                    workspaceState: current.workspaceState,
+                    objectRegistry: current.objectRegistry,
+                    polygonState: polygonState,
+                    sketchInputState: currentSketchInputState
+                )
+            )
+            do {
+                guard let command = try planner.dragCommand(
+                    tool: tool,
+                    startModelPoint: resolvedDrag.start,
+                    endModelPoint: resolvedDrag.end,
+                    sketchPlane: resolvedDrag.sketchPlane,
+                    startWorldPoint: resolvedDrag.startWorldPoint,
+                    endWorldPoint: resolvedDrag.endWorldPoint
+                ) else {
+                    return []
+                }
+                return [command]
+            } catch let failure as CanvasSketchCurveDrafts.Failure {
+                throw EditorError(code: .commandInvalid, message: failure.message)
+            }
+        } completion: { results in
+            try await finishCanvasSourceCommand(results.last)
         }
     }
 
     private func reportViewportDragSnapFailures(_ resolution: ViewportCanvasDragSnapResolution) {
         for failureDescription in resolution.failureDescriptions {
-            session.reportToolStatus(
+            reportToolStatus(
                 "Snapping failed and was skipped: \(failureDescription)",
                 severity: .warning
             )
@@ -4271,17 +5202,17 @@ public struct MainView: View {
                 sketchPlane: sketchPlane
             )
         } catch WorkspaceCanvasPlaneInputMapper.Failure.unresolvedViewNormal {
-            session.reportToolStatus(
+            reportToolStatus(
                 "Canvas input requires a resolved viewport normal for the active construction plane.",
                 severity: .warning
             )
         } catch WorkspaceCanvasPlaneInputMapper.Failure.viewRayParallelToPlane {
-            session.reportToolStatus(
+            reportToolStatus(
                 "Canvas input is parallel to the active construction plane from this view.",
                 severity: .warning
             )
         } catch {
-            session.reportToolStatus(
+            reportToolStatus(
                 "Canvas input could not be projected onto the active construction plane.",
                 severity: .warning
             )
@@ -4320,7 +5251,7 @@ public struct MainView: View {
                 sketchPlane: sketchPlane
             )
         } catch {
-            session.reportToolStatus(
+            reportToolStatus(
                 "Canvas input world point could not be resolved on the active construction plane.",
                 severity: .warning
             )
@@ -4336,8 +5267,8 @@ public struct MainView: View {
     ) -> SnappedModelInput {
         let resolution = WorkspaceSnapInputResolver().resolve(
             point,
-            in: session.document,
-            ruler: session.workspaceState.ruler,
+            in: snapshot.document.document,
+            ruler: snapshot.workspaceState.ruler,
             options: snapResolutionOptions(
                 referencePoint: referencePoint,
                 modifierFlags: modifierFlags
@@ -4346,7 +5277,7 @@ public struct MainView: View {
             modifierFlags: modifierFlags
         )
         if let failureMessage = resolution.failureMessage {
-            session.reportToolStatus(
+            reportToolStatus(
                 "Snapping failed and was skipped: \(failureMessage)",
                 severity: .warning
             )
@@ -4364,7 +5295,7 @@ public struct MainView: View {
             isConstructionPlaneSnapEnabled: isConstructionPlaneSnapEnabled,
             constructionPlane: constructionPlaneSnapPlane,
             overrideState: snapOverrideState,
-            referenceLineAnchors: session.sketchInputState.referenceLineAnchors
+            referenceLineAnchors: sketchInputState.referenceLineAnchors
         ).options(
             referencePoint: referencePoint,
             modifierFlags: modifierFlags
@@ -4376,7 +5307,7 @@ public struct MainView: View {
     }
 
     private func effectiveSketchPlane(fallback: SketchPlane) -> SketchPlane {
-        workspacePlaneMode.sketchPlane ?? session.activeSketchPlane(fallback: fallback)
+        workspacePlaneMode.sketchPlane ?? activeSketchPlane(fallback: fallback)
     }
 
     private func handleViewportHover(_ hit: ViewportHit?) {
@@ -4422,7 +5353,7 @@ public struct MainView: View {
         }
         patternArrayCurvePathPreviewCandidate = PatternArrayCurvePathCandidate(
             target: target,
-            document: session.document
+            document: snapshot.document.document
         )
     }
 
@@ -4453,68 +5384,86 @@ public struct MainView: View {
         targets: [SelectionTarget],
         intent: ViewportSelectionIntent
     ) {
-        selectionDragPreviewTargets = []
+        clearSelectionDragPreview()
         if applyPatternArrayCurvePathPick(targets: targets) {
             return
         }
         switch intent {
         case .replace:
             guard !targets.isEmpty else {
-                session.clearSelection()
-                dimensionCommandState.deactivate()
-                syncOffsetCommandAvailability()
+                clearSelection { published in
+                    dimensionCommandState.deactivate()
+                    syncOffsetCommandAvailability(for: published.selection)
+                }
                 return
             }
-            _ = session.selectTargets(targets)
+            submitSelectionMutation { selection, document in
+                try selection.selectTargets(targets, in: document)
+            } completion: { published in
+                dimensionCommandState.deactivate()
+                syncOffsetCommandAvailability(for: published.selection)
+            }
         case .toggle:
             guard !targets.isEmpty else {
                 return
             }
-            var nextTargets = session.selection.selectedTargets
-            for target in targets {
-                if let index = nextTargets.firstIndex(of: target) {
-                    nextTargets.remove(at: index)
-                } else {
-                    nextTargets.append(target)
+            submitSelectionMutation { selection, document in
+                var nextTargets = selection.selectedTargets
+                for target in targets {
+                    if let index = nextTargets.firstIndex(of: target) {
+                        nextTargets.remove(at: index)
+                    } else {
+                        nextTargets.append(target)
+                    }
                 }
+                try selection.selectTargets(nextTargets, in: document)
+            } completion: { published in
+                dimensionCommandState.deactivate()
+                syncOffsetCommandAvailability(for: published.selection)
             }
-            _ = session.selectTargets(nextTargets)
         }
-        dimensionCommandState.deactivate()
-        syncOffsetCommandAvailability()
     }
 
     private func applyViewportSelection(
         references: [SelectionReference],
         intent: ViewportSelectionIntent
     ) {
-        selectionDragPreviewTargets = []
+        clearSelectionDragPreview()
         patternArrayCurvePathPreviewCandidate = nil
         switch intent {
         case .replace:
             guard !references.isEmpty else {
-                session.clearSelection()
-                dimensionCommandState.deactivate()
-                syncOffsetCommandAvailability()
+                clearSelection { published in
+                    dimensionCommandState.deactivate()
+                    syncOffsetCommandAvailability(for: published.selection)
+                }
                 return
             }
-            _ = session.selectReferences(references)
+            submitSelectionMutation { selection, document in
+                try selection.selectReferences(references, in: document)
+            } completion: { published in
+                dimensionCommandState.deactivate()
+                syncOffsetCommandAvailability(for: published.selection)
+            }
         case .toggle:
             guard !references.isEmpty else {
                 return
             }
-            var nextReferences = session.selection.selectedReferences
-            for reference in references {
-                if let index = nextReferences.firstIndex(of: reference) {
-                    nextReferences.remove(at: index)
-                } else {
-                    nextReferences.append(reference)
+            submitSelectionMutation { selection, document in
+                var nextReferences = selection.selectedReferences
+                for reference in references {
+                    if let index = nextReferences.firstIndex(of: reference) {
+                        nextReferences.remove(at: index)
+                    } else {
+                        nextReferences.append(reference)
+                    }
                 }
+                try selection.selectReferences(nextReferences, in: document)
+            } completion: { published in
+                dimensionCommandState.deactivate()
+                syncOffsetCommandAvailability(for: published.selection)
             }
-            _ = session.selectReferences(nextReferences)
         }
-        dimensionCommandState.deactivate()
-        syncOffsetCommandAvailability()
     }
 
     private func applyPatternArrayCurvePathPick(targets: [SelectionTarget]) -> Bool {
@@ -4522,13 +5471,18 @@ public struct MainView: View {
             return false
         }
         let outcome = PatternArrayCurvePathPickService(
-            session: session,
+            document: snapshot.document.document,
+            submit: { submitSource($0) },
+            submitPath: { submitPatternArrayCurvePath(sourceID: sourceID, path: $0) },
+            report: { reportToolStatus($0, severity: $1) },
             sourceID: sourceID
         ).apply(targets: targets)
         switch outcome {
         case .waitingForCurve:
             break
-        case .applied, .failed:
+        case .submitted:
+            break
+        case .failed:
             patternArrayCurvePathPreviewCandidate = nil
             patternArrayCurvePathPickState.cancel()
         }
@@ -4537,11 +5491,49 @@ public struct MainView: View {
         return true
     }
 
+    private func submitPatternArrayCurvePath(
+        sourceID: PatternArraySourceID,
+        path: PatternArrayCurvePath
+    ) {
+        submitSource(name: "updatePatternArrayCurvePath") { current in
+            guard let source = current.document.document.productMetadata.patternArrays[sourceID],
+                  case .curve(var curve) = source.distribution else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Curve Array path pick requires an existing curve Pattern Array source."
+                )
+            }
+            curve.path = path
+            return [
+                .updatePatternArray(
+                    id: sourceID,
+                    name: nil,
+                    definitionID: nil,
+                    distribution: .curve(curve),
+                    outputMode: nil
+                ),
+            ]
+        } completion: { results in
+            guard results.last != nil else {
+                isPreviewExpanded = true
+                return
+            }
+            patternArrayCurvePathPreviewCandidate = nil
+            patternArrayCurvePathPickState.cancel()
+            reportToolStatus("Curve Array path updated.")
+        }
+    }
+
     private func syncOffsetCommandAvailability() {
-        if selectionScope != .region || selectedRegionTargets.isEmpty {
+        syncOffsetCommandAvailability(for: snapshot.selection)
+    }
+
+    private func syncOffsetCommandAvailability(for selection: SelectionModel) {
+        let classification = WorkspaceSelectionTargetClassification(selection: selection)
+        if selectionScope != .region || classification.regionTargets.isEmpty {
             regionOffsetCommandState.deactivate()
         }
-        if selectionScope != .edge || selectedEdgeTargets.isEmpty {
+        if selectionScope != .edge || classification.edgeTargets.isEmpty {
             edgeOffsetCommandState.deactivate()
         }
     }
@@ -4556,51 +5548,48 @@ public struct MainView: View {
 
     private func setHoveredSceneNode(_ id: SceneNodeID?) {
         if id == nil {
-            guard session.selection.hoveredTarget != nil ||
-                session.selection.hoveredReference != nil else {
+            guard hoveredTarget != nil || hoveredReference != nil else {
                 return
             }
-        } else if session.selection.hoveredSceneNodeID == id {
+        } else if displaySelection.hoveredSceneNodeID == id {
             return
         }
-        _ = session.hoverSceneNode(id)
+        _ = hoverSceneNode(id)
     }
 
     private func setHoveredTarget(_ target: SelectionTarget?) {
         if target == nil {
-            guard session.selection.hoveredTarget != nil ||
-                session.selection.hoveredReference != nil else {
+            guard hoveredTarget != nil || hoveredReference != nil else {
                 return
             }
-        } else if session.selection.hoveredTarget == target {
+        } else if hoveredTarget == target {
             return
         }
-        _ = session.hoverTarget(target)
+        _ = hoverTarget(target)
     }
 
     private func setHoveredReference(_ reference: SelectionReference?) {
         if reference == nil {
-            guard session.selection.hoveredTarget != nil ||
-                session.selection.hoveredReference != nil else {
+            guard hoveredTarget != nil || hoveredReference != nil else {
                 return
             }
-        } else if session.selection.hoveredReference == reference {
+        } else if hoveredReference == reference {
             return
         }
-        _ = session.hoverReference(reference)
+        _ = hoverReference(reference)
     }
 
     private func setHoveredSceneNode(_ id: SceneNodeID, isHovered: Bool) {
         if isHovered {
             setHoveredSceneNode(id)
-        } else if session.selection.hoveredSceneNodeID == id {
+        } else if displaySelection.hoveredSceneNodeID == id {
             setHoveredSceneNode(nil)
         }
     }
 
     @ViewBuilder
     private func componentBrowserRow(_ id: SceneNodeID, depth: Int) -> some View {
-        if let node = session.document.productMetadata.sceneNodes[id] {
+        if let node = snapshot.document.document.productMetadata.sceneNodes[id] {
             HStack(spacing: 6) {
                 Spacer()
                     .frame(width: CGFloat(depth) * 12)
@@ -4643,7 +5632,7 @@ public struct MainView: View {
 
     @ViewBuilder
     private func componentDefinitionRow(_ id: ComponentDefinitionID) -> some View {
-        if let definition = session.document.productMetadata.componentDefinitions[id] {
+        if let definition = snapshot.document.document.productMetadata.componentDefinitions[id] {
             Label {
                 HStack {
                     Text(definition.name)
@@ -4661,7 +5650,7 @@ public struct MainView: View {
 
     @ViewBuilder
     private func componentInstanceRow(_ id: ComponentInstanceID) -> some View {
-        if let instance = session.document.productMetadata.componentInstances[id] {
+        if let instance = snapshot.document.document.productMetadata.componentInstances[id] {
             HStack(spacing: 6) {
                 Image(systemName: "cube.transparent")
                     .frame(width: 16)
@@ -4742,74 +5731,96 @@ public struct MainView: View {
     }
 
     private func toggleSceneNodeVisibility(_ id: SceneNodeID) {
-        guard let node = session.document.productMetadata.sceneNodes[id] else {
-            return
+        submitSource(name: "toggleSceneNodeVisibility") { current in
+            guard let node = current.document.document.productMetadata.sceneNodes[id] else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Scene node \(id) no longer exists."
+                )
+            }
+            return [.setSceneNodeVisibility(id: id, isVisible: !node.isVisible)]
         }
-        session.setSceneNodeVisibility(id, isVisible: !node.isVisible)
     }
 
     private func toggleSceneNodeLock(_ id: SceneNodeID) {
-        guard let node = session.document.productMetadata.sceneNodes[id] else {
-            return
+        submitSource(name: "toggleSceneNodeLock") { current in
+            guard let node = current.document.document.productMetadata.sceneNodes[id] else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Scene node \(id) no longer exists."
+                )
+            }
+            return [.setSceneNodeLock(id: id, isLocked: !node.isLocked)]
         }
-        session.setSceneNodeLock(id, isLocked: !node.isLocked)
     }
 
     private func toggleComponentInstanceVisibility(_ id: ComponentInstanceID) {
-        guard let instance = session.document.productMetadata.componentInstances[id] else {
-            return
+        submitSource(name: "toggleComponentInstanceVisibility") { current in
+            guard let instance = current.document.document.productMetadata.componentInstances[id] else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Component instance \(id) no longer exists."
+                )
+            }
+            return [
+                .setComponentInstanceVisibility(id: id, isVisible: !instance.isVisible),
+            ]
         }
-        session.setComponentInstanceVisibility(id, isVisible: !instance.isVisible)
     }
 
     private func toggleComponentInstanceLock(_ id: ComponentInstanceID) {
-        guard let instance = session.document.productMetadata.componentInstances[id] else {
-            return
+        submitSource(name: "toggleComponentInstanceLock") { current in
+            guard let instance = current.document.document.productMetadata.componentInstances[id] else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Component instance \(id) no longer exists."
+                )
+            }
+            return [.setComponentInstanceLock(id: id, isLocked: !instance.isLocked)]
         }
-        session.setComponentInstanceLock(id, isLocked: !instance.isLocked)
     }
 
     private var selectedSceneNodes: [SceneNode] {
-        session.selection.selectedSceneNodeIDs.compactMap { id in
-            session.document.productMetadata.sceneNodes[id]
+        snapshot.selection.selectedSceneNodeIDs.compactMap { id in
+            snapshot.document.document.productMetadata.sceneNodes[id]
         }
     }
 
     private var sketchEntityInspectorStateBuilder: WorkspaceSketchEntityInspectorStateBuilder {
         WorkspaceSketchEntityInspectorStateBuilder(
-            document: session.document,
-            selection: session.selection,
-            displayUnit: session.workspaceState.displayUnit,
+            document: snapshot.document.document,
+            selection: snapshot.selection,
+            displayUnit: snapshot.workspaceState.displayUnit,
             objectRegistry: objectRegistry,
-            curveCurvatureDisplays: session.workspaceState.curveCurvatureDisplays
+            curveCurvatureDisplays: snapshot.workspaceState.curveCurvatureDisplays
         )
     }
 
     private var surfaceInspectorStateBuilder: WorkspaceSurfaceInspectorStateBuilder {
         WorkspaceSurfaceInspectorStateBuilder(
-            document: session.document,
-            selection: session.selection,
-            currentEvaluation: session.currentEvaluation,
-            documentGeneration: session.generation,
+            document: snapshot.document.document,
+            selection: snapshot.selection,
+            currentEvaluation: snapshot.cadInteraction,
+            documentGeneration: snapshot.documentGeneration,
             objectRegistry: objectRegistry,
             surfaceAnalysisOptions: surfaceAnalysisOptions.analysisOptions,
-            workspaceState: session.workspaceState
+            workspaceState: snapshot.workspaceState
         )
     }
 
     private var sectionAnalysisStateBuilder: WorkspaceSectionAnalysisStateBuilder {
         WorkspaceSectionAnalysisStateBuilder(
-            document: session.document,
-            currentEvaluation: session.currentEvaluation,
-            documentGeneration: session.generation,
-            displayUnit: session.workspaceState.displayUnit,
+            document: snapshot.document.document,
+            currentEvaluation: snapshot.cadInteraction,
+            documentGeneration: snapshot.documentGeneration,
+            displayUnit: snapshot.workspaceState.displayUnit,
             objectRegistry: objectRegistry
         )
     }
 
     private var topologyEditInspectorStateBuilder: WorkspaceTopologyEditInspectorStateBuilder {
         WorkspaceTopologyEditInspectorStateBuilder(
-            selection: session.selection,
+            selection: snapshot.selection,
             selectedTargetSummary: selectedTargetSummary,
             faceOffsetStepMeters: defaultFaceOffsetStepMeters,
             edgeChamferStepMeters: defaultEdgeChamferStepMeters,
@@ -4822,18 +5833,18 @@ public struct MainView: View {
 
     private var constructionPlaneTargetSelectionBuilder: WorkspaceConstructionPlaneTargetSelectionBuilder {
         WorkspaceConstructionPlaneTargetSelectionBuilder(
-            document: session.document,
-            selection: session.selection
+            document: snapshot.document.document,
+            selection: snapshot.selection
         )
     }
 
     private var selectionTargetClassification: WorkspaceSelectionTargetClassification {
-        WorkspaceSelectionTargetClassification(selection: session.selection)
+        WorkspaceSelectionTargetClassification(selection: snapshot.selection)
     }
 
     private var selectionTargetResolver: WorkspaceSelectionTargetResolver {
         WorkspaceSelectionTargetResolver(
-            document: session.document,
+            document: snapshot.document.document,
             sceneBrowserRows: sceneBrowserRows,
             selectionScope: selectionScope,
             objectRegistry: objectRegistry
@@ -4842,21 +5853,21 @@ public struct MainView: View {
 
     private var projectionTargetResolver: WorkspaceProjectionTargetResolver {
         WorkspaceProjectionTargetResolver(
-            document: session.document,
-            selection: session.selection,
-            displayUnit: session.workspaceState.displayUnit,
+            document: snapshot.document.document,
+            selection: snapshot.selection,
+            displayUnit: snapshot.workspaceState.displayUnit,
             objectRegistry: objectRegistry
         )
     }
 
     private var splineControlPointSelectionResolver: WorkspaceSplineControlPointSelectionResolver {
-        WorkspaceSplineControlPointSelectionResolver(selection: session.selection)
+        WorkspaceSplineControlPointSelectionResolver(selection: snapshot.selection)
     }
 
     private var edgeOffsetSupportStateResolver: WorkspaceEdgeOffsetSupportStateResolver {
         WorkspaceEdgeOffsetSupportStateResolver(
-            document: session.document,
-            selection: session.selection,
+            document: snapshot.document.document,
+            selection: snapshot.selection,
             objectRegistry: objectRegistry
         )
     }
@@ -4868,22 +5879,22 @@ public struct MainView: View {
     private func patternArrayInspectorState(for nodes: [SceneNode]) -> PatternArrayInspectorState? {
         PatternArrayInspectorState(
             selectedNodes: nodes,
-            sceneNodes: session.document.productMetadata.sceneNodes,
-            patternArrays: session.document.productMetadata.patternArrays,
+            sceneNodes: snapshot.document.document.productMetadata.sceneNodes,
+            patternArrays: snapshot.document.document.productMetadata.patternArrays,
             summaryResult: patternArraySummaryCache.result(
-                document: session.document,
-                generation: session.generation,
-                dirty: session.isDirty
+                document: snapshot.document.document,
+                generation: snapshot.documentGeneration,
+                dirty: snapshot.isDirty
             )
         )
     }
 
     private var selectedTargetCount: Int {
-        max(session.selection.selectedTargets.count, session.selection.selectedSceneNodeIDs.count)
+        max(snapshot.selection.selectedTargets.count, snapshot.selection.selectedSceneNodeIDs.count)
     }
 
     private var selectedTargetSummary: String {
-        let targets = session.selection.selectedTargets
+        let targets = snapshot.selection.selectedTargets
         guard !targets.isEmpty else {
             return "Object"
         }
@@ -5074,7 +6085,7 @@ public struct MainView: View {
     }
 
     private var workspaceInteractionScaleDefaults: WorkspaceInteractionScaleDefaults {
-        WorkspaceInteractionScaleDefaults(ruler: session.workspaceState.ruler)
+        WorkspaceInteractionScaleDefaults(ruler: snapshot.workspaceState.ruler)
     }
 
     private func sketchCurveOperationControls(
@@ -5085,7 +6096,7 @@ public struct MainView: View {
             entity: entity,
             controls: controls,
             state: sketchCurveOperationControlsState(for: entity),
-            displayUnit: session.workspaceState.displayUnit,
+            displayUnit: snapshot.workspaceState.displayUnit,
             extendDistanceMeters: $sketchExtendDistanceMeters,
             extendShape: $sketchExtendShape,
             vertexOffsetDistanceMeters: $sketchVertexOffsetDistanceMeters,
@@ -5260,37 +6271,34 @@ public struct MainView: View {
     }
 
     private var workspaceDocumentInspectorState: WorkspaceDocumentInspectorState {
-        let workspaceBounds = session.currentEvaluation.flatMap {
-            WorkspaceBoundsService().bounds(for: $0.evaluatedDocument)
-        }
         let recommendationStates = workspaceDocumentRecommendationStates(
-            bounds: workspaceBounds,
-            ruler: session.workspaceState.ruler,
-            displayUnit: session.workspaceState.displayUnit
+            bounds: presentationMeasurementBounds,
+            ruler: snapshot.workspaceState.ruler,
+            displayUnit: snapshot.workspaceState.displayUnit
         )
         return WorkspaceDocumentInspectorState(
             documentName: documentTitle,
-            documentID: shortID(session.document.id),
+            documentID: shortID(snapshot.document.document.id),
             sourceUnitTitle: "m",
-            displayUnit: session.workspaceState.displayUnit,
-            sourceFeatureCount: session.document.cadDocument.designGraph.order.count,
-            sceneNodeCount: session.document.productMetadata.sceneNodes.count,
-            selectedCount: session.selection.selectedSceneNodeIDs.count,
-            generatedBodyCount: session.evaluatedBodyCount,
-            componentCount: session.document.productMetadata.componentDefinitions.count,
-            instanceCount: session.document.productMetadata.componentInstances.count,
+            displayUnit: snapshot.workspaceState.displayUnit,
+            sourceFeatureCount: snapshot.document.document.cadDocument.designGraph.order.count,
+            sceneNodeCount: snapshot.document.document.productMetadata.sceneNodes.count,
+            selectedCount: snapshot.selection.selectedSceneNodeIDs.count,
+            generatedBodyCount: snapshot.evaluationSnapshot.bodyCount,
+            componentCount: snapshot.document.document.productMetadata.componentDefinitions.count,
+            instanceCount: snapshot.document.document.productMetadata.componentInstances.count,
             evaluationTitle: evaluationStatusTitle,
             diagnosticSummary: diagnosticSummary,
             renderReasonTitle: renderInvalidationReasonTitle,
             renderGenerationTitle: renderInvalidationGenerationTitle,
-            materialCount: session.document.productMetadata.materialLibrary.materials.count,
+            materialCount: snapshot.document.document.productMetadata.materialLibrary.materials.count,
             defaultMaterialTitle: defaultMaterialTitle,
-            validationRuleCount: session.document.productMetadata.validationRules.count,
-            exportPresetCount: session.document.productMetadata.exportPresets.count,
-            ruler: session.workspaceState.ruler,
+            validationRuleCount: snapshot.document.document.productMetadata.validationRules.count,
+            exportPresetCount: snapshot.document.document.productMetadata.exportPresets.count,
+            ruler: snapshot.workspaceState.ruler,
             scaleRecommendation: recommendationStates.scale,
             scalePresetOptions: workspaceScalePresetOptionStates(
-                ruler: session.workspaceState.ruler
+                ruler: snapshot.workspaceState.ruler
             ),
             precisionRecommendation: recommendationStates.precision,
             parameters: workspaceParameterInspectorState
@@ -5300,12 +6308,12 @@ public struct MainView: View {
     private var workspaceParameterInspectorState: WorkspaceParameterInspectorState {
         WorkspaceParameterInspectorState(
             result: ParameterListResult(
-                document: session.document,
-                generation: session.generation,
-                dirty: session.isDirty,
-                diagnostics: session.diagnostics
+                document: snapshot.document.document,
+                generation: snapshot.documentGeneration,
+                dirty: snapshot.isDirty,
+                diagnostics: diagnostics
             ),
-            displayUnit: session.workspaceState.displayUnit
+            displayUnit: snapshot.workspaceState.displayUnit
         )
     }
 
@@ -5313,8 +6321,8 @@ public struct MainView: View {
         for nodes: [SceneNode]
     ) -> WorkspaceObjectOverviewInspectorState {
         WorkspaceObjectOverviewInspectorStateBuilder(
-            document: session.document,
-            displayUnit: session.workspaceState.displayUnit,
+            document: snapshot.document.document,
+            displayUnit: snapshot.workspaceState.displayUnit,
             objectRegistry: objectRegistry,
             selectedTargetSummary: selectedTargetSummary,
             selectedTargetCount: selectedTargetCount
@@ -5328,7 +6336,7 @@ public struct MainView: View {
         WorkspaceInspectorTextSectionView(section: overviewState.selectionSection)
         WorkspaceConstructionPlaneInspectorView(
             state: selectedConstructionPlaneInspectorState,
-            displayUnit: session.workspaceState.displayUnit,
+            displayUnit: snapshot.workspaceState.displayUnit,
             originSliderMetersRange: transformPositionSliderMetersRange,
             onSetOriginComponent: setSelectedConstructionPlaneOriginComponent,
             onSetNormalComponent: setSelectedConstructionPlaneNormalComponent,
@@ -5350,7 +6358,7 @@ public struct MainView: View {
             continuityResult: selectedSurfaceContinuityResult(for: nodes),
             boundaryContinuityStateResult: selectedSurfaceBoundaryContinuityStateResult,
             showsUnavailableSections: shouldShowSurfaceContinuitySection(for: nodes),
-            displayUnit: session.workspaceState.displayUnit,
+            displayUnit: snapshot.workspaceState.displayUnit,
             boundaryContinuityLevel: $surfaceBoundaryContinuityLevel,
             boundaryMatchSide: $surfaceBoundaryMatchSide,
             boundaryReferenceDirection: $surfaceBoundaryReferenceDirection,
@@ -5367,7 +6375,7 @@ public struct MainView: View {
         projectOutlineSection(nodes)
         WorkspaceTopologyEditInspectorView(
             state: topologyEditInspectorState(for: nodes),
-            displayUnit: session.workspaceState.displayUnit,
+            displayUnit: snapshot.workspaceState.displayUnit,
             faceDraftAngleDegrees: $faceDraftAngleDegrees,
             edgeOffsetDistanceMeters: $edgeOffsetDistanceMeters,
             edgeOffsetGapFill: $edgeOffsetGapFill,
@@ -5413,25 +6421,28 @@ public struct MainView: View {
 
         WorkspaceObjectTransformInspectorView(
             nodes: nodes,
-            displayUnit: session.workspaceState.displayUnit,
+            displayUnit: snapshot.workspaceState.displayUnit,
             positionSliderMetersRange: transformPositionSliderMetersRange,
             materialOptions: sortedMaterialOptions,
             onSetVisibility: { id, isVisible in
-                session.setSceneNodeVisibility(id, isVisible: isVisible)
+                submitSource(.setSceneNodeVisibility(id: id, isVisible: isVisible))
             },
             onSetLock: { id, isLocked in
-                session.setSceneNodeLock(id, isLocked: isLocked)
+                submitSource(.setSceneNodeLock(id: id, isLocked: isLocked))
             },
             onSetTransformComponent: { component, value in
                 setTransformComponent(component, to: value, for: nodes)
             },
             onSetMaterial: { id, materialID in
-                session.setSceneNodeMaterial(id, materialID: materialID)
+                submitSource(.setSceneNodeMaterial(id: id, materialID: materialID))
             },
             onResetTransform: {
-                for node in nodes {
-                    session.setSceneNodeTransform(node.id, localTransform: .identity)
-                }
+                submitSource(
+                    nodes.map { node in
+                        .setSceneNodeTransform(id: node.id, localTransform: .identity)
+                    },
+                    name: "resetObjectInspectorTransform"
+                )
             }
         )
     }
@@ -5534,7 +6545,11 @@ public struct MainView: View {
     private func patternArrayInspectorSection(_ state: PatternArrayInspectorState) -> some View {
         PatternArrayInspectorView(
             state: state,
-            session: session,
+            document: snapshot.document.document,
+            workspaceState: snapshot.workspaceState,
+            submit: { submitSource($0) },
+            submitCurrent: { submitCurrentPatternArrayEdit(sourceID: state.sourceID, $0) },
+            report: { reportToolStatus($0, severity: $1) },
             positionSliderMetersRange: transformPositionSliderMetersRange,
             defaultAxisDistanceMeters: workspaceInteractionScaleDefaults.operationStepMeters,
             isCurvePathPickActive: patternArrayCurvePathPickState.isPicking(sourceID: state.sourceID),
@@ -5543,12 +6558,56 @@ public struct MainView: View {
         )
     }
 
+    private func patternArrayEditingService(
+        sourceID: PatternArraySourceID
+    ) -> PatternArrayEditingService {
+        PatternArrayEditingService(
+            document: snapshot.document.document,
+            workspaceState: snapshot.workspaceState,
+            submit: { submitSource($0) },
+            report: { reportToolStatus($0, severity: $1) },
+            sourceID: sourceID,
+            submitCurrent: { submitCurrentPatternArrayEdit(sourceID: sourceID, $0) }
+        )
+    }
+
+    private func submitCurrentPatternArrayEdit(
+        sourceID: PatternArraySourceID,
+        _ operation: @escaping PatternArrayEditingService.CurrentContextOperation
+    ) {
+        submitSource(name: "updatePatternArray") { current in
+            guard current.document.document.productMetadata.patternArrays[sourceID] != nil else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Pattern array source \(sourceID) no longer exists."
+                )
+            }
+            var commands: [EditorCommand] = []
+            let service = PatternArrayEditingService(
+                document: current.document.document,
+                workspaceState: current.workspaceState,
+                submit: { commands.append($0) },
+                report: { reportToolStatus($0, severity: $1) },
+                sourceID: sourceID,
+                submitCurrent: nil
+            )
+            operation(service)
+            guard commands.isEmpty == false else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "The pattern array edit is no longer applicable to the current source."
+                )
+            }
+            return commands
+        }
+    }
+
     private func surfaceControlPointInspectorSection(
         _ state: SurfaceControlPointInspectorState
     ) -> some View {
         SurfaceControlPointInspectorView(
             state: state,
-            session: session,
+            workspaceState: snapshot.workspaceState,
             positionSliderMetersRange: transformPositionSliderMetersRange,
             slideDistanceMeters: $polySplineSurfaceVertexSlideDistanceMeters,
             frameMoveUMeters: $surfaceControlPointFrameUMoveMeters,
@@ -5598,12 +6657,13 @@ public struct MainView: View {
     }
 
     private func selectSurfaceBasisReference(_ reference: SelectionReference) {
-        guard session.selectReference(reference) else {
-            return
+        submitSelectionMutation { selection, document in
+            try selection.selectReference(reference, in: document)
+        } completion: { published in
+            dimensionCommandState.deactivate()
+            syncOffsetCommandAvailability(for: published.selection)
+            reportToolStatus("Surface basis reference selected.")
         }
-        dimensionCommandState.deactivate()
-        syncOffsetCommandAvailability()
-        session.reportToolStatus("Surface basis reference selected.")
     }
 
     @ViewBuilder
@@ -5628,13 +6688,13 @@ public struct MainView: View {
     private func startPatternArrayCurvePathPick(sourceID: PatternArraySourceID) {
         patternArrayCurvePathPreviewCandidate = nil
         patternArrayCurvePathPickState.start(sourceID: sourceID)
-        session.reportToolStatus("Pick a sketch line, circle, arc, or spline for the Curve Array path.")
+        reportToolStatus("Pick a sketch line, circle, arc, or spline for the Curve Array path.")
     }
 
     private func cancelPatternArrayCurvePathPick() {
         patternArrayCurvePathPreviewCandidate = nil
         patternArrayCurvePathPickState.cancel()
-        session.reportToolStatus("Curve Array path pick canceled.")
+        reportToolStatus("Curve Array path pick canceled.")
     }
 
     private func shouldShowSurfaceContinuitySection(for nodes: [SceneNode]) -> Bool {
@@ -5704,7 +6764,7 @@ public struct MainView: View {
         WorkspaceSketchCurveInspectorView(
             entity: entity,
             targetSummary: selectedTargetSummary,
-            displayUnit: session.workspaceState.displayUnit,
+            displayUnit: snapshot.workspaceState.displayUnit,
             curvatureDisplay: curveCurvatureDisplay(for: entity),
             pointDisplay: pointDisplay(for: entity),
             showsCurveDisplayControls: entity.bridgeCurve == nil,
@@ -6085,7 +7145,7 @@ public struct MainView: View {
             } else {
                 WorkspaceSplineControlPointControlsView(
                     entity: entity,
-                    displayUnit: session.workspaceState.displayUnit,
+                    displayUnit: snapshot.workspaceState.displayUnit,
                     selectedControlPointIndexes: selectedSplineControlPointIndexes(for: entity),
                     selectedControlPointIndex: $selectedSplineControlPointIndex,
                     slideDistanceMeters: $sketchSplineControlPointSlideDistanceMeters,
@@ -6106,7 +7166,7 @@ public struct MainView: View {
                 )
                 WorkspaceSplineEndpointConstraintControlsView(
                     entity: entity,
-                    displayUnit: session.workspaceState.displayUnit,
+                    displayUnit: snapshot.workspaceState.displayUnit,
                     onAddLineTangency: { entity, endpoint, lineID in
                         addSplineEndpointTangentConstraint(
                             entity,
@@ -6161,16 +7221,16 @@ public struct MainView: View {
     @ViewBuilder
     private func objectShapeSection(_ nodes: [SceneNode]) -> some View {
         let shapes = WorkspaceObjectShapeInspectorStateBuilder(
-            document: session.document,
-            currentEvaluation: session.currentEvaluation,
-            documentGeneration: session.generation,
+            document: snapshot.document.document,
+            currentEvaluation: snapshot.cadInteraction,
+            documentGeneration: snapshot.documentGeneration,
             objectRegistry: objectRegistry,
-            ruler: session.workspaceState.ruler
+            ruler: snapshot.workspaceState.ruler
         )
         .shapes(for: nodes)
         WorkspaceObjectShapeInspectorView(
             shapes: shapes,
-            displayUnit: session.workspaceState.displayUnit,
+            displayUnit: snapshot.workspaceState.displayUnit,
             positionSliderMetersRange: transformPositionSliderMetersRange,
             sizeSliderMetersRange: sizeSliderMetersRange,
             fallbackLengthSliderMetersRange: lengthSliderMetersRange(for: 0.0),
@@ -6185,28 +7245,41 @@ public struct MainView: View {
         to meters: Double,
         for shapes: [InspectorObjectShape]
     ) {
-        for shape in shapes {
-            guard let node = session.document.productMetadata.sceneNodes[shape.id] else {
-                continue
-            }
-            var values = WorkspaceTransformMatrix.normalizedValues(node.localTransform.matrix.values)
-            switch axis {
-            case .x:
-                values[InspectorTransformComponent.translationX.matrixIndex] = meters - shape.sourceCenter.x
-            case .y:
-                values[InspectorTransformComponent.translationY.matrixIndex] = meters - shape.sourceCenter.y
-            case .z:
-                values[InspectorTransformComponent.translationZ.matrixIndex] = meters - shape.sourceCenter.z
-            }
-            do {
-                let matrix = try Matrix4x4(values: values)
-                session.setSceneNodeTransform(
-                    node.id,
-                    localTransform: Transform3D(matrix: matrix)
+        let sceneNodeIDs = shapes.map(\.id)
+        submitSource(name: "setObjectCenter") { current in
+            let currentShapes = currentObjectShapes(sceneNodeIDs: sceneNodeIDs, in: current)
+            guard currentShapes.count == sceneNodeIDs.count else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "One or more edited object shapes no longer exist."
                 )
-            } catch {
-                session.reportToolStatus(error.localizedDescription, severity: .warning)
             }
+            var commands: [EditorCommand] = []
+            for shape in currentShapes {
+                guard let node = current.document.document.productMetadata.sceneNodes[shape.id] else {
+                    throw EditorError(
+                        code: .referenceUnresolved,
+                        message: "Object scene node \(shape.id) no longer exists."
+                    )
+                }
+                var values = WorkspaceTransformMatrix.normalizedValues(node.localTransform.matrix.values)
+                switch axis {
+                case .x:
+                    values[InspectorTransformComponent.translationX.matrixIndex] = meters - shape.sourceCenter.x
+                case .y:
+                    values[InspectorTransformComponent.translationY.matrixIndex] = meters - shape.sourceCenter.y
+                case .z:
+                    values[InspectorTransformComponent.translationZ.matrixIndex] = meters - shape.sourceCenter.z
+                }
+                let matrix = try Matrix4x4(values: values)
+                commands.append(
+                    .setSceneNodeTransform(
+                        id: node.id,
+                        localTransform: Transform3D(matrix: matrix)
+                    )
+                )
+            }
+            return commands
         }
     }
 
@@ -6216,36 +7289,77 @@ public struct MainView: View {
         for shapes: [InspectorObjectShape]
     ) {
         let sizeMeters = max(meters, 1.0e-9)
-        for shape in shapes {
-            switch shape.typeID {
-            case .some(.cube):
-                setCubeSize(axis, to: sizeMeters, for: shape)
-            case .some(.cylinder):
-                setCylinderSize(axis, to: sizeMeters, for: shape)
-            default:
-                continue
+        let sceneNodeIDs = shapes.map(\.id)
+        submitSource(name: "setObjectSize") { current in
+            let currentShapes = currentObjectShapes(sceneNodeIDs: sceneNodeIDs, in: current)
+            guard currentShapes.count == sceneNodeIDs.count else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "One or more resized object shapes no longer exist."
+                )
             }
+            var commands: [EditorCommand] = []
+            for shape in currentShapes {
+                switch shape.typeID {
+                case .some(.cube):
+                    commands.append(
+                        contentsOf: try cubeSizeCommands(
+                            axis,
+                            to: sizeMeters,
+                            for: shape,
+                            document: current.document.document
+                        )
+                    )
+                case .some(.cylinder):
+                    commands.append(
+                        contentsOf: try cylinderSizeCommands(
+                            axis,
+                            to: sizeMeters,
+                            for: shape,
+                            document: current.document.document
+                        )
+                    )
+                default:
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "Object \(shape.id) no longer supports direct size editing."
+                    )
+                }
+            }
+            return commands
         }
+    }
+
+    private func currentObjectShapes(
+        sceneNodeIDs: [SceneNodeID],
+        in current: ProjectViewSnapshot
+    ) -> [InspectorObjectShape] {
+        let document = current.document.document
+        let nodes = sceneNodeIDs.compactMap { document.productMetadata.sceneNodes[$0] }
+        return WorkspaceObjectShapeInspectorStateBuilder(
+            document: document,
+            currentEvaluation: current.cadInteraction,
+            documentGeneration: current.documentGeneration,
+            objectRegistry: current.objectRegistry,
+            ruler: current.workspaceState.ruler
+        )
+        .shapes(for: nodes) ?? []
     }
 
     private func offsetSelectedFace(
         _ target: SelectionTarget,
         by meters: Double
     ) {
-        let result = session.offsetBodyFace(
-            target: target,
-            distance: .length(meters, .meter)
+        submitSource(
+            .offsetBodyFace(
+                target: target,
+                distance: .length(meters, .meter)
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func deleteSelectedFaces(_ targets: [SelectionTarget]) {
-        let result = session.deleteBodyFaces(targets: targets)
-        if result?.diagnostics.isEmpty == false || result == nil {
-            isPreviewExpanded = true
-        }
+        submitSource(.deleteBodyFaces(targets: targets))
     }
 
     private func draftSelectedFaces(
@@ -6254,18 +7368,17 @@ public struct MainView: View {
         angleDegrees: Double
     ) {
         guard angleDegrees.isFinite else {
-            session.reportToolStatus("Draft Face requires a finite angle.", severity: .warning)
+            reportToolStatus("Draft Face requires a finite angle.", severity: .warning)
             isPreviewExpanded = true
             return
         }
-        let result = session.draftBodyFaces(
-            targets: targets,
-            neutralTarget: neutralTarget,
-            angle: .angle(angleDegrees, .degree)
+        submitSource(
+            .draftBodyFaces(
+                targets: targets,
+                neutralTarget: neutralTarget,
+                angle: .angle(angleDegrees, .degree)
+            )
         )
-        if result?.diagnostics.isEmpty == false || result == nil {
-            isPreviewExpanded = true
-        }
     }
 
     private func offsetSelectedEdges(
@@ -6275,27 +7388,27 @@ public struct MainView: View {
         isSymmetric: Bool = false
     ) {
         guard targets.count == 1, let target = targets.first else {
-            session.reportToolStatus(
+            reportToolStatus(
                 "Offset Edge currently supports one selected edge.",
                 severity: .warning
             )
             isPreviewExpanded = true
             return
         }
-        let result = session.offsetCurve(
-            target: target,
-            distance: .length(max(meters, 1.0e-9), .meter),
-            options: OffsetCurveOptions(
-                isSymmetric: isSymmetric,
-                gapFill: gapFill
-            ),
-            vertexHandle: nil
-        )
-        if result?.diagnostics.isEmpty == false || result == nil {
-            isPreviewExpanded = true
-        }
-        if result?.didMutate == true {
-            edgeOffsetCommandState.deactivate()
+        submitSource(
+            .offsetCurve(
+                target: target,
+                distance: .length(max(meters, 1.0e-9), .meter),
+                options: OffsetCurveOptions(
+                    isSymmetric: isSymmetric,
+                    gapFill: gapFill
+                ),
+                vertexHandle: nil
+            )
+        ) { result in
+            if result?.didMutate == true {
+                edgeOffsetCommandState.deactivate()
+            }
         }
     }
 
@@ -6303,27 +7416,25 @@ public struct MainView: View {
         _ targets: [SelectionTarget],
         by meters: Double
     ) {
-        let result = session.chamferBodyEdges(
-            targets: targets,
-            distance: .length(meters, .meter)
+        submitSource(
+            .chamferBodyEdges(
+                targets: targets,
+                distance: .length(meters, .meter)
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func filletSelectedEdges(
         _ targets: [SelectionTarget],
         radius meters: Double
     ) {
-        let result = session.filletBodyEdges(
-            targets: targets,
-            radius: .length(meters, .meter),
-            segmentCount: 8
+        submitSource(
+            .filletBodyEdges(
+                targets: targets,
+                radius: .length(meters, .meter),
+                segmentCount: 8
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func moveSelectedVertex(
@@ -6331,14 +7442,13 @@ public struct MainView: View {
         deltaX: Double,
         deltaY: Double
     ) {
-        let result = session.moveBodyVertex(
-            target: target,
-            deltaX: .length(deltaX, .meter),
-            deltaY: .length(deltaY, .meter)
+        submitSource(
+            .moveBodyVertex(
+                target: target,
+                deltaX: .length(deltaX, .meter),
+                deltaY: .length(deltaY, .meter)
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func offsetSelectedRegions(
@@ -6348,18 +7458,17 @@ public struct MainView: View {
         isSymmetric: Bool = false,
         combinesRegions: Bool = false
     ) {
-        let result = session.offsetRegions(
-            targets: targets,
-            distance: .length(meters, .meter),
-            options: OffsetCurveOptions(
-                isSymmetric: isSymmetric,
-                gapFill: gapFill
-            ),
-            combinesRegions: combinesRegions
+        submitSource(
+            .offsetRegions(
+                targets: targets,
+                distance: .length(meters, .meter),
+                options: OffsetCurveOptions(
+                    isSymmetric: isSymmetric,
+                    gapFill: gapFill
+                ),
+                combinesRegions: combinesRegions
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func moveSelectedSketchEntityPoint(
@@ -6368,15 +7477,14 @@ public struct MainView: View {
         deltaX: Double,
         deltaY: Double
     ) {
-        let result = session.moveSketchEntityPoint(
-            target: target,
-            handle: handle,
-            deltaX: .length(deltaX, .meter),
-            deltaY: .length(deltaY, .meter)
+        submitSource(
+            .moveSketchEntityPoint(
+                target: target,
+                handle: handle,
+                deltaX: .length(deltaX, .meter),
+                deltaY: .length(deltaY, .meter)
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func moveSelectedSplineControlPoint(
@@ -6385,15 +7493,14 @@ public struct MainView: View {
         deltaX: Double,
         deltaY: Double
     ) {
-        let result = session.moveSketchSplineControlPoint(
-            target: target,
-            controlPointIndex: controlPointIndex,
-            deltaX: .length(deltaX, .meter),
-            deltaY: .length(deltaY, .meter)
+        submitSource(
+            .moveSketchSplineControlPoint(
+                target: target,
+                controlPointIndex: controlPointIndex,
+                deltaX: .length(deltaX, .meter),
+                deltaY: .length(deltaY, .meter)
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func selectedSplineControlPointIndexes(for entity: InspectorSketchEntity) -> [Int] {
@@ -6414,15 +7521,14 @@ public struct MainView: View {
         distanceMeters: Double? = nil
     ) {
         let resolvedDistanceMeters = distanceMeters ?? max(sketchSplineControlPointSlideDistanceMeters, 1.0e-9)
-        let result = session.slideSketchSplineControlPoints(
-            target: target,
-            controlPointIndexes: controlPointIndexes,
-            direction: direction,
-            distance: .length(resolvedDistanceMeters, .meter)
+        submitSource(
+            .slideSketchSplineControlPoints(
+                target: target,
+                controlPointIndexes: controlPointIndexes,
+                direction: direction,
+                distance: .length(resolvedDistanceMeters, .meter)
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func slideSelectedPolySplineSurfaceVertices(
@@ -6431,52 +7537,35 @@ public struct MainView: View {
         distanceMeters: Double? = nil
     ) {
         let resolvedDistanceMeters = distanceMeters ?? max(polySplineSurfaceVertexSlideDistanceMeters, 1.0e-9)
-        let result = session.slidePolySplineSurfaceVertices(
-            targets: targets,
-            direction: direction,
-            distance: .length(resolvedDistanceMeters, .meter)
+        submitSource(
+            .slidePolySplineSurfaceVertices(
+                targets: targets,
+                direction: direction,
+                distance: .length(resolvedDistanceMeters, .meter)
+            )
         )
-        if result?.diagnostics.isEmpty == false || result == nil {
-            isPreviewExpanded = true
-        }
     }
 
     private func setSurfaceControlPointDisplay(
         _ targets: [SelectionReference],
         isVisible: Bool
     ) {
-        var shouldExpandPreview = false
-        for target in targets {
-            let result = session.setSurfaceControlPointDisplay(
-                target: target,
-                isVisible: isVisible
-            )
-            if result?.diagnostics.isEmpty == false || result == nil {
-                shouldExpandPreview = true
+        applyWorkspace(
+            targets.map { target in
+                .setSurfaceControlPointDisplay(target: target, isVisible: isVisible)
             }
-        }
-        if shouldExpandPreview {
-            isPreviewExpanded = true
-        }
+        )
     }
 
     private func setSurfaceFrameDisplay(
         _ queries: [SurfaceFrameQuery],
         isVisible: Bool
     ) {
-        var shouldExpandPreview = false
-        for query in queries {
-            let result = session.setSurfaceFrameDisplay(
-                query: query,
-                isVisible: isVisible
-            )
-            if result?.diagnostics.isEmpty == false || result == nil {
-                shouldExpandPreview = true
+        applyWorkspace(
+            queries.map { query in
+                .setSurfaceFrameDisplay(query: query, isVisible: isVisible)
             }
-        }
-        if shouldExpandPreview {
-            isPreviewExpanded = true
-        }
+        )
     }
 
     private func setSurfaceControlPointCoordinate(
@@ -6487,36 +7576,62 @@ public struct MainView: View {
         guard state.canEditCoordinates else {
             return
         }
-
-        var shouldExpandPreview = false
-        for entry in state.entries where entry.isEditable {
-            let currentMeters: Double
-            switch axis {
-            case .x:
-                currentMeters = entry.point.x
-            case .y:
-                currentMeters = entry.point.y
-            case .z:
-                currentMeters = entry.point.z
-            }
-
-            let delta = meters - currentMeters
-            guard abs(delta) > 1.0e-12 else {
-                continue
-            }
-
-            let result = session.moveSurfaceControlPoint(
-                target: entry.selectionReference,
-                deltaX: .length(axis == .x ? delta : 0.0, .meter),
-                deltaY: .length(axis == .y ? delta : 0.0, .meter),
-                deltaZ: .length(axis == .z ? delta : 0.0, .meter)
+        let references = state.entries.filter(\.isEditable).map(\.selectionReference)
+        let analysisOptions = surfaceAnalysisOptions.analysisOptions
+        submitSource(name: "moveSurfaceControlPoints") { current in
+            let builder = WorkspaceSurfaceInspectorStateBuilder(
+                document: current.document.document,
+                selection: SelectionModel(selectedReferences: references),
+                currentEvaluation: current.cadInteraction,
+                documentGeneration: current.documentGeneration,
+                objectRegistry: current.objectRegistry,
+                surfaceAnalysisOptions: analysisOptions,
+                workspaceState: current.workspaceState
             )
-            if result?.diagnostics.isEmpty == false || result == nil {
-                shouldExpandPreview = true
+            let currentState: SurfaceControlPointInspectorState
+            switch builder.surfaceControlPointStateResult() {
+            case .success(let state?):
+                currentState = state
+            case .success(nil):
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "The edited surface control points no longer exist."
+                )
+            case .failure(let error):
+                throw error
             }
-        }
-        if shouldExpandPreview {
-            isPreviewExpanded = true
+            let editableEntries = currentState.entries.filter(\.isEditable)
+            guard editableEntries.count == references.count else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "One or more edited surface control points no longer exist."
+                )
+            }
+            var commands: [EditorCommand] = []
+            for entry in editableEntries {
+                let currentMeters: Double
+                switch axis {
+                case .x:
+                    currentMeters = entry.point.x
+                case .y:
+                    currentMeters = entry.point.y
+                case .z:
+                    currentMeters = entry.point.z
+                }
+                let delta = meters - currentMeters
+                guard abs(delta) > 1.0e-12 else {
+                    continue
+                }
+                commands.append(
+                    .moveSurfaceControlPoint(
+                        target: entry.selectionReference,
+                        deltaX: .length(axis == .x ? delta : 0.0, .meter),
+                        deltaY: .length(axis == .y ? delta : 0.0, .meter),
+                        deltaZ: .length(axis == .z ? delta : 0.0, .meter)
+                    )
+                )
+            }
+            return commands
         }
     }
 
@@ -6524,100 +7639,89 @@ public struct MainView: View {
         _ targets: [SelectionReference],
         weight: Double
     ) {
-        var shouldExpandPreview = false
-        for target in targets {
-            let result = session.setSurfaceControlPointWeight(
-                target: target,
-                weight: .scalar(max(weight, 1.0e-9))
-            )
-            if result?.diagnostics.isEmpty == false || result == nil {
-                shouldExpandPreview = true
-            }
-        }
-        if shouldExpandPreview {
-            isPreviewExpanded = true
-        }
+        submitSource(
+            targets.map {
+                .setSurfaceControlPointWeight(
+                    target: $0,
+                    weight: .scalar(max(weight, 1.0e-9))
+                )
+            },
+            name: "setSurfaceControlPointWeights"
+        )
     }
 
     private func setSurfaceKnotValue(
         _ target: SelectionReference,
         value: Double
     ) {
-        let result: CommandExecutionResult?
+        let command: EditorCommand
         switch target {
         case .surface(.trimKnot(let reference)):
-            result = session.setSurfaceTrimKnotValue(
+            command = .setSurfaceTrimKnotValue(
                 target: .surface(.trim(reference.trim)),
                 knotIndex: reference.knotIndex,
                 value: .scalar(value)
             )
         default:
-            result = session.setSurfaceKnotValue(
+            command = .setSurfaceKnotValue(
                 target: target,
                 value: .scalar(value)
             )
         }
-        if result?.diagnostics.isEmpty == false || result == nil {
-            isPreviewExpanded = true
-        }
+        submitSource(command)
     }
 
     private func insertSurfaceKnot(
         _ target: SelectionReference,
         value: Double
     ) {
-        let result: CommandExecutionResult?
+        let command: EditorCommand
         switch target {
         case .surface(.trimKnot), .surface(.trimSpan):
-            result = session.insertSurfaceTrimKnot(
+            command = .insertSurfaceTrimKnot(
                 target: target,
                 value: .scalar(value)
             )
         default:
-            result = session.insertSurfaceKnot(
+            command = .insertSurfaceKnot(
                 target: target,
                 value: .scalar(value)
             )
         }
-        if result?.diagnostics.isEmpty == false || result == nil {
-            isPreviewExpanded = true
-        }
+        submitSource(command)
     }
 
     private func splitSurfaceSpan(
         _ target: SelectionReference,
         fraction: Double
     ) {
-        let result = session.splitSurfaceSpan(
-            target: target,
-            fraction: .scalar(fraction)
+        submitSource(
+            .splitSurfaceSpan(
+                target: target,
+                fraction: .scalar(fraction)
+            )
         )
-        if result?.diagnostics.isEmpty == false || result == nil {
-            isPreviewExpanded = true
-        }
     }
 
     private func setSurfaceKnotMultiplicity(
         _ target: SelectionReference,
         multiplicity: Int
     ) {
-        let result: CommandExecutionResult?
+        let command: EditorCommand
         switch target {
         case .surface(.trimKnot(let reference)):
-            result = session.setSurfaceTrimKnotMultiplicity(
+            command = .setSurfaceTrimKnotMultiplicity(
                 target: .surface(.trim(reference.trim)),
                 knotIndex: reference.knotIndex,
                 multiplicity: multiplicity
             )
         default:
-            result = session.setSurfaceKnotMultiplicity(
+            command = .setSurfaceKnotMultiplicity(
                 target: target,
                 multiplicity: multiplicity
             )
         }
-        if result?.diagnostics.isEmpty == false || result == nil {
-            isPreviewExpanded = true
-        }
+        submitSource(command)
     }
 
     private func matchSurfaceBoundaryContinuity(
@@ -6627,16 +7731,15 @@ public struct MainView: View {
         matchSide: SurfaceBoundaryMatchSide,
         referenceDirection: SurfaceBoundaryReferenceDirection
     ) {
-        let result = session.matchSurfaceBoundaryContinuity(
-            target: target,
-            reference: reference,
-            level: level,
-            matchSide: matchSide,
-            referenceDirection: referenceDirection
+        submitSource(
+            .matchSurfaceBoundaryContinuity(
+                target: target,
+                reference: reference,
+                level: level,
+                matchSide: matchSide,
+                referenceDirection: referenceDirection
+            )
         )
-        if result?.diagnostics.isEmpty == false || result == nil {
-            isPreviewExpanded = true
-        }
     }
 
     private func setSurfaceTrimDomain(
@@ -6646,16 +7749,15 @@ public struct MainView: View {
         vLowerBound: Double,
         vUpperBound: Double
     ) {
-        let result = session.setSurfaceTrimDomain(
-            target: target,
-            uLowerBound: .scalar(uLowerBound),
-            uUpperBound: .scalar(uUpperBound),
-            vLowerBound: .scalar(vLowerBound),
-            vUpperBound: .scalar(vUpperBound)
+        submitSource(
+            .setSurfaceTrimDomain(
+                target: target,
+                uLowerBound: .scalar(uLowerBound),
+                uUpperBound: .scalar(uUpperBound),
+                vLowerBound: .scalar(vLowerBound),
+                vUpperBound: .scalar(vUpperBound)
+            )
         )
-        if result?.diagnostics.isEmpty == false || result == nil {
-            isPreviewExpanded = true
-        }
     }
 
     private func slideSelectedSurfaceControlPoints(
@@ -6664,14 +7766,13 @@ public struct MainView: View {
         distanceMeters: Double? = nil
     ) {
         let resolvedDistanceMeters = distanceMeters ?? max(polySplineSurfaceVertexSlideDistanceMeters, 1.0e-9)
-        let result = session.slideSurfaceControlPoints(
-            targets: targets,
-            direction: direction,
-            distance: .length(resolvedDistanceMeters, .meter)
+        submitSource(
+            .slideSurfaceControlPoints(
+                targets: targets,
+                direction: direction,
+                distance: .length(resolvedDistanceMeters, .meter)
+            )
         )
-        if result?.diagnostics.isEmpty == false || result == nil {
-            isPreviewExpanded = true
-        }
     }
 
     private func moveSelectedSurfaceControlPointsInFrame(
@@ -6681,22 +7782,21 @@ public struct MainView: View {
         vDistanceMeters: Double,
         normalDistanceMeters: Double
     ) {
-        let result = session.moveSurfaceControlPointsInFrame(
-            targets: targets,
-            frame: frame,
-            uDistance: .length(uDistanceMeters, .meter),
-            vDistance: .length(vDistanceMeters, .meter),
-            normalDistance: .length(normalDistanceMeters, .meter)
+        submitSource(
+            .moveSurfaceControlPointsInFrame(
+                targets: targets,
+                frame: frame,
+                uDistance: .length(uDistanceMeters, .meter),
+                vDistance: .length(vDistanceMeters, .meter),
+                normalDistance: .length(normalDistanceMeters, .meter)
+            )
         )
-        if result?.diagnostics.isEmpty == false || result == nil {
-            isPreviewExpanded = true
-        }
     }
 
     private func curveCurvatureDisplay(
         for entity: InspectorSketchEntity
     ) -> CurveCurvatureDisplay? {
-        session.workspaceState.curveCurvatureDisplays[
+        snapshot.workspaceState.curveCurvatureDisplays[
             .sketchEntity(
                 featureID: entity.sourceFeatureID,
                 entityID: entity.entityID
@@ -6707,7 +7807,7 @@ public struct MainView: View {
     private func pointDisplay(
         for entity: InspectorSketchEntity
     ) -> PointDisplay? {
-        session.workspaceState.pointDisplays[
+        snapshot.workspaceState.pointDisplays[
             .sketchEntity(
                 featureID: entity.sourceFeatureID,
                 entityID: entity.entityID
@@ -6720,27 +7820,21 @@ public struct MainView: View {
         isVisible: Bool,
         combScale: Double
     ) {
-        let result = session.setCurveCurvatureDisplay(
+        setCurveCurvatureDisplay(
             target: entity.target,
             isVisible: isVisible,
             combScale: max(combScale, 1.0e-6)
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func setPointDisplay(
         _ entity: InspectorSketchEntity,
         isVisible: Bool
     ) {
-        let result = session.setPointDisplay(
+        setPointDisplay(
             target: entity.target,
             isVisible: isVisible
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func setBridgeCurveTension(
@@ -6750,33 +7844,20 @@ public struct MainView: View {
         value: Double
     ) {
         let nextValue = max(value, 1.0e-6)
-        let result: CommandExecutionResult?
-        switch endpoint {
-        case .first:
-            var tension = bridgeCurve.firstEndpoint.tension
-            setBridgeTensionLevel(&tension, level: level, value: nextValue)
-            var nextEndpoint = bridgeCurve.firstEndpoint
-            nextEndpoint.tension = tension
-            result = session.setBridgeCurveParameters(
-                sourceID: bridgeCurve.sourceID,
-                firstEndpoint: nextEndpoint
+        submitBridgeCurveEndpointEdit(
+            sourceID: bridgeCurve.sourceID,
+            endpoint: endpoint,
+            name: "setBridgeCurveTension"
+        ) { nextEndpoint in
+            Self.setBridgeTensionLevel(
+                &nextEndpoint.tension,
+                level: level,
+                value: nextValue
             )
-        case .second:
-            var tension = bridgeCurve.secondEndpoint.tension
-            setBridgeTensionLevel(&tension, level: level, value: nextValue)
-            var nextEndpoint = bridgeCurve.secondEndpoint
-            nextEndpoint.tension = tension
-            result = session.setBridgeCurveParameters(
-                sourceID: bridgeCurve.sourceID,
-                secondEndpoint: nextEndpoint
-            )
-        }
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
         }
     }
 
-    private func setBridgeTensionLevel(
+    private static func setBridgeTensionLevel(
         _ tension: inout BridgeCurveTension,
         level: InspectorBridgeCurveTensionLevel,
         value: Double
@@ -6797,25 +7878,12 @@ public struct MainView: View {
         value: Double
     ) {
         let clampedValue = min(max(value, 0.0), 1.0)
-        let result: CommandExecutionResult?
-        switch endpoint {
-        case .first:
-            var nextEndpoint = bridgeCurve.firstEndpoint
+        submitBridgeCurveEndpointEdit(
+            sourceID: bridgeCurve.sourceID,
+            endpoint: endpoint,
+            name: "setBridgeCurveParameter"
+        ) { nextEndpoint in
             nextEndpoint.parameter = .scalar(clampedValue)
-            result = session.setBridgeCurveParameters(
-                sourceID: bridgeCurve.sourceID,
-                firstEndpoint: nextEndpoint
-            )
-        case .second:
-            var nextEndpoint = bridgeCurve.secondEndpoint
-            nextEndpoint.parameter = .scalar(clampedValue)
-            result = session.setBridgeCurveParameters(
-                sourceID: bridgeCurve.sourceID,
-                secondEndpoint: nextEndpoint
-            )
-        }
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
         }
     }
 
@@ -6823,25 +7891,12 @@ public struct MainView: View {
         _ bridgeCurve: InspectorBridgeCurve,
         endpoint: InspectorBridgeCurveEndpoint
     ) {
-        let result: CommandExecutionResult?
-        switch endpoint {
-        case .first:
-            var nextEndpoint = bridgeCurve.firstEndpoint
+        submitBridgeCurveEndpointEdit(
+            sourceID: bridgeCurve.sourceID,
+            endpoint: endpoint,
+            name: "toggleBridgeCurveSense"
+        ) { nextEndpoint in
             nextEndpoint.reversesSense.toggle()
-            result = session.setBridgeCurveParameters(
-                sourceID: bridgeCurve.sourceID,
-                firstEndpoint: nextEndpoint
-            )
-        case .second:
-            var nextEndpoint = bridgeCurve.secondEndpoint
-            nextEndpoint.reversesSense.toggle()
-            result = session.setBridgeCurveParameters(
-                sourceID: bridgeCurve.sourceID,
-                secondEndpoint: nextEndpoint
-            )
-        }
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
         }
     }
 
@@ -6850,36 +7905,57 @@ public struct MainView: View {
         endpoint: InspectorBridgeCurveEndpoint,
         trimSide: BridgeCurveTrimSide
     ) {
-        let result: CommandExecutionResult?
-        switch endpoint {
-        case .first:
-            var nextEndpoint = bridgeCurve.firstEndpoint
+        submitBridgeCurveEndpointEdit(
+            sourceID: bridgeCurve.sourceID,
+            endpoint: endpoint,
+            name: "setBridgeCurveTrimSide"
+        ) { nextEndpoint in
             nextEndpoint.trimSide = trimSide
-            result = session.setBridgeCurveParameters(
-                sourceID: bridgeCurve.sourceID,
-                firstEndpoint: nextEndpoint
-            )
-        case .second:
-            var nextEndpoint = bridgeCurve.secondEndpoint
-            nextEndpoint.trimSide = trimSide
-            result = session.setBridgeCurveParameters(
-                sourceID: bridgeCurve.sourceID,
-                secondEndpoint: nextEndpoint
-            )
         }
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
+    }
+
+    private func submitBridgeCurveEndpointEdit(
+        sourceID: BridgeCurveSourceID,
+        endpoint: InspectorBridgeCurveEndpoint,
+        name: String,
+        edit: @escaping @MainActor @Sendable (inout BridgeCurveEndpoint) -> Void
+    ) {
+        submitSource(name: name) { current in
+            guard let source = current.document.document.productMetadata.bridgeCurveSources[sourceID] else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Bridge curve source no longer exists."
+                )
+            }
+            var nextEndpoint: BridgeCurveEndpoint
+            switch endpoint {
+            case .first:
+                nextEndpoint = source.firstEndpoint
+            case .second:
+                nextEndpoint = source.secondEndpoint
+            }
+            edit(&nextEndpoint)
+            return [
+                .setBridgeCurveParameters(
+                    sourceID: sourceID,
+                    firstEndpoint: endpoint == .first ? nextEndpoint : nil,
+                    secondEndpoint: endpoint == .second ? nextEndpoint : nil,
+                    continuity: nil
+                ),
+            ]
         }
     }
 
     private func trimBridgeCurveSources(_ bridgeCurve: InspectorBridgeCurve) {
-        let result = session.setBridgeCurveParameters(
-            sourceID: bridgeCurve.sourceID,
-            trimsSourceCurves: true
+        submitSource(
+            .setBridgeCurveParameters(
+                sourceID: bridgeCurve.sourceID,
+                firstEndpoint: nil,
+                secondEndpoint: nil,
+                continuity: nil,
+                trimsSourceCurves: true
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func setBridgeCurveCurvatureDisplay(
@@ -6887,14 +7963,11 @@ public struct MainView: View {
         isVisible: Bool,
         combScale: Double
     ) {
-        let result = session.setCurveCurvatureDisplay(
+        setCurveCurvatureDisplay(
             target: bridgeCurve.target,
             isVisible: isVisible,
             combScale: max(combScale, 1.0e-6)
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func setBridgeCurveContinuity(
@@ -6902,19 +7975,29 @@ public struct MainView: View {
         endpoint: InspectorBridgeCurveEndpoint,
         continuity: BridgeCurveEndpointContinuity
     ) {
-        var nextContinuity = bridgeCurve.continuity
-        switch endpoint {
-        case .first:
-            nextContinuity.first = continuity
-        case .second:
-            nextContinuity.second = continuity
-        }
-        let result = session.setBridgeCurveParameters(
-            sourceID: bridgeCurve.sourceID,
-            continuity: nextContinuity
-        )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
+        let sourceID = bridgeCurve.sourceID
+        submitSource(name: "setBridgeCurveContinuity") { current in
+            guard let source = current.document.document.productMetadata.bridgeCurveSources[sourceID] else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Bridge curve source no longer exists."
+                )
+            }
+            var nextContinuity = source.continuity
+            switch endpoint {
+            case .first:
+                nextContinuity.first = continuity
+            case .second:
+                nextContinuity.second = continuity
+            }
+            return [
+                .setBridgeCurveParameters(
+                    sourceID: sourceID,
+                    firstEndpoint: nil,
+                    secondEndpoint: nil,
+                    continuity: nextContinuity
+                ),
+            ]
         }
     }
 
@@ -6922,16 +8005,15 @@ public struct MainView: View {
         _ entity: InspectorSketchEntity,
         controlPointIndex: Int
     ) {
-        let result = session.addSketchConstraint(
-            featureID: entity.sourceFeatureID,
-            constraint: .smoothSplineControlPoint(
-                entity: entity.entityID,
-                index: controlPointIndex
+        submitSource(
+            .addSketchConstraint(
+                featureID: entity.sourceFeatureID,
+                constraint: .smoothSplineControlPoint(
+                    entity: entity.entityID,
+                    index: controlPointIndex
+                )
             )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func addSplineEndpointTangentConstraint(
@@ -6939,9 +8021,9 @@ public struct MainView: View {
         endpoint: SketchSplineEndpoint,
         lineID: SketchEntityID
     ) {
-        guard let feature = session.document.cadDocument.designGraph.nodes[entity.sourceFeatureID],
+        guard let feature = snapshot.document.document.cadDocument.designGraph.nodes[entity.sourceFeatureID],
               case .sketch(let sketch) = feature.operation else {
-            session.reportToolStatus(
+            reportToolStatus(
                 "Spline tangency requires an existing sketch feature.",
                 severity: .warning
             )
@@ -6949,36 +8031,35 @@ public struct MainView: View {
         }
         let orientation: SketchTangentOrientation
         do {
-            orientation = try session.document.splineLineTangentOrientation(
+            orientation = try snapshot.document.document.splineLineTangentOrientation(
                 splineID: entity.entityID,
                 endpoint: endpoint,
                 lineID: lineID,
                 in: sketch
             )
         } catch let error as EditorError {
-            session.reportToolStatus(error.message, severity: .warning)
+            reportToolStatus(error.message, severity: .warning)
             return
         } catch {
-            session.reportToolStatus(
+            reportToolStatus(
                 "Spline tangency could not resolve the current geometry.",
                 severity: .warning
             )
             return
         }
-        let result = session.addSketchConstraint(
-            featureID: entity.sourceFeatureID,
-            constraint: .splineEndpointTangent(SketchSplineLineTangencyConstraint(
-                splineEndpoint: SketchSplineEndpointReference(
-                    splineID: entity.entityID,
-                    endpoint: endpoint
-                ),
-                line: lineID,
-                orientation: orientation
-            ))
+        submitSource(
+            .addSketchConstraint(
+                featureID: entity.sourceFeatureID,
+                constraint: .splineEndpointTangent(SketchSplineLineTangencyConstraint(
+                    splineEndpoint: SketchSplineEndpointReference(
+                        splineID: entity.entityID,
+                        endpoint: endpoint
+                    ),
+                    line: lineID,
+                    orientation: orientation
+                ))
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     /// Joined endpoints of differing kinds flow in the same parameter
@@ -6996,20 +8077,19 @@ public struct MainView: View {
         endpoint: SketchSplineEndpoint,
         target: SketchSplineEndpointReference
     ) {
-        let result = session.addSketchConstraint(
-            featureID: entity.sourceFeatureID,
-            constraint: .tangentSplineEndpoints(SketchSplineEndpointTangencyConstraint(
-                first: SketchSplineEndpointReference(
-                    splineID: entity.entityID,
-                    endpoint: endpoint
-                ),
-                second: target,
-                orientation: splineEndpointPairOrientation(endpoint, target)
-            ))
+        submitSource(
+            .addSketchConstraint(
+                featureID: entity.sourceFeatureID,
+                constraint: .tangentSplineEndpoints(SketchSplineEndpointTangencyConstraint(
+                    first: SketchSplineEndpointReference(
+                        splineID: entity.entityID,
+                        endpoint: endpoint
+                    ),
+                    second: target,
+                    orientation: splineEndpointPairOrientation(endpoint, target)
+                ))
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func addSmoothSplineEndpointsConstraint(
@@ -7017,114 +8097,107 @@ public struct MainView: View {
         endpoint: SketchSplineEndpoint,
         target: SketchSplineEndpointReference
     ) {
-        let result = session.addSketchConstraint(
-            featureID: entity.sourceFeatureID,
-            constraint: .smoothSplineEndpoints(SketchSplineEndpointTangencyConstraint(
-                first: SketchSplineEndpointReference(
-                    splineID: entity.entityID,
-                    endpoint: endpoint
-                ),
-                second: target,
-                orientation: splineEndpointPairOrientation(endpoint, target)
-            ))
+        submitSource(
+            .addSketchConstraint(
+                featureID: entity.sourceFeatureID,
+                constraint: .smoothSplineEndpoints(SketchSplineEndpointTangencyConstraint(
+                    first: SketchSplineEndpointReference(
+                        splineID: entity.entityID,
+                        endpoint: endpoint
+                    ),
+                    second: target,
+                    orientation: splineEndpointPairOrientation(endpoint, target)
+                ))
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func setSelectedSketchCircleRadius(
         _ target: SelectionTarget,
         meters: Double
     ) {
-        let result = session.setSketchCircleParameters(
-            target: target,
-            center: nil,
-            radius: .length(max(meters, 1.0e-9), .meter)
+        submitSource(
+            .setSketchCircleParameters(
+                target: target,
+                center: nil,
+                radius: .length(max(meters, 1.0e-9), .meter)
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func setSelectedSketchArcRadius(
         _ target: SelectionTarget,
         meters: Double
     ) {
-        let result = session.setSketchArcParameters(
-            target: target,
-            center: nil,
-            radius: .length(max(meters, 1.0e-9), .meter),
-            startAngle: nil,
-            endAngle: nil
+        submitSource(
+            .setSketchArcParameters(
+                target: target,
+                center: nil,
+                radius: .length(max(meters, 1.0e-9), .meter),
+                startAngle: nil,
+                endAngle: nil
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func setSelectedSketchArcStartAngle(
         _ target: SelectionTarget,
         degrees: Double
     ) {
-        let result = session.setSketchArcParameters(
-            target: target,
-            center: nil,
-            radius: nil,
-            startAngle: .angle(degrees, .degree),
-            endAngle: nil
+        submitSource(
+            .setSketchArcParameters(
+                target: target,
+                center: nil,
+                radius: nil,
+                startAngle: .angle(degrees, .degree),
+                endAngle: nil
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func setSelectedSketchArcStartAngle(
         _ target: SelectionTarget,
         radians: Double
     ) {
-        let result = session.setSketchArcParameters(
-            target: target,
-            center: nil,
-            radius: nil,
-            startAngle: .angle(radians, .radian),
-            endAngle: nil
+        submitSource(
+            .setSketchArcParameters(
+                target: target,
+                center: nil,
+                radius: nil,
+                startAngle: .angle(radians, .radian),
+                endAngle: nil
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func setSelectedSketchArcEndAngle(
         _ target: SelectionTarget,
         degrees: Double
     ) {
-        let result = session.setSketchArcParameters(
-            target: target,
-            center: nil,
-            radius: nil,
-            startAngle: nil,
-            endAngle: .angle(degrees, .degree)
+        submitSource(
+            .setSketchArcParameters(
+                target: target,
+                center: nil,
+                radius: nil,
+                startAngle: nil,
+                endAngle: .angle(degrees, .degree)
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func setSelectedSketchArcEndAngle(
         _ target: SelectionTarget,
         radians: Double
     ) {
-        let result = session.setSketchArcParameters(
-            target: target,
-            center: nil,
-            radius: nil,
-            startAngle: nil,
-            endAngle: .angle(radians, .radian)
+        submitSource(
+            .setSketchArcParameters(
+                target: target,
+                center: nil,
+                radius: nil,
+                startAngle: nil,
+                endAngle: .angle(radians, .radian)
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func setSelectedSketchEntityDimension(
@@ -7144,58 +8217,49 @@ public struct MainView: View {
         kind: SketchEntityDimensionKind,
         value: CADExpression
     ) {
-        let result = session.setSketchEntityDimension(
-            target: target,
-            kind: kind,
-            value: value
+        submitSource(
+            .setSketchEntityDimension(
+                target: target,
+                kind: kind,
+                value: value
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func convertSelectedSketchLineToArc(
         _ target: SelectionTarget,
         sagitta: Double
     ) {
-        let result = session.convertSketchLineToArc(
-            target: target,
-            sagitta: .length(sagitta, .meter)
+        submitSource(
+            .convertSketchLineToArc(
+                target: target,
+                sagitta: .length(sagitta, .meter)
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func convertSelectedSketchLineToSpline(
         _ target: SelectionTarget
     ) {
-        let result = session.convertSketchLineToSpline(target: target)
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
+        submitSource(.convertSketchLineToSpline(target: target))
     }
 
     private func reverseSelectedSketchCurve(
         _ target: SelectionTarget
     ) {
-        let result = session.reverseSketchCurve(target: target)
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
+        submitSource(.reverseSketchCurve(target: target))
     }
 
     private func extendSelectedSketchCurve(
         _ target: SelectionTarget
     ) {
-        let result = session.extendSketchCurve(
-            target: target,
-            distance: .length(max(sketchExtendDistanceMeters, 1.0e-9), .meter),
-            shape: sketchExtendShape
+        submitSource(
+            .extendSketchCurve(
+                target: target,
+                distance: .length(max(sketchExtendDistanceMeters, 1.0e-9), .meter),
+                shape: sketchExtendShape
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func applySelectedSketchCornerTreatment(
@@ -7208,15 +8272,14 @@ public struct MainView: View {
         } else {
             adjacentTarget = nil
         }
-        let result = session.applySketchCornerTreatment(
-            target: target,
-            adjacentTarget: adjacentTarget,
-            distance: .length(max(sketchCornerTreatmentDistanceMeters, 1.0e-9), .meter),
-            treatment: sketchCornerTreatment
+        submitSource(
+            .applySketchCornerTreatment(
+                target: target,
+                adjacentTarget: adjacentTarget,
+                distance: .length(max(sketchCornerTreatmentDistanceMeters, 1.0e-9), .meter),
+                treatment: sketchCornerTreatment
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func offsetSelectedSketchVertex(
@@ -7225,52 +8288,48 @@ public struct MainView: View {
         guard let handle = selectedSketchVertexOffsetHandle(entity) else {
             return
         }
-        let result = session.offsetSketchVertex(
-            target: entity.target,
-            handle: handle,
-            distance: .length(max(sketchVertexOffsetDistanceMeters, 1.0e-9), .meter)
+        submitSource(
+            .offsetSketchVertex(
+                target: entity.target,
+                handle: handle,
+                distance: .length(max(sketchVertexOffsetDistanceMeters, 1.0e-9), .meter)
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func splitSelectedSketchCurve(
         _ target: SelectionTarget
     ) {
         let fraction = min(max(sketchSplitFraction, 0.01), 0.99)
-        let result = session.splitSketchCurve(
-            target: target,
-            fraction: .scalar(fraction)
+        submitSource(
+            .splitSketchCurve(
+                target: target,
+                fraction: .scalar(fraction)
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func insertSelectedSketchSplineControlPoint(
         _ target: SelectionTarget
     ) {
         let fraction = min(max(sketchSplitFraction, 0.01), 0.99)
-        let result = session.insertSketchSplineControlPoint(
-            target: target,
-            fraction: .scalar(fraction)
+        submitSource(
+            .insertSketchSplineControlPoint(
+                target: target,
+                fraction: .scalar(fraction)
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func rebuildSelectedSketchCurve(
         _ target: SelectionTarget
     ) {
-        let result = session.rebuildSketchCurve(
-            target: target,
-            options: .points(controlPointCount: sketchRebuildControlPointCount)
+        submitSource(
+            .rebuildSketchCurve(
+                target: target,
+                options: .points(controlPointCount: sketchRebuildControlPointCount)
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func refitSelectedSketchCurve(
@@ -7281,54 +8340,49 @@ public struct MainView: View {
             max(sketchRebuildToleranceMeters, toleranceRange.lowerBound),
             toleranceRange.upperBound
         )
-        let result = session.rebuildSketchCurve(
-            target: target,
-            options: .refit(
-                tolerance: .length(tolerance, .meter),
-                keepsCorners: sketchRebuildKeepsCorners
+        submitSource(
+            .rebuildSketchCurve(
+                target: target,
+                options: .refit(
+                    tolerance: .length(tolerance, .meter),
+                    keepsCorners: sketchRebuildKeepsCorners
+                )
             )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func explicitControlSelectedSketchCurve(
         _ target: SelectionTarget
     ) {
-        let result = session.rebuildSketchCurve(
-            target: target,
-            options: .explicitControl(
-                degree: sketchRebuildExplicitDegree,
-                spanCount: sketchRebuildExplicitSpanCount,
-                weight: min(max(sketchRebuildExplicitWeight, 0.0), 1.0)
+        submitSource(
+            .rebuildSketchCurve(
+                target: target,
+                options: .explicitControl(
+                    degree: sketchRebuildExplicitDegree,
+                    spanCount: sketchRebuildExplicitSpanCount,
+                    weight: min(max(sketchRebuildExplicitWeight, 0.0), 1.0)
+                )
             )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func trimSelectedSketchCurveSegment(
         _ target: SelectionTarget
     ) {
-        let result = session.trimSketchCurveSegment(target: target)
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
+        submitSource(.trimSketchCurveSegment(target: target))
     }
 
     private func cutSelectedSketchCurve(
         _ target: SelectionTarget,
         cutter: SelectionTarget
     ) {
-        let result = session.cutSketchCurve(
-            target: target,
-            cutter: cutter
+        submitSource(
+            .cutSketchCurve(
+                target: target,
+                cutter: cutter,
+                options: CutCurveOptions()
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func joinSelectedSketchCurves(
@@ -7337,14 +8391,13 @@ public struct MainView: View {
         guard let adjacentTarget = sketchCurveJoinInspectorState(for: entity).joinAdjacentTarget else {
             return
         }
-        let result = session.joinSketchCurves(
-            target: entity.target,
-            adjacentTarget: adjacentTarget,
-            continuity: sketchCurveJoinContinuity
+        submitSource(
+            .joinSketchCurves(
+                target: entity.target,
+                adjacentTarget: adjacentTarget,
+                continuity: sketchCurveJoinContinuity
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func unjoinSelectedSketchCurve(
@@ -7353,10 +8406,7 @@ public struct MainView: View {
         guard sketchCurveJoinInspectorState(for: entity).canUnjoin else {
             return
         }
-        let result = session.unjoinSketchCurve(target: entity.target)
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
+        submitSource(.unjoinSketchCurve(target: entity.target))
     }
 
     private func alignSelectedSketchVertex(
@@ -7365,16 +8415,15 @@ public struct MainView: View {
         guard let referenceTarget = selectedSketchVertexAlignmentReferenceTarget(for: entity) else {
             return
         }
-        let result = session.alignSketchVertex(
-            target: entity.target,
-            reference: referenceTarget,
-            options: SketchVertexAlignmentOptions(
-                continuity: sketchVertexAlignmentContinuity
+        submitSource(
+            .alignSketchVertex(
+                target: entity.target,
+                reference: referenceTarget,
+                options: SketchVertexAlignmentOptions(
+                    continuity: sketchVertexAlignmentContinuity
+                )
             )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func projectSelectedSketchCurvesToConstructionPlane(
@@ -7384,14 +8433,13 @@ public struct MainView: View {
         guard targets.isEmpty == false else {
             return
         }
-        let result = session.projectSketchCurvesToConstructionPlane(
-            targets: targets,
-            plane: nil,
-            name: nil
+        submitSource(
+            .projectSketchCurvesToConstructionPlane(
+                targets: targets,
+                plane: activeSketchPlane(),
+                name: nil
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func projectSelectedGeneratedEdgesToConstructionPlane(
@@ -7400,14 +8448,13 @@ public struct MainView: View {
         guard targets.isEmpty == false else {
             return
         }
-        let result = session.projectSketchCurvesToConstructionPlane(
-            targets: targets,
-            plane: nil,
-            name: nil
+        submitSource(
+            .projectSketchCurvesToConstructionPlane(
+                targets: targets,
+                plane: activeSketchPlane(),
+                name: nil
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func projectSelectedCurvesToGeneratedFace(
@@ -7417,14 +8464,13 @@ public struct MainView: View {
         guard targets.isEmpty == false else {
             return
         }
-        let result = session.projectCurvesToGeneratedFace(
-            targets: targets,
-            face: face,
-            name: nil
+        submitSource(
+            .projectCurvesToGeneratedFace(
+                targets: targets,
+                face: face,
+                name: nil
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func projectSelectedBodyOutlinesToConstructionPlane(
@@ -7433,99 +8479,116 @@ public struct MainView: View {
         guard targets.isEmpty == false else {
             return
         }
-        let result = session.projectBodyOutlinesToConstructionPlane(
-            targets: targets,
-            plane: nil,
-            name: nil
+        submitSource(
+            .projectBodyOutlinesToConstructionPlane(
+                targets: targets,
+                plane: activeSketchPlane(),
+                name: nil
+            )
         )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
     }
 
     private func createSlotFromOffsetCurve(
         _ target: SelectionTarget,
         width meters: Double
     ) {
-        let result = session.offsetCurve(
-            target: target,
-            distance: .length(max(meters, 1.0e-9), .meter),
-            options: OffsetCurveOptions(mode: .slot),
-            vertexHandle: nil
-        )
-        if result?.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
-        }
-        if result?.didMutate == true {
-            slotProfileCommandState.deactivate()
-        }
-    }
-
-    private func setCubeSize(
-        _ axis: InspectorObjectAxis,
-        to meters: Double,
-        for shape: InspectorObjectShape
-    ) {
-        session.setCubeDimensions(
-            featureID: shape.featureID,
-            sizeX: .length(axis == .x ? meters : shape.size.x, .meter),
-            sizeY: .length(axis == .y ? meters : shape.size.y, .meter),
-            sizeZ: .length(axis == .z ? meters : shape.size.z, .meter)
-        )
-        if axis == .y {
-            preserveObjectCenterAfterYResize(to: meters, for: shape)
+        submitSource(
+            .offsetCurve(
+                target: target,
+                distance: .length(max(meters, 1.0e-9), .meter),
+                options: OffsetCurveOptions(mode: .slot),
+                vertexHandle: nil
+            )
+        ) { result in
+            if result?.didMutate == true {
+                slotProfileCommandState.deactivate()
+            }
         }
     }
 
-    private func setCylinderSize(
+    private func cubeSizeCommands(
         _ axis: InspectorObjectAxis,
         to meters: Double,
-        for shape: InspectorObjectShape
-    ) {
+        for shape: InspectorObjectShape,
+        document: DesignDocument
+    ) throws -> [EditorCommand] {
+        var commands: [EditorCommand] = [
+            .setCubeDimensions(
+                featureID: shape.featureID,
+                sizeX: .length(axis == .x ? meters : shape.size.x, .meter),
+                sizeY: .length(axis == .y ? meters : shape.size.y, .meter),
+                sizeZ: .length(axis == .z ? meters : shape.size.z, .meter)
+            )
+        ]
+        if axis == .y,
+           let centerCommand = try preserveObjectCenterCommandAfterYResize(
+               to: meters,
+               for: shape,
+               document: document
+           ) {
+            commands.append(centerCommand)
+        }
+        return commands
+    }
+
+    private func cylinderSizeCommands(
+        _ axis: InspectorObjectAxis,
+        to meters: Double,
+        for shape: InspectorObjectShape,
+        document: DesignDocument
+    ) throws -> [EditorCommand] {
         guard shape.cylinder != nil else {
-            return
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Object \(shape.id) is no longer a cylinder."
+            )
         }
         let radius = axis == .y ? max(shape.size.x, shape.size.z) / 2.0 : meters / 2.0
-        session.setCylinderDimensions(
-            featureID: shape.featureID,
-            radius: .length(max(radius, 1.0e-9), .meter),
-            sizeY: .length(axis == .y ? meters : shape.size.y, .meter)
-        )
-        if axis == .y {
-            preserveObjectCenterAfterYResize(to: meters, for: shape)
+        var commands: [EditorCommand] = [
+            .setCylinderDimensions(
+                featureID: shape.featureID,
+                radius: .length(max(radius, 1.0e-9), .meter),
+                sizeY: .length(axis == .y ? meters : shape.size.y, .meter)
+            )
+        ]
+        if axis == .y,
+           let centerCommand = try preserveObjectCenterCommandAfterYResize(
+               to: meters,
+               for: shape,
+               document: document
+           ) {
+            commands.append(centerCommand)
         }
+        return commands
     }
 
-    private func preserveObjectCenterAfterYResize(
+    private func preserveObjectCenterCommandAfterYResize(
         to sizeYMeters: Double,
-        for shape: InspectorObjectShape
-    ) {
+        for shape: InspectorObjectShape,
+        document: DesignDocument
+    ) throws -> EditorCommand? {
         guard shape.size.y > 1.0e-9,
-              let node = session.document.productMetadata.sceneNodes[shape.id] else {
-            return
+              let node = document.productMetadata.sceneNodes[shape.id] else {
+            return nil
         }
         let sourceCenterRatio = shape.sourceCenter.y / shape.size.y
         let nextSourceCenterY = sourceCenterRatio * sizeYMeters
         var values = WorkspaceTransformMatrix.normalizedValues(node.localTransform.matrix.values)
         values[InspectorTransformComponent.translationY.matrixIndex] = shape.center.y - nextSourceCenterY
-        do {
-            let matrix = try Matrix4x4(values: values)
-            session.setSceneNodeTransform(
-                node.id,
-                localTransform: Transform3D(matrix: matrix)
-            )
-        } catch {
-            session.reportToolStatus(error.localizedDescription, severity: .warning)
-        }
+        let matrix = try Matrix4x4(values: values)
+        return .setSceneNodeTransform(
+            id: node.id,
+            localTransform: Transform3D(matrix: matrix)
+        )
     }
 
     private var transformPositionSliderMetersRange: ClosedRange<Double> {
-        let span = session.workspaceState.ruler.normalizedForWorkspaceScale().visibleSpanMeters
+        let span = snapshot.workspaceState.ruler.normalizedForWorkspaceScale().visibleSpanMeters
         return -span ... span
     }
 
     private var sizeSliderMetersRange: ClosedRange<Double> {
-        let visibleSpan = session.workspaceState.ruler.normalizedForWorkspaceScale().visibleSpanMeters
+        let visibleSpan = snapshot.workspaceState.ruler.normalizedForWorkspaceScale().visibleSpanMeters
         return 0.0 ... visibleSpan
     }
 
@@ -7534,24 +8597,34 @@ public struct MainView: View {
         to value: Double,
         for nodes: [SceneNode]
     ) {
-        for node in nodes {
-            var values = WorkspaceTransformMatrix.normalizedValues(node.localTransform.matrix.values)
-            values[component.matrixIndex] = value
-            do {
+        let sceneNodeIDs = nodes.map(\.id)
+        let matrixIndex = component.matrixIndex
+        submitSource(name: "setTransformComponent") { current in
+            var commands: [EditorCommand] = []
+            for sceneNodeID in sceneNodeIDs {
+                guard let node = current.document.document.productMetadata.sceneNodes[sceneNodeID] else {
+                    throw EditorError(
+                        code: .referenceUnresolved,
+                        message: "Scene node \(sceneNodeID) no longer exists."
+                    )
+                }
+                var values = WorkspaceTransformMatrix.normalizedValues(node.localTransform.matrix.values)
+                values[matrixIndex] = value
                 let matrix = try Matrix4x4(values: values)
-                session.setSceneNodeTransform(
-                    node.id,
-                    localTransform: Transform3D(matrix: matrix)
+                commands.append(
+                    .setSceneNodeTransform(
+                        id: node.id,
+                        localTransform: Transform3D(matrix: matrix)
+                    )
                 )
-            } catch {
-                session.reportToolStatus(error.localizedDescription, severity: .warning)
             }
+            return commands
         }
     }
 
     private func extrudeFeatureID(for node: SceneNode) -> FeatureID? {
         guard let featureID = node.reference?.featureID,
-              let feature = session.document.cadDocument.designGraph.nodes[featureID],
+              let feature = snapshot.document.document.cadDocument.designGraph.nodes[featureID],
               case .extrude = feature.operation else {
             return nil
         }
@@ -7559,12 +8632,12 @@ public struct MainView: View {
     }
 
     private func resolvedExtrudeDistance(featureID: FeatureID) -> Double? {
-        guard let feature = session.document.cadDocument.designGraph.nodes[featureID],
+        guard let feature = snapshot.document.document.cadDocument.designGraph.nodes[featureID],
               case .extrude(let extrude) = feature.operation else {
             return nil
         }
         do {
-            let quantity = try session.document.cadDocument.parameters.resolvedValue(for: extrude.distance)
+            let quantity = try snapshot.document.document.cadDocument.parameters.resolvedValue(for: extrude.distance)
             guard quantity.kind == .length else {
                 return nil
             }
@@ -7575,7 +8648,7 @@ public struct MainView: View {
     }
 
     private var sortedMaterialOptions: [WorkspaceObjectMaterialOption] {
-        session.document.productMetadata.materialLibrary.materials
+        snapshot.document.document.productMetadata.materialLibrary.materials
             .sorted { lhs, rhs in
                 lhs.value.name.localizedStandardCompare(rhs.value.name) == .orderedAscending
             }
@@ -7592,19 +8665,22 @@ public struct MainView: View {
         guard value.valueKind == property.valueKind else {
             return
         }
-        for shape in shapes {
-            session.setSceneNodeObjectProperty(
-                shape.id,
-                propertyID: property.id,
-                value: value
-            )
-        }
+        submitSource(
+            shapes.map { shape in
+                .setSceneNodeObjectProperty(
+                    id: shape.id,
+                    propertyID: property.id,
+                    value: value
+                )
+            },
+            name: "setObjectProperty"
+        )
     }
 
     private func lengthSliderMetersRange(for meters: Double) -> ClosedRange<Double> {
         workspaceLengthSliderMetersRange(
             for: meters,
-            ruler: session.workspaceState.ruler
+            ruler: snapshot.workspaceState.ruler
         )
     }
 
@@ -7671,7 +8747,7 @@ public struct MainView: View {
         guard let length = sketchLineLength(for: entity) else {
             return defaultSketchEntityMoveStepMeters
         }
-        let ruler = session.workspaceState.ruler.normalizedForWorkspaceScale()
+        let ruler = snapshot.workspaceState.ruler.normalizedForWorkspaceScale()
         let bounded = min(
             length / 4.0,
             max(ruler.visibleSpanMeters / 20.0, ruler.minorTickMeters)
@@ -7711,7 +8787,7 @@ public struct MainView: View {
     }
 
     private var diagnosticSummary: String {
-        let diagnostics = session.diagnostics
+        let diagnostics = diagnostics
         guard !diagnostics.isEmpty else {
             return "None"
         }
@@ -7722,7 +8798,7 @@ public struct MainView: View {
     }
 
     private var renderInvalidationReasonTitle: String {
-        switch session.renderInvalidation.reason {
+        switch snapshot.evaluationSnapshot.renderInvalidation.reason {
         case .none:
             return "None"
         case .evaluated:
@@ -7733,14 +8809,14 @@ public struct MainView: View {
     }
 
     private var renderInvalidationGenerationTitle: String {
-        guard let generation = session.renderInvalidation.generation else {
+        guard let generation = snapshot.evaluationSnapshot.renderInvalidation.generation else {
             return "None"
         }
         return "\(generation.value)"
     }
 
     private var defaultMaterialTitle: String {
-        let library = session.document.productMetadata.materialLibrary
+        let library = snapshot.document.document.productMetadata.materialLibrary
         guard let defaultMaterialID = library.defaultMaterialID else {
             return "None"
         }
@@ -7760,7 +8836,7 @@ public struct MainView: View {
         workspaceLengthControl(
             title,
             values: [meters],
-            displayUnit: session.workspaceState.displayUnit,
+            displayUnit: snapshot.workspaceState.displayUnit,
             sliderMetersRange: sliderMetersRange
         ) { nextMeters in
             onChange(max(nextMeters, 0.0))
@@ -7780,45 +8856,54 @@ public struct MainView: View {
         majorTickMeters: Double? = nil,
         visibleSpanMeters: Double? = nil
     ) {
-        var ruler = session.workspaceState.ruler
-        if let minorTickMeters {
-            ruler.minorTickMeters = minorTickMeters
-        }
-        if let majorTickMeters {
-            ruler.majorTickMeters = majorTickMeters
-        }
-        if let visibleSpanMeters {
-            ruler.visibleSpanMeters = visibleSpanMeters
-        }
-
-        session.setRulerConfiguration(ruler.normalizedForWorkspaceScale())
-        if visibleSpanMeters != nil {
-            requestViewportCameraReset()
+        applyWorkspace(commands: { current in
+            var ruler = current.workspaceState.ruler
+            if let minorTickMeters {
+                ruler.minorTickMeters = minorTickMeters
+            }
+            if let majorTickMeters {
+                ruler.majorTickMeters = majorTickMeters
+            }
+            if let visibleSpanMeters {
+                ruler.visibleSpanMeters = visibleSpanMeters
+            }
+            return [.setRulerConfiguration(ruler.normalizedForWorkspaceScale())]
+        }) { published in
+            resetWorkspaceInteractionScaleDefaults(ruler: published.workspaceState.ruler)
+            if visibleSpanMeters != nil {
+                requestViewportCameraReset()
+            }
         }
     }
 
     private func applyDisplayUnit(_ unit: LengthDisplayUnit) {
-        session.setDisplayUnit(unit)
-        resetWorkspaceInteractionScaleDefaults()
+        setDisplayUnit(unit) { published in
+            resetWorkspaceInteractionScaleDefaults(ruler: published.workspaceState.ruler)
+        }
     }
 
     private func applyViewportGridVisualSpacingMode(
         _ visualSpacingMode: ViewportGridVisualSpacingMode
     ) {
-        session.setViewportGridSettings(
+        setViewportGridSettings(
             ViewportGridSettings(visualSpacingMode: visualSpacingMode)
         )
     }
 
     private func applyWorkspaceRebaseTranslation(_ translation: Vector3D) {
-        session.rebaseWorkspaceOrigin(translation: translation)
-        resetWorkspaceInteractionScaleDefaults()
+        submitSource(.rebaseWorkspaceOrigin(translation: translation)) { result in
+            guard result != nil,
+                  let published = workspace.view else {
+                return
+            }
+            resetWorkspaceInteractionScaleDefaults(ruler: published.workspaceState.ruler)
+        }
     }
 
     private func applyWorkspaceScalePreset(_ preset: WorkspaceScalePreset) {
-        session.setRulerConfiguration(preset.rulerConfiguration.normalizedForWorkspaceScale())
-        resetWorkspaceInteractionScaleDefaults()
-        requestViewportCameraReset()
+        setRulerConfiguration(preset.rulerConfiguration.normalizedForWorkspaceScale()) { _ in
+            requestViewportCameraReset()
+        }
     }
 
     private func selectSmallerWorkspaceScalePreset() {
@@ -7836,31 +8921,54 @@ public struct MainView: View {
     }
 
     private func fitWorkspaceScaleToModel() {
-        do {
-            let plan = try WorkspaceScaleFitService().plan(
-                document: session.document,
-                ruler: session.workspaceState.ruler,
-                objectRegistry: session.objectRegistry,
-                currentEvaluation: session.currentEvaluation,
-                currentGeneration: session.generation
+        let task = operationSequencer.enqueue {
+            guard let current = workspace.view else {
+                throw ProjectWorkspaceActionError(
+                    code: .snapshotUnavailable,
+                    message: "The project workspace has no published view snapshot."
+                )
+            }
+            let plan = WorkspaceScaleFitService().plan(
+                bounds: current.viewport.worldBounds.map {
+                    MeasurementResult.Bounds(
+                        minX: $0.minimum.x,
+                        minY: $0.minimum.y,
+                        minZ: $0.minimum.z,
+                        maxX: $0.maximum.x,
+                        maxY: $0.maximum.y,
+                        maxZ: $0.maximum.z
+                    )
+                },
+                ruler: current.workspaceState.ruler
             )
             switch plan.action {
             case .alreadyFits:
-                session.reportToolStatus("Workspace scale already fits the current model.")
+                reportToolStatus("Workspace scale already fits the current presentation geometry.")
+                return current
             case .unsupportedRange:
-                session.reportToolStatus(
-                    "Workspace scale cannot fit the current model within the supported preset range.",
+                reportToolStatus(
+                    "Workspace scale cannot fit the current presentation geometry within the supported preset range.",
                     severity: .warning
                 )
+                return current
             case .applyPreset(let preset):
-                session.setRulerConfiguration(
-                    preset.rulerConfiguration.normalizedForWorkspaceScale()
+                let published = try await workspace.applyWorkspace(
+                    .setRulerConfiguration(
+                        preset.rulerConfiguration.normalizedForWorkspaceScale()
+                    )
                 )
-                resetWorkspaceInteractionScaleDefaults()
+                resetWorkspaceInteractionScaleDefaults(ruler: published.workspaceState.ruler)
                 requestViewportCameraReset()
+                return published
             }
-        } catch {
-            session.reportToolStatus(error.localizedDescription, severity: .warning)
+        }
+        Task { @MainActor in
+            do {
+                _ = try await task.value
+            } catch {
+                reportToolStatus(error.localizedDescription, severity: .warning)
+                isPreviewExpanded = true
+            }
         }
     }
 
@@ -7872,61 +8980,46 @@ public struct MainView: View {
         name: String,
         expression: String,
         kind: QuantityKind
-    ) -> Bool {
-        do {
+    ) async -> Bool {
+        await performSource(name: "upsertParameter") { current in
             let parsedExpression = try ParameterExpressionParser().parseForUpsert(
                 expression,
                 parameterName: name,
-                parameters: session.document.cadDocument.parameters,
+                parameters: current.document.document.cadDocument.parameters,
                 targetKind: kind,
                 defaults: ParameterExpressionDefaults(
-                    lengthUnit: session.workspaceState.displayUnit,
+                    lengthUnit: current.workspaceState.displayUnit,
                     angleUnit: .degree
                 )
             )
-            return session.perform(
+            return [
                 .upsertParameter(
                     name: name,
                     expression: parsedExpression,
                     kind: kind
-                )
-            ) != nil
-        } catch let error as EditorError {
-            session.reportToolStatus(error.message, severity: .warning)
-            return false
-        } catch {
-            session.reportToolStatus(String(describing: error), severity: .warning)
-            return false
-        }
+                ),
+            ]
+        }.last?.didMutate == true
     }
 
     private func renameDocumentParameter(
         currentName: String,
         newName: String
-    ) -> Bool {
-        do {
-            let result = try session.execute(
-                .renameParameter(
-                    currentName: currentName,
-                    newName: newName
-                )
+    ) async -> Bool {
+        await performSource(
+            .renameParameter(
+                currentName: currentName,
+                newName: newName
             )
-            return result.didMutate
-        } catch let error as EditorError {
-            session.reportToolStatus(error.message, severity: .warning)
-            return false
-        } catch {
-            session.reportToolStatus(String(describing: error), severity: .warning)
-            return false
-        }
+        )?.didMutate == true
     }
 
-    private func deleteDocumentParameter(name: String) -> Bool {
-        session.perform(.deleteParameter(name: name)) != nil
+    private func deleteDocumentParameter(name: String) async -> Bool {
+        await performSource(.deleteParameter(name: name))?.didMutate == true
     }
 
-    private func resetWorkspaceInteractionScaleDefaults() {
-        let defaults = workspaceInteractionScaleDefaults
+    private func resetWorkspaceInteractionScaleDefaults(ruler: RulerConfiguration) {
+        let defaults = WorkspaceInteractionScaleDefaults(ruler: ruler)
         sketchSplineControlPointSlideDistanceMeters = defaults.operationStepMeters
         polySplineSurfaceVertexSlideDistanceMeters = defaults.operationStepMeters
         surfaceControlPointFrameUMoveMeters = defaults.surfaceFrameTangentialMoveMeters
@@ -7973,11 +9066,11 @@ public struct MainView: View {
     }
 
     private func componentDefinitionName(for id: ComponentDefinitionID) -> String {
-        session.document.productMetadata.componentDefinitions[id]?.name ?? "Missing Definition"
+        snapshot.document.document.productMetadata.componentDefinitions[id]?.name ?? "Missing Definition"
     }
 
     private var evaluationStatusTitle: String {
-        switch session.evaluationStatus {
+        switch snapshot.evaluationSnapshot.status {
         case .notEvaluated:
             return "Not Evaluated"
         case .valid:
@@ -7990,7 +9083,7 @@ public struct MainView: View {
     private func formatted(_ meters: Double) -> String {
         WorkspaceInspectorNumberText.readableLengthString(
             fromMeters: meters,
-            preferredUnit: session.workspaceState.displayUnit
+            preferredUnit: snapshot.workspaceState.displayUnit
         )
     }
 
@@ -8018,7 +9111,7 @@ public struct MainView: View {
         case .length:
             return workspaceLengthFieldPresentation(
                 fromMeters: value,
-                preferredUnit: session.workspaceState.displayUnit
+                preferredUnit: snapshot.workspaceState.displayUnit
             ).text
         case .angle:
             return WorkspaceInspectorNumberText.string(from: degrees(fromRadians: value))
@@ -8045,10 +9138,10 @@ public struct MainView: View {
         case .length:
             return workspaceLengthFieldPresentation(
                 fromMeters: value,
-                preferredUnit: session.workspaceState.displayUnit
+                preferredUnit: snapshot.workspaceState.displayUnit
             ).unit
         case .angle:
-            return session.workspaceState.displayUnit
+            return snapshot.workspaceState.displayUnit
         }
     }
 

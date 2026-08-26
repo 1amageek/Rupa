@@ -133,12 +133,12 @@ struct InspectorBridgeCurveTension: Equatable {
     var third: Double
 }
 
-enum InspectorBridgeCurveEndpoint {
+enum InspectorBridgeCurveEndpoint: Equatable, Sendable {
     case first
     case second
 }
 
-enum InspectorBridgeCurveTensionLevel {
+enum InspectorBridgeCurveTensionLevel: Equatable, Sendable {
     case first
     case second
     case third
@@ -256,7 +256,7 @@ struct InspectorCylinderShape: Equatable {
     var cornerSideSegments: Int
 }
 
-enum InspectorObjectAxis: Equatable {
+enum InspectorObjectAxis: Equatable, Sendable {
     case x
     case y
     case z

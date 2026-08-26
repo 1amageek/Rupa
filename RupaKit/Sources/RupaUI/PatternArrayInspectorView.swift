@@ -4,7 +4,11 @@ import SwiftUI
 @MainActor
 struct PatternArrayInspectorView: View {
     let state: PatternArrayInspectorState
-    let session: EditorSession
+    let document: DesignDocument
+    let workspaceState: WorkspaceState
+    let submit: (EditorCommand) -> Void
+    let submitCurrent: ((@escaping PatternArrayEditingService.CurrentContextOperation) -> Void)?
+    let report: (String, EditorDiagnostic.Severity) -> Void
     let positionSliderMetersRange: ClosedRange<Double>
     let defaultAxisDistanceMeters: Double
     let isCurvePathPickActive: Bool
@@ -457,8 +461,12 @@ struct PatternArrayInspectorView: View {
 
     private var editingService: PatternArrayEditingService {
         PatternArrayEditingService(
-            session: session,
-            sourceID: state.sourceID
+            document: document,
+            workspaceState: workspaceState,
+            submit: submit,
+            report: report,
+            sourceID: state.sourceID,
+            submitCurrent: submitCurrent
         )
     }
 
@@ -639,7 +647,7 @@ struct PatternArrayInspectorView: View {
         workspaceLengthControl(
             title,
             values: values,
-            displayUnit: session.workspaceState.displayUnit,
+            displayUnit: workspaceState.displayUnit,
             sliderMetersRange: positionSliderMetersRange
         ) { meters in
             onChange(meters)
@@ -706,7 +714,7 @@ struct PatternArrayInspectorView: View {
         workspaceLengthControl(
             title,
             values: [meters],
-            displayUnit: session.workspaceState.displayUnit,
+            displayUnit: workspaceState.displayUnit,
             sliderMetersRange: sliderMetersRange
         ) { nextMeters in
             onChange(max(nextMeters, 0.0))
@@ -716,7 +724,7 @@ struct PatternArrayInspectorView: View {
     private func distanceSliderMetersRange(for meters: Double) -> ClosedRange<Double> {
         workspaceLengthSliderMetersRange(
             for: meters,
-            ruler: session.workspaceState.ruler,
+            ruler: workspaceState.ruler,
             expansionMultiplier: 2.0
         )
     }

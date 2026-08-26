@@ -4,7 +4,7 @@ import SwiftCAD
 
 /// A validated value projection of the current DesignDocument for read-only UI use.
 ///
-/// The projection contains no package bytes and no reference to the owning session.
+/// The projection contains no package bytes and no reference to its mutable editor owner.
 /// `document` is returned by value, so mutating a caller-owned copy cannot mutate the
 /// project owner.
 public struct ProjectReadDocument: Sendable {

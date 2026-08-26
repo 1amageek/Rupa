@@ -8,6 +8,7 @@ public struct UniversalViewportScene: Equatable, Sendable {
     public let projectID: ProjectID
     public let items: [UniversalViewportSceneItem]
     public let copyTelemetry: GeometryCopyTelemetry
+    public let worldBounds: GeometryBounds3D?
 
     public init(
         snapshotID: EvaluationSnapshotID,
@@ -19,9 +20,12 @@ public struct UniversalViewportScene: Equatable, Sendable {
         self.projectID = projectID
         self.items = items
         self.copyTelemetry = copyTelemetry
+        self.worldBounds = Self.aggregateWorldBounds(for: items)
     }
 
-    public var worldBounds: GeometryBounds3D? {
+    private static func aggregateWorldBounds(
+        for items: [UniversalViewportSceneItem]
+    ) -> GeometryBounds3D? {
         guard let first = items.first else {
             return nil
         }

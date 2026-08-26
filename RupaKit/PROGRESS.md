@@ -3,12 +3,7 @@
 - [x] T06A-1 read and interaction contract (commit: Define project read and interaction boundary) `depends:none` `parallel:none`
 - [x] T06A-2 MeshSource-native Viewport (commit: Add MeshSource-native viewport presentation boundary) `depends:T06A-1` `parallel:none`
 - [x] T06A-3 ProjectWorkspace command parity (commit: Define ProjectWorkspace command boundary) `depends:T06A-1` `parallel:none`
-- [ ] T06A-4 MainView cutover `depends:T06A-2,T06A-3` `parallel:none`
-  - [ ] T06A-4.1 Replace MainView and its production-reachable helpers with ProjectViewSnapshot reads and ProjectWorkspace actions `depends:T06A-2,T06A-3` `parallel:none`
-  - [ ] T06A-4.2 Keep only non-authoritative transient tool, hover, preview, focus, and camera state in the MainActor UI layer `depends:T06A-4.1` `parallel:none`
-  - [ ] T06A-4.3 Connect the MeshSource-native Viewport, occurrence selection/navigation, and exact-context CAD affordances to one published snapshot `depends:T06A-4.2` `parallel:none`
-  - [ ] T06A-4.4 Prove the audited production action matrix and verify the transitive MainView graph neither owns nor mutates EditorSession `depends:T06A-4.3` `parallel:none`
-  - [ ] T06A-4.5 Pass task-designer review, focused verification, and commit the reviewed MainView cutover `depends:T06A-4.4` `parallel:none`
+- [x] T06A-4 MainView cutover (commit: Cut MainView over to ProjectWorkspace) `depends:T06A-2,T06A-3` `parallel:none`
 - [ ] T06A-5 Agent production registration cutover `depends:T06A-3,T06A-4` `parallel:none`
   - [ ] T06A-5.1 Enumerate production-registered Agent commands and map read, source, interaction, export, and failure behavior to the project-operation boundary `depends:T06A-3,T06A-4` `parallel:none`
   - [ ] T06A-5.2 Replace EditorSession publication with a ProjectOperating-backed registration that shares ProjectController staging, revision, package, evaluation, and publication authority `depends:T06A-5.1` `parallel:none`

@@ -4,7 +4,7 @@ import SwiftUI
 @MainActor
 struct SurfaceControlPointInspectorView: View {
     let state: SurfaceControlPointInspectorState
-    let session: EditorSession
+    let workspaceState: WorkspaceState
     let positionSliderMetersRange: ClosedRange<Double>
     @Binding var slideDistanceMeters: Double
     @Binding var frameMoveUMeters: Double
@@ -347,7 +347,7 @@ struct SurfaceControlPointInspectorView: View {
         workspaceLengthControl(
             title,
             values: values,
-            displayUnit: session.workspaceState.displayUnit,
+            displayUnit: workspaceState.displayUnit,
             sliderMetersRange: positionSliderMetersRange
         ) { meters in
             onChange(meters)
@@ -363,7 +363,7 @@ struct SurfaceControlPointInspectorView: View {
         workspaceLengthControl(
             title,
             values: [meters],
-            displayUnit: session.workspaceState.displayUnit,
+            displayUnit: workspaceState.displayUnit,
             sliderMetersRange: sliderMetersRange
         ) { nextMeters in
             onChange(max(nextMeters, 0.0))
@@ -379,7 +379,7 @@ struct SurfaceControlPointInspectorView: View {
         workspaceLengthControl(
             title,
             values: [meters],
-            displayUnit: session.workspaceState.displayUnit,
+            displayUnit: workspaceState.displayUnit,
             sliderMetersRange: sliderMetersRange
         ) { nextMeters in
             guard nextMeters.isFinite else {
@@ -443,7 +443,7 @@ struct SurfaceControlPointInspectorView: View {
     private func distanceSliderMetersRange(for meters: Double) -> ClosedRange<Double> {
         workspaceLengthSliderMetersRange(
             for: meters,
-            ruler: session.workspaceState.ruler,
+            ruler: workspaceState.ruler,
             expansionMultiplier: 2.0
         )
     }
@@ -451,7 +451,7 @@ struct SurfaceControlPointInspectorView: View {
     private func frameMoveSliderMetersRange(for meters: Double) -> ClosedRange<Double> {
         workspaceSignedLengthSliderMetersRange(
             for: meters,
-            ruler: session.workspaceState.ruler,
+            ruler: workspaceState.ruler,
             expansionMultiplier: 2.0
         )
     }

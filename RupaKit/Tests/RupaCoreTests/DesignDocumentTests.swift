@@ -154,6 +154,23 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     #expect(ObjectTypeRegistry.builtIn.definitions == validatedRegistry.definitions)
 }
 
+@Test(.timeLimit(.minutes(1)))
+func objectTypeRegistryReusesPreorderedDefinitionStorage() {
+    let registry = ObjectTypeRegistry.builtIn
+    let expectedIDs = registry.orderedDefinitions.map { $0.id.rawValue }.sorted()
+    let firstAddress = registry.orderedDefinitions.withUnsafeBufferPointer { buffer in
+        buffer.baseAddress.map { Int(bitPattern: $0) }
+    }
+
+    for _ in 0 ..< 1_000 {
+        let currentAddress = registry.orderedDefinitions.withUnsafeBufferPointer { buffer in
+            buffer.baseAddress.map { Int(bitPattern: $0) }
+        }
+        #expect(currentAddress == firstAddress)
+    }
+    #expect(registry.orderedDefinitions.map { $0.id.rawValue } == expectedIDs)
+}
+
 @Test func builtInObjectCatalogLengthRangesCoverSitePlanningScale() async throws {
     let siteDefaults = WorkspaceScaleDefaults(
         ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration

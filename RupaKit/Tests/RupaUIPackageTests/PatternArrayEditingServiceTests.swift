@@ -28,16 +28,15 @@ import Testing
             )
         ))
     )
-    let service = PatternArrayEditingService(session: session, sourceID: sourceID)
+    let service = makePatternArrayEditingService(session: session, sourceID: sourceID)
 
-    let result = service.setRectangularAxisDistanceMode(slot: .first, distanceMode: .extent)
+    service.setRectangularAxisDistanceMode(slot: .first, distanceMode: .extent)
 
     let source = try #require(session.document.productMetadata.patternArrays[sourceID])
     guard case .rectangular(let rectangular) = source.distribution else {
         Issue.record("Expected a rectangular pattern array source.")
         return
     }
-    #expect(result?.didMutate == true)
     #expect(rectangular.firstAxis.distanceMode == .extent)
     #expect(rectangular.firstAxis.distance == .reference(spacing.id))
 }
@@ -58,9 +57,9 @@ import Testing
             )
         ))
     )
-    let service = PatternArrayEditingService(session: session, sourceID: sourceID)
+    let service = makePatternArrayEditingService(session: session, sourceID: sourceID)
 
-    let result = service.setRectangularAxisDistance(slot: .first, meters: 0.024)
+    service.setRectangularAxisDistance(slot: .first, meters: 0.024)
 
     let source = try #require(session.document.productMetadata.patternArrays[sourceID])
     guard case .rectangular(let rectangular) = source.distribution,
@@ -68,7 +67,6 @@ import Testing
         Issue.record("Expected a rectangular pattern array source with constant first-axis distance.")
         return
     }
-    #expect(result?.didMutate == true)
     #expect(rectangular.firstAxis.distanceMode == .spacing)
     #expect(distance.kind == .length)
     #expect(distance.value == 0.024)
@@ -100,9 +98,9 @@ import Testing
             )
         ))
     )
-    let service = PatternArrayEditingService(session: session, sourceID: sourceID)
+    let service = makePatternArrayEditingService(session: session, sourceID: sourceID)
 
-    let result = service.setRectangularAxisDistance(slot: .first, meters: 0.024)
+    service.setRectangularAxisDistance(slot: .first, meters: 0.024)
 
     let source = try #require(session.document.productMetadata.patternArrays[sourceID])
     guard case .rectangular(let rectangular) = source.distribution,
@@ -111,7 +109,6 @@ import Testing
         return
     }
     let quantity = try parameterQuantity(named: "editablePatternSpacing", in: session.document)
-    #expect(result?.didMutate == true)
     #expect(parameterID == spacing.id)
     #expect(quantity.kind == .length)
     #expect(quantity.value == 0.024)
@@ -130,8 +127,21 @@ import Testing
     let angle = try #require(session.document.cadDocument.parameters.parameters.values.first {
         $0.name == "editablePatternAngleOnly"
     })
+    var reports: [EditorDiagnostic] = []
 
-    let result = PatternArrayExpressionWritebackService(session: session).updateReferencedExpression(
+    let result = PatternArrayExpressionWritebackService(
+        document: session.document,
+        submit: { command in
+            do {
+                _ = try session.execute(command)
+            } catch {
+                Issue.record(error)
+            }
+        },
+        report: { message, severity in
+            reports.append(EditorDiagnostic(severity: severity, message: message))
+        }
+    ).updateReferencedExpression(
         .reference(angle.id),
         quantity: .length(0.024, unit: .meter)
     )
@@ -147,7 +157,7 @@ import Testing
     }
     #expect(quantity.kind == .angle)
     #expect(abs(quantity.value - Double.pi / 4.0) < 1.0e-12)
-    #expect(session.diagnostics.contains {
+    #expect(reports.contains {
         $0.severity == .warning && $0.message == "Pattern Array parameter reference could not be updated."
     })
 }
@@ -227,14 +237,14 @@ import Testing
         ))
     )
 
-    let radialResult = PatternArrayEditingService(
+    makePatternArrayEditingService(
         session: session,
         sourceID: radialSourceID
     ).setRadialAngle(degrees: 90.0)
-    let curveService = PatternArrayEditingService(session: session, sourceID: curveSourceID)
-    let twistResult = curveService.setCurveTwist(degrees: 30.0)
-    let scaleResult = curveService.setCurveEndScale(2.0)
-    let ratioResult = curveService.setCurveExtentRatio(0.75)
+    let curveService = makePatternArrayEditingService(session: session, sourceID: curveSourceID)
+    curveService.setCurveTwist(degrees: 30.0)
+    curveService.setCurveEndScale(2.0)
+    curveService.setCurveExtentRatio(0.75)
 
     let radialSource = try #require(session.document.productMetadata.patternArrays[radialSourceID])
     let curveSource = try #require(session.document.productMetadata.patternArrays[curveSourceID])
@@ -247,10 +257,6 @@ import Testing
         Issue.record("Expected radial and curve controls to keep parameter references.")
         return
     }
-    #expect(radialResult?.didMutate == true)
-    #expect(twistResult?.didMutate == true)
-    #expect(scaleResult?.didMutate == true)
-    #expect(ratioResult?.didMutate == true)
     #expect(radialAngleID == angle.id)
     #expect(twistID == twist.id)
     #expect(scaleID == scale.id)
@@ -299,12 +305,22 @@ import Testing
         ))
     )
 
-    let rectangularService = PatternArrayEditingService(session: session, sourceID: rectangularSourceID)
-    let radialService = PatternArrayEditingService(session: session, sourceID: radialSourceID)
-    _ = rectangularService.setRectangularAxisCopyCount(slot: .first, copyCount: 5)
-    _ = rectangularService.setRectangularAxisCopyCount(slot: .second, copyCount: 1)
-    _ = radialService.setRadialAngularCopyCount(6)
-    _ = radialService.setRadialAxisCopyCount(3)
+    makePatternArrayEditingService(
+        session: session,
+        sourceID: rectangularSourceID
+    ).setRectangularAxisCopyCount(slot: .first, copyCount: 5)
+    makePatternArrayEditingService(
+        session: session,
+        sourceID: rectangularSourceID
+    ).setRectangularAxisCopyCount(slot: .second, copyCount: 1)
+    makePatternArrayEditingService(
+        session: session,
+        sourceID: radialSourceID
+    ).setRadialAngularCopyCount(6)
+    makePatternArrayEditingService(
+        session: session,
+        sourceID: radialSourceID
+    ).setRadialAxisCopyCount(3)
 
     let rectangularSource = try #require(session.document.productMetadata.patternArrays[rectangularSourceID])
     let radialSource = try #require(session.document.productMetadata.patternArrays[radialSourceID])
@@ -369,22 +385,19 @@ import Testing
         ))
     )
 
-    let rectangularResult = PatternArrayEditingService(
+    makePatternArrayEditingService(
         session: session,
         sourceID: rectangularSourceID
     ).setRectangularAxisDistance(slot: .first, meters: 1.0e-9)
-    let radialResult = PatternArrayEditingService(
+    makePatternArrayEditingService(
         session: session,
         sourceID: radialSourceID
     ).setRadialAxisDistance(1.0e-9)
-    let curveResult = PatternArrayEditingService(
+    makePatternArrayEditingService(
         session: session,
         sourceID: curveSourceID
     ).setCurveExtentDistance(1.0e-9)
 
-    #expect(rectangularResult?.didMutate == true)
-    #expect(radialResult?.didMutate == true)
-    #expect(curveResult?.didMutate == true)
     #expect(try rectangularFirstAxisDistance(in: session.document, sourceID: rectangularSourceID) == minimumDistance)
     #expect(try radialAxisDistance(in: session.document, sourceID: radialSourceID) == minimumDistance)
     #expect(try curveExtentDistance(in: session.document, sourceID: curveSourceID) == minimumDistance)
@@ -408,7 +421,7 @@ import Testing
         ))
     )
 
-    let result = PatternArrayEditingService(
+    makePatternArrayEditingService(
         session: session,
         sourceID: sourceID
     ).setRadialAngle(degrees: 1.0e-12)
@@ -419,7 +432,6 @@ import Testing
         Issue.record("Expected a radial pattern source with a constant angular distance.")
         return
     }
-    #expect(result?.didMutate == true)
     #expect(radial.angularAxis.angleMode == .spacing)
     #expect(quantity.kind == .angle)
     #expect(quantity.value == PatternArrayAnglePolicy.standard.minimumAngleRadians)
@@ -444,13 +456,84 @@ import Testing
         ))
     )
 
-    let result = PatternArrayEditingService(
+    makePatternArrayEditingService(
         session: session,
         sourceID: sourceID
     ).setRadialAxisEnabled(true)
 
-    #expect(result?.didMutate == true)
     #expect(try radialAxisDistance(in: session.document, sourceID: sourceID) == 100.0)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func patternArrayEditingServiceSubmitsIdempotentRadialAxisUpdate() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let sourceID = try createPatternArray(
+        in: session,
+        name: "Radial Axis",
+        distribution: .radial(RadialPatternArray(
+            angularAxis: PatternArrayAngularAxis(
+                center: .origin,
+                axis: .unitZ,
+                angle: .angle(90.0, .degree),
+                copyCount: 3,
+                angleMode: .spacing
+            ),
+            radialAxis: PatternArrayLinearAxis(
+                direction: .unitX,
+                distance: .length(0.02, .meter),
+                copyCount: 1,
+                distanceMode: .spacing
+            )
+        ))
+    )
+    var commands: [EditorCommand] = []
+    PatternArrayEditingService(
+        document: session.document,
+        workspaceState: session.workspaceState,
+        submit: { commands.append($0) },
+        report: { _, _ in },
+        sourceID: sourceID
+    ).setRadialAxisEnabled(true, fallbackDistanceMeters: 0.02)
+
+    #expect(commands.count == 1)
+    #expect(commands.first?.name == "updatePatternArray")
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func patternArrayEditingServiceSubmitsIdempotentCurveExtentModeUpdate() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let sourceID = try createPatternArray(
+        in: session,
+        name: "Curve Extent",
+        distribution: .curve(CurvePatternArray(
+            path: .polyline(
+                points: [.origin, Point3D(x: 0.03, y: 0.0, z: 0.0)],
+                normal: .unitZ
+            ),
+            copyCount: 2,
+            extent: .scalar(0.5),
+            extentMode: .ratio
+        ))
+    )
+    var commands: [EditorCommand] = []
+    PatternArrayEditingService(
+        document: session.document,
+        workspaceState: session.workspaceState,
+        submit: { commands.append($0) },
+        report: { _, _ in },
+        sourceID: sourceID
+    ).setCurveExtentMode(
+        .ratio,
+        fallbackDistanceMeters: 0.02,
+        fallbackRatio: 0.5
+    )
+
+    #expect(commands.count == 1)
+    #expect(commands.first?.name == "updatePatternArray")
 }
 
 @MainActor
@@ -487,19 +570,17 @@ import Testing
         ))
     )
 
-    let rectangularResult = PatternArrayEditingService(
+    makePatternArrayEditingService(
         session: session,
         sourceID: rectangularSourceID
     ).setRectangularSecondAxisEnabled(true, fallbackDistanceMeters: nil)
-    let curveService = PatternArrayEditingService(session: session, sourceID: curveSourceID)
-    let curveResult = curveService.setCurveExtentMode(
+    let curveService = makePatternArrayEditingService(session: session, sourceID: curveSourceID)
+    curveService.setCurveExtentMode(
         .distance,
         fallbackDistanceMeters: nil,
         fallbackRatio: nil
     )
 
-    #expect(rectangularResult?.didMutate == true)
-    #expect(curveResult?.didMutate == true)
     #expect(try rectangularSecondAxisDistance(in: session.document, sourceID: rectangularSourceID) == 100.0)
     #expect(try curveExtentDistance(in: session.document, sourceID: curveSourceID) == 100.0)
 }
@@ -523,9 +604,9 @@ import Testing
             copyCount: 2
         ))
     )
-    let service = PatternArrayEditingService(session: session, sourceID: sourceID)
+    let service = makePatternArrayEditingService(session: session, sourceID: sourceID)
 
-    let result = service.setCurvePath(
+    service.setCurvePath(
         .sketchEntity(
             featureID: pathReference.featureID,
             entityID: pathReference.entityID
@@ -537,7 +618,6 @@ import Testing
         Issue.record("Expected a curve pattern array source.")
         return
     }
-    #expect(result?.didMutate == true)
     #expect(curve.path == .sketchEntity(featureID: pathReference.featureID, entityID: pathReference.entityID))
     #expect(source.outputInstanceIDs.count == 2)
 }
@@ -631,7 +711,7 @@ import Testing
         document: session.document
     ))
 
-    let outcome = PatternArrayCurvePathPickService(
+    let outcome = makePatternArrayCurvePathPickService(
         session: session,
         sourceID: sourceID
     ).apply(targets: [target])
@@ -641,7 +721,7 @@ import Testing
         Issue.record("Expected a curve pattern array source.")
         return
     }
-    #expect(outcome == .applied(expectedCandidate))
+    #expect(outcome == .submitted(expectedCandidate))
     #expect(curve.path == .sketchEntity(featureID: pathReference.featureID, entityID: pathReference.entityID))
     #expect(session.selection.selectedTargets == [selectedSourceTarget])
 }
@@ -666,7 +746,7 @@ import Testing
         ))
     )
 
-    let result = PatternArrayEditingService(
+    makePatternArrayEditingService(
         session: session,
         sourceID: sourceID
     ).setCurvePathPoint(
@@ -680,7 +760,6 @@ import Testing
         Issue.record("Expected an editable polyline Curve Pattern Array.")
         return
     }
-    #expect(result?.didMutate == true)
     #expect(points[0] == .origin)
     #expect(points[1] == Point3D(x: 0.03, y: 0.01, z: 0.02))
     #expect(points[2] == Point3D(x: 0.06, y: 0.0, z: 0.0))
@@ -706,7 +785,7 @@ import Testing
         ))
     )
 
-    let result = PatternArrayEditingService(
+    makePatternArrayEditingService(
         session: session,
         sourceID: sourceID
     ).setCurvePathPoint(
@@ -720,7 +799,6 @@ import Testing
         Issue.record("Expected an editable polyline Curve Pattern Array.")
         return
     }
-    #expect(result == nil)
     #expect(points == [
         .origin,
         Point3D(x: 0.03, y: 0.0, z: 0.0),
@@ -747,9 +825,9 @@ import Testing
             extentMode: .ratio
         ))
     )
-    let service = PatternArrayEditingService(session: session, sourceID: sourceID)
+    let service = makePatternArrayEditingService(session: session, sourceID: sourceID)
 
-    let result = service.setCurveExtentRatio(2.0)
+    service.setCurveExtentRatio(2.0)
 
     let source = try #require(session.document.productMetadata.patternArrays[sourceID])
     guard case .curve(let curve) = source.distribution,
@@ -757,10 +835,114 @@ import Testing
         Issue.record("Expected a constant ratio extent.")
         return
     }
-    #expect(result?.didMutate == true)
     #expect(curve.extentMode == .ratio)
     #expect(quantity.kind == .scalar)
     #expect(quantity.value == 1.0)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func patternArrayEditingServiceRebasesDeferredFieldEditsOnCurrentSource() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let sourceID = try createPatternArray(
+        in: session,
+        name: "Deferred Rectangular Array",
+        distribution: .rectangular(RectangularPatternArray(
+            firstAxis: PatternArrayLinearAxis(
+                direction: .unitX,
+                distance: .length(10.0, .millimeter),
+                copyCount: 3
+            )
+        ))
+    )
+    var pending: [PatternArrayEditingService.CurrentContextOperation] = []
+    let deferred = PatternArrayEditingService(
+        document: session.document,
+        workspaceState: session.workspaceState,
+        submit: { _ in Issue.record("Deferred editing must not submit a stale command.") },
+        report: { _, _ in },
+        sourceID: sourceID,
+        submitCurrent: { pending.append($0) }
+    )
+
+    deferred.setRectangularAxisCopyCount(slot: .first, copyCount: 5)
+    deferred.setRectangularSecondAxisEnabled(true, fallbackDistanceMeters: 0.02)
+    #expect(pending.count == 2)
+
+    for operation in pending {
+        let current = PatternArrayEditingService(
+            document: session.document,
+            workspaceState: session.workspaceState,
+            submit: { command in
+                do {
+                    _ = try session.execute(command)
+                } catch {
+                    Issue.record(error)
+                }
+            },
+            report: { _, _ in },
+            sourceID: sourceID
+        )
+        operation(current)
+    }
+
+    let source = try #require(session.document.productMetadata.patternArrays[sourceID])
+    guard case .rectangular(let rectangular) = source.distribution else {
+        Issue.record("Expected a rectangular pattern array source.")
+        return
+    }
+    #expect(rectangular.firstAxis.copyCount == 5)
+    #expect(rectangular.secondAxis != nil)
+
+    var idempotentCommands: [EditorCommand] = []
+    PatternArrayEditingService(
+        document: session.document,
+        workspaceState: session.workspaceState,
+        submit: { idempotentCommands.append($0) },
+        report: { _, _ in },
+        sourceID: sourceID
+    ).setRectangularSecondAxisEnabled(true, fallbackDistanceMeters: 0.02)
+    #expect(idempotentCommands.count == 1)
+}
+
+@MainActor
+private func makePatternArrayEditingService(
+    session: EditorSession,
+    sourceID: PatternArraySourceID
+) -> PatternArrayEditingService {
+    PatternArrayEditingService(
+        document: session.document,
+        workspaceState: session.workspaceState,
+        submit: { command in
+            do {
+                _ = try session.execute(command)
+            } catch {
+                Issue.record(error)
+            }
+        },
+        report: { _, _ in },
+        sourceID: sourceID
+    )
+}
+
+@MainActor
+private func makePatternArrayCurvePathPickService(
+    session: EditorSession,
+    sourceID: PatternArraySourceID
+) -> PatternArrayCurvePathPickService {
+    PatternArrayCurvePathPickService(
+        document: session.document,
+        submit: { command in
+            do {
+                _ = try session.execute(command)
+            } catch {
+                Issue.record(error)
+            }
+        },
+        report: { _, _ in },
+        sourceID: sourceID
+    )
 }
 
 @MainActor

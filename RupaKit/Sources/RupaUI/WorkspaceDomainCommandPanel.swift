@@ -6,18 +6,19 @@ struct WorkspaceDomainCommandPanel: View {
     var command: WorkspaceCommandDescriptor
     var displayUnit: LengthDisplayUnit
     var generation: DocumentGeneration
-    var execute: @MainActor (DomainCommandRequest) throws -> DomainExecutionResult
+    var execute: @MainActor (DomainCommandRequest) async throws -> DomainExecutionResult
 
     @State private var draft: WorkspaceDomainCommandDraft
     @State private var isDryRun: Bool
     @State private var result: DomainExecutionResult?
     @State private var errorMessage: String?
+    @State private var isExecuting: Bool
 
     init(
         command: WorkspaceCommandDescriptor,
         displayUnit: LengthDisplayUnit,
         generation: DocumentGeneration,
-        execute: @escaping @MainActor (DomainCommandRequest) throws -> DomainExecutionResult
+        execute: @escaping @MainActor (DomainCommandRequest) async throws -> DomainExecutionResult
     ) {
         self.command = command
         self.displayUnit = displayUnit
@@ -31,6 +32,7 @@ struct WorkspaceDomainCommandPanel: View {
         self._isDryRun = State(initialValue: false)
         self._result = State(initialValue: nil)
         self._errorMessage = State(initialValue: nil)
+        self._isExecuting = State(initialValue: false)
     }
 
     var body: some View {
@@ -231,6 +233,7 @@ struct WorkspaceDomainCommandPanel: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
+            .disabled(isExecuting)
             .accessibilityIdentifier("WorkspaceDomainCommand.run")
         }
     }
@@ -282,17 +285,21 @@ struct WorkspaceDomainCommandPanel: View {
     }
 
     private func runCommand() {
-        do {
-            let request = try draft.request(
-                descriptor: command.domainCapability,
-                generation: generation,
-                dryRun: isDryRun
-            )
-            result = try execute(request)
-            errorMessage = nil
-        } catch {
-            result = nil
-            errorMessage = error.localizedDescription
+        Task { @MainActor in
+            isExecuting = true
+            defer { isExecuting = false }
+            do {
+                let request = try draft.request(
+                    descriptor: command.domainCapability,
+                    generation: generation,
+                    dryRun: isDryRun
+                )
+                result = try await execute(request)
+                errorMessage = nil
+            } catch {
+                result = nil
+                errorMessage = error.localizedDescription
+            }
         }
     }
 

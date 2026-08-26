@@ -2,7 +2,9 @@ import RupaCore
 
 @MainActor
 struct PatternArrayExpressionWritebackService {
-    let session: EditorSession
+    let document: DesignDocument
+    let submit: (EditorCommand) -> Void
+    let report: (String, EditorDiagnostic.Severity) -> Void
 
     func updateReferencedExpression(
         _ expression: CADExpression,
@@ -11,26 +13,26 @@ struct PatternArrayExpressionWritebackService {
         guard case .reference(let parameterID) = expression else {
             return nil
         }
-        guard let parameter = session.document.cadDocument.parameters.parameters[parameterID],
+        guard let parameter = document.cadDocument.parameters.parameters[parameterID],
               parameter.kind == quantity.kind else {
-            session.reportToolStatus(
+            report(
                 "Pattern Array parameter reference could not be updated.",
-                severity: .warning
+                .warning
             )
             return .blocked
         }
-        let commandResult = session.perform(
+        submit(
             .upsertParameter(
                 name: parameter.name,
                 expression: .constant(quantity),
                 kind: parameter.kind
             )
         )
-        return .updated(commandResult)
+        return .updated
     }
 }
 
 enum PatternArrayExpressionWritebackResult {
-    case updated(CommandExecutionResult?)
+    case updated
     case blocked
 }

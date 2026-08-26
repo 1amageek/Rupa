@@ -392,6 +392,70 @@ import Testing
     #expect(session.diagnostics.isEmpty)
 }
 
+@Test(.timeLimit(.minutes(1)))
+func selectionModelReplacesHoverWithoutRematerializingSelectedTargets() {
+    let firstTarget = SelectionTarget(sceneNodeID: SceneNodeID())
+    let secondTarget = SelectionTarget(sceneNodeID: SceneNodeID())
+    let selection = SelectionModel(selectedTargets: [firstTarget, secondTarget])
+    let originalAddress = selection.selectedTargets.withUnsafeBufferPointer { buffer in
+        buffer.baseAddress.map { Int(bitPattern: $0) }
+    }
+
+    let hovered = selection.replacingHover(with: .target(secondTarget))
+    let hoveredAddress = hovered.selectedTargets.withUnsafeBufferPointer { buffer in
+        buffer.baseAddress.map { Int(bitPattern: $0) }
+    }
+    let cleared = hovered.replacingHover(with: .none)
+    let clearedAddress = cleared.selectedTargets.withUnsafeBufferPointer { buffer in
+        buffer.baseAddress.map { Int(bitPattern: $0) }
+    }
+
+    #expect(hovered.selectedTargets == selection.selectedTargets)
+    #expect(hovered.hoveredTarget == secondTarget)
+    #expect(hovered.hoveredReference == nil)
+    #expect(cleared.hoveredTarget == nil)
+    #expect(hoveredAddress == originalAddress)
+    #expect(clearedAddress == originalAddress)
+
+    let firstReference = commandStackSelectionReference(role: "first")
+    let secondReference = commandStackSelectionReference(role: "second")
+    let referenceSelection = SelectionModel(
+        selectedReferences: [firstReference, secondReference]
+    )
+    let referenceAddress = referenceSelection.selectedReferences.withUnsafeBufferPointer { buffer in
+        buffer.baseAddress.map { Int(bitPattern: $0) }
+    }
+    let hoveredReference = referenceSelection.replacingHover(
+        with: .reference(secondReference)
+    )
+    let hoveredReferenceAddress = hoveredReference.selectedReferences.withUnsafeBufferPointer { buffer in
+        buffer.baseAddress.map { Int(bitPattern: $0) }
+    }
+    let clearedReference = hoveredReference.replacingHover(with: .none)
+    let clearedReferenceAddress = clearedReference.selectedReferences.withUnsafeBufferPointer { buffer in
+        buffer.baseAddress.map { Int(bitPattern: $0) }
+    }
+
+    #expect(hoveredReference.selectedReferences == referenceSelection.selectedReferences)
+    #expect(hoveredReference.hoveredTarget == nil)
+    #expect(hoveredReference.hoveredReference == secondReference)
+    #expect(clearedReference.hoveredTarget == nil)
+    #expect(clearedReference.hoveredReference == nil)
+    #expect(hoveredReferenceAddress == referenceAddress)
+    #expect(clearedReferenceAddress == referenceAddress)
+}
+
+private func commandStackSelectionReference(role: String) -> SelectionReference {
+    .subshape(StableSubshapeReference(
+        subshapeID: SubshapeID(
+            featureID: FeatureID(UUID()),
+            role: role,
+            ordinal: 0
+        ),
+        geometrySignature: .vertex(point: .origin)
+    ))
+}
+
 @MainActor
 @Test func editorSessionPrunesSelectionWhenSelectedNodeIsRemovedByReset() async throws {
     let session = EditorSession()
@@ -1820,6 +1884,15 @@ import Testing
     }?.key)
 
     _ = session.selectSceneNode(sectionNodeID)
+    let planningService = SweepSelectionPlanningService(
+        document: session.document,
+        selection: session.selection
+    )
+    let plannedPreview = planningService.preview(targetSceneNodeID: pathNodeID)
+    let plannedCommand = try planningService.command(
+        targetSceneNodeID: pathNodeID,
+        name: "Planned Curve Sweep"
+    )
     session.selectTool(.sweep)
     let preview = session.sweepSelectionPreview(targetSceneNodeID: pathNodeID)
     let result = session.activateSelectedToolFromCanvas(targetSceneNodeID: pathNodeID)
@@ -1833,7 +1906,25 @@ import Testing
         Issue.record("Sweep tool should create a curve-section sheet sweep feature.")
         return
     }
+    guard case let .createSweep(
+        plannedName,
+        plannedSections,
+        plannedPath,
+        plannedGuides,
+        plannedTargets,
+        plannedOptions
+    ) = plannedCommand else {
+        Issue.record("The immutable sweep planner must produce createSweep.")
+        return
+    }
 
+    #expect(plannedPreview == preview)
+    #expect(plannedName == "Planned Curve Sweep")
+    #expect(plannedSections == [.curve(SweepCurveSectionReference(featureID: sectionFeatureID))])
+    #expect(plannedPath == SweepPathReference(featureID: pathFeatureID))
+    #expect(plannedGuides.isEmpty)
+    #expect(plannedTargets.isEmpty)
+    #expect(plannedOptions.resultKind == .sheet)
     #expect(preview.status == .ready)
     #expect(preview.section == .curve(SweepCurveSectionReference(featureID: sectionFeatureID)))
     #expect(preview.pathFeatureID == pathFeatureID)

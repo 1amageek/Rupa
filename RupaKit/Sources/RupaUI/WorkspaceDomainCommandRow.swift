@@ -6,7 +6,7 @@ struct WorkspaceDomainCommandRow: View {
     var command: WorkspaceCommandDescriptor
     var displayUnit: LengthDisplayUnit
     var generation: DocumentGeneration
-    var execute: @MainActor (DomainCommandRequest) throws -> DomainExecutionResult
+    var execute: @MainActor (DomainCommandRequest) async throws -> DomainExecutionResult
 
     @State private var isPresented = false
 
@@ -14,7 +14,7 @@ struct WorkspaceDomainCommandRow: View {
         command: WorkspaceCommandDescriptor,
         displayUnit: LengthDisplayUnit,
         generation: DocumentGeneration,
-        execute: @escaping @MainActor (DomainCommandRequest) throws -> DomainExecutionResult
+        execute: @escaping @MainActor (DomainCommandRequest) async throws -> DomainExecutionResult
     ) {
         self.command = command
         self.displayUnit = displayUnit

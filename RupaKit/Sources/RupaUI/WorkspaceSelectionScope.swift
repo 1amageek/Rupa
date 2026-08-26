@@ -1,3 +1,4 @@
+import RupaCore
 import RupaRendering
 import SwiftUI
 
@@ -93,5 +94,9 @@ enum WorkspaceSelectionScope: String, CaseIterable, Identifiable, Sendable {
         case .object, .face, .edge, .vertex, .region, .sketchEntity:
             return true
         }
+    }
+
+    func allowsPresentationOccurrencePick(for tool: ModelingTool) -> Bool {
+        tool == .select && self == .object
     }
 }

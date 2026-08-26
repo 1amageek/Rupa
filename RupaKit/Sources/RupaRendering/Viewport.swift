@@ -1,6 +1,7 @@
 import Foundation
 import OSLog
 import RupaCore
+import RupaGeometry
 import SwiftUI
 import RupaViewportScene
 
@@ -41,9 +42,14 @@ public struct Viewport: View {
     @State private var identityHitResolver = ViewportIdentityHitResolver(
         renderBudget: .deviceCalibrated()
     )
+    @State private var presentationPlanCache = MeshSourcePresentationPlanCache()
+    @State private var presentationSectionGeometryCache = MeshSourcePresentationSectionGeometryCache()
+    @State private var baseSceneSnapshotCache = ViewportSceneSnapshotCache()
     @State private var sceneSnapshotCache = ViewportSceneSnapshotCache()
 
     private let document: DesignDocument
+    private let presentationScene: UniversalViewportScene?
+    private let presentationSceneNodeIDByOccurrenceID: [SceneOccurrenceID: SceneNodeID]
     private let workspaceRenderState: ViewportWorkspaceRenderState
     private let currentEvaluation: DocumentEvaluationContext?
     private let documentGeneration: DocumentGeneration?
@@ -51,6 +57,7 @@ public struct Viewport: View {
     private let objectRegistry: ObjectTypeRegistry
     private let renderInvalidation: RenderInvalidation
     private let selection: SelectionModel
+    private let objectSelectionIndex: ViewportObjectSelectionIndex
     private let selectionDragPreviewTargets: [SelectionTarget]
     private let patternArrayCurvePathReplacementPreviewRequest: ViewportPatternArrayCurvePathReplacementPreviewRequest?
     private let surfaceAnalysis: SurfaceAnalysisResult?
@@ -82,6 +89,9 @@ public struct Viewport: View {
     private let slotWidthMeters: Double
     private let sketchVertexOffsetDistanceMeters: Double
     private let edgeOffsetDistanceMeters: Double
+    private let presentationCADInteractionSceneNodeIDs: Set<SceneNodeID>
+    private let onPresentationOccurrencePick: ((SceneOccurrenceID, ViewportSelectionIntent) -> Void)?
+    private let onPresentationOccurrenceHover: ((SceneOccurrenceID?) -> Void)?
     private let onPick: ((ViewportCanvasTarget) -> Void)?
     private let onCanvasDrag: ((ViewportModelDrag) -> Void)?
     private let onShiftScroll: ((ViewportScrollDirection) -> Bool)?
@@ -129,6 +139,9 @@ public struct Viewport: View {
     private let onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)?
     private let onCameraFrameChange: ((ViewportCameraFrame) -> Void)?
     private let onProjectedGridStepChange: ((Double) -> Void)?
+    private let sceneObjectDefinitions: [ObjectTypeDefinition]
+    private let presentationInteractionStateResolver: MeshSourcePresentationInteractionStateResolver
+    private let selectedPresentationHasExactCADContext: Bool
 
     private var workspaceRuler: RulerConfiguration {
         workspaceRenderState.ruler
@@ -270,6 +283,8 @@ public struct Viewport: View {
 
     public init(
         document: DesignDocument,
+        presentationScene: UniversalViewportScene? = nil,
+        presentationSceneNodeIDByOccurrenceID: [SceneOccurrenceID: SceneNodeID] = [:],
         workspaceRenderState: ViewportWorkspaceRenderState,
         currentEvaluation: DocumentEvaluationContext? = nil,
         documentGeneration: DocumentGeneration? = nil,
@@ -277,7 +292,9 @@ public struct Viewport: View {
         objectRegistry: ObjectTypeRegistry = .builtIn,
         renderInvalidation: RenderInvalidation = RenderInvalidation(),
         selection: SelectionModel = .empty,
+        objectSelectionIndex: ViewportObjectSelectionIndex,
         selectionDragPreviewTargets: [SelectionTarget] = [],
+        presentationPreviewSceneNodeIDs: Set<SceneNodeID> = [],
         patternArrayCurvePathReplacementPreviewRequest: ViewportPatternArrayCurvePathReplacementPreviewRequest? = nil,
         surfaceAnalysis: SurfaceAnalysisResult? = nil,
         surfaceAnalysisOptions: ViewportSurfaceAnalysisOptions = ViewportSurfaceAnalysisOptions(),
@@ -308,6 +325,10 @@ public struct Viewport: View {
         slotWidthMeters: Double? = nil,
         sketchVertexOffsetDistanceMeters: Double? = nil,
         edgeOffsetDistanceMeters: Double? = nil,
+        presentationCADInteractionSceneNodeIDs: Set<SceneNodeID> = [],
+        selectedPresentationHasExactCADContext: Bool,
+        onPresentationOccurrencePick: ((SceneOccurrenceID, ViewportSelectionIntent) -> Void)? = nil,
+        onPresentationOccurrenceHover: ((SceneOccurrenceID?) -> Void)? = nil,
         onPick: ((ViewportCanvasTarget) -> Void)? = nil,
         onCanvasDrag: ((ViewportModelDrag) -> Void)? = nil,
         onShiftScroll: ((ViewportScrollDirection) -> Bool)? = nil,
@@ -357,6 +378,8 @@ public struct Viewport: View {
         onProjectedGridStepChange: ((Double) -> Void)? = nil
     ) {
         self.document = document
+        self.presentationScene = presentationScene
+        self.presentationSceneNodeIDByOccurrenceID = presentationSceneNodeIDByOccurrenceID
         self.workspaceRenderState = workspaceRenderState
         self.currentEvaluation = currentEvaluation
         self.documentGeneration = documentGeneration
@@ -364,6 +387,7 @@ public struct Viewport: View {
         self.objectRegistry = objectRegistry
         self.renderInvalidation = renderInvalidation
         self.selection = selection
+        self.objectSelectionIndex = objectSelectionIndex
         self.selectionDragPreviewTargets = selectionDragPreviewTargets
         self.patternArrayCurvePathReplacementPreviewRequest = patternArrayCurvePathReplacementPreviewRequest
         self.surfaceAnalysis = surfaceAnalysis
@@ -402,6 +426,9 @@ public struct Viewport: View {
             ?? interactionScaleDefaults.operationStepMeters
         self.edgeOffsetDistanceMeters = edgeOffsetDistanceMeters
             ?? interactionScaleDefaults.operationStepMeters
+        self.presentationCADInteractionSceneNodeIDs = presentationCADInteractionSceneNodeIDs
+        self.onPresentationOccurrencePick = onPresentationOccurrencePick
+        self.onPresentationOccurrenceHover = onPresentationOccurrenceHover
         self.onPick = onPick
         self.onCanvasDrag = onCanvasDrag
         self.onShiftScroll = onShiftScroll
@@ -449,6 +476,15 @@ public struct Viewport: View {
         self.onProjectionBasisChange = onProjectionBasisChange
         self.onCameraFrameChange = onCameraFrameChange
         self.onProjectedGridStepChange = onProjectedGridStepChange
+        self.sceneObjectDefinitions = objectRegistry.orderedDefinitions
+        self.presentationInteractionStateResolver = MeshSourcePresentationInteractionStateResolver(
+            sceneNodeIDByOccurrenceID: presentationSceneNodeIDByOccurrenceID,
+            selectedSceneNodeIDs: objectSelectionIndex.sceneNodeIDs,
+            previewSceneNodeIDs: presentationPreviewSceneNodeIDs,
+            hoveredSceneNodeID: selection.hoveredSceneNodeID
+        )
+        self.selectedPresentationHasExactCADContext = presentationScene == nil
+            || selectedPresentationHasExactCADContext
     }
 
     public var body: some View {
@@ -456,10 +492,12 @@ public struct Viewport: View {
             TimelineView(.animation) { timeline in
                 let basis = projectionBasis(at: timeline.date)
                 let fittingChromeLayout = makeFittingChromeLayout(size: proxy.size)
+                let sceneKey = sceneSnapshotKey(usesDragPreviewDocument: true)
                 let sceneContext = makeSceneContext(
                     size: proxy.size,
                     camera: camera,
                     basis: basis,
+                    sceneKey: sceneKey,
                     fittingInsets: fittingChromeLayout.fittingInsets
                 )
                 let projectedGrid = ViewportProjectedGrid(
@@ -476,15 +514,28 @@ public struct Viewport: View {
                         scaleReadout: projectedGrid.scaleReadout
                     )
                 )
+                let presentationPlanResult = presentationScene.map {
+                    presentationPlanCache.result(for: $0)
+                }
+                let presentationSectionGeometryResolver = presentationSectionGeometryResolver(
+                    sceneKey: sceneKey
+                )
 
                 Canvas { context, size in
                     ViewportGridRenderer.draw(projectedGrid, chromeLayout: chromeLayout, in: &context)
                     drawAxes(in: &context, size: size, camera: camera, basis: basis)
+                    drawPresentation(
+                        result: presentationPlanResult,
+                        in: &context,
+                        layout: sceneContext.layout,
+                        sectionGeometryResolver: presentationSectionGeometryResolver
+                    )
                     drawModel(
                         in: &context,
                         sceneContext: sceneContext,
                         chromeLayout: chromeLayout,
-                        placementCellSideMeters: projectedGrid.minorStepMeters
+                        placementCellSideMeters: projectedGrid.minorStepMeters,
+                        drawsLegacyBodies: presentationScene == nil
                     )
                     drawReferenceLines(in: &context, size: size, camera: camera, basis: basis)
                 }
@@ -498,6 +549,9 @@ public struct Viewport: View {
                         scaleReadout: projectedGrid.scaleReadout,
                         chromeLayout: chromeLayout
                     )
+                }
+                .overlay(alignment: .topTrailing) {
+                    presentationFailureOverlay(result: presentationPlanResult)
                 }
                 .overlay {
                     canvasDragPlaceholderOverlay(basis: basis)
@@ -1036,22 +1090,38 @@ public struct Viewport: View {
         camera: ViewportCamera,
         basis: ViewportProjectionBasis,
         usesDragPreviewDocument: Bool = true,
+        sceneKey: ViewportSceneSnapshotKey? = nil,
         fittingInsets: ViewportLayout.FittingInsets? = nil
     ) -> ViewportSceneContext {
-        let scene = cachedScene(usesDragPreviewDocument: usesDragPreviewDocument)
+        let scene = cachedScene(
+            usesDragPreviewDocument: usesDragPreviewDocument,
+            sceneKey: sceneKey
+        )
+        let geometryBoundsSource: ViewportGeometryBoundsSource
+        if let presentationScene {
+            geometryBoundsSource = .geometry(presentationScene.worldBounds)
+        } else {
+            geometryBoundsSource = .scene
+        }
         return ViewportSceneContext(
             ruler: workspaceRuler,
             scene: scene,
             size: size,
             camera: camera,
             basis: basis,
+            geometryBoundsSource: geometryBoundsSource,
             fittingInsets: fittingInsets ?? viewportLayoutFittingInsets(size: size)
         )
     }
 
-    private func cachedScene(usesDragPreviewDocument: Bool) -> ViewportScene {
+    private func cachedScene(
+        usesDragPreviewDocument: Bool,
+        sceneKey: ViewportSceneSnapshotKey? = nil
+    ) -> ViewportScene {
         sceneSnapshotCache.scene(
-            for: sceneSnapshotKey(usesDragPreviewDocument: usesDragPreviewDocument)
+            for: sceneKey ?? sceneSnapshotKey(
+                usesDragPreviewDocument: usesDragPreviewDocument
+            )
         ) {
             buildScene(usesDragPreviewDocument: usesDragPreviewDocument)
         }
@@ -1059,6 +1129,14 @@ public struct Viewport: View {
 
     private func buildScene(usesDragPreviewDocument: Bool) -> ViewportScene {
         sceneApplyingSectionClipping(
+            cachedBaseScene(usesDragPreviewDocument: usesDragPreviewDocument)
+        )
+    }
+
+    private func cachedBaseScene(usesDragPreviewDocument: Bool) -> ViewportScene {
+        baseSceneSnapshotCache.scene(
+            for: sceneSnapshotKey(usesDragPreviewDocument: usesDragPreviewDocument)
+        ) {
             ViewportSceneBuilder(objectRegistry: objectRegistry).build(
                 document: sceneDocument(usesDragPreviewDocument: usesDragPreviewDocument),
                 ruler: workspaceRuler,
@@ -1067,7 +1145,7 @@ public struct Viewport: View {
                 documentGeneration: sceneDocumentGeneration(usesDragPreviewDocument: usesDragPreviewDocument),
                 evaluationCache: sceneEvaluationCache(usesDragPreviewDocument: usesDragPreviewDocument)
             )
-        )
+        }
     }
 
     private func sceneSnapshotKey(
@@ -1102,9 +1180,7 @@ public struct Viewport: View {
             workspaceRenderState: workspaceRenderState,
             renderInvalidation: renderInvalidation,
             sectionClippingPlan: sectionClippingPlan,
-            objectDefinitions: objectRegistry.definitions.values.sorted { lhs, rhs in
-                lhs.id.rawValue < rhs.id.rawValue
-            }
+            objectDefinitions: sceneObjectDefinitions
         )
     }
 
@@ -1126,15 +1202,13 @@ public struct Viewport: View {
         usesDragPreviewDocument: Bool = true,
         fittingInsets: ViewportLayout.FittingInsets? = nil
     ) -> ViewportModelCoordinateMapper {
-        let scene = cachedScene(usesDragPreviewDocument: usesDragPreviewDocument)
-        return ViewportModelCoordinateMapper(
-            ruler: workspaceRuler,
-            scene: scene,
+        makeSceneContext(
             size: size,
             camera: camera,
             basis: basis,
+            usesDragPreviewDocument: usesDragPreviewDocument,
             fittingInsets: fittingInsets ?? viewportLayoutFittingInsets(size: size)
-        )
+        ).mapper
     }
 
     private func makeLayout(
@@ -1231,11 +1305,181 @@ public struct Viewport: View {
         )
     }
 
+    private func drawPresentation(
+        result: Result<MeshSourcePresentationRenderPlan, MeshSourcePresentationRenderError>?,
+        in context: inout GraphicsContext,
+        layout: ViewportLayout,
+        sectionGeometryResolver: MeshSourcePresentationSectionGeometryResolver?
+    ) {
+        guard case let .success(plan) = result else {
+            return
+        }
+        do {
+            try MeshSourcePresentationRenderer().render(plan: plan) { triangle in
+                let interactionState = presentationInteractionStateResolver.state(
+                    for: triangle.occurrenceID
+                )
+                let color: Color
+                switch interactionState {
+                case .normal:
+                    color = ViewportTheme.bodySurface
+                case .hovered:
+                    color = ViewportTheme.hover
+                case .selected:
+                    color = ViewportTheme.selection
+                }
+                let polygon: ViewportTrianglePolygon
+                if let sectionGeometryResolver {
+                    guard let resolvedPolygon = sectionGeometryResolver.polygon(for: triangle) else {
+                        return
+                    }
+                    polygon = resolvedPolygon
+                } else {
+                    polygon = ViewportTrianglePolygon(
+                        first: point3D(triangle.firstPosition),
+                        second: point3D(triangle.secondPosition),
+                        third: point3D(triangle.thirdPosition)
+                    )
+                }
+                var path = Path()
+                path.move(to: layout.project(polygon.first))
+                path.addLine(to: layout.project(polygon.second))
+                path.addLine(to: layout.project(polygon.third))
+                if let fourth = polygon.fourth {
+                    path.addLine(to: layout.project(fourth))
+                }
+                path.closeSubpath()
+                context.fill(
+                    path,
+                    with: .color(color.opacity(interactionState == .normal ? 0.24 : 0.34))
+                )
+                context.stroke(
+                    path,
+                    with: .color(color.opacity(interactionState == .normal ? 0.30 : 0.74)),
+                    lineWidth: interactionState == .normal ? 0.7 : 1.1
+                )
+            }
+        } catch {
+            // The cache validates the complete immutable traversal before publication.
+            assertionFailure("A validated presentation render plan failed: \(error)")
+        }
+    }
+
+    private func presentationSectionGeometryResolver(
+        sceneKey: ViewportSceneSnapshotKey? = nil
+    ) -> MeshSourcePresentationSectionGeometryResolver? {
+        guard let presentationScene,
+              let sectionClippingPlan else {
+            presentationSectionGeometryCache.invalidate()
+            return nil
+        }
+        let sceneKey = sceneKey ?? sceneSnapshotKey(usesDragPreviewDocument: true)
+        let cacheKey = sceneKey.map {
+            MeshSourcePresentationSectionGeometryCache.Key(
+                presentationSnapshotID: presentationScene.snapshotID,
+                sceneSnapshotKey: $0,
+                plane: sectionAnalysis?.plane,
+                toleranceMeters: sectionAnalysis?.toleranceMeters
+            )
+        }
+        return presentationSectionGeometryCache.resolver(for: cacheKey) {
+            MeshSourcePresentationSectionGeometryResolver(
+                sectionPlan: sectionClippingPlan,
+                plane: sectionAnalysis?.plane,
+                toleranceMeters: sectionAnalysis?.toleranceMeters
+            )
+        }
+    }
+
+    private func presentationOccurrenceID(
+        at point: CGPoint,
+        layout: ViewportLayout
+    ) -> SceneOccurrenceID? {
+        guard let presentationScene else {
+            return nil
+        }
+        guard case let .success(plan) = presentationPlanCache.result(for: presentationScene) else {
+            return nil
+        }
+        do {
+            return try MeshSourcePresentationScreenHitTester().occurrenceID(
+                at: point,
+                in: plan,
+                layout: layout,
+                sectionGeometryResolver: presentationSectionGeometryResolver()
+            )
+        } catch {
+            assertionFailure("A validated presentation pick plan failed: \(error)")
+            return nil
+        }
+    }
+
+    private func presentationOccurrenceIDs(
+        intersecting rect: CGRect,
+        layout: ViewportLayout
+    ) -> [SceneOccurrenceID] {
+        guard let presentationScene else {
+            return []
+        }
+        guard case let .success(plan) = presentationPlanCache.result(for: presentationScene) else {
+            return []
+        }
+        do {
+            return try MeshSourcePresentationScreenHitTester().occurrenceIDs(
+                intersecting: rect,
+                in: plan,
+                layout: layout,
+                sectionGeometryResolver: presentationSectionGeometryResolver()
+            )
+        } catch {
+            assertionFailure("A validated presentation rectangle-pick plan failed: \(error)")
+            return []
+        }
+    }
+
+    private func presentationFilteredLegacyHit(
+        _ hit: ViewportHit?,
+        presentationOccurrenceID: SceneOccurrenceID?
+    ) -> ViewportHit? {
+        guard presentationScene != nil else {
+            return hit
+        }
+        return MeshSourcePresentationLegacyHitFilter().hit(
+            hit,
+            presentationOccurrenceID: presentationOccurrenceID,
+            navigation: presentationSceneNodeIDByOccurrenceID,
+            exactCADSceneNodeIDs: presentationCADInteractionSceneNodeIDs
+        )
+    }
+
+    @ViewBuilder
+    private func presentationFailureOverlay(
+        result: Result<MeshSourcePresentationRenderPlan, MeshSourcePresentationRenderError>?
+    ) -> some View {
+        if case let .failure(error) = result {
+            Text(error.localizedDescription)
+                .font(.caption)
+                .foregroundStyle(Color.red)
+                .padding(8.0)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8.0))
+                .padding(12.0)
+                .accessibilityIdentifier("CanvasPresentationFailure")
+                .accessibilityLabel("Presentation geometry unavailable")
+                .accessibilityValue(error.localizedDescription)
+                .allowsHitTesting(false)
+        }
+    }
+
+    private func point3D(_ point: GeometryPoint3D) -> Point3D {
+        Point3D(x: point.x, y: point.y, z: point.z)
+    }
+
     private func drawModel(
         in context: inout GraphicsContext,
         sceneContext: ViewportSceneContext,
         chromeLayout: ViewportCanvasChromeLayout,
-        placementCellSideMeters: Double
+        placementCellSideMeters: Double,
+        drawsLegacyBodies: Bool
     ) {
         let scene = sceneContext.scene
         let layout = sceneContext.layout
@@ -1265,7 +1509,7 @@ public struct Viewport: View {
         let hoveredSketchRegionTarget = hoveredSketchRegionTarget()
         let hoveredFeatureIDs = hoveredFeatureIDs()
         let hoveredSceneNodeIDs = hoveredSceneNodeIDs()
-        let selectedBodyItems = selectedBodyItems(in: scene, selectedFeatureIDs: selectedObjectFeatureIDs)
+        let selectedBodyItems = selectedBodyItems(in: scene)
         let patternArrayPreviews = ViewportPatternArrayPreviewService().previews(
             document: document,
             scene: scene,
@@ -1301,23 +1545,25 @@ public struct Viewport: View {
             )
         }
 
-        for item in scene.items {
-            if case .body = item.kind {
-                drawBody(
-                    item,
-                    in: &context,
-                    layout: layout,
-                    isSelected: isObjectItem(
+        if drawsLegacyBodies || dragPreviewDocument != nil || editedBodies.isEmpty == false {
+            for item in scene.items {
+                if case .body = item.kind {
+                    drawBody(
                         item,
-                        selectedByFeatureIDs: selectedObjectFeatureIDs,
-                        selectedBySceneNodeIDs: selectedObjectSceneNodeIDs
-                    ) && !usesSelectionGroup,
-                    isHovered: hoveredFeatureIDs.contains(item.featureID)
-                        || previewObjectFeatureIDs.contains(item.featureID)
-                        || item.sceneNodeID.map(hoveredSceneNodeIDs.contains) == true
-                        || item.sceneNodeID.map(previewObjectSceneNodeIDs.contains) == true,
-                    sectionAction: sectionDisplayPlan?.action(forSceneItemID: item.id)
-                )
+                        in: &context,
+                        layout: layout,
+                        isSelected: isObjectItem(
+                            item,
+                            selectedByFeatureIDs: selectedObjectFeatureIDs,
+                            selectedBySceneNodeIDs: selectedObjectSceneNodeIDs
+                        ) && !usesSelectionGroup,
+                        isHovered: hoveredFeatureIDs.contains(item.featureID)
+                            || previewObjectFeatureIDs.contains(item.featureID)
+                            || item.sceneNodeID.map(hoveredSceneNodeIDs.contains) == true
+                            || item.sceneNodeID.map(previewObjectSceneNodeIDs.contains) == true,
+                        sectionAction: sectionDisplayPlan?.action(forSceneItemID: item.id)
+                    )
+                }
             }
         }
 
@@ -1774,8 +2020,7 @@ public struct Viewport: View {
             drawSelectionAffordances(
                 in: &context,
                 scene: scene,
-                layout: layout,
-                selectedFeatureIDs: selectedObjectFeatureIDs
+                layout: layout
             )
         }
     }
@@ -6364,14 +6609,16 @@ public struct Viewport: View {
     private func drawSelectionAffordances(
         in context: inout GraphicsContext,
         scene: ViewportScene,
-        layout: ViewportLayout,
-        selectedFeatureIDs: Set<FeatureID>
+        layout: ViewportLayout
     ) {
+        let selectedTargets = objectSelectionTargets()
+        let selectedFeatureIDs = featureIDs(for: selectedTargets)
+        let selectedSceneNodeIDs = sceneNodeIDs(for: selectedTargets)
         let suppressedFeatureIDs = suppressedSketchFeatureIDs(
             in: scene,
             selectedFeatureIDs: selectedFeatureIDs
         )
-        let selectedBodyItems = selectedBodyItems(in: scene, selectedFeatureIDs: selectedFeatureIDs)
+        let selectedBodyItems = selectedBodyItems(in: scene)
         if selectedBodyItems.count > 1,
            let groupFeatureID = selectionGroupFeatureID(for: selectedBodyItems),
            let groupEdit = selectionGroupEditState(for: selectedBodyItems) {
@@ -6383,7 +6630,11 @@ public struct Viewport: View {
                 drawsBoundingBox: true
             )
         }
-        for item in scene.items where selectedFeatureIDs.contains(item.featureID) {
+        for item in scene.items where isObjectItem(
+            item,
+            selectedByFeatureIDs: selectedFeatureIDs,
+            selectedBySceneNodeIDs: selectedSceneNodeIDs
+        ) {
             if case .sketch = item.kind,
                suppressedFeatureIDs.contains(item.featureID) {
                 continue
@@ -6392,7 +6643,8 @@ public struct Viewport: View {
             case .curve:
                 continue
             case .body:
-                guard selectedBodyItems.count <= 1 else {
+                guard selectedBodyItems.count <= 1,
+                      selectedBodyItems.first?.id == item.id else {
                     continue
                 }
                 drawBodySelectionAffordance(item, in: &context, layout: layout)
@@ -8437,7 +8689,7 @@ public struct Viewport: View {
     }
 
     private func selectedObjectFeatureIDs() -> Set<FeatureID> {
-        featureIDs(for: objectSelectionTargets())
+        objectSelectionIndex.featureIDs
     }
 
     private func selectedTargetFeatureIDs() -> Set<FeatureID> {
@@ -8461,15 +8713,14 @@ public struct Viewport: View {
         selectedByFeatureIDs featureIDs: Set<FeatureID>,
         selectedBySceneNodeIDs sceneNodeIDs: Set<SceneNodeID>
     ) -> Bool {
-        if let sceneNodeID = item.sceneNodeID,
-           sceneNodeIDs.contains(sceneNodeID) {
-            return true
+        if let sceneNodeID = item.sceneNodeID {
+            return sceneNodeIDs.contains(sceneNodeID)
         }
         return featureIDs.contains(item.featureID)
     }
 
     private func objectSelectionTargets() -> [SelectionTarget] {
-        objectSelectionTargets(in: selection.selectedTargets)
+        objectSelectionIndex.objectTargets
     }
 
     private func objectSelectionTargets(in targets: [SelectionTarget]) -> [SelectionTarget] {
@@ -9652,16 +9903,21 @@ public struct Viewport: View {
         }
     }
 
-    private func selectedBodyItems(
-        in scene: ViewportScene,
-        selectedFeatureIDs: Set<FeatureID>
-    ) -> [ViewportSceneItem] {
-        scene.items.filter { item in
-            guard selectedFeatureIDs.contains(item.featureID),
-                  case .body = item.kind else {
-                return false
+    private func selectedBodyItems(in scene: ViewportScene) -> [ViewportSceneItem] {
+        objectSelectionIndex.selectedBodySourceItems(in: scene)
+    }
+
+    private func selectedBodyItem(
+        for affordanceTarget: ViewportAffordanceTarget,
+        in scene: ViewportScene
+    ) -> ViewportSceneItem? {
+        if let sceneNodeID = affordanceTarget.selectionTarget?.sceneNodeID {
+            return scene.items.first { item in
+                item.sceneNodeID == sceneNodeID && item.featureID == affordanceTarget.featureID
             }
-            return true
+        }
+        return scene.items.first { item in
+            item.sceneNodeID == nil && item.featureID == affordanceTarget.featureID
         }
     }
 
@@ -9732,7 +9988,7 @@ public struct Viewport: View {
         featureID: FeatureID,
         action: ViewportAffordanceAction
     ) -> Bool {
-        hoveredAffordance == ViewportAffordanceTarget(featureID: featureID, action: action)
+        hoveredAffordance?.featureID == featureID && hoveredAffordance?.action == action
     }
 
     private func isEdgeFilletAffordanceHovered(
@@ -11501,8 +11757,7 @@ public struct Viewport: View {
         scene: ViewportScene,
         layout: ViewportLayout
     ) -> ViewportAffordanceTarget? {
-        let selectedFeatureIDs = selectedObjectFeatureIDs()
-        let selectedBodyItems = selectedBodyItems(in: scene, selectedFeatureIDs: selectedFeatureIDs)
+        let selectedBodyItems = selectedBodyItems(in: scene)
         if selectedBodyItems.count > 1,
            let groupFeatureID = selectionGroupFeatureID(for: selectedBodyItems),
            let groupEdit = selectionGroupEditState(for: selectedBodyItems) {
@@ -11514,10 +11769,7 @@ public struct Viewport: View {
             )
         }
 
-        for item in scene.items.reversed() where selectedFeatureIDs.contains(item.featureID) {
-            guard case .body = item.kind else {
-                continue
-            }
+        for item in selectedBodyItems.reversed() {
             if let target = bodyAffordanceTarget(
                 point: point,
                 item: item,
@@ -11538,6 +11790,7 @@ public struct Viewport: View {
         return bodyAffordanceTarget(
             point: point,
             featureID: item.featureID,
+            selectionTarget: objectSelectionIndex.exactTarget(for: item),
             edit: edit,
             layout: layout
         )
@@ -11546,6 +11799,7 @@ public struct Viewport: View {
     private func bodyAffordanceTarget(
         point: CGPoint,
         featureID: FeatureID,
+        selectionTarget: SelectionTarget? = nil,
         edit: ViewportObjectEditState,
         layout: ViewportLayout
     ) -> ViewportAffordanceTarget? {
@@ -11574,7 +11828,11 @@ public struct Viewport: View {
                 layout: layout
             )
             if point.distance(to: endpoint) <= handleTolerance {
-                return ViewportAffordanceTarget(featureID: featureID, action: .oneSidedScale(axis))
+                return ViewportAffordanceTarget(
+                    featureID: featureID,
+                    selectionTarget: selectionTarget,
+                    action: .oneSidedScale(axis)
+                )
             }
 
             let centerScalePoint = edit.projectedPoint(
@@ -11589,19 +11847,31 @@ public struct Viewport: View {
                 layout: layout
             )
             if point.distance(to: centerScalePoint) <= handleTolerance {
-                return ViewportAffordanceTarget(featureID: featureID, action: .centerScale(axis))
+                return ViewportAffordanceTarget(
+                    featureID: featureID,
+                    selectionTarget: selectionTarget,
+                    action: .centerScale(axis)
+                )
             }
         }
 
         for handle in bodyVertexHandles(edit, layout: layout) {
             if point.distance(to: handle.point) <= handleTolerance {
-                return ViewportAffordanceTarget(featureID: featureID, action: .vertexMove(handle.vertex))
+                return ViewportAffordanceTarget(
+                    featureID: featureID,
+                    selectionTarget: selectionTarget,
+                    action: .vertexMove(handle.vertex)
+                )
             }
         }
 
         for handle in bodyFaceCenterHandles(edit, layout: layout) {
             if point.distance(to: handle.point) <= handleTolerance {
-                return ViewportAffordanceTarget(featureID: featureID, action: .faceMove(handle.face))
+                return ViewportAffordanceTarget(
+                    featureID: featureID,
+                    selectionTarget: selectionTarget,
+                    action: .faceMove(handle.face)
+                )
             }
         }
 
@@ -11611,7 +11881,11 @@ public struct Viewport: View {
             radius: radius,
             basis: affordanceBasis
         ) {
-            return ViewportAffordanceTarget(featureID: featureID, action: .rotate(axis))
+            return ViewportAffordanceTarget(
+                featureID: featureID,
+                selectionTarget: selectionTarget,
+                action: .rotate(axis)
+            )
         }
 
         for axis in ViewportCoordinateAxis.allCases {
@@ -11627,7 +11901,11 @@ public struct Viewport: View {
                 layout: layout
             )
             if point.distanceToSegment(start: center, end: endpoint) <= 7.0 {
-                return ViewportAffordanceTarget(featureID: featureID, action: .translate(axis))
+                return ViewportAffordanceTarget(
+                    featureID: featureID,
+                    selectionTarget: selectionTarget,
+                    action: .translate(axis)
+                )
             }
         }
 
@@ -11804,7 +12082,7 @@ public struct Viewport: View {
         let scene = sceneContext.scene
         let layout = sceneContext.layout
         let selectedFeatureIDs = selectedObjectFeatureIDs()
-        let selectedBodyItems = selectedBodyItems(in: scene, selectedFeatureIDs: selectedFeatureIDs)
+        let selectedBodyItems = selectedBodyItems(in: scene)
         let targetIsSelectionGroup = selectedBodyItems.count > 1
             && selectedBodyItems.contains { $0.featureID == target.featureID }
 
@@ -11819,7 +12097,7 @@ public struct Viewport: View {
                 baseEdits = bodyEditStates(for: selectedBodyItems)
                 baseGroupEdit = selectionGroupEditState(for: Array(baseEdits.values))
             } else {
-                guard let item = scene.items.first(where: { $0.featureID == target.featureID }),
+                guard let item = selectedBodyItem(for: target, in: scene),
                       case .body = item.kind else {
                     return
                 }
@@ -12637,30 +12915,59 @@ public struct Viewport: View {
             finishPendingInteractionClick(pendingInteractionTarget)
             return
         }
-        guard let onPick else {
-            return
-        }
         let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: currentProjectionBasis
         )
+        var presentationOccurrenceID: SceneOccurrenceID?
+        if let presentationScene {
+            switch presentationPlanCache.result(for: presentationScene) {
+            case .success(let plan):
+                do {
+                    presentationOccurrenceID = try MeshSourcePresentationScreenHitTester().occurrenceID(
+                        at: point,
+                        in: plan,
+                        layout: sceneContext.layout,
+                        sectionGeometryResolver: presentationSectionGeometryResolver()
+                    )
+                    if let occurrenceID = presentationOccurrenceID,
+                       let onPresentationOccurrencePick {
+                        onPresentationOccurrencePick(occurrenceID, selectionIntent)
+                        return
+                    }
+                } catch {
+                    assertionFailure("A validated presentation pick plan failed: \(error)")
+                    return
+                }
+            case .failure:
+                return
+            }
+        }
+        guard let onPick else {
+            return
+        }
         let scene = sceneContext.scene
         let mapper = sceneContext.mapper
-        let hit = viewportHit(
-            point: point,
-            in: sceneBySuppressingSketches(
-                scene,
-                selectedFeatureIDs: selectedTargetFeatureIDs()
+        let hit = presentationFilteredLegacyHit(
+            viewportHit(
+                point: point,
+                in: sceneBySuppressingSketches(
+                    scene,
+                    selectedFeatureIDs: selectedTargetFeatureIDs()
+                ),
+                layout: mapper.layout
             ),
-            layout: mapper.layout
+            presentationOccurrenceID: presentationOccurrenceID
         )
         let sketchPlane = constructionSketchPlane(for: hit)
-        let exactWorldPoint = selectedGeneratedFaceSurfaceWorldPoint(
-            at: point,
-            in: scene,
-            layout: mapper.layout
-        )
+        let exactWorldPoint = selectedPresentationHasExactCADContext
+            ? selectedGeneratedFaceSurfaceWorldPoint(
+                at: point,
+                in: scene,
+                layout: mapper.layout
+            )
+            : nil
         let input = canvasInput(
             for: point,
             exactWorldPoint: exactWorldPoint,
@@ -13769,6 +14076,7 @@ public struct Viewport: View {
         guard let activeAffordanceDrag,
               case .translate = activeAffordanceDrag.target.action,
               activeAffordanceDrag.baseGroupEdit == nil,
+              let selectionTarget = activeAffordanceDrag.target.selectionTarget,
               let baseEdit = activeAffordanceDrag.baseEdits[activeAffordanceDrag.target.featureID],
               let currentEdit = editedBodies[activeAffordanceDrag.target.featureID] else {
             return nil
@@ -13781,7 +14089,7 @@ public struct Viewport: View {
         return (
             activeAffordanceDrag.target.featureID,
             ViewportBodyMoveDragTarget(
-                featureID: activeAffordanceDrag.target.featureID,
+                target: selectionTarget,
                 deltaX: deltaX,
                 deltaY: deltaY
             )
@@ -13933,16 +14241,9 @@ public struct Viewport: View {
         guard let onSelectionDrag else {
             return
         }
-        onSelectionDrag(
-            ViewportSelectionDragTarget(
-                hits: selectionHits(
-                    from: start,
-                    to: end,
-                    size: size
-                ),
-                selectionIntent: selectionIntent
-            )
-        )
+        var target = selectionDragTarget(from: start, to: end, size: size)
+        target.selectionIntent = selectionIntent
+        onSelectionDrag(target)
     }
 
     private func publishSelectionDragPreview(
@@ -13951,28 +14252,28 @@ public struct Viewport: View {
         size: CGSize
     ) {
         publishSelectionDragPreview(
-            hits: selectionHits(
-                from: start,
-                to: end,
-                size: size
-            )
+            target: selectionDragTarget(from: start, to: end, size: size)
         )
+    }
+
+    private func publishSelectionDragPreview(target: ViewportSelectionDragTarget) {
+        onSelectionDragPreview?(target)
     }
 
     private func publishSelectionDragPreview(hits: [ViewportHit]) {
-        onSelectionDragPreview?(
-            ViewportSelectionDragTarget(hits: hits)
+        publishSelectionDragPreview(
+            target: ViewportSelectionDragTarget(hits: hits)
         )
     }
 
-    private func selectionHits(
+    private func selectionDragTarget(
         from start: CGPoint,
         to end: CGPoint,
         size: CGSize
-    ) -> [ViewportHit] {
+    ) -> ViewportSelectionDragTarget {
         let rect = dragRect(from: start, to: end)
         guard rect.width > 0.0, rect.height > 0.0 else {
-            return []
+            return ViewportSelectionDragTarget(hits: [])
         }
         let sceneContext = makeSceneContext(
             size: size,
@@ -13985,12 +14286,33 @@ public struct Viewport: View {
             scene,
             selectedFeatureIDs: selectedTargetFeatureIDs()
         )
-        return identityHitResolver.selectionHits(
+        let presentationOccurrenceIDs = presentationOccurrenceIDs(
+            intersecting: rect,
+            layout: mapper.layout
+        )
+        let rawHits = identityHitResolver.selectionHits(
             in: rect,
             scene: hitScene,
             layout: mapper.layout,
             sketchControlPointHitPolicy: sketchControlPointHitPolicy(for: hitScene),
             selectionHitPolicy: selectionHitPolicy
+        )
+        let hits = if presentationScene == nil {
+            rawHits
+        } else {
+            MeshSourcePresentationLegacyHitFilter().selectionHits(
+                rawHits,
+                visiblePresentationOccurrenceIDs: presentationOccurrenceIDs,
+                navigation: presentationSceneNodeIDByOccurrenceID,
+                exactCADSceneNodeIDs: presentationCADInteractionSceneNodeIDs,
+                selectionHitPolicy: selectionHitPolicy
+            )
+        }
+        return ViewportSelectionDragTarget(
+            hits: hits,
+            presentationOccurrenceIDs: selectionHitPolicy.allowsObjectHits
+                ? presentationOccurrenceIDs
+                : []
         )
     }
 
@@ -14006,6 +14328,7 @@ public struct Viewport: View {
             setHoveredInteractionTarget(target)
             hoveredCanvasHit = nil
             hoveredModelPoint = nil
+            onPresentationOccurrenceHover?(nil)
             clearHoverCallbacks()
             return
         }
@@ -14014,18 +14337,27 @@ public struct Viewport: View {
             scene,
             selectedFeatureIDs: selectedTargetFeatureIDs()
         )
-        let hit = viewportHit(
-            point: point,
-            in: hitScene,
+        let presentationOccurrenceID = presentationOccurrenceID(
+            at: point,
             layout: mapper.layout
+        )
+        let hit = presentationFilteredLegacyHit(
+            viewportHit(
+                point: point,
+                in: hitScene,
+                layout: mapper.layout
+            ),
+            presentationOccurrenceID: presentationOccurrenceID
         )
         hoveredCanvasHit = hit
         let sketchPlane = canvasDragSketchPlane(for: hit)
-        let exactWorldPoint = selectedGeneratedFaceSurfaceWorldPoint(
-            at: point,
-            in: scene,
-            layout: mapper.layout
-        )
+        let exactWorldPoint = selectedPresentationHasExactCADContext
+            ? selectedGeneratedFaceSurfaceWorldPoint(
+                at: point,
+                in: scene,
+                layout: mapper.layout
+            )
+            : nil
         hoveredModelPoint = canvasInput(
             for: point,
             exactWorldPoint: exactWorldPoint,
@@ -14034,7 +14366,13 @@ public struct Viewport: View {
         )?.point
         refreshSnapOverlayResolution(layout: mapper.layout)
         refreshPlacementHighlight(layout: mapper.layout)
-        onHover?(hit)
+        if hit == nil, let presentationOccurrenceID {
+            onHover?(nil)
+            onPresentationOccurrenceHover?(presentationOccurrenceID)
+        } else {
+            onPresentationOccurrenceHover?(nil)
+            onHover?(hit)
+        }
     }
 
     private func clearHoverInteractionTargets() {
@@ -14048,6 +14386,7 @@ public struct Viewport: View {
     private func clearHoverCallbacks() {
         clearSnapOverlayResolution()
         clearPlacementHighlight()
+        onPresentationOccurrenceHover?(nil)
         onHover?(nil)
     }
 
