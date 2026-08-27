@@ -1,0 +1,121 @@
+{
+  "agentSaveUnsupported" : true,
+  "authoredMeshCount" : 10,
+  "bodies" : [
+    {
+      "authoredMeshRepresentationID" : "representation.bicycle.rear-wheel",
+      "authoredMeshSourceID" : "mesh.bicycle.rear-wheel",
+      "contentIdentity" : "4e7fb735fab80f7b44408edf6736c494edf61b0ad43999c15bb56d829b4e2fa9",
+      "featureID" : "B73DEE61-B077-4F54-84BE-1CB7997F9134",
+      "key" : "rear-wheel",
+      "name" : "Rear Wheel",
+      "sceneNodeID" : "7BE2851B-C812-48DD-AD24-8579F91B6504",
+      "triangleCount" : 320
+    },
+    {
+      "authoredMeshRepresentationID" : "representation.bicycle.front-wheel",
+      "authoredMeshSourceID" : "mesh.bicycle.front-wheel",
+      "contentIdentity" : "29441df5c40e8db903c4baef27ec51f30e74d8f48a4c6f307fdd545ae765e79f",
+      "featureID" : "B0F1B063-EBCF-47B2-9FA3-1C3DE9FD6F9F",
+      "key" : "front-wheel",
+      "name" : "Front Wheel",
+      "sceneNodeID" : "1E1F3BEF-EB04-4D9A-B53B-4C4AEC5D810C",
+      "triangleCount" : 320
+    },
+    {
+      "authoredMeshRepresentationID" : "representation.bicycle.chainstay",
+      "authoredMeshSourceID" : "mesh.bicycle.chainstay",
+      "contentIdentity" : "9531f5b4e5dbda5604569ba7d5edcc38404adeec6498a02eba611e73ea6607fc",
+      "featureID" : "DCF7A267-CE7C-4F23-855F-5F7689F27376",
+      "key" : "chainstay",
+      "name" : "Chainstay",
+      "sceneNodeID" : "16DFFA31-CB6C-44D3-8FC9-72D1DDC80CCC",
+      "triangleCount" : 12
+    },
+    {
+      "authoredMeshRepresentationID" : "representation.bicycle.seat-tube",
+      "authoredMeshSourceID" : "mesh.bicycle.seat-tube",
+      "contentIdentity" : "1df002a90379f0de52da018957dddd4245c47dc88bfdf6d0e64171bfe5928eb0",
+      "featureID" : "F88D6CE3-6B89-4A5F-BDA2-FB2FC63567DB",
+      "key" : "seat-tube",
+      "name" : "Seat Tube",
+      "sceneNodeID" : "12C30B4B-C757-41BF-A7B4-591F5B598494",
+      "triangleCount" : 12
+    },
+    {
+      "authoredMeshRepresentationID" : "representation.bicycle.top-tube",
+      "authoredMeshSourceID" : "mesh.bicycle.top-tube",
+      "contentIdentity" : "dc9ddbfc5077ee6808e8f940a65bfc55ca2df4f27ff008b69ca2ed901d22b768",
+      "featureID" : "886F2AB2-21F9-409F-B380-B50D09FC2C01",
+      "key" : "top-tube",
+      "name" : "Top Tube",
+      "sceneNodeID" : "5D14AA9F-84D3-41AE-BC9E-6409956F1DE8",
+      "triangleCount" : 12
+    },
+    {
+      "authoredMeshRepresentationID" : "representation.bicycle.down-tube",
+      "authoredMeshSourceID" : "mesh.bicycle.down-tube",
+      "contentIdentity" : "fdaf5ef6fd71929fdf9641bc239ed2e59a309b0a821e49d3073ca57f3a2fbe91",
+      "featureID" : "187346E8-DE19-4EDB-B2F2-A28B20998D6A",
+      "key" : "down-tube",
+      "name" : "Down Tube",
+      "sceneNodeID" : "CBC04C97-F4B8-4614-9153-F9513BA62C3C",
+      "triangleCount" : 12
+    },
+    {
+      "authoredMeshRepresentationID" : "representation.bicycle.fork",
+      "authoredMeshSourceID" : "mesh.bicycle.fork",
+      "contentIdentity" : "576a9eb290a4a6369eb9cefb4de2e4074e830f8cb35f3a368b07fb9708f1d6bd",
+      "featureID" : "FE0B8311-D302-4DEA-8215-8CA16C446AD2",
+      "key" : "fork",
+      "name" : "Front Fork",
+      "sceneNodeID" : "029AFCBD-2BB3-49C6-AD41-74C415F910F0",
+      "triangleCount" : 12
+    },
+    {
+      "authoredMeshRepresentationID" : "representation.bicycle.seat",
+      "authoredMeshSourceID" : "mesh.bicycle.seat",
+      "contentIdentity" : "b2726269aaee997a290100800c3f7d8e1c861aaced3fbc1077802bc4c0abe074",
+      "featureID" : "3EC7EEA3-C8CD-471D-84A0-2F72343372E1",
+      "key" : "seat",
+      "name" : "Seat",
+      "sceneNodeID" : "1719FE5C-31C6-430A-8B82-FA51633DF0E9",
+      "triangleCount" : 12
+    },
+    {
+      "authoredMeshRepresentationID" : "representation.bicycle.handlebar",
+      "authoredMeshSourceID" : "mesh.bicycle.handlebar",
+      "contentIdentity" : "e4464e0ffeed03a05d9c7aa4c72258a72a947319ffbd895387bcbe72387bb331",
+      "featureID" : "60BEEDA1-AAD8-4157-933A-8E4635BD4C1C",
+      "key" : "handlebar",
+      "name" : "Handlebar",
+      "sceneNodeID" : "3A537CA4-28F6-4839-B815-5919AAA98889",
+      "triangleCount" : 12
+    },
+    {
+      "authoredMeshRepresentationID" : "representation.bicycle.crank",
+      "authoredMeshSourceID" : "mesh.bicycle.crank",
+      "contentIdentity" : "32b045ba46780cc276fcb5d04ab87fbe8f6bb890c32c2d93734bd45b521149a1",
+      "featureID" : "22D08B0A-74DE-4DF8-B966-2B4857E0C7E9",
+      "key" : "crank",
+      "name" : "Crank",
+      "sceneNodeID" : "AAA62EA5-8E61-40E1-BF19-9DEEDA14AC53",
+      "triangleCount" : 320
+    }
+  ],
+  "bodyCount" : 10,
+  "editCopiedBytes" : 7920,
+  "editCopyEventCount" : 1,
+  "everyPresentationBufferShared" : true,
+  "packageByteCount" : 302237,
+  "packageSHA256" : "6806116ea40c16d9d98a98c4b682a74505dd7fc346ac087e992e990dc0d1ec5c",
+  "pngByteCount" : 27440,
+  "pngSHA256" : "4d544ec23686b3309f8dd3e328cd1ab712baa3bfcceb3f58539d58f7f847e0e0",
+  "previewPublished" : false,
+  "projectID" : "project.D2CD0486-A1F1-4253-B297-FF0ED43B670B",
+  "rendererItemCount" : 10,
+  "representativeIdentityAfterEdit" : "4e7fb735fab80f7b44408edf6736c494edf61b0ad43999c15bb56d829b4e2fa9",
+  "representativeIdentityBeforeEdit" : "53d7bbb0cbdd8080cc09fcb329709530d7b9fab4a4c5905940e1d686d9a96806",
+  "representativeSourceID" : "mesh.bicycle.rear-wheel",
+  "triangleCount" : 1044
+}

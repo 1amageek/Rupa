@@ -614,7 +614,9 @@ let package = Package(
                 "RupaKit",
                 "RupaProject",
                 "RupaProjectModel",
+                "RupaRendering",
                 "RupaUI",
+                "RupaViewportScene",
             ]
         ),
         .testTarget(

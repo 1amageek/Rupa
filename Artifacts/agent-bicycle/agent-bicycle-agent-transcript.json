@@ -1,0 +1,154 @@
+[
+  {
+    "documentGeneration" : 10,
+    "method" : "command.applyBatch",
+    "publicationSequence" : 2,
+    "sequence" : 1,
+    "status" : "success",
+    "transactionRevision" : 1
+  },
+  {
+    "documentGeneration" : 10,
+    "method" : "document.topologySummary",
+    "publicationSequence" : 2,
+    "sequence" : 2,
+    "status" : "success",
+    "transactionRevision" : 1
+  },
+  {
+    "documentGeneration" : 20,
+    "method" : "command.applyBatch",
+    "publicationSequence" : 3,
+    "sequence" : 3,
+    "status" : "success",
+    "transactionRevision" : 2
+  },
+  {
+    "documentGeneration" : 21,
+    "method" : "project.mesh.makeEditable",
+    "publicationSequence" : 4,
+    "sequence" : 4,
+    "status" : "success",
+    "transactionRevision" : 3
+  },
+  {
+    "documentGeneration" : 22,
+    "method" : "project.mesh.makeEditable",
+    "publicationSequence" : 5,
+    "sequence" : 5,
+    "status" : "success",
+    "transactionRevision" : 4
+  },
+  {
+    "documentGeneration" : 23,
+    "method" : "project.mesh.makeEditable",
+    "publicationSequence" : 6,
+    "sequence" : 6,
+    "status" : "success",
+    "transactionRevision" : 5
+  },
+  {
+    "documentGeneration" : 24,
+    "method" : "project.mesh.makeEditable",
+    "publicationSequence" : 7,
+    "sequence" : 7,
+    "status" : "success",
+    "transactionRevision" : 6
+  },
+  {
+    "documentGeneration" : 25,
+    "method" : "project.mesh.makeEditable",
+    "publicationSequence" : 8,
+    "sequence" : 8,
+    "status" : "success",
+    "transactionRevision" : 7
+  },
+  {
+    "documentGeneration" : 26,
+    "method" : "project.mesh.makeEditable",
+    "publicationSequence" : 9,
+    "sequence" : 9,
+    "status" : "success",
+    "transactionRevision" : 8
+  },
+  {
+    "documentGeneration" : 27,
+    "method" : "project.mesh.makeEditable",
+    "publicationSequence" : 10,
+    "sequence" : 10,
+    "status" : "success",
+    "transactionRevision" : 9
+  },
+  {
+    "documentGeneration" : 28,
+    "method" : "project.mesh.makeEditable",
+    "publicationSequence" : 11,
+    "sequence" : 11,
+    "status" : "success",
+    "transactionRevision" : 10
+  },
+  {
+    "documentGeneration" : 29,
+    "method" : "project.mesh.makeEditable",
+    "publicationSequence" : 12,
+    "sequence" : 12,
+    "status" : "success",
+    "transactionRevision" : 11
+  },
+  {
+    "documentGeneration" : 30,
+    "method" : "project.mesh.makeEditable",
+    "publicationSequence" : 13,
+    "sequence" : 13,
+    "status" : "success",
+    "transactionRevision" : 12
+  },
+  {
+    "documentGeneration" : 30,
+    "method" : "project.mesh.catalog",
+    "publicationSequence" : 13,
+    "sequence" : 14,
+    "status" : "success",
+    "transactionRevision" : 12
+  },
+  {
+    "documentGeneration" : 30,
+    "method" : "project.mesh.page",
+    "publicationSequence" : 13,
+    "sequence" : 15,
+    "status" : "success",
+    "transactionRevision" : 12
+  },
+  {
+    "documentGeneration" : 30,
+    "method" : "project.mesh.neighborhood",
+    "publicationSequence" : 13,
+    "sequence" : 16,
+    "status" : "success",
+    "transactionRevision" : 12
+  },
+  {
+    "documentGeneration" : 30,
+    "method" : "project.mesh.edit.preview",
+    "publicationSequence" : 13,
+    "sequence" : 17,
+    "status" : "success",
+    "transactionRevision" : 12
+  },
+  {
+    "documentGeneration" : 31,
+    "method" : "project.mesh.edit.commit",
+    "publicationSequence" : 14,
+    "sequence" : 18,
+    "status" : "success",
+    "transactionRevision" : 13
+  },
+  {
+    "documentGeneration" : 31,
+    "method" : "document.save",
+    "publicationSequence" : 14,
+    "sequence" : 19,
+    "status" : "failure:command.unsupported",
+    "transactionRevision" : 13
+  }
+]
