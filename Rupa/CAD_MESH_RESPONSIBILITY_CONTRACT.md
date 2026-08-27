@@ -97,11 +97,16 @@ CAD representation. Baking adds an Authored Mesh representation and may switch
 the presentation selection; it does not remove the CAD representation. Its
 provenance records the originating CAD representation and content identity.
 
-T04 establishes this authority and provenance contract. T05-A provides typed
-Core commands for Authored Mesh vertex edits, supported face edits, and purpose
-selection with stale-content rejection. T05-B integrates those commands into
-atomic Project transactions. T05-C provides explicit Make Editable from a
-modeling-purpose CAD evaluation.
+T04 establishes this authority and provenance contract. T05-A, T05-B, and T05-C
+established the initial typed Authored Mesh and Make Editable source paths.
+T09's plan, selector, source-target, transaction, read, and resource contracts
+are owned by the [system design](../DESIGN.md) and its
+[RupaGeometry](../RupaKit/Sources/RupaGeometry/DESIGN.md),
+[RupaCore](../RupaKit/Sources/RupaCore/DESIGN.md),
+[RupaProject](../RupaKit/Sources/RupaProject/DESIGN.md), and
+[RupaKit](../RupaKit/Sources/RupaKit/DESIGN.md) module designs; this document
+remains the authority for representation meaning, source categories, and
+provenance.
 
 ```mermaid
 sequenceDiagram
