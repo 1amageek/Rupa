@@ -1,26 +1,15 @@
 import RupaGeometry
 
-public enum AuthoredMeshEditCommand: Codable, Equatable, Sendable {
-    case setVertexPosition(
-        target: AuthoredMeshEditTarget,
-        vertexID: MeshVertexID,
-        position: GeometryPoint3D
-    )
-    case addFace(
-        target: AuthoredMeshEditTarget,
-        vertexIDs: [MeshVertexID]
-    )
-    case deleteFace(
-        target: AuthoredMeshEditTarget,
-        faceID: MeshFaceID
-    )
+/// A complete immutable Mesh plan applied to one source authority.
+public struct AuthoredMeshEditCommand: Codable, Equatable, Sendable {
+    public let target: AuthoredMeshEditTarget
+    public let plan: MeshEditPlan
 
-    public var target: AuthoredMeshEditTarget {
-        switch self {
-        case .setVertexPosition(let target, _, _),
-             .addFace(let target, _),
-             .deleteFace(let target, _):
-            target
-        }
+    public init(
+        target: AuthoredMeshEditTarget,
+        plan: MeshEditPlan
+    ) {
+        self.target = target
+        self.plan = plan
     }
 }

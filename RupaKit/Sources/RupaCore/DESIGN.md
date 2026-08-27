@@ -22,6 +22,8 @@ Parent: [RupaKit package design](../../DESIGN.md). Children: none for T09.
 - source-authority target validation using only `sourceID` and expected content
   identity;
 - applying one complete Mesh plan through the injected Geometry executor;
+- consuming Geometry's already-validated execution without duplicating or
+  replaying operation/output rules;
 - replacing only the matching asset after full success and preserving all
   Product/CAD/selection/provenance values;
 - semantic document validation and Core command results.
@@ -71,8 +73,8 @@ flowchart TD
     Lookup --> AssetCheck["Authored Mesh domain + asset key/sourceID"]
     AssetCheck --> Plan["AuthoredMeshEditPlan"]
     Plan --> Executor["RupaGeometry executor"]
-    Executor --> Candidate["Candidate MeshSource + receipt"]
-    Candidate --> Asset["Asset replacement preserving provenance"]
+    Executor --> Execution["Validated Mesh execution + receipt"]
+    Execution --> Asset["Asset replacement preserving provenance"]
     Asset --> Validate["Full DesignDocument validation"]
     Validate --> Application["Staged Core application"]
 ```
@@ -87,15 +89,25 @@ unique copy to satisfy a single scene selection.
 1. The Mesh edit target contains only `GeometrySourceID` and expected
    `ContentIdentity`. Scene-node and representation IDs are not part of source
    authority.
-2. Core validates the Authored Mesh identity domain, the retained asset
-   dictionary key, the asset source ID, and the expected content identity before
-   invoking Geometry. A CAD-derived snapshot, external observation, or arbitrary
-   Mesh payload cannot be promoted by identity imitation.
+2. Public application validates the document once before dispatch. The retained
+   `AuthoredMeshAsset` invariant guarantees that construction and decoding
+   already validated its source and computed or verified its cached content
+   identity. After document validation, Core performs one O(1) authority check:
+   dictionary key, asset/source ID, identity domain, and cached content identity
+   against the target. It does not revalidate or rehash the existing source. A
+   CAD-derived snapshot, external observation, or arbitrary Mesh payload cannot
+   be promoted by identity imitation.
 3. The target may name a retained-but-unselected asset; Core does not require an
    inverse Object or representation reference to apply the edit.
-4. The Core command contains one complete plan. Core validates the returned
-   geometry result and replaces the asset under the same source ID only after
-   every plan step and full `DesignDocument` validation succeed.
+4. The Core command contains one complete plan. `MeshEditPlanExecuting` returns
+   an already-validated `MeshEditPlanExecution`, whose raw initializer is not
+   public. Core trusts that type invariant and does not rescan the original or
+   result source, validate the execution again, or duplicate output-role,
+   alias, ID-lifecycle, allocation, or topology rules. It replaces the asset
+   under the same source ID only after execution succeeds and the complete
+   staged `DesignDocument` validates. That aggregate document validation is a
+   separate Core authority boundary, not authorization for a second execution
+   semantic validator.
 5. Shared source references remain shared. Core does not clone the source or
    synchronize CAD, purpose selection, or representation metadata as a side
    effect.
@@ -109,6 +121,20 @@ unique copy to satisfy a single scene selection.
 9. Core does not make a derived evaluation snapshot an Authored Mesh source;
    explicit Make Editable remains a separate command.
 
+### Executor substitution boundary
+
+The public `DefaultGeometrySourceCommandApplier` initializer selects
+`DefaultMeshEditPlanExecutor` and does not accept an external executor. A
+package-scoped initializer accepts the package-scoped `MeshEditPlanExecuting`
+seam for same-package composition and tests. T09 does not promise external
+executor substitutability; Agent, CLI, MCP, and future provider transports use
+the Core command boundary rather than injecting an executor.
+
+Core tests may inject a package test executor that delegates to the default
+executor or throws a typed failure. They do not construct malformed execution
+values or test Core revalidation, because invalid candidates cannot cross the
+production Geometry boundary.
+
 ## Runtime Flows
 
 ```mermaid
@@ -119,10 +145,10 @@ sequenceDiagram
     participant D as DesignDocument
 
     P->>A: source-authority plan command
-    A->>D: validate document and locate sourceID
-    A->>A: compare expected content identity
+    A->>D: validate document once and locate sourceID
+    A->>A: O(1) key/source/cached identity check
     A->>E: execute plan against retained MeshSource
-    E-->>A: candidate result + receipt
+    E-->>A: validated execution
     A->>D: replace asset and validate complete staged document
     D-->>P: staged document + Core result
 ```
@@ -145,11 +171,10 @@ The project layer decides whether and when the staged value is published.
 ## Failure, Concurrency, and Constraints
 
 Core rejects source-domain mismatch, an asset dictionary key/source-ID mismatch,
-missing asset, stale content identity, invalid plan receipt, invalid Geometry
-result, executor failure, and post-replacement document validation failure with
-typed errors. It never returns the original asset as a success fallback after a
-failed edit and it does not fail merely because no inverse Object/reference is
-present.
+missing asset, stale content identity, executor failure, and post-replacement
+document validation failure with typed errors. It never returns the original
+asset as a success fallback after a failed edit and it does not fail merely
+because no inverse Object/reference is present.
 
 The Core value path is immutable during asynchronous project staging. Any
 mutable session access remains inside the existing project/session isolation
@@ -163,7 +188,7 @@ T09-B owns the following behavioral proof:
 | Invariant | Required evidence |
 |---|---|
 | Authority | Current, stale, missing, domain/key/source-ID, retained-but-unselected, and no-inverse-reference source cases. |
-| Plan integration | One complete plan, receipt propagation, Geometry-result validation, no-op identity stability, and mid-plan rollback. |
+| Plan integration | One complete plan, receipt propagation from a validated execution, one executor invocation with no Core replay, valid create-then-delete lifecycle, no-op identity stability, and mid-plan rollback. |
 | Shared source | One edited asset is visible through every retained representation reference; no implicit clone. |
 | Independence | CAD/Product/selection/provenance bytes remain unchanged after Mesh edit. |
 | History | One command-history entry plus undo/redo behavior. |

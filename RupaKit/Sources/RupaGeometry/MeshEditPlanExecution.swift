@@ -1,11 +1,14 @@
 import Foundation
 
 /// The immutable source and receipt returned after one complete plan commit.
-public struct MeshEditPlanExecution: Sendable {
-    public let source: MeshSource
-    public let receipt: MeshEditReceipt
+///
+/// This value is constructed only by the package-owned executor after the
+/// staging buffer has validated every step, receipt, and commit boundary.
+package struct MeshEditPlanExecution: Sendable {
+    package let source: MeshSource
+    package let receipt: MeshEditReceipt
 
-    public init(source: MeshSource, receipt: MeshEditReceipt) {
+    init(source: MeshSource, receipt: MeshEditReceipt) {
         self.source = source
         self.receipt = receipt
     }

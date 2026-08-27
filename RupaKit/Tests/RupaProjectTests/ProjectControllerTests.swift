@@ -2256,27 +2256,26 @@ private func authoredMeshVertexEditCommand(
     position: GeometryPoint3D
 ) throws -> GeometrySourceCommand {
     let asset = try #require(document.authoredMeshAssets[sourceID])
-    let match = try #require(document.productMetadata.sceneNodes.first { node in
-        node.value.object?.geometryRepresentations.representations.values.contains {
-            $0.source == .authoredMesh(sourceID)
-        } == true
-    })
-    let representationID = try #require(
-        match.value.object?.geometryRepresentations.representations.first {
-            $0.value.source == .authoredMesh(sourceID)
-        }?.key
-    )
     let vertexID = try #require(asset.source.vertexIDs.first)
+    let positionEdit = try MeshVertexPositionEdit(
+        vertexID: vertexID,
+        position: position
+    )
+    let plan = try MeshEditPlan(
+        steps: [
+            MeshEditStep(
+                id: MeshEditStepID("set-vertex-position"),
+                operation: .primitive(.setVertexPositions([positionEdit]))
+            ),
+        ]
+    )
     return .editAuthoredMesh(
-        .setVertexPosition(
+        AuthoredMeshEditCommand(
             target: AuthoredMeshEditTarget(
-                sceneNodeID: match.key,
-                representationID: representationID,
                 sourceID: sourceID,
                 expectedSourceIdentity: asset.contentIdentity
             ),
-            vertexID: vertexID,
-            position: position
+            plan: plan
         )
     )
 }

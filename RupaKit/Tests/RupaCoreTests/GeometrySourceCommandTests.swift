@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import Synchronization
 import RupaCoreTypes
 import RupaProjectModel
 import Testing
@@ -10,22 +11,37 @@ import Testing
 func authoredMeshVertexEditPreservesAuthorityAndSharesUnchangedStorage() throws {
     let source = try largeEditableMeshSource(identity: "mesh.vertex-edit", vertexCount: 6_000)
     let fixture = try meshOnlyDocument(source: source)
-    let target = AuthoredMeshEditTarget(
-        sceneNodeID: fixture.sceneNodeID,
-        representationID: fixture.representationID,
-        sourceID: source.identity,
-        expectedSourceIdentity: fixture.asset.contentIdentity
-    )
+    let target = authoredMeshTarget(for: fixture)
     let replacement = GeometryPoint3D(x: 40, y: 50, z: 60)
+    let finalPosition = GeometryPoint3D(x: 41, y: 52, z: 63)
+    let plan = try MeshEditPlan(
+        steps: [
+            MeshEditStep(
+                id: MeshEditStepID("move"),
+                operation: .primitive(
+                    .setVertexPositions([
+                        MeshVertexPositionEdit(
+                            vertexID: source.vertexIDs[0],
+                            position: replacement
+                        ),
+                    ])
+                )
+            ),
+            MeshEditStep(
+                id: MeshEditStepID("offset"),
+                operation: .translateElements(
+                    .output(
+                        stepID: MeshEditStepID("move"),
+                        role: .affectedVertices
+                    ),
+                    offset: GeometryVector3D(x: 1, y: 2, z: 3)
+                )
+            ),
+        ]
+    )
 
     let application = try DefaultGeometrySourceCommandApplier().apply(
-        .editAuthoredMesh(
-            .setVertexPosition(
-                target: target,
-                vertexID: source.vertexIDs[0],
-                position: replacement
-            )
-        ),
+        .editAuthoredMesh(AuthoredMeshEditCommand(target: target, plan: plan)),
         to: fixture.document
     )
     let editedAsset = try #require(application.document.authoredMeshAssets[source.identity])
@@ -38,12 +54,14 @@ func authoredMeshVertexEditPreservesAuthorityAndSharesUnchangedStorage() throws 
     #expect(result.previousSourceIdentity == fixture.asset.contentIdentity)
     #expect(result.sourceIdentity == editedAsset.contentIdentity)
     #expect(result.sourceIdentity != result.previousSourceIdentity)
+    #expect(result.receipt.stepReceipts.count == 2)
+    #expect(result.receipt.didChange)
     #expect(result.copyTelemetry.didCopy)
     #expect(
         result.copyTelemetry.copiedBytes
             < UInt64(source.vertexPositions.count * MemoryLayout<GeometryPoint3D>.stride)
     )
-    #expect(try editedAsset.source.position(of: source.vertexIDs[0]) == replacement)
+    #expect(try editedAsset.source.position(of: source.vertexIDs[0]) == finalPosition)
     #expect(try source.position(of: source.vertexIDs[0]) != replacement)
     #expect(editedAsset.provenance == fixture.asset.provenance)
     expectUnchangedMeshStorageShared(source, editedAsset.source)
@@ -64,16 +82,13 @@ func authoredMeshNoOpPreservesContentAndEveryBufferIdentity() throws {
     let source = try editableQuadSource(identity: "mesh.no-op")
     let fixture = try meshOnlyDocument(source: source)
     let originalPosition = try source.position(of: source.vertexIDs[0])
-    let command = GeometrySourceCommand.editAuthoredMesh(
-        .setVertexPosition(
-            target: AuthoredMeshEditTarget(
-                sceneNodeID: fixture.sceneNodeID,
-                representationID: fixture.representationID,
-                sourceID: source.identity,
-                expectedSourceIdentity: fixture.asset.contentIdentity
-            ),
-            vertexID: source.vertexIDs[0],
-            position: originalPosition
+    let command = try authoredMeshCommand(
+        target: authoredMeshTarget(for: fixture),
+        plan: vertexPositionPlan(
+            id: "no-op",
+            edits: [
+                MeshVertexPositionEdit(vertexID: source.vertexIDs[0], position: originalPosition),
+            ]
         )
     )
 
@@ -85,27 +100,63 @@ func authoredMeshNoOpPreservesContentAndEveryBufferIdentity() throws {
 
     #expect(!application.result.didMutate)
     #expect(!application.result.copyTelemetry.didCopy)
+    guard case .authoredMeshEdit(let result) = application.result else {
+        Issue.record("Expected an Authored Mesh edit result.")
+        return
+    }
+    #expect(!result.receipt.didChange)
     #expect(retained.contentIdentity == fixture.asset.contentIdentity)
     expectAllMeshStorageShared(source, retained.source)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func authoredMeshEditTargetDecoderRejectsLegacyNavigationCoordinates() throws {
+    let source = try editableQuadSource(identity: "mesh.target-codec")
+    let fixture = try meshOnlyDocument(source: source)
+    let target = authoredMeshTarget(for: fixture)
+    var payload = try #require(
+        JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(target)
+        ) as? [String: Any]
+    )
+    payload["sceneNodeID"] = "legacy.scene"
+    payload["representationID"] = "legacy.representation"
+    let legacyPayload = try JSONSerialization.data(withJSONObject: payload)
+    var error: DecodingError?
+
+    do {
+        _ = try JSONDecoder().decode(AuthoredMeshEditTarget.self, from: legacyPayload)
+    } catch let caught as DecodingError {
+        error = caught
+    }
+
+    guard let error else {
+        Issue.record("Expected legacy Authored Mesh target coordinates to be rejected.")
+        return
+    }
+    guard case .dataCorrupted = error else {
+        Issue.record("Expected legacy Authored Mesh target coordinates to be rejected.")
+        return
+    }
 }
 
 @Test(.timeLimit(.minutes(1)))
 func authoredMeshEditRejectsStaleSourceIdentityWithoutMutation() throws {
     let source = try editableQuadSource(identity: "mesh.stale")
     let fixture = try meshOnlyDocument(source: source)
-    let target = AuthoredMeshEditTarget(
-        sceneNodeID: fixture.sceneNodeID,
-        representationID: fixture.representationID,
-        sourceID: source.identity,
-        expectedSourceIdentity: fixture.asset.contentIdentity
-    )
+    let target = authoredMeshTarget(for: fixture)
     let applier = DefaultGeometrySourceCommandApplier()
     let first = try applier.apply(
-        .editAuthoredMesh(
-            .setVertexPosition(
-                target: target,
-                vertexID: source.vertexIDs[0],
-                position: GeometryPoint3D(x: 0, y: 0, z: 1)
+        authoredMeshCommand(
+            target: target,
+            plan: vertexPositionPlan(
+                id: "first",
+                edits: [
+                    MeshVertexPositionEdit(
+                        vertexID: source.vertexIDs[0],
+                        position: GeometryPoint3D(x: 0, y: 0, z: 1)
+                    ),
+                ]
             )
         ),
         to: fixture.document
@@ -115,11 +166,16 @@ func authoredMeshEditRejectsStaleSourceIdentityWithoutMutation() throws {
 
     do {
         _ = try applier.apply(
-            .editAuthoredMesh(
-                .setVertexPosition(
-                    target: target,
-                    vertexID: source.vertexIDs[1],
-                    position: GeometryPoint3D(x: 1, y: 0, z: 2)
+            try authoredMeshCommand(
+                target: target,
+                plan: vertexPositionPlan(
+                    id: "stale",
+                    edits: [
+                        MeshVertexPositionEdit(
+                            vertexID: source.vertexIDs[1],
+                            position: GeometryPoint3D(x: 1, y: 0, z: 2)
+                        ),
+                    ]
                 )
             ),
             to: first.document
@@ -139,15 +195,23 @@ func authoredMeshFaceEditsPreservePersistentIdentityAndVertexStorage() throws {
     let fixture = try meshOnlyDocument(source: source)
     let applier = DefaultGeometrySourceCommandApplier()
     let added = try applier.apply(
-        .editAuthoredMesh(
-            .addFace(
-                target: AuthoredMeshEditTarget(
-                    sceneNodeID: fixture.sceneNodeID,
-                    representationID: fixture.representationID,
-                    sourceID: source.identity,
-                    expectedSourceIdentity: fixture.asset.contentIdentity
-                ),
-                vertexIDs: [source.vertexIDs[0], source.vertexIDs[2], source.vertexIDs[3]]
+        authoredMeshCommand(
+            target: authoredMeshTarget(for: fixture),
+            plan: try MeshEditPlan(
+                steps: [
+                    MeshEditStep(
+                        id: MeshEditStepID("add-face"),
+                        operation: .primitive(
+                            .addFace(
+                                vertexIDs: [
+                                    source.vertexIDs[0],
+                                    source.vertexIDs[2],
+                                    source.vertexIDs[3],
+                                ]
+                            )
+                        )
+                    ),
+                ]
             )
         ),
         to: fixture.document
@@ -157,7 +221,13 @@ func authoredMeshFaceEditsPreservePersistentIdentityAndVertexStorage() throws {
         Issue.record("Expected an Authored Mesh edit result.")
         return
     }
-    let addedFaceID = try #require(addedResult.addedFaceID)
+    let createdFace = try #require(
+        addedResult.receipt.stepReceipts[0].outputs[.createdFaces]?.first
+    )
+    guard case .face(let addedFaceID) = createdFace else {
+        Issue.record("Expected the plan receipt to contain a created face.")
+        return
+    }
 
     #expect(addedAsset.source.faceIDs.contains(source.faceIDs[0]))
     #expect(addedAsset.source.faceIDs.contains(addedFaceID))
@@ -168,15 +238,24 @@ func authoredMeshFaceEditsPreservePersistentIdentityAndVertexStorage() throws {
     #expect(addedAsset.provenance == fixture.asset.provenance)
 
     let deleted = try applier.apply(
-        .editAuthoredMesh(
-            .deleteFace(
-                target: AuthoredMeshEditTarget(
-                    sceneNodeID: fixture.sceneNodeID,
-                    representationID: fixture.representationID,
-                    sourceID: source.identity,
-                    expectedSourceIdentity: addedAsset.contentIdentity
-                ),
-                faceID: source.faceIDs[0]
+        authoredMeshCommand(
+            target: AuthoredMeshEditTarget(
+                sourceID: source.identity,
+                expectedSourceIdentity: addedAsset.contentIdentity
+            ),
+            plan: try MeshEditPlan(
+                steps: [
+                    MeshEditStep(
+                        id: MeshEditStepID("delete-face"),
+                        operation: .primitive(
+                            .deleteFaces(
+                                try MeshElementSelector.explicit(
+                                    MeshSelectionSet(elements: [.face(source.faceIDs[0])])
+                                )
+                            )
+                        )
+                    ),
+                ]
             )
         ),
         to: added.document
@@ -192,39 +271,43 @@ func authoredMeshFaceEditsPreservePersistentIdentityAndVertexStorage() throws {
 func authoredMeshTopologyEditRejectsAttributeRemappingWithoutMutation() throws {
     let source = try attributedTriangleSource(identity: "mesh.attributes")
     let fixture = try meshOnlyDocument(source: source)
-    var error: MeshSourceError?
+    var error: MeshEditError?
 
     do {
         _ = try DefaultGeometrySourceCommandApplier().apply(
-            .editAuthoredMesh(
-                .deleteFace(
-                    target: AuthoredMeshEditTarget(
-                        sceneNodeID: fixture.sceneNodeID,
-                        representationID: fixture.representationID,
-                        sourceID: source.identity,
-                        expectedSourceIdentity: fixture.asset.contentIdentity
-                    ),
-                    faceID: source.faceIDs[0]
+            authoredMeshCommand(
+                target: authoredMeshTarget(for: fixture),
+                plan: try MeshEditPlan(
+                    steps: [
+                        MeshEditStep(
+                            id: MeshEditStepID("delete-face"),
+                            operation: .primitive(
+                                .deleteFaces(
+                                    try MeshElementSelector.explicit(
+                                        MeshSelectionSet(elements: [.face(source.faceIDs[0])])
+                                    )
+                                )
+                            )
+                        ),
+                    ]
                 )
             ),
             to: fixture.document
         )
-    } catch let caught as MeshSourceError {
+    } catch let caught as MeshEditError {
         error = caught
     }
 
-    #expect(error?.code == .unsupportedOperation)
+    #expect(error?.code == .topologyAttributeRemappingUnsupported)
     #expect(fixture.document.authoredMeshAssets[source.identity] == fixture.asset)
 }
 
 @Test(.timeLimit(.minutes(1)))
-func authoredMeshEditRejectsMismatchedObjectRepresentationAndSource() throws {
+func authoredMeshEditRejectsMissingSourceWithoutMutation() throws {
     let source = try editableQuadSource(identity: "mesh.target")
     let fixture = try meshOnlyDocument(source: source)
     let otherSourceID: GeometrySourceID = "mesh.other"
     let target = AuthoredMeshEditTarget(
-        sceneNodeID: fixture.sceneNodeID,
-        representationID: fixture.representationID,
         sourceID: otherSourceID,
         expectedSourceIdentity: fixture.asset.contentIdentity
     )
@@ -232,11 +315,16 @@ func authoredMeshEditRejectsMismatchedObjectRepresentationAndSource() throws {
 
     do {
         _ = try DefaultGeometrySourceCommandApplier().apply(
-            .editAuthoredMesh(
-                .setVertexPosition(
-                    target: target,
-                    vertexID: source.vertexIDs[0],
-                    position: GeometryPoint3D(x: 0, y: 0, z: 1)
+            try authoredMeshCommand(
+                target: target,
+                plan: vertexPositionPlan(
+                    id: "missing",
+                    edits: [
+                        MeshVertexPositionEdit(
+                            vertexID: source.vertexIDs[0],
+                            position: GeometryPoint3D(x: 0, y: 0, z: 1)
+                        ),
+                    ]
                 )
             ),
             to: fixture.document
@@ -245,75 +333,262 @@ func authoredMeshEditRejectsMismatchedObjectRepresentationAndSource() throws {
         error = caught
     }
 
-    #expect(error?.code == .commandInvalid)
+    #expect(error?.code == .referenceUnresolved)
     #expect(fixture.document.authoredMeshAssets[source.identity] == fixture.asset)
 }
 
 @Test(.timeLimit(.minutes(1)))
-func geometrySourceCommandsRejectMissingObjectAndRepresentationReferences() throws {
+func authoredMeshEditAllowsRetainedUnselectedAsset() throws {
     let source = try editableQuadSource(identity: "mesh.missing-references")
     let fixture = try meshOnlyDocument(source: source)
-    let applier = DefaultGeometrySourceCommandApplier()
-    var missingObjectError: EditorError?
-    var missingRepresentationError: EditorError?
-    var missingSelectionError: EditorError?
+    let unselectedSource = try editableQuadSource(identity: "mesh.unselected")
+    let unselectedAsset = try AuthoredMeshAsset(source: unselectedSource, provenance: .created)
+    var document = fixture.document
+    document.authoredMeshAssets[unselectedAsset.id] = unselectedAsset
+    _ = try document.validate()
+
+    let application = try DefaultGeometrySourceCommandApplier().apply(
+        try authoredMeshCommand(
+            target: AuthoredMeshEditTarget(
+                sourceID: unselectedAsset.id,
+                expectedSourceIdentity: unselectedAsset.contentIdentity
+            ),
+            plan: vertexPositionPlan(
+                id: "unselected",
+                edits: [
+                    MeshVertexPositionEdit(
+                        vertexID: unselectedSource.vertexIDs[0],
+                        position: GeometryPoint3D(x: 9, y: 9, z: 9)
+                    ),
+                ]
+            )
+        ),
+        to: document
+    )
+    let edited = try #require(application.document.authoredMeshAssets[unselectedAsset.id])
+    #expect(application.result.didMutate)
+    #expect(try edited.source.position(of: unselectedSource.vertexIDs[0]) == GeometryPoint3D(x: 9, y: 9, z: 9))
+    #expect(edited.provenance == unselectedAsset.provenance)
+    #expect(application.document.productMetadata == document.productMetadata)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func authoredMeshEditPropagatesThroughSharedRepresentationReferences() throws {
+    let source = try editableQuadSource(identity: "mesh.shared")
+    let fixture = try meshOnlyDocument(source: source)
+    var document = fixture.document
+    let object = try #require(document.productMetadata.sceneNodes[fixture.sceneNodeID]?.object)
+    let secondSceneNodeID = try document.productMetadata.appendSceneNodeToFirstRoot(
+        name: "Shared Mesh Alias",
+        reference: .authoredMesh(source.identity),
+        object: object
+    )
+    _ = try document.validate()
+
+    let application = try DefaultGeometrySourceCommandApplier().apply(
+        try authoredMeshCommand(
+            target: AuthoredMeshEditTarget(
+                sourceID: source.identity,
+                expectedSourceIdentity: fixture.asset.contentIdentity
+            ),
+            plan: vertexPositionPlan(
+                id: "shared",
+                edits: [
+                    MeshVertexPositionEdit(
+                        vertexID: source.vertexIDs[0],
+                        position: GeometryPoint3D(x: 2, y: 3, z: 4)
+                    ),
+                ]
+            )
+        ),
+        to: document
+    )
+    #expect(application.result.didMutate)
+    #expect(application.document.authoredMeshAssets.count == 1)
+    #expect(application.document.productMetadata.sceneNodes[fixture.sceneNodeID]?.object == object)
+    #expect(application.document.productMetadata.sceneNodes[secondSceneNodeID]?.object == object)
+    #expect(
+        application.document.productMetadata.sceneNodes[secondSceneNodeID]?.reference
+            == .authoredMesh(source.identity)
+    )
+}
+
+@Test(.timeLimit(.minutes(1)))
+func authoredMeshPlanPreservesCADSelectionAndProvenance() throws {
+    var document = DesignDocument.empty(named: "CAD and Mesh")
+    let bodyFeatureID = try document.createExtrudedRectangle(
+        name: "CAD Body",
+        plane: .xy,
+        width: .length(1, .meter),
+        height: .length(1, .meter),
+        depth: .length(1, .meter),
+        direction: .normal
+    )
+    let sceneNodeID = try #require(document.productMetadata.sceneNodes.first {
+        $0.value.reference == .body(bodyFeatureID)
+    }?.key)
+    var object = try #require(document.productMetadata.sceneNodes[sceneNodeID]?.object)
+    let cadRepresentationID = try #require(object.geometryRepresentations.selection?.modeling)
+    let source = try editableQuadSource(identity: "mesh.cad-coexistence")
+    let asset = try AuthoredMeshAsset(
+        source: source,
+        provenance: .imported(
+            try ContentIdentity(
+                domain: "rupa.import-source",
+                fingerprint: ContentFingerprint(
+                    algorithm: "import-revision",
+                    value: "cad-coexistence"
+                )
+            )
+        )
+    )
+    let meshRepresentationID: GeometryRepresentationID = "representation.cad-coexistence"
+    object.geometryRepresentations.representations[meshRepresentationID] = GeometryRepresentation(
+        id: meshRepresentationID,
+        source: .authoredMesh(source.identity)
+    )
+    object.geometryRepresentations.selection = GeometryRepresentationSelection(
+        modeling: cadRepresentationID,
+        presentation: meshRepresentationID
+    )
+    document.productMetadata.sceneNodes[sceneNodeID]?.object = object
+    document.authoredMeshAssets[asset.id] = asset
+    _ = try document.validate()
+
+    let originalCADFingerprint = try document.cadDocument.sourceFingerprint(tolerance: .standard)
+    let originalProductMetadata = document.productMetadata
+    let application = try DefaultGeometrySourceCommandApplier().apply(
+        try authoredMeshCommand(
+            target: AuthoredMeshEditTarget(
+                sourceID: source.identity,
+                expectedSourceIdentity: asset.contentIdentity
+            ),
+            plan: vertexPositionPlan(
+                id: "cad-coexistence-edit",
+                edits: [
+                    MeshVertexPositionEdit(
+                        vertexID: source.vertexIDs[0],
+                        position: GeometryPoint3D(x: 8, y: 9, z: 10)
+                    ),
+                ]
+            )
+        ),
+        to: document
+    )
+    let editedAsset = try #require(application.document.authoredMeshAssets[source.identity])
+
+    #expect(application.result.didMutate)
+    #expect(try application.document.cadDocument.sourceFingerprint(tolerance: .standard) == originalCADFingerprint)
+    #expect(application.document.productMetadata == originalProductMetadata)
+    #expect(editedAsset.provenance == asset.provenance)
+    #expect(
+        application.document.productMetadata.sceneNodes[sceneNodeID]?.object?
+            .geometryRepresentations.selection
+            == object.geometryRepresentations.selection
+    )
+}
+
+@Test(.timeLimit(.minutes(1)))
+func authoredMeshPlanFailureDoesNotPublishPartialSource() throws {
+    let source = try editableQuadSource(identity: "mesh.plan-failure")
+    let fixture = try meshOnlyDocument(source: source)
+    let command = try authoredMeshCommand(
+        target: authoredMeshTarget(for: fixture),
+        plan: MeshEditPlan(
+            steps: [
+                MeshEditStep(
+                    id: MeshEditStepID("valid-first-step"),
+                    operation: .primitive(
+                        .setVertexPositions([
+                            MeshVertexPositionEdit(
+                                vertexID: source.vertexIDs[0],
+                                position: GeometryPoint3D(x: 1, y: 2, z: 3)
+                            ),
+                        ])
+                    )
+                ),
+                MeshEditStep(
+                    id: MeshEditStepID("invalid-second-step"),
+                    operation: .primitive(
+                        .setVertexPositions([
+                            MeshVertexPositionEdit(
+                                vertexID: MeshVertexID(999_999),
+                                position: GeometryPoint3D(x: 4, y: 5, z: 6)
+                            ),
+                        ])
+                    )
+                ),
+            ]
+        )
+    )
+    var error: MeshEditError?
+    do {
+        _ = try DefaultGeometrySourceCommandApplier().apply(command, to: fixture.document)
+    } catch let caught as MeshEditError {
+        error = caught
+    }
+    #expect(error?.code == .sourceMutation)
+    #expect(fixture.document.authoredMeshAssets[source.identity] == fixture.asset)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func authoredMeshPlanUsesOnePackageExecutorInvocation() throws {
+    let source = try editableQuadSource(identity: "mesh.executor-spy")
+    let fixture = try meshOnlyDocument(source: source)
+    let command = try authoredMeshCommand(
+        target: authoredMeshTarget(for: fixture),
+        plan: vertexPositionPlan(
+            id: "executor-spy",
+            edits: [
+                MeshVertexPositionEdit(
+                    vertexID: source.vertexIDs[0],
+                    position: GeometryPoint3D(x: 4, y: 5, z: 6)
+                ),
+            ]
+        )
+    )
+    let invocationCount = InvocationCounter()
+    let applier = DefaultGeometrySourceCommandApplier(
+        meshEditPlanExecutor: CountingMeshEditPlanExecutor(invocationCount: invocationCount)
+    )
+
+    let application = try applier.apply(command, to: fixture.document)
+
+    #expect(invocationCount.value == 1)
+    #expect(application.result.didMutate)
+    #expect(application.document.authoredMeshAssets[source.identity] != fixture.asset)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func authoredMeshPlanTypedExecutorFailureDoesNotPublish() throws {
+    let source = try editableQuadSource(identity: "mesh.executor-failure")
+    let fixture = try meshOnlyDocument(source: source)
+    let command = try authoredMeshCommand(
+        target: authoredMeshTarget(for: fixture),
+        plan: vertexPositionPlan(
+            id: "executor-failure",
+            edits: [
+                MeshVertexPositionEdit(
+                    vertexID: source.vertexIDs[0],
+                    position: GeometryPoint3D(x: 4, y: 5, z: 6)
+                ),
+            ]
+        )
+    )
+    let invocationCount = InvocationCounter()
+    let applier = DefaultGeometrySourceCommandApplier(
+        meshEditPlanExecutor: FailingMeshEditPlanExecutor(invocationCount: invocationCount)
+    )
+    var error: MeshEditError?
 
     do {
-        _ = try applier.apply(
-            .editAuthoredMesh(
-                .setVertexPosition(
-                    target: AuthoredMeshEditTarget(
-                        sceneNodeID: SceneNodeID(),
-                        representationID: fixture.representationID,
-                        sourceID: source.identity,
-                        expectedSourceIdentity: fixture.asset.contentIdentity
-                    ),
-                    vertexID: source.vertexIDs[0],
-                    position: GeometryPoint3D(x: 0, y: 0, z: 1)
-                )
-            ),
-            to: fixture.document
-        )
-    } catch let caught as EditorError {
-        missingObjectError = caught
-    }
-    do {
-        _ = try applier.apply(
-            .editAuthoredMesh(
-                .setVertexPosition(
-                    target: AuthoredMeshEditTarget(
-                        sceneNodeID: fixture.sceneNodeID,
-                        representationID: "representation.missing",
-                        sourceID: source.identity,
-                        expectedSourceIdentity: fixture.asset.contentIdentity
-                    ),
-                    vertexID: source.vertexIDs[0],
-                    position: GeometryPoint3D(x: 0, y: 0, z: 1)
-                )
-            ),
-            to: fixture.document
-        )
-    } catch let caught as EditorError {
-        missingRepresentationError = caught
-    }
-    do {
-        _ = try applier.apply(
-            .selectRepresentation(
-                GeometryRepresentationSelectionCommand(
-                    sceneNodeID: fixture.sceneNodeID,
-                    purpose: .presentation,
-                    representationID: "representation.missing"
-                )
-            ),
-            to: fixture.document
-        )
-    } catch let caught as EditorError {
-        missingSelectionError = caught
+        _ = try applier.apply(command, to: fixture.document)
+    } catch let caught as MeshEditError {
+        error = caught
     }
 
-    #expect(missingObjectError?.code == .referenceUnresolved)
-    #expect(missingRepresentationError?.code == .referenceUnresolved)
-    #expect(missingSelectionError?.code == .referenceUnresolved)
+    #expect(invocationCount.value == 1)
+    #expect(error?.code == .sourceMutation)
     #expect(fixture.document.authoredMeshAssets[source.identity] == fixture.asset)
 }
 
@@ -389,16 +664,13 @@ func editorSessionPublishesAuthoredMeshEditWithGenerationRevisionAndUndoHistory(
     let replacement = GeometryPoint3D(x: 0, y: 0, z: 2)
 
     let result = try session.execute(
-        .editAuthoredMesh(
-            .setVertexPosition(
-                target: AuthoredMeshEditTarget(
-                    sceneNodeID: fixture.sceneNodeID,
-                    representationID: fixture.representationID,
-                    sourceID: source.identity,
-                    expectedSourceIdentity: fixture.asset.contentIdentity
-                ),
-                vertexID: source.vertexIDs[0],
-                position: replacement
+        try authoredMeshCommand(
+            target: authoredMeshTarget(for: fixture),
+            plan: vertexPositionPlan(
+                id: "session-edit",
+                edits: [
+                    MeshVertexPositionEdit(vertexID: source.vertexIDs[0], position: replacement),
+                ]
             )
         ),
         expectedTransactionRevision: DocumentTransactionRevision(0)
@@ -421,6 +693,13 @@ func editorSessionPublishesAuthoredMeshEditWithGenerationRevisionAndUndoHistory(
         session.document.authoredMeshAssets[source.identity]?.contentIdentity
             == fixture.asset.contentIdentity
     )
+
+    _ = try session.redo(expectedTransactionRevision: DocumentTransactionRevision(2))
+    #expect(
+        try session.document.authoredMeshAssets[source.identity]?
+            .source.position(of: source.vertexIDs[0]) == replacement
+    )
+    #expect(session.commandStack.undoEntries.count == 1)
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -430,16 +709,16 @@ func editorSessionAuthoredMeshNoOpDoesNotAdvanceGenerationOrRevision() throws {
     let session = EditorSession(document: fixture.document)
 
     let result = try session.execute(
-        .editAuthoredMesh(
-            .setVertexPosition(
-                target: AuthoredMeshEditTarget(
-                    sceneNodeID: fixture.sceneNodeID,
-                    representationID: fixture.representationID,
-                    sourceID: source.identity,
-                    expectedSourceIdentity: fixture.asset.contentIdentity
-                ),
-                vertexID: source.vertexIDs[0],
-                position: try source.position(of: source.vertexIDs[0])
+        try authoredMeshCommand(
+            target: authoredMeshTarget(for: fixture),
+            plan: vertexPositionPlan(
+                id: "session-no-op",
+                edits: [
+                    MeshVertexPositionEdit(
+                        vertexID: source.vertexIDs[0],
+                        position: try source.position(of: source.vertexIDs[0])
+                    ),
+                ]
             )
         ),
         expectedTransactionRevision: DocumentTransactionRevision(0)
@@ -743,6 +1022,80 @@ private struct MeshSourceCommandFixture {
     let asset: AuthoredMeshAsset
     let sceneNodeID: SceneNodeID
     let representationID: GeometryRepresentationID
+}
+
+private final class InvocationCounter: Sendable {
+    private let storage = Mutex(0)
+
+    var value: Int {
+        storage.withLock { $0 }
+    }
+
+    func increment() {
+        storage.withLock { $0 += 1 }
+    }
+}
+
+private struct CountingMeshEditPlanExecutor: MeshEditPlanExecuting {
+    let invocationCount: InvocationCounter
+
+    package func execute(
+        plan: MeshEditPlan,
+        source: MeshSource
+    ) throws -> MeshEditPlanExecution {
+        invocationCount.increment()
+        return try DefaultMeshEditPlanExecutor().execute(plan: plan, source: source)
+    }
+}
+
+private struct FailingMeshEditPlanExecutor: MeshEditPlanExecuting {
+    let invocationCount: InvocationCounter
+
+    package func execute(
+        plan: MeshEditPlan,
+        source: MeshSource
+    ) throws -> MeshEditPlanExecution {
+        invocationCount.increment()
+        throw MeshEditError(
+            code: .sourceMutation,
+            message: "Injected plan execution failure."
+        )
+    }
+}
+
+private func authoredMeshTarget(
+    for fixture: MeshSourceCommandFixture
+) -> AuthoredMeshEditTarget {
+    AuthoredMeshEditTarget(
+        sourceID: fixture.asset.id,
+        expectedSourceIdentity: fixture.asset.contentIdentity
+    )
+}
+
+private func vertexPositionPlan(
+    id: String,
+    edits: [MeshVertexPositionEdit]
+) throws -> MeshEditPlan {
+    try MeshEditPlan(
+        steps: [
+            MeshEditStep(
+                id: MeshEditStepID(id),
+                operation: .primitive(.setVertexPositions(edits))
+            ),
+        ]
+    )
+}
+
+private func authoredMeshCommand(
+    target: AuthoredMeshEditTarget,
+    plan: MeshEditPlan
+) -> GeometrySourceCommand {
+    .editAuthoredMesh(
+        AuthoredMeshEditCommand(
+            target: target,
+            plan: plan
+        )
+    )
 }
 
 private func meshOnlyDocument(source: MeshSource) throws -> MeshSourceCommandFixture {

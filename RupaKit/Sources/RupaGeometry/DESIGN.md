@@ -25,6 +25,8 @@ through the package's native target graph.
 - hard executor ceilings and caller-lowerable effective limits;
 - one-buffer execution, staged element outputs, persistent ID allocation, and
   immutable commit receipts;
+- constructing a validated execution from the same buffer operations and step
+  outputs that produced the result;
 - copy telemetry and zero-copy evidence for unchanged storage.
 
 It does not own Product Objects, representation selection, Authored Mesh
@@ -92,7 +94,8 @@ flowchart TD
     Limits --> Execute["Ordered execution in one buffer"]
     Execute --> Translate["Deduplicated vertex translation"]
     Execute --> Extrude["Connected orientable manifold extrusion"]
-    Execute --> Receipt["Outputs + telemetry + result"]
+    Execute --> Receipt["Checked step outputs + telemetry"]
+    Receipt --> Commit["Validated execution construction"]
 ```
 
 Primitive edits are the lower-level escape hatch for Core and tests. Semantic
@@ -162,6 +165,48 @@ conditionals, arbitrary code, or forward output references.
 10. No-op plans, including a zero-offset translation, preserve source identity
     and produce an explicit no-op receipt.
 
+### Validated execution construction
+
+`MeshEditPlanExecution` is the package-visible immutable, already-validated
+result type. Its raw source/receipt initializer is internal to `RupaGeometry`;
+only the module can construct it after successful executor commit. The value
+owns its immutable `MeshSource` and receipt for their full lifetime and carries
+no deferred validation state.
+
+1. `MeshEditPlanExecuting`, `DefaultMeshEditPlanExecutor`, and
+   `MeshEditPlanExecution` are package-scoped execution contracts for Core and
+   package tests. T09 exposes plans and receipts through the Core command
+   boundary, not external Geometry executor conformance or injection. A future
+   external executor requires a separately designed candidate contract and one
+   Geometry-owned validation boundary; it cannot use an unchecked public
+   execution initializer.
+2. The default executor establishes receipt semantics during its existing
+   ordered traversal. Each step receipt is appended in plan order and checked
+   against the operation's exact output-role set, including applicable empty
+   arrays. Operation aliases are produced from the same ordered ID array, such
+   as `createdFaces` and `sideFaces` for extrusion.
+3. Output IDs come directly from the buffer operation that created or affected
+   them. Deleted IDs come directly from the active selection accepted by the
+   delete operation. The staging buffer remains the sole authority for active
+   element lifetime, monotonic allocation, and non-reuse; the executor does not
+   reconstruct a second topology ledger from source and result buffers.
+4. A prior-step selector resolves against the staging buffer at the consuming
+   step. Therefore a created element may be consumed or retired later in the
+   same plan. A valid `addFace` followed by deletion of that step's
+   `createdFaces` remains valid even though the created face and its corners are
+   absent from the final source; its allocated IDs remain consumed by the
+   buffer's allocation state.
+5. Commit preserves the source identity, constructs one valid immutable result
+   source, sets `didChange` from direct original/result inequality, and enforces
+   the effective copy limit before constructing `MeshEditPlanExecution`.
+6. There is no post-commit operation replay. Execution construction does not
+   expand selections again, rederive extrusion topology, rebuild element
+   lifecycle, or rescan and revalidate the original/result sources. The executor
+   relies on the validated-by-construction input `MeshSource`; buffer commit
+   constructs the result through its existing validating boundary once. Failure
+   of a step, buffer commit, receipt invariant, or limit returns a typed error
+   and constructs no execution value.
+
 ### Limits and zero-copy
 
 The T09 standard defaults are also the current executor hard ceilings. Effective
@@ -181,6 +226,9 @@ Preflight checks all statically predictable counts before scanning, selection
 expansion, allocation, or output. Cumulative counters are checked at each of
 those boundaries, not only at the end. After commit, copy telemetry is checked
 again; more than 65,536 copied bytes is a typed failure.
+
+Receipt checks use the IDs and buffer state already available at those charged
+boundaries. They do not introduce an uncharged second source/topology scan.
 
 The source remains shared for unchanged chunks/pages. Only modified chunks,
 appended topology, and explicitly required remapping buffers are copied. Every
@@ -203,9 +251,12 @@ sequenceDiagram
     loop ordered steps
         E->>B: resolve retained/prior-step selector
         B-->>E: staged IDs and output records
+        E->>E: check exact roles and direct aliases
     end
     E->>B: commit once
-    B-->>C: immutable Mesh result + receipt + telemetry
+    B-->>E: valid immutable Mesh result
+    E->>E: check identity, didChange, telemetry; construct execution
+    E-->>C: validated execution
 ```
 
 On any step failure, the buffer is discarded and no partial result is returned.
@@ -249,6 +300,7 @@ The module proof is T09-A:
 | Topology validity | Disconnected, inconsistent, non-manifold, and invalid offset rejection tests. |
 | Attribute contract | Attribute-preserving translation and typed topology-remap failure tests. |
 | Atomicity | Mid-plan failure leaves no committed result. |
+| Execution semantics | Exact step roles/order and aliases from direct buffer results, persistent allocation/non-reuse, valid create-then-delete plans, and absence of a second topology replay. |
 | Performance | Unchanged chunk identity, one-buffer telemetry, hard-boundary limits, and measured copy ceilings. |
 
 Changes to source buffer layout, ID allocation, attribute handling, or executor

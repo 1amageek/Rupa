@@ -7,15 +7,8 @@ public enum GeometrySourceCommand: Codable, Equatable, Sendable {
 
     public var name: String {
         switch self {
-        case .editAuthoredMesh(let edit):
-            switch edit {
-            case .setVertexPosition:
-                "setAuthoredMeshVertexPosition"
-            case .addFace:
-                "addAuthoredMeshFace"
-            case .deleteFace:
-                "deleteAuthoredMeshFace"
-            }
+        case .editAuthoredMesh:
+            "editAuthoredMesh"
         case .makeCADRepresentationEditable:
             "makeCADRepresentationEditable"
         case .selectRepresentation:

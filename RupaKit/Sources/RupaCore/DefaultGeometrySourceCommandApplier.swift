@@ -5,7 +5,15 @@ import RupaGeometry
 import RupaProjectModel
 
 public struct DefaultGeometrySourceCommandApplier: GeometrySourceCommandApplying {
-    public init() {}
+    private let meshEditPlanExecutor: any MeshEditPlanExecuting
+
+    public init() {
+        self.meshEditPlanExecutor = DefaultMeshEditPlanExecutor()
+    }
+
+    package init(meshEditPlanExecutor: any MeshEditPlanExecuting) {
+        self.meshEditPlanExecutor = meshEditPlanExecutor
+    }
 
     public func apply(
         _ command: GeometrySourceCommand,
@@ -162,30 +170,24 @@ public struct DefaultGeometrySourceCommandApplier: GeometrySourceCommandApplying
         to document: DesignDocument,
         objectRegistry: ObjectTypeRegistry
     ) throws -> GeometrySourceCommandApplication {
-        let target = command.target
-        try target.validate()
-        let asset = try requireAsset(for: target, in: document)
-        guard asset.contentIdentity == target.expectedSourceIdentity else {
+        let asset = try requireAsset(for: command.target, in: document)
+        let execution: MeshEditPlanExecution
+        do {
+            execution = try meshEditPlanExecutor.execute(
+                plan: command.plan,
+                source: asset.source
+            )
+        } catch let error as MeshEditError {
+            throw error
+        } catch {
             throw EditorError(
-                code: .sourceIdentityMismatch,
-                message: "Authored Mesh source changed after the edit target was resolved."
+                code: .commandFailed,
+                message: "Authored Mesh plan execution failed: \(error)."
             )
         }
 
-        var editBuffer = MeshEditBuffer(source: asset.source)
-        var addedFaceID: MeshFaceID?
-        switch command {
-        case .setVertexPosition(_, let vertexID, let position):
-            try editBuffer.setVertexPosition(position, for: vertexID)
-        case .addFace(_, let vertexIDs):
-            addedFaceID = try editBuffer.addFace(vertexIDs: vertexIDs)
-        case .deleteFace(_, let faceID):
-            try editBuffer.deleteFace(faceID)
-        }
-
-        let didMutate = editBuffer.hasEdits
-        let commit = try editBuffer.commit()
-        guard didMutate else {
+        let receipt = execution.receipt
+        guard receipt.didChange else {
             return GeometrySourceCommandApplication(
                 document: document,
                 result: .authoredMeshEdit(
@@ -193,15 +195,14 @@ public struct DefaultGeometrySourceCommandApplier: GeometrySourceCommandApplying
                         sourceID: asset.id,
                         previousSourceIdentity: asset.contentIdentity,
                         sourceIdentity: asset.contentIdentity,
-                        addedFaceID: nil,
-                        didMutate: false,
-                        copyTelemetry: commit.telemetry
+                        receipt: receipt,
+                        didMutate: false
                     )
                 )
             )
         }
 
-        let editedAsset = try asset.replacingSource(commit.source)
+        let editedAsset = try asset.replacingSource(execution.source)
         var staged = document
         staged.authoredMeshAssets[asset.id] = editedAsset
         _ = try staged.validate(objectRegistry: objectRegistry)
@@ -212,9 +213,8 @@ public struct DefaultGeometrySourceCommandApplier: GeometrySourceCommandApplying
                     sourceID: editedAsset.id,
                     previousSourceIdentity: asset.contentIdentity,
                     sourceIdentity: editedAsset.contentIdentity,
-                    addedFaceID: addedFaceID,
-                    didMutate: true,
-                    copyTelemetry: commit.telemetry
+                    receipt: receipt,
+                    didMutate: true
                 )
             )
         )
@@ -290,30 +290,24 @@ public struct DefaultGeometrySourceCommandApplier: GeometrySourceCommandApplying
         for target: AuthoredMeshEditTarget,
         in document: DesignDocument
     ) throws -> AuthoredMeshAsset {
-        guard let sceneNode = document.productMetadata.sceneNodes[target.sceneNodeID],
-              let object = sceneNode.object else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "Authored Mesh edits require an existing Product Object."
-            )
-        }
-        guard let representation = object.geometryRepresentations
-            .representations[target.representationID] else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "Authored Mesh edits require a retained representation on the target object."
-            )
-        }
-        guard representation.source == .authoredMesh(target.sourceID) else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Authored Mesh edit object, representation, and source identities do not match."
-            )
-        }
+        try target.validate()
         guard let asset = document.authoredMeshAssets[target.sourceID] else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Authored Mesh edit source is not retained by the document."
+            )
+        }
+        guard asset.id == target.sourceID,
+              asset.source.identity == target.sourceID else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Authored Mesh asset key and source identity must match the edit target."
+            )
+        }
+        guard asset.contentIdentity == target.expectedSourceIdentity else {
+            throw EditorError(
+                code: .sourceIdentityMismatch,
+                message: "Authored Mesh source changed after the edit target was resolved."
             )
         }
         return asset

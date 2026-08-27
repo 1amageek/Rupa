@@ -6,24 +6,25 @@ public enum GeometrySourceCommandResult: Equatable, Sendable {
         public let sourceID: GeometrySourceID
         public let previousSourceIdentity: ContentIdentity
         public let sourceIdentity: ContentIdentity
-        public let addedFaceID: MeshFaceID?
+        public let receipt: MeshEditReceipt
         public let didMutate: Bool
-        public let copyTelemetry: GeometryCopyTelemetry
+
+        public var copyTelemetry: GeometryCopyTelemetry {
+            receipt.telemetry
+        }
 
         public init(
             sourceID: GeometrySourceID,
             previousSourceIdentity: ContentIdentity,
             sourceIdentity: ContentIdentity,
-            addedFaceID: MeshFaceID?,
-            didMutate: Bool,
-            copyTelemetry: GeometryCopyTelemetry
+            receipt: MeshEditReceipt,
+            didMutate: Bool
         ) {
             self.sourceID = sourceID
             self.previousSourceIdentity = previousSourceIdentity
             self.sourceIdentity = sourceIdentity
-            self.addedFaceID = addedFaceID
+            self.receipt = receipt
             self.didMutate = didMutate
-            self.copyTelemetry = copyTelemetry
         }
     }
 

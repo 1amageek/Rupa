@@ -2,10 +2,12 @@ import Foundation
 import RupaCoreTypes
 
 /// The bounded reference executor for one complete Mesh edit plan.
-public struct DefaultMeshEditPlanExecutor: MeshEditPlanExecuting {
-    public init() {}
+/// The caller supplies a source that has already crossed its owning
+/// validation boundary; this executor does not revalidate that source.
+package struct DefaultMeshEditPlanExecutor: MeshEditPlanExecuting {
+    package init() {}
 
-    public func execute(
+    package func execute(
         plan: MeshEditPlan,
         source: MeshSource
     ) throws -> MeshEditPlanExecution {
@@ -13,12 +15,6 @@ public struct DefaultMeshEditPlanExecutor: MeshEditPlanExecuting {
         var budget = ExecutionBudget(limits: validatedPlan.limits)
         try budget.scan(sourceRecordCount(in: source))
         try preflightStaticBudget(plan: validatedPlan, budget: &budget)
-
-        do {
-            try source.validate()
-        } catch let error as MeshSourceError {
-            throw MeshEditError(code: .sourceValidation, message: error.message)
-        }
 
         if source.attributes.count > 0,
            validatedPlan.steps.contains(where: { $0.operation.isTopologyMutation }) {
