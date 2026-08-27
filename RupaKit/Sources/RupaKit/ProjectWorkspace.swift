@@ -9,7 +9,7 @@ import RupaProject
 /// Main-actor observation adapter for one project-operation owner.
 @MainActor
 @Observable
-public final class ProjectWorkspace {
+public final class ProjectWorkspace: ProjectMeshEditing, ProjectMeshReading {
     public private(set) var view: ProjectViewSnapshot?
 
     @ObservationIgnored
@@ -20,6 +20,10 @@ public final class ProjectWorkspace {
     private let domainResultProjector: any DomainCommandResultProjecting
     @ObservationIgnored
     private let automationBatchPlanner: any AutomationBatchPlanning
+
+    var projectAuthorityOwner: any ProjectOperating {
+        project
+    }
 
     public init(
         project: any ProjectOperating,

@@ -25,6 +25,7 @@ Parent: [RupaKit package design](../../DESIGN.md). Children: none for T09.
 - immutable Mesh source handles bound to the exact project authority coordinate,
   `GeometrySourceID`, and `ContentIdentity`;
 - bounded catalog, paged element, and neighborhood reads with stable ordering;
+- response-wide read budgets charged before output materialization;
 - preview and commit request/result contracts over the existing
   `ProjectController`/`ProjectOperating` path;
 - lowering a Mesh edit request to a Core source command carried by the existing
@@ -41,9 +42,9 @@ The read records are transport-neutral values owned by this module:
 
 | Read value | Required contents/order |
 |---|---|
-| Catalog | Sources sorted by raw `sourceID`; each source reports provenance, counts, bounds, and references. References sort by raw `sceneNodeID`, then raw `representationID`, then purpose order `modeling`, `presentation`; empty source bounds are `nil`. |
+| Catalog | Sources sorted by raw `sourceID`; each source reports provenance, counts, bounds, and one reference record for every matching retained representation. Each reference contains `sceneNodeID`, `representationID`, and `selectedPurposes`; purposes sort `modeling`, then `presentation`, and an unselected representation has an empty array. References sort by raw `sceneNodeID`, then raw `representationID`; empty source bounds are `nil`. |
 | Element page | Source-buffer order. Cursor binds `sourceID`, content identity, element domain, and `nextIndex`. Vertex records contain ID and position; edge records contain ID and endpoints; face records contain ID and ordered corner IDs; corner records contain ID, face, vertex, edge, previous, and next IDs. |
-| Neighborhood | Breadth-first graph over only edge-endpoint/vertex, face-corner, corner-vertex, and corner-edge relations. Results sort by distance, domain order `vertex`, `edge`, `face`, `corner`, then raw ID. |
+| Neighborhood | Breadth-first graph over only edge-endpoint/vertex, face-corner, corner-vertex, and corner-edge relations. Results sort by distance, domain order `vertex`, `edge`, `face`, `corner`, then numeric `UInt64` raw ID. |
 
 Read limits use the same effective-limit rule as Mesh edits: `requested ??
 standard`, lowerable by the caller and never clamped above a hard ceiling.
@@ -57,8 +58,11 @@ standard`, lowerable by the caller and never clamped above a hard ceiling.
 | Output records | 4,096 | 4,096 |
 | Reference units | 8,192 | 8,192 |
 
-Reference units include records and nested IDs. A page or neighborhood response
-never returns a partial record to satisfy a limit.
+One catalog reference consumes exactly three reference units: one record, one
+`sceneNodeID`, and one `representationID`. Read budgets are cumulative across an
+entire response and are consumed before the corresponding output is
+materialized. A page or neighborhood response never returns a partial record to
+satisfy a limit.
 
 ```mermaid
 flowchart LR
@@ -90,7 +94,7 @@ the Authored Mesh source catalog.
 | [RupaProject design](../RupaProject/DESIGN.md) | depends on | Project staging and publication | Provides the actor-backed authority port. | Use existing `ProjectOperating`; no second controller. |
 | [RupaCore design](../RupaCore/DESIGN.md) | used through Project | Source ID/content identity and shared asset rules | Defines what a Mesh handle targets. | Scene/representation context is navigation only. |
 | [RupaGeometry design](../RupaGeometry/DESIGN.md) | used through Core | Plan/executor/budget/receipt | Defines request semantics without transport knowledge. | Do not expose internal mutable buffers. |
-| [State and project contract](../../../Rupa/STATE_AND_PROJECT_CONTRACT.md) | depends on | Workspace and project snapshot lifecycle | Defines stale/cancel/no-retry behavior. | No post-commit replay on view projection failure. |
+| [State and project contract](../../../Rupa/STATE_AND_PROJECT_CONTRACT.md) | depends on | Workspace and project snapshot lifecycle | Defines stale/cancel/no-retry behavior. | No post-commit replay after any publication-success projection or validation failure. |
 | [RupaKit tests](../../Tests/RupaKitTests) | verification owner | Use-case and workspace tests | Owns handle, pagination, preview, and exact-view proof. | Must exercise the real workspace/project path. |
 
 ## Architecture
@@ -99,9 +103,10 @@ the Authored Mesh source catalog.
 flowchart TD
     Snapshot["Published ProjectViewSnapshot"] --> Handle["MeshSourceHandle\nproject coordinate + sourceID + content identity"]
     Handle --> ReadGuard["Full snapshot pre/post guards"]
-    ReadGuard --> Catalog["Bounded catalog"]
-    ReadGuard --> Page["Stable cursor page"]
-    ReadGuard --> Neighborhood["Depth/scan/output bounded neighborhood"]
+    ReadGuard --> Budget["Response-wide budget"]
+    Budget --> Catalog["One-pass grouped catalog"]
+    Budget --> Page["Stable cursor page"]
+    Budget --> Neighborhood["Depth/scan/output bounded neighborhood"]
     Handle --> Preview["Preview request"]
     Handle --> Commit["Commit request"]
     Preview --> Lower["Lower to Core command + ProjectSourceTransaction"]
@@ -126,34 +131,55 @@ authority before returning data.
    than silently refreshing to current state.
 3. Catalog output is the sole read authority for retained Mesh sources. Sources
    sort by raw source ID and report provenance, counts, bounds, and all retained
-   references. References sort by raw `sceneNodeID`, then raw
-   `representationID`, then purpose order `modeling`, `presentation`; they
-   contain `sceneNodeID`, `representationID`, and purpose. Empty source bounds
-   are `nil`.
+   references. Every retained representation whose source is the catalog source
+   produces exactly one reference record, whether selected or not. A record
+   contains `sceneNodeID`, `representationID`, and `selectedPurposes`.
+   `selectedPurposes` sorts `modeling`, then `presentation` and is empty when
+   that representation is unselected. References sort by raw `sceneNodeID`,
+   then raw `representationID`. Empty source bounds are `nil`.
 4. Element pages follow source-buffer order. A cursor is bound to source ID,
    content identity, element domain, and next index. Vertex, edge, face, and
    corner records contain exactly the fields defined in the read-value table.
 5. Neighborhood queries use breadth-first traversal over only edge-endpoint
    vertex, face-corner, corner-vertex, and corner-edge relations. Results sort
-   by distance, domain order (`vertex`, `edge`, `face`, `corner`), then raw ID.
+   by distance, domain order (`vertex`, `edge`, `face`, `corner`), then the
+   numeric `UInt64` raw ID. String formatting is not an ordering authority.
 6. Read effective limits are `requested ?? standard`; callers may lower them but
-   values above hard ceilings are rejected, never clamped. Record and nested-ID
-   reference units are cumulative, and no partial record is returned.
-7. RupaKit lowers a validated Mesh edit request to a Core source command and
+   values above hard ceilings are rejected, never clamped. One response-scoped
+   budget accumulates every source, scene node, representation, source element,
+   and relation record actually visited. Known traversal costs are preflighted
+   before result materialization; dynamically discovered catalog references
+   consume their record plus nested-ID units before append. One catalog
+   reference always consumes three units. No hidden repeated linear scan is
+   excluded from the scan count, and no partial record is returned.
+7. Catalog construction traverses scene nodes and their representations once,
+   groups matching representation references by source, and then accumulates
+   source element/bounds scans in the same response budget. It does not rescan
+   all scene nodes for each source. Corner paging uses a monotonic, logarithmic,
+   or precomputed face lookup whose visited records remain within the declared
+   budget. Neighborhood construction creates its ID indices and adjacency once;
+   result lookup is O(1) and does not replay linear source searches.
+8. RupaKit lowers a validated Mesh edit request to a Core source command and
    passes it through the existing `ProjectSourceTransaction`. `RupaProject`
    receives only generic project ID, transaction revision, and publication
    coordinates.
-8. Preview requires the same exact handle and full snapshot coordinates, stages
+9. Preview requires the same exact handle and full snapshot coordinates, stages
    one plan, and returns no publication. Its result cannot be promoted as source
    authority.
-9. Commit requires the same exact handle and full snapshot coordinates,
+10. Commit requires the same exact handle and full snapshot coordinates,
    revalidates at the ProjectController boundary, and returns the exact
    committed view plus a new source handle.
-10. One commit is one project transaction, one revision advance at most, and one
+11. After Project publication succeeds, result extraction, result/view/asset/
+    handle validation, cancellation, and post-publication coordinate
+    revalidation failures are reported as `ProjectWorkspacePostCommitError` at
+    `domainResultProjection`, carrying the exact committed coordinates and an
+    explicit no-retry outcome. They are never downgraded to a pre-commit Mesh
+    edit error and never replay the mutation.
+12. One commit is one project transaction, one revision advance at most, and one
     source-history entry. Shared Authored Mesh references observe the same asset.
-11. Cancellation and stale pre/post-read or commit coordinates return typed
+13. Cancellation and stale pre/post-read or commit coordinates return typed
     failure/no-retry outcomes and never silently refresh to the current view.
-12. No AgentProtocol, CLI, or MCP change is part of this module's T09 scope.
+14. No AgentProtocol, CLI, or MCP change is part of this module's T09 scope.
 
 ## Runtime Flows
 
@@ -177,7 +203,11 @@ sequenceDiagram
         P-->>W: staged result, no publication
     else commit
         P-->>W: committed state
-        W-->>Caller: exact new view + new handle
+        alt result projection and post-publication validation succeed
+            W-->>Caller: exact new view + new handle
+        else result projection, cancellation, or revalidation fails
+            W-->>Caller: exact commit + domainResultProjection no-retry failure
+        end
     end
 ```
 
@@ -200,9 +230,11 @@ read result is rejected rather than silently relabeled as current.
 
 The module reports typed failures for missing source, stale project/view/source
 coordinate, invalid cursor, page/neighborhood limit exceedance, cancellation,
-preview/commit result mismatch, and post-commit view projection failure. It does
-not return empty or current-state fallback data for an unsupported or stale
-request.
+preview/commit result mismatch, and post-commit view or domain-result projection
+failure. After publication, every result-validation, cancellation, and
+revalidation failure retains the exact commit and communicates no-retry
+semantics. The module does not return empty or current-state fallback data for
+an unsupported or stale request.
 
 The MainActor adapter never holds a Geometry mutable buffer. Heavy scans use
 immutable values outside the actor and revalidate the full snapshot before and
@@ -215,13 +247,13 @@ T09-C owns the following behavioral proof:
 
 | Invariant | Required evidence |
 |---|---|
-| Handle authority | Catalog/reference accuracy, stale handle, source/content mismatch, and separate full-snapshot validation. |
-| Bounded reads | Raw source-ID catalog order, source-buffer pagination, cursor mismatch, neighborhood graph/order, depth/scan/output/reference-unit limits, and bounded materialization. |
+| Handle authority | Catalog/reference accuracy including selected and unselected retained representations, selected-purpose ordering, stale handle, source/content mismatch, and separate full-snapshot validation. |
+| Bounded reads | Raw source-ID catalog order, numeric raw element-ID tie breaking including multi-digit IDs, source-buffer pagination, cursor mismatch, neighborhood graph/order, response-wide cumulative depth/scan/output/reference-unit limits, exact three-unit catalog references, and pre-materialization rejection. Multi-source catalog, late-corner page, and large neighborhood fixtures must exercise the declared scan ceiling. |
 | Record integrity | Vertex/edge/face/corner field completeness, empty bounds as `nil`, and no partial record at a limit boundary. |
-| Cancellation | Full project/generation/transaction/publication/workspace pre/post-read checks and cancellation rejection. |
+| Cancellation | Full project/generation/transaction/publication/workspace pre/post-read checks and cancellation rejection. Post-read stale proof must mutate a real authority coordinate between the two validations and demonstrate rejection by the Project authority, rather than synthesizing the stale error in a test hook. |
 | Preview | No source/package/evaluation/history/view publication. |
 | Commit | Exact-view publication, one revision/undo, new handle, shared-source routing. |
-| Post-commit behavior | View projection failure reports exact committed coordinates with no-retry semantics. |
+| Post-commit behavior | View projection and every post-publication result extraction, result/view/asset/handle validation, cancellation, and coordinate revalidation failure report the exact committed coordinates with no-retry semantics; no path can surface a retryable pre-commit error after publication. |
 | Scope | No AgentProtocol/CLI/MCP source changes. |
 
 Changes to the use-case request shape, snapshot coordinate, read materialization,
