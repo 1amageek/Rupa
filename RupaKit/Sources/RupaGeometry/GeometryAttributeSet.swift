@@ -26,6 +26,32 @@ public struct GeometryAttributeSet: Codable, Equatable, Sendable {
         layers.count
     }
 
+    /// Counts attribute value and sparse-index records without traversing either buffer.
+    func scanRecordCount() throws -> Int {
+        var count = 0
+        for layer in layers.values {
+            let valueCount = count.addingReportingOverflow(layer.values.count)
+            guard !valueCount.overflow else {
+                throw MeshSourceError(
+                    code: .invalidBuffer,
+                    message: "Geometry attribute value scan record count overflowed."
+                )
+            }
+            count = valueCount.partialValue
+            if let indices = layer.indices {
+                let indexCount = count.addingReportingOverflow(indices.count)
+                guard !indexCount.overflow else {
+                    throw MeshSourceError(
+                        code: .invalidBuffer,
+                        message: "Geometry attribute index scan record count overflowed."
+                    )
+                }
+                count = indexCount.partialValue
+            }
+        }
+        return count
+    }
+
     public func layer(for id: GeometryAttributeID) -> GeometryAttributeLayer? {
         layers[id]
     }
