@@ -56,6 +56,8 @@ flowchart LR
     ProjectModel --> Kit
     Kit --> UI["RupaUI"]
     Kit --> AgentProtocol[RupaAgentProtocol]
+    Geometry --> AgentProtocol
+    ProjectModel --> AgentProtocol
     AgentProtocol --> AgentRuntime[RupaAgentRuntime]
     Kit --> AgentRuntime
 ```

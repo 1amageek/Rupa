@@ -229,6 +229,8 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
             "RupaAutomation",
             "RupaCapabilities",
             "RupaDomainFoundation",
+            "RupaGeometry",
+            "RupaProjectModel",
         ],
         "RupaAgentRuntime": [
             "RupaKit",

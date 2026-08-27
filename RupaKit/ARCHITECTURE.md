@@ -82,6 +82,9 @@ flowchart LR
     AgentProtocol --> Automation
     AgentProtocol --> Domain
     AgentProtocol --> Capabilities
+    AgentProtocol --> Geometry
+    AgentProtocol --> ProjectModel
+    AgentProtocol --> Kit
     AgentRuntime[RupaAgentRuntime] --> Core
     AgentRuntime --> CoreTypes
     AgentRuntime --> AgentProtocol

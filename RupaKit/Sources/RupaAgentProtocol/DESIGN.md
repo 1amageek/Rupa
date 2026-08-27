@@ -24,6 +24,8 @@ CAD/Mesh, save/load packages, perform socket I/O, or rasterize previews.
 |---|---|---|---|---|
 | [package design](../../DESIGN.md) | parent | dependency direction and T10 scope | Places this adapter above RupaKit values and below runtime/transport. | No reverse dependency from RupaKit is allowed. |
 | [RupaKit use cases](../RupaKit/DESIGN.md) | depends on | Codable Mesh value contracts | Supplies one canonical Mesh vocabulary. | `ProjectViewSnapshot` is process-local and never encoded. |
+| [RupaGeometry](../RupaGeometry/DESIGN.md) | depends on | `MeshEditPlan`, `MeshEditReceipt`, and `GeometryCopyTelemetry` values | Supplies the bounded operation and copy-accounting vocabulary carried by Agent messages. | Protocol payloads reuse these values and do not execute plans. |
+| [RupaProjectModel](../RupaProjectModel/DESIGN.md) | depends on | Authored Mesh provenance | Supplies the persisted authority provenance projected by Make Editable results. | Provenance is evidence, not permission to mutate project state. |
 | [AgentRuntime](../RupaAgentRuntime/DESIGN.md) | used by | decoded typed requests and projected results | Binds messages to registered project authority. | Runtime errors remain typed, never a success fallback. |
 | [system design](../../../DESIGN.md) | system parent | file-lifecycle and authority invariants | Defines the acceptance workflow. | Agent save remains unsupported. |
 
@@ -34,7 +36,8 @@ flowchart LR
     Client --> Envelope["Agent request envelope"]
     Envelope --> DTO["Protocol-owned route DTO"]
     RupaKitValues["Codable RupaKit Mesh values"] --> DTO
-    Geometry["MeshEditPlan / receipt"] --> DTO
+    Geometry["RupaGeometry\nMeshEditPlan / receipt / telemetry"] --> DTO
+    ProjectModel["RupaProjectModel\nAuthored Mesh provenance"] --> DTO
     DTO --> Runtime["RupaAgentRuntime"]
     Runtime --> Result["Protocol-owned result projection"]
     Result --> Envelope
