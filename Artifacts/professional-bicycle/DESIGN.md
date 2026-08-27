@@ -29,6 +29,8 @@ T11-0  reference contract and gates (this document)
   -> T11-IV cumulative task review
 ```
 
+T11-R evidence record: [EVIDENCE.md](EVIDENCE.md).
+
 T11 is a design and acceptance definition task. It does not create a CAD
 source, a Mesh source, a renderer, a CLI/MCP surface, a manufacturing release,
 or a certification result.
