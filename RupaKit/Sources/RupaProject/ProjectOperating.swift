@@ -61,6 +61,17 @@ public protocol ProjectOperating: Actor {
         operationGuard: @escaping ProjectOperationGuard
     ) throws -> AutomationBatchExecution
 
+    /// Prepares a CAD-to-Authored-Mesh source command from the current
+    /// modeling-purpose evaluation. The operation accepts identity intent only;
+    /// evaluated Mesh payloads are owned and produced by the project authority.
+    func prepareMakeCADRepresentationEditableCommand(
+        sceneNodeID: SceneNodeID,
+        authoredMeshSourceID: GeometrySourceID,
+        authoredMeshRepresentationID: GeometryRepresentationID,
+        switchesPresentationSelection: Bool,
+        expectedTransactionRevision: DocumentTransactionRevision
+    ) async throws -> GeometrySourceCommand
+
     func undo(
         expectedProjectID: ProjectID,
         expectedTransactionRevision: DocumentTransactionRevision,

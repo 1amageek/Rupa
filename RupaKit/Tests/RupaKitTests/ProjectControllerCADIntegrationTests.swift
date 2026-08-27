@@ -592,6 +592,397 @@ func makeEditableRejectsStaleRevisionAndRollsBackMixedCADMutation() async throws
     )
 }
 
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspaceMakeEditableCommitsExactCADMeshPairing() async throws {
+    let fixture = try extrudedCADDocument(named: "Workspace Make Editable", depth: 1.0)
+    let controller = try makeCADProjectController(document: fixture.document)
+    let workspace = await ProjectWorkspace(project: controller)
+    let initial = try await workspace.evaluate()
+    let initialState = try await controller.currentState()
+    let sceneNodeID = try bodySceneNodeID(
+        in: fixture.document,
+        featureID: fixture.bodyFeatureID
+    )
+    let bodyObject = try #require(initial.document.document.productMetadata.sceneNodes[sceneNodeID]?.object)
+    let selection = try #require(bodyObject.geometryRepresentations.selection)
+    let sourceRepresentation = try #require(
+        bodyObject.geometryRepresentations.representations[selection.modeling]
+    )
+    let sourceFingerprint = try initial.document.document.cadDocument.sourceFingerprint(
+        tolerance: .standard
+    )
+    let sourceID: GeometrySourceID = "mesh.workspace-editable"
+    let representationID: GeometryRepresentationID = "representation.workspace-editable"
+
+    let result = try await workspace.makeEditable(
+        ProjectMakeEditableRequest(
+            snapshot: initial,
+            sceneNodeID: sceneNodeID,
+            authoredMeshSourceID: sourceID,
+            authoredMeshRepresentationID: representationID,
+            name: "integration.workspace.make-editable"
+        )
+    )
+    let asset = try #require(result.view.document.document.authoredMeshAssets[sourceID])
+    let committedObject = try #require(
+        result.view.document.document.productMetadata.sceneNodes[sceneNodeID]?.object
+    )
+    let committedSelection = try #require(committedObject.geometryRepresentations.selection)
+    let viewportItem = try #require(result.view.viewport.items.first)
+
+    #expect(initialState.canUndo == false)
+    #expect(result.view.transactionRevision.value == initial.transactionRevision.value + 1)
+    #expect(result.view.documentGeneration.value == initial.documentGeneration.value + 1)
+    #expect(result.view.canUndo)
+    #expect(result.handle.projectAuthorityCoordinate == ProjectAuthorityCoordinate(
+        projectID: result.view.projectID,
+        transactionRevision: result.view.transactionRevision,
+        publicationSequence: result.view.publicationSequence
+    ))
+    #expect(result.handle.sourceID == sourceID)
+    #expect(result.handle.contentIdentity == asset.contentIdentity)
+    #expect(result.sceneNodeID == sceneNodeID)
+    #expect(result.sourceRepresentationID == selection.modeling)
+    #expect(result.authoredMeshRepresentationID == representationID)
+    #expect(result.evaluationSnapshotID.purpose == .modeling)
+    #expect(result.cadSourceIdentity.domain == AuthoredMeshProvenance.cadSourceIdentityDomain)
+    #expect(result.provenance == .derivedFromCAD(
+        representationID: selection.modeling,
+        sourceIdentity: result.cadSourceIdentity
+    ))
+    #expect(result.switchedPresentationSelection)
+    #expect(committedSelection.modeling == selection.modeling)
+    #expect(committedSelection.presentation == representationID)
+    #expect(committedObject.geometryRepresentations.representations.count == 2)
+    #expect(sourceRepresentation.source.providerID == CADGeometrySourceProvider.identifier)
+    #expect(result.view.document.document.hasAuthoritativeCADSource)
+    #expect(try result.view.document.document.cadDocument.sourceFingerprint(
+        tolerance: .standard
+    ) == sourceFingerprint)
+    #expect(viewportItem.reference == .authoredMesh(sourceID))
+    #expect(viewportItem.mesh.identity == sourceID)
+    #expect(viewportItem.copyTelemetry.didCopy == false)
+    expectEveryMeshBufferShared(asset.source, viewportItem.mesh)
+
+    let undone = try await workspace.undo(from: result.view)
+    #expect(undone.canUndo == false)
+    #expect(undone.canRedo)
+    #expect(try await controller.currentState().document.authoredMeshAssets.isEmpty)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspaceMakeEditableCanRetainCADPresentationSelection() async throws {
+    let fixture = try extrudedCADDocument(named: "Retain CAD Presentation", depth: 1.0)
+    let controller = try makeCADProjectController(document: fixture.document)
+    let workspace = await ProjectWorkspace(project: controller)
+    let initial = try await workspace.evaluate()
+    let sceneNodeID = try bodySceneNodeID(
+        in: fixture.document,
+        featureID: fixture.bodyFeatureID
+    )
+    let initialObject = try #require(initial.document.document.productMetadata.sceneNodes[sceneNodeID]?.object)
+    let initialPresentation = try #require(
+        initialObject.geometryRepresentations.selection?.presentation
+    )
+    let result = try await workspace.makeEditable(
+        ProjectMakeEditableRequest(
+            snapshot: initial,
+            sceneNodeID: sceneNodeID,
+            authoredMeshSourceID: "mesh.retain-cad-presentation",
+            authoredMeshRepresentationID: "representation.retain-cad-presentation",
+            switchesPresentationSelection: false
+        )
+    )
+    let object = try #require(result.view.document.document.productMetadata.sceneNodes[sceneNodeID]?.object)
+    let selection = try #require(object.geometryRepresentations.selection)
+
+    #expect(result.switchedPresentationSelection == false)
+    #expect(selection.modeling == initialObject.geometryRepresentations.selection?.modeling)
+    #expect(selection.presentation == initialPresentation)
+    #expect(result.view.viewport.items.first?.reference.providerID == CADGeometrySourceProvider.identifier)
+    #expect(result.view.document.document.authoredMeshAssets.isEmpty == false)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspaceMakeEditableAllowsRepresentationIdentityUsedByAnotherObject() async throws {
+    var fixture = try extrudedCADDocument(named: "Object-Scoped Representation", depth: 1.0)
+    let secondFeatureID = try fixture.document.createExtrudedCircle(
+        name: "Second Body",
+        plane: .xy,
+        center: SketchPoint(
+            x: .length(2.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        radius: .length(0.5, .meter),
+        depth: .length(1.0, .meter),
+        direction: .normal
+    )
+    let targetSceneNodeID = try bodySceneNodeID(
+        in: fixture.document,
+        featureID: fixture.bodyFeatureID
+    )
+    let secondSceneNodeID = try bodySceneNodeID(
+        in: fixture.document,
+        featureID: secondFeatureID
+    )
+    var secondSceneNode = try #require(
+        fixture.document.productMetadata.sceneNodes[secondSceneNodeID]
+    )
+    var secondObject = try #require(secondSceneNode.object)
+    let secondSelection = try #require(secondObject.geometryRepresentations.selection)
+    let secondRepresentation = try #require(
+        secondObject.geometryRepresentations.representations[secondSelection.modeling]
+    )
+    let sharedRepresentationID: GeometryRepresentationID =
+        "representation.object-scoped-shared"
+    secondObject.geometryRepresentations = GeometryRepresentationSet(
+        representations: [
+            sharedRepresentationID: GeometryRepresentation(
+                id: sharedRepresentationID,
+                source: secondRepresentation.source
+            ),
+        ],
+        selection: GeometryRepresentationSelection(
+            modeling: sharedRepresentationID,
+            presentation: sharedRepresentationID
+        )
+    )
+    secondSceneNode.object = secondObject
+    fixture.document.productMetadata.sceneNodes[secondSceneNodeID] = secondSceneNode
+    _ = try fixture.document.validate()
+
+    let controller = try makeCADProjectController(document: fixture.document)
+    let workspace = await ProjectWorkspace(project: controller)
+    let initial = try await workspace.evaluate()
+    let result = try await workspace.makeEditable(
+        ProjectMakeEditableRequest(
+            snapshot: initial,
+            sceneNodeID: targetSceneNodeID,
+            authoredMeshSourceID: "mesh.object-scoped-shared",
+            authoredMeshRepresentationID: sharedRepresentationID
+        )
+    )
+    let objectsUsingIdentity = result.view.document.document.productMetadata.sceneNodes.values
+        .compactMap(\.object)
+        .filter { $0.geometryRepresentations.representations[sharedRepresentationID] != nil }
+
+    #expect(objectsUsingIdentity.count == 2)
+    #expect(result.authoredMeshRepresentationID == sharedRepresentationID)
+    #expect(result.view.document.document.authoredMeshAssets[result.authoredMeshSourceID] != nil)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspaceMakeEditableRejectsForgedSnapshotAndDuplicateWithoutPublication() async throws {
+    let fixture = try extrudedCADDocument(named: "Reject Forged Workspace Make Editable", depth: 1.0)
+    let controller = try makeCADProjectController(document: fixture.document)
+    let workspace = await ProjectWorkspace(project: controller)
+    let initial = try await workspace.evaluate()
+    let sceneNodeID = try bodySceneNodeID(
+        in: fixture.document,
+        featureID: fixture.bodyFeatureID
+    )
+    let sourceID: GeometrySourceID = "mesh.reject-forged-workspace"
+    let representationID: GeometryRepresentationID = "representation.reject-forged-workspace"
+    var forgedDocument = initial.document.document
+    forgedDocument.cadDocument.designGraph.revision =
+        forgedDocument.cadDocument.designGraph.revision.advanced()
+    let forgedReadDocument = try ProjectReadDocument(
+        document: forgedDocument,
+        objectRegistry: initial.objectRegistry
+    )
+    let forgedSnapshot = ProjectViewSnapshot(
+        documentLifetimeID: initial.documentLifetimeID,
+        projectID: initial.projectID,
+        projectName: initial.projectName,
+        document: forgedReadDocument,
+        documentGeneration: initial.documentGeneration,
+        transactionRevision: initial.transactionRevision,
+        publicationSequence: initial.publicationSequence,
+        isDirty: initial.isDirty,
+        canUndo: initial.canUndo,
+        canRedo: initial.canRedo,
+        selection: initial.selection,
+        workspaceState: initial.workspaceState,
+        objectRegistry: initial.objectRegistry,
+        evaluationSnapshot: initial.evaluationSnapshot,
+        viewport: initial.viewport,
+        cadInteraction: initial.cadInteraction,
+        sceneNodeIDByOccurrenceID: initial.sceneNodeIDByOccurrenceID
+    )
+
+    var forgedError: ProjectMakeEditableError?
+    do {
+        _ = try await workspace.makeEditable(
+            ProjectMakeEditableRequest(
+                snapshot: forgedSnapshot,
+                sceneNodeID: sceneNodeID,
+                authoredMeshSourceID: sourceID,
+                authoredMeshRepresentationID: representationID
+            )
+        )
+    } catch let error as ProjectMakeEditableError {
+        forgedError = error
+    }
+    #expect(forgedError?.code == .resultMismatch)
+    #expect(await controller.currentTransactionRevision() == initial.transactionRevision)
+    #expect(await controller.currentDocument().authoredMeshAssets.isEmpty)
+
+    let targetObject = try #require(
+        initial.document.document.productMetadata.sceneNodes[sceneNodeID]?.object
+    )
+    let targetRepresentationID = try #require(
+        targetObject.geometryRepresentations.selection?.modeling
+    )
+    var representationOnlyError: ProjectMakeEditableError?
+    do {
+        _ = try await workspace.makeEditable(
+            ProjectMakeEditableRequest(
+                snapshot: initial,
+                sceneNodeID: sceneNodeID,
+                authoredMeshSourceID: "mesh.unique-source",
+                authoredMeshRepresentationID: targetRepresentationID
+            )
+        )
+    } catch let error as ProjectMakeEditableError {
+        representationOnlyError = error
+    }
+    #expect(representationOnlyError?.code == .duplicateIdentity)
+    #expect(await controller.currentTransactionRevision() == initial.transactionRevision)
+    #expect(await controller.currentDocument().authoredMeshAssets.isEmpty)
+
+    let committed = try await workspace.makeEditable(
+        ProjectMakeEditableRequest(
+            snapshot: initial,
+            sceneNodeID: sceneNodeID,
+            authoredMeshSourceID: sourceID,
+            authoredMeshRepresentationID: representationID
+        )
+    )
+    var duplicateError: ProjectMakeEditableError?
+    do {
+        _ = try await workspace.makeEditable(
+            ProjectMakeEditableRequest(
+                snapshot: committed.view,
+                sceneNodeID: sceneNodeID,
+                authoredMeshSourceID: sourceID,
+                authoredMeshRepresentationID: representationID
+            )
+        )
+    } catch let error as ProjectMakeEditableError {
+        duplicateError = error
+    }
+    #expect(duplicateError?.code == .duplicateIdentity)
+    #expect(await controller.currentTransactionRevision() == committed.view.transactionRevision)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspaceMakeEditableCancellationPreservesAuthority() async throws {
+    let fixture = try extrudedCADDocument(named: "Cancelled Workspace Make Editable", depth: 1.0)
+    let controller = try makeCADProjectController(document: fixture.document)
+    let workspace = await ProjectWorkspace(project: controller)
+    let initial = try await workspace.evaluate()
+    let sceneNodeID = try bodySceneNodeID(
+        in: fixture.document,
+        featureID: fixture.bodyFeatureID
+    )
+    let operationCount = Mutex(0)
+    var cancellationError: ProjectMakeEditableError?
+    do {
+        _ = try await workspace.makeEditable(
+            ProjectMakeEditableRequest(
+                snapshot: initial,
+                sceneNodeID: sceneNodeID,
+                authoredMeshSourceID: "mesh.cancelled-workspace",
+                authoredMeshRepresentationID: "representation.cancelled-workspace"
+            ),
+            operationGuard: {
+                let count = operationCount.withLock { value in
+                    value += 1
+                    return value
+                }
+                if count == 4 {
+                    throw CancellationError()
+                }
+            }
+        )
+    } catch let error as ProjectMakeEditableError {
+        cancellationError = error
+    }
+    #expect(cancellationError?.code == .cancelled)
+    #expect(operationCount.withLock { $0 } == 4)
+    #expect(await controller.currentTransactionRevision() == initial.transactionRevision)
+    #expect(await controller.currentDocument().authoredMeshAssets.isEmpty)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspaceMakeEditablePreservesPostCommitNoRetryContract() async throws {
+    let fixture = try extrudedCADDocument(named: "Post Commit Workspace Make Editable", depth: 1.0)
+    let controller = try makeCADProjectController(document: fixture.document)
+    let workspace = await ProjectWorkspace(
+        project: controller,
+        viewBuilder: ProjectMakeEditableFailingViewBuilder(failingBuild: 2)
+    )
+    let initial = try await workspace.evaluate()
+    let sceneNodeID = try bodySceneNodeID(
+        in: fixture.document,
+        featureID: fixture.bodyFeatureID
+    )
+    let request = ProjectMakeEditableRequest(
+        snapshot: initial,
+        sceneNodeID: sceneNodeID,
+        authoredMeshSourceID: "mesh.post-commit-workspace",
+        authoredMeshRepresentationID: "representation.post-commit-workspace"
+    )
+    var postCommitError: ProjectWorkspacePostCommitError?
+    do {
+        _ = try await workspace.makeEditable(request)
+    } catch let error as ProjectWorkspacePostCommitError {
+        postCommitError = error
+    }
+    #expect(postCommitError?.stage == .viewProjection)
+    if let postCommitError,
+       case .source(let commit) = postCommitError.commit {
+        #expect(commit.state.transactionRevision == DocumentTransactionRevision(1))
+        #expect(commit.state.document.authoredMeshAssets[request.authoredMeshSourceID] != nil)
+    } else {
+        Issue.record("Expected the exact committed source mutation in the post-commit error.")
+    }
+    #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(1))
+    #expect(await controller.currentDocument().authoredMeshAssets[request.authoredMeshSourceID] != nil)
+
+    var retryError: ProjectMakeEditableError?
+    do {
+        _ = try await workspace.makeEditable(request)
+    } catch let error as ProjectMakeEditableError {
+        retryError = error
+    }
+    #expect(retryError?.code == .documentGenerationMismatch)
+    #expect(await controller.currentTransactionRevision() == DocumentTransactionRevision(1))
+}
+
+private final class ProjectMakeEditableFailingViewBuilder: ProjectViewSnapshotBuilding, Sendable {
+    private let failingBuild: Int
+    private let buildCount = Mutex(0)
+
+    init(failingBuild: Int) {
+        self.failingBuild = failingBuild
+    }
+
+    func build(from state: ProjectStateSnapshot) throws -> ProjectViewSnapshot {
+        let count = buildCount.withLock { value in
+            value += 1
+            return value
+        }
+        guard count != failingBuild else {
+            throw ProjectViewSnapshotError(
+                code: .sourceMismatch,
+                message: "The fixture rejected the post-commit project view."
+            )
+        }
+        return try ProjectViewSnapshotBuilder().build(from: state)
+    }
+}
+
 private func makeCADProjectController(
     document: DesignDocument,
     evaluatorPreparer: any ProjectEvaluatorPreparing =

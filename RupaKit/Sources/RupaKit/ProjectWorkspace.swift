@@ -9,7 +9,7 @@ import RupaProject
 /// Main-actor observation adapter for one project-operation owner.
 @MainActor
 @Observable
-public final class ProjectWorkspace: ProjectMeshEditing, ProjectMeshReading {
+public final class ProjectWorkspace: ProjectMakeEditable, ProjectMeshEditing, ProjectMeshReading {
     public private(set) var view: ProjectViewSnapshot?
 
     @ObservationIgnored

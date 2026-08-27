@@ -223,6 +223,7 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
             "RupaCore",
         ],
         "RupaAgentProtocol": [
+            "RupaKit",
             "RupaCore",
             "RupaCoreTypes",
             "RupaAutomation",
