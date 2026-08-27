@@ -134,7 +134,8 @@ let package = Package(
                 "RupaProjectModel",
                 "RupaViewportScene",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
-            ]
+            ],
+            exclude: ["DESIGN.md"]
         ),
         .target(
             name: "RupaCore",
@@ -146,7 +147,8 @@ let package = Package(
                 .product(name: "CADModeling", package: "swift-CAD"),
                 .product(name: "CADTopology", package: "swift-CAD"),
                 .product(name: "Collections", package: "swift-collections"),
-            ]
+            ],
+            exclude: ["DESIGN.md"]
         ),
         .target(
             name: "RupaCoreTypes",
@@ -162,7 +164,8 @@ let package = Package(
             name: "RupaGeometry",
             dependencies: [
                 "RupaCoreTypes",
-            ]
+            ],
+            exclude: ["DESIGN.md"]
         ),
         .target(
             name: "RupaProjectModel",
@@ -207,7 +210,8 @@ let package = Package(
                 "RupaProjectModel",
                 "RupaProjectPackage",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
-            ]
+            ],
+            exclude: ["DESIGN.md"]
         ),
         .target(
             name: "RupaUI",

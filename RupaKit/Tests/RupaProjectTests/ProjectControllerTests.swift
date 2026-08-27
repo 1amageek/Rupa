@@ -1672,6 +1672,75 @@ func projectControllerFailedSaveRetainsDirtyPublicationState() async throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
+func projectControllerPublishedMeshEditRetriesSaveWithoutLosingAuthority() async throws {
+    try await withTemporaryDirectory { directory in
+        let sourceDocument = try meshOnlyDocument(named: "Retry Mesh Save")
+        let sourceAsset = try #require(sourceDocument.authoredMeshAssets.values.first)
+        let writer = FailOncePackageWriter()
+        let controller = try makeController(
+            document: sourceDocument,
+            packageWriter: writer
+        )
+        let committed = try await controller.commit(
+            ProjectSourceTransaction(
+                name: "fixture.retry-published-mesh-save",
+                geometrySourceCommands: [
+                    try authoredMeshVertexEditCommand(
+                        document: sourceDocument,
+                        sourceID: sourceAsset.id,
+                        position: GeometryPoint3D(x: 0, y: 0, z: 21)
+                    ),
+                ],
+                expectedProjectID: sourceDocument.projectID,
+                expectedTransactionRevision: DocumentTransactionRevision(0),
+                expectedPublicationSequence: 0
+            )
+        )
+        let published = try await controller.currentState()
+        let url = directory.appendingPathComponent("retry-mesh-save.rupa")
+
+        var firstError: ProjectControllerError?
+        do {
+            _ = try await controller.save(
+                to: url,
+                expectedTransactionRevision: committed.transactionRevision
+            )
+        } catch let error as ProjectControllerError {
+            firstError = error
+        }
+        let retained = try await controller.currentState()
+
+        #expect(firstError?.code == .packageFailed)
+        #expect(retained.isDirty)
+        #expect(retained.transactionRevision == published.transactionRevision)
+        #expect(retained.publicationSequence == published.publicationSequence)
+        #expect(retained.document.authoredMeshAssets == published.document.authoredMeshAssets)
+        #expect(retained.package.authoredMeshAssets == published.package.authoredMeshAssets)
+        #expect(retained.evaluationSnapshot == published.evaluationSnapshot)
+        #expect(retained.evaluation.id == published.evaluation.id)
+        #expect(retained.evaluation.projectID == published.evaluation.projectID)
+        #expect(retained.evaluation.occurrences.keys == published.evaluation.occurrences.keys)
+        #expect(retained.evaluation.copyTelemetry == published.evaluation.copyTelemetry)
+        #expect(retained.canUndo == published.canUndo)
+
+        let saved = try await controller.save(
+            to: url,
+            expectedTransactionRevision: committed.transactionRevision
+        )
+        let clean = try await controller.currentState()
+        let restored = try ProjectPackageStore().load(from: url)
+
+        #expect(writer.attemptCount == 2)
+        #expect(saved.document.authoredMeshAssets == published.package.authoredMeshAssets)
+        #expect(restored.authoredMeshAssets == published.package.authoredMeshAssets)
+        #expect(clean.isDirty == false)
+        #expect(clean.transactionRevision == published.transactionRevision)
+        #expect(clean.publicationSequence == published.publicationSequence + 1)
+        #expect(clean.document.authoredMeshAssets == published.document.authoredMeshAssets)
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
 func projectControllerLoadInvalidatesPreLoadTransactionRevisions() async throws {
     try await withTemporaryDirectory { directory in
         let url = directory.appendingPathComponent("project.swcad")
@@ -2139,6 +2208,32 @@ private struct FailingPackageWriter: ProjectPackageWriting {
             code: .atomicSaveFailure,
             message: "Fixture save failure."
         )
+    }
+}
+
+private final class FailOncePackageWriter: ProjectPackageWriting {
+    private let attempts = Mutex(0)
+    private let writer = ProjectPackageStore()
+
+    var attemptCount: Int {
+        attempts.withLock { $0 }
+    }
+
+    func save(
+        _ document: ProjectPackageDocument,
+        to url: URL
+    ) throws -> ProjectPackageSaveResult {
+        let attempt = attempts.withLock { count in
+            count += 1
+            return count
+        }
+        guard attempt > 1 else {
+            throw ProjectPackageError(
+                code: .atomicSaveFailure,
+                message: "Fixture first save failure."
+            )
+        }
+        return try writer.save(document, to: url)
     }
 }
 
