@@ -3,18 +3,18 @@
 ## Purpose and Scope
 
 This module is the application-facing, transport-neutral boundary for Agent-
-ready Authored Mesh reads and edits. It is a child of the [RupaKit package
+ready Authored Mesh reads/edits and CAD Make Editable. It is a child of the [RupaKit package
 design](../../DESIGN.md) and the [system design](../../../DESIGN.md).
 
-Its direct users are the existing `RupaUI`, Agent runtime/UI, and future CLI or
-MCP adapters. T09 adds no protocol, CLI, or MCP type; those adapters will call
-these use cases later.
+Its direct users are the existing `RupaUI` and Agent runtime/UI. T10 connects
+AgentProtocol/Runtime to these use cases; CLI and MCP adapters remain outside
+this scope.
 
 The module depends on `RupaCore`, `RupaCoreTypes`, `RupaGeometry`,
 `RupaProject`, `RupaProjectModel`, `RupaEvaluation`, `RupaAutomation`, and
 existing integration targets as declared by `Package.swift`.
 
-Parent: [RupaKit package design](../../DESIGN.md). Children: none for T09.
+Parent: [RupaKit package design](../../DESIGN.md). Children: none.
 
 ## Responsibilities and Boundaries
 
@@ -32,6 +32,9 @@ Parent: [RupaKit package design](../../DESIGN.md). Children: none for T09.
   `ProjectSourceTransaction`;
 - full `ProjectViewSnapshot` validation before and after reads, plus
   revalidation, cancellation propagation, and exact-view return behavior.
+- an exact-snapshot Make Editable use case that asks `ProjectOperating` to
+  prepare the current CAD modeling evaluation, commits it through one existing
+  source transaction, and returns the exact view plus new Mesh handle.
 
 It does not own Mesh topology algorithms, source asset replacement, project
 actor state, package encoding, Agent protocol envelopes, CLI parsing, MCP
@@ -179,7 +182,12 @@ authority before returning data.
     source-history entry. Shared Authored Mesh references observe the same asset.
 13. Cancellation and stale pre/post-read or commit coordinates return typed
     failure/no-retry outcomes and never silently refresh to the current view.
-14. No AgentProtocol, CLI, or MCP change is part of this module's T09 scope.
+14. T10 AgentProtocol adapts these contracts but does not move authority into
+    the wire layer; CLI and MCP changes remain out of scope.
+15. Make Editable retains the CAD representation and modeling selection, adds
+    one `derivedFromCAD` Authored Mesh asset/representation, optionally switches
+    presentation, returns a handle bound to the exact committed view, and
+    preserves the existing postcommit no-retry contract.
 
 ## Runtime Flows
 
@@ -254,7 +262,7 @@ T09-C owns the following behavioral proof:
 | Preview | No source/package/evaluation/history/view publication. |
 | Commit | Exact-view publication, one revision/undo, new handle, shared-source routing. |
 | Post-commit behavior | View projection and every post-publication result extraction, result/view/asset/handle validation, cancellation, and coordinate revalidation failure report the exact committed coordinates with no-retry semantics; no path can surface a retryable pre-commit error after publication. |
-| Scope | No AgentProtocol/CLI/MCP source changes. |
+| Scope | AgentProtocol/Runtime adapter changes only; no CLI/MCP or dedicated modeling command. |
 
 Changes to the use-case request shape, snapshot coordinate, read materialization,
 or workspace publication require rechecking the Project and system designs.

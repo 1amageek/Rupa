@@ -3,15 +3,17 @@
 ## Purpose and Scope
 
 This document is the package-level design for the `RupaKit` Swift package. It
-composes the T09 Mesh-editing contracts owned by the changed modules and keeps
-the package graph aligned with the existing project authority route.
+composes the verified T09 Mesh-editing foundation with the T10 Agent-to-project
+geometry route while keeping one existing project authority.
 
-Parent: [system design](../DESIGN.md). Direct children for T09 are:
+Parent: [system design](../DESIGN.md). Direct children used by T10 are:
 
 - [RupaGeometry](Sources/RupaGeometry/DESIGN.md)
 - [RupaCore](Sources/RupaCore/DESIGN.md)
 - [RupaProject](Sources/RupaProject/DESIGN.md)
 - [RupaKit integration target](Sources/RupaKit/DESIGN.md)
+- [RupaAgentProtocol](Sources/RupaAgentProtocol/DESIGN.md)
+- [RupaAgentRuntime](Sources/RupaAgentRuntime/DESIGN.md)
 
 Package dependencies are the local targets and external packages declared by
 [`Package.swift`](Package.swift), notably `swift-CAD`, Swift Collections, and
@@ -19,11 +21,10 @@ Argument Parser. Package users are the system root, application targets, and
 existing UI/Agent/CLI adapters through their declared target dependencies.
 
 The package also contains existing targets such as `RupaEvaluation`,
-`RupaProjectModel`, `RupaProjectPackage`, `RupaAgentProtocol`, and UI/runtime
-adapters. Their current ownership remains indexed by
-[ARCHITECTURE.md](ARCHITECTURE.md); T09 does not change their public surface.
+`RupaProjectModel`, `RupaProjectPackage`, UI, rendering, and transport adapters.
+Their current ownership remains indexed by [ARCHITECTURE.md](ARCHITECTURE.md).
 
-The package design is the parent of the four changed module designs. It is not
+The package design is the parent of the changed and reused module designs. It is not
 a replacement for the system source-authority or state contracts linked below.
 
 ## Responsibilities and Boundaries
@@ -32,12 +33,12 @@ The package design owns:
 
 - the dependency direction between provider-independent Mesh editing, source
   authority, project orchestration, and application integration;
-- the rule that all four layers use the existing `ProjectController` authority;
-- package-wide API and verification boundaries for T09.
+- the rule that every T09/T10 layer uses the existing `ProjectController` authority;
+- package-wide API and verification boundaries for T10.
 
 It does not own Mesh topology algorithms, CAD semantics, source asset mutation,
-archive encoding, or Agent/CLI/MCP transport. Those are delegated to child
-designs or existing normative contracts.
+archive encoding, socket I/O, MCP, CLI, or a bicycle-specific command. Those
+are delegated to child designs or existing normative contracts.
 
 ```mermaid
 flowchart LR
@@ -53,21 +54,26 @@ flowchart LR
     Core --> Kit
     Geometry --> Kit
     ProjectModel --> Kit
-    Kit --> UI["RupaUI / future Agent adapters"]
+    Kit --> UI["RupaUI"]
+    Kit --> AgentProtocol[RupaAgentProtocol]
+    AgentProtocol --> AgentRuntime[RupaAgentRuntime]
+    Kit --> AgentRuntime
 ```
 
 ## Related Designs
 
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
-| [system design](../DESIGN.md) | parent | System authority and T09 cross-boundary invariants | Defines the complete inspect-to-publish flow. | Child documents provide local details; do not duplicate them here. |
+| [system design](../DESIGN.md) | parent | System authority and T10 cross-boundary invariants | Defines the complete Agent-to-presentation flow. | Child documents provide local details; do not duplicate them here. |
 | [CAD/Mesh responsibility](../Rupa/CAD_MESH_RESPONSIBILITY_CONTRACT.md) | depends on | Representation roles, Authored Mesh authority, derived snapshots, zero-copy baseline | Defines the meaning of the source being edited. | A plan cannot turn a derived evaluation snapshot into source. |
 | [State and project contract](../Rupa/STATE_AND_PROJECT_CONTRACT.md) | depends on | Project actor, revision, history, cancellation, and publication | Defines the lifecycle used by `RupaProject`. | Do not introduce a parallel session or publication sequence. |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | coordinates with | Existing package graph and application route | Records existing targets and shared workspace composition. | T09-specific design is in this hierarchy, not in a duplicated architecture summary. |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | coordinates with | Existing package graph and application route | Records existing targets and shared workspace composition. | Task-specific contracts remain in this hierarchy. |
 | [RupaGeometry design](Sources/RupaGeometry/DESIGN.md) | child | Plan/executor/buffer contract | Owns Mesh operation and performance semantics. | Package consumers use its public contracts only. |
 | [RupaCore design](Sources/RupaCore/DESIGN.md) | child | Source identity and asset mutation contract | Owns Product/Authored Mesh source authority. | Scene references are navigation context, not authority. |
 | [RupaProject design](Sources/RupaProject/DESIGN.md) | child | Staging/publication contract | Owns project transaction integration. | Geometry algorithms remain below this boundary. |
-| [RupaKit integration design](Sources/RupaKit/DESIGN.md) | child | Transport-neutral read/edit use cases | Owns application-facing exact-snapshot adaptation. | No AgentProtocol/CLI/MCP changes in T09. |
+| [RupaKit integration design](Sources/RupaKit/DESIGN.md) | child | Transport-neutral read/edit and Make Editable use cases | Owns application-facing exact-snapshot adaptation. | T10 adds only AgentProtocol/Runtime adapters; CLI/MCP remain unchanged. |
+| [RupaAgentProtocol design](Sources/RupaAgentProtocol/DESIGN.md) | child | Codable Agent Mesh and Make Editable messages | Reuses RupaKit value contracts without duplicating geometry meaning. | It must not import runtime or transport. |
+| [RupaAgentRuntime design](Sources/RupaAgentRuntime/DESIGN.md) | child | Registered-workspace request routing | Binds wire values to the exact current full project view. | It never creates a session or saves a package. |
 
 ## Architecture
 
@@ -101,7 +107,8 @@ records are owned by the four child designs:
 | Existing CAD/Mesh and state contracts remain authoritative for their domains. | [CAD/Mesh responsibility](../Rupa/CAD_MESH_RESPONSIBILITY_CONTRACT.md), [state/project contract](../Rupa/STATE_AND_PROJECT_CONTRACT.md) |
 
 The package design does not repeat those contracts and does not introduce a
-second authority, source clone, protocol surface, or transport route.
+second authority or source clone. T10 adds only the typed Agent adapter surface
+over the existing RupaKit use cases.
 
 ## Runtime Flows
 
@@ -116,7 +123,7 @@ in [RupaGeometry](Sources/RupaGeometry/DESIGN.md#runtime-flows),
 
 ## State, Ownership, and Lifecycle
 
-The package owns no shared mutable T09 state. State and lifetime are delegated
+The package owns no shared mutable T10 state. State and lifetime are delegated
 to the child owners: Mesh buffers to `RupaGeometry`, source assets to
 `RupaCore`, project publication to `RupaProject`, and observable workspace view
 to `RupaKit`.
@@ -140,6 +147,8 @@ contracts rather than duplicating their behavioral cases:
 | Project integration | `RupaProject` | T09-C and T09-IV tests for exact coordinates and atomic publication. |
 | Application use case | `RupaKit` target | T09-C tests for bounded read/preview/commit. |
 | Full package | Integration | T09-IV build/test and actual save/load path. |
+| Agent wire and dispatch | `RupaAgentProtocol` / `RupaAgentRuntime` | T10-B codec, malformed-input, registered-workspace, stale/cancel, and no-retry tests. |
+| Actual rendered workflow | T10 integration | Agent CAD bicycle assembly, Make Editable for every generated body, one representative Mesh edit, application save/load, all-Authored-Mesh presentation evaluation, renderer triangles, and deterministic PNG. |
 
 Any public contract or dependency change requires rechecking the system root,
 the affected child design, and the existing architecture/normative links.

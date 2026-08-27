@@ -301,12 +301,14 @@ let package = Package(
         .target(
             name: "RupaAgentProtocol",
             dependencies: [
+                "RupaKit",
                 "RupaCoreTypes",
                 "RupaCore",
                 "RupaAutomation",
                 "RupaDomainFoundation",
                 "RupaCapabilities",
-            ]
+            ],
+            exclude: ["DESIGN.md"]
         ),
         .target(
             name: "RupaAgentRuntime",
@@ -320,7 +322,8 @@ let package = Package(
                 "RupaCapabilities",
                 "RupaAgentProtocol",
                 "RupaProject",
-            ]
+            ],
+            exclude: ["DESIGN.md"]
         ),
         .target(
             name: "RupaAgentTransport",

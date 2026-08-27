@@ -3,7 +3,7 @@
 ## Purpose and Scope
 
 This module owns project-level staging and publication for the T09 Authored Mesh
-plan path. It is a child of the [RupaKit package design](../../DESIGN.md) and
+plan path and the T10 Make Editable preparation port. It is a child of the [RupaKit package design](../../DESIGN.md) and
 the [system design](../../../DESIGN.md).
 
 The target depends on `RupaCore`, `RupaCoreTypes`, `RupaEvaluation`,
@@ -11,7 +11,7 @@ The target depends on `RupaCore`, `RupaCoreTypes`, `RupaEvaluation`,
 defined by `Package.swift`. Its users include the `RupaKit` integration target,
 UI composition, and existing Agent/runtime adapters through `ProjectOperating`.
 
-Parent: [RupaKit package design](../../DESIGN.md). Children: none for T09.
+Parent: [RupaKit package design](../../DESIGN.md). Children: none.
 
 ## Responsibilities and Boundaries
 
@@ -25,6 +25,9 @@ Parent: [RupaKit package design](../../DESIGN.md). Children: none for T09.
   purpose-aware evaluation before publication;
 - revision/publication/cancellation checks and atomic commit/load behavior;
 - returning exact `ProjectStateSnapshot` results for workspace projection.
+- exposing `ProjectController` Make Editable preparation through
+  `ProjectOperating` so RupaKit can use the same project authority without
+  downcasting to the concrete actor.
 
 It does not own Mesh plan semantics, topology algorithms, Authored Mesh asset
 identity, Mesh handles, Mesh read pagination, workspace/document-generation
@@ -105,6 +108,11 @@ the isolated source staging path and returns an immutable result to Core/Project
 7. A new `ProjectStateSnapshot` is published only after source, package,
    projection, evaluation, and publication guards agree. `ProjectWorkspace` may
    then build the exact `ProjectViewSnapshot` through its existing route.
+8. Make Editable preparation is a project-authority operation: it accepts only
+   target/identity intent, evaluates the current modeling representation, and
+   returns the existing bound Core source command. RupaKit commits that command
+   with the exact captured project/revision/publication coordinates; callers
+   cannot supply evaluated Mesh bytes.
 
 ## Runtime Flows
 
