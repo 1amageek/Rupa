@@ -1612,6 +1612,362 @@ func projectAgentUnavailableHistoryFailsWithoutChangingProject() async throws {
 }
 
 @MainActor
+@Test(.timeLimit(.minutes(1)))
+func projectAgentMeshRoutesUseBoundedRegisteredWorkspaceAndExactHandles() async throws {
+    let document = try projectAgentMeshOnlyDocument(named: "Agent Mesh Routes")
+    let sourceAsset = try #require(document.authoredMeshAssets.values.first)
+    let (_, workspace) = try await makeProjectWorkspace(document: document)
+    let controller = ProjectAgentCommandController()
+    let sessionID = try await controller.register(workspace: workspace)
+    let initial = try #require(workspace.view)
+    let codec = AgentMessageCodec()
+
+    let catalogResponse = await controller.handle(
+        .meshCatalog(
+            AgentMeshCatalogRequest(
+                sessionID: sessionID,
+                expectedGeneration: initial.documentGeneration,
+                limits: ProjectMeshReadLimits(maxSources: 1)
+            )
+        )
+    )
+    guard case .meshCatalog(let catalogResult) = catalogResponse else {
+        Issue.record("Expected the registered workspace Mesh catalog route to succeed.")
+        return
+    }
+    let catalogSource = try #require(catalogResult.catalog.source(for: sourceAsset.id))
+    #expect(catalogResult.coordinates.sessionID == sessionID)
+    #expect(catalogResult.coordinates.documentGeneration == initial.documentGeneration)
+    #expect(catalogSource.handle.contentIdentity == sourceAsset.contentIdentity)
+    #expect(try codec.decodeResponse(from: codec.encode(catalogResponse)) == catalogResponse)
+
+    let pageResponse = await controller.handle(
+        .meshPage(
+            AgentMeshPageRequest(
+                sessionID: sessionID,
+                expectedGeneration: initial.documentGeneration,
+                handle: catalogSource.handle,
+                domain: .vertex,
+                limits: ProjectMeshReadLimits(maxPageRecords: 1)
+            )
+        )
+    )
+    guard case .meshPage(let pageResult) = pageResponse else {
+        Issue.record("Expected the registered workspace Mesh page route to succeed.")
+        return
+    }
+    guard case .vertex(let vertex) = try #require(pageResult.page.records.first) else {
+        Issue.record("Expected the first Mesh page record to be a vertex.")
+        return
+    }
+    #expect(pageResult.page.handle == catalogSource.handle)
+    #expect(pageResult.page.domain == .vertex)
+    #expect(try codec.decodeResponse(from: codec.encode(pageResponse)) == pageResponse)
+
+    let neighborhoodResponse = await controller.handle(
+        .meshNeighborhood(
+            AgentMeshNeighborhoodRequest(
+                sessionID: sessionID,
+                expectedGeneration: initial.documentGeneration,
+                handle: catalogSource.handle,
+                origin: .vertex(vertex.id),
+                depth: 1,
+                limits: ProjectMeshReadLimits(maxOutputRecords: 4)
+            )
+        )
+    )
+    guard case .meshNeighborhood(let neighborhoodResult) = neighborhoodResponse else {
+        Issue.record("Expected the registered workspace Mesh neighborhood route to succeed.")
+        return
+    }
+    #expect(neighborhoodResult.neighborhood.handle == catalogSource.handle)
+    #expect(neighborhoodResult.neighborhood.records.first?.distance == 0)
+    #expect(try codec.decodeResponse(from: codec.encode(neighborhoodResponse)) == neighborhoodResponse)
+
+    let plan = try projectAgentMeshEditPlan(vertexID: vertex.id)
+    let previewBase = try #require(workspace.view)
+    let previewResponse = await controller.handle(
+        .meshEdit(
+            AgentMeshEditRequest(
+                sessionID: sessionID,
+                expectedGeneration: previewBase.documentGeneration,
+                handle: catalogSource.handle,
+                plan: plan,
+                mode: .preview,
+                name: "agent.mesh.preview"
+            )
+        )
+    )
+    guard case .meshEditPreview(let previewResult) = previewResponse else {
+        Issue.record("Expected the Mesh preview route to return a preview result.")
+        return
+    }
+    #expect(previewResult.didMutate)
+    #expect(previewResult.coordinates.documentGeneration == previewBase.documentGeneration)
+    #expect(previewResult.proposedDocumentGeneration.value > previewBase.documentGeneration.value)
+    #expect(try codec.decodeResponse(from: codec.encode(previewResponse)) == previewResponse)
+    let afterPreview = try #require(workspace.view)
+    #expect(afterPreview.documentGeneration == previewBase.documentGeneration)
+    #expect(afterPreview.transactionRevision == previewBase.transactionRevision)
+    #expect(afterPreview.canUndo == previewBase.canUndo)
+    #expect(
+        afterPreview.document.document.authoredMeshAssets[sourceAsset.id]?.contentIdentity
+            == sourceAsset.contentIdentity
+    )
+
+    let commitResponse = await controller.handle(
+        .meshEdit(
+            AgentMeshEditRequest(
+                sessionID: sessionID,
+                expectedGeneration: previewBase.documentGeneration,
+                handle: catalogSource.handle,
+                plan: plan,
+                mode: .commit,
+                name: "agent.mesh.commit"
+            )
+        )
+    )
+    guard case .meshEditCommit(let commitResult) = commitResponse else {
+        Issue.record("Expected the Mesh commit route to publish an exact result.")
+        return
+    }
+    #expect(commitResult.didMutate)
+    #expect(commitResult.handle.sourceID == sourceAsset.id)
+    #expect(commitResult.handle.contentIdentity == commitResult.contentIdentity)
+    #expect(commitResult.handle.projectAuthorityCoordinate.projectID == initial.projectID)
+    #expect(
+        commitResult.coordinates.documentGeneration.value
+            == previewBase.documentGeneration.value + 1
+    )
+    #expect(commitResult.coordinates.canUndo)
+    #expect(try codec.decodeResponse(from: codec.encode(commitResponse)) == commitResponse)
+    let committed = try #require(workspace.view)
+    #expect(committed.documentGeneration == commitResult.coordinates.documentGeneration)
+    #expect(
+        committed.document.document.authoredMeshAssets[sourceAsset.id]?.contentIdentity
+            == commitResult.contentIdentity
+    )
+
+    let staleResponse = await controller.handle(
+        .meshPage(
+            AgentMeshPageRequest(
+                sessionID: sessionID,
+                expectedGeneration: committed.documentGeneration,
+                handle: catalogSource.handle,
+                domain: .vertex,
+                limits: ProjectMeshReadLimits(maxPageRecords: 1)
+            )
+        )
+    )
+    guard case .failure(let staleError) = staleResponse else {
+        Issue.record("Expected the stale Mesh handle to be rejected at the current generation.")
+        return
+    }
+    #expect(staleError.code == .documentTransactionRevisionMismatch)
+
+    let undoResponse = await controller.handle(
+        .undo(
+            sessionID: sessionID,
+            expectedGeneration: committed.documentGeneration
+        )
+    )
+    guard case .sessionOperation(let undoResult) = undoResponse else {
+        Issue.record("Expected the Mesh commit to produce one undo history entry.")
+        return
+    }
+    #expect(undoResult.operation == .undo)
+    #expect(undoResult.canUndo == false)
+    #expect(undoResult.canRedo)
+    #expect(
+        workspace.view?.document.document.authoredMeshAssets[sourceAsset.id]?.contentIdentity
+            == sourceAsset.contentIdentity
+    )
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func projectAgentMakeEditableRouteRetainsCADAuthorityAndProjectsWireResult() async throws {
+    let document = try projectAgentCADAndMeshDocument(named: "Agent Make Editable")
+    let (_, workspace) = try await makeProjectWorkspace(document: document)
+    let controller = ProjectAgentCommandController()
+    let sessionID = try await controller.register(workspace: workspace)
+    let initial = try #require(workspace.view)
+    let bodyNode = try #require(
+        initial.document.document.productMetadata.sceneNodes.values.first {
+            $0.reference?.kind == .body
+        }
+    )
+    let sourceID = GeometrySourceID(rawValue: "mesh.agent.make-editable")
+    let representationID = GeometryRepresentationID(rawValue: "representation.agent.make-editable")
+
+    let response = await controller.handle(
+        .makeEditable(
+            AgentMakeEditableRequest(
+                sessionID: sessionID,
+                expectedGeneration: initial.documentGeneration,
+                sceneNodeID: bodyNode.id,
+                authoredMeshSourceID: sourceID,
+                authoredMeshRepresentationID: representationID,
+                switchesPresentationSelection: true,
+                name: "agent.make-editable"
+            )
+        )
+    )
+    guard case .makeEditable(let result) = response else {
+        Issue.record("Expected the Make Editable Agent route to succeed.")
+        return
+    }
+    #expect(result.sceneNodeID == bodyNode.id)
+    #expect(result.authoredMeshSourceID == sourceID)
+    #expect(result.authoredMeshRepresentationID == representationID)
+    #expect(result.switchedPresentationSelection)
+    #expect(result.handle.sourceID == sourceID)
+    #expect(result.handle.contentIdentity == result.authoredMeshContentIdentity)
+    #expect(result.coordinates.documentGeneration.value == initial.documentGeneration.value + 1)
+    #expect(result.coordinates.canUndo)
+    #expect(try AgentMessageCodec().decodeResponse(from: AgentMessageCodec().encode(response)) == response)
+
+    let committed = try #require(workspace.view)
+    let object = try #require(committed.document.document.productMetadata.sceneNodes[bodyNode.id]?.object)
+    let modelingRepresentation = try #require(object.geometryRepresentations.selection?.modeling)
+    let presentationRepresentation = try #require(object.geometryRepresentations.selection?.presentation)
+    #expect(modelingRepresentation != representationID)
+    #expect(presentationRepresentation == representationID)
+    #expect(
+        object.geometryRepresentations.representations[representationID]?.source
+            == .authoredMesh(sourceID)
+    )
+    #expect(committed.document.document.authoredMeshAssets[sourceID] != nil)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func projectAgentGeometryRoutesRejectCancellationAndOverLimitWithoutPublication() async throws {
+    let document = try projectAgentMeshOnlyDocument(named: "Agent Geometry Failure")
+    let (_, workspace) = try await makeProjectWorkspace(document: document)
+    let controller = ProjectAgentCommandController()
+    let sessionID = try await controller.register(workspace: workspace)
+    let before = try #require(workspace.view)
+
+    let overLimitResponse = await controller.handle(
+        .meshCatalog(
+            AgentMeshCatalogRequest(
+                sessionID: sessionID,
+                expectedGeneration: before.documentGeneration,
+                limits: ProjectMeshReadLimits(
+                    maxSources: ProjectMeshReadLimits.hard.maxSources + 1
+                )
+            )
+        )
+    )
+    guard case .failure(let limitError) = overLimitResponse else {
+        Issue.record("Expected an over-limit Agent Mesh request to fail explicitly.")
+        return
+    }
+    #expect(limitError.code == .commandInvalid)
+
+    let cancellationTask = Task {
+        await controller.handle(
+            .meshCatalog(
+                AgentMeshCatalogRequest(
+                    sessionID: sessionID,
+                    expectedGeneration: before.documentGeneration
+                )
+            )
+        )
+    }
+    cancellationTask.cancel()
+    let cancellationResponse = await cancellationTask.value
+    guard case .failure(let cancellationError) = cancellationResponse else {
+        Issue.record("Expected a cancelled Agent Mesh request to fail explicitly.")
+        return
+    }
+    #expect(cancellationError.code == .commandInvalid)
+
+    let after = try #require(workspace.view)
+    #expect(after.documentGeneration == before.documentGeneration)
+    #expect(after.transactionRevision == before.transactionRevision)
+    #expect(after.publicationSequence == before.publicationSequence)
+    #expect(after.document.document.authoredMeshAssets == before.document.document.authoredMeshAssets)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func projectAgentMeshCommitReportsPostPublicationFailureWithoutRetry() async throws {
+    let document = try projectAgentMeshOnlyDocument(named: "Agent Mesh Post Commit")
+    let sourceAsset = try #require(document.authoredMeshAssets.values.first)
+    let project = try ProjectController(
+        document: document,
+        evaluatorPreparer: DefaultDesignDocumentProjectEvaluatorFactory(),
+        projector: DesignDocumentProjectBridge()
+    )
+    let workspace = ProjectWorkspace(
+        project: project,
+        viewBuilder: ProjectAgentNthFailingViewBuilder(failingBuildNumber: 2)
+    )
+    _ = try await workspace.evaluate()
+    let controller = ProjectAgentCommandController()
+    let sessionID = try await controller.register(workspace: workspace)
+    let before = try #require(workspace.view)
+
+    let catalogResponse = await controller.handle(
+        .meshCatalog(
+            AgentMeshCatalogRequest(
+                sessionID: sessionID,
+                expectedGeneration: before.documentGeneration
+            )
+        )
+    )
+    guard case .meshCatalog(let catalogResult) = catalogResponse,
+          let catalogSource = catalogResult.catalog.sources.first else {
+        Issue.record("Expected a Mesh source before the post-commit failure test.")
+        return
+    }
+    let plan = try projectAgentMeshEditPlan(vertexID: MeshVertexID(0))
+    let response = await controller.handle(
+        .meshEdit(
+            AgentMeshEditRequest(
+                sessionID: sessionID,
+                expectedGeneration: before.documentGeneration,
+                handle: catalogSource.handle,
+                plan: plan,
+                mode: .commit,
+                name: "agent.mesh.post-commit"
+            )
+        )
+    )
+    guard case .committedMutation(let outcome) = response else {
+        Issue.record("Expected a must-not-retry committed Mesh mutation outcome.")
+        return
+    }
+    #expect(outcome.retryDisposition == .mustNotRetry)
+    #expect(outcome.mutation == .source)
+    #expect(outcome.requestMethod == "project.mesh.edit.commit")
+    let state = try await project.currentState()
+    #expect(state.documentGeneration.value == before.documentGeneration.value + 1)
+    #expect(state.document.authoredMeshAssets[sourceAsset.id]?.contentIdentity != sourceAsset.contentIdentity)
+    #expect(workspace.view?.documentGeneration == state.documentGeneration)
+}
+
+private func projectAgentMeshEditPlan(vertexID: MeshVertexID) throws -> MeshEditPlan {
+    try MeshEditPlan(
+        steps: [
+            MeshEditStep(
+                id: MeshEditStepID("agent-mesh-position"),
+                operation: .primitive(
+                    .setVertexPositions([
+                        try MeshVertexPositionEdit(
+                            vertexID: vertexID,
+                            position: GeometryPoint3D(x: 0, y: 0, z: 0.25)
+                        ),
+                    ])
+                )
+            ),
+        ]
+    )
+}
+
+@MainActor
 private func makeProjectWorkspace(
     document: DesignDocument
 ) async throws -> (ProjectController, ProjectWorkspace) {

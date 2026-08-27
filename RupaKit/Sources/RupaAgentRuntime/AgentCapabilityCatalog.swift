@@ -2021,6 +2021,82 @@ public enum AgentCapabilityCatalog {
             failureMode: "Rejects stale generations or evaluation failures before returning mesh data."
         ),
         capability(
+            "meshCatalog",
+            category: .read,
+            summary: "Read the bounded catalog of retained Authored Mesh sources, element counts, bounds, provenance, and Product Object representation references.",
+            access: .agentRequest,
+            stateEffect: .readOnly,
+            discovery: [.meshCatalog],
+            targets: [.document, .sceneNode, .body],
+            failureMode: "Rejects stale generations, invalid read limits, missing Authored Mesh sources, and source identity mismatches without returning an unbounded catalog."
+        ),
+        capability(
+            "meshPage",
+            category: .read,
+            summary: "Read one bounded page of Authored Mesh element records using an exact source handle and cursor.",
+            access: .agentRequest,
+            stateEffect: .readOnly,
+            discovery: [.meshCatalog, .meshPage],
+            targets: [.body, .face, .edge, .vertex],
+            failureMode: "Rejects stale generations, stale handle coordinates, invalid cursors, invalid read limits, and missing source elements."
+        ),
+        capability(
+            "meshNeighborhood",
+            category: .read,
+            summary: "Read one bounded element neighborhood using an exact Authored Mesh source handle, origin, and depth.",
+            access: .agentRequest,
+            stateEffect: .readOnly,
+            discovery: [.meshCatalog, .meshNeighborhood],
+            targets: [.body, .face, .edge, .vertex],
+            failureMode: "Rejects stale generations, stale handle coordinates, invalid origins, invalid depth or read limits, and missing source elements."
+        ),
+        capability(
+            "meshEditPreview",
+            category: .directEditing,
+            summary: "Evaluate one bounded declarative Authored Mesh edit plan without publishing project state.",
+            access: .agentRequest,
+            stateEffect: .readOnly,
+            supportsDryRun: true,
+            semanticSupportsCancellation: true,
+            discovery: [.meshCatalog, .meshPage, .meshEditPreview],
+            targets: [.body, .face, .edge, .vertex],
+            failureMode: "Rejects stale generations, stale handles, invalid plans, invalid limits, and cancellation without publishing or silently rebasing the proposal.",
+            semanticEffect: .query,
+            semanticResult: CapabilityResultDescriptor(
+                kind: .validationReport,
+                maximumFidelity: "exact-authored-mesh-edit-preview"
+            ),
+            semanticRetrySafe: true
+        ),
+        capability(
+            "meshEditCommit",
+            category: .directEditing,
+            summary: "Commit one bounded declarative Authored Mesh edit plan through the project source authority and return the exact new source handle.",
+            access: .agentRequest,
+            stateEffect: .sourceMutation,
+            semanticSupportsCancellation: true,
+            discovery: [.meshCatalog, .meshPage, .meshEditPreview],
+            targets: [.body, .face, .edge, .vertex],
+            failureMode: "Rejects stale generations, stale handles, invalid plans, invalid limits, and cancellation before publication; a post-publication projection failure returns a must-not-retry committed receipt.",
+            semanticEffect: .sourceMutation,
+            semanticResult: CapabilityResultDescriptor(kind: .sourceTransaction),
+            semanticRetrySafe: false
+        ),
+        capability(
+            "makeEditable",
+            category: .directEditing,
+            summary: "Promote one selected CAD body representation to an Authored Mesh representation without removing its CAD modeling authority.",
+            access: .agentRequest,
+            stateEffect: .sourceMutation,
+            semanticSupportsCancellation: true,
+            discovery: [.topologySummary, .meshCatalog, .makeEditable],
+            targets: [.sceneNode, .body],
+            failureMode: "Rejects stale generations, missing or non-CAD modeling bodies, duplicate source or representation identities, and cancellation before publication; a post-publication projection failure returns a must-not-retry committed receipt.",
+            semanticEffect: .sourceMutation,
+            semanticResult: CapabilityResultDescriptor(kind: .sourceTransaction),
+            semanticRetrySafe: false
+        ),
+        capability(
             "polySplineMeshAnalysis",
             category: .read,
             summary: "Preflight a source mesh for PolySpline reconstruction and return structured support diagnostics plus quad patch graph candidates and partition data without mutating the document.",

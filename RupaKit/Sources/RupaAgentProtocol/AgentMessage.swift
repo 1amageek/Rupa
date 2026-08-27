@@ -133,6 +133,11 @@ public enum AgentRequest: Codable, Equatable, Sendable {
         sessionID: UUID,
         expectedGeneration: DocumentGeneration?
     )
+    case meshCatalog(AgentMeshCatalogRequest)
+    case meshPage(AgentMeshPageRequest)
+    case meshNeighborhood(AgentMeshNeighborhoodRequest)
+    case meshEdit(AgentMeshEditRequest)
+    case makeEditable(AgentMakeEditableRequest)
     case polySplineMeshAnalysis(
         sessionID: UUID,
         sourceMesh: Mesh,
@@ -250,6 +255,12 @@ public enum AgentResponse: Codable, Equatable, Sendable {
     case designDisplaySnapshot(DesignDisplaySnapshotResult)
     case patternArraySummary(PatternArraySummaryResult)
     case meshSummary(MeshSummaryResult)
+    case meshCatalog(AgentMeshCatalogResult)
+    case meshPage(AgentMeshPageResult)
+    case meshNeighborhood(AgentMeshNeighborhoodResult)
+    case meshEditPreview(AgentMeshEditPreviewResult)
+    case meshEditCommit(AgentMeshEditCommitResult)
+    case makeEditable(AgentMakeEditableResult)
     case polySplineMeshAnalysis(PolySplineMeshAnalysisResult)
     case sketchEntitySummary(SketchEntitySummaryResult)
     case sketchDimensionSummary(SketchDimensionSummaryResult)
@@ -334,6 +345,21 @@ public extension AgentRequest {
             "document.patternArraySummary"
         case .meshSummary:
             "document.meshSummary"
+        case .meshCatalog:
+            "project.mesh.catalog"
+        case .meshPage:
+            "project.mesh.page"
+        case .meshNeighborhood:
+            "project.mesh.neighborhood"
+        case .meshEdit(let request):
+            switch request.mode {
+            case .preview:
+                "project.mesh.edit.preview"
+            case .commit:
+                "project.mesh.edit.commit"
+            }
+        case .makeEditable:
+            "project.mesh.makeEditable"
         case .polySplineMeshAnalysis:
             "document.polySplineMeshAnalysis"
         case .sketchEntitySummary:

@@ -2,7 +2,10 @@ import Foundation
 import RupaCapabilities
 import RupaAutomation
 import RupaCore
+import RupaCoreTypes
 import RupaDomainFoundation
+import RupaGeometry
+import RupaKit
 
 public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
     public static let protocolVersion = "2.0"
@@ -61,6 +64,20 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                 code: .commandInvalid,
                 message: "Agent request method \(method) does not match payload method \(params.methodName)."
             )
+        }
+        switch params {
+        case .meshCatalog(let request):
+            try request.validate()
+        case .meshPage(let request):
+            try request.validate()
+        case .meshNeighborhood(let request):
+            try request.validate()
+        case .meshEdit(let request):
+            try request.validate()
+        case .makeEditable(let request):
+            try request.validate()
+        default:
+            break
         }
     }
 
@@ -231,6 +248,64 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                 SessionGenerationParams(
                     sessionID: sessionID,
                     expectedGeneration: expectedGeneration
+                ),
+                forKey: .params
+            )
+        case let .meshCatalog(request):
+            try container.encode(
+                MeshCatalogParams(
+                    sessionID: request.sessionID,
+                    expectedGeneration: request.expectedGeneration,
+                    limits: request.limits
+                ),
+                forKey: .params
+            )
+        case let .meshPage(request):
+            try container.encode(
+                MeshPageParams(
+                    sessionID: request.sessionID,
+                    expectedGeneration: request.expectedGeneration,
+                    handle: request.handle,
+                    domain: request.domain,
+                    cursor: request.cursor,
+                    limits: request.limits
+                ),
+                forKey: .params
+            )
+        case let .meshNeighborhood(request):
+            try container.encode(
+                MeshNeighborhoodParams(
+                    sessionID: request.sessionID,
+                    expectedGeneration: request.expectedGeneration,
+                    handle: request.handle,
+                    origin: request.origin,
+                    depth: request.depth,
+                    limits: request.limits
+                ),
+                forKey: .params
+            )
+        case let .meshEdit(request):
+            try container.encode(
+                MeshEditParams(
+                    sessionID: request.sessionID,
+                    expectedGeneration: request.expectedGeneration,
+                    handle: request.handle,
+                    plan: request.plan,
+                    mode: request.mode,
+                    name: request.name
+                ),
+                forKey: .params
+            )
+        case let .makeEditable(request):
+            try container.encode(
+                MakeEditableParams(
+                    sessionID: request.sessionID,
+                    expectedGeneration: request.expectedGeneration,
+                    sceneNodeID: request.sceneNodeID,
+                    authoredMeshSourceID: request.authoredMeshSourceID,
+                    authoredMeshRepresentationID: request.authoredMeshRepresentationID,
+                    switchesPresentationSelection: request.switchesPresentationSelection,
+                    name: request.name
                 ),
                 forKey: .params
             )
@@ -551,6 +626,71 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
         case "document.meshSummary":
             let payload = try decodeParams(SessionGenerationParams.self, from: container, method: method)
             return .meshSummary(sessionID: payload.sessionID, expectedGeneration: payload.expectedGeneration)
+        case "project.mesh.catalog":
+            let payload = try decodeParams(MeshCatalogParams.self, from: container, method: method)
+            let request = AgentMeshCatalogRequest(
+                sessionID: payload.sessionID,
+                expectedGeneration: payload.expectedGeneration,
+                limits: payload.limits
+            )
+            try request.validate()
+            return .meshCatalog(request)
+        case "project.mesh.page":
+            let payload = try decodeParams(MeshPageParams.self, from: container, method: method)
+            let request = AgentMeshPageRequest(
+                sessionID: payload.sessionID,
+                expectedGeneration: payload.expectedGeneration,
+                handle: payload.handle,
+                domain: payload.domain,
+                cursor: payload.cursor,
+                limits: payload.limits
+            )
+            try request.validate()
+            return .meshPage(request)
+        case "project.mesh.neighborhood":
+            let payload = try decodeParams(MeshNeighborhoodParams.self, from: container, method: method)
+            let request = AgentMeshNeighborhoodRequest(
+                sessionID: payload.sessionID,
+                expectedGeneration: payload.expectedGeneration,
+                handle: payload.handle,
+                origin: payload.origin,
+                depth: payload.depth,
+                limits: payload.limits
+            )
+            try request.validate()
+            return .meshNeighborhood(request)
+        case "project.mesh.edit.preview", "project.mesh.edit.commit":
+            let payload = try decodeParams(MeshEditParams.self, from: container, method: method)
+            let expectedMode: AgentMeshEditMode = method == "project.mesh.edit.preview" ? .preview : .commit
+            guard payload.mode == expectedMode else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Mesh edit mode does not match method \(method)."
+                )
+            }
+            let request = AgentMeshEditRequest(
+                sessionID: payload.sessionID,
+                expectedGeneration: payload.expectedGeneration,
+                handle: payload.handle,
+                plan: payload.plan,
+                mode: payload.mode,
+                name: payload.name
+            )
+            try request.validate()
+            return .meshEdit(request)
+        case "project.mesh.makeEditable":
+            let payload = try decodeParams(MakeEditableParams.self, from: container, method: method)
+            let request = AgentMakeEditableRequest(
+                sessionID: payload.sessionID,
+                expectedGeneration: payload.expectedGeneration,
+                sceneNodeID: payload.sceneNodeID,
+                authoredMeshSourceID: payload.authoredMeshSourceID,
+                authoredMeshRepresentationID: payload.authoredMeshRepresentationID,
+                switchesPresentationSelection: payload.switchesPresentationSelection,
+                name: payload.name
+            )
+            try request.validate()
+            return .makeEditable(request)
         case "document.polySplineMeshAnalysis":
             let payload = try decodeParams(PolySplineMeshAnalysisParams.self, from: container, method: method)
             return .polySplineMeshAnalysis(
@@ -1056,6 +1196,73 @@ private struct ExportParams: AgentRequestParameterPayload, Equatable {
     var expectedGeneration: DocumentGeneration?
     var options: ExportOptions
     var dryRun: Bool
+}
+
+private struct MeshCatalogParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = ["sessionID", "expectedGeneration", "limits"]
+
+    var sessionID: UUID
+    var expectedGeneration: DocumentGeneration
+    var limits: ProjectMeshReadLimits
+}
+
+private struct MeshPageParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = [
+        "sessionID", "expectedGeneration", "handle", "domain", "cursor", "limits",
+    ]
+
+    var sessionID: UUID
+    var expectedGeneration: DocumentGeneration
+    var handle: ProjectMeshSourceHandle
+    var domain: ProjectMeshElementDomain
+    var cursor: ProjectMeshElementCursor?
+    var limits: ProjectMeshReadLimits
+}
+
+private struct MeshNeighborhoodParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = [
+        "sessionID", "expectedGeneration", "handle", "origin", "depth", "limits",
+    ]
+
+    var sessionID: UUID
+    var expectedGeneration: DocumentGeneration
+    var handle: ProjectMeshSourceHandle
+    var origin: ProjectMeshElementReference
+    var depth: Int
+    var limits: ProjectMeshReadLimits
+}
+
+private struct MeshEditParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = [
+        "sessionID", "expectedGeneration", "handle", "plan", "mode", "name",
+    ]
+
+    var sessionID: UUID
+    var expectedGeneration: DocumentGeneration
+    var handle: ProjectMeshSourceHandle
+    var plan: MeshEditPlan
+    var mode: AgentMeshEditMode
+    var name: String
+}
+
+private struct MakeEditableParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = [
+        "sessionID",
+        "expectedGeneration",
+        "sceneNodeID",
+        "authoredMeshSourceID",
+        "authoredMeshRepresentationID",
+        "switchesPresentationSelection",
+        "name",
+    ]
+
+    var sessionID: UUID
+    var expectedGeneration: DocumentGeneration
+    var sceneNodeID: SceneNodeID
+    var authoredMeshSourceID: GeometrySourceID
+    var authoredMeshRepresentationID: GeometryRepresentationID
+    var switchesPresentationSelection: Bool
+    var name: String
 }
 
 private struct AnyCodingKey: CodingKey, Hashable {

@@ -208,6 +208,18 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             try container.encode(value, forKey: .result)
         case .meshSummary(let value):
             try container.encode(value, forKey: .result)
+        case .meshCatalog(let value):
+            try container.encode(value, forKey: .result)
+        case .meshPage(let value):
+            try container.encode(value, forKey: .result)
+        case .meshNeighborhood(let value):
+            try container.encode(value, forKey: .result)
+        case .meshEditPreview(let value):
+            try container.encode(value, forKey: .result)
+        case .meshEditCommit(let value):
+            try container.encode(value, forKey: .result)
+        case .makeEditable(let value):
+            try container.encode(value, forKey: .result)
         case .polySplineMeshAnalysis(let value):
             try container.encode(value, forKey: .result)
         case .sketchEntitySummary(let value):
@@ -328,6 +340,30 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             )
         case "document.meshSummary":
             return .meshSummary(try container.decode(MeshSummaryResult.self, forKey: .result))
+        case "project.mesh.catalog":
+            return .meshCatalog(
+                try container.decode(AgentMeshCatalogResult.self, forKey: .result)
+            )
+        case "project.mesh.page":
+            return .meshPage(
+                try container.decode(AgentMeshPageResult.self, forKey: .result)
+            )
+        case "project.mesh.neighborhood":
+            return .meshNeighborhood(
+                try container.decode(AgentMeshNeighborhoodResult.self, forKey: .result)
+            )
+        case "project.mesh.edit.preview":
+            return .meshEditPreview(
+                try container.decode(AgentMeshEditPreviewResult.self, forKey: .result)
+            )
+        case "project.mesh.edit.commit":
+            return .meshEditCommit(
+                try container.decode(AgentMeshEditCommitResult.self, forKey: .result)
+            )
+        case "project.mesh.makeEditable":
+            return .makeEditable(
+                try container.decode(AgentMakeEditableResult.self, forKey: .result)
+            )
         case "document.polySplineMeshAnalysis":
             return .polySplineMeshAnalysis(
                 try container.decode(PolySplineMeshAnalysisResult.self, forKey: .result)
@@ -431,6 +467,18 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             "document.patternArraySummary"
         case .meshSummary:
             "document.meshSummary"
+        case .meshCatalog:
+            "project.mesh.catalog"
+        case .meshPage:
+            "project.mesh.page"
+        case .meshNeighborhood:
+            "project.mesh.neighborhood"
+        case .meshEditPreview:
+            "project.mesh.edit.preview"
+        case .meshEditCommit:
+            "project.mesh.edit.commit"
+        case .makeEditable:
+            "project.mesh.makeEditable"
         case .polySplineMeshAnalysis:
             "document.polySplineMeshAnalysis"
         case .sketchEntitySummary:
@@ -498,6 +546,12 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
              ("document.designDisplaySnapshot", .designDisplaySnapshot),
              ("document.patternArraySummary", .patternArraySummary),
              ("document.meshSummary", .meshSummary),
+             ("project.mesh.catalog", .meshCatalog),
+             ("project.mesh.page", .meshPage),
+             ("project.mesh.neighborhood", .meshNeighborhood),
+             ("project.mesh.edit.preview", .meshEditPreview),
+             ("project.mesh.edit.commit", .meshEditCommit),
+             ("project.mesh.makeEditable", .makeEditable),
              ("document.polySplineMeshAnalysis", .polySplineMeshAnalysis),
              ("document.sketchEntitySummary", .sketchEntitySummary),
              ("document.sketchDimensionSummary", .sketchDimensionSummary),

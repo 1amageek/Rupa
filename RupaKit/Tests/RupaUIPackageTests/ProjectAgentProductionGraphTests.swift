@@ -58,7 +58,7 @@ func projectAgentRouteInventoriesAreFixedAndExhaustiveAtTheirOwners() throws {
     let requestDeclaration = try #require(
         requestSource.split(separator: "public enum AgentResponse", maxSplits: 1).first
     )
-    #expect(caseCount(in: String(requestDeclaration)) == 48)
+    #expect(caseCount(in: String(requestDeclaration)) == 53)
 
     let automationSource = try String(
         contentsOf: root.appendingPathComponent(
@@ -71,8 +71,8 @@ func projectAgentRouteInventoriesAreFixedAndExhaustiveAtTheirOwners() throws {
     let staticCapabilities = AgentCapabilityCatalog.descriptors(
         domainRegistry: DomainRegistry()
     )
-    #expect(staticCapabilities.count == 164)
-    #expect(Set(staticCapabilities.map(\.name)).count == 164)
+    #expect(staticCapabilities.count == 170)
+    #expect(Set(staticCapabilities.map(\.name)).count == 170)
     #expect(staticCapabilities.contains { $0.name == "setFeatureSuppression" } == false)
     for descriptor in staticCapabilities {
         switch descriptor.access {

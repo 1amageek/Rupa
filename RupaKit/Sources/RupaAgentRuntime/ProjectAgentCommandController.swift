@@ -210,6 +210,21 @@ public final class ProjectAgentCommandController: AgentSocketServing {
              .surfaceBoundaryContinuityCompatibility:
             return try await executeSnapshotRead(request)
 
+        case .meshCatalog(let request):
+            return try await executeMeshCatalog(request)
+
+        case .meshPage(let request):
+            return try await executeMeshPage(request)
+
+        case .meshNeighborhood(let request):
+            return try await executeMeshNeighborhood(request)
+
+        case .meshEdit(let request):
+            return try await executeMeshEdit(request)
+
+        case .makeEditable(let request):
+            return try await executeMakeEditable(request)
+
         case .execute(
             let sessionID,
             let command,
@@ -636,6 +651,163 @@ public final class ProjectAgentCommandController: AgentSocketServing {
         }
     }
 
+    private func executeMeshCatalog(
+        _ request: AgentMeshCatalogRequest
+    ) async throws -> AgentResponse {
+        try request.validate()
+        let lease = try await registry.lease(id: request.sessionID)
+        let snapshot = try currentView(lease.workspace)
+        try requireGeneration(
+            request.expectedGeneration,
+            snapshot: snapshot
+        )
+        let catalog = try await lease.workspace.catalog(
+            from: snapshot,
+            limits: request.limits,
+            operationGuard: lease.operationGuard
+        )
+        return .meshCatalog(
+            ProjectAgentGeometryProjection.catalog(
+                catalog,
+                sessionID: request.sessionID,
+                view: snapshot
+            )
+        )
+    }
+
+    private func executeMeshPage(
+        _ request: AgentMeshPageRequest
+    ) async throws -> AgentResponse {
+        try request.validate()
+        let lease = try await registry.lease(id: request.sessionID)
+        let snapshot = try currentView(lease.workspace)
+        try requireGeneration(
+            request.expectedGeneration,
+            snapshot: snapshot
+        )
+        try requireMeshHandleCoordinate(request.handle, snapshot: snapshot)
+        let page = try await lease.workspace.page(
+            ProjectMeshElementPageRequest(
+                handle: request.handle,
+                domain: request.domain,
+                cursor: request.cursor,
+                limits: request.limits
+            ),
+            from: snapshot,
+            operationGuard: lease.operationGuard
+        )
+        return .meshPage(
+            ProjectAgentGeometryProjection.page(
+                page,
+                sessionID: request.sessionID,
+                view: snapshot
+            )
+        )
+    }
+
+    private func executeMeshNeighborhood(
+        _ request: AgentMeshNeighborhoodRequest
+    ) async throws -> AgentResponse {
+        try request.validate()
+        let lease = try await registry.lease(id: request.sessionID)
+        let snapshot = try currentView(lease.workspace)
+        try requireGeneration(
+            request.expectedGeneration,
+            snapshot: snapshot
+        )
+        try requireMeshHandleCoordinate(request.handle, snapshot: snapshot)
+        let neighborhood = try await lease.workspace.neighborhood(
+            ProjectMeshNeighborhoodRequest(
+                handle: request.handle,
+                origin: request.origin,
+                depth: request.depth,
+                limits: request.limits
+            ),
+            from: snapshot,
+            operationGuard: lease.operationGuard
+        )
+        return .meshNeighborhood(
+            ProjectAgentGeometryProjection.neighborhood(
+                neighborhood,
+                sessionID: request.sessionID,
+                view: snapshot
+            )
+        )
+    }
+
+    private func executeMeshEdit(
+        _ request: AgentMeshEditRequest
+    ) async throws -> AgentResponse {
+        try request.validate()
+        let lease = try await registry.lease(id: request.sessionID)
+        let snapshot = try currentView(lease.workspace)
+        try requireGeneration(
+            request.expectedGeneration,
+            snapshot: snapshot
+        )
+        try requireMeshHandleCoordinate(request.handle, snapshot: snapshot)
+        let projectRequest = ProjectMeshEditRequest(
+            handle: request.handle,
+            plan: request.plan,
+            snapshot: snapshot,
+            name: request.name
+        )
+        switch request.mode {
+        case .preview:
+            let result = try await lease.workspace.preview(
+                projectRequest,
+                operationGuard: lease.operationGuard
+            )
+            return .meshEditPreview(
+                ProjectAgentGeometryProjection.preview(
+                    result,
+                    sessionID: request.sessionID
+                )
+            )
+        case .commit:
+            let result = try await lease.workspace.commit(
+                projectRequest,
+                operationGuard: lease.operationGuard
+            )
+            return .meshEditCommit(
+                ProjectAgentGeometryProjection.commit(
+                    result,
+                    sessionID: request.sessionID
+                )
+            )
+        }
+    }
+
+    private func executeMakeEditable(
+        _ request: AgentMakeEditableRequest
+    ) async throws -> AgentResponse {
+        try request.validate()
+        let lease = try await registry.lease(id: request.sessionID)
+        let snapshot = try currentView(lease.workspace)
+        try requireGeneration(
+            request.expectedGeneration,
+            snapshot: snapshot
+        )
+        let projectRequest = ProjectMakeEditableRequest(
+            snapshot: snapshot,
+            sceneNodeID: request.sceneNodeID,
+            authoredMeshSourceID: request.authoredMeshSourceID,
+            authoredMeshRepresentationID: request.authoredMeshRepresentationID,
+            switchesPresentationSelection: request.switchesPresentationSelection,
+            name: request.name
+        )
+        let result = try await lease.workspace.makeEditable(
+            projectRequest,
+            operationGuard: lease.operationGuard
+        )
+        return .makeEditable(
+            ProjectAgentGeometryProjection.makeEditable(
+                result,
+                sessionID: request.sessionID
+            )
+        )
+    }
+
     private func executeSnapshotRead(_ request: AgentRequest) async throws -> AgentResponse {
         guard let sessionID = request.projectSessionID else {
             throw EditorError(
@@ -794,6 +966,31 @@ public final class ProjectAgentCommandController: AgentSocketServing {
         }
     }
 
+    private func requireMeshHandleCoordinate(
+        _ handle: ProjectMeshSourceHandle,
+        snapshot: ProjectViewSnapshot
+    ) throws {
+        let coordinate = handle.projectAuthorityCoordinate
+        guard coordinate.projectID == snapshot.projectID else {
+            throw EditorError(
+                code: .projectMismatch,
+                message: "The Mesh handle belongs to a different project."
+            )
+        }
+        guard coordinate.transactionRevision == snapshot.transactionRevision else {
+            throw EditorError(
+                code: .documentTransactionRevisionMismatch,
+                message: "The Mesh handle belongs to a different transaction revision."
+            )
+        }
+        guard coordinate.publicationSequence == snapshot.publicationSequence else {
+            throw EditorError(
+                code: .projectPublicationMismatch,
+                message: "The Mesh handle belongs to a different publication sequence."
+            )
+        }
+    }
+
     private func normalizedDocumentName(_ name: String) throws -> String {
         let normalized = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else {
@@ -876,6 +1073,16 @@ private extension AgentRequest {
              .selectReferences(let id, _, _),
              .export(let id, _, _, _, _):
             id
+        case .meshCatalog(let request):
+            request.sessionID
+        case .meshPage(let request):
+            request.sessionID
+        case .meshNeighborhood(let request):
+            request.sessionID
+        case .meshEdit(let request):
+            request.sessionID
+        case .makeEditable(let request):
+            request.sessionID
         case .undo(let id, _),
              .redo(let id, _),
              .executeBatch(let id, _),

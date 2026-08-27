@@ -11,6 +11,12 @@ public struct ProjectAgentErrorMapper: Sendable {
         if let error = error as? EditorError {
             return error
         }
+        if error is CancellationError {
+            return EditorError(
+                code: .commandInvalid,
+                message: "The Agent project request was cancelled."
+            )
+        }
         if let error = error as? ProjectControllerError {
             let code: EditorError.Code
             switch error.code {
@@ -72,6 +78,24 @@ public struct ProjectAgentErrorMapper: Sendable {
             }
             return EditorError(code: code, message: error.message)
         }
+        if let error = error as? ProjectMeshReadError {
+            return EditorError(
+                code: Self.editorCode(for: error.code),
+                message: error.message
+            )
+        }
+        if let error = error as? ProjectMeshEditError {
+            return EditorError(
+                code: Self.editorCode(for: error.code),
+                message: error.message
+            )
+        }
+        if let error = error as? ProjectMakeEditableError {
+            return EditorError(
+                code: Self.editorCode(for: error.code),
+                message: error.message
+            )
+        }
         if let error = error as? ProjectWorkspaceActionError {
             let code: EditorError.Code = error.code == .snapshotUnavailable
                 ? .agentUnavailable
@@ -93,5 +117,93 @@ public struct ProjectAgentErrorMapper: Sendable {
             code: primary.code,
             message: "\(primary.message) Export staging cleanup also failed: \(cleanupFailure.localizedDescription)"
         )
+    }
+
+    private static func editorCode(
+        for code: ProjectMeshReadError.Code
+    ) -> EditorError.Code {
+        switch code {
+        case .projectMismatch:
+            .projectMismatch
+        case .documentLifetimeMismatch,
+             .publicationSequenceMismatch:
+            .projectPublicationMismatch
+        case .documentGenerationMismatch:
+            .documentGenerationMismatch
+        case .transactionRevisionMismatch:
+            .documentTransactionRevisionMismatch
+        case .workspaceRevisionMismatch:
+            .workspaceRevisionMismatch
+        case .sourceIdentityMismatch:
+            .sourceIdentityMismatch
+        case .cancelled,
+             .invalidCursor,
+             .invalidLimit,
+             .limitExceeded,
+             .sourceMissing,
+             .elementNotFound,
+             .invalidSource:
+            .commandInvalid
+        case .resultMismatch:
+            .commandFailed
+        }
+    }
+
+    private static func editorCode(
+        for code: ProjectMeshEditError.Code
+    ) -> EditorError.Code {
+        switch code {
+        case .projectMismatch:
+            .projectMismatch
+        case .documentLifetimeMismatch,
+             .publicationSequenceMismatch:
+            .projectPublicationMismatch
+        case .documentGenerationMismatch:
+            .documentGenerationMismatch
+        case .transactionRevisionMismatch:
+            .documentTransactionRevisionMismatch
+        case .workspaceRevisionMismatch:
+            .workspaceRevisionMismatch
+        case .sourceIdentityMismatch:
+            .sourceIdentityMismatch
+        case .cancelled,
+             .invalidPlan,
+             .invalidSource,
+             .sourceMissing:
+            .commandInvalid
+        case .resultMismatch:
+            .commandFailed
+        }
+    }
+
+    private static func editorCode(
+        for code: ProjectMakeEditableError.Code
+    ) -> EditorError.Code {
+        switch code {
+        case .projectMismatch:
+            .projectMismatch
+        case .documentLifetimeMismatch,
+             .publicationSequenceMismatch:
+            .projectPublicationMismatch
+        case .documentGenerationMismatch:
+            .documentGenerationMismatch
+        case .transactionRevisionMismatch:
+            .documentTransactionRevisionMismatch
+        case .workspaceRevisionMismatch:
+            .workspaceRevisionMismatch
+        case .sourceIdentityMismatch:
+            .sourceIdentityMismatch
+        case .cancelled,
+             .invalidRequest,
+             .sourceMissing,
+             .representationMissing,
+             .representationMismatch,
+             .duplicateIdentity,
+             .nonCADModelingSource,
+             .invalidSource:
+            .commandInvalid
+        case .resultMismatch:
+            .commandFailed
+        }
     }
 }

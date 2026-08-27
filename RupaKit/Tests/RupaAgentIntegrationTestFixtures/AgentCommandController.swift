@@ -722,6 +722,15 @@ public final class AgentCommandController: AgentClientProtocol {
                     )
                 }
                 return try run()
+            case .meshCatalog,
+                 .meshPage,
+                 .meshNeighborhood,
+                 .meshEdit,
+                 .makeEditable:
+                throw EditorError(
+                    code: .commandUnsupported,
+                    message: "Geometry project routes require the registered ProjectWorkspace runtime controller."
+                )
             case .polySplineMeshAnalysis:
                 func run() throws -> AgentResponse {
                     guard case let .polySplineMeshAnalysis(sessionID, sourceMesh, options, expectedGeneration) = request else {
