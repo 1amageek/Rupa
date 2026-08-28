@@ -15,6 +15,7 @@ enum CADActivatedAngleCase: String, CaseIterable, Equatable, Hashable, Sendable 
     case ang011 = "ANG-011"
     case ang012 = "ANG-012"
     case ang013 = "ANG-013"
+    case ang014 = "ANG-014"
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)

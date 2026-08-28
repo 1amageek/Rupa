@@ -10,7 +10,7 @@ struct CADActivatedCaseExecutorTests {
         let executor = DefaultCADActivatedCaseExecutor()
         let expected = (1...12).map { String(format: "LIN-%03d", $0) }
             + (1...12).map { String(format: "REC-%03d", $0) }
-            + ["CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013"]
+            + ["CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014"]
         #expect(executor.activatedCaseIDs.map(\.rawValue) == expected)
     }
 
@@ -278,6 +278,19 @@ struct CADActivatedCaseExecutorTests {
         for forbidden in ["FeatureID", "diagnostics", "telemetry", "expectation", "workspace"] {
             #expect(xzRightAngleEncoded.contains(forbidden) == false)
         }
+
+        let yzOneHundredTwentyDegreeAngle = try await executor.evaluate(
+            caseID: "ANG-014",
+            candidate: CADAngleReferenceCandidate()
+        )
+        #expect(yzOneHundredTwentyDegreeAngle.id == "ANG-014")
+        #expect(yzOneHundredTwentyDegreeAngle.category == .angle)
+        #expect(yzOneHundredTwentyDegreeAngle.outcome == .realized)
+        try yzOneHundredTwentyDegreeAngle.validate()
+        let yzOneHundredTwentyDegreeAngleEncoded = try canonicalJSON(yzOneHundredTwentyDegreeAngle)
+        for forbidden in ["FeatureID", "diagnostics", "telemetry", "expectation", "workspace"] {
+            #expect(yzOneHundredTwentyDegreeAngleEncoded.contains(forbidden) == false)
+        }
     }
 
     @MainActor
@@ -385,10 +398,10 @@ struct CADActivatedCaseExecutorTests {
     func inactiveCaseIsRejectedBeforeCategoryDispatch() async throws {
         let executor = DefaultCADActivatedCaseExecutor()
         do {
-            _ = try executor.context(for: "ANG-014")
+            _ = try executor.context(for: "ANG-015")
             Issue.record("Inactive case must be rejected.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("ANG-014"))
+            #expect(error == .inactiveCase("ANG-015"))
         }
     }
 
