@@ -55,7 +55,7 @@ rupa-agent-cad-benchmark request <CASE-ID>
 rupa-agent-cad-benchmark evaluate --response <PATH|->
 ```
 
-`request` validates that the ID is in the activated fifty-one-case set and emits
+`request` validates that the ID is in the activated fifty-two-case set and emits
 exactly one request-envelope JSON object to standard output. `evaluate` reads
 exactly one candidate-response envelope from the selected file, or from
 standard input when `-` is selected, then emits exactly one evaluation- or
@@ -128,8 +128,8 @@ Process-level tests build and invoke the actual executable and prove:
 
 - `request` emits valid v1 JSON for an activated line, rectangle, REC-009
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
-  millimetre/XY case, the complete CIR-001...012 category, and ANG-001...015,
-  and rejects inactive `ANG-016`;
+  millimetre/XY case, the complete CIR-001...012 category, and ANG-001...016,
+  and rejects inactive `BOX-001`;
 - JSON line, rectangle, circle, and angle responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
@@ -353,6 +353,17 @@ ANG-016 remains inactive with exit `64`. The preceding 50-request aggregate
 remains frozen; the new aggregate is measured from the exact emitted requests.
 Commands, arguments, schemas, byte limits, exit mapping, cleanup, and no-retry
 behavior remain unchanged.
+
+ANG-016 advances the process authority to 52 reviewed IDs without adding a
+command or changing candidate-response v3. An actual bounded response with
+`kind: "angle"` executes the canonical YZ +X-normal 125/375 mm, 150-degree pair
+through the same production atomic batch and immutable source oracle, while
+BOX-001 remains inactive with exit `64`. The preceding 51-request aggregate
+`8a5baed7294693f150ce8e67494112f521b0667bfe1d4f6e45db0661e83d6f07` remains
+frozen; the observed 52-request aggregate is
+`53836e6352b776f1b2a0eccd81cc17d7046a489782a5ad678236d920e36f8a7a`. Commands,
+arguments, schemas, byte limits, exit mapping, cleanup, and no-retry behavior
+remain unchanged.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected
 case argument, so a case-mismatch process fixture cannot be constructed without
