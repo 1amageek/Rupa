@@ -9,8 +9,8 @@ between an external Agent process and the activated-case executor owned by
 [benchmark CLI](../RupaAgentCADBenchmarkCLI/DESIGN.md) supplies process arguments
 and standard streams; this target owns the JSON meaning used by that process.
 
-The adapter is limited to the twenty-three reviewed cases `LIN-001`...`LIN-012`
-and `REC-001`...`REC-011`. It does not activate a catalog case and does not make the
+The adapter is limited to the twenty-four reviewed cases `LIN-001`...`LIN-012`
+and `REC-001`...`REC-012`. It does not activate a catalog case and does not make the
 remaining target specifications executable.
 
 ## Responsibilities and Boundaries
@@ -105,7 +105,7 @@ evaluation and candidate construction remain module-internal test/composition
 seams, so a caller cannot construct a large in-memory response and bypass the
 JSON input authority.
 
-The activated twenty-three cases accept one action decision. `unsupported` and
+The activated twenty-four cases accept one action decision. `unsupported` and
 `finish` remain valid protocol values but are not converted to successful
 actions; the T12-XA-A executor contract projects either as typed
 `invalidSubmission` without publication. Multi-round continuation is not added
@@ -177,6 +177,17 @@ ceiling. A millimetre/YZ REC-011 response realized through the unchanged
 rectangle production route and oracle; REC-012 remained a typed inactive
 failure before evaluation. No adapter schema or fingerprint changed.
 
+`T12-REC-012` is the next additive activation. Before its gate passed, the
+executor-owned adapter boundary was the twenty-three-case prefix through
+REC-011. The gate advanced it to the exact ordered twenty-four-case prefix,
+retained the frozen first-twenty, twenty-one-, twenty-two-, and twenty-three-
+request aggregate digests, froze the actual twenty-four-request digest, and
+rechecked the existing size ceiling. An exact public millimetre/XY REC-012
+response realized through the unchanged rectangle production route and oracle.
+Because REC-012 ends the rectangle catalog, CIR-001—not an invented REC-013—
+remained a typed inactive failure before evaluation. No adapter schema or
+fingerprint changed.
+
 ## Runtime Flows
 
 ```mermaid
@@ -225,7 +236,7 @@ classification and are projected only to stable non-private codes.
 |---|---|
 | Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON for line and rectangle decisions; every direct and nested case ID is the same scalar string; synthesized case-ID objects, synthesized legacy enum shapes, and unknown discriminators are rejected. |
 | Exact public-context binding | The request fingerprint equals the live executor context; changed schema, case, context byte, capability, budget, or fingerprint is rejected before publication. |
-| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012 plus REC-001...011; the historical first-twenty, twenty-one-, and twenty-two-request bytes/digests are unchanged, the twenty-three-request aggregate digest is frozen from current bytes, REC-011 traverses the production rectangle route/oracle, and REC-012 is rejected before evaluation. |
+| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012 plus REC-001...012; the historical first-twenty, twenty-one-, twenty-two-, and twenty-three-request bytes/digests are unchanged, the twenty-four-request aggregate digest is frozen from current bytes, REC-012 traverses the production rectangle route/oracle, and CIR-001 is rejected before evaluation. |
 | Bounded I/O | Exact-limit input succeeds, `limit + 1` fails before decode and leaves executor evaluation count zero, chunked stdin and file paths behave identically, no public typed-response execution bypass exists, encoded output cannot exceed the same bound, and the guaranteed infrastructure document is byte-equal to normal encoding, bounded, and decodable. |
 | Candidate/oracle separation | Static dependency and source scans prove the adapter imports only public benchmark contracts; encoded fixtures contain no expectation/oracle/source snapshot fields or values. |
 | Same production route | JSON candidates for at least one activated line and rectangle realize through the public executor; wrong geometry publishes once then exact oracle rejects without retry. |

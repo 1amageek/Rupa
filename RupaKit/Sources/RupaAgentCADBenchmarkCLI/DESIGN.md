@@ -55,7 +55,7 @@ rupa-agent-cad-benchmark request <CASE-ID>
 rupa-agent-cad-benchmark evaluate --response <PATH|->
 ```
 
-`request` validates that the ID is in the activated twenty-three-case set and emits
+`request` validates that the ID is in the activated twenty-four-case set and emits
 exactly one request-envelope JSON object to standard output. `evaluate` reads
 exactly one candidate-response envelope from the selected file, or from
 standard input when `-` is selected, then emits exactly one evaluation- or
@@ -127,8 +127,8 @@ mutation.
 Process-level tests build and invoke the actual executable and prove:
 
 - `request` emits valid v1 JSON for an activated line, rectangle, REC-009
-  inch/XZ case, REC-010 metre/XY case, and REC-011 millimetre/YZ case, and
-  rejects inactive `REC-012`;
+  inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
+  millimetre/XY case, and rejects inactive `CIR-001`;
 - a JSON line response and a JSON rectangle response traverse the adapter,
   production controller, and exact oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
@@ -136,6 +136,9 @@ Process-level tests build and invoke the actual executable and prove:
 - a REC-010 JSON response preserves its public metre/XY/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
 - a REC-011 JSON response preserves its public millimetre/YZ/centre values,
+  traverses the unchanged rectangle production controller and exact oracle, and
+  exits `0`;
+- a REC-012 JSON response preserves its public millimetre/XY/centre values,
   traverses the unchanged rectangle production controller and exact oracle, and
   exits `0`;
 - wrong geometry is published once, rejected without retry, returned as a
@@ -160,6 +163,14 @@ a bounded millimetre/YZ REC-011 request, evaluate an external exact response to
 `realized`/exit `0` through the existing rectangle path, and reject
 REC-012 as inactive with exit `64`. Commands, arguments, schema, and fallback
 behavior remain unchanged.
+
+`T12-REC-012` advanced the executor-owned command boundary from twenty-three to
+twenty-four after its case gate passed. Actual process tests emit a bounded
+millimetre/XY REC-012 request, evaluate an external exact response to
+`realized`/exit `0` through the existing rectangle path, and reject CIR-001 as
+inactive with exit `64`. REC-012 is the rectangle catalog terminus, so the CLI
+does not recognize an invented REC-013 boundary. Commands, arguments, schema,
+and fallback behavior remain unchanged.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected
 case argument, so a case-mismatch process fixture cannot be constructed without

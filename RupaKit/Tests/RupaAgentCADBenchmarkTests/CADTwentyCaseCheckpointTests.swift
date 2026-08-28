@@ -81,17 +81,16 @@ struct CADTwentyCaseCheckpointTests {
     }
 
     @Test
-    func twentyCaseBoundaryRejectsUnreviewedRectangleCases() throws {
-        for caseID in ["REC-012"] {
-            do {
-                _ = try CADActivatedRectangleCase(caseID: caseID)
-                Issue.record("\(caseID) must remain outside the historical first-twenty boundary.")
-            } catch let error as CADBenchmarkError {
-                guard case .invalidCaseID(let observed) = error,
-                      observed == caseID else {
-                    Issue.record("Unexpected typed error for \(caseID): \(error)")
-                    continue
-                }
+    func rectangleActivationRejectsCrossCategoryCaseID() throws {
+        let caseID = "CIR-001"
+        do {
+            _ = try CADActivatedRectangleCase(caseID: caseID)
+            Issue.record("\(caseID) must remain outside the rectangle activation boundary.")
+        } catch let error as CADBenchmarkError {
+            guard case .invalidCaseID(let observed) = error,
+                  observed == caseID else {
+                Issue.record("Unexpected typed error for \(caseID): \(error)")
+                return
             }
         }
     }

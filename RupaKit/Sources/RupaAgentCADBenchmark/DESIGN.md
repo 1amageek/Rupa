@@ -384,7 +384,7 @@ The public `CADActivatedCaseExecuting` contract exposes exactly three
 operations: the ordered activated case IDs, the candidate-visible context for
 one activated ID, and asynchronous evaluation of one caller-supplied
 `CADCandidateProtocol`. Its default `@MainActor` implementation recognizes only
-`LIN-001`...`LIN-012` and `REC-001`...`REC-011`, dispatches to the existing thin
+`LIN-001`...`LIN-012` and `REC-001`...`REC-012`, dispatches to the existing thin
 line or rectangle facade, and returns a validated `CADCaseResult`. A catalog ID
 outside that allow-list is a typed inactive-case error. The public result does
 not contain private expectations, source snapshots, FeatureIDs, workspace
@@ -416,7 +416,7 @@ workspace publication and records validated `invalidSubmission` plus cleanup
 evidence because activated line/rectangle cases require one action. The public
 executor projects that record as
 `CADCaseResult(outcome: .invalidSubmission)`. These decisions are not promoted
-to `expectedUnsupported`, because all twenty-three activated cases have already
+to `expectedUnsupported`, because all twenty-four activated cases have already
 proved their creation capability through the production controller. A
 candidate-thrown error remains the typed executor `candidateFailure`, also
 before publication. No adapter may catch these paths and substitute a reference
@@ -442,7 +442,7 @@ the catalog, challenge, private expectation, or manifest digest.
 
 The executor performs one candidate decision for the currently activated
 line/rectangle contract. It does not generalize multi-round continuation,
-activate `REC-012`, schedule several cases, or establish a benchmark baseline.
+activate `CIR-001`, schedule several cases, or establish a benchmark baseline.
 
 ### Vertical Case Gate
 
@@ -720,14 +720,45 @@ orientation, exact centre, and equal width/height. Exact success, timeout,
 unconditional cleanup, count/phase telemetry, and private expectation isolation
 remain mandatory.
 
-Activation advances executor, JSON adapter, and CLI together to the ordered
-twenty-three-case prefix ending in REC-011, while REC-012 remains typed inactive.
+The REC-011 gate advanced executor, JSON adapter, and CLI together to the
+ordered twenty-three-case prefix ending in REC-011, while REC-012 remained typed inactive.
 The first-twenty, REC-009 twenty-one-request, and REC-010 twenty-two-request
-aggregates must retain their frozen digests before the actual ordered twenty-
-three requests establish the new digest. Bounded JSON and actual CLI request/
-evaluation must realize REC-011 through the unchanged controller/oracle path.
-No catalog, expectation, capability, tolerance, envelope, or fingerprint
-version advances.
+aggregates retained their frozen digests before the actual ordered twenty-three
+requests established the new digest. Bounded JSON and actual CLI request/
+evaluation realized REC-011 through the unchanged controller/oracle path. No
+catalog, expectation, capability, tolerance, envelope, or fingerprint version
+advanced.
+
+### REC-012 design-first activation boundary
+
+Before `T12-REC-012` passed, authority remained the ordered twenty-three-case
+prefix through `REC-011`. REC-012 adds only the catalog's existing 750 by
+80 mm high-aspect rectangle on XY, centred at world (-100, -40, 0) mm. It
+reuses the rectangle projection, plane mapping, lifecycle, production
+`createRectangleSketch` route, and source/profile oracle; it introduces no
+runner, action, geometry authority, schema, catalog version, or tolerance rule.
+
+The postpublication discriminator keeps the dimensions exact at 750 by 80 mm
+but shifts the centre in XY from (-100, -40, 0) to (-50, -40, 0) mm. It must
+publish once, fail exact placement observation, retain that committed
+coordinate, and never retry. This distinguishes in-plane placement without
+weakening the high-aspect dimension check. A second fixture shifts only the
+XY-plane normal to z = 2 mm at the correct x/y centre and must fail before
+command dispatch or publication. The reference candidate preserves the public
+millimetre unit, XY orientation, exact centre, width, and height. Exact success,
+timeout, unconditional cleanup, count/phase telemetry, and private expectation
+isolation remain mandatory.
+
+Activation advances executor, JSON adapter, and CLI together to the ordered
+twenty-four-case prefix ending in REC-012. The rectangle catalog ends at
+REC-012, so no REC-013 boundary is invented: CIR-001 remains typed inactive at
+the executor, adapter, and CLI until the rectangle category gate and the later
+CIR-001 vertical gate pass. The first-twenty, twenty-one-, twenty-two-, and
+twenty-three-request aggregates must retain their frozen digests before the
+actual ordered twenty-four requests establish the new digest. Bounded JSON and
+actual CLI request/evaluation must realize REC-012 through the unchanged
+controller/oracle path. No catalog, expectation, capability, tolerance,
+envelope, or fingerprint version advances.
 
 A gate passes only after focused success, failure, and boundary tests are green,
 the measurements are captured, the original T12 task designer reviews the
@@ -1093,6 +1124,7 @@ through the following vertical work items:
 | REC-009 authority transition | T12-REC-009 | Frozen first-twenty replay and request bytes/digest remain unchanged; exact current twenty-one-ID order, 1.0 by 0.5 inch XZ realization, same-numeric millimetre postpublication rejection/no-retry, off-XZ prepublication rejection, timeout/cleanup/telemetry, refrozen twenty-one-request aggregate, bounded CLI request/evaluation, REC-010 typed inactivity, and unchanged catalog/wire versions |
 | REC-010 authority transition | T12-REC-010 | Existing rectangle route/oracle only; exact 2.0 by 1.0 metre XY realization, same-numeric millimetre postpublication rejection/no-retry, z = 0.01 m prepublication rejection, timeout/cleanup/telemetry/privacy, preserved twenty- and twenty-one-request digests, exact twenty-two-ID order and refrozen aggregate, bounded JSON/CLI success, REC-011 typed inactivity, and unchanged catalog/wire versions |
 | REC-011 authority transition | T12-REC-011 | Existing rectangle route/oracle only; exact 35 by 35 mm YZ square at (0, 15, -15) mm, same-square wrong in-plane centre postpublication rejection/no-retry, x = 2 mm prepublication rejection, timeout/cleanup/telemetry/privacy, preserved twenty-/twenty-one-/twenty-two-request digests, exact twenty-three-ID order and refrozen aggregate, bounded JSON/CLI success, REC-012 typed inactivity, and unchanged catalog/wire versions |
+| REC-012 authority transition | T12-REC-012 | Existing rectangle route/oracle only; exact 750 by 80 mm high-aspect XY rectangle at (-100, -40, 0) mm, same-dimension wrong in-plane centre postpublication rejection/no-retry, z = 2 mm prepublication rejection, timeout/cleanup/telemetry/privacy, preserved twenty-/twenty-one-/twenty-two-/twenty-three-request digests, exact twenty-four-ID order and refrozen aggregate, bounded JSON/CLI success, CIR-001 typed inactivity, and unchanged catalog/wire versions |
 | Parallelism, baselines, and aggregate report | T12-I | Only after all 100 gates: serial replay, bounded-parallel equivalence and measurement, capability/execution baselines, deterministic report, cleanup, and timed integration tests |
 | Final cumulative correctness | T12-IV | Review every case/category/integration artifact and actual path; verify design synchronization, static audits, commits, and eligible normal push |
 

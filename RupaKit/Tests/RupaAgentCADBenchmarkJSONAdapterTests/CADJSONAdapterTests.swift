@@ -96,6 +96,18 @@ struct CADJSONAdapterTests {
         )
         #expect(squareRectangleEvaluation.result?.outcome == .realized)
         #expect(squareRectangleEvaluation.error == nil)
+
+        let translatedRectangleRequest = try adapter.makeRequest(for: "REC-012")
+        let translatedRectangleResponse = try CADJSONCandidateResponseEnvelope(
+            caseID: translatedRectangleRequest.caseID,
+            context: translatedRectangleRequest.context,
+            decision: .action(rec012RectangleAction(name: "REC-012"))
+        )
+        let translatedRectangleEvaluation = try await adapter.evaluate(
+            responseData: CADJSONBoundedCodec.encode(translatedRectangleResponse)
+        )
+        #expect(translatedRectangleEvaluation.result?.outcome == .realized)
+        #expect(translatedRectangleEvaluation.error == nil)
     }
 
     @MainActor
@@ -177,7 +189,7 @@ struct CADJSONAdapterTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func requestAndLiveContextsAreValueEqualAndAllTwentyThreeRequestsStayBounded() throws {
+    func requestAndLiveContextsAreValueEqualAndAllTwentyFourRequestsStayBounded() throws {
         let executor = DefaultCADActivatedCaseExecutor()
         let adapter = CADJSONAdapter(executor: executor)
         var largestRequest = 0
@@ -205,7 +217,7 @@ struct CADJSONAdapterTests {
             #expect(try CADJSONBoundedCodec.encode(response).count < 16_384)
         }
 
-        #expect(executor.activatedCaseIDs.count == 23)
+        #expect(executor.activatedCaseIDs.count == 24)
         #expect(largestRequest < 16_384)
     }
 
@@ -216,7 +228,7 @@ struct CADJSONAdapterTests {
         let adapter = CADJSONAdapter(executor: executor)
         let historicalIDs = (1...12).map { String(format: "LIN-%03d", $0) }
             + (1...8).map { String(format: "REC-%03d", $0) }
-        let currentIDs = historicalIDs + ["REC-009", "REC-010", "REC-011"]
+        let currentIDs = historicalIDs + ["REC-009", "REC-010", "REC-011", "REC-012"]
         #expect(executor.activatedCaseIDs.map(\.rawValue) == currentIDs)
 
         // Each activated record is case ID, request byte count, and request SHA-256, all length-prefixed.
@@ -251,6 +263,13 @@ struct CADJSONAdapterTests {
         appendLengthPrefixed(bigEndianBytes(UInt64(rec011Request.count)), to: &currentAggregate)
         appendLengthPrefixed(Data(SHA256.hash(data: rec011Request)), to: &currentAggregate)
         #expect(sha256Hex(currentAggregate) == "96371a67956c5496aab1bb832d446bcbe3e2f2aa22d2612dbb2dec7dd3736f0f")
+
+        let rec012ID: CADBenchmarkCaseID = "REC-012"
+        let rec012Request = try adapter.encodeRequest(for: rec012ID)
+        appendLengthPrefixed(Data(rec012ID.rawValue.utf8), to: &currentAggregate)
+        appendLengthPrefixed(bigEndianBytes(UInt64(rec012Request.count)), to: &currentAggregate)
+        appendLengthPrefixed(Data(SHA256.hash(data: rec012Request)), to: &currentAggregate)
+        #expect(sha256Hex(currentAggregate) == "1d4190e85472aff255ce56003df4f571452be0eefb40ae2ebf3e0d54d4f0d61e")
     }
 
     @MainActor
@@ -381,7 +400,7 @@ struct CADJSONAdapterTests {
         }
 
         do {
-            _ = try await adapter.evaluate(response: response, for: "REC-012")
+            _ = try await adapter.evaluate(response: response, for: "CIR-001")
             Issue.record("An inactive case must be rejected before context resolution.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
@@ -848,6 +867,16 @@ private func rec011RectangleAction(name: String) -> CADCandidateAction {
         center: CADPoint3D(x: 0, y: 15, z: -15, unit: .millimeter),
         width: CADLength(value: 35, unit: .millimeter),
         height: CADLength(value: 35, unit: .millimeter)
+    )))
+}
+
+private func rec012RectangleAction(name: String) -> CADCandidateAction {
+    .automation(.sketch(.rectangle(
+        name: name,
+        plane: .xy,
+        center: CADPoint3D(x: -100, y: -40, z: 0, unit: .millimeter),
+        width: CADLength(value: 750, unit: .millimeter),
+        height: CADLength(value: 80, unit: .millimeter)
     )))
 }
 

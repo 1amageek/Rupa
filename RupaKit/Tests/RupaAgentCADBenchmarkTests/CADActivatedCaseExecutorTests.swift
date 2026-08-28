@@ -9,7 +9,7 @@ struct CADActivatedCaseExecutorTests {
     func executorActivatesOnlyReviewedLineAndRectangleCases() throws {
         let executor = DefaultCADActivatedCaseExecutor()
         let expected = (1...12).map { String(format: "LIN-%03d", $0) }
-            + (1...11).map { String(format: "REC-%03d", $0) }
+            + (1...12).map { String(format: "REC-%03d", $0) }
         #expect(executor.activatedCaseIDs.map(\.rawValue) == expected)
     }
 
@@ -50,6 +50,14 @@ struct CADActivatedCaseExecutorTests {
             candidate: RectangleContextCheckingCandidate(expected: squareRectangleContext)
         )
         #expect(squareRectangleResult.outcome == .realized)
+
+        let translatedRectangleID: CADBenchmarkCaseID = "REC-012"
+        let translatedRectangleContext = try executor.context(for: translatedRectangleID)
+        let translatedRectangleResult = try await executor.evaluate(
+            caseID: translatedRectangleID,
+            candidate: RectangleContextCheckingCandidate(expected: translatedRectangleContext)
+        )
+        #expect(translatedRectangleResult.outcome == .realized)
     }
 
     @MainActor
@@ -99,6 +107,19 @@ struct CADActivatedCaseExecutorTests {
         let squareEncoded = try canonicalJSON(squareRectangle)
         for forbidden in ["FeatureID", "diagnostics", "telemetry", "expectation", "workspace"] {
             #expect(squareEncoded.contains(forbidden) == false)
+        }
+
+        let translatedRectangle = try await executor.evaluate(
+            caseID: "REC-012",
+            candidate: ReferenceRectangleCandidate()
+        )
+        #expect(translatedRectangle.id == "REC-012")
+        #expect(translatedRectangle.category == .rectangle)
+        #expect(translatedRectangle.outcome == .realized)
+        try translatedRectangle.validate()
+        let translatedEncoded = try canonicalJSON(translatedRectangle)
+        for forbidden in ["FeatureID", "diagnostics", "telemetry", "expectation", "workspace"] {
+            #expect(translatedEncoded.contains(forbidden) == false)
         }
     }
 
@@ -207,10 +228,10 @@ struct CADActivatedCaseExecutorTests {
     func inactiveCaseIsRejectedBeforeCategoryDispatch() async throws {
         let executor = DefaultCADActivatedCaseExecutor()
         do {
-            _ = try executor.context(for: "REC-012")
+            _ = try executor.context(for: "CIR-001")
             Issue.record("Inactive case must be rejected.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("REC-012"))
+            #expect(error == .inactiveCase("CIR-001"))
         }
     }
 
