@@ -6,8 +6,14 @@ struct CADTwentyCaseCheckpointTests {
     @MainActor
     @Test(.timeLimit(.minutes(1)))
     func exactlyTwentyCasesReplaySeriallyWithReviewedCoverage() async throws {
-        let lineCases = CADActivatedLineCase.allCases
-        let rectangleCases = CADActivatedRectangleCase.allCases
+        let lineCases: [CADActivatedLineCase] = [
+            .lin001, .lin002, .lin003, .lin004, .lin005, .lin006,
+            .lin007, .lin008, .lin009, .lin010, .lin011, .lin012,
+        ]
+        let rectangleCases: [CADActivatedRectangleCase] = [
+            .rec001, .rec002, .rec003, .rec004,
+            .rec005, .rec006, .rec007, .rec008,
+        ]
         let activatedIDs = lineCases.map(\.rawValue) + rectangleCases.map(\.rawValue)
         #expect(activatedIDs == [
             "LIN-001", "LIN-002", "LIN-003", "LIN-004", "LIN-005", "LIN-006",
@@ -76,10 +82,10 @@ struct CADTwentyCaseCheckpointTests {
 
     @Test
     func twentyCaseBoundaryRejectsUnreviewedRectangleCases() throws {
-        for caseID in ["REC-009", "REC-010", "REC-011", "REC-012"] {
+        for caseID in ["REC-010", "REC-011", "REC-012"] {
             do {
                 _ = try CADActivatedRectangleCase(caseID: caseID)
-                Issue.record("\(caseID) must remain outside the first-twenty boundary.")
+                Issue.record("\(caseID) must remain outside the historical first-twenty boundary.")
             } catch let error as CADBenchmarkError {
                 guard case .invalidCaseID(let observed) = error,
                       observed == caseID else {

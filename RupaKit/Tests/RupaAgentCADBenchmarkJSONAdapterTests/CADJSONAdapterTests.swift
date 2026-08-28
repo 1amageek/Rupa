@@ -60,6 +60,18 @@ struct CADJSONAdapterTests {
             CADJSONEvaluationEnvelope.self,
             from: adapter.encodeEvaluation(rectangleEvaluation)
         ) == rectangleEvaluation)
+
+        let inchRectangleRequest = try adapter.makeRequest(for: "REC-009")
+        let inchRectangleResponse = try CADJSONCandidateResponseEnvelope(
+            caseID: inchRectangleRequest.caseID,
+            context: inchRectangleRequest.context,
+            decision: .action(rec009RectangleAction(name: "REC-009"))
+        )
+        let inchRectangleEvaluation = try await adapter.evaluate(
+            responseData: CADJSONBoundedCodec.encode(inchRectangleResponse)
+        )
+        #expect(inchRectangleEvaluation.result?.outcome == .realized)
+        #expect(inchRectangleEvaluation.error == nil)
     }
 
     @MainActor
@@ -141,7 +153,7 @@ struct CADJSONAdapterTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func requestAndLiveContextsAreValueEqualAndAllTwentyRequestsStayBounded() throws {
+    func requestAndLiveContextsAreValueEqualAndAllTwentyOneRequestsStayBounded() throws {
         let executor = DefaultCADActivatedCaseExecutor()
         let adapter = CADJSONAdapter(executor: executor)
         var largestRequest = 0
@@ -169,7 +181,7 @@ struct CADJSONAdapterTests {
             #expect(try CADJSONBoundedCodec.encode(response).count < 16_384)
         }
 
-        #expect(executor.activatedCaseIDs.count == 20)
+        #expect(executor.activatedCaseIDs.count == 21)
         #expect(largestRequest < 16_384)
     }
 
@@ -178,20 +190,29 @@ struct CADJSONAdapterTests {
     func activatedRequestSequenceHasAStableLengthPrefixedAggregateDigest() throws {
         let executor = DefaultCADActivatedCaseExecutor()
         let adapter = CADJSONAdapter(executor: executor)
-        let expectedIDs = (1...12).map { String(format: "LIN-%03d", $0) }
+        let historicalIDs = (1...12).map { String(format: "LIN-%03d", $0) }
             + (1...8).map { String(format: "REC-%03d", $0) }
-        #expect(executor.activatedCaseIDs.map(\.rawValue) == expectedIDs)
+        let currentIDs = historicalIDs + ["REC-009"]
+        #expect(executor.activatedCaseIDs.map(\.rawValue) == currentIDs)
 
         // Each activated record is case ID, request byte count, and request SHA-256, all length-prefixed.
-        var aggregate = Data()
-        for caseID in executor.activatedCaseIDs {
+        var historicalAggregate = Data()
+        for rawCaseID in historicalIDs {
+            let caseID = CADBenchmarkCaseID(rawValue: rawCaseID)
             let request = try adapter.encodeRequest(for: caseID)
-            appendLengthPrefixed(Data(caseID.rawValue.utf8), to: &aggregate)
-            appendLengthPrefixed(bigEndianBytes(UInt64(request.count)), to: &aggregate)
-            appendLengthPrefixed(Data(SHA256.hash(data: request)), to: &aggregate)
+            appendLengthPrefixed(Data(caseID.rawValue.utf8), to: &historicalAggregate)
+            appendLengthPrefixed(bigEndianBytes(UInt64(request.count)), to: &historicalAggregate)
+            appendLengthPrefixed(Data(SHA256.hash(data: request)), to: &historicalAggregate)
         }
+        #expect(sha256Hex(historicalAggregate) == "1989b5499be40d18b1f3b8a5381b9b0a0f28c53bf9de975d8c0251bc1a7e509e")
 
-        #expect(sha256Hex(aggregate) == "1989b5499be40d18b1f3b8a5381b9b0a0f28c53bf9de975d8c0251bc1a7e509e")
+        var currentAggregate = historicalAggregate
+        let rec009ID: CADBenchmarkCaseID = "REC-009"
+        let rec009Request = try adapter.encodeRequest(for: rec009ID)
+        appendLengthPrefixed(Data(rec009ID.rawValue.utf8), to: &currentAggregate)
+        appendLengthPrefixed(bigEndianBytes(UInt64(rec009Request.count)), to: &currentAggregate)
+        appendLengthPrefixed(Data(SHA256.hash(data: rec009Request)), to: &currentAggregate)
+        #expect(sha256Hex(currentAggregate) == "2b16e65e4e608df5b53a01528b8978c09c0ca4c4df203deec5ff4ebdd34a7fd4")
     }
 
     @MainActor
@@ -322,7 +343,7 @@ struct CADJSONAdapterTests {
         }
 
         do {
-            _ = try await adapter.evaluate(response: response, for: "REC-009")
+            _ = try await adapter.evaluate(response: response, for: "REC-010")
             Issue.record("An inactive case must be rejected before context resolution.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
@@ -759,6 +780,16 @@ private func rectangleAction(name: String) -> CADCandidateAction {
         center: CADPoint3D(x: 0, y: 0, z: 0),
         width: CADLength(value: 40),
         height: CADLength(value: 20)
+    )))
+}
+
+private func rec009RectangleAction(name: String) -> CADCandidateAction {
+    .automation(.sketch(.rectangle(
+        name: name,
+        plane: .xz,
+        center: CADPoint3D(x: 0, y: 0, z: 0, unit: .inch),
+        width: CADLength(value: 1, unit: .inch),
+        height: CADLength(value: 0.5, unit: .inch)
     )))
 }
 

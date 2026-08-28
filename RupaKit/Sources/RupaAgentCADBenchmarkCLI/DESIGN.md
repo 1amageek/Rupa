@@ -55,13 +55,13 @@ rupa-agent-cad-benchmark request <CASE-ID>
 rupa-agent-cad-benchmark evaluate --response <PATH|->
 ```
 
-`request` validates that the ID is in the activated twenty-case set and emits
+`request` validates that the ID is in the activated twenty-one-case set and emits
 exactly one request-envelope JSON object to standard output. `evaluate` reads
 exactly one candidate-response envelope from the selected file, or from
 standard input when `-` is selected, then emits exactly one evaluation- or
-error-envelope JSON object to standard output. Machine output never mixes logs or human
-diagnostics into standard output. `--help` and argument-parser usage remain
-human-readable process metadata and are not evaluation envelopes.
+error-envelope JSON object to standard output. Machine output never mixes logs
+or human diagnostics into standard output. `--help` and argument-parser usage
+remain human-readable process metadata and are not evaluation envelopes.
 
 Exit status is stable and orthogonal to JSON decoding:
 
@@ -126,10 +126,12 @@ mutation.
 
 Process-level tests build and invoke the actual executable and prove:
 
-- `request` emits valid v1 JSON for an activated line and rectangle and rejects
-  inactive `REC-009`;
+- `request` emits valid v1 JSON for an activated line, rectangle, and REC-009
+  inch/XZ case and rejects inactive `REC-010`;
 - a JSON line response and a JSON rectangle response traverse the adapter,
   production controller, and exact oracle and exit `0` with `realized`;
+- a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
+  the unchanged rectangle production controller and exact oracle, and exits `0`;
 - wrong geometry is published once, rejected without retry, returned as a
   non-realized envelope, and exits `2`;
 - malformed, oversize, unknown-schema, mismatched-fingerprint, and inactive

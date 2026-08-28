@@ -162,7 +162,7 @@ flowchart LR
     Private["Internal expectation\nsource + B-Rep predicates"] --> Facade
     Active --> Private
     Input --> Candidate["Candidate protocol"]
-    Candidate --> Executor["Activated-case executor\nexact 20-case dispatch"]
+    Candidate --> Executor["Activated-case executor\ncurrent reviewed dispatch"]
     Executor --> Facade["Thin category facade\npublic projection + private oracle handoff"]
     Facade --> Harness["CADCaseLifecycleHarness\nfresh route + immutable record"]
     Harness --> Controller["ProjectAgentCommandController"]
@@ -384,7 +384,7 @@ The public `CADActivatedCaseExecuting` contract exposes exactly three
 operations: the ordered activated case IDs, the candidate-visible context for
 one activated ID, and asynchronous evaluation of one caller-supplied
 `CADCandidateProtocol`. Its default `@MainActor` implementation recognizes only
-`LIN-001`...`LIN-012` and `REC-001`...`REC-008`, dispatches to the existing thin
+`LIN-001`...`LIN-012` and `REC-001`...`REC-009`, dispatches to the existing thin
 line or rectangle facade, and returns a validated `CADCaseResult`. A catalog ID
 outside that allow-list is a typed inactive-case error. The public result does
 not contain private expectations, source snapshots, FeatureIDs, workspace
@@ -416,7 +416,7 @@ workspace publication and records validated `invalidSubmission` plus cleanup
 evidence because activated line/rectangle cases require one action. The public
 executor projects that record as
 `CADCaseResult(outcome: .invalidSubmission)`. These decisions are not promoted
-to `expectedUnsupported`, because all twenty activated cases have already
+to `expectedUnsupported`, because all twenty-one activated cases have already
 proved their creation capability through the production controller. A
 candidate-thrown error remains the typed executor `candidateFailure`, also
 before publication. No adapter may catch these paths and substitute a reference
@@ -442,7 +442,7 @@ the catalog, challenge, private expectation, or manifest digest.
 
 The executor performs one candidate decision for the currently activated
 line/rectangle contract. It does not generalize multi-round continuation,
-activate `REC-009`, schedule several cases, or establish a benchmark baseline.
+activate `REC-010`, schedule several cases, or establish a benchmark baseline.
 
 ### Vertical Case Gate
 
@@ -607,6 +607,7 @@ versioned tolerance policy; no case may widen it from observed error.
 | `REC-006` | Metre conversion on XZ | Same numeric width/height in centimetres publishes once and is rejected |
 | `REC-007` | High aspect ratio plus simultaneous normal and in-plane YZ offsets | A same-area dimension swap is rejected while the exact x/y centre is retained |
 | `REC-008` | Large translated XY extent under the versioned modeling-tolerance rule | Same dimensions at a wrong centre publish once and are rejected |
+| `REC-009` | Inch conversion on XZ | Same numeric width/height in millimetres publishes once and is rejected |
 
 Each rectangle case also owns exact success through the registered production
 controller, one publication and no retry after semantic rejection, off-plane
@@ -629,7 +630,45 @@ external-Agent checkpoint consumes this exact frozen twenty-case boundary
 before rectangle activation resumes. This sequencing keeps one unambiguous
 ready leaf and prevents adapter behavior from drifting while new cases are
 activated; it does not make the adapter rectangle semantics or a category gate.
-REC-009 remains a typed inactive case until `T12-XA-V` is committed.
+REC-009 remained a typed inactive case through the `T12-XA-V` commit.
+
+### REC-009 activation and the current external boundary
+
+After the committed first-twenty and external-Agent checkpoints, `T12-REC-009`
+adds only `REC-009` to `CADActivatedRectangleCase`. Its catalog specification is
+already fixed: a rectangle centred at world origin on XZ, 1.0 inch wide along
+world X and 0.5 inch high along world Z. The existing rectangle projection,
+mapping, shared lifecycle, production `createRectangleSketch` route, and exact
+source/profile oracle remain the only implementation path; this case adds no
+runner, oracle, action, schema, or modeling authority.
+
+The historical `T12-REC-008G` test must stop deriving its rectangle subset from
+`CADActivatedRectangleCase.allCases`. It explicitly replays the frozen subset
+`REC-001`...`REC-008` with all twelve line cases and retains its original twenty-
+case coverage assertions. Its inactive assertion advances to `REC-010`...
+`REC-012`. Current authority is owned separately by the REC-009 gate and must be
+exactly the ordered twenty-one IDs `LIN-001`...`LIN-012`, then
+`REC-001`...`REC-009`; `REC-010` remains typed inactive in the executor, JSON
+adapter, and CLI.
+
+REC-009 proves the first inch rectangle on XZ. The reference candidate preserves
+the public inch unit, XZ orientation, world-origin centre, width 1.0, and height
+0.5. A candidate using the same numeric width and height in millimetres must
+publish once and fail the exact oracle without retry. A centre displaced from
+world Y = 0 beyond `ModelingTolerance` must fail before publication. The same
+case owns its typed timeout, unconditional cleanup, count/timing telemetry, and
+candidate/private separation evidence.
+
+Activation is an additive availability change over the existing catalog and
+wire contracts. The catalog, manifest, expectation contract, capability
+classification, tolerance, and JSON schema versions/digests do not change.
+The adapter's ordered activated-request aggregate is instead refrozen from the
+actual twenty-one requests, while the first twenty request bytes and their
+historical aggregate digest remain unchanged and every request remains within
+its existing size budget. The dedicated CLI must emit a bounded request and a
+realized exact-oracle evaluation for REC-009, while both request and evaluation of REC-010
+remain typed inactive with exit `64`. These external checks are part of the
+REC-009 gate rather than a new generic adapter sprint.
 
 A gate passes only after focused success, failure, and boundary tests are green,
 the measurements are captured, the original T12 task designer reviews the
@@ -992,6 +1031,7 @@ through the following vertical work items:
 | Sphere honesty | T12-SPH-001...005 | Production capability observation yields typed expected unsupported with zero publication when analytic sphere is absent; substitutes remain rejected by the unchanged exact contract |
 | Exactly 100 implemented cases | T12-LIN through T12-SPH | Catalog identity plus one reviewed vertical evidence commit per stable case; catalog structure alone is insufficient |
 | External candidate executor | T12-XA-A | Exact activated twenty-ID allow-list, value-equal request/live contexts, arbitrary protocol candidate line/rectangle success and mismatch through the production route/oracle, explicit discriminator golden JSON, legacy-shape rejection, typed inactive/error projection, cleanup, privacy/static boundary, and focused tests |
+| REC-009 authority transition | T12-REC-009 | Frozen first-twenty replay and request bytes/digest remain unchanged; exact current twenty-one-ID order, 1.0 by 0.5 inch XZ realization, same-numeric millimetre postpublication rejection/no-retry, off-XZ prepublication rejection, timeout/cleanup/telemetry, refrozen twenty-one-request aggregate, bounded CLI request/evaluation, REC-010 typed inactivity, and unchanged catalog/wire versions |
 | Parallelism, baselines, and aggregate report | T12-I | Only after all 100 gates: serial replay, bounded-parallel equivalence and measurement, capability/execution baselines, deterministic report, cleanup, and timed integration tests |
 | Final cumulative correctness | T12-IV | Review every case/category/integration artifact and actual path; verify design synchronization, static audits, commits, and eligible normal push |
 
