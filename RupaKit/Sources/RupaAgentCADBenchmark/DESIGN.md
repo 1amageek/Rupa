@@ -210,7 +210,7 @@ implementation permission to add a parallel authority.
 | `CADRectangleCaseRunner` / `CADRectangleOracle` | Internal thin REC-001 facade and exact rectangle oracle | Own rectangle projection/routing/mapping, private rectangle expectation, four-line/profile checks, and rectangle result projection; delegate lifecycle only |
 | `CADCircleCaseRunner` / `CADCircleOracle` | Internal thin CIR-001 facade and exact analytic-circle oracle | Own circle projection/routing/mapping, private circle expectation, analytic entity/centre/radius/profile checks, and circle-local result projection; delegate lifecycle only |
 | `CADAngleCaseRunner` / `CADAngleOracle` | Internal thin ANG-001 facade and exact two-line source oracle | Own angle projection, affine intersection mapping, ordered two-command batch, private angle expectation, role/intersection/length/unsigned-angle checks, and angle-local result projection; delegate lifecycle only |
-| `CADBoxCaseRunner` / `CADBoxOracle` | Internal thin BOX-001 facade and exact closed-box source/B-Rep oracle | Own box projection, lower-corner-to-profile mapping, one-command solid routing, private box expectation, source profile/extrude/body/topology checks, and box-local result projection; delegate lifecycle only |
+| `CADBoxCaseRunner` / `CADBoxOracle` | Internal thin BOX facade and exact closed-box source/B-Rep oracle | Own box projection, lower-corner-to-profile mapping, one-command solid routing, private box expectation, source profile/extrude/body/topology checks, and box-local result projection; delegate lifecycle only |
 | `CADCaseOutcome` / score | Public result projection; failure taxonomy and binary scoring | No fallback success |
 | `CADBenchmarkReport` | Public result projection; deterministic run and measurement projection | Value/report only |
 
@@ -857,7 +857,7 @@ typed inactive.
 
 | Classification | BOX decision |
 |---|---|
-| Confirmed current fact | `ProjectAgentCommandController` exposes `createExtrudedRectangle`; its Automation/Editor path creates a rectangle sketch plus extrude body, commits one source generation, publishes one evaluated body, and topology tests prove 1 body/6 faces/12 edges/8 vertices. BOX-001 and BOX-002 expose this route through the reviewed solid/box action while BOX-003 remains inactive. |
+| Confirmed current fact | `ProjectAgentCommandController` exposes `createExtrudedRectangle`; its Automation/Editor path creates a rectangle sketch plus extrude body, commits one source generation, publishes one evaluated body, and topology tests prove 1 body/6 faces/12 edges/8 vertices. BOX-001 through BOX-003 expose this route through the reviewed solid/box action while BOX-004 remains inactive. |
 | Required ideal contract | A candidate describes one axis-aligned box by lower-corner origin and X/Y/Z dimensions; the existing production command remains mutation authority and an independent immutable source/B-Rep oracle remains result authority. |
 | Minimal difference | Add one benchmark-owned solid/box action, box projection/mapping/facade/oracle/result types, BOX activation dispatch, candidate-response v4, and focused/adapter/CLI evidence. Do not add a kernel command or a generic future-solid runner. |
 | Unresolved at design completion | No semantic or authority blocker remains. Each new aggregate digest and measured timing is intentionally observed and frozen only by its implementation gate rather than guessed here. |
@@ -960,7 +960,14 @@ BOX-002 preserves the exact frozen 53-request aggregate
 advances the observed 54-request aggregate to
 `36bf68952c6a605df9e9bb4187929752ee42317f0a45506f9847bc265ac065ec`.
 Its translated 25 mm cube uses the same v4 solid/box response and production
-source/B-Rep route; BOX-003 is the typed inactive boundary.
+source/B-Rep route.
+
+BOX-003 preserves the exact frozen 54-request aggregate
+`36bf68952c6a605df9e9bb4187929752ee42317f0a45506f9847bc265ac065ec` and
+advances the observed 55-request aggregate to
+`74353ca8a790b520689404973dbc370b59ec77f50ec81ac3a48c4387b94862c3`.
+Its 50 × 30 × 20 mm rectangular solid uses the same v4 solid/box response and
+production source/B-Rep route; BOX-004 is the typed inactive boundary.
 
 After BOX-012, `T12-BOX-G` serially replays BOX-001...012 in exact lexical
 order. It requires twelve unique IDs, unit coverage millimetre 9/metre 2/inch

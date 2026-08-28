@@ -4,6 +4,7 @@ import Foundation
 enum CADActivatedBoxCase: String, CaseIterable, Equatable, Hashable, Sendable {
     case box001 = "BOX-001"
     case box002 = "BOX-002"
+    case box003 = "BOX-003"
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)

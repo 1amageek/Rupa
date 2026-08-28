@@ -312,10 +312,130 @@ struct CADBoxCaseTests {
         #expect(height == CADLength(value: 25, unit: .millimeter))
     }
 
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func box003CreatesExactTranslatedRectangularSolidThroughProductionController() async throws {
+        let result = try await CADBoxCaseRunner(case: .box003).runReference()
+
+        try result.validate()
+        #expect(result.caseID == "BOX-003")
+        #expect(result.outcome == .realized)
+        #expect(result.realized)
+        #expect(result.candidateResult?.status == .published)
+        #expect(result.candidateResult?.createdFeatureIDs.count == 2)
+        #expect(result.candidateResult?.primaryFeatureID == result.candidateResult?.createdFeatureIDs.last)
+        #expect(result.roleBindings?.bindings.first?.role == "solid")
+        #expect(result.routeEvidence.didPublish)
+        #expect(result.routeEvidence.finalDocumentGeneration.value == result.routeEvidence.initialDocumentGeneration.value + 1)
+        #expect(result.routeEvidence.finalTransactionRevision.value == result.routeEvidence.initialTransactionRevision.value + 1)
+        #expect(result.routeEvidence.finalPublicationSequence == result.routeEvidence.initialPublicationSequence + 1)
+        #expect(result.routeEvidence.finalWorkspaceRevision == result.routeEvidence.initialWorkspaceRevision)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        #expect(result.telemetry.planningWallNanoseconds > 0)
+        #expect(result.telemetry.routeWallNanoseconds > 0)
+        #expect(result.telemetry.oracleWallNanoseconds > 0)
+        #expect(result.telemetry.totalWallNanoseconds > 0)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.readCount >= 1)
+        #expect(result.telemetry.entityCount == 4)
+        #expect(result.telemetry.featureCount == 2)
+        #expect(result.telemetry.bodyCount == 1)
+        #expect(result.telemetry.faceCount == 6)
+        #expect(result.telemetry.edgeCount == 12)
+        #expect(result.telemetry.vertexCount == 8)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func box003OracleRejectsSwappedDepthAndHeightAfterOnePublicationWithoutRetry() async throws {
+        let action = boxAction(
+            name: "BOX-003.wrong-depth-height",
+            origin: CADPoint3D(x: -25, y: 15, z: 5, unit: .millimeter),
+            width: CADLength(value: 50, unit: .millimeter),
+            depth: CADLength(value: 20, unit: .millimeter),
+            height: CADLength(value: 30, unit: .millimeter)
+        )
+        let result = try await CADBoxCaseRunner(case: .box003).run(action: action)
+
+        try result.validate()
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish)
+        #expect(result.routeEvidence.finalPublicationSequence == result.routeEvidence.initialPublicationSequence + 1)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.readCount == 2)
+        #expect(result.telemetry.entityCount == 4)
+        #expect(result.telemetry.featureCount == 2)
+        #expect(result.telemetry.bodyCount == 1)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        #expect(result.diagnostics.contains { $0.contains("oracle mismatch") })
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func box003RejectsZeroDepthBeforePublication() async throws {
+        let action = boxAction(
+            name: "BOX-003.zero-depth",
+            origin: CADPoint3D(x: -25, y: 15, z: 5, unit: .millimeter),
+            width: CADLength(value: 50, unit: .millimeter),
+            depth: CADLength(value: 0, unit: .millimeter),
+            height: CADLength(value: 20, unit: .millimeter)
+        )
+        let result = try await CADBoxCaseRunner(case: .box003).run(action: action)
+
+        try result.validate()
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish == false)
+        #expect(result.routeEvidence.finalPublicationSequence == result.routeEvidence.initialPublicationSequence)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 0)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func box003TimeoutIsTypedAndCleansUp() async throws {
+        let result = try await CADBoxCaseRunner(
+            case: .box003,
+            timeoutWallNanoseconds: 1
+        ).runReference()
+
+        try result.validate()
+        #expect(result.outcome == .timeout)
+        #expect(result.routeEvidence.didPublish == false)
+        #expect(result.telemetry.totalWallNanoseconds >= result.telemetry.timeoutWallNanoseconds)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @Test
+    func box003ReferenceCandidatePreservesPublicRectangularValues() async throws {
+        let challenge = try CADBenchmarkCatalog().challenge(for: "BOX-003")
+        let decision = try await CADBoxReferenceCandidate().decide(
+            for: candidateContext(challenge)
+        )
+
+        guard case .action(.automation(.solid(.box(
+            let name, let origin, let width, let depth, let height
+        )))) = decision else {
+            Issue.record("BOX-003 candidate did not produce one solid box action.")
+            return
+        }
+        #expect(name == "BOX-003")
+        #expect(origin == CADPoint3D(x: -25, y: 15, z: 5, unit: .millimeter))
+        #expect(width == CADLength(value: 50, unit: .millimeter))
+        #expect(depth == CADLength(value: 30, unit: .millimeter))
+        #expect(height == CADLength(value: 20, unit: .millimeter))
+    }
+
     @Test
     func activatedBoxBoundaryContainsOnlyReviewedCases() throws {
-        #expect(CADActivatedBoxCase.allCases == [.box001, .box002])
-        for rejectedCaseID in ["BOX-003", "REC-001", "CIR-001"] {
+        #expect(CADActivatedBoxCase.allCases == [.box001, .box002, .box003])
+        for rejectedCaseID in ["BOX-004", "REC-001", "CIR-001"] {
             do {
                 _ = try CADActivatedBoxCase(caseID: rejectedCaseID)
                 Issue.record("\(rejectedCaseID) must remain outside the box activation boundary.")
