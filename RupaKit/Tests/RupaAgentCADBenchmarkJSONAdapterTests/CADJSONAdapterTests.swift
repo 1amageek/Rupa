@@ -382,6 +382,26 @@ struct CADJSONAdapterTests {
         #expect(translatedOneHundredFiftyDegreeAngleEvaluation.result?.outcome == .realized)
         #expect(translatedOneHundredFiftyDegreeAngleEvaluation.error == nil)
 
+        let negativePlacementOneHundredSixtyFiveDegreeAngleRequest = try adapter.makeRequest(for: "ANG-010")
+        let negativePlacementOneHundredSixtyFiveDegreeAngleResponse = try CADJSONCandidateResponseEnvelope(
+            caseID: negativePlacementOneHundredSixtyFiveDegreeAngleRequest.caseID,
+            context: negativePlacementOneHundredSixtyFiveDegreeAngleRequest.context,
+            decision: .action(angle010Action(name: "ANG-010"))
+        )
+        let negativePlacementOneHundredSixtyFiveDegreeAngleResponseData = try CADJSONBoundedCodec.encode(
+            negativePlacementOneHundredSixtyFiveDegreeAngleResponse
+        )
+        let negativePlacementOneHundredSixtyFiveDegreeAngleJSON = try #require(
+            String(data: negativePlacementOneHundredSixtyFiveDegreeAngleResponseData, encoding: .utf8)
+        )
+        #expect(negativePlacementOneHundredSixtyFiveDegreeAngleJSON.contains("\"kind\":\"angle\""))
+        #expect(negativePlacementOneHundredSixtyFiveDegreeAngleJSON.contains("\"caseID\":\"ANG-010\""))
+        let negativePlacementOneHundredSixtyFiveDegreeAngleEvaluation = try await adapter.evaluate(
+            responseData: negativePlacementOneHundredSixtyFiveDegreeAngleResponseData
+        )
+        #expect(negativePlacementOneHundredSixtyFiveDegreeAngleEvaluation.result?.outcome == .realized)
+        #expect(negativePlacementOneHundredSixtyFiveDegreeAngleEvaluation.error == nil)
+
         let inchRectangleRequest = try adapter.makeRequest(for: "REC-009")
         let inchRectangleResponse = try CADJSONCandidateResponseEnvelope(
             caseID: inchRectangleRequest.caseID,
@@ -528,7 +548,7 @@ struct CADJSONAdapterTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func requestAndLiveContextsAreValueEqualAndAllFortyFiveRequestsStayBounded() throws {
+    func requestAndLiveContextsAreValueEqualAndAllFortySixRequestsStayBounded() throws {
         let executor = DefaultCADActivatedCaseExecutor()
         let adapter = CADJSONAdapter(executor: executor)
         var largestRequest = 0
@@ -563,6 +583,8 @@ struct CADJSONAdapterTests {
                 action = angle008Action(name: caseID.rawValue)
             } else if caseID.rawValue == "ANG-009" {
                 action = angle009Action(name: caseID.rawValue)
+            } else if caseID.rawValue == "ANG-010" {
+                action = angle010Action(name: caseID.rawValue)
             } else if caseID.category == .angle {
                 action = angleAction(name: caseID.rawValue)
             } else if caseID.rawValue == "CIR-002" {
@@ -598,7 +620,7 @@ struct CADJSONAdapterTests {
             #expect(try CADJSONBoundedCodec.encode(response).count < 16_384)
         }
 
-        #expect(executor.activatedCaseIDs.count == 45)
+        #expect(executor.activatedCaseIDs.count == 46)
         #expect(largestRequest < 16_384)
     }
 
@@ -609,7 +631,7 @@ struct CADJSONAdapterTests {
         let adapter = CADJSONAdapter(executor: executor)
         let historicalIDs = (1...12).map { String(format: "LIN-%03d", $0) }
             + (1...8).map { String(format: "REC-%03d", $0) }
-        let currentIDs = historicalIDs + ["REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009"]
+        let currentIDs = historicalIDs + ["REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010"]
         #expect(executor.activatedCaseIDs.map(\.rawValue) == currentIDs)
 
         // Each activated record is case ID, request byte count, and request SHA-256, all length-prefixed.
@@ -798,6 +820,13 @@ struct CADJSONAdapterTests {
         appendLengthPrefixed(bigEndianBytes(UInt64(ang009Request.count)), to: &currentAggregate)
         appendLengthPrefixed(Data(SHA256.hash(data: ang009Request)), to: &currentAggregate)
         #expect(sha256Hex(currentAggregate) == "6c9014e08de0670558528695d21790d489f0bc9516a6e1febefc6c3437b69c87")
+
+        let ang010ID: CADBenchmarkCaseID = "ANG-010"
+        let ang010Request = try adapter.encodeRequest(for: ang010ID)
+        appendLengthPrefixed(Data(ang010ID.rawValue.utf8), to: &currentAggregate)
+        appendLengthPrefixed(bigEndianBytes(UInt64(ang010Request.count)), to: &currentAggregate)
+        appendLengthPrefixed(Data(SHA256.hash(data: ang010Request)), to: &currentAggregate)
+        #expect(sha256Hex(currentAggregate) == "4f4f451db3ab64d9d5f5d657cb7b0ebe3c79a02d370ab2b56070b1d7e3396e65")
     }
 
     @MainActor
@@ -928,7 +957,7 @@ struct CADJSONAdapterTests {
         }
 
         do {
-            _ = try await adapter.evaluate(response: response, for: "ANG-010")
+            _ = try await adapter.evaluate(response: response, for: "ANG-011")
             Issue.record("An inactive case must be rejected before context resolution.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
@@ -1562,6 +1591,22 @@ private func angle009Action(name: String) -> CADCandidateAction {
             x: 75 - 300 * 0.866025403784,
             y: 50 + 300 * 0.5,
             z: 400,
+            unit: .millimeter
+        )
+    )))
+}
+
+private func angle010Action(name: String) -> CADCandidateAction {
+    .automation(.sketch(.angle(
+        name: name,
+        plane: .xy,
+        firstStart: CADPoint3D(x: -75, y: -50, z: 450, unit: .millimeter),
+        firstEnd: CADPoint3D(x: 75, y: -50, z: 450, unit: .millimeter),
+        secondStart: CADPoint3D(x: -75, y: -50, z: 450, unit: .millimeter),
+        secondEnd: CADPoint3D(
+            x: -75 - 350 * 0.965925826289,
+            y: -50 + 350 * 0.258819045103,
+            z: 450,
             unit: .millimeter
         )
     )))
