@@ -133,9 +133,9 @@ struct CADRectangleCaseTests {
 
     @Test
     func activatedRectangleBoundaryMatchesReviewedCases() throws {
-        #expect(CADActivatedRectangleCase.allCases == [.rec001, .rec002, .rec003, .rec004, .rec005])
+        #expect(CADActivatedRectangleCase.allCases == [.rec001, .rec002, .rec003, .rec004, .rec005, .rec006])
 
-        for rejectedCaseID in ["REC-006", "LIN-001"] {
+        for rejectedCaseID in ["REC-007", "LIN-001"] {
             do {
                 _ = try CADActivatedRectangleCase(caseID: rejectedCaseID)
                 Issue.record("\(rejectedCaseID) must remain outside the rectangle activation boundary.")
@@ -545,6 +545,105 @@ struct CADRectangleCaseTests {
         #expect(center == CADPoint3D(x: 0, y: 0, z: 0, unit: .centimeter))
         #expect(width == CADLength(value: 10, unit: .centimeter))
         #expect(height == CADLength(value: 5, unit: .centimeter))
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func rec006CreatesExactMeterXZRectangleThroughProductionController() async throws {
+        let result = try await CADRectangleCaseRunner(case: .rec006).runReference()
+
+        try result.validate()
+        #expect(result.caseID == "REC-006")
+        #expect(result.outcome == .realized)
+        #expect(result.routeEvidence.didPublish)
+        #expect(result.routeEvidence.finalPublicationSequence == result.routeEvidence.initialPublicationSequence + 1)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.readCount >= 1)
+        #expect(result.telemetry.entityCount == 4)
+        #expect(result.telemetry.featureCount == 1)
+        #expect(result.telemetry.bodyCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func rec006OracleRejectsCentimeterValuesForMeterDimensions() async throws {
+        let wrongScale = rectangleAction(
+            name: "REC-006.wrong-scale",
+            plane: .xz,
+            center: CADPoint3D(x: 0, y: 0, z: 0, unit: .meter),
+            width: CADLength(value: 0.4, unit: .centimeter),
+            height: CADLength(value: 0.2, unit: .centimeter)
+        )
+
+        let result = try await CADRectangleCaseRunner(case: .rec006).run(action: wrongScale)
+
+        try result.validate()
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish)
+        #expect(result.routeEvidence.finalPublicationSequence == result.routeEvidence.initialPublicationSequence + 1)
+        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.readCount == 2)
+        #expect(result.telemetry.entityCount == 4)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.diagnostics.contains { $0.contains("oracle mismatch") })
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func rec006RejectsOffXZCenterBeforePublication() async throws {
+        let offPlane = rectangleAction(
+            name: "REC-006.off-plane",
+            plane: .xz,
+            center: CADPoint3D(x: 0, y: 0.002, z: 0, unit: .meter),
+            width: CADLength(value: 0.4, unit: .meter),
+            height: CADLength(value: 0.2, unit: .meter)
+        )
+
+        let result = try await CADRectangleCaseRunner(case: .rec006).run(action: offPlane)
+
+        try result.validate()
+        #expect(result.outcome == .invalidSubmission)
+        #expect(!result.routeEvidence.didPublish)
+        #expect(result.telemetry.commandCount == 0)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func rec006TimeoutIsTypedAndCleansUp() async throws {
+        let result = try await CADRectangleCaseRunner(
+            case: .rec006,
+            timeoutWallNanoseconds: 1
+        ).runReference()
+
+        try result.validate()
+        #expect(result.outcome == .timeout)
+        #expect(!result.routeEvidence.didPublish)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test
+    func rec006CandidatePreservesMeterXZPublicValues() async throws {
+        let challenge = try CADBenchmarkCatalog().challenge(for: "REC-006")
+        let decision = try await CADRectangleReferenceCandidate().decide(
+            for: candidateContext(challenge)
+        )
+
+        guard case .action(.automation(.sketch(.rectangle(
+            _, let plane, let center, let width, let height
+        )))) = decision else {
+            Issue.record("REC-006 candidate did not produce one rectangle action.")
+            return
+        }
+        #expect(plane == .xz)
+        #expect(center == CADPoint3D(x: 0, y: 0, z: 0, unit: .meter))
+        #expect(width == CADLength(value: 0.4, unit: .meter))
+        #expect(height == CADLength(value: 0.2, unit: .meter))
     }
 }
 
