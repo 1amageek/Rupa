@@ -505,6 +505,19 @@ corresponding layer. The next lexical BOX ID remains inactive until its own
 gate; after BOX-012, CYL-001 is the typed inactive boundary. BOX adds no direct
 source, workspace, or oracle access to this adapter.
 
+### BOX-002 external authority
+
+BOX-002 preserves the frozen 53-request aggregate
+`dd12c2cc346e37ec4f3dcecb396aa46bcfe69a82923a41041c36739b826d0b79` and
+advances the observed 54-request aggregate to
+`36bf68952c6a605df9e9bb4187929752ee42317f0a45506f9847bc265ac065ec`.
+Its bounded v4 response describes a 25 × 25 × 25 mm translated cube with
+lower-corner origin (20, -20, 0) mm and is evaluated through the production
+extruded-rectangle/source/B-Rep route. A wrong lower-corner origin is rejected
+after exactly one publication without retry, while zero width and BOX-003 are
+typed prepublication/inactive failures. Request, evaluation, error, and
+fingerprint contracts remain unchanged.
+
 ## Runtime Flows
 
 ```mermaid
@@ -551,9 +564,9 @@ classification and are projected only to stable non-private codes.
 
 | Invariant | Behavioral evidence |
 |---|---|
-| Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON includes the BOX-001 `solid` / `box` decision; candidate-response v4 carries the explicit discriminators, v1 through v3 and unknown current-schema discriminators are rejected, and every direct and nested case ID is the same scalar string. |
+| Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON includes the BOX-001 and BOX-002 `solid` / `box` decisions; candidate-response v4 carries the explicit discriminators, v1 through v3 and unknown current-schema discriminators are rejected, and every direct and nested case ID is the same scalar string. |
 | Exact public-context binding | The request fingerprint equals the live executor context; changed schema, case, context byte, capability, budget, or fingerprint is rejected before publication. |
-| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, CIR-001...012, ANG-001...016, and BOX-001. The frozen 52-request prefix remains `53836e6352b776f1b2a0eccd81cc17d7046a489782a5ad678236d920e36f8a7a`; the observed 53-request aggregate is `dd12c2cc346e37ec4f3dcecb396aa46bcfe69a82923a41041c36739b826d0b79`; BOX-001 traverses the production extruded-rectangle/source/B-Rep route and BOX-002 is rejected before evaluation. |
+| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, CIR-001...012, ANG-001...016, BOX-001, and BOX-002. The frozen 52-request prefix remains `53836e6352b776f1b2a0eccd81cc17d7046a489782a5ad678236d920e36f8a7a`; the 53-request aggregate remains `dd12c2cc346e37ec4f3dcecb396aa46bcfe69a82923a41041c36739b826d0b79`; the observed 54-request aggregate is `36bf68952c6a605df9e9bb4187929752ee42317f0a45506f9847bc265ac065ec`; BOX-001 and BOX-002 traverse the production extruded-rectangle/source/B-Rep route and BOX-003 is rejected before evaluation. |
 | Bounded I/O | Exact-limit input succeeds, `limit + 1` fails before decode and leaves executor evaluation count zero, chunked stdin and file paths behave identically, no public typed-response execution bypass exists, encoded output cannot exceed the same bound, and the guaranteed infrastructure document is byte-equal to normal encoding, bounded, and decodable. |
 | Candidate/oracle separation | Static dependency and source scans prove the adapter imports only public benchmark contracts; encoded fixtures contain no expectation/oracle/source snapshot fields or values. |
 | Same production route | JSON candidates for activated line, rectangle, circle, angle, and box cases realize through the public executor; wrong geometry publishes once then the category's exact oracle rejects without retry. |

@@ -857,7 +857,7 @@ typed inactive.
 
 | Classification | BOX decision |
 |---|---|
-| Confirmed current fact | `ProjectAgentCommandController` exposes `createExtrudedRectangle`; its Automation/Editor path creates a rectangle sketch plus extrude body, commits one source generation, publishes one evaluated body, and topology tests prove 1 body/6 faces/12 edges/8 vertices. BOX-001 now exposes this route through the reviewed solid/box action while BOX-002 remains inactive. |
+| Confirmed current fact | `ProjectAgentCommandController` exposes `createExtrudedRectangle`; its Automation/Editor path creates a rectangle sketch plus extrude body, commits one source generation, publishes one evaluated body, and topology tests prove 1 body/6 faces/12 edges/8 vertices. BOX-001 and BOX-002 expose this route through the reviewed solid/box action while BOX-003 remains inactive. |
 | Required ideal contract | A candidate describes one axis-aligned box by lower-corner origin and X/Y/Z dimensions; the existing production command remains mutation authority and an independent immutable source/B-Rep oracle remains result authority. |
 | Minimal difference | Add one benchmark-owned solid/box action, box projection/mapping/facade/oracle/result types, BOX activation dispatch, candidate-response v4, and focused/adapter/CLI evidence. Do not add a kernel command or a generic future-solid runner. |
 | Unresolved at design completion | No semantic or authority blocker remains. Each new aggregate digest and measured timing is intentionally observed and frozen only by its implementation gate rather than guessed here. |
@@ -953,7 +953,14 @@ BOX-001 preserves the exact frozen 52-request prefix
 advances the observed 53-request aggregate to
 `dd12c2cc346e37ec4f3dcecb396aa46bcfe69a82923a41041c36739b826d0b79`.
 The candidate-response schema is v4; request, evaluation, and error schemas
-remain unchanged, and BOX-002 is the typed inactive boundary.
+remain unchanged.
+
+BOX-002 preserves the exact frozen 53-request aggregate
+`dd12c2cc346e37ec4f3dcecb396aa46bcfe69a82923a41041c36739b826d0b79` and
+advances the observed 54-request aggregate to
+`36bf68952c6a605df9e9bb4187929752ee42317f0a45506f9847bc265ac065ec`.
+Its translated 25 mm cube uses the same v4 solid/box response and production
+source/B-Rep route; BOX-003 is the typed inactive boundary.
 
 After BOX-012, `T12-BOX-G` serially replays BOX-001...012 in exact lexical
 order. It requires twelve unique IDs, unit coverage millimetre 9/metre 2/inch

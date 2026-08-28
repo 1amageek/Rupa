@@ -3,6 +3,7 @@ import Foundation
 /// The box cases whose solid production route has been independently activated.
 enum CADActivatedBoxCase: String, CaseIterable, Equatable, Hashable, Sendable {
     case box001 = "BOX-001"
+    case box002 = "BOX-002"
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)

@@ -129,8 +129,8 @@ Process-level tests build and invoke the actual executable and prove:
 - `request` emits valid v1 JSON for an activated line, rectangle, REC-009
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
   millimetre/XY case, the complete CIR-001...012 category, ANG-001...016, and
-  BOX-001, and rejects inactive `BOX-002`;
-- JSON line, rectangle, circle, angle, and BOX-001 responses traverse the adapter, production
+  BOX-001...002, and rejects inactive `BOX-003`;
+- JSON line, rectangle, circle, angle, and BOX-001...002 responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
@@ -388,12 +388,16 @@ predicates, source identities, or diagnostics. The 65,536-byte bound, one-JSON
 stdout rule, exit mapping, request/evaluation/error schemas, and generic `rupa`
 CLI remain unchanged.
 
-BOX-001 is the current process boundary: it preserves the frozen 52-request
-prefix `53836e6352b776f1b2a0eccd81cc17d7046a489782a5ad678236d920e36f8a7a`,
+BOX-001 preserves the frozen 52-request prefix
+`53836e6352b776f1b2a0eccd81cc17d7046a489782a5ad678236d920e36f8a7a` and
 observes the 53-request aggregate
-`dd12c2cc346e37ec4f3dcecb396aa46bcfe69a82923a41041c36739b826d0b79`,
-executes a v4 solid/box response through the production controller, and keeps
-BOX-002 inactive with exit `64`.
+`dd12c2cc346e37ec4f3dcecb396aa46bcfe69a82923a41041c36739b826d0b79`.
+BOX-002 is the current process boundary: it preserves that frozen 53-request
+aggregate, observes the 54-request aggregate
+`36bf68952c6a605df9e9bb4187929752ee42317f0a45506f9847bc265ac065ec`, and
+executes a v4 translated 25 × 25 × 25 mm solid/box response at lower corner
+(20, -20, 0) mm through the production controller. BOX-003 remains inactive
+with exit `64`.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected
 case argument, so a case-mismatch process fixture cannot be constructed without
