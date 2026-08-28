@@ -90,9 +90,10 @@ Candidate-facing public contracts and private oracle expectations are also
 physically separated. Public source files contain only candidate-visible
 values and protocol methods; they must not import, store, or mention an
 expectation type. Internal catalog/expectation files own the private geometry
-and are not part of the candidate-facing API. The runner is the only boundary
-that projects an internal catalog entry into a public challenge and passes the
-corresponding internal expectation to the read-only oracle. If a future
+and are not part of the candidate-facing API. A thin category facade is the
+only boundary that projects an internal catalog entry into a public challenge
+and passes the corresponding private expectation to its read-only category
+oracle; the shared lifecycle harness cannot receive it. If a future
 external candidate adapter needs a stronger compile-time boundary, it may be
 placed in a separate internal target without changing this contract.
 
@@ -134,27 +135,31 @@ source entities and exact B-Rep properties through the immutable final view.
 ## Architecture
 
 The benchmark is split into target specifications, candidate-facing public
-contracts, an internal expectation store, a route runner, a read-only oracle,
-and a case-evidence ledger. Only cases in the reviewed activation ledger may
-compose all of those responsibilities. The public candidate source files contain no
-private expectation reference. The runner alone projects one internal entry
-into a public challenge, mutates a fresh isolated project through the
-registered controller, and passes the matching expectation to the oracle.
-The oracle alone is read-only with respect to the final immutable authority
-state.
+contracts, an internal expectation store, thin category facades, one shared
+production lifecycle harness, read-only category oracles, and a case-evidence
+ledger. Only cases in the reviewed activation ledger may compose all of those
+responsibilities. Public candidate source files contain no private expectation
+reference. A category facade alone pairs the public projection with its private
+expectation and passes that expectation directly to its category oracle. The
+harness receives only public candidate values and category-routed production
+requests, mutates a fresh isolated project through the registered controller,
+and returns an immutable lifecycle record and final view; it cannot inspect an
+expectation or decide geometry correctness.
 
 ```mermaid
 flowchart LR
     Specs["100 target specifications\nunverified by default"] --> Active["Reviewed activation ledger\nadded one case at a time"]
     Active --> Input["Public challenge text\ncapability + prior typed results"]
-    Private["Internal expectation\nsource + B-Rep predicates"] --> Oracle["Read-only exact oracle"]
+    Private["Internal expectation\nsource + B-Rep predicates"] --> Facade
     Active --> Private
     Input --> Candidate["Candidate protocol"]
-    Candidate --> Runner["Fresh serial case runner"]
-    Runner --> Controller["ProjectAgentCommandController"]
+    Candidate --> Facade["Thin category facade\npublic projection + private oracle handoff"]
+    Facade --> Harness["CADCaseLifecycleHarness\nfresh route + immutable record"]
+    Harness --> Controller["ProjectAgentCommandController"]
     Controller --> Workspace["Registered ProjectWorkspace"]
     Workspace --> Final["Immutable final ProjectViewSnapshot"]
-    Final --> Oracle
+    Final --> Facade
+    Facade --> Oracle
     Oracle --> Evidence["Binary outcome + telemetry"]
     Evidence --> Gate["Six-axis Vertical Case Gate"]
     Gate -->|pass + review + commit| Ledger["Verified case ledger"]
@@ -176,12 +181,17 @@ implementation permission to add a parallel authority.
 |---|---|---|
 | `CADBenchmarkCaseID` / category | Public; stable identity and category validation | Immutable value only |
 | `CADChallenge` | Public projection; candidate-visible instruction, capability metadata, roles, and budget | No structured expected geometry, feature IDs, topology, tolerance, or plan |
-| `CADExpectedGeometry` | Internal; oracle-private source/B-Rep expectation and role checks | Runner/oracle boundary only; never in public candidate files |
+| `CADExpectedGeometry` | Internal; oracle-private source/B-Rep expectation and role checks | Category-facade/oracle boundary only; never enters the shared lifecycle harness or public candidate files |
 | `CADCandidateProtocol` | Public; bounded request/response continuation | No workspace, controller, or expectation reference |
-| `CADCandidateAction` | Public; the active finite-line automation intent | No session, coordinate, expectation, or future-category transform fields |
+| `CADCandidateAction` | Public; activated finite-line intent and, beginning with REC-001, one bounded rectangle intent | No session, coordinate, expectation, or future-category transform fields |
 | `CADActivatedLineCase` | Internal; the reviewed line IDs that may enter behavioral execution | Adds exactly one ID only when that case's vertical implementation begins; catalog presence alone is never activation |
-| `CADLineCaseRunner` | Internal line-category extraction beginning at LIN-002; public challenge projection, fresh lifecycle, route dispatch, response capture, cleanup | Owns one ephemeral activated line case and the private expectation-to-oracle handoff; it is not a cross-category runner |
+| `CADActivatedRectangleCase` | Internal; the reviewed rectangle IDs that may enter behavioral execution | Contains only REC-001 when introduced and advances one reviewed case per commit |
+| `CADCaseActionRouting` | Internal; converts an activated category action plus public challenge context into a typed production Agent request | Has no workspace/source mutation authority and cannot read a private expectation |
+| `CADCaseLifecycleHarness` | Internal; owns the shared fresh controller/workspace, pre-owned registration UUID, exact coordinate binding, deadline, production dispatch, final immutable view capture, and unconditional cleanup | The only shared mutable lifecycle owner; it does not select cases, map geometry, run an oracle, or project a category result |
+| `CADCaseLifecycleRecord` | Internal immutable output from the harness | Preserves initial/final coordinates, typed response, publication/no-retry state, cleanup state, and common count/timing telemetry without geometry assertions |
+| `CADLineCaseRunner` | Internal thin line facade | Owns line activation, public projection, line routing/mapping, private expectation-to-line-oracle handoff, and line result projection; delegates lifecycle only |
 | `CADLineOracle` | Internal line-category extraction beginning at LIN-002; exact finite-line source verification and zero-body evaluation check | Read-only immutable input plus the selected activated line's internal expectation |
+| `CADRectangleCaseRunner` / `CADRectangleOracle` | Internal thin REC-001 facade and exact rectangle oracle | Own rectangle projection/routing/mapping, private rectangle expectation, four-line/profile checks, and rectangle result projection; delegate lifecycle only |
 | `CADCaseOutcome` / score | Public result projection; failure taxonomy and binary scoring | No fallback success |
 | `CADBenchmarkReport` | Public result projection; deterministic run and measurement projection | Value/report only |
 
@@ -753,14 +763,18 @@ CLI, MCP, renderer, Mesh edit, file save/load, or bicycle-specific CAD command.
 ```mermaid
 stateDiagram-v2
     [*] --> Fresh
-    Fresh --> CapabilityObserved
+    Fresh --> UUIDPreowned
+    UUIDPreowned --> Registered
+    Registered --> CapabilityObserved
     CapabilityObserved --> CandidatePlanning
-    CandidatePlanning --> ActionDispatch
+    CandidatePlanning --> CategoryRouting
+    CategoryRouting --> ActionDispatch
     ActionDispatch --> CandidatePlanning: typed response and bounded continuation
     ActionDispatch --> FinalView: terminal action published or no-publication outcome
-    FinalView --> OracleRead
-    OracleRead --> Realized: all checks pass
-    OracleRead --> Failed: check or typed outcome fails
+    FinalView --> LifecycleRecord
+    LifecycleRecord --> CategoryOracleRead
+    CategoryOracleRead --> Realized: all checks pass
+    CategoryOracleRead --> Failed: check or typed outcome fails
     CapabilityObserved --> ExpectedUnsupported: baseline unavailable + typed declaration
     ExpectedUnsupported --> Cleanup
     Realized --> Cleanup
@@ -768,11 +782,23 @@ stateDiagram-v2
     Cleanup --> [*]
 ```
 
-The production route itself linearizes coordinates. The benchmark binds the
+`CADCaseLifecycleHarness` pre-owns the registration UUID before registration
+and applies one shared attempt deadline to setup, registration, candidate
+planning, category routing, controller dispatch, and immutable-view capture.
+Cleanup remains unconditional after deadline/cancellation and is bounded by the
+focused safety ceiling rather than skipped by an expired attempt deadline. The
+harness unregisters its UUID on every terminal path even when registration
+returns late. `CADCaseActionRouting` supplies only the category-specific typed request.
+The resulting `CADCaseLifecycleRecord` is immutable and contains route facts,
+not an oracle verdict or private expected geometry.
+
+The production route itself linearizes coordinates. The harness binds the
 current exact view immediately before each Agent request, but never rebases a
 stale candidate action after a publication. A response-dependent action may
 use only the prior typed response returned by this same case. After a published
-mutation, a committed-mutation/no-retry result is terminal.
+mutation, a committed-mutation/no-retry result is terminal. The thin category
+facade receives the record and immutable final view, calls only its own exact
+oracle with its private expectation, and projects the category result.
 
 ### Activation lifecycle
 
@@ -799,14 +825,17 @@ establish the aggregate baselines and deterministic report.
 
 ## State, Ownership, and Lifecycle
 
-The catalog and private expectations are immutable values owned by the
-benchmark run. A candidate owns only its own decision state and prior typed
-responses. The runner owns the ephemeral per-case controller, workspace,
-registration lease, coordinate binding, action budget, and response log until
-cleanup and is the only benchmark component allowed to mutate a fresh project,
-always through the registered controller route. The oracle owns no live project
-state and is read-only; it consumes one immutable final view and returns a
-value report.
+The catalog and private expectations are immutable values owned by each thin
+category facade. A candidate owns only its own decision state and prior typed
+responses. `CADCaseLifecycleHarness` owns the ephemeral per-case controller,
+workspace, pre-owned registration UUID, coordinate binding, action budget, and
+response log until cleanup and is the only benchmark component allowed to
+mutate a fresh project, always through the registered controller route. Its
+record is returned only after cleanup, retains no live controller/workspace/
+registration handle, and exposes only immutable values. A
+category oracle owns no live project state and is read-only; it consumes one
+immutable final view plus the private expectation held by its facade and returns
+a value report.
 
 No benchmark state is persisted as a project source, package, CAD document, or
 Mesh asset. Reports are values in T12; application-owned save/load remains
@@ -815,8 +844,8 @@ application/reporting task and cannot become a source authority.
 
 ## Failure, Concurrency, and Constraints
 
-The runner preserves the existing registration lease and project coordinate
-contracts. Stale generation, transaction/publication/workspace revision,
+The shared lifecycle harness preserves the existing registration lease and
+project coordinate contracts. Stale generation, transaction/publication/workspace revision,
 invalid plan, session loss, route mismatch, and committed post-publication
 errors remain typed route outcomes. The benchmark maps them to the case
 taxonomy without replacing the original code or message.
@@ -824,8 +853,13 @@ taxonomy without replacing the original code or message.
 No operation is retried after a source or interaction publication. Before
 publication, cancellation or a stale coordinate discards the case's staged
 work; after publication, the exact commit coordinate is retained and the case
-terminates with no-retry semantics. A failed cleanup, leaked task, shared
-mutable fixture, or cross-case state observation is an infrastructure failure.
+terminates with no-retry semantics. Setup, registration, planning, routing,
+dispatch, and immutable-view capture share the attempt deadline; cleanup still
+runs under the separate focused safety ceiling after that deadline expires. The
+harness must unregister its pre-owned UUID in deadline, cancellation, route,
+oracle-independent projection, and unexpected-error paths. A failed cleanup,
+leaked task, shared mutable fixture, or cross-case state observation is an
+infrastructure failure.
 
 The benchmark's source boundary scan must allow immutable public payload values
 required by `AgentRequest`/`AutomationCommand` (for example `Sketch`,
@@ -850,6 +884,8 @@ through the following vertical work items:
 | First actual vertical behavior | T12-LIN-001 | One fresh production route, exact line source oracle, adversarial failure, binary outcome, required telemetry, designer gate review, and case commit |
 | Per-case production/source proof | Every `T12-<CATEGORY>-<NNN>` | The same six-axis gate with evidence owned by that case; a failure blocks the next case and changes the owning design before retry |
 | First-ten line comparison | T12-LIN-010G | Exactly ten activated line IDs, canonical XY/XZ/YZ and affine-plane source mappings, four unit families, oriented world endpoints, per-case route/failure/cleanup/telemetry evidence, serial-only execution, and no success claim for LIN-011/012 |
+| Shared lifecycle extraction | T12-REC-001 | All completed line tests remain green with unchanged route coordinates, timeout/late-registration cleanup, cancellation/stale rejection, publication no-retry, counts, and telemetry; static review proves both facades dispatch only through `ProjectAgentCommandController` and the harness cannot access private expectations |
+| First rectangle behavior | T12-REC-001 | REC-001 alone is activated; exact 40 by 20 mm centred XY four-line/profile realization, same-area swapped-dimension postpublication rejection without retry, off-plane prepublication rejection, typed timeout, zero leaked registrations, candidate privacy, count/timing telemetry, and designer review pass through the shared harness and thin rectangle facade |
 | Cumulative semantic stability | Every `T12-<CATEGORY>-G` | Review all committed cases in the category for shared assumptions, false positives/negatives, route authority, tolerance/plane semantics, and measured bounds before the next category |
 | Sphere honesty | T12-SPH-001...005 | Production capability observation yields typed expected unsupported with zero publication when analytic sphere is absent; substitutes remain rejected by the unchanged exact contract |
 | Exactly 100 implemented cases | T12-LIN through T12-SPH | Catalog identity plus one reviewed vertical evidence commit per stable case; catalog structure alone is insufficient |
