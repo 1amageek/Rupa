@@ -760,6 +760,35 @@ actual CLI request/evaluation must realize REC-012 through the unchanged
 controller/oracle path. No catalog, expectation, capability, tolerance,
 envelope, or fingerprint version advances.
 
+### Rectangle category cumulative gate
+
+`T12-REC-G` changes no geometry, public API, activation authority, wire schema,
+or runtime policy. Its dedicated serialized checkpoint owns one cumulative
+replay of `CADActivatedRectangleCase.allCases` in the exact ordered sequence
+REC-001...REC-012. Each case must traverse the existing rectangle facade,
+shared lifecycle, production controller, and immutable source/profile oracle;
+the checkpoint may not construct source geometry directly or replace the
+per-case oracle.
+
+The replay proves twelve unique IDs, plane coverage XY 6/XZ 3/YZ 3, and unit
+coverage millimetre 8/centimetre 1/metre 2/inch 1 from public challenge
+projections. Every result must validate as realized with exactly one
+publication, unconditional cleanup and zero remaining registrations, one
+action, one command, at least one source read, four sketch entities, one
+feature, zero bodies, and positive planning, route, oracle, and total wall
+measurements. The checkpoint remains serial concurrency 1; parallel measurement
+belongs only to T12-I after all 100 cases are complete.
+
+Postpublication wrong-geometry/no-retry, prepublication plane rejection,
+timeout, candidate privacy, and exact-oracle adversarial behavior remain owned
+by the twelve committed case tests. The category gate inventories and reruns
+that affected suite but does not duplicate those fixtures. Existing executor,
+JSON adapter, and actual CLI tests compose with the checkpoint to prove the
+current exact twenty-four-ID authority and typed CIR-001 inactivity. The gate
+passes only when the dedicated checkpoint, affected benchmark/adapter/CLI
+suites, static privacy audit, diff-check, original-designer review, and commit
+`Verify Agent rectangle benchmark category` are complete.
+
 A gate passes only after focused success, failure, and boundary tests are green,
 the measurements are captured, the original T12 task designer reviews the
 actual path, findings are resolved, and the case is committed. If any axis
@@ -1125,6 +1154,7 @@ through the following vertical work items:
 | REC-010 authority transition | T12-REC-010 | Existing rectangle route/oracle only; exact 2.0 by 1.0 metre XY realization, same-numeric millimetre postpublication rejection/no-retry, z = 0.01 m prepublication rejection, timeout/cleanup/telemetry/privacy, preserved twenty- and twenty-one-request digests, exact twenty-two-ID order and refrozen aggregate, bounded JSON/CLI success, REC-011 typed inactivity, and unchanged catalog/wire versions |
 | REC-011 authority transition | T12-REC-011 | Existing rectangle route/oracle only; exact 35 by 35 mm YZ square at (0, 15, -15) mm, same-square wrong in-plane centre postpublication rejection/no-retry, x = 2 mm prepublication rejection, timeout/cleanup/telemetry/privacy, preserved twenty-/twenty-one-/twenty-two-request digests, exact twenty-three-ID order and refrozen aggregate, bounded JSON/CLI success, REC-012 typed inactivity, and unchanged catalog/wire versions |
 | REC-012 authority transition | T12-REC-012 | Existing rectangle route/oracle only; exact 750 by 80 mm high-aspect XY rectangle at (-100, -40, 0) mm, same-dimension wrong in-plane centre postpublication rejection/no-retry, z = 2 mm prepublication rejection, timeout/cleanup/telemetry/privacy, preserved twenty-/twenty-one-/twenty-two-/twenty-three-request digests, exact twenty-four-ID order and refrozen aggregate, bounded JSON/CLI success, CIR-001 typed inactivity, and unchanged catalog/wire versions |
+| Rectangle category stability | T12-REC-G | One serialized exact-order replay of REC-001...012 through the existing production/oracle path; exact plane/unit coverage, publication/cleanup/count/phase invariants, composed per-case adversarial/privacy evidence, exact twenty-four-ID external authority, CIR-001 typed inactivity, designer review, and no geometry/API/schema change |
 | Parallelism, baselines, and aggregate report | T12-I | Only after all 100 gates: serial replay, bounded-parallel equivalence and measurement, capability/execution baselines, deterministic report, cleanup, and timed integration tests |
 | Final cumulative correctness | T12-IV | Review every case/category/integration artifact and actual path; verify design synchronization, static audits, commits, and eligible normal push |
 
