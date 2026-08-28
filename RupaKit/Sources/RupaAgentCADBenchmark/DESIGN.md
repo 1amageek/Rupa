@@ -857,7 +857,7 @@ typed inactive.
 
 | Classification | BOX decision |
 |---|---|
-| Confirmed current fact | `ProjectAgentCommandController` exposes `createExtrudedRectangle`; its Automation/Editor path creates a rectangle sketch plus extrude body, commits one source generation, publishes one evaluated body, and existing topology tests prove 1 body/6 faces/12 edges/8 vertices. The benchmark currently exposes no solid candidate action and BOX-001 is inactive. |
+| Confirmed current fact | `ProjectAgentCommandController` exposes `createExtrudedRectangle`; its Automation/Editor path creates a rectangle sketch plus extrude body, commits one source generation, publishes one evaluated body, and topology tests prove 1 body/6 faces/12 edges/8 vertices. BOX-001 now exposes this route through the reviewed solid/box action while BOX-002 remains inactive. |
 | Required ideal contract | A candidate describes one axis-aligned box by lower-corner origin and X/Y/Z dimensions; the existing production command remains mutation authority and an independent immutable source/B-Rep oracle remains result authority. |
 | Minimal difference | Add one benchmark-owned solid/box action, box projection/mapping/facade/oracle/result types, BOX activation dispatch, candidate-response v4, and focused/adapter/CLI evidence. Do not add a kernel command or a generic future-solid runner. |
 | Unresolved at design completion | No semantic or authority blocker remains. Each new aggregate digest and measured timing is intentionally observed and frozen only by its implementation gate rather than guessed here. |
@@ -947,6 +947,13 @@ named case commit. A realized case records publication +1, document generation
 topology 1 body/6 faces/12 edges/8 vertices. A postpublication mismatch records
 the published state and the second immutable diagnostic read rather than
 retrying or rounding failure telemetry to zero.
+
+BOX-001 preserves the exact frozen 52-request prefix
+`53836e6352b776f1b2a0eccd81cc17d7046a489782a5ad678236d920e36f8a7a` and
+advances the observed 53-request aggregate to
+`dd12c2cc346e37ec4f3dcecb396aa46bcfe69a82923a41041c36739b826d0b79`.
+The candidate-response schema is v4; request, evaluation, and error schemas
+remain unchanged, and BOX-002 is the typed inactive boundary.
 
 After BOX-012, `T12-BOX-G` serially replays BOX-001...012 in exact lexical
 order. It requires twelve unique IDs, unit coverage millimetre 9/metre 2/inch

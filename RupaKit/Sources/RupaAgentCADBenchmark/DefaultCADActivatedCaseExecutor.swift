@@ -9,6 +9,7 @@ public struct DefaultCADActivatedCaseExecutor: CADActivatedCaseExecuting, Sendab
         + CADActivatedRectangleCase.allCases.map(\.caseID)
         + CADActivatedCircleCase.allCases.map(\.caseID)
         + CADActivatedAngleCase.allCases.map(\.caseID)
+        + CADActivatedBoxCase.allCases.map(\.caseID)
 
     public init() {}
 
@@ -80,6 +81,21 @@ public struct DefaultCADActivatedCaseExecutor: CADActivatedCaseExecuting, Sendab
                 )
             }
 
+            if CADActivatedBoxCase.allCases.contains(where: { $0.caseID == caseID }) {
+                let activatedCase = try CADActivatedBoxCase(caseID: caseID)
+                let internalResult = try await CADBoxCaseRunner(case: activatedCase)
+                    .run(candidate: capturingCandidate)
+                try internalResult.validate()
+                return try publicResult(
+                    caseID: caseID,
+                    category: challenge.category,
+                    outcome: internalResult.outcome,
+                    durationMilliseconds: milliseconds(
+                        from: internalResult.telemetry.totalWallNanoseconds
+                    )
+                )
+            }
+
             let activatedCase = try CADActivatedRectangleCase(caseID: caseID)
             let internalResult = try await CADRectangleCaseRunner(case: activatedCase)
                 .run(candidate: capturingCandidate)
@@ -128,6 +144,9 @@ public struct DefaultCADActivatedCaseExecutor: CADActivatedCaseExecuting, Sendab
         }
         if CADActivatedAngleCase.allCases.contains(where: { $0.caseID == caseID }) {
             return "createLineSketch"
+        }
+        if CADActivatedBoxCase.allCases.contains(where: { $0.caseID == caseID }) {
+            return "createExtrudedRectangle"
         }
         return "createRectangleSketch"
     }
