@@ -4,6 +4,7 @@ import Foundation
 /// Catalog membership alone never makes a case executable.
 enum CADActivatedRectangleCase: String, CaseIterable, Equatable, Hashable, Sendable {
     case rec001 = "REC-001"
+    case rec002 = "REC-002"
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)
