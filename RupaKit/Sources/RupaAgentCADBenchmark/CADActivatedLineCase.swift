@@ -16,6 +16,7 @@ enum CADActivatedLineCase: String, CaseIterable, Equatable, Hashable, Sendable {
     case lin008 = "LIN-008"
     case lin009 = "LIN-009"
     case lin010 = "LIN-010"
+    case lin011 = "LIN-011"
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)
