@@ -1538,6 +1538,136 @@ func lin011ReferenceCandidatePreservesMeterXZNegativeZPublicContext() async thro
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
+func lin012CreatesExactMillimeterXYLineThroughProductionController() async throws {
+    let result = try await CADLineCaseRunner(case: .lin012).runReference()
+
+    try result.validate()
+    #expect(result.caseID == "LIN-012")
+    #expect(result.outcome == .realized)
+    #expect(result.realized)
+    #expect(result.candidateResult?.status == .published)
+    #expect(result.candidateResult?.createdFeatureIDs.count == 1)
+    #expect(result.candidateResult?.primaryFeatureID == result.candidateResult?.createdFeatureIDs.first)
+    #expect(result.roleBindings?.bindings.count == 1)
+    #expect(result.routeEvidence.didPublish)
+    #expect(result.routeEvidence.cleanupCompleted)
+    #expect(result.routeEvidence.cleanupWallNanoseconds > 0)
+    #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    #expect(result.telemetry.actionCount == 1)
+    #expect(result.telemetry.commandCount == 1)
+    #expect(result.telemetry.readCount >= 1)
+    #expect(result.telemetry.entityCount == 1)
+    #expect(result.telemetry.featureCount == 1)
+    #expect(result.telemetry.bodyCount == 0)
+    #expect(result.telemetry.cancellationCheckpointCount >= 1)
+    #expect(result.telemetry.planningWallNanoseconds <= result.telemetry.totalWallNanoseconds)
+    #expect(result.telemetry.routeWallNanoseconds <= result.telemetry.totalWallNanoseconds)
+    #expect(result.telemetry.oracleWallNanoseconds <= result.telemetry.totalWallNanoseconds)
+    print(
+        "LIN-012 telemetry: planning=\(result.telemetry.planningWallNanoseconds)ns "
+            + "route=\(result.telemetry.routeWallNanoseconds)ns "
+            + "oracle=\(result.telemetry.oracleWallNanoseconds)ns "
+            + "total=\(result.telemetry.totalWallNanoseconds)ns"
+    )
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func lin012OracleRejectsSameLengthWrongOriginWithoutRetry() async throws {
+    let wrongPlacement = CADCandidateAction.automation(.sketch(.line(
+        name: "LIN-012.same-length-wrong-origin",
+        plane: .xy,
+        start: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
+        end: CADPoint3D(x: 375, y: 0, z: 0, unit: .millimeter)
+    )))
+
+    let result = try await CADLineCaseRunner(case: .lin012).run(action: wrongPlacement)
+
+    try result.validate()
+    #expect(result.outcome == .invalidSubmission)
+    #expect(result.candidateResult?.status == .published)
+    #expect(result.routeEvidence.didPublish)
+    #expect(result.routeEvidence.finalPublicationSequence == result.routeEvidence.initialPublicationSequence + 1)
+    #expect(result.telemetry.actionCount == 1)
+    #expect(result.telemetry.commandCount == 1)
+    #expect(result.telemetry.readCount == 2)
+    #expect(result.telemetry.entityCount == 1)
+    #expect(result.telemetry.featureCount == 1)
+    #expect(result.routeEvidence.cleanupCompleted)
+    #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    #expect(result.diagnostics.contains { $0.contains("oracle mismatch") })
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func lin012RejectsOffXYPlaneInputBeforePublication() async throws {
+    let offPlane = CADCandidateAction.automation(.sketch(.line(
+        name: "LIN-012.off-plane",
+        plane: .xy,
+        start: CADPoint3D(x: 125, y: -75, z: 1, unit: .millimeter),
+        end: CADPoint3D(x: 500, y: -75, z: 1, unit: .millimeter)
+    )))
+
+    let result = try await CADLineCaseRunner(case: .lin012).run(action: offPlane)
+
+    try result.validate()
+    #expect(result.outcome == .invalidSubmission)
+    #expect(!result.routeEvidence.didPublish)
+    #expect(result.routeEvidence.initialPublicationSequence == result.routeEvidence.finalPublicationSequence)
+    #expect(result.telemetry.actionCount == 1)
+    #expect(result.telemetry.commandCount == 0)
+    #expect(result.routeEvidence.cleanupCompleted)
+    #expect(result.routeEvidence.remainingRegistrationCount == 0)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func lin012TimeoutIsTypedAndCleansUp() async throws {
+    let result = try await CADLineCaseRunner(
+        case: .lin012,
+        timeoutWallNanoseconds: 1
+    ).runReference()
+
+    try result.validate()
+    #expect(result.outcome == .timeout)
+    #expect(!result.routeEvidence.didPublish)
+    #expect(result.telemetry.totalWallNanoseconds >= result.telemetry.timeoutWallNanoseconds)
+    #expect(result.routeEvidence.cleanupCompleted)
+    #expect(result.routeEvidence.remainingRegistrationCount == 0)
+}
+
+@MainActor
+@Test
+func lin012ReferenceCandidatePreservesMillimeterXYPublicContext() async throws {
+    let challenge = try CADBenchmarkCatalog().challenge(for: "LIN-012")
+    let context = CADCandidateContext(
+        challenge: challenge,
+        capabilities: CADCapabilitySnapshot(
+            version: "test.v1",
+            statuses: [CADCapabilityStatus(
+                id: challenge.requiredCapability.id,
+                version: challenge.requiredCapability.version,
+                available: true
+            )]
+        ),
+        remainingRounds: challenge.budget.maximumRounds,
+        remainingActions: challenge.budget.maximumActions
+    )
+    let candidate: any CADCandidateProtocol = CADLineReferenceCandidate()
+
+    let decision = try await candidate.decide(for: context)
+
+    guard case .action(.automation(.sketch(.line(_, let plane, let start, let end)))) = decision else {
+        Issue.record("LIN-012 public context did not produce one line action.")
+        return
+    }
+    #expect(plane == .xy)
+    #expect(start == CADPoint3D(x: 125, y: -75, z: 0, unit: .millimeter))
+    #expect(end == CADPoint3D(x: 500, y: -75, z: 0, unit: .millimeter))
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
 func lineCheckpointReplaysTenActivatedCasesAndMatchesPublicCoverage() async throws {
     let firstTenCases: [CADActivatedLineCase] = [
         .lin001, .lin002, .lin003, .lin004, .lin005,
@@ -1601,15 +1731,18 @@ func lineCheckpointReplaysTenActivatedCasesAndMatchesPublicCoverage() async thro
 
 @Test
 func activatedLineBoundaryContainsExactlyReviewedCases() throws {
-    #expect(CADActivatedLineCase.allCases.map(\.rawValue) == ["LIN-001", "LIN-002", "LIN-003", "LIN-004", "LIN-005", "LIN-006", "LIN-007", "LIN-008", "LIN-009", "LIN-010", "LIN-011"])
+    #expect(CADActivatedLineCase.allCases.map(\.rawValue) == ["LIN-001", "LIN-002", "LIN-003", "LIN-004", "LIN-005", "LIN-006", "LIN-007", "LIN-008", "LIN-009", "LIN-010", "LIN-011", "LIN-012"])
 
-    do {
-        _ = try CADActivatedLineCase(caseID: "LIN-012")
-        Issue.record("LIN-012 must remain inactive until its own vertical gate.")
-    } catch let error as CADBenchmarkError {
-        guard case .invalidCaseID("LIN-012") = error else {
-            Issue.record("Unexpected typed error: \(error)")
-            return
+    for rejectedCaseID in ["REC-001", "LIN-013"] {
+        do {
+            _ = try CADActivatedLineCase(caseID: rejectedCaseID)
+            Issue.record("\(rejectedCaseID) must remain outside the activated line boundary.")
+        } catch let error as CADBenchmarkError {
+            guard case .invalidCaseID(let observedCaseID) = error,
+                  observedCaseID == rejectedCaseID else {
+                Issue.record("Unexpected typed error for \(rejectedCaseID): \(error)")
+                continue
+            }
         }
     }
 }
