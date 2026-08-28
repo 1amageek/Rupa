@@ -1406,6 +1406,81 @@ func lin010ReferenceCandidatePreservesInchYZPublicContext() async throws {
     #expect(end == CADPoint3D(x: -5, y: 10, z: 0, unit: .inch))
 }
 
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func lineCheckpointReplaysTenActivatedCasesAndMatchesPublicCoverage() async throws {
+    let activatedCases = CADActivatedLineCase.allCases
+    let expectedCaseIDs = [
+        "LIN-001", "LIN-002", "LIN-003", "LIN-004", "LIN-005",
+        "LIN-006", "LIN-007", "LIN-008", "LIN-009", "LIN-010",
+    ]
+    #expect(activatedCases.map(\.rawValue) == expectedCaseIDs)
+
+    let catalog = try CADBenchmarkCatalog()
+    var projections: [CADLineChallengeProjection] = []
+    for activatedCase in activatedCases {
+        let challenge = try catalog.challenge(for: activatedCase.caseID)
+        let projection = try CADLineChallengeProjection.decode(challenge)
+        #expect(projection.id == activatedCase.caseID)
+        projections.append(projection)
+    }
+    #expect(projections.count == 10)
+    #expect(projections.filter { $0.orientation == .xy }.count == 6)
+    #expect(projections.filter { $0.orientation == .xz }.count == 2)
+    #expect(projections.filter { $0.orientation == .yz }.count == 2)
+    #expect(projections.filter { $0.length.unit == .millimeter }.count == 7)
+    #expect(projections.filter { $0.length.unit == .centimeter }.count == 1)
+    #expect(projections.filter { $0.length.unit == .meter }.count == 1)
+    #expect(projections.filter { $0.length.unit == .inch }.count == 1)
+
+    for activatedCase in activatedCases {
+        let result = try await CADLineCaseRunner(case: activatedCase).runReference()
+
+        try result.validate()
+        #expect(result.caseID == activatedCase.caseID)
+        #expect(result.outcome == .realized)
+        #expect(result.realized)
+        #expect(result.candidateResult?.status == .published)
+        #expect(result.routeEvidence.didPublish)
+        #expect(result.routeEvidence.finalPublicationSequence == result.routeEvidence.initialPublicationSequence + 1)
+        #expect(result.routeEvidence.finalDocumentGeneration.value == result.routeEvidence.initialDocumentGeneration.value + 1)
+        #expect(result.routeEvidence.finalTransactionRevision.value == result.routeEvidence.initialTransactionRevision.value + 1)
+        #expect(result.routeEvidence.finalWorkspaceRevision >= result.routeEvidence.initialWorkspaceRevision)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.cleanupWallNanoseconds > 0)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.readCount >= 1)
+        #expect(result.telemetry.entityCount == 1)
+        #expect(result.telemetry.featureCount == 1)
+        #expect(result.telemetry.bodyCount == 0)
+        #expect(result.telemetry.planningWallNanoseconds <= result.telemetry.totalWallNanoseconds)
+        #expect(result.telemetry.routeWallNanoseconds <= result.telemetry.totalWallNanoseconds)
+        #expect(result.telemetry.oracleWallNanoseconds <= result.telemetry.totalWallNanoseconds)
+        #expect(result.telemetry.totalWallNanoseconds <= result.telemetry.timeoutWallNanoseconds)
+        print(
+            "\(activatedCase.rawValue) checkpoint: planning=\(result.telemetry.planningWallNanoseconds)ns "
+                + "route=\(result.telemetry.routeWallNanoseconds)ns "
+                + "oracle=\(result.telemetry.oracleWallNanoseconds)ns "
+                + "total=\(result.telemetry.totalWallNanoseconds)ns"
+        )
+    }
+
+    for inactiveCaseID in ["LIN-011", "LIN-012"] {
+        do {
+            _ = try CADActivatedLineCase(caseID: inactiveCaseID)
+            Issue.record("\(inactiveCaseID) must remain inactive until its own vertical gate.")
+        } catch let error as CADBenchmarkError {
+            guard case .invalidCaseID(let rejectedCaseID) = error,
+                  rejectedCaseID == inactiveCaseID else {
+                Issue.record("Unexpected typed error for \(inactiveCaseID): \(error)")
+                continue
+            }
+        }
+    }
+}
+
 @Test
 func activatedLineBoundaryContainsExactlyReviewedCases() throws {
     #expect(CADActivatedLineCase.allCases.map(\.rawValue) == ["LIN-001", "LIN-002", "LIN-003", "LIN-004", "LIN-005", "LIN-006", "LIN-007", "LIN-008", "LIN-009", "LIN-010"])
