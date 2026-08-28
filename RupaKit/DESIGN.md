@@ -28,8 +28,8 @@ Their current ownership remains indexed by [ARCHITECTURE.md](ARCHITECTURE.md).
 
 The package design is the parent of the changed and reused module designs. It is
 not a replacement for the system source-authority or state contracts linked
-below. The T12 benchmark design is intentionally documented before its future
-target is added to `Package.swift`.
+below. The T12 benchmark target is now declared in `Package.swift` as an upper-
+level consumer; its implementation remains behind the child design boundary.
 
 ## Responsibilities and Boundaries
 
@@ -67,7 +67,7 @@ flowchart LR
     ProjectModel --> AgentProtocol
     AgentProtocol --> AgentRuntime[RupaAgentRuntime]
     Kit --> AgentRuntime
-    AgentRuntime --> Benchmark["RupaAgentCADBenchmark\nfuture upper-level target"]
+    AgentRuntime --> Benchmark["RupaAgentCADBenchmark\nupper-level target"]
     Core --> Benchmark
     Automation[RupaAutomation] --> Benchmark
     Kit --> Benchmark
@@ -87,7 +87,7 @@ flowchart LR
 | [RupaKit integration design](Sources/RupaKit/DESIGN.md) | child | Transport-neutral read/edit and Make Editable use cases | Owns application-facing exact-snapshot adaptation. | T10 adds only AgentProtocol/Runtime adapters; CLI/MCP remain unchanged. |
 | [RupaAgentProtocol design](Sources/RupaAgentProtocol/DESIGN.md) | child | Codable Agent Mesh and Make Editable messages | Reuses RupaKit value contracts without duplicating geometry meaning. | It must not import runtime or transport. |
 | [RupaAgentRuntime design](Sources/RupaAgentRuntime/DESIGN.md) | child | Registered-workspace request routing | Binds wire values to the exact current full project view. | It never creates a session or saves a package. |
-| [RupaAgentCADBenchmark design](Sources/RupaAgentCADBenchmark/DESIGN.md) | child | Exactly-100-case candidate/oracle/runner/scoring contract | Measures basic CAD realization through the registered Agent route using immutable source/B-Rep reads. | It is not in `Package.swift` during T12-0; production authority modules must not depend on it. |
+| [RupaAgentCADBenchmark design](Sources/RupaAgentCADBenchmark/DESIGN.md) | child | Exactly-100 target envelope and vertical per-case gate contract | Activates one case at a time through the registered Agent route, immutable source/B-Rep oracle, and measured evidence. | Catalog presence is not implementation evidence; production authority modules must not depend on it. |
 
 ## Architecture
 
@@ -125,7 +125,7 @@ records are owned by the four child designs:
 | `RupaCore` is the source-authority boundary; `RupaProject` is the publication boundary. | [RupaCore design](Sources/RupaCore/DESIGN.md), [RupaProject design](Sources/RupaProject/DESIGN.md) |
 | `RupaKit` is the application use-case boundary over existing Project authority. | [RupaKit integration design](Sources/RupaKit/DESIGN.md) |
 | Existing CAD/Mesh and state contracts remain authoritative for their domains. | [CAD/Mesh responsibility](../Rupa/CAD_MESH_RESPONSIBILITY_CONTRACT.md), [state/project contract](../Rupa/STATE_AND_PROJECT_CONTRACT.md) |
-| `RupaAgentCADBenchmark` is a bounded verification composition above the production Agent route: its runner mutates only fresh isolated project authorities through `ProjectAgentCommandController`, while its oracle alone reads immutable source/B-Rep values; capability-availability and execution-regression baselines remain separate, and invalid runs cannot update the latter. | [RupaAgentCADBenchmark design](Sources/RupaAgentCADBenchmark/DESIGN.md) |
+| `RupaAgentCADBenchmark` is a bounded verification composition above the production Agent route: it activates one target specification at a time, its runner mutates only a fresh isolated project through `ProjectAgentCommandController`, and its oracle alone reads immutable source/B-Rep values. The next case is blocked until the current vertical gate is reviewed and committed; aggregate baselines remain post-100 work. | [RupaAgentCADBenchmark design](Sources/RupaAgentCADBenchmark/DESIGN.md) |
 
 The package design does not repeat those contracts and does not introduce a
 second authority or source clone. T10 adds only the typed Agent adapter surface
@@ -160,11 +160,13 @@ The package preserves the native target dependency graph and does not weaken
 the isolation contracts owned by its children. Child failures remain typed and
 are not converted at the package boundary. Concurrency, resource, and
 zero-copy constraints are defined and verified by the owning module designs.
-The T12 benchmark uses per-case fresh authorities and reports
-MainActor/project-actor serialization; it cannot claim parallelism from
-scheduler intent alone. Baseline environment/catalog/capability drift is
-explicit; oracle or infrastructure failure invalidates a run without
-canonicalizing failures or updating the execution-regression baseline.
+The T12 benchmark uses per-case fresh authorities and fixed serial concurrency
+1 while cases are activated. It cannot introduce or claim parallel execution
+until all 100 case/category gates pass and a later bounded-parallel integration
+proves equivalence to the reviewed serial run. Baseline
+environment/catalog/capability drift is explicit; oracle or infrastructure
+failure invalidates a run without canonicalizing failures or updating the
+execution-regression baseline.
 
 ## Verification and Change Impact
 
@@ -179,7 +181,7 @@ contracts rather than duplicating their behavioral cases:
 | Application use case | `RupaKit` target | T09-C tests for bounded read/preview/commit. |
 | Full package | Integration | T09-IV build/test and actual save/load path. |
 | Agent wire and dispatch | `RupaAgentProtocol` / `RupaAgentRuntime` | T10-B codec, malformed-input, registered-workspace, stale/cancel, and no-retry tests. |
-| Agent CAD benchmark | `RupaAgentCADBenchmark` | T12-0 design, then exactly-100-case catalog, independent source/B-Rep oracle, production-route runner, typed outcome/scoring, fresh isolation, and measured resource/concurrency evidence. Reference-plan results are control-path evidence only. |
+| Agent CAD benchmark | `RupaAgentCADBenchmark` | T12-0 design, minimum LIN-001 foundation, then one reviewed production-route/exact-oracle/telemetry commit per stable case and one cumulative gate per category. Parallel measurement, aggregate baselines, score, and report follow only after all 100 gates. Reference-plan results are control-path evidence only. |
 | Actual rendered workflow | T10 integration | Agent CAD bicycle assembly, Make Editable for every generated body, one representative Mesh edit, application save/load, all-Authored-Mesh presentation evaluation, renderer triangles, and deterministic PNG. |
 
 Any public contract or dependency change requires rechecking the system root,

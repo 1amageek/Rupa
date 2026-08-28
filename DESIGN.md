@@ -68,11 +68,14 @@ flowchart LR
         Reference --> Acceptance["Validator and acceptance specifications"]
         Acceptance --> ArtifactEvidence["Persisted/rendered evidence plan"]
     end
-    subgraph T12["T12 CAD benchmark branch"]
-        Challenge["100 candidate-visible challenges"] --> Runner["Fresh isolated runner"]
+    subgraph T12["T12 vertical CAD benchmark branch"]
+        Challenge["100 target specifications\nunverified by default"] --> Active["One active case\nLIN-001 first"]
+        Active --> Runner["Fresh serial runner"]
         Runner --> AgentRoute["ProjectAgentCommandController"]
         AgentRoute --> SourceSnapshot["Immutable source/B-Rep view"]
-        SourceSnapshot --> Oracle["Independent oracle + binary score"]
+        SourceSnapshot --> Oracle["Independent exact oracle"]
+        Oracle --> Gate["Telemetry + designer gate + commit"]
+        Gate --> Active
     end
     Runtime -. "observed by T11-R" .-> Sources
     Runtime -. "route observed by T12-0" .-> AgentRoute
@@ -123,6 +126,14 @@ flowchart LR
     established or updated only by a complete valid production run; exact
     environment/catalog/capability drift is explicit, and infrastructure or
     oracle failure never becomes a canonical case failure.
+12. The 100 IDs are target specifications, not implementation claims. T12
+    activates one case at a time beginning with `LIN-001`; the next case is
+    blocked until production-route reachability, authority/rollback, exact
+    oracle observability, tolerance/plane semantics, timeout/resource telemetry,
+    and candidate information separation are reviewed and committed.
+13. Case activation and category gates use concurrency 1. Parallel measurement,
+    aggregate scoring/reporting, and execution-baseline establishment begin only
+    after all 100 vertical gates pass.
 
 T10's bicycle workflow is a capability fixture for the Agent route, authority
 transition, application-owned save/load, and renderer traversal. Its
@@ -162,13 +173,14 @@ sequenceDiagram
     participant A as ProjectAgentCommandController
     participant W as Fresh ProjectWorkspace
     participant O as Read-only source/B-Rep oracle
-    C->>B: challenge + capability + own prior typed results
+    C->>B: one active challenge text + capability + own prior typed results
     B->>A: bound AgentRequest through fresh registration
     A->>W: registered workspace use case
     W-->>A: typed result and exact coordinates
     A-->>B: candidate step result
     B->>O: final immutable view + typed output bindings
-    O-->>B: binary checks + typed outcome
+    O-->>B: binary checks + typed outcome + measured evidence
+    Note over C,O: next case remains blocked until designer gate review and commit
 ```
 
 ## State, Ownership, and Lifecycle
@@ -178,9 +190,10 @@ history, and publication sequence. `ProjectWorkspace` owns the observable exact
 view. AgentProtocol owns only Codable messages; AgentRuntime owns only request
 routing and registration leases. The acceptance PNG is generated test evidence
 from loaded presentation triangles and is not source or package authority. T12
-owns benchmark catalog, capability-availability and execution-regression
-baseline evidence, candidate-response, oracle-result, and report values plus
-one isolated case runner at a time; it owns no project or CAD source state.
+owns the benchmark target-specification catalog, per-case activation evidence,
+capability-availability and execution-regression baseline evidence,
+candidate-response, oracle-result, and report values plus one isolated case
+runner at a time; it owns no project or CAD source state.
 
 ## Failure, Concurrency, and Constraints
 
@@ -188,10 +201,11 @@ Project actor isolation and registration operation leases remain the ordering
 boundaries. Heavy bounded reads and geometry work use immutable snapshots
 outside the actor and revalidate before return/publication. No retry is allowed
 after a source mutation has published. Existing read/plan hard ceilings remain
-the maximum accepted through Agent decoding. T12 adds per-case action/read/time/
-entity/evaluation/report bounds selected from measured reference runs; it does
-not guess success counts or concurrency speedup. MainActor/project-actor
-serialization is recorded as an observed constraint. A capability or
+the maximum accepted through Agent decoding. T12 adds per-case planning/route/
+oracle/total-wall timing and action/command/read/entity bounds selected from
+measured serial reference runs; it does not guess success counts or concurrency
+speedup. Activation remains at concurrency 1 until all 100 gates pass.
+MainActor/project-actor serialization is recorded as an observed constraint. A capability or
 environment mismatch is an explicit baseline drift; an oracle or infrastructure
 failure invalidates the run without updating the execution-regression baseline.
 
@@ -203,7 +217,7 @@ failure invalidates the run without updating the execution-regression baseline.
 | Make Editable authority | Project/RupaKit tests for exact snapshot, CAD/modeling retention, presentation switch, provenance, zero-copy handoff, stale/cancel rollback, and one history entry. |
 | Agent routing | Runtime tests proving each request reaches the registered workspace use case and preserves typed stale/cancel/no-retry failures. |
 | T10 capability fixture | Agent CAD route, representation transition, application-owned save/load, renderer triangle traversal, and deterministic presentation output are exercised through the existing path. The fixture is not evidence of T11 L2 dimensional coherence, semantic bicycle parts, interfaces, manufacturing readiness, structural safety, or certification. |
-| T12 benchmark contract | `RupaAgentCADBenchmark` design and later catalog/oracle/runner/report tests prove exactly 100 stable cases, candidate/oracle separation, typed unsupported and failure behavior, source/B-Rep authority, fixed-denominator binary scoring, fresh isolation, measured bounds, separate capability-availability and execution-regression baselines, explicit drift, and invalid-run non-canonicalization. A reference-plan score is control-path evidence, not LLM reasoning evidence. |
+| T12 benchmark contract | `RupaAgentCADBenchmark` keeps exactly 100 stable target specifications but proves implementation one case at a time. Every case requires an actual registered-controller route, exact source/B-Rep oracle, failure evidence, planning/route/oracle/total-wall telemetry with action/command/read/entity counts, designer gate review, and commit; categories receive cumulative gates. Parallel measurement, fixed-denominator aggregate scoring/reporting, and execution baseline follow only after all 100 gates. A reference-plan result is control-path evidence, not LLM reasoning evidence. |
 | Portability | Focused Native runtime tests and compile/link evidence only for portable targets supported by their dependency graph; unavailable target entry failures are reported, not treated as success. |
 
 Changes to Agent wire values, project authority, representation selection, file

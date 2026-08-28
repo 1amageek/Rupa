@@ -15,12 +15,14 @@ lifecycle. It is a testable composition module; it is not a CAD kernel, a
 modeling command, a renderer, a Mesh editor, a CLI, an MCP server, or an LLM
 integration.
 
-T12-0 fixes the responsibility and evidence contract. T12-A defines the
-candidate-facing public value types and catalog projection. T12-B implements
-the oracle. T12-C implements the route runner. T12-V executes the 100-case
-Swift Testing benchmark and records measured runtime evidence. This document
-must remain the authority for the cross-sprint contracts; implementation
-details belong to their owning source and test files.
+T12-0 fixes the responsibility and evidence contract. Subsequent work proceeds
+vertically by case instead of implementing catalog, oracle, runner, and report
+layers for all categories in advance. The existing 100 IDs are target
+specifications. A case becomes verified only after its candidate contract,
+production route, exact oracle, failure behavior, telemetry, focused tests,
+designer gate review, and commit are all complete. `LIN-001` is the first case;
+no later case or general all-category engine may be used to claim its evidence.
+This document remains the authority for those cumulative contracts.
 
 ## Responsibilities and Boundaries
 
@@ -42,6 +44,8 @@ The module owns:
 - typed case outcomes, binary realization scoring, separate capability
   decision accuracy, and deterministic reports;
 - measured resource-bound and concurrency evidence.
+- a monotonic activation ledger that distinguishes an unmeasured target
+  specification from a gate-reviewed case with actual behavioral evidence.
 
 It does not own:
 
@@ -56,6 +60,8 @@ It does not own:
 - manufacturing, structural safety, certification, or professional bicycle
   design claims;
 - guessed success baselines for supported geometry.
+- category-wide implementation claims based only on types, generated catalog
+  data, or tests that do not traverse the production Agent route and oracle.
 
 The benchmark's dependency direction is one-way:
 
@@ -75,11 +81,10 @@ flowchart TD
     Kit --> Benchmark
 ```
 
-The future SwiftPM target may depend on `RupaAgentRuntime`,
+The SwiftPM target depends on `RupaAgentRuntime`,
 `RupaAgentProtocol`, `RupaAutomation`, `RupaKit`, `RupaProject`, `RupaCore`,
 `RupaCoreTypes`, and the source-model types required by the read-only oracle.
-No existing target may depend on this benchmark module, and T12-0 does not add
-the target to `Package.swift`.
+No existing production authority target may depend on this benchmark module.
 
 Candidate-facing public contracts and private oracle expectations are also
 physically separated. Public source files contain only candidate-visible
@@ -125,31 +130,35 @@ source entities and exact B-Rep properties through the immutable final view.
 
 ## Architecture
 
-The benchmark is split into candidate-facing public contracts, an internal
-catalog/expectation store, a route runner, and a read-only oracle. The public
-candidate source files contain no private expectation reference. The runner
-alone projects one internal catalog entry into the public challenge, mutates a
-fresh isolated project through the registered controller, and passes the
-matching internal expectation to the oracle. The oracle alone is read-only
-with respect to the final immutable authority state.
+The benchmark is split into target specifications, candidate-facing public
+contracts, an internal expectation store, a route runner, a read-only oracle,
+and a case-evidence ledger. Only the currently activated case must compose all
+of those responsibilities. The public candidate source files contain no
+private expectation reference. The runner alone projects one internal entry
+into a public challenge, mutates a fresh isolated project through the
+registered controller, and passes the matching expectation to the oracle.
+The oracle alone is read-only with respect to the final immutable authority
+state.
 
 ```mermaid
 flowchart LR
-    Catalog["Versioned catalog\n100 public challenges"] --> Input["Candidate input\nchallenge + capability + prior typed results"]
-    Private["Internal expectation source\nroles + source geometry + B-Rep checks"] --> Oracle["Read-only oracle"]
-    Input --> Candidate["Candidate protocol\nreference plan or future planner"]
-    Candidate --> Action["Typed candidate action\nno session or authority coordinates"]
-    Action --> Runner["Per-case runner"]
-    Private --> Runner
-    Runner --> Input
-    Runner --> Bind["Bind fresh session + current coordinates"]
-    Bind --> Controller["ProjectAgentCommandController"]
+    Specs["100 target specifications\nunverified by default"] --> Active["One active case\nLIN-001 first"]
+    Active --> Input["Public challenge text\ncapability + prior typed results"]
+    Private["Internal expectation\nsource + B-Rep predicates"] --> Oracle["Read-only exact oracle"]
+    Active --> Private
+    Input --> Candidate["Candidate protocol"]
+    Candidate --> Runner["Fresh serial case runner"]
+    Runner --> Controller["ProjectAgentCommandController"]
     Controller --> Workspace["Registered ProjectWorkspace"]
-    Workspace --> Transaction["AutomationBatch / Project transaction"]
-    Transaction --> Final["Immutable final ProjectViewSnapshot"]
+    Workspace --> Final["Immutable final ProjectViewSnapshot"]
     Final --> Oracle
-    Oracle --> Result["Binary realization + typed outcome"]
-    Candidate -. "never receives or references" .-> Private
+    Oracle --> Evidence["Binary outcome + telemetry"]
+    Evidence --> Gate["Six-axis Vertical Case Gate"]
+    Gate -->|pass + review + commit| Ledger["Verified case ledger"]
+    Gate -->|fail| Redesign["Update contract/design\nretry same case"]
+    Redesign --> Active
+    Ledger --> Next["Activate next lexical case"]
+    Candidate -. "cannot receive" .-> Private
 ```
 
 ### Proposed module components
@@ -163,10 +172,10 @@ implementation permission to add a parallel authority.
 | Component | Visibility and responsibility | State/authority |
 |---|---|---|
 | `CADBenchmarkCaseID` / category | Public; stable identity and category validation | Immutable value only |
-| `CADChallenge` | Public; candidate-visible instruction, units, axes, capability metadata | No expected feature IDs, topology, or plan |
+| `CADChallenge` | Public projection; candidate-visible instruction, capability metadata, roles, and budget | No structured expected geometry, feature IDs, topology, tolerance, or plan |
 | `CADExpectedGeometry` | Internal; oracle-private source/B-Rep expectation and role checks | Runner/oracle boundary only; never in public candidate files |
 | `CADCandidateProtocol` | Public; bounded request/response continuation | No workspace, controller, or expectation reference |
-| `CADCandidateAction` | Public; automation/read intent and typed unsupported declaration | No session, coordinate, or expectation fields |
+| `CADCandidateAction` | Public; the currently active LIN-001 line automation intent | No session, coordinate, expectation, or future-category transform fields |
 | `CADCaseRunner` | Internal; public challenge projection, fresh lifecycle, route dispatch, response capture, cleanup | Owns ephemeral case orchestration and is the sole expectation-to-oracle handoff |
 | `CADGeometryOracle` | Internal; source and exact B-Rep verification | Read-only immutable input plus internal expectation |
 | `CADCaseOutcome` / score | Public result projection; failure taxonomy and binary scoring | No fallback success |
@@ -176,10 +185,13 @@ implementation permission to add a parallel authority.
 
 ### 1. Exactly-100 case envelope
 
-The catalog owns exactly these stable lexical ID ranges. A case is one
-challenge, even when its expected output contains several entities or bodies.
-The category denominators never change because an individual run did not
-support a capability.
+The catalog owns exactly these stable lexical ID ranges as final target
+specifications. A case is one challenge, even when its expected output contains
+several entities or bodies. The category denominators never change because an
+individual run did not support a capability. Catalog presence, successful
+decoding, or a stable digest does not mean that a case has been implemented or
+measured. Verification state is held separately and advances only after the
+case's Vertical Case Gate passes and its evidence is committed.
 
 | Category | Stable IDs | Count | Required source intent |
 |---|---|---:|---|
@@ -195,15 +207,21 @@ support a capability.
 | `TRN` | `TRN-001`...`TRN-008` | 8 | Translation/rotation placements of source geometry |
 | **Total** | **all IDs above** | **100** | **No implicit or generated cases** |
 
-The public catalog manifest is a versioned value containing the ordered IDs,
-category counts, challenge-input digest, and public catalog/tolerance-policy
-versions. The runner's internal catalog record additionally contains the
-private expectation digest and the `CapabilityAvailabilityBaseline` version
-and digest; those fields never cross the candidate protocol. Any change to an
-ID, input, expected geometry, role, tolerance rule, or capability
-classification changes the appropriate internal version/digest. Duplicate
-IDs, gaps, non-finite values, or a count other than 100 are typed catalog
-errors.
+The public target-specification manifest is a versioned value containing the
+ordered IDs, category counts, public challenge-text digest, and public catalog
+version. The internal expectation contract separately contains aggregate
+private-expectation version/digest, capability-classification version/digest,
+capability-baseline contract version/digest, and tolerance-policy data; these
+fields never cross the candidate protocol. Actual capability availability is
+not part of that target contract. It is represented by the separate internal
+`CADCapabilityAvailabilityBaseline`, which is constructed from a production
+`CADCapabilitySnapshot` observation and carries its own version, sorted
+id/version/availability/reason-code records, and digest. Any change to an ID,
+challenge text, expected geometry, role, tolerance rule, or capability
+classification advances the owning version and digest. Duplicate IDs, gaps,
+non-finite values, or a count other than 100 are typed specification errors.
+The manifest and digests prove specification identity only; per-case production
+evidence proves implementation.
 
 The category meaning is source-oriented. A rendered circle, solid disc,
 rectangle bar, polygonal sphere, or arbitrary Mesh is not a realization of the
@@ -248,24 +266,24 @@ to the oracle. No candidate protocol method can request or encode it.
 The candidate protocol is a value/sink boundary:
 
 ```text
-CADChallenge + CapabilitySnapshot + prior CandidateStepResult
+Candidate-visible challenge text + CapabilitySnapshot + prior CandidateStepResult
     -> CADCandidateDecision
        -> action(CADCandidateAction)
        -> unsupported(CADUnsupportedDeclaration)
        -> finish(CADOutputRoleBindings)
 ```
 
-`CADCandidateAction` contains only an Agent-level automation intent or a typed
-read intent. It may carry immutable public payload values required by the
-`AgentRequest`/`AutomationCommand` contract, such as `Sketch`, `SketchEntity`,
-or `SketchConstraint`; these values are inert request data and are valid only
-when passed through the controller route. An action does not contain a session
-ID, workspace reference, project authority coordinate, `EditorSession`, or a
-direct CAD object. The runner owns the mapping from this action to an
-`AgentRequest`, attaches the fresh session ID and current
-generation/transaction/workspace coordinates, then calls
-`ProjectAgentCommandController.handle`. This rule applies equally to the
-reference-plan candidate and a future natural-language/LLM adapter.
+`CADCandidateAction` currently exposes only the LIN-001 finite-line automation
+payload. Future category actions remain target specifications until their
+vertical case owns a production contract; transform pivot and composition-order
+semantics belong to `T12-TRN-001` and are not part of this foundation. The line
+payload is immutable request data and is valid only when passed through the
+controller route. An action does not contain a session ID, workspace reference,
+project authority coordinate, `EditorSession`, or a direct CAD object. The
+future runner will own the mapping from this action to an `AgentRequest`, attach
+the fresh session ID and current generation/transaction/workspace coordinates,
+then call `ProjectAgentCommandController.handle`. This rule applies equally to
+the reference-plan candidate and a future natural-language/LLM adapter.
 
 Candidate/reference code may not mutate `EditorSession`, `DesignDocument`, or
 `CADDocumentStore`, evaluate the CAD kernel, construct B-Rep, construct Mesh
@@ -297,8 +315,9 @@ The runner may use one `AutomationBatch` for a simple case or several actions
 when a later action depends on a returned feature ID. A batch is an execution
 optimization, not a case contract. The response records command indexes and
 returned primary/created `FeatureID`s. Final output-role bindings reference
-those typed records and are rejected if they are missing, duplicated, stale,
-out of range, or not owned by the fresh case document.
+an exact selector composed of response step and either primary output or a
+created-output index. Bindings are rejected if they are ambiguous, missing,
+duplicated, stale, out of range, or not owned by the fresh case document.
 
 An unsupported declaration is typed and contains a required capability ID,
 capability version, and bounded reason code. It is accepted as
@@ -308,26 +327,57 @@ command error or a successful message into unsupported success. An unsupported
 declaration ends the case without publication and without a substitute
 primitive.
 
+### Vertical Case Gate
+
+Cases are activated in the lexical/category order recorded in
+[`PROGRESS.md`](../../PROGRESS.md), beginning with `LIN-001`. The minimum
+foundation before `LIN-001` may define shared identities, public/private
+projection, exact output selection, typed failures, and version/digest values.
+It must not implement a generic all-category oracle or runner, settle future
+transform/category semantics, or count an unmeasured target specification as
+implemented.
+
+Each case must satisfy all six gate axes in one vertical slice:
+
+| Gate axis | Falsifiable completion evidence |
+|---|---|
+| Command reachability | The reference candidate's bounded action reaches `ProjectAgentCommandController`, the registered workspace, Automation/project transaction, and the expected typed production result; an unavailable command remains a typed capability outcome. |
+| Authority and rollback | A fresh controller/workspace/registration and exact coordinates are used; invalid, stale, cancelled, and prepublication failure fixtures publish nothing, while a published result retains its exact no-retry coordinate. |
+| Oracle observability | The independent oracle identifies the exact selected source feature/entity and required source/B-Rep properties from the immutable final view, and rejects at least one wrong/missing/extra/substitute fixture. |
+| Tolerance and plane semantics | Canonical units, plane origin/orientation, placement, and comparisons are unambiguous and use the fresh document's `ModelingTolerance`; candidate output cannot widen acceptance. |
+| Timeout and resource envelope | A bounded focused run terminates and records planning, route, oracle, and total wall time plus action, Automation-command, read-record, and observed source entity/feature/body counts. |
+| Candidate information boundary | The candidate receives challenge text, capability metadata, roles, budget, and only its own prior typed results; private structured expectations, tolerance values, and oracle predicates are unreachable. |
+
+A gate passes only after focused success, failure, and boundary tests are green,
+the measurements are captured, the original T12 task designer reviews the
+actual path, findings are resolved, and the case is committed. If any axis
+fails, the case remains unverified, the next case cannot start, and the owning
+contract/design is updated before retrying the same case. After the last case
+of a category, a cumulative category gate reviews the shared contract against
+all committed cases before the next category begins.
+
 ### 4. Capability and execution baselines
 
 The benchmark keeps two different, versioned baselines. Neither is guessed
 from a desired case count or inferred from a screenshot.
 
-`CapabilityAvailabilityBaseline` records what the exact production controller
-can expose before a case run. It contains:
+Before all 100 gates pass, the benchmark stores only reviewed per-case evidence
+and specification/capability digests. This evidence may detect a wall and drive
+a contract update, but it is not an `ExecutionRegressionBaseline`, aggregate
+score, or claim about unactivated cases. The final baselines and deterministic
+aggregate report are implemented only after every case and category gate has
+passed.
 
-1. the exact `AgentCapabilityDescriptor`/registry snapshot exposed by the
-   production controller;
-2. the route and version used for each capability, if one exists;
-3. a typed structural absence record when no analytic-sphere route is exposed;
-4. the observation toolchain, platform, catalog version, and timestamp; and
-5. a digest over the canonical availability fields. The observation timestamp
-   is audit metadata and is excluded from the digest so a later observation in
-   the same environment does not create artificial baseline drift.
-
-This availability baseline determines whether an unsupported declaration is
-expected. It is independent of whether a candidate succeeds at an available
-capability.
+`CADCapabilityAvailabilityBaseline` is a separate internal observation value,
+not a field of the target expectation contract. It is constructed from the
+production-observed `CADCapabilitySnapshot` at the controller boundary and
+contains the snapshot version plus sorted `id`/`version`/`available`/
+`reasonCode` records. Its digest is recomputed and validated from those exact
+fields, so a change from available to unavailable (or a reason-code change)
+produces explicit drift. T12-F does not freeze a production observation or
+claim that any production capability is available; the baseline only defines
+the representation and validation contract needed by a later run. It remains
+independent of whether a candidate succeeds at an available capability.
 
 `ExecutionRegressionBaseline` records the observed terminal result for every
 case, including the typed outcome and oracle-check summary, only after the
@@ -414,11 +464,13 @@ angleAccept(e, o) := normalizedAngularDistance(e, o)
 ```
 
 The relative factors and any relation-specific rule are catalog-owned constants
-chosen and verified from the authoritative source/evaluator behavior in
-T12-A. They are not widened from candidate output, observed error, display
-units, tessellation settings, or a failing case. Values within the kernel
-degeneracy boundary are invalid rather than approximately accepted. Non-finite
-or overflowed values are typed validation failures.
+introduced only when the first activated case that needs them verifies the
+authoritative source/evaluator behavior. A later case may expose a semantic
+wall; it must advance the tolerance contract/version before retry rather than
+widening acceptance from candidate output, observed error, display units,
+tessellation settings, or the failing case. Values within the kernel degeneracy
+boundary are invalid rather than approximately accepted. Non-finite or
+overflowed values are typed validation failures.
 
 ### 7. Case outcomes and scoring
 
@@ -439,14 +491,15 @@ produce `realized`.
 | `cancellation` | Explicit cancellation is observed at a defined boundary | Not realized; no retry after publication |
 | `infrastructureFailure` | Harness cannot create/isolate/route/cleanup or violates its own contract | Entire run invalid; no case failure becomes canonical and no regression baseline is updated |
 
-The primary score is `realized / 100`. Each category retains its fixed
-denominator. A secondary supported-geometry realization rate uses only the
-cases whose capability baseline is observed available and reports the excluded
-expected-unsupported count explicitly. Capability-decision accuracy is a
-separate value: a candidate must attempt available cases and declare
-unsupported only for unavailable cases. Neither metric is substituted for the
-other, and the reference-plan score is labelled control-path evidence rather
-than natural-language or LLM reasoning evidence.
+After all 100 gates pass, the integration computes the primary score as
+`realized / 100`; no partial activation score is published. Each category
+retains its fixed denominator. A secondary supported-geometry realization rate
+uses only the cases whose capability baseline is observed available and reports
+the excluded expected-unsupported count explicitly. Capability-decision
+accuracy is a separate value: a candidate must attempt available cases and
+declare unsupported only for unavailable cases. Neither metric is substituted
+for the other, and the reference-plan score is labelled control-path evidence
+rather than natural-language or LLM reasoning evidence.
 
 Oracle or infrastructure failure makes the run invalid instead of assigning a
 zero or success to an unobserved case. A published-mutation projection failure
@@ -465,30 +518,34 @@ existing runtime contract. Registration is removed in a guaranteed cleanup
 path after all operations finish, including cancellation and timeout.
 
 Cases share no workspace, controller, registration lease, package, output file,
-mutable static fixture, or generated identifier. The scheduler may run cases
-serially or at an explicit bounded concurrency, but each case's candidate and
-oracle state remains private. The final report is sorted by lexical CaseID,
-regardless of completion order. The run records requested concurrency and
-observed concurrency; MainActor/project-actor serialization is reported as a
-measurement and is not described as parallel CAD execution.
+mutable static fixture, or generated identifier. Activation and all individual
+case/category gates run at concurrency 1. No parallel scheduler or parallel
+performance claim is introduced while any target specification remains
+unverified. Only after all 100 case and category gates pass may the integration
+work compare the reviewed serial run with explicit bounded concurrency. That
+later run records requested and observed concurrency, preserves result
+equivalence, and reports MainActor/project-actor serialization rather than
+describing scheduler intent as parallel CAD execution.
 
 ### 9. Resource bounds and measurement rule
 
-T12-0 fixes which resources must be bounded, not guessed numeric values. The
-owner selects checked-in values only after a clean reference baseline and
-serial/bounded-parallel measurements. The selected value must be above the
-observed p95/max envelope by a documented margin, below an absolute safety
-ceiling, and be remeasured when the toolchain, evaluator, catalog, or route
-changes.
+T12-0 fixes which resources must be bounded, not guessed numeric values. Every
+case gate captures its own serial planning, route, oracle, and total wall times
+and the count telemetry below. The owner chooses that case's focused timeout
+and resource bounds only from clean measured executions, with documented
+margin below an absolute safety ceiling. Aggregate percentiles and concurrency
+settings are selected only after all 100 cases are verified and both the full
+serial run and later bounded-parallel runs have been measured. Toolchain,
+evaluator, catalog, route, or semantic changes invalidate the affected evidence.
 
 | Resource | Bound required | Measurement owner |
 |---|---|---|
-| Candidate rounds/actions | Per-case and batch command count | Runner/reference candidate |
-| Read work | Read records, topology/entity visits, diagnostics | Oracle and route runner |
-| Source output | Generated feature/entity/body count | Project/CAD observation |
+| Candidate rounds/actions | Action and Automation-command count | Runner/reference candidate |
+| Read work | Read-record count, topology/entity visits, diagnostics | Oracle and route runner |
+| Source output | Observed entity, feature, and body counts | Project/CAD observation |
 | Exact evaluation | Evaluation passes and elapsed work | ProjectController metrics |
-| Time | Planning, case, and whole-run deadlines | Runner timing evidence |
-| Concurrency | Explicit scheduler maximum and observed active cases | Scheduler measurement |
+| Time | Planning, route, oracle, total wall, case, and whole-run deadlines | Runner timing evidence |
+| Concurrency | Fixed 1 during activation; explicit maximum and observed active cases only after 100 gates | Integration scheduler measurement |
 | Report | Per-case checks, diagnostics, and encoded byte ceiling | Report owner |
 
 Every bound is charged before materializing unbounded candidate output where the
@@ -500,9 +557,11 @@ registration, or inability to terminate work is infrastructure failure.
 ### 10. Evidence classes and non-goals
 
 The deterministic reference-plan candidate is a control subject. Its result
-proves that the benchmark catalog, runner, production Agent route, project
-transaction, exact source/B-Rep oracle, and report arithmetic can be traversed.
-It does not measure language understanding, planning quality, or LLM reasoning.
+proves only the activated case's candidate contract, production Agent route,
+project transaction, exact source/B-Rep oracle, binary outcome, and telemetry.
+Aggregate report arithmetic is not claimed until the post-100 integration.
+The reference candidate does not measure language understanding, planning
+quality, or LLM reasoning.
 
 A future natural-language/LLM adapter may implement the same
 `CADCandidateProtocol` only in a separately authorized task. It receives the
@@ -538,19 +597,28 @@ stale candidate action after a publication. A response-dependent action may
 use only the prior typed response returned by this same case. After a published
 mutation, a committed-mutation/no-retry result is terminal.
 
-### Run lifecycle
+### Activation lifecycle
 
 ```mermaid
 flowchart TD
-    Observe["Capture capability baseline"] --> Validate["Validate manifest = 100 cases"]
-    Validate --> Schedule["Fresh isolated case scheduler"]
-    Schedule --> Execute["Candidate actions through controller"]
+    Select["Select next lexical target specification\nLIN-001 first"] --> Contract["Define only this case's contract"]
+    Contract --> Execute["Serial candidate action through controller"]
     Execute --> Snapshot["Capture final immutable view"]
-    Snapshot --> Oracle["Independent source/B-Rep oracle"]
-    Oracle --> Aggregate["Aggregate fixed-denominator scores"]
-    Aggregate --> Sort["Sort by CaseID + encode deterministic report"]
-    Sort --> Cleanup["Verify leases/controllers are cleaned up"]
+    Snapshot --> Oracle["Independent exact source/B-Rep oracle"]
+    Oracle --> Measure["Binary outcome + required telemetry"]
+    Measure --> Gate{"Six gate axes pass?"}
+    Gate -->|No| Update["Update owning contract/design"]
+    Update --> Contract
+    Gate -->|Yes| Review["Designer review + focused tests + commit"]
+    Review --> Boundary{"Category complete?"}
+    Boundary -->|No| Select
+    Boundary -->|Yes| Category["Cumulative category gate"]
+    Category --> Select
 ```
+
+The loop stops after the final sphere category gate. Only then does integration
+replay all 100 cases serially, introduce bounded-parallel measurement, and
+establish the aggregate baselines and deterministic report.
 
 ## State, Ownership, and Lifecycle
 
@@ -594,21 +662,21 @@ candidate code in the physical source layout and visibility boundary.
 
 ## Verification and Change Impact
 
-T12-0 verifies the contract and hierarchy; it does not claim that the 100
-cases, oracle, runner, or baseline have been implemented. Later proofs are
-owned by the following work items:
+T12-0 verifies the contract and hierarchy. The existing 100-entry catalog is a
+target specification and does not claim that any case, oracle, runner,
+measurement, or baseline has been implemented. Behavioral proof advances only
+through the following vertical work items:
 
 | Invariant | Owning work item | Required behavioral evidence |
 |---|---|---|
-| Production route and no direct shortcut | T12-0.1 / T12-C.5 | Original implementation reading plus registered-controller tests; architecture scan permits only immutable public request payloads and rejects direct mutation, kernel evaluation, and B-Rep construction |
-| Candidate/oracle information separation | T12-0.2 / T12-A.5 | Candidate-facing public source files contain no expectation references; runner-only projection and private visibility/physical-boundary tests reject malformed leakage paths |
-| Exactly 100 stable cases | T12-A.2–A.3 | Lexical IDs, fixed category counts, uniqueness, manifest digest, and catalog drift tests |
-| Source and B-Rep authority | T12-B.1–B.2 | Immutable source/entity/measurement/topology reads reject wrong, extra, missing, degenerate, and substitute geometry |
-| Sphere honesty | T12-B.2D / T12-C.2D / T12-V.1 | Capability-availability baseline observation yields typed expected unsupported with zero publication when analytic sphere is absent; future analytic sphere is accepted only by the unchanged oracle and both baseline digests are recorded |
-| Binary realization and separate decision accuracy | T12-B.3 | Per-check evidence, fixed denominators, arithmetic tests, no success fallback, and explicit control-path label |
-| Fresh lifecycle and no leakage | T12-C.1 / T12-C.4 | Per-case unique authority/IDs, cleanup, serial-vs-concurrent deterministic equality, and cancellation termination |
-| Measured resource limits | T12-C.3 / T12-V.3 | Reference p50/p95/max, selected margin, timeout behavior, bounded concurrency, and no leaked work |
-| Complete 100-case behavior | T12-V | First complete valid all-case run through production route and oracle establishes the evidence-derived execution regression baseline; later green runs compare exact environment/catalog/capability digests and typed outcomes, while invalid runs cannot update it |
+| Minimum candidate/private and identity foundation | T12-F | Public projection tests, aggregate private/capability/tolerance digest drift, exact output selector failures, and no category-wide behavior claim |
+| First actual vertical behavior | T12-LIN-001 | One fresh production route, exact line source oracle, adversarial failure, binary outcome, required telemetry, designer gate review, and case commit |
+| Per-case production/source proof | Every `T12-<CATEGORY>-<NNN>` | The same six-axis gate with evidence owned by that case; a failure blocks the next case and changes the owning design before retry |
+| Cumulative semantic stability | Every `T12-<CATEGORY>-G` | Review all committed cases in the category for shared assumptions, false positives/negatives, route authority, tolerance/plane semantics, and measured bounds before the next category |
+| Sphere honesty | T12-SPH-001...005 | Production capability observation yields typed expected unsupported with zero publication when analytic sphere is absent; substitutes remain rejected by the unchanged exact contract |
+| Exactly 100 implemented cases | T12-LIN through T12-SPH | Catalog identity plus one reviewed vertical evidence commit per stable case; catalog structure alone is insufficient |
+| Parallelism, baselines, and aggregate report | T12-I | Only after all 100 gates: serial replay, bounded-parallel equivalence and measurement, capability/execution baselines, deterministic report, cleanup, and timed integration tests |
+| Final cumulative correctness | T12-IV | Review every case/category/integration artifact and actual path; verify design synchronization, static audits, commits, and eligible normal push |
 
 Any change to `ProjectAgentCommandController`, `ProjectWorkspace`,
 `AutomationBatch`, project publication coordinates, topology/sketch read

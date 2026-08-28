@@ -93,6 +93,10 @@ let package = Package(
             targets: ["RupaAgentTransport"]
         ),
         .library(
+            name: "RupaAgentCADBenchmark",
+            targets: ["RupaAgentCADBenchmark"]
+        ),
+        .library(
             name: "RupaAgent",
             targets: ["RupaAgent"]
         ),
@@ -333,6 +337,20 @@ let package = Package(
                 "RupaCoreTypes",
                 "RupaAgentProtocol",
             ]
+        ),
+        .target(
+            name: "RupaAgentCADBenchmark",
+            dependencies: [
+                "RupaAgentRuntime",
+                "RupaAgentProtocol",
+                "RupaAutomation",
+                "RupaKit",
+                "RupaProject",
+                "RupaCore",
+                "RupaCoreTypes",
+                .product(name: "SwiftCAD", package: "swift-CAD"),
+            ],
+            exclude: ["DESIGN.md"]
         ),
         .target(
             name: "RupaCLIKit",
@@ -647,6 +665,12 @@ let package = Package(
                 "RupaCLIKit",
                 "RupaDomainFoundation",
                 "RupaAgentIntegrationTestFixtures",
+            ]
+        ),
+        .testTarget(
+            name: "RupaAgentCADBenchmarkTests",
+            dependencies: [
+                "RupaAgentCADBenchmark",
             ]
         ),
     ],
