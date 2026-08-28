@@ -55,7 +55,7 @@ rupa-agent-cad-benchmark request <CASE-ID>
 rupa-agent-cad-benchmark evaluate --response <PATH|->
 ```
 
-`request` validates that the ID is in the activated twenty-two-case set and emits
+`request` validates that the ID is in the activated twenty-three-case set and emits
 exactly one request-envelope JSON object to standard output. `evaluate` reads
 exactly one candidate-response envelope from the selected file, or from
 standard input when `-` is selected, then emits exactly one evaluation- or
@@ -127,13 +127,17 @@ mutation.
 Process-level tests build and invoke the actual executable and prove:
 
 - `request` emits valid v1 JSON for an activated line, rectangle, REC-009
-  inch/XZ case, and REC-010 metre/XY case, and rejects inactive `REC-011`;
+  inch/XZ case, REC-010 metre/XY case, and REC-011 millimetre/YZ case, and
+  rejects inactive `REC-012`;
 - a JSON line response and a JSON rectangle response traverse the adapter,
   production controller, and exact oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
 - a REC-010 JSON response preserves its public metre/XY/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
+- a REC-011 JSON response preserves its public millimetre/YZ/centre values,
+  traverses the unchanged rectangle production controller and exact oracle, and
+  exits `0`;
 - wrong geometry is published once, rejected without retry, returned as a
   non-realized envelope, and exits `2`;
 - malformed, oversize, unknown-schema, mismatched-fingerprint, and inactive
@@ -143,12 +147,19 @@ Process-level tests build and invoke the actual executable and prove:
 - all emitted evaluation/error JSON is bounded and private-data free.
 
 For `T12-REC-010`, the twenty-one-case command boundary remained the confirmed
-fact until the case gate passed. That gate advances `request` and
-`evaluate` together to the executor-owned twenty-two-case prefix, proves an
-actual bounded REC-010 metre/XY request and external response exit `0` with
-`realized` through the unchanged rectangle production/oracle path, and proves
-REC-011 remains an inactive-case exit `64`. It does not add a command, argument,
+fact until the case gate passed. That gate advanced `request` and `evaluate`
+together to the executor-owned twenty-two-case prefix, proved an actual bounded
+REC-010 metre/XY request and external response exit `0` with `realized` through
+the unchanged rectangle production/oracle path, and proved REC-011 remained an
+inactive-case exit `64`. It did not add a command, argument,
 schema, hidden test hook, or fallback candidate.
+
+`T12-REC-011` similarly advanced the executor-owned command boundary from
+twenty-two to twenty-three after its case gate passed. Actual process tests emit
+a bounded millimetre/YZ REC-011 request, evaluate an external exact response to
+`realized`/exit `0` through the existing rectangle path, and reject
+REC-012 as inactive with exit `64`. Commands, arguments, schema, and fallback
+behavior remain unchanged.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected
 case argument, so a case-mismatch process fixture cannot be constructed without

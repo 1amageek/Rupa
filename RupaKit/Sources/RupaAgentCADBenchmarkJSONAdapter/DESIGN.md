@@ -9,8 +9,8 @@ between an external Agent process and the activated-case executor owned by
 [benchmark CLI](../RupaAgentCADBenchmarkCLI/DESIGN.md) supplies process arguments
 and standard streams; this target owns the JSON meaning used by that process.
 
-The adapter is limited to the twenty-two reviewed cases `LIN-001`...`LIN-012`
-and `REC-001`...`REC-010`. It does not activate a catalog case and does not make the
+The adapter is limited to the twenty-three reviewed cases `LIN-001`...`LIN-012`
+and `REC-001`...`REC-011`. It does not activate a catalog case and does not make the
 remaining target specifications executable.
 
 ## Responsibilities and Boundaries
@@ -105,7 +105,7 @@ evaluation and candidate construction remain module-internal test/composition
 seams, so a caller cannot construct a large in-memory response and bypass the
 JSON input authority.
 
-The activated twenty-two cases accept one action decision. `unsupported` and
+The activated twenty-three cases accept one action decision. `unsupported` and
 `finish` remain valid protocol values but are not converted to successful
 actions; the T12-XA-A executor contract projects either as typed
 `invalidSubmission` without publication. Multi-round continuation is not added
@@ -160,14 +160,22 @@ presented as current authority.
 
 `T12-REC-010` is an additive activation transition, not a schema change. Before
 its vertical gate passed, the adapter was limited to the twenty-one-case prefix
-through `REC-009`. The gate derives the exact ordered
-twenty-two-case prefix from the executor, prove that the historical first-
-twenty and REC-009 twenty-one-request aggregates still match their frozen
-digests, and freeze a new digest over the actual twenty-two bounded requests.
-An exact public metre/XY REC-010 response must traverse the unchanged rectangle
-production route and oracle; `REC-011` must remain a typed inactive failure
-before evaluation. Envelope v1, fingerprint v1, and the existing byte ceiling
-remain unchanged.
+through `REC-009`. The gate derived the exact ordered twenty-two-case prefix
+from the executor, proved that the historical first-twenty and REC-009 twenty-
+one-request aggregates still matched their frozen digests, and froze a new
+digest over the actual twenty-two bounded requests. An exact public metre/XY
+REC-010 response traversed the unchanged rectangle production route and oracle;
+`REC-011` remained a typed inactive failure before evaluation. Envelope v1,
+fingerprint v1, and the existing byte ceiling remained unchanged.
+
+`T12-REC-011` is the next additive activation. Before its gate passed, the
+executor-owned adapter boundary was the twenty-two-case prefix through REC-010.
+The gate advanced it to the exact ordered twenty-three-case prefix, retained
+the frozen first-twenty, twenty-one-, and twenty-two-request aggregate digests,
+froze the actual twenty-three-request digest, and rechecked the existing size
+ceiling. A millimetre/YZ REC-011 response realized through the unchanged
+rectangle production route and oracle; REC-012 remained a typed inactive
+failure before evaluation. No adapter schema or fingerprint changed.
 
 ## Runtime Flows
 
@@ -217,7 +225,7 @@ classification and are projected only to stable non-private codes.
 |---|---|
 | Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON for line and rectangle decisions; every direct and nested case ID is the same scalar string; synthesized case-ID objects, synthesized legacy enum shapes, and unknown discriminators are rejected. |
 | Exact public-context binding | The request fingerprint equals the live executor context; changed schema, case, context byte, capability, budget, or fingerprint is rejected before publication. |
-| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012 plus REC-001...010; the historical first-twenty and twenty-one-request bytes/digests are unchanged, the twenty-two-request aggregate digest is frozen from current bytes, REC-010 traverses the production rectangle route/oracle, and REC-011 is rejected before evaluation. |
+| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012 plus REC-001...011; the historical first-twenty, twenty-one-, and twenty-two-request bytes/digests are unchanged, the twenty-three-request aggregate digest is frozen from current bytes, REC-011 traverses the production rectangle route/oracle, and REC-012 is rejected before evaluation. |
 | Bounded I/O | Exact-limit input succeeds, `limit + 1` fails before decode and leaves executor evaluation count zero, chunked stdin and file paths behave identically, no public typed-response execution bypass exists, encoded output cannot exceed the same bound, and the guaranteed infrastructure document is byte-equal to normal encoding, bounded, and decodable. |
 | Candidate/oracle separation | Static dependency and source scans prove the adapter imports only public benchmark contracts; encoded fixtures contain no expectation/oracle/source snapshot fields or values. |
 | Same production route | JSON candidates for at least one activated line and rectangle realize through the public executor; wrong geometry publishes once then exact oracle rejects without retry. |

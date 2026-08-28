@@ -84,6 +84,18 @@ struct CADJSONAdapterTests {
         )
         #expect(metreRectangleEvaluation.result?.outcome == .realized)
         #expect(metreRectangleEvaluation.error == nil)
+
+        let squareRectangleRequest = try adapter.makeRequest(for: "REC-011")
+        let squareRectangleResponse = try CADJSONCandidateResponseEnvelope(
+            caseID: squareRectangleRequest.caseID,
+            context: squareRectangleRequest.context,
+            decision: .action(rec011RectangleAction(name: "REC-011"))
+        )
+        let squareRectangleEvaluation = try await adapter.evaluate(
+            responseData: CADJSONBoundedCodec.encode(squareRectangleResponse)
+        )
+        #expect(squareRectangleEvaluation.result?.outcome == .realized)
+        #expect(squareRectangleEvaluation.error == nil)
     }
 
     @MainActor
@@ -165,7 +177,7 @@ struct CADJSONAdapterTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func requestAndLiveContextsAreValueEqualAndAllTwentyTwoRequestsStayBounded() throws {
+    func requestAndLiveContextsAreValueEqualAndAllTwentyThreeRequestsStayBounded() throws {
         let executor = DefaultCADActivatedCaseExecutor()
         let adapter = CADJSONAdapter(executor: executor)
         var largestRequest = 0
@@ -193,7 +205,7 @@ struct CADJSONAdapterTests {
             #expect(try CADJSONBoundedCodec.encode(response).count < 16_384)
         }
 
-        #expect(executor.activatedCaseIDs.count == 22)
+        #expect(executor.activatedCaseIDs.count == 23)
         #expect(largestRequest < 16_384)
     }
 
@@ -204,7 +216,7 @@ struct CADJSONAdapterTests {
         let adapter = CADJSONAdapter(executor: executor)
         let historicalIDs = (1...12).map { String(format: "LIN-%03d", $0) }
             + (1...8).map { String(format: "REC-%03d", $0) }
-        let currentIDs = historicalIDs + ["REC-009", "REC-010"]
+        let currentIDs = historicalIDs + ["REC-009", "REC-010", "REC-011"]
         #expect(executor.activatedCaseIDs.map(\.rawValue) == currentIDs)
 
         // Each activated record is case ID, request byte count, and request SHA-256, all length-prefixed.
@@ -232,6 +244,13 @@ struct CADJSONAdapterTests {
         appendLengthPrefixed(bigEndianBytes(UInt64(rec010Request.count)), to: &currentAggregate)
         appendLengthPrefixed(Data(SHA256.hash(data: rec010Request)), to: &currentAggregate)
         #expect(sha256Hex(currentAggregate) == "bcc3e458c5af0b0f9f77682b999bd52d1e6856818579daf539b99d1076d67943")
+
+        let rec011ID: CADBenchmarkCaseID = "REC-011"
+        let rec011Request = try adapter.encodeRequest(for: rec011ID)
+        appendLengthPrefixed(Data(rec011ID.rawValue.utf8), to: &currentAggregate)
+        appendLengthPrefixed(bigEndianBytes(UInt64(rec011Request.count)), to: &currentAggregate)
+        appendLengthPrefixed(Data(SHA256.hash(data: rec011Request)), to: &currentAggregate)
+        #expect(sha256Hex(currentAggregate) == "96371a67956c5496aab1bb832d446bcbe3e2f2aa22d2612dbb2dec7dd3736f0f")
     }
 
     @MainActor
@@ -362,7 +381,7 @@ struct CADJSONAdapterTests {
         }
 
         do {
-            _ = try await adapter.evaluate(response: response, for: "REC-011")
+            _ = try await adapter.evaluate(response: response, for: "REC-012")
             Issue.record("An inactive case must be rejected before context resolution.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
@@ -819,6 +838,16 @@ private func rec010RectangleAction(name: String) -> CADCandidateAction {
         center: CADPoint3D(x: 0, y: 0, z: 0, unit: .meter),
         width: CADLength(value: 2, unit: .meter),
         height: CADLength(value: 1, unit: .meter)
+    )))
+}
+
+private func rec011RectangleAction(name: String) -> CADCandidateAction {
+    .automation(.sketch(.rectangle(
+        name: name,
+        plane: .yz,
+        center: CADPoint3D(x: 0, y: 15, z: -15, unit: .millimeter),
+        width: CADLength(value: 35, unit: .millimeter),
+        height: CADLength(value: 35, unit: .millimeter)
     )))
 }
 
