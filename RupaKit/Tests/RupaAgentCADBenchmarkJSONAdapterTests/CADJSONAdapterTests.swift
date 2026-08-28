@@ -694,6 +694,51 @@ struct CADJSONAdapterTests {
     }
 
     @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func box004WireActionExecutesTheTranslatedProductionSolidRoute() async throws {
+        let adapter = CADJSONAdapter()
+        let request = try adapter.makeRequest(for: "BOX-004")
+        let response = try CADJSONCandidateResponseEnvelope(
+            caseID: request.caseID,
+            context: request.context,
+            decision: .action(box004Action(name: "BOX-004"))
+        )
+        let requestJSON = String(decoding: try CADJSONBoundedCodec.encode(request), as: UTF8.self)
+        let responseJSON = String(decoding: try CADJSONBoundedCodec.encode(response), as: UTF8.self)
+
+        #expect(requestJSON.contains("\"caseID\":\"BOX-004\""))
+        #expect(requestJSON.contains("origin (0.0, 0.0, -25.0) mm"))
+        #expect(responseJSON.contains("\"caseID\":\"BOX-004\""))
+        #expect(responseJSON.contains("\"kind\":\"solid\""))
+        #expect(responseJSON.contains("\"kind\":\"box\""))
+        #expect(responseJSON.contains("\"value\":100"))
+        #expect(responseJSON.contains("\"value\":50"))
+        #expect(responseJSON.contains("\"value\":75"))
+
+        let evaluation = try await adapter.evaluate(
+            responseData: CADJSONBoundedCodec.encode(response)
+        )
+        #expect(evaluation.caseID == "BOX-004")
+        #expect(evaluation.result?.outcome == .realized)
+        #expect(evaluation.error == nil)
+
+        let wrongResponse = try CADJSONCandidateResponseEnvelope(
+            caseID: request.caseID,
+            context: request.context,
+            decision: .action(box004Action(
+                name: "BOX-004.wrong-origin-z",
+                originZ: 0
+            ))
+        )
+        let wrongEvaluation = try await adapter.evaluate(
+            responseData: CADJSONBoundedCodec.encode(wrongResponse)
+        )
+        #expect(wrongEvaluation.caseID == "BOX-004")
+        #expect(wrongEvaluation.result?.outcome == .invalidSubmission)
+        #expect(wrongEvaluation.error == nil)
+    }
+
+    @MainActor
     @Test
     func goldenWireFixturesMatchTheCompleteDeterministicDocument() throws {
         let adapter = CADJSONAdapter()
@@ -790,7 +835,7 @@ struct CADJSONAdapterTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func requestAndLiveContextsAreValueEqualAndAllFiftyFiveRequestsStayBounded() throws {
+    func requestAndLiveContextsAreValueEqualAndAllFiftySixRequestsStayBounded() throws {
         let executor = DefaultCADActivatedCaseExecutor()
         let adapter = CADJSONAdapter(executor: executor)
         var largestRequest = 0
@@ -813,6 +858,8 @@ struct CADJSONAdapterTests {
                 action = box002Action(name: caseID.rawValue)
             } else if caseID.rawValue == "BOX-003" {
                 action = box003Action(name: caseID.rawValue)
+            } else if caseID.rawValue == "BOX-004" {
+                action = box004Action(name: caseID.rawValue)
             } else if caseID.category == .box {
                 action = box001Action(name: caseID.rawValue)
             } else if caseID.rawValue == "ANG-002" {
@@ -880,7 +927,7 @@ struct CADJSONAdapterTests {
             #expect(try CADJSONBoundedCodec.encode(response).count < 16_384)
         }
 
-        #expect(executor.activatedCaseIDs.count == 55)
+        #expect(executor.activatedCaseIDs.count == 56)
         #expect(largestRequest < 16_384)
     }
 
@@ -891,7 +938,7 @@ struct CADJSONAdapterTests {
         let adapter = CADJSONAdapter(executor: executor)
         let historicalIDs = (1...12).map { String(format: "LIN-%03d", $0) }
             + (1...8).map { String(format: "REC-%03d", $0) }
-        let currentIDs = historicalIDs + ["REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003"]
+        let currentIDs = historicalIDs + ["REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004"]
         #expect(executor.activatedCaseIDs.map(\.rawValue) == currentIDs)
 
         // Each activated record is case ID, request byte count, and request SHA-256, all length-prefixed.
@@ -1150,6 +1197,13 @@ struct CADJSONAdapterTests {
         appendLengthPrefixed(bigEndianBytes(UInt64(box003Request.count)), to: &currentAggregate)
         appendLengthPrefixed(Data(SHA256.hash(data: box003Request)), to: &currentAggregate)
         #expect(sha256Hex(currentAggregate) == "74353ca8a790b520689404973dbc370b59ec77f50ec81ac3a48c4387b94862c3")
+
+        let box004ID: CADBenchmarkCaseID = "BOX-004"
+        let box004Request = try adapter.encodeRequest(for: box004ID)
+        appendLengthPrefixed(Data(box004ID.rawValue.utf8), to: &currentAggregate)
+        appendLengthPrefixed(bigEndianBytes(UInt64(box004Request.count)), to: &currentAggregate)
+        appendLengthPrefixed(Data(SHA256.hash(data: box004Request)), to: &currentAggregate)
+        #expect(sha256Hex(currentAggregate) == "dc4c6fa1f96ae4181f54d48b34ae77b95d2548bc90935a3c7f0d7c51743efd9a")
     }
 
     @MainActor
@@ -1281,9 +1335,9 @@ struct CADJSONAdapterTests {
 
         let inactiveResponse = try CADJSONCandidateResponseEnvelope(
             schema: CADJSONAdapterSchema.candidateResponse,
-            caseID: "BOX-004",
+            caseID: "BOX-005",
             contextFingerprint: String(repeating: "0", count: 64),
-            decision: .action(box001Action(name: "BOX-004"))
+            decision: .action(box001Action(name: "BOX-005"))
         )
         do {
             _ = try await adapter.evaluate(response: inactiveResponse)
@@ -1814,6 +1868,24 @@ private func box003Action(
     width: Double = 50,
     depth: Double = 30,
     height: Double = 20
+) -> CADCandidateAction {
+    .automation(.solid(.box(
+        name: name,
+        origin: CADPoint3D(x: originX, y: originY, z: originZ, unit: .millimeter),
+        width: CADLength(value: width, unit: .millimeter),
+        depth: CADLength(value: depth, unit: .millimeter),
+        height: CADLength(value: height, unit: .millimeter)
+    )))
+}
+
+private func box004Action(
+    name: String,
+    originX: Double = 0,
+    originY: Double = 0,
+    originZ: Double = -25,
+    width: Double = 100,
+    depth: Double = 50,
+    height: Double = 75
 ) -> CADCandidateAction {
     .automation(.solid(.box(
         name: name,

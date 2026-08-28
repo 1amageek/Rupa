@@ -87,7 +87,7 @@ struct CADBoxCaseRunner {
         challenge: CADChallenge,
         modelingTolerance: ModelingTolerance
     ) throws -> AutomationCommand {
-        let projection = try CADBoxChallengeProjection.decode(challenge)
+        _ = try CADBoxChallengeProjection.decode(challenge)
         guard case .automation(
             .solid(.box(let name, let origin, let width, let depth, let height))
         ) = action,
@@ -111,13 +111,9 @@ struct CADBoxCaseRunner {
             )
         }
         let sourcePlane = try CADBoxGeometryMapping.sourcePlane(
-            expectedOrigin: projection.origin,
-            expectedWidth: projection.width,
-            expectedDepth: projection.depth,
             submittedOrigin: origin,
             submittedWidth: width,
             submittedDepth: depth,
-            modelingTolerance: modelingTolerance,
             caseID: caseID
         )
         return .createExtrudedRectangle(

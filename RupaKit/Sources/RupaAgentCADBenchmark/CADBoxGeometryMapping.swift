@@ -19,31 +19,26 @@ enum CADBoxGeometryMapping {
     }
 
     static func sourcePlane(
-        expectedOrigin: CADPoint3D,
-        expectedWidth: CADLength,
-        expectedDepth: CADLength,
         submittedOrigin: CADPoint3D,
         submittedWidth: CADLength,
         submittedDepth: CADLength,
-        modelingTolerance: ModelingTolerance,
         caseID: CADBenchmarkCaseID
     ) throws -> SketchPlane {
-        let expectedCenter = bottomCenter(
-            origin: expectedOrigin,
-            width: expectedWidth,
-            depth: expectedDepth
-        )
         let submittedCenter = bottomCenter(
             origin: submittedOrigin,
             width: submittedWidth,
             depth: submittedDepth
         )
-        return try CADRectangleGeometryMapping.sourcePlane(
-            orientation: .xy,
-            targetCenter: expectedCenter,
-            submittedCenter: submittedCenter,
-            modelingTolerance: modelingTolerance,
-            caseID: caseID
+        try submittedCenter.validate(caseID: caseID, field: "box.submittedBottomCenter")
+        return .plane(
+            Plane3D(
+                origin: Point3D(
+                    x: submittedCenter.meters.x,
+                    y: submittedCenter.meters.y,
+                    z: submittedCenter.meters.z
+                ),
+                normal: .unitZ
+            )
         )
     }
 }

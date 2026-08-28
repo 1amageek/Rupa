@@ -857,7 +857,7 @@ typed inactive.
 
 | Classification | BOX decision |
 |---|---|
-| Confirmed current fact | `ProjectAgentCommandController` exposes `createExtrudedRectangle`; its Automation/Editor path creates a rectangle sketch plus extrude body, commits one source generation, publishes one evaluated body, and topology tests prove 1 body/6 faces/12 edges/8 vertices. BOX-001 through BOX-003 expose this route through the reviewed solid/box action while BOX-004 remains inactive. |
+| Confirmed current fact | `ProjectAgentCommandController` exposes `createExtrudedRectangle`; its Automation/Editor path creates a rectangle sketch plus extrude body, commits one source generation, publishes one evaluated body, and topology tests prove 1 body/6 faces/12 edges/8 vertices. BOX-001 through BOX-004 expose this route through the reviewed solid/box action while BOX-005 remains inactive. |
 | Required ideal contract | A candidate describes one axis-aligned box by lower-corner origin and X/Y/Z dimensions; the existing production command remains mutation authority and an independent immutable source/B-Rep oracle remains result authority. |
 | Minimal difference | Add one benchmark-owned solid/box action, box projection/mapping/facade/oracle/result types, BOX activation dispatch, candidate-response v4, and focused/adapter/CLI evidence. Do not add a kernel command or a generic future-solid runner. |
 | Unresolved at design completion | No semantic or authority blocker remains. Each new aggregate digest and measured timing is intentionally observed and frozen only by its implementation gate rather than guessed here. |
@@ -878,9 +878,17 @@ BOX-001 adds the smallest public solid action contract:
   `origin`, `width`, `depth`, and `height` fields;
 - `CADBoxChallengeProjection` and the reference candidate derive those values
   only from public challenge text;
-- `CADBoxGeometryMapping` maps the public lower corner and X/Y/Z dimensions to
-  an XY affine source plane whose origin is the bottom-face center, then routes
-  width=X, sketch height=Y depth, extrusion distance=Z height, and normal +Z;
+- `CADBoxGeometryMapping` maps the submitted lower corner and X/Y/Z dimensions
+  to an XY source plane whose origin is the submitted bottom-face center, then
+  routes width=X, sketch height=Y depth, extrusion distance=Z height, and
+  normal +Z. It does not bind the submitted normal coordinate to the private
+  target; the immutable source/B-Rep oracle owns that comparison after the
+  production publication. Consequently, prepublication solid failures are
+  limited to non-finite/degenerate values and invalid action kinds, while a
+  geometrically valid but misplaced box is published once and rejected by the
+  oracle without retry. The submitted fields and the computed bottom-face
+  center must all remain finite, so arithmetic overflow is a typed
+  prepublication failure;
 - `CADBoxCaseRunner` remains a thin facade over `CADCaseLifecycleHarness`; its
   action route exposes the actual production operation name
   `createExtrudedRectangle`, while public capability status remains the
@@ -967,7 +975,16 @@ BOX-003 preserves the exact frozen 54-request aggregate
 advances the observed 55-request aggregate to
 `74353ca8a790b520689404973dbc370b59ec77f50ec81ac3a48c4387b94862c3`.
 Its 50 × 30 × 20 mm rectangular solid uses the same v4 solid/box response and
-production source/B-Rep route; BOX-004 is the typed inactive boundary.
+production source/B-Rep route; BOX-004 is the next reviewed case.
+
+BOX-004 preserves the exact frozen 55-request aggregate
+`74353ca8a790b520689404973dbc370b59ec77f50ec81ac3a48c4387b94862c3` and
+advances the observed 56-request aggregate to
+`dc4c6fa1f96ae4181f54d48b34ae77b95d2548bc90935a3c7f0d7c51743efd9a`.
+Its 100 × 50 × 75 mm rectangular solid uses the same v4 solid/box response and
+production source/B-Rep route. A valid box at the wrong normal placement
+publishes once and is rejected by the immutable oracle without retry; zero
+height and BOX-005 remain typed prepublication/inactive failures.
 
 After BOX-012, `T12-BOX-G` serially replays BOX-001...012 in exact lexical
 order. It requires twelve unique IDs, unit coverage millimetre 9/metre 2/inch

@@ -105,13 +105,9 @@ enum CADBoxOracle {
         let sourcePlane: SketchPlane
         do {
             sourcePlane = try CADBoxGeometryMapping.sourcePlane(
-                expectedOrigin: expected.origin,
-                expectedWidth: expected.width,
-                expectedDepth: expected.depth,
                 submittedOrigin: expected.origin,
                 submittedWidth: expected.width,
                 submittedDepth: expected.depth,
-                modelingTolerance: tolerance.modelingTolerance,
                 caseID: caseID
             )
         } catch {
