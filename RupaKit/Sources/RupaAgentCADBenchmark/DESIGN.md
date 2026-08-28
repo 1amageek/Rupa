@@ -514,6 +514,17 @@ counts, phase timings, focused serial tests, designer approval, and its own
 commit. No rectangle category runner is generalized before REC-001, and no
 case beyond REC-008 is activated by this first-twenty expansion.
 
+`T12-REC-008G` is the first-twenty checkpoint, not the final rectangle-category
+gate or an aggregate execution baseline. It requires the activation boundaries
+to contain exactly LIN-001...012 and REC-001...008, then replays those twenty
+cases serially through their category production runners and exact immutable
+oracles. The public coverage is eleven XY, five XZ, and four YZ cases, with
+fourteen millimetre, two centimetre, three metre, and one inch inputs. The gate
+reviews the existing per-case wrong-publication/no-retry, prepublication
+rejection, cleanup, candidate-private boundary, and telemetry evidence without
+duplicating those adversarial fixtures. REC-009 remains a typed inactive case
+until this reviewed checkpoint is committed.
+
 A gate passes only after focused success, failure, and boundary tests are green,
 the measurements are captured, the original T12 task designer reviews the
 actual path, findings are resolved, and the case is committed. If any axis
