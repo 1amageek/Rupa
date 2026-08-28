@@ -16,6 +16,8 @@ Parent: [system design](../DESIGN.md). Direct children used by T10/T12 are:
 - [RupaAgentProtocol](Sources/RupaAgentProtocol/DESIGN.md)
 - [RupaAgentRuntime](Sources/RupaAgentRuntime/DESIGN.md)
 - [RupaAgentCADBenchmark](Sources/RupaAgentCADBenchmark/DESIGN.md)
+- [RupaAgentCADBenchmarkJSONAdapter](Sources/RupaAgentCADBenchmarkJSONAdapter/DESIGN.md)
+- [RupaAgentCADBenchmarkCLI](Sources/RupaAgentCADBenchmarkCLI/DESIGN.md)
 
 Package dependencies are the local targets and external packages declared by
 [`Package.swift`](Package.swift), notably `swift-CAD`, Swift Collections, and
@@ -41,11 +43,12 @@ The package design owns:
 - package-wide API and verification boundaries for T10 and T12.
 
 It does not own Mesh topology algorithms, CAD semantics, source asset mutation,
-archive encoding, socket I/O, MCP, CLI, LLM reasoning, or a bicycle-specific or
+archive encoding, socket I/O, MCP, general CLI behavior, LLM reasoning, or a bicycle-specific or
 benchmark-specific CAD command. Those are delegated to child designs or
 existing normative contracts. T12's runner, catalog, source/B-Rep oracle, and
 score values are owned by its child design; they do not become another project
-authority.
+authority. The dedicated benchmark JSON adapter and executable own only their
+versioned exchange and process boundaries.
 
 ```mermaid
 flowchart LR
@@ -71,6 +74,8 @@ flowchart LR
     Core --> Benchmark
     Automation[RupaAutomation] --> Benchmark
     Kit --> Benchmark
+    Benchmark --> JSONAdapter["RupaAgentCADBenchmarkJSONAdapter\nversioned bounded JSON"]
+    JSONAdapter --> BenchmarkCLI["RupaAgentCADBenchmarkCLI\ndedicated executable"]
 ```
 
 ## Related Designs
@@ -84,10 +89,12 @@ flowchart LR
 | [RupaGeometry design](Sources/RupaGeometry/DESIGN.md) | child | Plan/executor/buffer contract | Owns Mesh operation and performance semantics. | Package consumers use its public contracts only. |
 | [RupaCore design](Sources/RupaCore/DESIGN.md) | child | Source identity and asset mutation contract | Owns Product/Authored Mesh source authority. | Scene references are navigation context, not authority. |
 | [RupaProject design](Sources/RupaProject/DESIGN.md) | child | Staging/publication contract | Owns project transaction integration. | Geometry algorithms remain below this boundary. |
-| [RupaKit integration design](Sources/RupaKit/DESIGN.md) | child | Transport-neutral read/edit and Make Editable use cases | Owns application-facing exact-snapshot adaptation. | T10 adds only AgentProtocol/Runtime adapters; CLI/MCP remain unchanged. |
+| [RupaKit integration design](Sources/RupaKit/DESIGN.md) | child | Transport-neutral read/edit and Make Editable use cases | Owns application-facing exact-snapshot adaptation. | The T10 runtime remains unchanged; the benchmark CLI is a separate upper sibling. |
 | [RupaAgentProtocol design](Sources/RupaAgentProtocol/DESIGN.md) | child | Codable Agent Mesh and Make Editable messages | Reuses RupaKit value contracts without duplicating geometry meaning. | It must not import runtime or transport. |
 | [RupaAgentRuntime design](Sources/RupaAgentRuntime/DESIGN.md) | child | Registered-workspace request routing | Binds wire values to the exact current full project view. | It never creates a session or saves a package. |
 | [RupaAgentCADBenchmark design](Sources/RupaAgentCADBenchmark/DESIGN.md) | child | Exactly-100 target envelope and vertical per-case gate contract | Activates one case at a time through the registered Agent route, immutable source/B-Rep oracle, and measured evidence. | Catalog presence is not implementation evidence; production authority modules must not depend on it. |
+| [Benchmark JSON adapter](Sources/RupaAgentCADBenchmarkJSONAdapter/DESIGN.md) | child | versioned envelopes, context fingerprint, bounded decode, JSON candidate | Binds one external decision to the exact public context of one activated case. | It cannot import private expectations or accept a catalog-only case. |
+| [Benchmark CLI](Sources/RupaAgentCADBenchmarkCLI/DESIGN.md) | child | dedicated request/evaluate process contract | Exposes the JSON adapter as `rupa-agent-cad-benchmark` without changing `rupa`. | It owns no envelope meaning, network transport, or project state. |
 
 ## Architecture
 
@@ -105,6 +112,8 @@ flowchart TD
     R --> B["RupaAgentCADBenchmark\nrunner / oracle / report"]
     C --> B
     A["RupaAutomation\ncommand values"] --> B
+    B --> J["Benchmark JSON adapter\nenvelope / fingerprint / bound"]
+    J --> CLI["Dedicated benchmark CLI"]
 ```
 
 This direction avoids leaking project coordinates into the geometry kernel and
@@ -126,12 +135,13 @@ records are owned by the four child designs:
 | `RupaKit` is the application use-case boundary over existing Project authority. | [RupaKit integration design](Sources/RupaKit/DESIGN.md) |
 | Existing CAD/Mesh and state contracts remain authoritative for their domains. | [CAD/Mesh responsibility](../Rupa/CAD_MESH_RESPONSIBILITY_CONTRACT.md), [state/project contract](../Rupa/STATE_AND_PROJECT_CONTRACT.md) |
 | `RupaAgentCADBenchmark` is a bounded verification composition above the production Agent route: it activates one target specification at a time, its runner mutates only a fresh isolated project through `ProjectAgentCommandController`, and its oracle alone reads immutable source/B-Rep values. The next case is blocked until the current vertical gate is reviewed and committed; aggregate baselines remain post-100 work. | [RupaAgentCADBenchmark design](Sources/RupaAgentCADBenchmark/DESIGN.md) |
+| The external benchmark path is one-way: `RupaAgentCADBenchmark` -> JSON adapter -> dedicated CLI. It accepts only activated cases, fingerprints candidate-visible context, and never makes transport or candidate data authoritative. | [JSON adapter](Sources/RupaAgentCADBenchmarkJSONAdapter/DESIGN.md), [benchmark CLI](Sources/RupaAgentCADBenchmarkCLI/DESIGN.md) |
 
 The package design does not repeat those contracts and does not introduce a
 second authority or source clone. T10 adds only the typed Agent adapter surface
-over the existing RupaKit use cases. T12 adds only the benchmark consumer
-contract; it does not add a modeling route, source persistence, Mesh path, or
-reasoning engine.
+over the existing RupaKit use cases. T12 adds the benchmark consumer plus its
+separate bounded JSON/CLI adapter; neither adds a modeling route, source
+persistence, Mesh path, or reasoning engine.
 
 ## Runtime Flows
 
@@ -143,7 +153,9 @@ in [RupaGeometry](Sources/RupaGeometry/DESIGN.md#runtime-flows),
 [RupaCore](Sources/RupaCore/DESIGN.md#runtime-flows),
 [RupaProject](Sources/RupaProject/DESIGN.md#runtime-flows), and
 [RupaKit](Sources/RupaKit/DESIGN.md#runtime-flows), then the
-[Agent benchmark](Sources/RupaAgentCADBenchmark/DESIGN.md#runtime-flows).
+[Agent benchmark](Sources/RupaAgentCADBenchmark/DESIGN.md#runtime-flows),
+[JSON adapter](Sources/RupaAgentCADBenchmarkJSONAdapter/DESIGN.md#runtime-flows),
+and [benchmark CLI](Sources/RupaAgentCADBenchmarkCLI/DESIGN.md#runtime-flows).
 
 ## State, Ownership, and Lifecycle
 
@@ -152,7 +164,8 @@ delegated to the child owners: Mesh buffers to `RupaGeometry`, source assets to
 `RupaCore`, project publication to `RupaProject`, observable workspace view to
 `RupaKit`, request routing to `RupaAgentRuntime`, and benchmark catalog,
 capability-availability/execution-regression baseline evidence, case/oracle,
-and report values to `RupaAgentCADBenchmark`.
+and report values to `RupaAgentCADBenchmark`. External request/response buffers
+and fingerprints are invocation-local values owned by the JSON adapter and CLI.
 
 ## Failure, Concurrency, and Constraints
 
@@ -167,6 +180,8 @@ proves equivalence to the reviewed serial run. Baseline
 environment/catalog/capability drift is explicit; oracle or infrastructure
 failure invalidates a run without canonicalizing failures or updating the
 execution-regression baseline.
+The external adapter remains serial at one case per process and enforces its
+versioned byte ceiling before decode; it cannot introduce pre-100 parallelism.
 
 ## Verification and Change Impact
 
@@ -182,6 +197,7 @@ contracts rather than duplicating their behavioral cases:
 | Full package | Integration | T09-IV build/test and actual save/load path. |
 | Agent wire and dispatch | `RupaAgentProtocol` / `RupaAgentRuntime` | T10-B codec, malformed-input, registered-workspace, stale/cancel, and no-retry tests. |
 | Agent CAD benchmark | `RupaAgentCADBenchmark` | T12-0 design, minimum LIN-001 foundation, then one reviewed production-route/exact-oracle/telemetry commit per stable case and one cumulative gate per category. Parallel measurement, aggregate baselines, score, and report follow only after all 100 gates. Reference-plan results are control-path evidence only. |
+| External benchmark JSON | JSON adapter / dedicated CLI | Explicit discriminator golden JSON, context fingerprint drift, bounded stdin/file decode, inactive-case/privacy rejection, direct protocol integration, and actual process exit/JSON behavior. |
 | Actual rendered workflow | T10 integration | Agent CAD bicycle assembly, Make Editable for every generated body, one representative Mesh edit, application save/load, all-Authored-Mesh presentation evaluation, renderer triangles, and deterministic PNG. |
 
 Any public contract or dependency change requires rechecking the system root,

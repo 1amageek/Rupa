@@ -11,7 +11,9 @@ The module defines a fixed, versioned envelope of exactly 100 CAD-basic
 challenges, the separation between candidate-visible instructions and
 oracle-private expected geometry, the candidate protocol, the independent
 source/B-Rep oracle, binary realization semantics, and per-case execution
-lifecycle. It is a testable composition module; it is not a CAD kernel, a
+lifecycle. For the separately authorized external-Agent task it also exposes a
+minimal activated-case context/executor contract while retaining every private
+expectation and live project value internally. It is a testable composition module; it is not a CAD kernel, a
 modeling command, a renderer, a Mesh editor, a CLI, an MCP server, or an LLM
 integration.
 
@@ -46,6 +48,9 @@ The module owns:
 - measured resource-bound and concurrency evidence.
 - a monotonic activation ledger that distinguishes an unmeasured target
   specification from a gate-reviewed case with actual behavioral evidence.
+- the public activated-case executor that accepts any `CADCandidateProtocol`
+  and projects only a sanitized `CADCaseResult` after the same category facade,
+  production lifecycle, exact oracle, and cleanup have completed.
 
 It does not own:
 
@@ -54,7 +59,8 @@ It does not own:
   handles during a case, but it cannot access their internal mutation APIs;
 - CAD command semantics, source transaction staging, evaluation, or package
   persistence;
-- candidate reasoning, prompt construction, an LLM SDK, or a transport;
+- candidate reasoning, prompt construction, an LLM SDK, JSON framing, process
+  I/O, a CLI, MCP, or another transport;
 - Mesh construction, Mesh editing, renderer triangles, screenshots, or visual
   similarity scoring;
 - manufacturing, structural safety, certification, or professional bicycle
@@ -79,6 +85,7 @@ flowchart TD
     Project --> Benchmark
     Automation --> Benchmark
     Kit --> Benchmark
+    Benchmark --> External["Public activated-case executor\nconsumed by external adapters"]
 ```
 
 The SwiftPM target depends on `RupaAgentRuntime`,
@@ -93,9 +100,10 @@ expectation type. Internal catalog/expectation files own the private geometry
 and are not part of the candidate-facing API. A thin category facade is the
 only boundary that projects an internal catalog entry into a public challenge
 and passes the corresponding private expectation to its read-only category
-oracle; the shared lifecycle harness cannot receive it. If a future
-external candidate adapter needs a stronger compile-time boundary, it may be
-placed in a separate internal target without changing this contract.
+oracle; the shared lifecycle harness cannot receive it. The separately
+authorized external candidate adapter is therefore placed in
+the separate `RupaAgentCADBenchmarkJSONAdapter` target and consumes only the
+public executor/context contract.
 
 ### Observed current production route
 
@@ -131,6 +139,7 @@ source entities and exact B-Rep properties through the immutable final view.
 | [RupaKit integration design](../RupaKit/DESIGN.md) | depends on | workspace use cases and exact `ProjectViewSnapshot` | Supplies the application-facing workspace boundary. | The oracle may inspect an immutable final view; it cannot publish state. |
 | [RupaProject design](../RupaProject/DESIGN.md) | depends on | actor-backed staging/publication and no-retry semantics | Owns source transactions and publication coordinates. | A benchmark retry is never allowed after a published mutation. |
 | [RupaCore design](../RupaCore/DESIGN.md) | depends on | source identity, sketch summaries, topology snapshots, and measurements | Supplies the immutable source/B-Rep observations used by the oracle. | Tessellated Mesh and renderer output are not geometry authority. |
+| [Benchmark JSON adapter](../RupaAgentCADBenchmarkJSONAdapter/DESIGN.md) | used by | activated context/executor, explicit decision codecs, sanitized result | Binds a versioned external JSON decision to the same candidate protocol and production/oracle route. | JSON, fingerprints, byte limits, process I/O, and error envelopes remain outside this module. |
 
 ## Architecture
 
@@ -153,7 +162,8 @@ flowchart LR
     Private["Internal expectation\nsource + B-Rep predicates"] --> Facade
     Active --> Private
     Input --> Candidate["Candidate protocol"]
-    Candidate --> Facade["Thin category facade\npublic projection + private oracle handoff"]
+    Candidate --> Executor["Activated-case executor\nexact 20-case dispatch"]
+    Executor --> Facade["Thin category facade\npublic projection + private oracle handoff"]
     Facade --> Harness["CADCaseLifecycleHarness\nfresh route + immutable record"]
     Harness --> Controller["ProjectAgentCommandController"]
     Controller --> Workspace["Registered ProjectWorkspace"]
@@ -184,6 +194,7 @@ implementation permission to add a parallel authority.
 | `CADExpectedGeometry` | Internal; oracle-private source/B-Rep expectation and role checks | Category-facade/oracle boundary only; never enters the shared lifecycle harness or public candidate files |
 | `CADCandidateProtocol` | Public; bounded request/response continuation | No workspace, controller, or expectation reference |
 | `CADCandidateAction` | Public; activated finite-line intent and, beginning with REC-001, one bounded rectangle intent | No session, coordinate, expectation, or future-category transform fields |
+| `CADActivatedCaseExecuting` / `DefaultCADActivatedCaseExecutor` | Public; exact activated-ID list, candidate context, one candidate evaluation, and sanitized result | Dispatches only reviewed line/rectangle facades; no private expectation, live view, internal evidence, or direct mutation escapes |
 | `CADActivatedLineCase` | Internal; the reviewed line IDs that may enter behavioral execution | Adds exactly one ID only when that case's vertical implementation begins; catalog presence alone is never activation |
 | `CADActivatedRectangleCase` | Internal; the reviewed rectangle IDs that may enter behavioral execution | Contains only REC-001 when introduced and advances one reviewed case per commit |
 | `CADCaseActionRouting` | Internal; converts an activated category action plus public challenge context into a typed production Agent request | Has no workspace/source mutation authority and cannot read a private expectation |
@@ -301,8 +312,8 @@ own reviewed commit. The runner attaches the fresh session ID and current
 generation/workspace coordinates, then calls
 `ProjectAgentCommandController.handle`. No rectangle, circle, solid,
 constraint, transform, compound, or sphere behavior is generalized by this
-extraction. The same boundary applies to the reference-plan candidate and a
-future natural-language/LLM adapter.
+extraction. The same boundary applies to the reference-plan candidate and the
+separately authorized external JSON candidate adapter.
 
 Candidate/reference code may not mutate `EditorSession`, `DesignDocument`, or
 `CADDocumentStore`, evaluate the CAD kernel, construct B-Rep, construct Mesh
@@ -351,6 +362,72 @@ the case capability is unavailable. A candidate cannot turn an arbitrary
 command error or a successful message into unsupported success. An unsupported
 declaration ends the case without publication and without a substitute
 primitive.
+
+### Activated-case executor and explicit decision encoding
+
+The public `CADActivatedCaseExecuting` contract exposes exactly three
+operations: the ordered activated case IDs, the candidate-visible context for
+one activated ID, and asynchronous evaluation of one caller-supplied
+`CADCandidateProtocol`. Its default `@MainActor` implementation recognizes only
+`LIN-001`...`LIN-012` and `REC-001`...`REC-008`, dispatches to the existing thin
+line or rectangle facade, and returns a validated `CADCaseResult`. A catalog ID
+outside that allow-list is a typed inactive-case error. The public result does
+not contain private expectations, source snapshots, FeatureIDs, workspace
+handles, oracle diagnostics, or mutable route state.
+
+```swift
+@MainActor
+public protocol CADActivatedCaseExecuting: Sendable {
+    var activatedCaseIDs: [CADBenchmarkCaseID] { get }
+
+    func context(for caseID: CADBenchmarkCaseID) throws -> CADCandidateContext
+
+    func evaluate(
+        caseID: CADBenchmarkCaseID,
+        candidate: any CADCandidateProtocol
+    ) async throws -> CADCaseResult
+}
+```
+
+`DefaultCADActivatedCaseExecutor` is the production implementation. Public
+throws are normalized to a dedicated typed executor error for inactive case,
+candidate failure, or invalid internal projection; an arbitrary candidate
+error never escapes as an untyped transport string. Route/oracle attempts that
+completed normally remain represented by `CADCaseOutcome`, including
+`invalidSubmission`, `timeout`, `oracleFailure`, and `infrastructureFailure`.
+
+The current lifecycle harness throws `CADBenchmarkError.invalidInput` when a
+candidate returns `unsupported` or `finish` because activated line/rectangle
+cases require one action. T12-XA-A changes that boundary before it becomes
+public: both non-action decisions terminate before workspace publication and
+are projected as validated `CADCaseResult(outcome: .invalidSubmission)` with
+cleanup evidence. They are not promoted to `expectedUnsupported`, because all
+twenty activated cases have already proved their creation capability through
+the production controller. A candidate-thrown error remains the typed executor
+`candidateFailure`, also before publication. No adapter may catch these paths
+and substitute a reference action.
+
+`context(for:)` and the context created inside evaluation use one internal
+context factory and the production controller's current capability descriptors.
+They must be value-equal for the same environment and activated case. The
+executor does not accept a caller-provided context, expectation, workspace,
+timeout override, or result. Category runners gain only an arbitrary-candidate
+entry; their reference/action test seams remain internal.
+
+The public associated-value enums `CADCandidateDecision`,
+`CADCandidateAction`, `CADAutomationAction`, and `CADSketchAction` use explicit
+Codable v1 objects with a string `kind` discriminator and named fields.
+`CADOutputRoleSelector` follows the same rule for a transitive `finish` payload.
+This keeps decision meaning in its existing owner and avoids adapter-local flat
+line/rectangle DTOs. The project is unreleased and the previous synthesized
+enum shape has only internal round-trip coverage, so this is an intentional
+wire break: no legacy decoder or silent fallback remains. Golden JSON fixes the
+new shape before the external adapter is released. These codecs do not change
+the catalog, challenge, private expectation, or manifest digest.
+
+The executor performs one candidate decision for the currently activated
+line/rectangle contract. It does not generalize multi-round continuation,
+activate `REC-009`, schedule several cases, or establish a benchmark baseline.
 
 ### Vertical Case Gate
 
@@ -532,8 +609,12 @@ oracles. The public coverage is eleven XY, five XZ, and four YZ cases, with
 fourteen millimetre, two centimetre, three metre, and one inch inputs. The gate
 reviews the existing per-case wrong-publication/no-retry, prepublication
 rejection, cleanup, candidate-private boundary, and telemetry evidence without
-duplicating those adversarial fixtures. REC-009 remains a typed inactive case
-until this reviewed checkpoint is committed.
+duplicating those adversarial fixtures. The separately authorized `T12-XA`
+external-Agent checkpoint consumes this exact frozen twenty-case boundary
+before rectangle activation resumes. This sequencing keeps one unambiguous
+ready leaf and prevents adapter behavior from drifting while new cases are
+activated; it does not make the adapter rectangle semantics or a category gate.
+REC-009 remains a typed inactive case until `T12-XA-V` is committed.
 
 A gate passes only after focused success, failure, and boundary tests are green,
 the measurements are captured, the original T12 task designer reviews the
@@ -750,11 +831,12 @@ Aggregate report arithmetic is not claimed until the post-100 integration.
 The reference candidate does not measure language understanding, planning
 quality, or LLM reasoning.
 
-A future natural-language/LLM adapter may implement the same
-`CADCandidateProtocol` only in a separately authorized task. It receives the
-same candidate-visible input, cannot receive the private expectation, and must
-use the same runner and route. T12 adds no LLM SDK, prompt demonstrations,
-CLI, MCP, renderer, Mesh edit, file save/load, or bicycle-specific CAD command.
+The separately authorized JSON adapter implements the same
+`CADCandidateProtocol`. It receives the same candidate-visible input, cannot
+receive the private expectation, and must use this public executor and route.
+Neither module adds an LLM SDK, prompt demonstrations, MCP, renderer, Mesh edit,
+file save/load, bicycle-specific CAD command, or multi-round planning engine;
+the dedicated CLI and JSON framing remain in their own targets.
 
 ## Runtime Flows
 
@@ -837,6 +919,11 @@ category oracle owns no live project state and is read-only; it consumes one
 immutable final view plus the private expectation held by its facade and returns
 a value report.
 
+The public executor owns no additional state. Each call delegates one fresh
+lifecycle to the existing facade/harness and returns only after oracle
+projection and unconditional cleanup. An external candidate object is retained
+only for that call.
+
 No benchmark state is persisted as a project source, package, CAD document, or
 Mesh asset. Reports are values in T12; application-owned save/load remains
 outside the benchmark. If a future report file is added, it must be a separate
@@ -889,6 +976,7 @@ through the following vertical work items:
 | Cumulative semantic stability | Every `T12-<CATEGORY>-G` | Review all committed cases in the category for shared assumptions, false positives/negatives, route authority, tolerance/plane semantics, and measured bounds before the next category |
 | Sphere honesty | T12-SPH-001...005 | Production capability observation yields typed expected unsupported with zero publication when analytic sphere is absent; substitutes remain rejected by the unchanged exact contract |
 | Exactly 100 implemented cases | T12-LIN through T12-SPH | Catalog identity plus one reviewed vertical evidence commit per stable case; catalog structure alone is insufficient |
+| External candidate executor | T12-XA-A | Exact activated twenty-ID allow-list, value-equal request/live contexts, arbitrary protocol candidate line/rectangle success and mismatch through the production route/oracle, explicit discriminator golden JSON, legacy-shape rejection, typed inactive/error projection, cleanup, privacy/static boundary, and focused tests |
 | Parallelism, baselines, and aggregate report | T12-I | Only after all 100 gates: serial replay, bounded-parallel equivalence and measurement, capability/execution baselines, deterministic report, cleanup, and timed integration tests |
 | Final cumulative correctness | T12-IV | Review every case/category/integration artifact and actual path; verify design synchronization, static audits, commits, and eligible normal push |
 
@@ -897,3 +985,6 @@ Any change to `ProjectAgentCommandController`, `ProjectWorkspace`,
 services, capability descriptors, catalog manifest, tolerance policy, or
 outcome arithmetic requires rechecking this design and the package/system
 parents. A type-only build or screenshot cannot close a behavioral proof.
+Changes to activated IDs, candidate context, decision/action Codable shape, or
+sanitized result projection also require the JSON-adapter and CLI designs plus
+their golden/process tests.

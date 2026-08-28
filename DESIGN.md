@@ -9,7 +9,10 @@ the already implemented Agent CAD route and T09 Authored Mesh use cases without
 adding a second project authority or a modeling-specific transport. T11 defines
 a bounded L2 engineering-reference design and evidence contract; it does not
 extend the T10 runtime. T12 measures basic CAD realization through that
-existing route; it adds no CAD authority, transport, renderer, or LLM route.
+existing route; its core adds no CAD authority, transport, renderer, or LLM
+route. The separately authorized T12 external-Agent adapter adds one bounded native
+JSON CLI above the benchmark without changing that project route or adding a
+general transport/LLM integration.
 
 This document has no parent. Its direct children are the
 [RupaKit package design](RupaKit/DESIGN.md), which indexes the changed module
@@ -28,9 +31,12 @@ The system owns the cross-module rule that one registered `ProjectWorkspace`
 serves CAD automation, Make Editable, Authored Mesh reads and edits, history,
 presentation evaluation, and application-owned persistence.
 
-It does not add an MCP server, CLI command, bicycle-specific command, new Mesh
-kernel operation, renderer, Agent file-lifecycle authority, benchmark-specific
-CAD command, or LLM integration. T10's bicycle workflow is a capability
+It does not add an MCP server, general-purpose CLI command, bicycle-specific
+command, new Mesh kernel operation, renderer, Agent file-lifecycle authority,
+benchmark-specific CAD command, or LLM integration. The dedicated
+`rupa-agent-cad-benchmark` executable only exchanges one activated case through
+versioned bounded JSON; it is not a new modeling or project authority. T10's
+bicycle workflow is a capability
 fixture composed from existing CAD automation commands. The T11 child is a
 separate evidence/design branch and does not change this runtime boundary. T12
 is a benchmark composition above the registered Agent route. Its runner may
@@ -42,7 +48,7 @@ the final immutable source/B-Rep snapshot.
 
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
-| [RupaKit package](RupaKit/DESIGN.md) | child | T10 dependency and verification composition | Indexes Project, RupaKit, AgentProtocol, and AgentRuntime ownership. | Details remain in the owning module. |
+| [RupaKit package](RupaKit/DESIGN.md) | child | T10/T12 dependency and verification composition | Indexes Project, RupaKit, AgentProtocol, AgentRuntime, benchmark, JSON-adapter, and dedicated-CLI ownership. | Details remain in the owning module. |
 | [CAD/Mesh responsibility](Rupa/CAD_MESH_RESPONSIBILITY_CONTRACT.md) | depends on | CAD modeling and Authored Mesh presentation authority | Defines retained representation meaning. | A derived evaluation snapshot is never persisted source. |
 | [State/project contract](Rupa/STATE_AND_PROJECT_CONTRACT.md) | depends on | exact coordinates, staging, history, rollback, save ownership | Defines the sole project publication lifecycle. | Agent mutations never bypass `ProjectController`. |
 | [Current task progress](RupaKit/PROGRESS.md) | coordinates with | work order and evidence ownership | Tracks the cumulative T10/T11/T12 design, implementation, and integration proof. | A design checkbox is not behavior evidence. |
@@ -70,6 +76,8 @@ flowchart LR
     end
     subgraph T12["T12 vertical CAD benchmark branch"]
         Challenge["100 target specifications\nunverified by default"] --> Active["One active case\nLIN-001 first"]
+        External["External Agent\nJSON response"] --> Adapter["Dedicated bounded\nJSON CLI adapter"]
+        Adapter --> Active
         Active --> Runner["Fresh serial runner"]
         Runner --> AgentRoute["ProjectAgentCommandController"]
         AgentRoute --> SourceSnapshot["Immutable source/B-Rep view"]
@@ -134,6 +142,12 @@ flowchart LR
 13. Case activation and category gates use concurrency 1. Parallel measurement,
     aggregate scoring/reporting, and execution-baseline establishment begin only
     after all 100 vertical gates pass.
+14. The external-Agent JSON adapter accepts only the twenty gate-reviewed IDs
+    `LIN-001`...`LIN-012` and `REC-001`...`REC-008`. It fingerprints only the
+    candidate-visible context, passes the decoded decision through the same
+    benchmark executor/controller/oracle path at concurrency 1, and cannot
+    expose private expectations, activate later cases, retry a publication, or
+    become source authority.
 
 T10's bicycle workflow is a capability fixture for the Agent route, authority
 transition, application-owned save/load, and renderer traversal. Its
@@ -183,6 +197,12 @@ sequenceDiagram
     Note over C,O: next case remains blocked until designer gate review and commit
 ```
 
+The separately authorized external process composes above `Candidate`: the
+dedicated CLI emits a versioned request containing the same public context,
+validates one bounded versioned response against its case and context
+fingerprint, and supplies that decision through `CADCandidateProtocol`. The
+runner, production controller, immutable oracle, and cleanup flow are unchanged.
+
 ## State, Ownership, and Lifecycle
 
 `ProjectController` owns Product, CAD, Authored Mesh, package, evaluation,
@@ -194,6 +214,8 @@ owns the benchmark target-specification catalog, per-case activation evidence,
 capability-availability and execution-regression baseline evidence,
 candidate-response, oracle-result, and report values plus one isolated case
 runner at a time; it owns no project or CAD source state.
+The JSON adapter owns only immutable envelopes, bounded process buffers, and a
+single invocation; it retains no project or benchmark-private state.
 
 ## Failure, Concurrency, and Constraints
 
@@ -208,6 +230,9 @@ speedup. Activation remains at concurrency 1 until all 100 gates pass.
 MainActor/project-actor serialization is recorded as an observed constraint. A capability or
 environment mismatch is an explicit baseline drift; an oracle or infrastructure
 failure invalidates the run without updating the execution-regression baseline.
+The external adapter executes one activated case per process, reads at most one
+65,536-byte response, and uses no network, background scheduler, or fallback
+reference candidate.
 
 ## Verification and Change Impact
 
@@ -218,6 +243,7 @@ failure invalidates the run without updating the execution-regression baseline.
 | Agent routing | Runtime tests proving each request reaches the registered workspace use case and preserves typed stale/cancel/no-retry failures. |
 | T10 capability fixture | Agent CAD route, representation transition, application-owned save/load, renderer triangle traversal, and deterministic presentation output are exercised through the existing path. The fixture is not evidence of T11 L2 dimensional coherence, semantic bicycle parts, interfaces, manufacturing readiness, structural safety, or certification. |
 | T12 benchmark contract | `RupaAgentCADBenchmark` keeps exactly 100 stable target specifications but proves implementation one case at a time. Every case requires an actual registered-controller route, exact source/B-Rep oracle, failure evidence, planning/route/oracle/total-wall telemetry with action/command/read/entity counts, designer gate review, and commit; categories receive cumulative gates. Parallel measurement, fixed-denominator aggregate scoring/reporting, and execution baseline follow only after all 100 gates. A reference-plan result is control-path evidence, not LLM reasoning evidence. |
+| T12 external candidate adapter | Golden JSON, bounded decode, fingerprint mismatch, inactive-case, process exit, privacy scan, and actual line/rectangle process tests prove that an external response reaches the same activated executor and exact oracle without exposing private expectations. |
 | Portability | Focused Native runtime tests and compile/link evidence only for portable targets supported by their dependency graph; unavailable target entry failures are reported, not treated as success. |
 
 Changes to Agent wire values, project authority, representation selection, file
