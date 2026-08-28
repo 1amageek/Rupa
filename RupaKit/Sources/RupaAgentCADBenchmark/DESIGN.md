@@ -665,6 +665,52 @@ not change. Focused and affected benchmark/adapter/CLI tests, privacy/static
 audits, original-designer review, and that row's individual commit close the
 leaf before the next row becomes ready.
 
+### Circle category cumulative gate
+
+`T12-CIR-G` changes no geometry, public API, activation authority, wire schema,
+catalog, tolerance, or runtime policy. One dedicated `.serialized` checkpoint
+owns a single cumulative replay of `CADActivatedCircleCase.allCases` in the
+exact ordered sequence CIR-001...CIR-012. Each case uses
+`CADCircleCaseRunner.runReference()` and therefore traverses the existing circle
+facade, shared lifecycle, registered production controller, immutable source
+snapshot, and analytic/profile oracle. The checkpoint may not construct source
+geometry directly, substitute a reference document, or replace the case oracle.
+
+The checkpoint first asserts the exact twelve-case order and uniqueness, then
+derives coverage from each public challenge projection. The required coverage
+is:
+
+| Dimension | Exact cumulative count |
+|---|---:|
+| XY plane | 6 |
+| XZ plane | 3 |
+| YZ plane | 3 |
+| Millimetre | 8 |
+| Centimetre | 1 |
+| Metre | 2 |
+| Inch | 1 |
+
+For every replayed case, the validated result must be `realized`, publish
+exactly once, complete cleanup with zero registrations, and report one action,
+one production command, at least one immutable source read, one circle entity,
+one feature, and zero bodies. Planning, route, oracle, and total wall timings
+must all be positive. The checkpoint remains serial concurrency 1; it neither
+introduces parallel measurement nor computes a benchmark score.
+
+The twelve committed case suites remain the authority for independent
+postpublication wrong-radius or wrong-centre rejection without retry,
+prepublication normal-offset rejection, typed timeout and cleanup, exact public
+candidate projection, world/local plane mapping, and private-expectation
+separation. The category gate inventories and reruns that affected suite but
+does not duplicate those fixtures. Existing executor, JSON adapter, and actual
+CLI tests compose with the checkpoint to prove the exact thirty-six-ID external
+authority, frozen aggregate
+`5c8cd7cbe83738f91459b1103d291194143042bde7e6f9c8415aa91f66ce5a28`,
+typed ANG-001 inactivity, and unchanged shared/schema/catalog authority. The
+gate passes only when the dedicated checkpoint, affected benchmark/adapter/CLI
+suites, static privacy audit, diff-check, original-designer review, and commit
+`Verify Agent circle benchmark category` are complete.
+
 ### Vertical Case Gate
 
 Cases are activated in the lexical/category order recorded in
