@@ -107,6 +107,7 @@ tests, not in the future benchmark API:
 | CAD action route | `.execute`/`.executeBatch` are lowered to `AutomationBatch` and sent to `ProjectWorkspace.executeAutomation`. | [`ProjectAgentCommandController.swift`](../RupaAgentRuntime/ProjectAgentCommandController.swift), [`ProjectWorkspace.swift`](../RupaKit/ProjectWorkspace.swift) |
 | Project authority | Source mutation is staged, validated against project/generation/transaction/publication coordinates, and published by the existing `ProjectController` actor. | [`ProjectController.swift`](../RupaProject/ProjectController.swift), [`ProjectSourceTransaction.swift`](../RupaProject/ProjectSourceTransaction.swift) |
 | Batch isolation | `AutomationRunner` uses isolated source/workspace/read transactions and returns typed execution context/results. | [`AutomationRunner+Batch.swift`](../RupaAutomation/AutomationRunner+Batch.swift), [`AutomationStagedBatchExecutor.swift`](../RupaAutomation/AutomationStagedBatchExecutor.swift) |
+| Result identity | `AutomationResult` defaults `primaryFeatureID` to `createdFeatureIDs.first`, so a successful creation response may intentionally expose the same FeatureID through both primary and created selectors. | [`AutomationResult.swift`](../RupaAutomation/AutomationResult.swift) |
 | Immutable observation | Sketch summaries and exact topology snapshots read source/evaluation values without providing mutation authority. | [`SketchEntitySnapshotService.swift`](../RupaCore/SketchEntitySnapshotService.swift), [`TopologySnapshotService.swift`](../RupaCore/TopologySnapshotService.swift), [`ProjectViewSnapshot.swift`](../RupaKit/ProjectViewSnapshot.swift) |
 | Failure/rollback | Stale Agent mutations are rejected and existing state remains unchanged; registered-session and cancellation/no-retry behavior are typed. | [`ProjectAgentCommandControllerTests.swift`](../../Tests/RupaUIPackageTests/ProjectAgentCommandControllerTests.swift) |
 
@@ -316,8 +317,14 @@ when a later action depends on a returned feature ID. A batch is an execution
 optimization, not a case contract. The response records command indexes and
 returned primary/created `FeatureID`s. Final output-role bindings reference
 an exact selector composed of response step and either primary output or a
-created-output index. Bindings are rejected if they are ambiguous, missing,
-duplicated, stale, out of range, or not owned by the fresh case document.
+created-output index. `createdFeatureIDs` are unique within one production
+response, while `primaryFeatureID` may legitimately alias one of them because
+primary is a convenience view over the result, not a second created output.
+`CADCandidateStepResult` preserves that production response faithfully. Role
+binding validation resolves selectors to actual FeatureIDs and rejects the same
+resolved FeatureID when it is assigned to more than one role across any selector
+or response step. Bindings are also rejected if they are ambiguous, missing,
+stale, out of range, or not owned by the fresh case document.
 
 An unsupported declaration is typed and contains a required capability ID,
 capability version, and bounded reason code. It is accepted as
@@ -669,7 +676,7 @@ through the following vertical work items:
 
 | Invariant | Owning work item | Required behavioral evidence |
 |---|---|---|
-| Minimum candidate/private and identity foundation | T12-F | Public projection tests, aggregate private/capability/tolerance digest drift, exact output selector failures, and no category-wide behavior claim |
+| Minimum candidate/private and identity foundation | T12-F | Public projection tests, aggregate private/capability/tolerance digest drift, production-faithful primary/created alias acceptance, resolved-FeatureID duplicate-role rejection across selectors and steps, exact output selector failures, and no category-wide behavior claim |
 | First actual vertical behavior | T12-LIN-001 | One fresh production route, exact line source oracle, adversarial failure, binary outcome, required telemetry, designer gate review, and case commit |
 | Per-case production/source proof | Every `T12-<CATEGORY>-<NNN>` | The same six-axis gate with evidence owned by that case; a failure blocks the next case and changes the owning design before retry |
 | Cumulative semantic stability | Every `T12-<CATEGORY>-G` | Review all committed cases in the category for shared assumptions, false positives/negatives, route authority, tolerance/plane semantics, and measured bounds before the next category |

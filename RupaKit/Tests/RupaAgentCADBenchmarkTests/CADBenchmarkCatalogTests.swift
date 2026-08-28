@@ -183,7 +183,7 @@ func outputRoleSelectorsResolveAgainstPublishedPriorResults() throws {
             operation: "sketch",
             status: .published,
             primaryFeatureID: "feature-first",
-            createdFeatureIDs: ["feature-first", "feature-second"]
+            createdFeatureIDs: ["feature-first", "feature-first"]
         ).validate()
     }
 

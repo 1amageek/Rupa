@@ -31,11 +31,10 @@ public struct CADCandidateStepResult: Codable, Equatable, Sendable {
               primaryFeatureID.map({ !$0.isEmpty }) ?? true,
               createdFeatureIDs.allSatisfy({ !$0.isEmpty }),
               Set(createdFeatureIDs).count == createdFeatureIDs.count,
-              primaryFeatureID.map({ !createdFeatureIDs.contains($0) }) ?? true,
               diagnostics.allSatisfy({ $0.isEmpty == false }) else {
             throw CADBenchmarkError.invalidInput(
                 caseID: "T12.RESULT",
-                reason: "Candidate step result must have unique created IDs and a primary ID outside that set."
+                reason: "Candidate step result must have unique created IDs; the primary ID may alias one created ID."
             )
         }
     }
