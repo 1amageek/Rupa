@@ -133,8 +133,8 @@ source entities and exact B-Rep properties through the immutable final view.
 
 The benchmark is split into target specifications, candidate-facing public
 contracts, an internal expectation store, a route runner, a read-only oracle,
-and a case-evidence ledger. Only the currently activated case must compose all
-of those responsibilities. The public candidate source files contain no
+and a case-evidence ledger. Only cases in the reviewed activation ledger may
+compose all of those responsibilities. The public candidate source files contain no
 private expectation reference. The runner alone projects one internal entry
 into a public challenge, mutates a fresh isolated project through the
 registered controller, and passes the matching expectation to the oracle.
@@ -143,7 +143,7 @@ state.
 
 ```mermaid
 flowchart LR
-    Specs["100 target specifications\nunverified by default"] --> Active["One active case\nLIN-001 first"]
+    Specs["100 target specifications\nunverified by default"] --> Active["Reviewed activation ledger\nadded one case at a time"]
     Active --> Input["Public challenge text\ncapability + prior typed results"]
     Private["Internal expectation\nsource + B-Rep predicates"] --> Oracle["Read-only exact oracle"]
     Active --> Private
@@ -176,9 +176,10 @@ implementation permission to add a parallel authority.
 | `CADChallenge` | Public projection; candidate-visible instruction, capability metadata, roles, and budget | No structured expected geometry, feature IDs, topology, tolerance, or plan |
 | `CADExpectedGeometry` | Internal; oracle-private source/B-Rep expectation and role checks | Runner/oracle boundary only; never in public candidate files |
 | `CADCandidateProtocol` | Public; bounded request/response continuation | No workspace, controller, or expectation reference |
-| `CADCandidateAction` | Public; the currently active LIN-001 line automation intent | No session, coordinate, expectation, or future-category transform fields |
-| `CADLIN001CaseRunner` | Internal; LIN-001 public challenge projection, fresh lifecycle, route dispatch, response capture, cleanup | Owns only the ephemeral LIN-001 orchestration and the private expectation-to-oracle handoff |
-| `CADLIN001Oracle` | Internal; exact LIN-001 source verification and zero-body evaluation check | Read-only immutable input plus the LIN-001 internal expectation |
+| `CADCandidateAction` | Public; the active finite-line automation intent | No session, coordinate, expectation, or future-category transform fields |
+| `CADActivatedLineCase` | Internal; the reviewed line IDs that may enter behavioral execution | Adds exactly one ID only when that case's vertical implementation begins; catalog presence alone is never activation |
+| `CADLineCaseRunner` | Internal line-category extraction beginning at LIN-002; public challenge projection, fresh lifecycle, route dispatch, response capture, cleanup | Owns one ephemeral activated line case and the private expectation-to-oracle handoff; it is not a cross-category runner |
+| `CADLineOracle` | Internal line-category extraction beginning at LIN-002; exact finite-line source verification and zero-body evaluation check | Read-only immutable input plus the selected activated line's internal expectation |
 | `CADCaseOutcome` / score | Public result projection; failure taxonomy and binary scoring | No fallback success |
 | `CADBenchmarkReport` | Public result projection; deterministic run and measurement projection | Value/report only |
 
@@ -274,19 +275,22 @@ Candidate-visible challenge text + CapabilitySnapshot + prior CandidateStepResul
        -> finish(CADOutputRoleBindings)
 ```
 
-`CADCandidateAction` currently exposes only the LIN-001 finite-line automation
-payload. Future category actions remain target specifications until their
-vertical case owns a production contract; transform pivot and composition-order
-semantics belong to `T12-TRN-001` and are not part of this foundation. The line
-payload is immutable request data and is valid only when passed through the
-controller route. An action does not contain a session ID, workspace reference,
-project authority coordinate, `EditorSession`, or a direct CAD object.
-`CADLIN001CaseRunner` owns the mapping from this action to an `AgentRequest`,
-attaches the fresh session ID and current generation/workspace coordinates,
-then calls `ProjectAgentCommandController.handle`. A later case must add only
-its own reviewed vertical mapping; LIN-001 does not provide a generic category
-runner. The same boundary applies to the reference-plan candidate and a future
-natural-language/LLM adapter.
+`CADCandidateAction` exposes only the finite-line automation payload proven by
+activated line cases. Future category actions remain target specifications until
+their vertical case owns a production contract; transform pivot and
+composition-order semantics belong to `T12-TRN-001` and are not part of this
+foundation. The line payload is immutable world-space request data and is valid
+only when passed through the controller route. An action does not contain a
+session ID, workspace reference, project authority coordinate, `EditorSession`,
+or a direct CAD object. At LIN-002, the lifecycle proven by LIN-001 is extracted
+only into a line-category runner selected by `CADActivatedLineCase`; accepting an
+arbitrary catalog ID is forbidden. Each later line case adds its ID only in its
+own reviewed commit. The runner attaches the fresh session ID and current
+generation/workspace coordinates, then calls
+`ProjectAgentCommandController.handle`. No rectangle, circle, solid,
+constraint, transform, compound, or sphere behavior is generalized by this
+extraction. The same boundary applies to the reference-plan candidate and a
+future natural-language/LLM adapter.
 
 Candidate/reference code may not mutate `EditorSession`, `DesignDocument`, or
 `CADDocumentStore`, evaluate the CAD kernel, construct B-Rep, construct Mesh
@@ -362,7 +366,7 @@ reference candidate implements `CADCandidateProtocol` and derives the action
 only from the public `CADChallenge`. The runner copies the production
 `AutomationResult` primary/created FeatureIDs without normalization, binds the
 segment role to the primary alias, and passes the private line expectation only
-to `CADLIN001Oracle`. The oracle requires one unsuppressed curve-owning sketch
+to `CADLineOracle`. The oracle requires one unsuppressed curve-owning sketch
 feature, one line entity, exact oriented endpoints and length under the fresh
 document's `ModelingTolerance`, and zero evaluated bodies.
 
@@ -372,6 +376,72 @@ document's `ModelingTolerance`, and zero evaluated bodies.
 | Prepublication rejection | Invalid plane, stale coordinates, and the harness timeout retain the observed pre-attempt coordinates and publish nothing; pre-planning cancellation creates no workspace registration or publication. A registration timeout unregisters the runner-owned UUID even when the register child stored its entry before returning. |
 | Postpublication semantic rejection | A syntactically valid wrong-length line is read from the immutable final view, rejected by the oracle, retains its committed coordinate, and is not retried. |
 | Measurement | Serial execution records all four phase durations, action/command/read counts, entity/feature/body counts, cancellation checkpoints, and cleanup duration. Candidate planning, workspace setup, registration, production dispatch, and oracle evaluation share one 10-second attempt deadline; the serial focused test owns the one-minute end-to-end safety ceiling including cleanup. |
+
+### Activated line parameter contract through LIN-010
+
+LIN-002 may extract only the line-category behavior already established by
+LIN-001: one public finite-line action, one production `createLineSketch`
+command, one returned primary/created FeatureID alias, one `segment` role, one
+source sketch feature/entity, zero evaluated bodies, the fresh registered
+controller lifecycle, exact publication coordinates, shared deadline, cleanup,
+and telemetry. The extraction is internal and selected by
+`CADActivatedLineCase`. An ID present only in the 100-case catalog cannot be
+executed. LIN-001 remains a regression input to the extracted contract, and each
+new enum case, focused evidence, designer approval, and commit activates exactly
+one later line.
+
+The candidate and adapter consume only the public challenge. The line action's
+endpoints are world-space values. The public challenge's declared orientation
+and plane-through-start anchor define the target affine frame; the submitted
+action cannot replace that anchor. The adapter validates both submitted
+endpoints against that public frame with the fresh document's
+`ModelingTolerance`, projects them through `SketchPlaneCoordinateSystem`, and
+passes only the resulting local two-dimensional points to
+`AutomationCommand.createLineSketch`. Private expected geometry is not used by
+this mapping.
+
+| Public orientation and anchor | Canonical swift-CAD source plane | Built-in local coordinates | Required boundary evidence |
+|---|---|---|---|
+| `xy`, anchor within tolerance of global XY | `.xy` | `(world x, world y)` | Global XY source storage and world endpoint reconstruction |
+| `xz`, anchor within tolerance of global XZ | `.zx` | `(world z, world x)` | The naming/order conversion is explicit; `.xy` or `.yz` is rejected |
+| `yz`, anchor within tolerance of global YZ | `.yz` | `(world y, world z)` | The source normal is +X and world endpoints survive local projection |
+| Any orientation offset from its global plane | `.plane(Plane3D(origin: public anchor, normal: declared positive normal))` | Derived only by `SketchPlaneCoordinateSystem` | Stored affine origin/normal, normal distance, and reconstructed world placement are verified |
+
+The oracle receives the private `CADLineChallengeInput` only after production
+execution. It requires the canonical stored plane for that case, reconstructs
+both world endpoints from the actual stored plane and local source entity,
+checks their order, coordinates, length, plane placement, sole-feature/entity
+shape, primary role binding, and zero bodies under the fresh document's
+`ModelingTolerance`. Comparing only local `(x, y)` source values is insufficient
+outside global XY.
+
+| Case | New variation owned by its commit | Canonical source-plane proof |
+|---|---|---|
+| `LIN-002` | Translated vertical 50 mm line | Global `.xy`; non-origin local endpoints |
+| `LIN-003` | Negative-to-positive horizontal 60 mm line | Global `.xy`; oriented endpoint order |
+| `LIN-004` | First XZ line, along world +Z | Benchmark `.xz` maps to swift-CAD `.zx`; local axes are `(Z, X)` |
+| `LIN-005` | First YZ line, translated along world Y | Global `.yz`; local axes are `(Y, Z)` |
+| `LIN-006` | Diagonal 30-40-50 mm line | Global `.xy`; simultaneous coordinate and length checks |
+| `LIN-007` | Reverse world-X orientation | Global `.xy`; swapping endpoints is a semantic failure |
+| `LIN-008` | Centimeter input | Global `.xy`; conversion to meters preserves placement and 125 cm length |
+| `LIN-009` | Meter input on XZ, along world +X | Global `.zx`; the world-X direction occupies the second local axis |
+| `LIN-010` | Inch input on YZ at world x = -5 inches | Affine `.plane` with public anchor and +X normal; built-in `.yz` at x = 0 is a wrong placement |
+
+Each case owns serial behavioral tests for exact realization, a syntactically
+valid published wrong endpoint/orientation that the oracle rejects without
+retry, an off-target-plane prepublication rejection, a typed deadline outcome,
+zero registrations after every terminal result, and actual phase/count
+telemetry. The LIN-001 stale, cancellation, late-registration-timeout, and
+primary/created-alias tests remain shared lifecycle regressions and are rerun
+when the extracted line runner changes.
+
+After LIN-010, `T12-LIN-010G` compares the ten committed cases before LIN-011 is
+activated. It proves that only LIN-001...010 are executable, covers six XY, two
+XZ, and two YZ cases plus millimeter/centimeter/meter/inch conversion, compares
+per-case publication/no-retry/cleanup and telemetry evidence at serial
+concurrency 1, reruns the candidate/private boundary audit, and confirms that no
+aggregate execution baseline or score has been inferred from the two remaining
+unmeasured line specifications.
 
 A gate passes only after focused success, failure, and boundary tests are green,
 the measurements are captured, the original T12 task designer reviews the
@@ -697,6 +767,7 @@ through the following vertical work items:
 | Minimum candidate/private and identity foundation | T12-F | Public projection tests, aggregate private/capability/tolerance digest drift, production-faithful primary/created alias acceptance, resolved-FeatureID duplicate-role rejection across selectors and steps, exact output selector failures, and no category-wide behavior claim |
 | First actual vertical behavior | T12-LIN-001 | One fresh production route, exact line source oracle, adversarial failure, binary outcome, required telemetry, designer gate review, and case commit |
 | Per-case production/source proof | Every `T12-<CATEGORY>-<NNN>` | The same six-axis gate with evidence owned by that case; a failure blocks the next case and changes the owning design before retry |
+| First-ten line comparison | T12-LIN-010G | Exactly ten activated line IDs, canonical XY/XZ/YZ and affine-plane source mappings, four unit families, oriented world endpoints, per-case route/failure/cleanup/telemetry evidence, serial-only execution, and no success claim for LIN-011/012 |
 | Cumulative semantic stability | Every `T12-<CATEGORY>-G` | Review all committed cases in the category for shared assumptions, false positives/negatives, route authority, tolerance/plane semantics, and measured bounds before the next category |
 | Sphere honesty | T12-SPH-001...005 | Production capability observation yields typed expected unsupported with zero publication when analytic sphere is absent; substitutes remain rejected by the unchanged exact contract |
 | Exactly 100 implemented cases | T12-LIN through T12-SPH | Catalog identity plus one reviewed vertical evidence commit per stable case; catalog structure alone is insufficient |

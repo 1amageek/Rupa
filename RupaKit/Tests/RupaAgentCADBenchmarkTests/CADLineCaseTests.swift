@@ -2,12 +2,12 @@ import Testing
 @testable import RupaAgentCADBenchmark
 
 @Suite(.serialized)
-struct CADLIN001Tests {
+struct CADLineCaseTests {
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
 func lin001CreatesExactSourceLineThroughProductionController() async throws {
-    let result = try await CADLIN001CaseRunner().runReference()
+    let result = try await CADLineCaseRunner(case: .lin001).runReference()
 
     try result.validate()
     #expect(result.caseID == "LIN-001")
@@ -49,7 +49,7 @@ func lin001OracleRejectsWrongPublishedGeometryWithoutRetry() async throws {
         end: CADPoint3D(x: 30, y: 0, z: 0, unit: .millimeter)
     )))
 
-    let result = try await CADLIN001CaseRunner().run(action: wrong)
+    let result = try await CADLineCaseRunner(case: .lin001).run(action: wrong)
 
     try result.validate()
     #expect(result.outcome == .invalidSubmission)
@@ -72,7 +72,7 @@ func lin001InvalidPrepublicationActionPublishesNothing() async throws {
         end: CADPoint3D(x: 25, y: 0, z: 0, unit: .millimeter)
     )))
 
-    let result = try await CADLIN001CaseRunner().run(action: invalid)
+    let result = try await CADLineCaseRunner(case: .lin001).run(action: invalid)
 
     try result.validate()
     #expect(result.outcome == .invalidSubmission)
@@ -87,7 +87,7 @@ func lin001InvalidPrepublicationActionPublishesNothing() async throws {
 @MainActor
 @Test(.timeLimit(.minutes(1)))
 func lin001StaleProductionCoordinatesPublishNothing() async throws {
-    let result = try await CADLIN001CaseRunner().runStaleReference()
+    let result = try await CADLineCaseRunner(case: .lin001).runStaleReference()
 
     try result.validate()
     #expect(result.outcome == .executionFailure)
@@ -102,7 +102,7 @@ func lin001StaleProductionCoordinatesPublishNothing() async throws {
 func lin001CancellationBeforePlanningPublishesNothing() async throws {
     let task = Task { @MainActor in
         await Task.yield()
-        return try await CADLIN001CaseRunner().runReference()
+        return try await CADLineCaseRunner(case: .lin001).runReference()
     }
     task.cancel()
 
@@ -118,7 +118,10 @@ func lin001CancellationBeforePlanningPublishesNothing() async throws {
 @MainActor
 @Test(.timeLimit(.minutes(1)))
 func lin001TimeoutBeforePublicationIsTypedAndCleansUp() async throws {
-    let result = try await CADLIN001CaseRunner(timeoutWallNanoseconds: 1).runReference()
+    let result = try await CADLineCaseRunner(
+        case: .lin001,
+        timeoutWallNanoseconds: 1
+    ).runReference()
 
     try result.validate()
     #expect(result.outcome == .timeout)
@@ -131,7 +134,8 @@ func lin001TimeoutBeforePublicationIsTypedAndCleansUp() async throws {
 @MainActor
 @Test(.timeLimit(.minutes(1)))
 func lin001SharedDeadlineTerminatesDelayedProductionRoute() async throws {
-    let result = try await CADLIN001CaseRunner(
+    let result = try await CADLineCaseRunner(
+        case: .lin001,
         timeoutWallNanoseconds: 500_000_000,
         preRouteDelayNanoseconds: 2_000_000_000
     ).runReference()
@@ -147,7 +151,8 @@ func lin001SharedDeadlineTerminatesDelayedProductionRoute() async throws {
 @MainActor
 @Test(.timeLimit(.minutes(1)))
 func lin001TimedOutRegistrationCleansLateEntry() async throws {
-    let result = try await CADLIN001CaseRunner(
+    let result = try await CADLineCaseRunner(
+        case: .lin001,
         timeoutWallNanoseconds: 500_000_000,
         postRegistrationDelayNanoseconds: 2_000_000_000
     ).runReference()
@@ -175,8 +180,8 @@ func lin001AdapterUsesFreshModelingToleranceForPlaneDistance() async throws {
         end: CADPoint3D(x: 0.025, y: 0, z: 2e-6, unit: .meter)
     )))
 
-    let accepted = try await CADLIN001CaseRunner().run(action: withinTolerance)
-    let rejected = try await CADLIN001CaseRunner().run(action: outsideTolerance)
+    let accepted = try await CADLineCaseRunner(case: .lin001).run(action: withinTolerance)
+    let rejected = try await CADLineCaseRunner(case: .lin001).run(action: outsideTolerance)
 
     try accepted.validate()
     try rejected.validate()
@@ -202,7 +207,7 @@ func lin001ReferenceCandidateUsesOnlyPublicContext() async throws {
         remainingRounds: challenge.budget.maximumRounds,
         remainingActions: challenge.budget.maximumActions
     )
-    let candidate: any CADCandidateProtocol = CADLIN001ReferenceCandidate()
+    let candidate: any CADCandidateProtocol = CADLineReferenceCandidate()
 
     let decision = try await candidate.decide(for: context)
 
@@ -217,7 +222,7 @@ func lin001ReferenceCandidateUsesOnlyPublicContext() async throws {
 
 @Test
 func lin001RouteEvidenceRejectsMoreThanOnePublication() throws {
-    let fabricated = CADLIN001RouteEvidence(
+    let fabricated = CADLineRouteEvidence(
         initialDocumentGeneration: .init(1),
         finalDocumentGeneration: .init(3),
         initialTransactionRevision: .init(2),
@@ -233,10 +238,143 @@ func lin001RouteEvidenceRejectsMoreThanOnePublication() throws {
     )
 
     do {
-        try fabricated.validate()
+        try fabricated.validate(caseID: "LIN-001")
         Issue.record("LIN-001 route evidence must reject more than one publication.")
     } catch let error as CADBenchmarkError {
         guard case .invalidInput = error else {
+            Issue.record("Unexpected typed error: \(error)")
+            return
+        }
+    }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func lin002CreatesExactTranslatedVerticalLineThroughProductionController() async throws {
+    let result = try await CADLineCaseRunner(case: .lin002).runReference()
+
+    try result.validate()
+    #expect(result.caseID == "LIN-002")
+    #expect(result.outcome == .realized)
+    #expect(result.routeEvidence.didPublish)
+    #expect(result.routeEvidence.cleanupCompleted)
+    #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    #expect(result.telemetry.actionCount == 1)
+    #expect(result.telemetry.commandCount == 1)
+    #expect(result.telemetry.readCount >= 1)
+    #expect(result.telemetry.entityCount == 1)
+    #expect(result.telemetry.featureCount == 1)
+    #expect(result.telemetry.bodyCount == 0)
+    print(
+        "LIN-002 telemetry: planning=\(result.telemetry.planningWallNanoseconds)ns "
+            + "route=\(result.telemetry.routeWallNanoseconds)ns "
+            + "oracle=\(result.telemetry.oracleWallNanoseconds)ns "
+            + "total=\(result.telemetry.totalWallNanoseconds)ns"
+    )
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func lin002OracleRejectsReversedPublishedEndpointsWithoutRetry() async throws {
+    let reversed = CADCandidateAction.automation(.sketch(.line(
+        name: "LIN-002.reversed",
+        plane: .xy,
+        start: CADPoint3D(x: 10, y: 40, z: 0, unit: .millimeter),
+        end: CADPoint3D(x: 10, y: -10, z: 0, unit: .millimeter)
+    )))
+
+    let result = try await CADLineCaseRunner(case: .lin002).run(action: reversed)
+
+    try result.validate()
+    #expect(result.outcome == .invalidSubmission)
+    #expect(result.routeEvidence.didPublish)
+    #expect(result.routeEvidence.finalPublicationSequence == result.routeEvidence.initialPublicationSequence + 1)
+    #expect(result.telemetry.actionCount == 1)
+    #expect(result.telemetry.commandCount == 1)
+    #expect(result.telemetry.readCount == 2)
+    #expect(result.telemetry.entityCount == 1)
+    #expect(result.routeEvidence.cleanupCompleted)
+    #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    #expect(result.diagnostics.contains { $0.contains("oracle mismatch") })
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func lin002RejectsOffPlaneInputBeforePublication() async throws {
+    let offPlane = CADCandidateAction.automation(.sketch(.line(
+        name: "LIN-002.off-plane",
+        plane: .xy,
+        start: CADPoint3D(x: 10, y: -10, z: 2, unit: .millimeter),
+        end: CADPoint3D(x: 10, y: 40, z: 2, unit: .millimeter)
+    )))
+
+    let result = try await CADLineCaseRunner(case: .lin002).run(action: offPlane)
+
+    try result.validate()
+    #expect(result.outcome == .invalidSubmission)
+    #expect(!result.routeEvidence.didPublish)
+    #expect(result.routeEvidence.initialPublicationSequence == result.routeEvidence.finalPublicationSequence)
+    #expect(result.telemetry.actionCount == 1)
+    #expect(result.telemetry.commandCount == 0)
+    #expect(result.routeEvidence.cleanupCompleted)
+    #expect(result.routeEvidence.remainingRegistrationCount == 0)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func lin002TimeoutIsTypedAndCleansUp() async throws {
+    let result = try await CADLineCaseRunner(
+        case: .lin002,
+        timeoutWallNanoseconds: 1
+    ).runReference()
+
+    try result.validate()
+    #expect(result.outcome == .timeout)
+    #expect(!result.routeEvidence.didPublish)
+    #expect(result.telemetry.totalWallNanoseconds >= result.telemetry.timeoutWallNanoseconds)
+    #expect(result.routeEvidence.cleanupCompleted)
+    #expect(result.routeEvidence.remainingRegistrationCount == 0)
+}
+
+@MainActor
+@Test
+func lin002ReferenceCandidateUsesOnlyPublicContext() async throws {
+    let challenge = try CADBenchmarkCatalog().challenge(for: "LIN-002")
+    let context = CADCandidateContext(
+        challenge: challenge,
+        capabilities: CADCapabilitySnapshot(
+            version: "test.v1",
+            statuses: [CADCapabilityStatus(
+                id: challenge.requiredCapability.id,
+                version: challenge.requiredCapability.version,
+                available: true
+            )]
+        ),
+        remainingRounds: challenge.budget.maximumRounds,
+        remainingActions: challenge.budget.maximumActions
+    )
+    let candidate: any CADCandidateProtocol = CADLineReferenceCandidate()
+
+    let decision = try await candidate.decide(for: context)
+
+    guard case .action(.automation(.sketch(.line(_, let plane, let start, let end)))) = decision else {
+        Issue.record("LIN-002 public context did not produce one line action.")
+        return
+    }
+    #expect(plane == .xy)
+    #expect(start == CADPoint3D(x: 10, y: -10, z: 0, unit: .millimeter))
+    #expect(end == CADPoint3D(x: 10, y: 40, z: 0, unit: .millimeter))
+}
+
+@Test
+func activatedLineBoundaryContainsExactlyReviewedCases() throws {
+    #expect(CADActivatedLineCase.allCases.map(\.rawValue) == ["LIN-001", "LIN-002"])
+
+    do {
+        _ = try CADActivatedLineCase(caseID: "LIN-003")
+        Issue.record("LIN-003 must remain inactive until its own vertical gate.")
+    } catch let error as CADBenchmarkError {
+        guard case .invalidCaseID("LIN-003") = error else {
             Issue.record("Unexpected typed error: \(error)")
             return
         }

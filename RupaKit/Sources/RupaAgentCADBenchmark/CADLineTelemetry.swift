@@ -1,7 +1,7 @@
 import Foundation
 
-/// Measured wall time and operation counts for one LIN-001 case attempt.
-struct CADLIN001Telemetry: Codable, Equatable, Sendable {
+/// Measured wall time and operation counts for one activated line case.
+struct CADLineTelemetry: Codable, Equatable, Sendable {
     let planningWallNanoseconds: UInt64
     let routeWallNanoseconds: UInt64
     let oracleWallNanoseconds: UInt64
@@ -43,7 +43,7 @@ struct CADLIN001Telemetry: Codable, Equatable, Sendable {
         self.cancellationCheckpointCount = cancellationCheckpointCount
     }
 
-    static let empty = CADLIN001Telemetry(
+    static let empty = CADLineTelemetry(
         planningWallNanoseconds: 0,
         routeWallNanoseconds: 0,
         oracleWallNanoseconds: 0,
@@ -58,7 +58,7 @@ struct CADLIN001Telemetry: Codable, Equatable, Sendable {
         cancellationCheckpointCount: 0
     )
 
-    func validate() throws {
+    func validate(caseID: CADBenchmarkCaseID) throws {
         guard actionCount >= 0,
               commandCount >= 0,
               readCount >= 0,
@@ -67,22 +67,22 @@ struct CADLIN001Telemetry: Codable, Equatable, Sendable {
               bodyCount >= 0,
               cancellationCheckpointCount >= 0 else {
             throw CADBenchmarkError.invalidInput(
-                caseID: "LIN-001",
-                reason: "LIN-001 telemetry counts must be non-negative."
+                caseID: caseID.rawValue,
+                reason: "Line telemetry counts must be non-negative."
             )
         }
         guard timeoutWallNanoseconds > 0 else {
             throw CADBenchmarkError.invalidInput(
-                caseID: "LIN-001",
-                reason: "LIN-001 must declare a positive bounded timeout."
+                caseID: caseID.rawValue,
+                reason: "An activated line case must declare a positive bounded timeout."
             )
         }
         guard planningWallNanoseconds <= totalWallNanoseconds,
               routeWallNanoseconds <= totalWallNanoseconds,
               oracleWallNanoseconds <= totalWallNanoseconds else {
             throw CADBenchmarkError.invalidInput(
-                caseID: "LIN-001",
-                reason: "LIN-001 phase durations cannot exceed total duration."
+                caseID: caseID.rawValue,
+                reason: "Line phase durations cannot exceed total duration."
             )
         }
     }

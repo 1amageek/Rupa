@@ -1,11 +1,11 @@
 import Foundation
 
-enum CADLIN001DeadlineError: Error, Equatable {
+enum CADLineDeadlineError: Error, Equatable {
     case exceeded
 }
 
-/// Enforces one shared execution deadline across asynchronous LIN-001 phases.
-struct CADLIN001Deadline: Sendable {
+/// Enforces one shared execution deadline across asynchronous line phases.
+struct CADLineDeadline: Sendable {
     let timeoutWallNanoseconds: UInt64
 
     private let clock = ContinuousClock()
@@ -27,7 +27,7 @@ struct CADLIN001Deadline: Sendable {
     ) async throws -> Value {
         let remaining = clock.now.duration(to: deadline)
         guard remaining > .zero else {
-            throw CADLIN001DeadlineError.exceeded
+            throw CADLineDeadlineError.exceeded
         }
         return try await withThrowingTaskGroup(of: Value.self) { group in
             group.addTask {
@@ -35,11 +35,11 @@ struct CADLIN001Deadline: Sendable {
             }
             group.addTask {
                 try await Task.sleep(for: remaining)
-                throw CADLIN001DeadlineError.exceeded
+                throw CADLineDeadlineError.exceeded
             }
             defer { group.cancelAll() }
             guard let first = try await group.next() else {
-                throw CADLIN001DeadlineError.exceeded
+                throw CADLineDeadlineError.exceeded
             }
             return first
         }

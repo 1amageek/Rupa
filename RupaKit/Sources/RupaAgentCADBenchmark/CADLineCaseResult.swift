@@ -1,24 +1,24 @@
 import Foundation
 
-/// The binary, typed result of one LIN-001 case attempt.
-struct CADLIN001CaseResult: Equatable, Sendable {
-    private let recorder: CADLIN001Recorder
+/// The binary, typed result of one activated line case attempt.
+struct CADLineCaseResult: Equatable, Sendable {
+    private let recorder: CADLineRecorder
     let caseID: CADBenchmarkCaseID
     let outcome: CADCaseOutcome
     let candidateResult: CADCandidateStepResult?
     let roleBindings: CADOutputRoleBindings?
-    let routeEvidence: CADLIN001RouteEvidence
-    let telemetry: CADLIN001Telemetry
+    let routeEvidence: CADLineRouteEvidence
+    let telemetry: CADLineTelemetry
     let diagnostics: [String]
 
     init(
-        recordedBy recorder: CADLIN001Recorder,
-        caseID: CADBenchmarkCaseID = "LIN-001",
+        recordedBy recorder: CADLineRecorder,
+        caseID: CADBenchmarkCaseID,
         outcome: CADCaseOutcome,
         candidateResult: CADCandidateStepResult? = nil,
         roleBindings: CADOutputRoleBindings? = nil,
-        routeEvidence: CADLIN001RouteEvidence = .empty,
-        telemetry: CADLIN001Telemetry,
+        routeEvidence: CADLineRouteEvidence = .empty,
+        telemetry: CADLineTelemetry,
         diagnostics: [String] = []
     ) {
         self.recorder = recorder
@@ -38,14 +38,14 @@ struct CADLIN001CaseResult: Equatable, Sendable {
     func withCleanupEvidence(
         cleanupWallNanoseconds: UInt64,
         remainingRegistrationCount: Int
-    ) -> CADLIN001CaseResult {
-        CADLIN001CaseResult(
+    ) -> CADLineCaseResult {
+        CADLineCaseResult(
             recordedBy: recorder,
             caseID: caseID,
             outcome: outcome,
             candidateResult: candidateResult,
             roleBindings: roleBindings,
-            routeEvidence: CADLIN001RouteEvidence(
+            routeEvidence: CADLineRouteEvidence(
                 initialDocumentGeneration: routeEvidence.initialDocumentGeneration,
                 finalDocumentGeneration: routeEvidence.finalDocumentGeneration,
                 initialTransactionRevision: routeEvidence.initialTransactionRevision,
@@ -64,15 +64,15 @@ struct CADLIN001CaseResult: Equatable, Sendable {
         )
     }
 
-    func withTotalWallNanoseconds(_ totalWallNanoseconds: UInt64) -> CADLIN001CaseResult {
-        CADLIN001CaseResult(
+    func withTotalWallNanoseconds(_ totalWallNanoseconds: UInt64) -> CADLineCaseResult {
+        CADLineCaseResult(
             recordedBy: recorder,
             caseID: caseID,
             outcome: outcome,
             candidateResult: candidateResult,
             roleBindings: roleBindings,
             routeEvidence: routeEvidence,
-            telemetry: CADLIN001Telemetry(
+            telemetry: CADLineTelemetry(
                 planningWallNanoseconds: telemetry.planningWallNanoseconds,
                 routeWallNanoseconds: telemetry.routeWallNanoseconds,
                 oracleWallNanoseconds: telemetry.oracleWallNanoseconds,
@@ -91,7 +91,7 @@ struct CADLIN001CaseResult: Equatable, Sendable {
     }
 
     func validate() throws {
-        guard caseID == "LIN-001" else {
+        guard CADActivatedLineCase(rawValue: caseID.rawValue) != nil else {
             throw CADBenchmarkError.invalidCaseID(caseID.rawValue)
         }
         if let candidateResult {
@@ -100,29 +100,29 @@ struct CADLIN001CaseResult: Equatable, Sendable {
         guard diagnostics.allSatisfy({ !$0.isEmpty }) else {
             throw CADBenchmarkError.invalidInput(
                 caseID: caseID.rawValue,
-                reason: "LIN-001 diagnostics must not contain empty messages."
+                reason: "Line diagnostics must not contain empty messages."
             )
         }
         guard routeEvidence.cleanupCompleted else {
             throw CADBenchmarkError.invalidInput(
                 caseID: caseID.rawValue,
-                reason: "LIN-001 results must retain guaranteed workspace cleanup evidence."
+                reason: "Activated line results must retain guaranteed workspace cleanup evidence."
             )
         }
-        try routeEvidence.validate()
-        try telemetry.validate()
+        try routeEvidence.validate(caseID: caseID)
+        try telemetry.validate(caseID: caseID)
         if outcome == .timeout {
             guard telemetry.totalWallNanoseconds >= telemetry.timeoutWallNanoseconds else {
                 throw CADBenchmarkError.invalidInput(
                     caseID: caseID.rawValue,
-                    reason: "A timed-out LIN-001 result must reach its declared wall-time bound."
+                    reason: "A timed-out line result must reach its declared wall-time bound."
                 )
             }
         } else {
             guard telemetry.totalWallNanoseconds <= telemetry.timeoutWallNanoseconds else {
                 throw CADBenchmarkError.invalidInput(
                     caseID: caseID.rawValue,
-                    reason: "A non-timeout LIN-001 result cannot exceed its wall-time bound."
+                    reason: "A non-timeout line result cannot exceed its wall-time bound."
                 )
             }
         }
@@ -135,7 +135,7 @@ struct CADLIN001CaseResult: Equatable, Sendable {
               let roleBindings else {
             throw CADBenchmarkError.invalidInput(
                 caseID: caseID.rawValue,
-                reason: "A realized LIN-001 result must include candidate evidence and role bindings."
+                reason: "A realized line result must include candidate evidence and role bindings."
             )
         }
         guard candidateResult.status == .published,
@@ -148,13 +148,13 @@ struct CADLIN001CaseResult: Equatable, Sendable {
               binding.selector == .primary else {
             throw CADBenchmarkError.invalidInput(
                 caseID: caseID.rawValue,
-                reason: "A realized LIN-001 result must bind the published segment to its primary feature alias."
+                reason: "A realized line result must bind the published segment to its primary feature alias."
             )
         }
         guard routeEvidence.didPublish, routeEvidence.cleanupCompleted else {
             throw CADBenchmarkError.invalidInput(
                 caseID: caseID.rawValue,
-                reason: "A realized LIN-001 result must retain published coordinates and cleanup evidence."
+                reason: "A realized line result must retain published coordinates and cleanup evidence."
             )
         }
         guard telemetry.totalWallNanoseconds > 0,
@@ -166,7 +166,7 @@ struct CADLIN001CaseResult: Equatable, Sendable {
               telemetry.bodyCount == 0 else {
             throw CADBenchmarkError.invalidInput(
                 caseID: caseID.rawValue,
-                reason: "A realized LIN-001 result must contain measured route and oracle evidence."
+                reason: "A realized line result must contain measured route and oracle evidence."
             )
         }
     }

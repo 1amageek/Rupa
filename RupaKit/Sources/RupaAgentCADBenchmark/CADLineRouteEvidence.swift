@@ -1,7 +1,7 @@
 import RupaCore
 
-/// Coordinates and cleanup evidence for one LIN-001 production-route attempt.
-struct CADLIN001RouteEvidence: Codable, Equatable, Sendable {
+/// Coordinates and cleanup evidence for one activated line production route.
+struct CADLineRouteEvidence: Codable, Equatable, Sendable {
     let initialDocumentGeneration: DocumentGeneration
     let finalDocumentGeneration: DocumentGeneration
     let initialTransactionRevision: DocumentTransactionRevision
@@ -43,16 +43,16 @@ struct CADLIN001RouteEvidence: Codable, Equatable, Sendable {
         self.remainingRegistrationCount = remainingRegistrationCount
     }
 
-    static let empty = CADLIN001RouteEvidence()
+    static let empty = CADLineRouteEvidence()
 
-    func validate() throws {
+    func validate(caseID: CADBenchmarkCaseID) throws {
         guard finalDocumentGeneration >= initialDocumentGeneration,
               finalTransactionRevision >= initialTransactionRevision,
               finalPublicationSequence >= initialPublicationSequence,
               finalWorkspaceRevision >= initialWorkspaceRevision else {
             throw CADBenchmarkError.invalidInput(
-                caseID: "LIN-001",
-                reason: "LIN-001 route coordinates cannot move backwards."
+                caseID: caseID.rawValue,
+                reason: "Line route coordinates cannot move backwards."
             )
         }
         if didPublish {
@@ -63,8 +63,8 @@ struct CADLIN001RouteEvidence: Codable, Equatable, Sendable {
                   finalDocumentGeneration.value == initialDocumentGeneration.value + 1,
                   finalTransactionRevision.value == initialTransactionRevision.value + 1 else {
                 throw CADBenchmarkError.invalidInput(
-                    caseID: "LIN-001",
-                    reason: "A published LIN-001 route must advance its no-retry coordinates exactly once."
+                    caseID: caseID.rawValue,
+                    reason: "A published line route must advance its no-retry coordinates exactly once."
                 )
             }
         } else {
@@ -73,23 +73,23 @@ struct CADLIN001RouteEvidence: Codable, Equatable, Sendable {
                   finalPublicationSequence == initialPublicationSequence,
                   finalWorkspaceRevision == initialWorkspaceRevision else {
                 throw CADBenchmarkError.invalidInput(
-                    caseID: "LIN-001",
-                    reason: "A non-published LIN-001 route must preserve its initial coordinates."
+                    caseID: caseID.rawValue,
+                    reason: "A non-published line route must preserve its initial coordinates."
                 )
             }
         }
         guard remainingRegistrationCount >= 0 else {
             throw CADBenchmarkError.invalidInput(
-                caseID: "LIN-001",
-                reason: "LIN-001 cleanup registration count must be non-negative."
+                caseID: caseID.rawValue,
+                reason: "Line cleanup registration count must be non-negative."
             )
         }
         if cleanupCompleted {
             guard cleanupWallNanoseconds > 0,
                   remainingRegistrationCount == 0 else {
                 throw CADBenchmarkError.invalidInput(
-                    caseID: "LIN-001",
-                    reason: "Completed LIN-001 cleanup must be measured and leave no registration."
+                    caseID: caseID.rawValue,
+                    reason: "Completed line cleanup must be measured and leave no registration."
                 )
             }
         }
