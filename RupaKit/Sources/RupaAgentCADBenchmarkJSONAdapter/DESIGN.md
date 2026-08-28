@@ -108,7 +108,7 @@ evaluation and candidate construction remain module-internal test/composition
 seams, so a caller cannot construct a large in-memory response and bypass the
 JSON input authority.
 
-The activated twenty-seven cases accept one action decision. `unsupported` and
+The activated twenty-eight cases accept one action decision. `unsupported` and
 `finish` remain valid protocol values but are not converted to successful
 actions; the T12-XA-A executor contract projects either as typed
 `invalidSubmission` without publication. Multi-round continuation is not added
@@ -216,11 +216,37 @@ executor-owned activated set. Before its internal production/oracle gate passed,
 the adapter was authoritative for the ordered twenty-six-case prefix through
 CIR-002. The completed case derives the twenty-seven-case prefix ending in
 CIR-003, preserve the frozen twenty-six-request aggregate, freeze the observed
-twenty-seven-request aggregate, and prove a bounded exact 25 mm XZ CIR-003
+twenty-seven-request aggregate, and proved a bounded exact 25 mm XZ CIR-003
 request and candidate-response-v2 evaluation through the unchanged circle
-route/oracle. CIR-004 remains typed inactive. Envelope versions, the context
+route/oracle. CIR-004 remained typed inactive at that gate. Envelope versions, the context
 fingerprint, byte bound, error projection, and candidate action shape do not
 change.
+
+### CIR-004 through CIR-012 sequential authority
+
+The remaining circle activations consume the exact geometry and adversarial
+contracts in the benchmark-owned [circle case matrix](../RupaAgentCADBenchmark/DESIGN.md#cir-004-through-cir-012-case-matrix).
+This adapter owns only their ordered external authority transition:
+
+| Case | Activated count after gate | Required prior aggregate | Next inactive ID |
+|---|---:|---|---|
+| CIR-004 | 28 | CIR-003 / 27-request aggregate | CIR-005 |
+| CIR-005 | 29 | CIR-004 / 28-request aggregate | CIR-006 |
+| CIR-006 | 30 | CIR-005 / 29-request aggregate | CIR-007 |
+| CIR-007 | 31 | CIR-006 / 30-request aggregate | CIR-008 |
+| CIR-008 | 32 | CIR-007 / 31-request aggregate | CIR-009 |
+| CIR-009 | 33 | CIR-008 / 32-request aggregate | CIR-010 |
+| CIR-010 | 34 | CIR-009 / 33-request aggregate | CIR-011 |
+| CIR-011 | 35 | CIR-010 / 34-request aggregate | CIR-012 |
+| CIR-012 | 36 | CIR-011 / 35-request aggregate | ANG-001 |
+
+Each row is a separate commit and remains inactive until its internal gate
+passes. That commit derives the exact ordered IDs from the executor, reasserts
+the prior digest, freezes the newly observed aggregate, proves bounded request
+and candidate-response-v2 evaluation through the unchanged circle route/oracle,
+and rejects the next ID before evaluation. CIR-012 uses the real next-category
+ID ANG-001; no CIR-013 is invented. Envelope versions, context fingerprint,
+byte bound, decision shape, error projection, and privacy boundary remain fixed.
 
 ## Runtime Flows
 
@@ -270,7 +296,7 @@ classification and are projected only to stable non-private codes.
 |---|---|
 | Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON for line, rectangle, and circle decisions; candidate-response v2 carries `kind: circle`, v1 and unknown discriminators are rejected, and every direct and nested case ID is the same scalar string. |
 | Exact public-context binding | The request fingerprint equals the live executor context; changed schema, case, context byte, capability, budget, or fingerprint is rejected before publication. |
-| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, and CIR-001...003; the historical twenty-six-request aggregate remains `c20b165d825b3333722f3b813af4392a9361d3dff9124d62cb3512ef4b870e40`, the twenty-seven-request aggregate is `9d9bde9eb7f520cecee220c7286b16e0c5347cd50219cfe08d780114f24cc975`, CIR-003 traverses the production XZ circle route/oracle, and CIR-004 is rejected before evaluation. |
+| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, and CIR-001...004; the historical twenty-seven-request aggregate remains `9d9bde9eb7f520cecee220c7286b16e0c5347cd50219cfe08d780114f24cc975`, the twenty-eight-request aggregate is `2be3d440bd56644efc614c520ffac49cad8a5cd4eb1d0629447e620dcf9e48fc`, CIR-004 traverses the production YZ circle route/oracle, and CIR-005 is rejected before evaluation. |
 | Bounded I/O | Exact-limit input succeeds, `limit + 1` fails before decode and leaves executor evaluation count zero, chunked stdin and file paths behave identically, no public typed-response execution bypass exists, encoded output cannot exceed the same bound, and the guaranteed infrastructure document is byte-equal to normal encoding, bounded, and decodable. |
 | Candidate/oracle separation | Static dependency and source scans prove the adapter imports only public benchmark contracts; encoded fixtures contain no expectation/oracle/source snapshot fields or values. |
 | Same production route | JSON candidates for an activated line, rectangle, and circle realize through the public executor; wrong geometry publishes once then the category's exact oracle rejects without retry. |

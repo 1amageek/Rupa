@@ -55,7 +55,7 @@ rupa-agent-cad-benchmark request <CASE-ID>
 rupa-agent-cad-benchmark evaluate --response <PATH|->
 ```
 
-`request` validates that the ID is in the activated twenty-seven-case set and emits
+`request` validates that the ID is in the activated twenty-eight-case set and emits
 exactly one request-envelope JSON object to standard output. `evaluate` reads
 exactly one candidate-response envelope from the selected file, or from
 standard input when `-` is selected, then emits exactly one evaluation- or
@@ -128,7 +128,7 @@ Process-level tests build and invoke the actual executable and prove:
 
 - `request` emits valid v1 JSON for an activated line, rectangle, REC-009
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
-  millimetre/XY case, plus CIR-001...003, and rejects inactive `CIR-004`;
+  millimetre/XY case, plus CIR-001...004, and rejects inactive `CIR-005`;
 - JSON line, rectangle, and circle responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
@@ -194,12 +194,25 @@ do not change.
 `T12-CIR-003` adds no command or transport behavior. Before its internal case
 gate passed, the executable was bound to the exact twenty-six activated IDs
 through CIR-002. The completed case advances `request` and `evaluate` together to
-the executor-owned twenty-seven-ID prefix, proves an actual bounded 25 mm XZ
+the executor-owned twenty-seven-ID prefix, proved an actual bounded 25 mm XZ
 CIR-003 request and external candidate-response-v2 evaluation as `realized`/
-exit `0` through `createCircleSketch`, and rejects CIR-004 as inactive with exit
+exit `0` through `createCircleSketch`, and rejected CIR-004 as inactive at that gate with exit
 `64`. The frozen twenty-six-request aggregate remains unchanged; schema,
 arguments, byte limits, exit mapping, cleanup ownership, and fallback behavior
 do not change.
+
+### CIR-004 through CIR-012 sequential process boundary
+
+The executable follows the benchmark-owned [circle case matrix](../RupaAgentCADBenchmark/DESIGN.md#cir-004-through-cir-012-case-matrix)
+and the JSON adapter's ordered authority. Each case remains an individual gate
+and commit. After that case's internal evidence passes, `request` and `evaluate`
+advance together by exactly one ID, an actual bounded request and external
+candidate-response-v2 document realize through `createCircleSketch` with exit
+`0`, and the matrix's next ID remains inactive with exit `64`. The preceding
+aggregate digest stays frozen and the new digest comes from observed request
+bytes. CIR-012 advances the boundary to 36 and rejects ANG-001; the CLI does not
+invent CIR-013. Commands, arguments, schema, byte limits, exit mapping, cleanup
+ownership, and no-fallback behavior remain unchanged across all nine commits.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected
 case argument, so a case-mismatch process fixture cannot be constructed without

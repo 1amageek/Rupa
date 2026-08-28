@@ -199,7 +199,7 @@ implementation permission to add a parallel authority.
 | `CADActivatedCaseExecuting` / `DefaultCADActivatedCaseExecutor` | Public; exact activated-ID list, candidate context, one candidate evaluation, and sanitized result | Dispatches only reviewed category facades; no private expectation, live view, internal evidence, or direct mutation escapes |
 | `CADActivatedLineCase` | Internal; the reviewed line IDs that may enter behavioral execution | Adds exactly one ID only when that case's vertical implementation begins; catalog presence alone is never activation |
 | `CADActivatedRectangleCase` | Internal; the reviewed rectangle IDs that may enter behavioral execution | Contains only REC-001 when introduced and advances one reviewed case per commit |
-| `CADActivatedCircleCase` | Internal; the reviewed circle IDs that may enter behavioral execution | Began with CIR-001, currently contains CIR-001...003, and advances one reviewed case per later commit |
+| `CADActivatedCircleCase` | Internal; the reviewed circle IDs that may enter behavioral execution | Began with CIR-001, currently contains CIR-001...004, and advances one reviewed case per later commit |
 | `CADCaseActionRouting` | Internal; converts an activated category action plus public challenge context into a typed production Agent request | Has no workspace/source mutation authority and cannot read a private expectation |
 | `CADCaseLifecycleHarness` | Internal; owns the shared fresh controller/workspace, pre-owned registration UUID, exact coordinate binding, deadline, production dispatch, final immutable view capture, and unconditional cleanup | The only shared mutable lifecycle owner; it does not select cases, map geometry, run an oracle, or project a category result |
 | `CADCaseLifecycleRecord` | Internal immutable output from the harness | Preserves initial/final coordinates, typed response, publication/no-retry state, cleanup state, and common count/timing telemetry without geometry assertions |
@@ -449,7 +449,7 @@ the catalog, challenge, private expectation, or manifest digest.
 
 The executor performs one candidate decision for the currently activated
 line/rectangle/circle contract. It does not generalize multi-round
-continuation, activate unreviewed IDs such as `CIR-004`, schedule several cases, or establish a
+continuation, activate unreviewed IDs such as `CIR-005`, schedule several cases, or establish a
 benchmark baseline.
 
 ### CIR-001 circle foundation and activation boundary
@@ -568,8 +568,53 @@ CIR-003, preserves the frozen twenty-six-request aggregate, and freezes the
 newly observed twenty-seven-request aggregate. Candidate-response v2, request/
 evaluation/error v1, fingerprint v1, byte bounds, catalog/manifest/expectation/
 capability/tolerance versions, and exit mapping remain unchanged. Bounded JSON
-and actual CLI evaluation must realize CIR-003 through the same production
-circle route/oracle, while CIR-004 remains typed inactive.
+and actual CLI evaluation realized CIR-003 through the same production
+circle route/oracle, while CIR-004 remained typed inactive at that gate.
+
+`T12-CIR-004` advances the same executor, JSON adapter, and CLI authority to the
+exact twenty-eight-case prefix ending in CIR-004. It preserves the frozen
+twenty-seven-request aggregate, freezes the observed twenty-eight-request
+aggregate as `2be3d440bd56644efc614c520ffac49cad8a5cd4eb1d0629447e620dcf9e48fc`,
+and keeps CIR-005 typed inactive. No shared circle infrastructure, schema,
+catalog, fingerprint, or tolerance authority changes in this transition.
+
+### CIR-004 through CIR-012 case matrix
+
+Each listed circle leaf is an independent Vertical Case Gate and commit. The
+committed circle projection, `CADCircleGeometryMapping`, reference candidate,
+facade, shared lifecycle, production `createCircleSketch` route, analytic/profile
+oracle, result/evidence/telemetry, and candidate-response v2 are reused without
+change. Every exact action must traverse a fresh registered workspace, publish
+once, prove one analytic circle entity and profile, one feature and zero bodies,
+then clean up all registrations. Every postpublication discriminator below must
+publish exactly once and fail the immutable oracle without retry. Every normal
+offset must fail before command dispatch or publication. Each leaf separately
+proves typed timeout, positive phase and operation/source telemetry, public
+challenge-only candidate construction, and exact public unit/plane/centre/radius
+preservation.
+
+| Case | Exact public target and new variation | Postpublication discriminator | Prepublication normal offset | External transition |
+|---|---|---|---|---|
+| CIR-004 | 50 mm, YZ, centre (-75, 0, 0) mm; first +X-normal YZ circle on affine plane x = -75 mm | Same radius, centre (-75, 10, 0) mm | Centre (-73, 0, 0) mm | 27→28; preserve CIR-003 aggregate; freeze 28; CIR-005 inactive |
+| CIR-005 | 100 mm, XY, centre (100, 100, 0) mm; large positive translated circle | Radius 50 mm at exact centre | Centre (100, 100, 2) mm | 28→29; preserve CIR-004 aggregate; freeze 29; CIR-006 inactive |
+| CIR-006 | 2 cm, XZ, centre (0, 0, 20) cm; first centimetre conversion | Radius 2 mm at exact centre | Centre (0, 0.2, 20) cm | 29→30; preserve CIR-005 aggregate; freeze 30; CIR-007 inactive |
+| CIR-007 | 0.1 m, YZ, centre (0, -0.1, 0) m; first metre and negative in-plane placement | Same radius, centre (0, 0.1, 0) m | Centre (0.002, -0.1, 0) m | 30→31; preserve CIR-006 aggregate; freeze 31; CIR-008 inactive |
+| CIR-008 | 1 inch, XY, centre (-2, 3, 0) inches; first imperial and mixed-sign placement | Radius 1 mm at exact centre | Centre (-2, 3, 0.1) inches | 31→32; preserve CIR-007 aggregate; freeze 32; CIR-009 inactive |
+| CIR-009 | 250 mm, XZ, centre (0, 0, -125) mm; large radius and negative Z placement | Same radius, centre (0, 0, 125) mm | Centre (0, 2, -125) mm | 32→33; preserve CIR-008 aggregate; freeze 33; CIR-010 inactive |
+| CIR-010 | 0.5 m, XY, centre (0.5, -0.5, 0) m; metre-scale signed placement | Same radius, centre (0.5, 0.5, 0) m | Centre (0.5, -0.5, 0.002) m | 33→34; preserve CIR-009 aggregate; freeze 34; CIR-011 inactive |
+| CIR-011 | 7.25 mm, YZ, centre (20, 0, 30) mm; fractional radius on +X-normal affine plane x = 20 mm | Same radius, centre (20, 0, -30) mm | Centre (22, 0, 30) mm | 34→35; preserve CIR-010 aggregate; freeze 35; CIR-012 inactive |
+| CIR-012 | 42 mm, XY, centre (-80, 45, 0) mm; terminal mixed-sign circle | Same radius, centre (80, 45, 0) mm | Centre (-80, 45, 2) mm | 35→36; preserve CIR-011 aggregate; freeze 36; ANG-001 inactive; no CIR-013 |
+
+For each row, executor, JSON adapter, and CLI authority advance atomically only
+after its internal production/oracle gate passes. The immediately preceding
+aggregate digest remains frozen and the new aggregate digest is recorded from
+observed canonical request bytes, never predicted. Bounded JSON request/v2
+response/evaluation and the actual CLI executable must realize the current row
+and reject the listed next ID. Catalog, manifest, expectation, capability,
+tolerance, envelope, fingerprint, byte-bound, exit, and fallback contracts do
+not change. Focused and affected benchmark/adapter/CLI tests, privacy/static
+audits, original-designer review, and that row's individual commit close the
+leaf before the next row becomes ready.
 
 ### Vertical Case Gate
 
