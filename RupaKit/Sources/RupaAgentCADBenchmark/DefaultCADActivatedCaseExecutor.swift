@@ -1,13 +1,14 @@
 import Foundation
 import RupaAgentRuntime
 
-/// Executes one candidate against one reviewed line, rectangle, or circle case.
+/// Executes one candidate against one reviewed benchmark case.
 @MainActor
 public struct DefaultCADActivatedCaseExecutor: CADActivatedCaseExecuting, Sendable {
     private static let activatedIDs =
         CADActivatedLineCase.allCases.map(\.caseID)
         + CADActivatedRectangleCase.allCases.map(\.caseID)
         + CADActivatedCircleCase.allCases.map(\.caseID)
+        + CADActivatedAngleCase.allCases.map(\.caseID)
 
     public init() {}
 
@@ -52,6 +53,21 @@ public struct DefaultCADActivatedCaseExecutor: CADActivatedCaseExecuting, Sendab
             if CADActivatedCircleCase.allCases.contains(where: { $0.caseID == caseID }) {
                 let activatedCase = try CADActivatedCircleCase(caseID: caseID)
                 let internalResult = try await CADCircleCaseRunner(case: activatedCase)
+                    .run(candidate: capturingCandidate)
+                try internalResult.validate()
+                return try publicResult(
+                    caseID: caseID,
+                    category: challenge.category,
+                    outcome: internalResult.outcome,
+                    durationMilliseconds: milliseconds(
+                        from: internalResult.telemetry.totalWallNanoseconds
+                    )
+                )
+            }
+
+            if CADActivatedAngleCase.allCases.contains(where: { $0.caseID == caseID }) {
+                let activatedCase = try CADActivatedAngleCase(caseID: caseID)
+                let internalResult = try await CADAngleCaseRunner(case: activatedCase)
                     .run(candidate: capturingCandidate)
                 try internalResult.validate()
                 return try publicResult(
@@ -109,6 +125,9 @@ public struct DefaultCADActivatedCaseExecutor: CADActivatedCaseExecuting, Sendab
         }
         if CADActivatedCircleCase.allCases.contains(where: { $0.caseID == caseID }) {
             return "createCircleSketch"
+        }
+        if CADActivatedAngleCase.allCases.contains(where: { $0.caseID == caseID }) {
+            return "createLineSketch"
         }
         return "createRectangleSketch"
     }

@@ -173,8 +173,8 @@ struct CADCaseLifecycleHarness {
                 diagnostics: ["\(caseID.rawValue) fresh workspace published no initial view."]
             )
         }
-        let commandResult = Result {
-            try routing.makeCommand(
+        let planResult = Result {
+            try routing.makePlan(
                 from: action,
                 challenge: challenge,
                 modelingTolerance: initialView.document.document.modelingSettings.tolerance
@@ -220,7 +220,7 @@ struct CADCaseLifecycleHarness {
         }
 
         let attempted: CADCaseLifecycleRecord
-        switch commandResult {
+        switch planResult {
         case .failure(let error):
             let retained = workspace.view ?? initialView
             attempted = record(
@@ -237,9 +237,9 @@ struct CADCaseLifecycleHarness {
                 ),
                 diagnostics: [message(error)]
             )
-        case .success(let command):
+        case .success(let plan):
             attempted = await execute(
-                command: command,
+                plan: plan,
                 controller: controller,
                 workspace: workspace,
                 sessionID: sessionID,
@@ -260,7 +260,7 @@ struct CADCaseLifecycleHarness {
     }
 
     private func execute(
-        command: AutomationCommand,
+        plan: CADCaseActionPlan,
         controller: ProjectAgentCommandController,
         workspace: ProjectWorkspace,
         sessionID: UUID,
@@ -305,7 +305,7 @@ struct CADCaseLifecycleHarness {
 
         if mode == .stale {
             return await executeStale(
-                command: command,
+                plan: plan,
                 controller: controller,
                 workspace: workspace,
                 sessionID: sessionID,
@@ -321,7 +321,7 @@ struct CADCaseLifecycleHarness {
         do {
             response = try await deadlineResponse(
                 controller: controller,
-                request: request(command: command, sessionID: sessionID, coordinates: initialView),
+                request: request(plan: plan, sessionID: sessionID, coordinates: initialView),
                 deadline: deadline
             )
         } catch is CADCaseDeadlineError {
@@ -336,7 +336,7 @@ struct CADCaseLifecycleHarness {
                     routeWallNanoseconds: elapsed(since: routeStart),
                     totalStart: totalStart,
                     actionCount: 1,
-                    commandCount: 1,
+                    commandCount: plan.commandCount,
                     cancellationCheckpointCount: 4
                 ),
                 diagnostics: ["\(caseID.rawValue) production route exceeded its shared deadline."]
@@ -353,7 +353,7 @@ struct CADCaseLifecycleHarness {
                     routeWallNanoseconds: elapsed(since: routeStart),
                     totalStart: totalStart,
                     actionCount: 1,
-                    commandCount: 1,
+                    commandCount: plan.commandCount,
                     cancellationCheckpointCount: 4
                 ),
                 diagnostics: ["\(caseID.rawValue) production route failed: \(message(error))"]
@@ -362,7 +362,7 @@ struct CADCaseLifecycleHarness {
 
         let routeWall = elapsed(since: routeStart)
         let finalView = workspace.view ?? initialView
-        guard case .command(let automationResult) = response else {
+        guard let mutation = mutationEvidence(from: response, for: plan) else {
             return record(
                 outcome: .executionFailure,
                 initialView: initialView,
@@ -375,7 +375,7 @@ struct CADCaseLifecycleHarness {
                     routeWallNanoseconds: routeWall,
                     totalStart: totalStart,
                     actionCount: 1,
-                    commandCount: 1,
+                    commandCount: plan.commandCount,
                     cancellationCheckpointCount: 4
                 ),
                 diagnostics: [responseMessage(response)]
@@ -392,14 +392,13 @@ struct CADCaseLifecycleHarness {
                     routeWallNanoseconds: routeWall,
                     totalStart: totalStart,
                     actionCount: 1,
-                    commandCount: 1,
+                    commandCount: plan.commandCount,
                     cancellationCheckpointCount: 4
                 ),
                 diagnostics: ["\(caseID.rawValue) production mutation published no final view."]
             )
         }
-        if let metrics = automationResult.executionMetrics,
-           metrics.commandCount != 1 {
+        if mutation.commandCount != plan.commandCount {
             return record(
                 outcome: .infrastructureFailure,
                 initialView: initialView,
@@ -412,13 +411,13 @@ struct CADCaseLifecycleHarness {
                     routeWallNanoseconds: routeWall,
                     totalStart: totalStart,
                     actionCount: 1,
-                    commandCount: 1,
+                    commandCount: plan.commandCount,
                     cancellationCheckpointCount: 4
                 ),
                 diagnostics: ["\(caseID.rawValue) production metrics disagreed with the dispatched command count."]
             )
         }
-        guard automationResult.didMutate else {
+        guard mutation.didMutate else {
             return record(
                 outcome: .executionFailure,
                 initialView: initialView,
@@ -431,7 +430,7 @@ struct CADCaseLifecycleHarness {
                     routeWallNanoseconds: routeWall,
                     totalStart: totalStart,
                     actionCount: 1,
-                    commandCount: 1,
+                    commandCount: plan.commandCount,
                     cancellationCheckpointCount: 4
                 ),
                 diagnostics: ["\(caseID.rawValue) command returned without source publication."]
@@ -450,7 +449,7 @@ struct CADCaseLifecycleHarness {
                     routeWallNanoseconds: routeWall,
                     totalStart: totalStart,
                     actionCount: 1,
-                    commandCount: 1,
+                    commandCount: plan.commandCount,
                     cancellationCheckpointCount: 5
                 ),
                 diagnostics: ["\(caseID.rawValue) was cancelled after publication; the committed coordinate was retained without retry."]
@@ -468,14 +467,14 @@ struct CADCaseLifecycleHarness {
                 routeWallNanoseconds: routeWall,
                 totalStart: totalStart,
                 actionCount: 1,
-                commandCount: 1,
+                commandCount: plan.commandCount,
                 cancellationCheckpointCount: 5
             )
         )
     }
 
     private func executeStale(
-        command: AutomationCommand,
+        plan: CADCaseActionPlan,
         controller: ProjectAgentCommandController,
         workspace: ProjectWorkspace,
         sessionID: UUID,
@@ -488,7 +487,7 @@ struct CADCaseLifecycleHarness {
         do {
             preparation = try await deadlineResponse(
                 controller: controller,
-                request: request(command: command, sessionID: sessionID, coordinates: initialView),
+                request: request(plan: plan, sessionID: sessionID, coordinates: initialView),
                 deadline: deadline
             )
         } catch is CADCaseDeadlineError {
@@ -528,7 +527,7 @@ struct CADCaseLifecycleHarness {
                 diagnostics: ["\(caseID.rawValue) stale-fixture preparation failed: \(message(error))"]
             )
         }
-        guard case .command = preparation,
+        guard mutationEvidence(from: preparation, for: plan) != nil,
               let retained = workspace.view else {
             return record(
                 outcome: .infrastructureFailure,
@@ -543,7 +542,7 @@ struct CADCaseLifecycleHarness {
                     planningWallNanoseconds: planningWallNanoseconds,
                     totalStart: totalStart,
                     actionCount: 1,
-                    commandCount: 1,
+                    commandCount: plan.commandCount,
                     cancellationCheckpointCount: 3
                 ),
                 diagnostics: ["\(caseID.rawValue) could not establish stale production coordinates."]
@@ -555,7 +554,7 @@ struct CADCaseLifecycleHarness {
         do {
             staleResponse = try await deadlineResponse(
                 controller: controller,
-                request: request(command: command, sessionID: sessionID, coordinates: initialView),
+                request: request(plan: plan, sessionID: sessionID, coordinates: initialView),
                 deadline: deadline
             )
         } catch is CADCaseDeadlineError {
@@ -571,7 +570,7 @@ struct CADCaseLifecycleHarness {
                     routeWallNanoseconds: elapsed(since: routeStart),
                     totalStart: totalStart,
                     actionCount: 2,
-                    commandCount: 2,
+                    commandCount: plan.commandCount * 2,
                     cancellationCheckpointCount: 4
                 ),
                 diagnostics: ["\(caseID.rawValue) stale request exceeded its shared deadline."]
@@ -588,7 +587,7 @@ struct CADCaseLifecycleHarness {
                     routeWallNanoseconds: elapsed(since: routeStart),
                     totalStart: totalStart,
                     actionCount: 2,
-                    commandCount: 2,
+                    commandCount: plan.commandCount * 2,
                     cancellationCheckpointCount: 4
                 ),
                 diagnostics: ["\(caseID.rawValue) stale request failed: \(message(error))"]
@@ -609,7 +608,7 @@ struct CADCaseLifecycleHarness {
                     routeWallNanoseconds: routeWall,
                     totalStart: totalStart,
                     actionCount: 2,
-                    commandCount: 2,
+                    commandCount: plan.commandCount * 2,
                     cancellationCheckpointCount: 4
                 ),
                 diagnostics: ["\(caseID.rawValue) stale coordinates were not rejected."]
@@ -627,7 +626,7 @@ struct CADCaseLifecycleHarness {
                 routeWallNanoseconds: routeWall,
                 totalStart: totalStart,
                 actionCount: 2,
-                commandCount: 2,
+                commandCount: plan.commandCount * 2,
                 cancellationCheckpointCount: 4
             ),
             diagnostics: [responseMessage(staleResponse)]
@@ -645,16 +644,51 @@ struct CADCaseLifecycleHarness {
     }
 
     private func request(
-        command: AutomationCommand,
+        plan: CADCaseActionPlan,
         sessionID: UUID,
         coordinates: ProjectViewSnapshot
     ) -> AgentRequest {
-        .execute(
-            sessionID: sessionID,
-            command: command,
-            expectedGeneration: coordinates.documentGeneration,
-            expectedWorkspaceRevision: coordinates.workspaceState.revision
-        )
+        switch plan {
+        case .command(let command):
+            .execute(
+                sessionID: sessionID,
+                command: command,
+                expectedGeneration: coordinates.documentGeneration,
+                expectedWorkspaceRevision: coordinates.workspaceState.revision
+            )
+        case .batch(let commands):
+            .executeBatch(
+                sessionID: sessionID,
+                batch: AutomationBatch(
+                    commands: commands,
+                    expectedGeneration: coordinates.documentGeneration,
+                    expectedTransactionRevision: coordinates.transactionRevision,
+                    expectedWorkspaceRevision: coordinates.workspaceState.revision
+                )
+            )
+        }
+    }
+
+    private func mutationEvidence(
+        from response: AgentResponse,
+        for plan: CADCaseActionPlan
+    ) -> (didMutate: Bool, commandCount: Int)? {
+        switch (plan, response) {
+        case let (.command, .command(result)):
+            return (
+                result.didMutate,
+                result.executionMetrics?.commandCount ?? 1
+            )
+        case let (.batch(commands), .batch(result)):
+            guard result.results.count == commands.count,
+                  result.metrics.evaluationPassCount == 1,
+                  result.metrics.historyEntryCount == 1 else {
+                return nil
+            }
+            return (result.didMutate, result.metrics.commandCount)
+        default:
+            return nil
+        }
     }
 
     private func deadlineResponse(

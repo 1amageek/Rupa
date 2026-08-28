@@ -8,7 +8,7 @@ import RupaAgentCADBenchmark
 struct CADJSONAdapterTests {
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func goldenLineRectangleAndCircleExchangeUsesTheProductionRoute() async throws {
+    func goldenLineRectangleCircleAndAngleExchangeUsesTheProductionRoute() async throws {
         let adapter = CADJSONAdapter()
 
         let lineRequest = try adapter.makeRequest(for: "LIN-001")
@@ -212,6 +212,20 @@ struct CADJSONAdapterTests {
         #expect(terminalCircleEvaluation.result?.outcome == .realized)
         #expect(terminalCircleEvaluation.error == nil)
 
+        let angleRequest = try adapter.makeRequest(for: "ANG-001")
+        let angleResponse = try CADJSONCandidateResponseEnvelope(
+            caseID: angleRequest.caseID,
+            context: angleRequest.context,
+            decision: .action(angleAction(name: "ANG-001"))
+        )
+        let angleResponseData = try CADJSONBoundedCodec.encode(angleResponse)
+        let angleJSON = try #require(String(data: angleResponseData, encoding: .utf8))
+        #expect(angleJSON.contains("\"kind\":\"angle\""))
+        #expect(angleJSON.contains("\"caseID\":\"ANG-001\""))
+        let angleEvaluation = try await adapter.evaluate(responseData: angleResponseData)
+        #expect(angleEvaluation.result?.outcome == .realized)
+        #expect(angleEvaluation.error == nil)
+
         let inchRectangleRequest = try adapter.makeRequest(for: "REC-009")
         let inchRectangleResponse = try CADJSONCandidateResponseEnvelope(
             caseID: inchRectangleRequest.caseID,
@@ -298,9 +312,9 @@ struct CADJSONAdapterTests {
         let lineRequestFixture = #"{"caseID":"LIN-001","context":{"capabilities":{"statuses":[{"available":true,"id":"cad.sketch.line","version":"1"}],"version":"agent-capabilities.v1"},"challenge":{"budget":{"maximumActions":32,"maximumReadRecords":64,"maximumRounds":16},"category":"LIN","id":"LIN-001","instruction":"Construct LIN-001 as a finite line segment of length 25.0 mm from (0.0, 0.0, 0.0) mm to (25.0, 0.0, 0.0) mm on the XY-oriented plane through (0.0, 0.0, 0.0) mm.","outputRoles":[{"description":"The requested finite line segment.","name":"segment"}],"requiredCapability":{"id":"cad.sketch.line","version":"1"}},"priorResults":[],"remainingActions":32,"remainingRounds":16},"contextFingerprint":"f339619e0f34caca2a5a08eaf48080ffe7d783ce7bcf228197f494a86657eaaf","schema":"rupa.agent-cad-benchmark.request.v1"}"#
         let rectangleRequestFixture = #"{"caseID":"REC-001","context":{"capabilities":{"statuses":[{"available":true,"id":"cad.sketch.rectangle","version":"1"}],"version":"agent-capabilities.v1"},"challenge":{"budget":{"maximumActions":32,"maximumReadRecords":64,"maximumRounds":16},"category":"REC","id":"REC-001","instruction":"Construct REC-001 as a rectangle of width 40.0 mm and height 20.0 mm centered at (0.0, 0.0, 0.0) mm on the xy plane.","outputRoles":[{"description":"The requested closed rectangle.","name":"rectangle"}],"requiredCapability":{"id":"cad.sketch.rectangle","version":"1"}},"priorResults":[],"remainingActions":32,"remainingRounds":16},"contextFingerprint":"73e04af4c7a56666e42a84e0c10c3413e5cb860df59b74d707e7c504c05d7ea5","schema":"rupa.agent-cad-benchmark.request.v1"}"#
         let circleRequestFixture = #"{"caseID":"CIR-001","context":{"capabilities":{"statuses":[{"available":true,"id":"cad.sketch.circle","version":"1"}],"version":"agent-capabilities.v1"},"challenge":{"budget":{"maximumActions":32,"maximumReadRecords":64,"maximumRounds":16},"category":"CIR","id":"CIR-001","instruction":"Construct CIR-001 as a circle of radius 5.0 mm centered at (0.0, 0.0, 0.0) mm on the xy plane.","outputRoles":[{"description":"The requested analytic circle.","name":"circle"}],"requiredCapability":{"id":"cad.sketch.circle","version":"1"}},"priorResults":[],"remainingActions":32,"remainingRounds":16},"contextFingerprint":"934124a9a32a3830d1ae07b9b9ddffc9f21354f6edc6240cc8adc2850342a26a","schema":"rupa.agent-cad-benchmark.request.v1"}"#
-        let lineResponseFixture = #"{"caseID":"LIN-001","contextFingerprint":"f339619e0f34caca2a5a08eaf48080ffe7d783ce7bcf228197f494a86657eaaf","decision":{"action":{"automation":{"kind":"sketch","sketch":{"end":{"unit":"millimeter","x":25,"y":0,"z":0},"kind":"line","name":"LIN-001","plane":"xy","start":{"unit":"millimeter","x":0,"y":0,"z":0}}},"kind":"automation"},"kind":"action"},"schema":"rupa.agent-cad-benchmark.candidate-response.v2"}"#
-        let rectangleResponseFixture = #"{"caseID":"REC-001","contextFingerprint":"73e04af4c7a56666e42a84e0c10c3413e5cb860df59b74d707e7c504c05d7ea5","decision":{"action":{"automation":{"kind":"sketch","sketch":{"center":{"unit":"millimeter","x":0,"y":0,"z":0},"height":{"unit":"millimeter","value":20},"kind":"rectangle","name":"REC-001","plane":"xy","width":{"unit":"millimeter","value":40}}},"kind":"automation"},"kind":"action"},"schema":"rupa.agent-cad-benchmark.candidate-response.v2"}"#
-        let circleResponseFixture = #"{"caseID":"CIR-001","contextFingerprint":"934124a9a32a3830d1ae07b9b9ddffc9f21354f6edc6240cc8adc2850342a26a","decision":{"action":{"automation":{"kind":"sketch","sketch":{"center":{"unit":"millimeter","x":0,"y":0,"z":0},"kind":"circle","name":"CIR-001","plane":"xy","radius":{"unit":"millimeter","value":5}}},"kind":"automation"},"kind":"action"},"schema":"rupa.agent-cad-benchmark.candidate-response.v2"}"#
+        let lineResponseFixture = #"{"caseID":"LIN-001","contextFingerprint":"f339619e0f34caca2a5a08eaf48080ffe7d783ce7bcf228197f494a86657eaaf","decision":{"action":{"automation":{"kind":"sketch","sketch":{"end":{"unit":"millimeter","x":25,"y":0,"z":0},"kind":"line","name":"LIN-001","plane":"xy","start":{"unit":"millimeter","x":0,"y":0,"z":0}}},"kind":"automation"},"kind":"action"},"schema":"rupa.agent-cad-benchmark.candidate-response.v3"}"#
+        let rectangleResponseFixture = #"{"caseID":"REC-001","contextFingerprint":"73e04af4c7a56666e42a84e0c10c3413e5cb860df59b74d707e7c504c05d7ea5","decision":{"action":{"automation":{"kind":"sketch","sketch":{"center":{"unit":"millimeter","x":0,"y":0,"z":0},"height":{"unit":"millimeter","value":20},"kind":"rectangle","name":"REC-001","plane":"xy","width":{"unit":"millimeter","value":40}}},"kind":"automation"},"kind":"action"},"schema":"rupa.agent-cad-benchmark.candidate-response.v3"}"#
+        let circleResponseFixture = #"{"caseID":"CIR-001","contextFingerprint":"934124a9a32a3830d1ae07b9b9ddffc9f21354f6edc6240cc8adc2850342a26a","decision":{"action":{"automation":{"kind":"sketch","sketch":{"center":{"unit":"millimeter","x":0,"y":0,"z":0},"kind":"circle","name":"CIR-001","plane":"xy","radius":{"unit":"millimeter","value":5}}},"kind":"automation"},"kind":"action"},"schema":"rupa.agent-cad-benchmark.candidate-response.v3"}"#
         let lineEvaluationFixture = #"{"caseID":"LIN-001","contextFingerprint":"f339619e0f34caca2a5a08eaf48080ffe7d783ce7bcf228197f494a86657eaaf","result":{"category":"LIN","id":"LIN-001","outcome":"realized"},"schema":"rupa.agent-cad-benchmark.evaluation.v1"}"#
         let rectangleEvaluationFixture = #"{"caseID":"REC-001","contextFingerprint":"73e04af4c7a56666e42a84e0c10c3413e5cb860df59b74d707e7c504c05d7ea5","result":{"category":"REC","id":"REC-001","outcome":"realized"},"schema":"rupa.agent-cad-benchmark.evaluation.v1"}"#
         let circleEvaluationFixture = #"{"caseID":"CIR-001","contextFingerprint":"934124a9a32a3830d1ae07b9b9ddffc9f21354f6edc6240cc8adc2850342a26a","result":{"category":"CIR","id":"CIR-001","outcome":"realized"},"schema":"rupa.agent-cad-benchmark.evaluation.v1"}"#
@@ -358,7 +372,7 @@ struct CADJSONAdapterTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func requestAndLiveContextsAreValueEqualAndAllThirtySixRequestsStayBounded() throws {
+    func requestAndLiveContextsAreValueEqualAndAllThirtySevenRequestsStayBounded() throws {
         let executor = DefaultCADActivatedCaseExecutor()
         let adapter = CADJSONAdapter(executor: executor)
         var largestRequest = 0
@@ -377,6 +391,8 @@ struct CADJSONAdapterTests {
                 action = lineAction(name: caseID.rawValue)
             } else if caseID.category == .rectangle {
                 action = rectangleAction(name: caseID.rawValue)
+            } else if caseID.category == .angle {
+                action = angleAction(name: caseID.rawValue)
             } else if caseID.rawValue == "CIR-002" {
                 action = cir002CircleAction(name: caseID.rawValue)
             } else if caseID.rawValue == "CIR-003" {
@@ -410,7 +426,7 @@ struct CADJSONAdapterTests {
             #expect(try CADJSONBoundedCodec.encode(response).count < 16_384)
         }
 
-        #expect(executor.activatedCaseIDs.count == 36)
+        #expect(executor.activatedCaseIDs.count == 37)
         #expect(largestRequest < 16_384)
     }
 
@@ -421,7 +437,7 @@ struct CADJSONAdapterTests {
         let adapter = CADJSONAdapter(executor: executor)
         let historicalIDs = (1...12).map { String(format: "LIN-%03d", $0) }
             + (1...8).map { String(format: "REC-%03d", $0) }
-        let currentIDs = historicalIDs + ["REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012"]
+        let currentIDs = historicalIDs + ["REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001"]
         #expect(executor.activatedCaseIDs.map(\.rawValue) == currentIDs)
 
         // Each activated record is case ID, request byte count, and request SHA-256, all length-prefixed.
@@ -547,6 +563,13 @@ struct CADJSONAdapterTests {
         appendLengthPrefixed(bigEndianBytes(UInt64(cir012Request.count)), to: &currentAggregate)
         appendLengthPrefixed(Data(SHA256.hash(data: cir012Request)), to: &currentAggregate)
         #expect(sha256Hex(currentAggregate) == "5c8cd7cbe83738f91459b1103d291194143042bde7e6f9c8415aa91f66ce5a28")
+
+        let ang001ID: CADBenchmarkCaseID = "ANG-001"
+        let ang001Request = try adapter.encodeRequest(for: ang001ID)
+        appendLengthPrefixed(Data(ang001ID.rawValue.utf8), to: &currentAggregate)
+        appendLengthPrefixed(bigEndianBytes(UInt64(ang001Request.count)), to: &currentAggregate)
+        appendLengthPrefixed(Data(SHA256.hash(data: ang001Request)), to: &currentAggregate)
+        #expect(sha256Hex(currentAggregate) == "b66ed71a2efccf115a81033c3bda0e9335c0a2a4c695ba5c58b49c9df7341b4e")
     }
 
     @MainActor
@@ -677,7 +700,7 @@ struct CADJSONAdapterTests {
         }
 
         do {
-            _ = try await adapter.evaluate(response: response, for: "ANG-001")
+            _ = try await adapter.evaluate(response: response, for: "ANG-002")
             Issue.record("An inactive case must be rejected before context resolution.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
@@ -748,7 +771,7 @@ struct CADJSONAdapterTests {
             )
         }
 
-        let legacy = Data(#"{"schema":"rupa.agent-cad-benchmark.candidate-response.v2","caseID":"LIN-001","contextFingerprint":"0000000000000000000000000000000000000000000000000000000000000000","decision":{"action":{"automation":{"sketch":{"line":{"name":"legacy"}}}}}}"#.utf8)
+        let legacy = Data(#"{"schema":"rupa.agent-cad-benchmark.candidate-response.v3","caseID":"LIN-001","contextFingerprint":"0000000000000000000000000000000000000000000000000000000000000000","decision":{"action":{"automation":{"sketch":{"line":{"name":"legacy"}}}}}}"#.utf8)
         expectAdapterError(.invalidDecision) {
             _ = try CADJSONBoundedCodec.decode(
                 CADJSONCandidateResponseEnvelope.self,
@@ -756,7 +779,7 @@ struct CADJSONAdapterTests {
             )
         }
 
-        let unknown = Data(#"{"schema":"rupa.agent-cad-benchmark.candidate-response.v2","caseID":"LIN-001","contextFingerprint":"0000000000000000000000000000000000000000000000000000000000000000","decision":{"kind":"future"}}"#.utf8)
+        let unknown = Data(#"{"schema":"rupa.agent-cad-benchmark.candidate-response.v3","caseID":"LIN-001","contextFingerprint":"0000000000000000000000000000000000000000000000000000000000000000","decision":{"kind":"future"}}"#.utf8)
         expectAdapterError(.invalidDecision) {
             _ = try CADJSONBoundedCodec.decode(
                 CADJSONCandidateResponseEnvelope.self,
@@ -767,7 +790,7 @@ struct CADJSONAdapterTests {
 
     @MainActor
     @Test
-    func candidateResponseV1IsRejectedAsUnsupportedSchema() throws {
+    func candidateResponseV1AndV2AreRejectedBeforeDecisionDecode() throws {
         let adapter = CADJSONAdapter()
         let request = try adapter.makeRequest(for: "LIN-001")
         let response = try CADJSONCandidateResponseEnvelope(
@@ -784,6 +807,26 @@ struct CADJSONAdapterTests {
             _ = try CADJSONBoundedCodec.decode(
                 CADJSONCandidateResponseEnvelope.self,
                 from: legacy
+            )
+        }
+
+        let prior = replacing(
+            try CADJSONBoundedCodec.encode(response),
+            from: CADJSONAdapterSchema.candidateResponse,
+            to: "rupa.agent-cad-benchmark.candidate-response.v2"
+        )
+        expectAdapterError(.unsupportedSchema) {
+            _ = try CADJSONBoundedCodec.decode(
+                CADJSONCandidateResponseEnvelope.self,
+                from: prior
+            )
+        }
+
+        let priorWithUnknownDecision = Data(#"{"schema":"rupa.agent-cad-benchmark.candidate-response.v2","decision":{"kind":"future"}}"#.utf8)
+        expectAdapterError(.unsupportedSchema) {
+            _ = try CADJSONBoundedCodec.decode(
+                CADJSONCandidateResponseEnvelope.self,
+                from: priorWithUnknownDecision
             )
         }
 
@@ -1154,6 +1197,22 @@ private func circleAction(name: String) -> CADCandidateAction {
         plane: .xy,
         center: CADPoint3D(x: 0, y: 0, z: 0),
         radius: CADLength(value: 5)
+    )))
+}
+
+private func angleAction(name: String) -> CADCandidateAction {
+    .automation(.sketch(.angle(
+        name: name,
+        plane: .xy,
+        firstStart: CADPoint3D(x: 0, y: 0, z: 35, unit: .millimeter),
+        firstEnd: CADPoint3D(x: 15, y: 0, z: 35, unit: .millimeter),
+        secondStart: CADPoint3D(x: 0, y: 0, z: 35, unit: .millimeter),
+        secondEnd: CADPoint3D(
+            x: 25 * 0.866025403784,
+            y: 12.5,
+            z: 35,
+            unit: .millimeter
+        )
     )))
 }
 

@@ -9,9 +9,10 @@ between an external Agent process and the activated-case executor owned by
 [benchmark CLI](../RupaAgentCADBenchmarkCLI/DESIGN.md) supplies process arguments
 and standard streams; this target owns the JSON meaning used by that process.
 
-The adapter is limited to the twenty-five reviewed cases `LIN-001`...`LIN-012`,
-`REC-001`...`REC-012`, and `CIR-001`. It does not activate a catalog case and
-does not make the remaining target specifications executable.
+The adapter is limited to the thirty-seven reviewed cases `LIN-001`...`LIN-012`,
+`REC-001`...`REC-012`, `CIR-001`...`CIR-012`, and `ANG-001`. It does not
+activate a catalog case and does not make the remaining target specifications
+executable.
 
 ## Responsibilities and Boundaries
 
@@ -101,6 +102,11 @@ rejection tests froze that decision before the CLI was released. CIR-001 adds th
 v1 is rejected without fallback. Request, evaluation, and error envelopes stay
 at v1, and the context fingerprint is unchanged.
 
+ANG-001 adds the explicit `angle` discriminator with two ordered endpoint
+pairs. Candidate-response advances to v3; v1 and v2 are rejected by the schema
+guard before decision decoding. Request, evaluation, error, and fingerprint
+schemas remain unchanged.
+
 Public production evaluation accepts candidate-response `Data`, not a decoded
 envelope or candidate value. It always applies the fixed 65,536-byte decode
 before constructing the internal typed response and candidate bridge. Typed
@@ -108,7 +114,7 @@ evaluation and candidate construction remain module-internal test/composition
 seams, so a caller cannot construct a large in-memory response and bypass the
 JSON input authority.
 
-The activated thirty-six cases accept one action decision. `unsupported` and
+The activated thirty-seven cases accept one action decision. `unsupported` and
 `finish` remain valid protocol values but are not converted to successful
 actions; the T12-XA-A executor contract projects either as typed
 `invalidSubmission` without publication. Multi-round continuation is not added
@@ -248,6 +254,16 @@ and rejects the next ID before evaluation. CIR-012 uses the real next-category
 ID ANG-001; no CIR-013 is invented. Envelope versions, context fingerprint,
 byte bound, decision shape, error projection, and privacy boundary remain fixed.
 
+### ANG-001 external authority
+
+ANG-001 extends the exact ordered authority from 36 to 37 IDs while preserving
+the frozen 36-request aggregate. The observed 37-request aggregate is
+`b66ed71a2efccf115a81033c3bda0e9335c0a2a4c695ba5c58b49c9df7341b4e`.
+The request reports the intersection capability as available because the
+production route composes two exposed `createLineSketch` primitives.
+One bounded v3 angle response traverses the same executor, production atomic
+batch, and immutable source oracle; ANG-002 is rejected before evaluation.
+
 ## Runtime Flows
 
 ```mermaid
@@ -294,12 +310,12 @@ classification and are projected only to stable non-private codes.
 
 | Invariant | Behavioral evidence |
 |---|---|
-| Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON for line, rectangle, and circle decisions; candidate-response v2 carries `kind: circle`, v1 and unknown discriminators are rejected, and every direct and nested case ID is the same scalar string. |
+| Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON for line, rectangle, circle, and angle decisions; candidate-response v3 carries `kind: angle`, v1/v2 and unknown discriminators are rejected, and every direct and nested case ID is the same scalar string. |
 | Exact public-context binding | The request fingerprint equals the live executor context; changed schema, case, context byte, capability, budget, or fingerprint is rejected before publication. |
-| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, and CIR-001...012; the historical thirty-five-request aggregate remains `27927a87226c9931ec4337b2ef653e08f2edd8217b95646bcea78d58d6c270e6`, the thirty-six-request aggregate is `5c8cd7cbe83738f91459b1103d291194143042bde7e6f9c8415aa91f66ce5a28`, CIR-012 traverses the production XY circle route/oracle, and ANG-001 is rejected before evaluation; no CIR-013 exists. |
+| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, CIR-001...012, and ANG-001; the thirty-six-request aggregate remains `5c8cd7cbe83738f91459b1103d291194143042bde7e6f9c8415aa91f66ce5a28`, the thirty-seven-request aggregate is `b66ed71a2efccf115a81033c3bda0e9335c0a2a4c695ba5c58b49c9df7341b4e`, ANG-001 traverses the atomic production batch/source oracle, and ANG-002 is rejected before evaluation. |
 | Bounded I/O | Exact-limit input succeeds, `limit + 1` fails before decode and leaves executor evaluation count zero, chunked stdin and file paths behave identically, no public typed-response execution bypass exists, encoded output cannot exceed the same bound, and the guaranteed infrastructure document is byte-equal to normal encoding, bounded, and decodable. |
 | Candidate/oracle separation | Static dependency and source scans prove the adapter imports only public benchmark contracts; encoded fixtures contain no expectation/oracle/source snapshot fields or values. |
-| Same production route | JSON candidates for an activated line, rectangle, and circle realize through the public executor; wrong geometry publishes once then the category's exact oracle rejects without retry. |
+| Same production route | JSON candidates for an activated line, rectangle, circle, and angle realize through the public executor; wrong geometry publishes once then the category's exact oracle rejects without retry. |
 | Non-action honesty | Valid `unsupported` and `finish` responses reach the benchmark candidate boundary, produce typed prepublication `invalidSubmission`, zero publication, and no fallback reference action. |
 
 Changes to public candidate Codable shapes, public context fields, capability

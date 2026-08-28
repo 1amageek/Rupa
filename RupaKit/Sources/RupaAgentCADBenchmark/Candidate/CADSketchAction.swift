@@ -15,6 +15,14 @@ public enum CADSketchAction: Codable, Equatable, Hashable, Sendable {
         center: CADPoint3D,
         radius: CADLength
     )
+    case angle(
+        name: String,
+        plane: CADSketchPlane,
+        firstStart: CADPoint3D,
+        firstEnd: CADPoint3D,
+        secondStart: CADPoint3D,
+        secondEnd: CADPoint3D
+    )
 
     private enum CodingKeys: String, CodingKey {
         case kind
@@ -26,6 +34,10 @@ public enum CADSketchAction: Codable, Equatable, Hashable, Sendable {
         case width
         case height
         case radius
+        case firstStart
+        case firstEnd
+        case secondStart
+        case secondEnd
     }
 
     public init(from decoder: Decoder) throws {
@@ -53,6 +65,15 @@ public enum CADSketchAction: Codable, Equatable, Hashable, Sendable {
                 plane: try container.decode(CADSketchPlane.self, forKey: .plane),
                 center: try container.decode(CADPoint3D.self, forKey: .center),
                 radius: try container.decode(CADLength.self, forKey: .radius)
+            )
+        case "angle":
+            self = .angle(
+                name: try container.decode(String.self, forKey: .name),
+                plane: try container.decode(CADSketchPlane.self, forKey: .plane),
+                firstStart: try container.decode(CADPoint3D.self, forKey: .firstStart),
+                firstEnd: try container.decode(CADPoint3D.self, forKey: .firstEnd),
+                secondStart: try container.decode(CADPoint3D.self, forKey: .secondStart),
+                secondEnd: try container.decode(CADPoint3D.self, forKey: .secondEnd)
             )
         default:
             throw DecodingError.dataCorruptedError(
@@ -85,6 +106,14 @@ public enum CADSketchAction: Codable, Equatable, Hashable, Sendable {
             try container.encode(plane, forKey: .plane)
             try container.encode(center, forKey: .center)
             try container.encode(radius, forKey: .radius)
+        case let .angle(name, plane, firstStart, firstEnd, secondStart, secondEnd):
+            try container.encode("angle", forKey: .kind)
+            try container.encode(name, forKey: .name)
+            try container.encode(plane, forKey: .plane)
+            try container.encode(firstStart, forKey: .firstStart)
+            try container.encode(firstEnd, forKey: .firstEnd)
+            try container.encode(secondStart, forKey: .secondStart)
+            try container.encode(secondEnd, forKey: .secondEnd)
         }
     }
 }

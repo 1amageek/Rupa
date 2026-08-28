@@ -8,7 +8,7 @@ enum CADChallengeInstruction {
         case let .circle(input):
             return "Construct \(id) as a circle of radius \(length(input.radius)) centered at \(point(input.center)) on the \(input.plane.rawValue) plane."
         case let .angle(input):
-            return "Construct \(id) as two finite lines of lengths \(length(input.firstLength)) and \(length(input.secondLength)) crossing at \(point(input.intersection)) with directions \(direction(input.firstDirection)) and \(direction(input.secondDirection)) and an included angle of \(angle(input.includedAngle)) on the \(input.plane.rawValue) plane."
+            return "Construct \(id) as two oriented finite line segments. Both segments start at intersection \(point(input.intersection)), which is the source-plane origin. The first has length \(length(input.firstLength)) and direction \(direction(input.firstDirection)). The second has length \(length(input.secondLength)) and direction \(direction(input.secondDirection)). The unsigned included angle is \(angle(input.includedAngle)) on the \(input.plane.rawValue.uppercased())-oriented plane."
         case let .box(input):
             return "Construct \(id) as a closed box with width \(length(input.width)), depth \(length(input.depth)), and height \(length(input.height)) from origin \(point(input.origin))."
         case let .cylinder(input):

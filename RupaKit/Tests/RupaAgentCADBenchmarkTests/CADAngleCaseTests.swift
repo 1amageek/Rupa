@@ -1,0 +1,476 @@
+import Foundation
+import Testing
+import RupaAgentProtocol
+import RupaAutomation
+import RupaCore
+import SwiftCAD
+@testable import RupaAgentCADBenchmark
+
+@Suite(.serialized)
+struct CADAngleCaseTests {
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func ang001CreatesTwoExactLinesInOneProductionBatch() async throws {
+        let result = try await CADAngleCaseRunner(case: .ang001).runReference()
+
+        try result.validate()
+        #expect(result.caseID == "ANG-001")
+        #expect(result.outcome == .realized)
+        #expect(result.candidateResults.map(\.stepIndex) == [0, 1])
+        #expect(result.candidateResults.allSatisfy { $0.status == .published })
+        #expect(result.roleBindings?.bindings.map(\.role) == ["first-line", "second-line"])
+        #expect(result.routeEvidence.didPublish)
+        #expect(
+            result.routeEvidence.finalPublicationSequence
+                == result.routeEvidence.initialPublicationSequence + 1
+        )
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 2)
+        #expect(result.telemetry.readCount >= 1)
+        #expect(result.telemetry.entityCount == 2)
+        #expect(result.telemetry.featureCount == 2)
+        #expect(result.telemetry.bodyCount == 0)
+        #expect(result.telemetry.planningWallNanoseconds > 0)
+        #expect(result.telemetry.routeWallNanoseconds > 0)
+        #expect(result.telemetry.oracleWallNanoseconds > 0)
+        #expect(result.telemetry.totalWallNanoseconds > 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func ang001RejectsNonintersectingPairAfterOnePublicationWithoutRetry() async throws {
+        let action = angleAction(
+            secondStart: CADPoint3D(x: 1, y: 0, z: 35, unit: .millimeter),
+            secondEnd: CADPoint3D(
+                x: 1 + 25 * 0.866025403784,
+                y: 12.5,
+                z: 35,
+                unit: .millimeter
+            )
+        )
+        let result = try await CADAngleCaseRunner(case: .ang001).run(action: action)
+
+        try result.validate()
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish)
+        #expect(
+            result.routeEvidence.finalPublicationSequence
+                == result.routeEvidence.initialPublicationSequence + 1
+        )
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 2)
+        #expect(result.telemetry.readCount == 2)
+        #expect(result.telemetry.entityCount == 2)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        #expect(result.diagnostics.contains { $0.contains("oracle mismatch") })
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func ang001RejectsOffPlaneEndpointBeforePublication() async throws {
+        let action = angleAction(
+            secondEnd: CADPoint3D(
+                x: 25 * 0.866025403784,
+                y: 12.5,
+                z: 37,
+                unit: .millimeter
+            )
+        )
+        let result = try await CADAngleCaseRunner(case: .ang001).run(action: action)
+
+        try result.validate()
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish == false)
+        #expect(
+            result.routeEvidence.finalPublicationSequence
+                == result.routeEvidence.initialPublicationSequence
+        )
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 0)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func ang001BatchRollsBackFirstLineWhenSecondLineFails() async throws {
+        let challenge = try CADBenchmarkCatalog().challenge(for: "ANG-001")
+        let plane = try angleSourcePlane()
+        let valid = lineCommand(
+            name: "ANG-001.rollback.first",
+            plane: plane,
+            start: Point2D(x: 0, y: 0),
+            end: Point2D(x: 0.015, y: 0)
+        )
+        let invalid = lineCommand(
+            name: "ANG-001.rollback.second",
+            plane: plane,
+            start: Point2D(x: 0, y: 0),
+            end: Point2D(x: 0, y: 0)
+        )
+        let harness = CADCaseLifecycleHarness(
+            caseID: "ANG-001",
+            challenge: challenge,
+            routing: CADCaseActionRouting(
+                operationName: "createAngleLines",
+                planBuilder: { _, _, _ in .batch([valid, invalid]) }
+            ),
+            timeoutWallNanoseconds: 10_000_000_000
+        )
+        let record = try await harness.run(action: angleAction())
+
+        #expect(record.outcome == .executionFailure)
+        #expect(record.routeEvidence.didPublish == false)
+        #expect(record.routeEvidence.initialDocumentGeneration == record.routeEvidence.finalDocumentGeneration)
+        #expect(record.routeEvidence.initialTransactionRevision == record.routeEvidence.finalTransactionRevision)
+        #expect(record.routeEvidence.initialPublicationSequence == record.routeEvidence.finalPublicationSequence)
+        #expect(record.finalView?.document.document.cadDocument.designGraph.nodes.isEmpty == true)
+        #expect(record.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func ang001StaleBatchIsRejectedWithoutSecondPublication() async throws {
+        let result = try await CADAngleCaseRunner(case: .ang001).runStaleReference()
+
+        try result.validate()
+        #expect(result.outcome == .executionFailure)
+        #expect(result.routeEvidence.didPublish == false)
+        #expect(result.telemetry.actionCount == 2)
+        #expect(result.telemetry.commandCount == 4)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func ang001TimeoutIsTypedAndCleansUp() async throws {
+        let result = try await CADAngleCaseRunner(
+            case: .ang001,
+            timeoutWallNanoseconds: 1
+        ).runReference()
+
+        try result.validate()
+        #expect(result.outcome == .timeout)
+        #expect(result.routeEvidence.didPublish == false)
+        #expect(result.telemetry.totalWallNanoseconds >= result.telemetry.timeoutWallNanoseconds)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func ang001CancellationBeforePlanningPublishesNothing() async throws {
+        let task = Task { @MainActor in
+            await Task.yield()
+            return try await CADAngleCaseRunner(case: .ang001).runReference()
+        }
+        task.cancel()
+
+        let result = try await task.value
+
+        try result.validate()
+        #expect(result.outcome == .cancellation)
+        #expect(result.routeEvidence.didPublish == false)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test
+    func ang001ReferenceCandidateUsesOnlyPublicIntersectionAndDirections() async throws {
+        let executor = DefaultCADActivatedCaseExecutor()
+        let context = try executor.context(for: "ANG-001")
+        #expect(context.capabilities.statuses == [
+            CADCapabilityStatus(
+                id: "cad.sketch.intersection",
+                version: "1",
+                available: true
+            ),
+        ])
+        let decision = try await CADAngleReferenceCandidate().decide(for: context)
+
+        guard case .action(.automation(.sketch(.angle(
+            _, let plane, let firstStart, let firstEnd, let secondStart, let secondEnd
+        )))) = decision else {
+            Issue.record("ANG-001 candidate did not produce one angle action.")
+            return
+        }
+        #expect(plane == .xy)
+        #expect(firstStart == CADPoint3D(x: 0, y: 0, z: 35, unit: .millimeter))
+        #expect(secondStart == firstStart)
+        #expect(abs(firstEnd.meters.x - 0.015) <= 1e-12)
+        #expect(abs(firstEnd.meters.y) <= 1e-12)
+        #expect(abs(firstEnd.meters.z - 0.035) <= 1e-12)
+        #expect(abs(secondEnd.meters.x - 0.025 * 0.866025403784) <= 1e-12)
+        #expect(abs(secondEnd.meters.y - 0.0125) <= 1e-12)
+        #expect(abs(secondEnd.meters.z - 0.035) <= 1e-12)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func ang001FailureTelemetryReadFailureIsAnOracleFailure() async throws {
+        let action = angleAction(
+            secondStart: CADPoint3D(x: 1, y: 0, z: 35, unit: .millimeter),
+            secondEnd: CADPoint3D(
+                x: 1 + 25 * 0.866025403784,
+                y: 12.5,
+                z: 35,
+                unit: .millimeter
+            )
+        )
+        let result = try await CADAngleCaseRunner(
+            case: .ang001,
+            failureSourceReader: { _ in throw FailureSourceReadError.unavailable }
+        ).run(action: action)
+
+        try result.validate()
+        #expect(result.outcome == .oracleFailure)
+        #expect(result.telemetry.readCount == 2)
+        #expect(result.routeEvidence.didPublish)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        #expect(result.diagnostics.contains { $0.contains("failure telemetry read failed") })
+    }
+
+    @Test
+    func ang001BindingContractRejectsMissingAndDuplicateAndIdentifiesSwappedOrder() throws {
+        let challenge = try CADBenchmarkCatalog().challenge(for: "ANG-001")
+        let steps = [
+            CADCandidateStepResult(
+                stepIndex: 0,
+                operation: "first",
+                status: .published,
+                primaryFeatureID: UUID().uuidString,
+                createdFeatureIDs: []
+            ),
+            CADCandidateStepResult(
+                stepIndex: 1,
+                operation: "second",
+                status: .published,
+                primaryFeatureID: UUID().uuidString,
+                createdFeatureIDs: []
+            ),
+        ]
+        let missing = CADOutputRoleBindings(bindings: [
+            CADOutputRoleBinding(role: "first-line", stepIndex: 0, selector: .primary),
+        ])
+        let duplicate = CADOutputRoleBindings(bindings: [
+            CADOutputRoleBinding(role: "first-line", stepIndex: 0, selector: .primary),
+            CADOutputRoleBinding(role: "second-line", stepIndex: 0, selector: .primary),
+        ])
+        let swapped = CADOutputRoleBindings(bindings: [
+            CADOutputRoleBinding(role: "first-line", stepIndex: 1, selector: .primary),
+            CADOutputRoleBinding(role: "second-line", stepIndex: 0, selector: .primary),
+        ])
+
+        #expect(throws: CADBenchmarkError.self) {
+            try missing.validate(for: challenge, availableStepResults: steps)
+        }
+        #expect(throws: CADBenchmarkError.self) {
+            try duplicate.validate(for: challenge, availableStepResults: steps)
+        }
+        try swapped.validate(for: challenge, availableStepResults: steps)
+        #expect(swapped.bindings != [
+            CADOutputRoleBinding(role: "first-line", stepIndex: 0, selector: .primary),
+            CADOutputRoleBinding(role: "second-line", stepIndex: 1, selector: .primary),
+        ])
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func ang001OracleRejectsMissingExtraSubstituteAndSwappedProductionSources() async throws {
+        let commands = try exactAngleCommands()
+        let missing = try await productionRecord(commands: [commands[0]])
+        try expectOracleMismatch(
+            record: missing,
+            bindings: CADOutputRoleBindings(bindings: [
+                CADOutputRoleBinding(role: "first-line", stepIndex: 0, selector: .primary),
+            ])
+        )
+
+        let extra = try await productionRecord(commands: commands + [commands[0]])
+        try expectOracleMismatch(record: extra, bindings: canonicalBindings())
+
+        let plane = try angleSourcePlane()
+        let substitute = AutomationCommand.createCircleSketch(
+            name: "ANG-001.substitute",
+            plane: plane,
+            center: SketchPoint(
+                x: .constant(.length(0, unit: .meter)),
+                y: .constant(.length(0, unit: .meter))
+            ),
+            radius: .constant(.length(0.01, unit: .meter))
+        )
+        let substituted = try await productionRecord(commands: [commands[0], substitute])
+        try expectOracleMismatch(record: substituted, bindings: canonicalBindings())
+
+        let exact = try await productionRecord(commands: commands)
+        try expectOracleMismatch(
+            record: exact,
+            bindings: CADOutputRoleBindings(bindings: [
+                CADOutputRoleBinding(role: "first-line", stepIndex: 1, selector: .primary),
+                CADOutputRoleBinding(role: "second-line", stepIndex: 0, selector: .primary),
+            ])
+        )
+    }
+
+    private func angleAction(
+        firstStart: CADPoint3D = CADPoint3D(x: 0, y: 0, z: 35, unit: .millimeter),
+        firstEnd: CADPoint3D = CADPoint3D(x: 15, y: 0, z: 35, unit: .millimeter),
+        secondStart: CADPoint3D = CADPoint3D(x: 0, y: 0, z: 35, unit: .millimeter),
+        secondEnd: CADPoint3D = CADPoint3D(
+            x: 25 * 0.866025403784,
+            y: 12.5,
+            z: 35,
+            unit: .millimeter
+        )
+    ) -> CADCandidateAction {
+        .automation(
+            .sketch(
+                .angle(
+                    name: "ANG-001",
+                    plane: .xy,
+                    firstStart: firstStart,
+                    firstEnd: firstEnd,
+                    secondStart: secondStart,
+                    secondEnd: secondEnd
+                )
+            )
+        )
+    }
+
+    private func angleSourcePlane() throws -> SketchPlaneReference {
+        let sourcePlane = try CADAngleGeometryMapping.sourcePlane(
+            orientation: .xy,
+            intersection: CADPoint3D(x: 0, y: 0, z: 35, unit: .millimeter),
+            modelingTolerance: .standard,
+            caseID: "ANG-001"
+        )
+        return SketchPlaneReference(sketchPlane: sourcePlane)
+    }
+
+    private func lineCommand(
+        name: String,
+        plane: SketchPlaneReference,
+        start: Point2D,
+        end: Point2D
+    ) -> AutomationCommand {
+        .createLineSketch(
+            name: name,
+            plane: plane,
+            start: SketchPoint(
+                x: .constant(.length(start.x, unit: .meter)),
+                y: .constant(.length(start.y, unit: .meter))
+            ),
+            end: SketchPoint(
+                x: .constant(.length(end.x, unit: .meter)),
+                y: .constant(.length(end.y, unit: .meter))
+            )
+        )
+    }
+
+    @MainActor
+    private func exactAngleCommands() throws -> [AutomationCommand] {
+        let challenge = try CADBenchmarkCatalog().challenge(for: "ANG-001")
+        let projection = try CADAngleChallengeProjection.decode(challenge)
+        let sourcePlane = try CADAngleGeometryMapping.sourcePlane(
+            orientation: projection.orientation,
+            intersection: projection.intersection,
+            modelingTolerance: .standard,
+            caseID: "ANG-001"
+        )
+        let points = [
+            projection.intersection,
+            projection.firstEnd,
+            projection.intersection,
+            projection.secondEnd,
+        ]
+        let local = try points.enumerated().map { index, point in
+            try CADAngleGeometryMapping.localPoint(
+                from: point,
+                sourcePlane: sourcePlane,
+                modelingTolerance: .standard,
+                caseID: "ANG-001",
+                field: "fixture.\(index)"
+            )
+        }
+        let reference = SketchPlaneReference(sketchPlane: sourcePlane)
+        return [
+            lineCommand(
+                name: "ANG-001.first-line",
+                plane: reference,
+                start: local[0],
+                end: local[1]
+            ),
+            lineCommand(
+                name: "ANG-001.second-line",
+                plane: reference,
+                start: local[2],
+                end: local[3]
+            ),
+        ]
+    }
+
+    @MainActor
+    private func productionRecord(
+        commands: [AutomationCommand]
+    ) async throws -> CADCaseLifecycleRecord {
+        let challenge = try CADBenchmarkCatalog().challenge(for: "ANG-001")
+        let harness = CADCaseLifecycleHarness(
+            caseID: "ANG-001",
+            challenge: challenge,
+            routing: CADCaseActionRouting(
+                operationName: "createAngleLines.fixture",
+                planBuilder: { _, _, _ in .batch(commands) }
+            ),
+            timeoutWallNanoseconds: 10_000_000_000
+        )
+        return try await harness.run(action: angleAction())
+    }
+
+    private func canonicalBindings() -> CADOutputRoleBindings {
+        CADOutputRoleBindings(bindings: [
+            CADOutputRoleBinding(role: "first-line", stepIndex: 0, selector: .primary),
+            CADOutputRoleBinding(role: "second-line", stepIndex: 1, selector: .primary),
+        ])
+    }
+
+    private func expectOracleMismatch(
+        record: CADCaseLifecycleRecord,
+        bindings: CADOutputRoleBindings
+    ) throws {
+        let view = try #require(record.finalView)
+        guard let response = record.response,
+              case .batch(let batch) = response else {
+            Issue.record("The production fixture did not return one batch response.")
+            return
+        }
+        let steps = batch.results.enumerated().map { index, result in
+            CADCandidateStepResult(
+                stepIndex: index,
+                operation: "fixture.\(index)",
+                status: result.didMutate ? .published : .unchanged,
+                primaryFeatureID: result.primaryFeatureID?.description,
+                createdFeatureIDs: result.createdFeatureIDs.map(\.description)
+            )
+        }
+        let entry = try CADActivatedAngleCase.ang001.catalogEntry
+        guard case .angle(let expected) = entry.expected else {
+            Issue.record("ANG-001 has no private angle expectation.")
+            return
+        }
+        #expect(throws: CADAngleOracleError.self) {
+            try CADAngleOracle.evaluate(
+                expected: expected,
+                challenge: entry.challenge,
+                bindings: bindings,
+                stepResults: steps,
+                snapshot: view
+            )
+        }
+    }
+}
+
+private enum FailureSourceReadError: Error {
+    case unavailable
+}

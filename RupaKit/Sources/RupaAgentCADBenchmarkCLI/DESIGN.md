@@ -55,7 +55,7 @@ rupa-agent-cad-benchmark request <CASE-ID>
 rupa-agent-cad-benchmark evaluate --response <PATH|->
 ```
 
-`request` validates that the ID is in the activated thirty-six-case set and emits
+`request` validates that the ID is in the activated thirty-seven-case set and emits
 exactly one request-envelope JSON object to standard output. `evaluate` reads
 exactly one candidate-response envelope from the selected file, or from
 standard input when `-` is selected, then emits exactly one evaluation- or
@@ -128,9 +128,9 @@ Process-level tests build and invoke the actual executable and prove:
 
 - `request` emits valid v1 JSON for an activated line, rectangle, REC-009
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
-  millimetre/XY case, plus the complete CIR-001...012 category, and rejects
-  inactive `ANG-001`; no CIR-013 is accepted or invented;
-- JSON line, rectangle, and circle responses traverse the adapter, production
+  millimetre/XY case, the complete CIR-001...012 category, and ANG-001, and
+  rejects inactive `ANG-002`;
+- JSON line, rectangle, circle, and angle responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
@@ -214,6 +214,16 @@ aggregate digest stays frozen and the new digest comes from observed request
 bytes. CIR-012 advances the boundary to 36 and rejects ANG-001; the CLI does not
 invent CIR-013. Commands, arguments, schema, byte limits, exit mapping, cleanup
 ownership, and no-fallback behavior remain unchanged across all nine commits.
+
+### ANG-001 atomic-batch process boundary
+
+ANG-001 advances the process authority to 37 reviewed IDs and
+candidate-response v3. An actual bounded response with `kind: "angle"` executes
+two ordered line commands through one production batch and exits `0` only after
+the immutable source oracle reports `realized`. Candidate-response v1 and v2
+are rejected before decision decoding, and ANG-002 remains inactive with exit
+`64`. Request/evaluation/error schemas, byte limits, exit mapping, cleanup, and
+no-retry behavior are unchanged.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected
 case argument, so a case-mismatch process fixture cannot be constructed without

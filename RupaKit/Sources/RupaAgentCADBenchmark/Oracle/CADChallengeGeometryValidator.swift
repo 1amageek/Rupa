@@ -85,7 +85,7 @@ enum CADChallengeGeometryValidator {
         try input.validate(caseID: caseID)
         guard tolerance.isNonDegenerate(input.firstLength.meters),
               tolerance.isNonDegenerate(input.secondLength.meters),
-              input.includedAngle.radians <= .pi + tolerance.modelingTolerance.angle else {
+              input.includedAngle.radians < .pi else {
             throw CADBenchmarkError.invalidInput(caseID: caseID.rawValue, reason: "Included angle is outside the unsigned planar-angle domain.")
         }
         let firstMagnitude = input.firstDirection.length

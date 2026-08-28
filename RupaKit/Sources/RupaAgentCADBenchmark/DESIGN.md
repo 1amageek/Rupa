@@ -195,18 +195,20 @@ implementation permission to add a parallel authority.
 | `CADChallenge` | Public projection; candidate-visible instruction, capability metadata, roles, and budget | No structured expected geometry, feature IDs, topology, tolerance, or plan |
 | `CADExpectedGeometry` | Internal; oracle-private source/B-Rep expectation and role checks | Category-facade/oracle boundary only; never enters the shared lifecycle harness or public candidate files |
 | `CADCandidateProtocol` | Public; bounded request/response continuation | No workspace, controller, or expectation reference |
-| `CADCandidateAction` | Public; activated line/rectangle intent and, beginning with CIR-001, one bounded analytic-circle sketch intent | No session, authority coordinate, expectation, or future-category transform fields |
+| `CADCandidateAction` | Public; reviewed line/rectangle/circle intent and, beginning with ANG-001, one bounded two-segment angle intent | No session, authority coordinate, expectation, or future-category transform fields |
 | `CADActivatedCaseExecuting` / `DefaultCADActivatedCaseExecutor` | Public; exact activated-ID list, candidate context, one candidate evaluation, and sanitized result | Dispatches only reviewed category facades; no private expectation, live view, internal evidence, or direct mutation escapes |
 | `CADActivatedLineCase` | Internal; the reviewed line IDs that may enter behavioral execution | Adds exactly one ID only when that case's vertical implementation begins; catalog presence alone is never activation |
 | `CADActivatedRectangleCase` | Internal; the reviewed rectangle IDs that may enter behavioral execution | Contains only REC-001 when introduced and advances one reviewed case per commit |
 | `CADActivatedCircleCase` | Internal; the reviewed circle IDs that may enter behavioral execution | Contains the complete reviewed CIR-001...012 category in catalog order; no CIR-013 exists |
-| `CADCaseActionRouting` | Internal; converts an activated category action plus public challenge context into a typed production Agent request | Has no workspace/source mutation authority and cannot read a private expectation |
+| `CADActivatedAngleCase` | Internal; the reviewed angle IDs that may enter behavioral execution | Contains only ANG-001 when introduced and advances one reviewed case per commit |
+| `CADCaseActionPlan` / `CADCaseActionRouting` | Internal; converts an activated category action plus public challenge context into either one command or one bounded atomic batch | Has no session/coordinate/workspace/source authority and cannot read a private expectation; completed single-command facades keep their existing branch |
 | `CADCaseLifecycleHarness` | Internal; owns the shared fresh controller/workspace, pre-owned registration UUID, exact coordinate binding, deadline, production dispatch, final immutable view capture, and unconditional cleanup | The only shared mutable lifecycle owner; it does not select cases, map geometry, run an oracle, or project a category result |
 | `CADCaseLifecycleRecord` | Internal immutable output from the harness | Preserves initial/final coordinates, typed response, publication/no-retry state, cleanup state, and common count/timing telemetry without geometry assertions |
 | `CADLineCaseRunner` | Internal thin line facade | Owns line activation, public projection, line routing/mapping, private expectation-to-line-oracle handoff, and line result projection; delegates lifecycle only |
 | `CADLineOracle` | Internal line-category extraction beginning at LIN-002; exact finite-line source verification and zero-body evaluation check | Read-only immutable input plus the selected activated line's internal expectation |
 | `CADRectangleCaseRunner` / `CADRectangleOracle` | Internal thin REC-001 facade and exact rectangle oracle | Own rectangle projection/routing/mapping, private rectangle expectation, four-line/profile checks, and rectangle result projection; delegate lifecycle only |
 | `CADCircleCaseRunner` / `CADCircleOracle` | Internal thin CIR-001 facade and exact analytic-circle oracle | Own circle projection/routing/mapping, private circle expectation, analytic entity/centre/radius/profile checks, and circle-local result projection; delegate lifecycle only |
+| `CADAngleCaseRunner` / `CADAngleOracle` | Internal thin ANG-001 facade and exact two-line source oracle | Own angle projection, affine intersection mapping, ordered two-command batch, private angle expectation, role/intersection/length/unsigned-angle checks, and angle-local result projection; delegate lifecycle only |
 | `CADCaseOutcome` / score | Public result projection; failure taxonomy and binary scoring | No fallback success |
 | `CADBenchmarkReport` | Public result projection; deterministic run and measurement projection | Value/report only |
 
@@ -257,7 +259,7 @@ challenge text, expected geometry, role, tolerance rule, or capability
 classification advances the owning version and digest. Duplicate IDs, gaps,
 non-finite values, or a count other than 100 are typed specification errors.
 The single-value case-ID wire is recorded by manifest schema
-`t12.manifest.v2` and catalog version `t12.catalog.v3`, with refrozen
+`t12.manifest.v2` and catalog version `t12.catalog.v4`, with refrozen
 challenge-input and manifest digests. The internal aggregate is recorded by
 expectation schema `t12.expectation.v3` and expectation version
 `t12.expectation-contract.v3`, with a refrozen expectation digest, because
@@ -317,9 +319,10 @@ Candidate-visible challenge text + CapabilitySnapshot + prior CandidateStepResul
        -> finish(CADOutputRoleBindings)
 ```
 
-`CADCandidateAction` exposes the line, rectangle, and circle automation payloads
-proven by activated cases. The circle payload contains name, plane, world-space
-centre, and positive radius; later category actions
+`CADCandidateAction` exposes the line, rectangle, circle, and reviewed angle
+automation payloads proven by activated cases. The angle payload contains a
+name, plane orientation, and two ordered world-space endpoint pairs; it neither
+contains an expected angle nor exposes the private oracle. Later category actions
 remain target specifications until their vertical case owns a production
 contract. Transform pivot and
 composition-order semantics belong to `T12-TRN-001` and are not part of this
@@ -390,8 +393,8 @@ The public `CADActivatedCaseExecuting` contract exposes exactly three
 operations: the ordered activated case IDs, the candidate-visible context for
 one activated ID, and asynchronous evaluation of one caller-supplied
 `CADCandidateProtocol`. Its default `@MainActor` implementation recognizes only
-`LIN-001`...`LIN-012` and `REC-001`...`REC-012`, dispatches to the existing thin
-line or rectangle facade, and returns a validated `CADCaseResult`. A catalog ID
+the ordered IDs whose individual gates have completed, dispatches to their thin
+category facades, and returns a validated `CADCaseResult`. A catalog ID
 outside that allow-list is a typed inactive-case error. The public result does
 not contain private expectations, source snapshots, FeatureIDs, workspace
 handles, oracle diagnostics, or mutable route state.
@@ -419,10 +422,10 @@ completed normally remain represented by `CADCaseOutcome`, including
 
 The lifecycle harness terminates `unsupported` and `finish` decisions before
 workspace publication and records validated `invalidSubmission` plus cleanup
-evidence because activated line/rectangle/circle cases require one action. The public
+evidence because activated cases require one bounded action. The public
 executor projects that record as
 `CADCaseResult(outcome: .invalidSubmission)`. These decisions are not promoted
-to `expectedUnsupported`, because all twenty-five activated cases have already
+to `expectedUnsupported`, because all thirty-seven activated cases have already
 proved their creation capability through the production controller. A
 candidate-thrown error remains the typed executor `candidateFailure`, also
 before publication. No adapter may catch these paths and substitute a reference
@@ -448,8 +451,8 @@ new shape before the external adapter is released. These codecs do not change
 the catalog, challenge, private expectation, or manifest digest.
 
 The executor performs one candidate decision for the currently activated
-line/rectangle/circle contract. It does not generalize multi-round
-continuation, activate unreviewed IDs such as `ANG-001`, schedule several cases, or establish a
+contract. It does not generalize multi-round continuation, activate an
+unreviewed ID, schedule several cases, or establish a
 benchmark baseline.
 
 ### CIR-001 circle foundation and activation boundary
@@ -710,6 +713,92 @@ typed ANG-001 inactivity, and unchanged shared/schema/catalog authority. The
 gate passes only when the dedicated checkpoint, affected benchmark/adapter/CLI
 suites, static privacy audit, diff-check, original-designer review, and commit
 `Verify Agent circle benchmark category` are complete.
+
+### ANG-001 intersection and atomic-batch foundation
+
+`T12-ANG-001` is the first angle behavior owner. The existing catalog target is
+two oriented finite segments on an XY-oriented plane: their shared world-space
+start/intersection is (0, 0, 35) mm, the first is 15 mm along +X, and the
+second is 25 mm along (0.866025403784, 0.5, 0), yielding an unsigned 30-degree
+included angle. The public instruction is made unambiguous for every angle
+target: the declared intersection is both segment starts and the affine source-
+plane origin, while `XY`/`XZ`/`YZ` select canonical +Z/+Y/+X normal and plane
+axes. The included-angle domain is non-degenerate `0 < angle < pi`; endpoint
+order preserves each declared direction, while the angle comparison itself is
+unsigned and uses normalized directions plus the fresh document's
+`ModelingTolerance`.
+
+The public `CADSketchAction.angle` carries a name, orientation, and the ordered
+world-space start/end pair for each segment. It deliberately permits an
+in-plane but semantically wrong pair so the immutable oracle, not request
+validation, owns exact intersection, direction, length, and angle acceptance.
+`CADAngleChallengeProjection` derives the reference endpoints only from public
+challenge text. `CADAngleGeometryMapping` always creates one affine
+`SketchPlane.plane` at the public intersection with the canonical positive
+normal and projects all four submitted endpoints through
+`SketchPlaneCoordinateSystem`; any normal distance beyond the fresh modeling
+tolerance fails before dispatch.
+
+One angle action is lowered to exactly two ordered
+`AutomationCommand.createLineSketch` values. A new internal
+`CADCaseActionPlan` lets `CADCaseActionRouting` select either the existing
+single-command path or one bounded batch; existing line, rectangle, and circle
+facades remain on their current `.execute` path. ANG-001 selects a two-command
+`AutomationBatch` and the lifecycle harness sends one `.executeBatch` request
+with the fresh generation, transaction revision, and workspace revision.
+`ProjectAgentCommandController` and `ProjectWorkspace.executeAutomation` remain
+the only mutation authority. The batch must yield two ordered command results,
+one project transaction/publication, one history entry and evaluation pass,
+two source-generation increments, and no partial state if the second command
+fails. Telemetry records one candidate action and two Automation commands.
+Both request generation and live execution derive the angle capability's
+availability from the exposed `createLineSketch` primitive; the synthetic
+two-line operation name is not a production capability.
+
+The angle facade maps production result 0 to candidate step 0 and result 1 to
+step 1 without rewriting primary/created aliases. `first-line` binds to step 0
+`.primary` and `second-line` to step 1 `.primary`; resolved FeatureIDs must be
+different. The exact oracle accepts only two unsuppressed curve-owning sketch
+features, each containing one finite line on the same canonical affine plane,
+with starts at the target intersection, ordered world endpoints, lengths 15 mm
+and 25 mm, normalized directions, unsigned 30-degree angle, exactly two source
+entities/features, and zero evaluated bodies. Missing or extra source, a
+non-line substitute, incomplete/duplicate/swapped role binding, wrong plane,
+intersection, endpoint order, length, or angle is a typed mismatch. Negative
+oracle fixtures may construct immutable wrong source snapshots, but exact
+success must use the registered production route.
+
+ANG-001 independently proves: exact realization; an in-plane pair whose second
+segment is shifted away from the intersection publishing once and then being
+rejected without retry; a submitted endpoint at world z = 37 mm being rejected
+before command/publication; second-command failure rolling back the first; a
+shared-deadline timeout with unconditional zero-registration cleanup; positive
+planning/route/oracle/total timings; action 1, command 2, read at least 1,
+entity 2, feature 2, body 0 counts; and public-challenge-only candidate
+construction. A postpublication mismatch performs one oracle read and one
+failure-telemetry read, while a failure of that second read is an
+`oracleFailure` rather than a candidate mismatch. Missing/extra/substitute and role-binding fixtures are owned by
+the angle oracle suite and do not become alternate production success paths.
+
+Clarifying the angle instruction changes the public target specification, so
+manifest schema remains `t12.manifest.v2` while catalog version advances from
+`t12.catalog.v3` to `t12.catalog.v4` and the challenge/manifest digests are
+refrozen from observed bytes. Expected geometry and output roles are unchanged,
+so expectation, capability, and tolerance contracts remain at their current
+versions. None of the first thirty-six activated contexts contains an angle
+challenge; their canonical request bytes and aggregate digest
+`5c8cd7cbe83738f91459b1103d291194143042bde7e6f9c8415aa91f66ce5a28`
+must remain unchanged.
+
+The new explicit `kind: "angle"` action is a closed-enum wire expansion, so
+candidate-response advances from v2 to v3 and v2 is rejected by the envelope
+schema guard before decision decoding, with no fallback. Request, evaluation,
+error, fingerprint, and byte-bound contracts remain v1. Only after the internal
+production/oracle gate passes do executor, adapter, and CLI authority advance
+atomically from the exact thirty-six-ID prefix to thirty-seven, freeze the
+newly observed request aggregate, realize an actual bounded ANG-001 request/v3
+response/evaluation, and reject ANG-002 as typed inactive. This foundation does
+not activate ANG-002...016 or add multi-round execution.
 
 ### Vertical Case Gate
 

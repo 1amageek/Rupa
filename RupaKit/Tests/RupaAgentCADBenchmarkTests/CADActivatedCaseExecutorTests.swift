@@ -6,11 +6,11 @@ import Testing
 struct CADActivatedCaseExecutorTests {
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func executorActivatesOnlyReviewedLineRectangleAndCircleCases() throws {
+    func executorActivatesOnlyReviewedLineRectangleCircleAndAngleCases() throws {
         let executor = DefaultCADActivatedCaseExecutor()
         let expected = (1...12).map { String(format: "LIN-%03d", $0) }
             + (1...12).map { String(format: "REC-%03d", $0) }
-            + ["CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012"]
+            + ["CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001"]
         #expect(executor.activatedCaseIDs.map(\.rawValue) == expected)
     }
 
@@ -229,10 +229,10 @@ struct CADActivatedCaseExecutorTests {
     func inactiveCaseIsRejectedBeforeCategoryDispatch() async throws {
         let executor = DefaultCADActivatedCaseExecutor()
         do {
-            _ = try executor.context(for: "ANG-001")
+            _ = try executor.context(for: "ANG-002")
             Issue.record("Inactive case must be rejected.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("ANG-001"))
+            #expect(error == .inactiveCase("ANG-002"))
         }
     }
 
@@ -257,10 +257,19 @@ struct CADActivatedCaseExecutorTests {
             center: CADPoint3D(x: 0, y: 0, z: 0),
             radius: CADLength(value: 5)
         )))
+        let angle = CADCandidateAction.automation(.sketch(.angle(
+            name: "angle",
+            plane: .xy,
+            firstStart: CADPoint3D(x: 0, y: 0, z: 35),
+            firstEnd: CADPoint3D(x: 15, y: 0, z: 35),
+            secondStart: CADPoint3D(x: 0, y: 0, z: 35),
+            secondEnd: CADPoint3D(x: 21.6506350946, y: 12.5, z: 35)
+        )))
 
         let lineJSON = try canonicalJSON(line)
         let rectangleJSON = try canonicalJSON(rectangle)
         let circleJSON = try canonicalJSON(circle)
+        let angleJSON = try canonicalJSON(angle)
         let actionDecisionJSON = try canonicalJSON(CADCandidateDecision.action(line))
         let finishJSON = try canonicalJSON(
             CADCandidateDecision.finish(CADOutputRoleBindings(bindings: []))
@@ -269,12 +278,14 @@ struct CADActivatedCaseExecutorTests {
         #expect(lineJSON == "{\"automation\":{\"kind\":\"sketch\",\"sketch\":{\"end\":{\"unit\":\"millimeter\",\"x\":25,\"y\":0,\"z\":0},\"kind\":\"line\",\"name\":\"segment\",\"plane\":\"xy\",\"start\":{\"unit\":\"millimeter\",\"x\":0,\"y\":0,\"z\":0}}},\"kind\":\"automation\"}")
         #expect(rectangleJSON == "{\"automation\":{\"kind\":\"sketch\",\"sketch\":{\"center\":{\"unit\":\"millimeter\",\"x\":10,\"y\":20,\"z\":0},\"height\":{\"unit\":\"millimeter\",\"value\":20},\"kind\":\"rectangle\",\"name\":\"frame\",\"plane\":\"xy\",\"width\":{\"unit\":\"millimeter\",\"value\":40}}},\"kind\":\"automation\"}")
         #expect(circleJSON == "{\"automation\":{\"kind\":\"sketch\",\"sketch\":{\"center\":{\"unit\":\"millimeter\",\"x\":0,\"y\":0,\"z\":0},\"kind\":\"circle\",\"name\":\"round\",\"plane\":\"xy\",\"radius\":{\"unit\":\"millimeter\",\"value\":5}}},\"kind\":\"automation\"}")
+        #expect(angleJSON == "{\"automation\":{\"kind\":\"sketch\",\"sketch\":{\"firstEnd\":{\"unit\":\"millimeter\",\"x\":15,\"y\":0,\"z\":35},\"firstStart\":{\"unit\":\"millimeter\",\"x\":0,\"y\":0,\"z\":35},\"kind\":\"angle\",\"name\":\"angle\",\"plane\":\"xy\",\"secondEnd\":{\"unit\":\"millimeter\",\"x\":21.6506350946,\"y\":12.5,\"z\":35},\"secondStart\":{\"unit\":\"millimeter\",\"x\":0,\"y\":0,\"z\":35}}},\"kind\":\"automation\"}")
         #expect(actionDecisionJSON == "{\"action\":{\"automation\":{\"kind\":\"sketch\",\"sketch\":{\"end\":{\"unit\":\"millimeter\",\"x\":25,\"y\":0,\"z\":0},\"kind\":\"line\",\"name\":\"segment\",\"plane\":\"xy\",\"start\":{\"unit\":\"millimeter\",\"x\":0,\"y\":0,\"z\":0}}},\"kind\":\"automation\"},\"kind\":\"action\"}")
         #expect(finishJSON == "{\"finish\":{\"bindings\":[]},\"kind\":\"finish\"}")
 
         #expect(try JSONDecoder().decode(CADCandidateAction.self, from: Data(lineJSON.utf8)) == line)
         #expect(try JSONDecoder().decode(CADCandidateAction.self, from: Data(rectangleJSON.utf8)) == rectangle)
         #expect(try JSONDecoder().decode(CADCandidateAction.self, from: Data(circleJSON.utf8)) == circle)
+        #expect(try JSONDecoder().decode(CADCandidateAction.self, from: Data(angleJSON.utf8)) == angle)
     }
 
     @Test

@@ -27,10 +27,10 @@ func publicManifestDigestIsDeterministicAndFrozen() throws {
 
     #expect(first.manifest == second.manifest)
     #expect(first.manifest.schema == "t12.manifest.v2")
-    #expect(first.manifest.catalog == "t12.catalog.v3")
+    #expect(first.manifest.catalog == "t12.catalog.v4")
     #expect(first.manifest.tolerancePolicy == "t12.tolerance.v1")
-    #expect(first.manifest.challengeInputDigest == "d8c296dabd0056f247352f4a11585da36708e1f262a59fb69165ca7f48b8593c")
-    #expect(first.manifest.digest == "431a0aa29398f8fa61ade21aff31b882f0bd3e7db055b2587af433486250efb2")
+    #expect(first.manifest.challengeInputDigest == "7a9e3be7ec08961e9372f2449c8abc642afdb70140c6674f59e2bae3c67d50f8")
+    #expect(first.manifest.digest == "be933d060bc7c569cea0b7a266577191c85e397109361af5a1eb6dea70abdf4b")
 
     let encoded = try JSONEncoder().encode(first.manifest)
     let encodedText = String(decoding: encoded, as: UTF8.self)
@@ -339,7 +339,7 @@ func lin001UsesAnAffinePlaneAnchoredAtLineStart() throws {
 }
 
 @Test
-func candidateLineActionIsTheOnlyActiveAutomationPayload() throws {
+func candidateLineActionRoundTripsThroughThePublicAutomationPayload() throws {
     let action = CADCandidateAction.automation(.sketch(.line(
         name: "segment",
         plane: .xy,
