@@ -8,7 +8,7 @@ import RupaAgentCADBenchmark
 struct CADJSONAdapterTests {
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func goldenLineAndRectangleExchangeUsesTheProductionRoute() async throws {
+    func goldenLineRectangleAndCircleExchangeUsesTheProductionRoute() async throws {
         let adapter = CADJSONAdapter()
 
         let lineRequest = try adapter.makeRequest(for: "LIN-001")
@@ -60,6 +60,25 @@ struct CADJSONAdapterTests {
             CADJSONEvaluationEnvelope.self,
             from: adapter.encodeEvaluation(rectangleEvaluation)
         ) == rectangleEvaluation)
+
+        let circleRequest = try adapter.makeRequest(for: "CIR-001")
+        let circleAction = circleAction(name: "CIR-001")
+        let circleResponse = try CADJSONCandidateResponseEnvelope(
+            caseID: circleRequest.caseID,
+            context: circleRequest.context,
+            decision: .action(circleAction)
+        )
+        let circleResponseData = try CADJSONBoundedCodec.encode(circleResponse)
+        let circleJSON = try #require(String(data: circleResponseData, encoding: .utf8))
+        #expect(circleJSON.contains("\"kind\":\"circle\""))
+        #expect(circleJSON.contains("\"caseID\":\"CIR-001\""))
+        let circleEvaluation = try await adapter.evaluate(responseData: circleResponseData)
+        #expect(circleEvaluation.result?.outcome == .realized)
+        #expect(circleEvaluation.error == nil)
+        #expect(try CADJSONBoundedCodec.decode(
+            CADJSONEvaluationEnvelope.self,
+            from: adapter.encodeEvaluation(circleEvaluation)
+        ) == circleEvaluation)
 
         let inchRectangleRequest = try adapter.makeRequest(for: "REC-009")
         let inchRectangleResponse = try CADJSONCandidateResponseEnvelope(
@@ -116,6 +135,7 @@ struct CADJSONAdapterTests {
         let adapter = CADJSONAdapter()
         let lineRequest = try adapter.makeRequest(for: "LIN-001")
         let rectangleRequest = try adapter.makeRequest(for: "REC-001")
+        let circleRequest = try adapter.makeRequest(for: "CIR-001")
         let lineResponse = try CADJSONCandidateResponseEnvelope(
             caseID: "LIN-001",
             context: lineRequest.context,
@@ -125,6 +145,11 @@ struct CADJSONAdapterTests {
             caseID: "REC-001",
             context: rectangleRequest.context,
             decision: .action(rectangleAction(name: "REC-001"))
+        )
+        let circleResponse = try CADJSONCandidateResponseEnvelope(
+            caseID: "CIR-001",
+            context: circleRequest.context,
+            decision: .action(circleAction(name: "CIR-001"))
         )
 
         let lineEvaluation = try CADJSONEvaluationEnvelope(
@@ -140,17 +165,29 @@ struct CADJSONAdapterTests {
 
         let lineRequestFixture = #"{"caseID":"LIN-001","context":{"capabilities":{"statuses":[{"available":true,"id":"cad.sketch.line","version":"1"}],"version":"agent-capabilities.v1"},"challenge":{"budget":{"maximumActions":32,"maximumReadRecords":64,"maximumRounds":16},"category":"LIN","id":"LIN-001","instruction":"Construct LIN-001 as a finite line segment of length 25.0 mm from (0.0, 0.0, 0.0) mm to (25.0, 0.0, 0.0) mm on the XY-oriented plane through (0.0, 0.0, 0.0) mm.","outputRoles":[{"description":"The requested finite line segment.","name":"segment"}],"requiredCapability":{"id":"cad.sketch.line","version":"1"}},"priorResults":[],"remainingActions":32,"remainingRounds":16},"contextFingerprint":"f339619e0f34caca2a5a08eaf48080ffe7d783ce7bcf228197f494a86657eaaf","schema":"rupa.agent-cad-benchmark.request.v1"}"#
         let rectangleRequestFixture = #"{"caseID":"REC-001","context":{"capabilities":{"statuses":[{"available":true,"id":"cad.sketch.rectangle","version":"1"}],"version":"agent-capabilities.v1"},"challenge":{"budget":{"maximumActions":32,"maximumReadRecords":64,"maximumRounds":16},"category":"REC","id":"REC-001","instruction":"Construct REC-001 as a rectangle of width 40.0 mm and height 20.0 mm centered at (0.0, 0.0, 0.0) mm on the xy plane.","outputRoles":[{"description":"The requested closed rectangle.","name":"rectangle"}],"requiredCapability":{"id":"cad.sketch.rectangle","version":"1"}},"priorResults":[],"remainingActions":32,"remainingRounds":16},"contextFingerprint":"73e04af4c7a56666e42a84e0c10c3413e5cb860df59b74d707e7c504c05d7ea5","schema":"rupa.agent-cad-benchmark.request.v1"}"#
-        let lineResponseFixture = #"{"caseID":"LIN-001","contextFingerprint":"f339619e0f34caca2a5a08eaf48080ffe7d783ce7bcf228197f494a86657eaaf","decision":{"action":{"automation":{"kind":"sketch","sketch":{"end":{"unit":"millimeter","x":25,"y":0,"z":0},"kind":"line","name":"LIN-001","plane":"xy","start":{"unit":"millimeter","x":0,"y":0,"z":0}}},"kind":"automation"},"kind":"action"},"schema":"rupa.agent-cad-benchmark.candidate-response.v1"}"#
-        let rectangleResponseFixture = #"{"caseID":"REC-001","contextFingerprint":"73e04af4c7a56666e42a84e0c10c3413e5cb860df59b74d707e7c504c05d7ea5","decision":{"action":{"automation":{"kind":"sketch","sketch":{"center":{"unit":"millimeter","x":0,"y":0,"z":0},"height":{"unit":"millimeter","value":20},"kind":"rectangle","name":"REC-001","plane":"xy","width":{"unit":"millimeter","value":40}}},"kind":"automation"},"kind":"action"},"schema":"rupa.agent-cad-benchmark.candidate-response.v1"}"#
+        let circleRequestFixture = #"{"caseID":"CIR-001","context":{"capabilities":{"statuses":[{"available":true,"id":"cad.sketch.circle","version":"1"}],"version":"agent-capabilities.v1"},"challenge":{"budget":{"maximumActions":32,"maximumReadRecords":64,"maximumRounds":16},"category":"CIR","id":"CIR-001","instruction":"Construct CIR-001 as a circle of radius 5.0 mm centered at (0.0, 0.0, 0.0) mm on the xy plane.","outputRoles":[{"description":"The requested analytic circle.","name":"circle"}],"requiredCapability":{"id":"cad.sketch.circle","version":"1"}},"priorResults":[],"remainingActions":32,"remainingRounds":16},"contextFingerprint":"934124a9a32a3830d1ae07b9b9ddffc9f21354f6edc6240cc8adc2850342a26a","schema":"rupa.agent-cad-benchmark.request.v1"}"#
+        let lineResponseFixture = #"{"caseID":"LIN-001","contextFingerprint":"f339619e0f34caca2a5a08eaf48080ffe7d783ce7bcf228197f494a86657eaaf","decision":{"action":{"automation":{"kind":"sketch","sketch":{"end":{"unit":"millimeter","x":25,"y":0,"z":0},"kind":"line","name":"LIN-001","plane":"xy","start":{"unit":"millimeter","x":0,"y":0,"z":0}}},"kind":"automation"},"kind":"action"},"schema":"rupa.agent-cad-benchmark.candidate-response.v2"}"#
+        let rectangleResponseFixture = #"{"caseID":"REC-001","contextFingerprint":"73e04af4c7a56666e42a84e0c10c3413e5cb860df59b74d707e7c504c05d7ea5","decision":{"action":{"automation":{"kind":"sketch","sketch":{"center":{"unit":"millimeter","x":0,"y":0,"z":0},"height":{"unit":"millimeter","value":20},"kind":"rectangle","name":"REC-001","plane":"xy","width":{"unit":"millimeter","value":40}}},"kind":"automation"},"kind":"action"},"schema":"rupa.agent-cad-benchmark.candidate-response.v2"}"#
+        let circleResponseFixture = #"{"caseID":"CIR-001","contextFingerprint":"934124a9a32a3830d1ae07b9b9ddffc9f21354f6edc6240cc8adc2850342a26a","decision":{"action":{"automation":{"kind":"sketch","sketch":{"center":{"unit":"millimeter","x":0,"y":0,"z":0},"kind":"circle","name":"CIR-001","plane":"xy","radius":{"unit":"millimeter","value":5}}},"kind":"automation"},"kind":"action"},"schema":"rupa.agent-cad-benchmark.candidate-response.v2"}"#
         let lineEvaluationFixture = #"{"caseID":"LIN-001","contextFingerprint":"f339619e0f34caca2a5a08eaf48080ffe7d783ce7bcf228197f494a86657eaaf","result":{"category":"LIN","id":"LIN-001","outcome":"realized"},"schema":"rupa.agent-cad-benchmark.evaluation.v1"}"#
         let rectangleEvaluationFixture = #"{"caseID":"REC-001","contextFingerprint":"73e04af4c7a56666e42a84e0c10c3413e5cb860df59b74d707e7c504c05d7ea5","result":{"category":"REC","id":"REC-001","outcome":"realized"},"schema":"rupa.agent-cad-benchmark.evaluation.v1"}"#
+        let circleEvaluationFixture = #"{"caseID":"CIR-001","contextFingerprint":"934124a9a32a3830d1ae07b9b9ddffc9f21354f6edc6240cc8adc2850342a26a","result":{"category":"CIR","id":"CIR-001","outcome":"realized"},"schema":"rupa.agent-cad-benchmark.evaluation.v1"}"#
 
         #expect(String(decoding: try CADJSONBoundedCodec.encode(lineRequest), as: UTF8.self) == lineRequestFixture)
         #expect(String(decoding: try CADJSONBoundedCodec.encode(rectangleRequest), as: UTF8.self) == rectangleRequestFixture)
+        #expect(String(decoding: try CADJSONBoundedCodec.encode(circleRequest), as: UTF8.self) == circleRequestFixture)
         #expect(String(decoding: try CADJSONBoundedCodec.encode(lineResponse), as: UTF8.self) == lineResponseFixture)
         #expect(String(decoding: try CADJSONBoundedCodec.encode(rectangleResponse), as: UTF8.self) == rectangleResponseFixture)
+        #expect(String(decoding: try CADJSONBoundedCodec.encode(circleResponse), as: UTF8.self) == circleResponseFixture)
         #expect(String(decoding: try CADJSONBoundedCodec.encode(lineEvaluation), as: UTF8.self) == lineEvaluationFixture)
         #expect(String(decoding: try CADJSONBoundedCodec.encode(rectangleEvaluation), as: UTF8.self) == rectangleEvaluationFixture)
+        #expect(String(decoding: try CADJSONBoundedCodec.encode(
+            try CADJSONEvaluationEnvelope(
+                caseID: circleRequest.caseID,
+                contextFingerprint: circleRequest.contextFingerprint,
+                result: CADCaseResult(id: "CIR-001", category: .circle, outcome: .realized)
+            )
+        ), as: UTF8.self) == circleEvaluationFixture)
     }
 
     @MainActor
@@ -189,7 +226,7 @@ struct CADJSONAdapterTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func requestAndLiveContextsAreValueEqualAndAllTwentyFourRequestsStayBounded() throws {
+    func requestAndLiveContextsAreValueEqualAndAllTwentyFiveRequestsStayBounded() throws {
         let executor = DefaultCADActivatedCaseExecutor()
         let adapter = CADJSONAdapter(executor: executor)
         var largestRequest = 0
@@ -206,8 +243,10 @@ struct CADJSONAdapterTests {
             let action: CADCandidateAction
             if caseID.category == .line {
                 action = lineAction(name: caseID.rawValue)
-            } else {
+            } else if caseID.category == .rectangle {
                 action = rectangleAction(name: caseID.rawValue)
+            } else {
+                action = circleAction(name: caseID.rawValue)
             }
             let response = try CADJSONCandidateResponseEnvelope(
                 caseID: caseID,
@@ -217,7 +256,7 @@ struct CADJSONAdapterTests {
             #expect(try CADJSONBoundedCodec.encode(response).count < 16_384)
         }
 
-        #expect(executor.activatedCaseIDs.count == 24)
+        #expect(executor.activatedCaseIDs.count == 25)
         #expect(largestRequest < 16_384)
     }
 
@@ -228,7 +267,7 @@ struct CADJSONAdapterTests {
         let adapter = CADJSONAdapter(executor: executor)
         let historicalIDs = (1...12).map { String(format: "LIN-%03d", $0) }
             + (1...8).map { String(format: "REC-%03d", $0) }
-        let currentIDs = historicalIDs + ["REC-009", "REC-010", "REC-011", "REC-012"]
+        let currentIDs = historicalIDs + ["REC-009", "REC-010", "REC-011", "REC-012", "CIR-001"]
         #expect(executor.activatedCaseIDs.map(\.rawValue) == currentIDs)
 
         // Each activated record is case ID, request byte count, and request SHA-256, all length-prefixed.
@@ -270,6 +309,13 @@ struct CADJSONAdapterTests {
         appendLengthPrefixed(bigEndianBytes(UInt64(rec012Request.count)), to: &currentAggregate)
         appendLengthPrefixed(Data(SHA256.hash(data: rec012Request)), to: &currentAggregate)
         #expect(sha256Hex(currentAggregate) == "1d4190e85472aff255ce56003df4f571452be0eefb40ae2ebf3e0d54d4f0d61e")
+
+        let cir001ID: CADBenchmarkCaseID = "CIR-001"
+        let cir001Request = try adapter.encodeRequest(for: cir001ID)
+        appendLengthPrefixed(Data(cir001ID.rawValue.utf8), to: &currentAggregate)
+        appendLengthPrefixed(bigEndianBytes(UInt64(cir001Request.count)), to: &currentAggregate)
+        appendLengthPrefixed(Data(SHA256.hash(data: cir001Request)), to: &currentAggregate)
+        #expect(sha256Hex(currentAggregate) == "aee0de92d235870b031871fa822746738ebec7e070ed19fd92263fb10a336d84")
     }
 
     @MainActor
@@ -400,7 +446,7 @@ struct CADJSONAdapterTests {
         }
 
         do {
-            _ = try await adapter.evaluate(response: response, for: "CIR-001")
+            _ = try await adapter.evaluate(response: response, for: "CIR-002")
             Issue.record("An inactive case must be rejected before context resolution.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
@@ -471,7 +517,7 @@ struct CADJSONAdapterTests {
             )
         }
 
-        let legacy = Data(#"{"schema":"rupa.agent-cad-benchmark.candidate-response.v1","caseID":"LIN-001","contextFingerprint":"0000000000000000000000000000000000000000000000000000000000000000","decision":{"action":{"automation":{"sketch":{"line":{"name":"legacy"}}}}}}"#.utf8)
+        let legacy = Data(#"{"schema":"rupa.agent-cad-benchmark.candidate-response.v2","caseID":"LIN-001","contextFingerprint":"0000000000000000000000000000000000000000000000000000000000000000","decision":{"action":{"automation":{"sketch":{"line":{"name":"legacy"}}}}}}"#.utf8)
         expectAdapterError(.invalidDecision) {
             _ = try CADJSONBoundedCodec.decode(
                 CADJSONCandidateResponseEnvelope.self,
@@ -479,11 +525,42 @@ struct CADJSONAdapterTests {
             )
         }
 
-        let unknown = Data(#"{"schema":"rupa.agent-cad-benchmark.candidate-response.v1","caseID":"LIN-001","contextFingerprint":"0000000000000000000000000000000000000000000000000000000000000000","decision":{"kind":"future"}}"#.utf8)
+        let unknown = Data(#"{"schema":"rupa.agent-cad-benchmark.candidate-response.v2","caseID":"LIN-001","contextFingerprint":"0000000000000000000000000000000000000000000000000000000000000000","decision":{"kind":"future"}}"#.utf8)
         expectAdapterError(.invalidDecision) {
             _ = try CADJSONBoundedCodec.decode(
                 CADJSONCandidateResponseEnvelope.self,
                 from: unknown
+            )
+        }
+    }
+
+    @MainActor
+    @Test
+    func candidateResponseV1IsRejectedAsUnsupportedSchema() throws {
+        let adapter = CADJSONAdapter()
+        let request = try adapter.makeRequest(for: "LIN-001")
+        let response = try CADJSONCandidateResponseEnvelope(
+            caseID: request.caseID,
+            context: request.context,
+            decision: .action(lineAction(name: "LIN-001"))
+        )
+        let legacy = replacing(
+            try CADJSONBoundedCodec.encode(response),
+            from: CADJSONAdapterSchema.candidateResponse,
+            to: "rupa.agent-cad-benchmark.candidate-response.v1"
+        )
+        expectAdapterError(.unsupportedSchema) {
+            _ = try CADJSONBoundedCodec.decode(
+                CADJSONCandidateResponseEnvelope.self,
+                from: legacy
+            )
+        }
+
+        let legacyWithUnknownDecision = Data(#"{"schema":"rupa.agent-cad-benchmark.candidate-response.v1","decision":{"kind":"future"}}"#.utf8)
+        expectAdapterError(.unsupportedSchema) {
+            _ = try CADJSONBoundedCodec.decode(
+                CADJSONCandidateResponseEnvelope.self,
+                from: legacyWithUnknownDecision
             )
         }
     }
@@ -837,6 +914,15 @@ private func rectangleAction(name: String) -> CADCandidateAction {
         center: CADPoint3D(x: 0, y: 0, z: 0),
         width: CADLength(value: 40),
         height: CADLength(value: 20)
+    )))
+}
+
+private func circleAction(name: String) -> CADCandidateAction {
+    .automation(.sketch(.circle(
+        name: name,
+        plane: .xy,
+        center: CADPoint3D(x: 0, y: 0, z: 0),
+        radius: CADLength(value: 5)
     )))
 }
 

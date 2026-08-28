@@ -135,7 +135,7 @@ struct CADRectangleCaseTests {
     func activatedRectangleBoundaryMatchesReviewedCases() throws {
         #expect(CADActivatedRectangleCase.allCases == [.rec001, .rec002, .rec003, .rec004, .rec005, .rec006, .rec007, .rec008, .rec009, .rec010, .rec011, .rec012])
 
-        for rejectedCaseID in ["CIR-001", "LIN-001"] {
+        for rejectedCaseID in ["CIR-002", "LIN-001"] {
             do {
                 _ = try CADActivatedRectangleCase(caseID: rejectedCaseID)
                 Issue.record("\(rejectedCaseID) must remain outside the rectangle activation boundary.")

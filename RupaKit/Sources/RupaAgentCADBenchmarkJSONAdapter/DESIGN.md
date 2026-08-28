@@ -9,9 +9,9 @@ between an external Agent process and the activated-case executor owned by
 [benchmark CLI](../RupaAgentCADBenchmarkCLI/DESIGN.md) supplies process arguments
 and standard streams; this target owns the JSON meaning used by that process.
 
-The adapter is limited to the twenty-four reviewed cases `LIN-001`...`LIN-012`
-and `REC-001`...`REC-012`. It does not activate a catalog case and does not make the
-remaining target specifications executable.
+The adapter is limited to the twenty-five reviewed cases `LIN-001`...`LIN-012`,
+`REC-001`...`REC-012`, and `CIR-001`. It does not activate a catalog case and
+does not make the remaining target specifications executable.
 
 ## Responsibilities and Boundaries
 
@@ -52,7 +52,7 @@ executor.
 flowchart LR
     PublicContext["CADCandidateContext\npublic values only"] --> Canonical["Canonical context payload\nSHA-256 fingerprint"]
     Canonical --> Request["Request envelope v1"]
-    External["External Agent"] --> Response["Candidate response envelope v1"]
+    External["External Agent"] --> Response["Candidate response envelope v2"]
     Request --> External
     Response --> Validate["Public Data entry\nbounded decode + validation"]
     Validate --> Candidate["Internal JSON candidate\nCADCandidateProtocol"]
@@ -76,7 +76,7 @@ object, rejects unknown schema versions, and validates all required fields.
 | Envelope | Required fields | Meaning |
 |---|---|---|
 | request v1 | `schema`, `caseID`, `contextFingerprint`, `context` | Exact public context offered to the external Agent. |
-| candidate response v1 | `schema`, `caseID`, `contextFingerprint`, `decision` | One decision to be returned by the JSON candidate. |
+| candidate response v2 | `schema`, `caseID`, `contextFingerprint`, `decision` | One decision, including the activated circle action, returned by the JSON candidate. |
 | evaluation v1 | `schema`, `caseID`, `contextFingerprint`, exactly one of `result` or `error` | Sanitized terminal outcome returned by the executable. |
 | error v1 | `schema`, `code`, `message`; optional `caseID` | Stable private-free failure before a case is known, or a case-bound failure when a validated ID is available. |
 
@@ -94,9 +94,12 @@ The candidate response carries the existing benchmark-owned
 `CADOutputRoleSelector` does the same for the transitive `finish` payload. The
 adapter does not introduce flat line/rectangle DTOs that would duplicate those
 semantics. Because the benchmark package is unreleased and the old synthesized
-enum encoding has only round-trip tests, v1 intentionally adopts the explicit
-shape without a compatibility decoder; golden JSON and rejection tests freeze
-that decision before the CLI is released.
+enum encoding had only round-trip tests, the initial candidate-response v1
+adopted the explicit shape without a compatibility decoder; golden JSON and
+rejection tests froze that decision before the CLI was released. CIR-001 adds the closed
+`CADSketchAction` discriminator `circle`; candidate-response advances to v2 and
+v1 is rejected without fallback. Request, evaluation, and error envelopes stay
+at v1, and the context fingerprint is unchanged.
 
 Public production evaluation accepts candidate-response `Data`, not a decoded
 envelope or candidate value. It always applies the fixed 65,536-byte decode
@@ -105,7 +108,7 @@ evaluation and candidate construction remain module-internal test/composition
 seams, so a caller cannot construct a large in-memory response and bypass the
 JSON input authority.
 
-The activated twenty-four cases accept one action decision. `unsupported` and
+The activated twenty-five cases accept one action decision. `unsupported` and
 `finish` remain valid protocol values but are not converted to successful
 actions; the T12-XA-A executor contract projects either as typed
 `invalidSubmission` without publication. Multi-round continuation is not added
@@ -188,6 +191,16 @@ Because REC-012 ends the rectangle catalog, CIR-001—not an invented REC-013—
 remained a typed inactive failure before evaluation. No adapter schema or
 fingerprint changed.
 
+`T12-CIR-001` is the first schema-changing activation. Before its internal gate
+passed, authority remained the twenty-four-case prefix. The completed
+gate accepts candidate-response v2 with the benchmark-owned `circle` action,
+rejects candidate-response v1 before evaluation, derives the exact ordered
+twenty-five IDs from the executor, preserves request bytes/digests through
+twenty-four, and freezes the actual twenty-five-request digest. A bounded CIR-
+001 request and v2 response realize through the circle production route
+and exact oracle; CIR-002 remains typed inactive. Request/evaluation/error v1,
+fingerprint v1, the byte ceiling, and catalog/expectation versions do not move.
+
 ## Runtime Flows
 
 ```mermaid
@@ -234,12 +247,12 @@ classification and are projected only to stable non-private codes.
 
 | Invariant | Behavioral evidence |
 |---|---|
-| Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON for line and rectangle decisions; every direct and nested case ID is the same scalar string; synthesized case-ID objects, synthesized legacy enum shapes, and unknown discriminators are rejected. |
+| Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON for line, rectangle, and circle decisions; candidate-response v2 carries `kind: circle`, v1 and unknown discriminators are rejected, and every direct and nested case ID is the same scalar string. |
 | Exact public-context binding | The request fingerprint equals the live executor context; changed schema, case, context byte, capability, budget, or fingerprint is rejected before publication. |
-| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012 plus REC-001...012; the historical first-twenty, twenty-one-, twenty-two-, and twenty-three-request bytes/digests are unchanged, the twenty-four-request aggregate digest is frozen from current bytes, REC-012 traverses the production rectangle route/oracle, and CIR-001 is rejected before evaluation. |
+| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, and CIR-001; the historical request bytes/digests through twenty-four are unchanged, the twenty-five-request aggregate digest is `aee0de92d235870b031871fa822746738ebec7e070ed19fd92263fb10a336d84`, CIR-001 traverses the production circle route/oracle, and CIR-002 is rejected before evaluation. |
 | Bounded I/O | Exact-limit input succeeds, `limit + 1` fails before decode and leaves executor evaluation count zero, chunked stdin and file paths behave identically, no public typed-response execution bypass exists, encoded output cannot exceed the same bound, and the guaranteed infrastructure document is byte-equal to normal encoding, bounded, and decodable. |
 | Candidate/oracle separation | Static dependency and source scans prove the adapter imports only public benchmark contracts; encoded fixtures contain no expectation/oracle/source snapshot fields or values. |
-| Same production route | JSON candidates for at least one activated line and rectangle realize through the public executor; wrong geometry publishes once then exact oracle rejects without retry. |
+| Same production route | JSON candidates for an activated line, rectangle, and circle realize through the public executor; wrong geometry publishes once then the category's exact oracle rejects without retry. |
 | Non-action honesty | Valid `unsupported` and `finish` responses reach the benchmark candidate boundary, produce typed prepublication `invalidSubmission`, zero publication, and no fallback reference action. |
 
 Changes to public candidate Codable shapes, public context fields, capability

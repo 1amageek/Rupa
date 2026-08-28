@@ -9,6 +9,12 @@ public enum CADSketchAction: Codable, Equatable, Hashable, Sendable {
         width: CADLength,
         height: CADLength
     )
+    case circle(
+        name: String,
+        plane: CADSketchPlane,
+        center: CADPoint3D,
+        radius: CADLength
+    )
 
     private enum CodingKeys: String, CodingKey {
         case kind
@@ -19,6 +25,7 @@ public enum CADSketchAction: Codable, Equatable, Hashable, Sendable {
         case center
         case width
         case height
+        case radius
     }
 
     public init(from decoder: Decoder) throws {
@@ -39,6 +46,13 @@ public enum CADSketchAction: Codable, Equatable, Hashable, Sendable {
                 center: try container.decode(CADPoint3D.self, forKey: .center),
                 width: try container.decode(CADLength.self, forKey: .width),
                 height: try container.decode(CADLength.self, forKey: .height)
+            )
+        case "circle":
+            self = .circle(
+                name: try container.decode(String.self, forKey: .name),
+                plane: try container.decode(CADSketchPlane.self, forKey: .plane),
+                center: try container.decode(CADPoint3D.self, forKey: .center),
+                radius: try container.decode(CADLength.self, forKey: .radius)
             )
         default:
             throw DecodingError.dataCorruptedError(
@@ -65,6 +79,12 @@ public enum CADSketchAction: Codable, Equatable, Hashable, Sendable {
             try container.encode(center, forKey: .center)
             try container.encode(width, forKey: .width)
             try container.encode(height, forKey: .height)
+        case let .circle(name, plane, center, radius):
+            try container.encode("circle", forKey: .kind)
+            try container.encode(name, forKey: .name)
+            try container.encode(plane, forKey: .plane)
+            try container.encode(center, forKey: .center)
+            try container.encode(radius, forKey: .radius)
         }
     }
 }

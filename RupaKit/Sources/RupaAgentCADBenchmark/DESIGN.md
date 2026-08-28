@@ -119,6 +119,8 @@ tests, not in the future benchmark API:
 | Result identity | `AutomationResult` defaults `primaryFeatureID` to `createdFeatureIDs.first`, so a successful creation response may intentionally expose the same FeatureID through both primary and created selectors. | [`AutomationResult.swift`](../RupaAutomation/AutomationResult.swift) |
 | Rectangle mutation | `AutomationCommand.createRectangleSketch` reaches `EditorCommand.createRectangleSketch`; `SketchBuilder.rectangle` creates four constrained lines centred on the selected source-plane origin. The command has width, height, and plane inputs but no separate centre input. | [`AutomationCommand.swift`](../RupaAutomation/AutomationCommand.swift), [`AutomationRunner.swift`](../RupaAutomation/AutomationRunner.swift), [`DesignDocument+SketchCreation.swift`](../RupaCore/DesignDocument+SketchCreation.swift) |
 | Rectangle observation | `SketchEntitySnapshotService` exposes the stored sketch plane, exact line endpoints and entity counts, and closed profile-region data needed by a read-only rectangle oracle. | [`SketchEntitySnapshotService.swift`](../RupaCore/SketchEntitySnapshotService.swift) |
+| Circle mutation | `AutomationCommand.createCircleSketch` resolves the selected plane and reaches `EditorCommand.createCircleSketch`; `DesignDocument.createCircleSketch` validates a positive resolved radius and stores one analytic `SketchEntity.circle` profile. | [`AutomationCommand.swift`](../RupaAutomation/AutomationCommand.swift), [`AutomationRunner.swift`](../RupaAutomation/AutomationRunner.swift), [`DesignDocument+SketchCreation.swift`](../RupaCore/DesignDocument+SketchCreation.swift) |
+| Circle observation | `SketchEntitySnapshotService` exposes the stored sketch plane plus analytic entity kind, resolved centre, and radius; it does not require tessellated display geometry. | [`SketchEntitySnapshotService.swift`](../RupaCore/SketchEntitySnapshotService.swift) |
 | Immutable observation | Sketch summaries and exact topology snapshots read source/evaluation values without providing mutation authority. | [`SketchEntitySnapshotService.swift`](../RupaCore/SketchEntitySnapshotService.swift), [`TopologySnapshotService.swift`](../RupaCore/TopologySnapshotService.swift), [`ProjectViewSnapshot.swift`](../RupaKit/ProjectViewSnapshot.swift) |
 | Failure/rollback | Stale Agent mutations are rejected and existing state remains unchanged; registered-session and cancellation/no-retry behavior are typed. | [`ProjectAgentCommandControllerTests.swift`](../../Tests/RupaUIPackageTests/ProjectAgentCommandControllerTests.swift) |
 
@@ -193,16 +195,18 @@ implementation permission to add a parallel authority.
 | `CADChallenge` | Public projection; candidate-visible instruction, capability metadata, roles, and budget | No structured expected geometry, feature IDs, topology, tolerance, or plan |
 | `CADExpectedGeometry` | Internal; oracle-private source/B-Rep expectation and role checks | Category-facade/oracle boundary only; never enters the shared lifecycle harness or public candidate files |
 | `CADCandidateProtocol` | Public; bounded request/response continuation | No workspace, controller, or expectation reference |
-| `CADCandidateAction` | Public; activated finite-line intent and, beginning with REC-001, one bounded rectangle intent | No session, coordinate, expectation, or future-category transform fields |
-| `CADActivatedCaseExecuting` / `DefaultCADActivatedCaseExecutor` | Public; exact activated-ID list, candidate context, one candidate evaluation, and sanitized result | Dispatches only reviewed line/rectangle facades; no private expectation, live view, internal evidence, or direct mutation escapes |
+| `CADCandidateAction` | Public; activated line/rectangle intent and, beginning with CIR-001, one bounded analytic-circle sketch intent | No session, authority coordinate, expectation, or future-category transform fields |
+| `CADActivatedCaseExecuting` / `DefaultCADActivatedCaseExecutor` | Public; exact activated-ID list, candidate context, one candidate evaluation, and sanitized result | Dispatches only reviewed category facades; no private expectation, live view, internal evidence, or direct mutation escapes |
 | `CADActivatedLineCase` | Internal; the reviewed line IDs that may enter behavioral execution | Adds exactly one ID only when that case's vertical implementation begins; catalog presence alone is never activation |
 | `CADActivatedRectangleCase` | Internal; the reviewed rectangle IDs that may enter behavioral execution | Contains only REC-001 when introduced and advances one reviewed case per commit |
+| `CADActivatedCircleCase` | Internal; the reviewed circle IDs that may enter behavioral execution | Contains only CIR-001 in this gate and advances one reviewed case per later commit |
 | `CADCaseActionRouting` | Internal; converts an activated category action plus public challenge context into a typed production Agent request | Has no workspace/source mutation authority and cannot read a private expectation |
 | `CADCaseLifecycleHarness` | Internal; owns the shared fresh controller/workspace, pre-owned registration UUID, exact coordinate binding, deadline, production dispatch, final immutable view capture, and unconditional cleanup | The only shared mutable lifecycle owner; it does not select cases, map geometry, run an oracle, or project a category result |
 | `CADCaseLifecycleRecord` | Internal immutable output from the harness | Preserves initial/final coordinates, typed response, publication/no-retry state, cleanup state, and common count/timing telemetry without geometry assertions |
 | `CADLineCaseRunner` | Internal thin line facade | Owns line activation, public projection, line routing/mapping, private expectation-to-line-oracle handoff, and line result projection; delegates lifecycle only |
 | `CADLineOracle` | Internal line-category extraction beginning at LIN-002; exact finite-line source verification and zero-body evaluation check | Read-only immutable input plus the selected activated line's internal expectation |
 | `CADRectangleCaseRunner` / `CADRectangleOracle` | Internal thin REC-001 facade and exact rectangle oracle | Own rectangle projection/routing/mapping, private rectangle expectation, four-line/profile checks, and rectangle result projection; delegate lifecycle only |
+| `CADCircleCaseRunner` / `CADCircleOracle` | Internal thin CIR-001 facade and exact analytic-circle oracle | Own circle projection/routing/mapping, private circle expectation, analytic entity/centre/radius/profile checks, and circle-local result projection; delegate lifecycle only |
 | `CADCaseOutcome` / score | Public result projection; failure taxonomy and binary scoring | No fallback success |
 | `CADBenchmarkReport` | Public result projection; deterministic run and measurement projection | Value/report only |
 
@@ -313,9 +317,11 @@ Candidate-visible challenge text + CapabilitySnapshot + prior CandidateStepResul
        -> finish(CADOutputRoleBindings)
 ```
 
-`CADCandidateAction` exposes only the finite-line automation payload proven by
-activated line cases. Future category actions remain target specifications until
-their vertical case owns a production contract; transform pivot and
+`CADCandidateAction` exposes the line, rectangle, and circle automation payloads
+proven by activated cases. The circle payload contains name, plane, world-space
+centre, and positive radius; later category actions
+remain target specifications until their vertical case owns a production
+contract. Transform pivot and
 composition-order semantics belong to `T12-TRN-001` and are not part of this
 foundation. The line payload is immutable world-space request data and is valid
 only when passed through the controller route. An action does not contain a
@@ -325,9 +331,9 @@ only into a line-category runner selected by `CADActivatedLineCase`; accepting a
 arbitrary catalog ID is forbidden. Each later line case adds its ID only in its
 own reviewed commit. The runner attaches the fresh session ID and current
 generation/workspace coordinates, then calls
-`ProjectAgentCommandController.handle`. No rectangle, circle, solid,
-constraint, transform, compound, or sphere behavior is generalized by this
-extraction. The same boundary applies to the reference-plan candidate and the
+`ProjectAgentCommandController.handle`. No solid, constraint, transform,
+compound, or sphere behavior is generalized by this extraction. The same
+boundary applies to the reference-plan candidate and the
 separately authorized external JSON candidate adapter.
 
 Candidate/reference code may not mutate `EditorSession`, `DesignDocument`, or
@@ -413,10 +419,10 @@ completed normally remain represented by `CADCaseOutcome`, including
 
 The lifecycle harness terminates `unsupported` and `finish` decisions before
 workspace publication and records validated `invalidSubmission` plus cleanup
-evidence because activated line/rectangle cases require one action. The public
+evidence because activated line/rectangle/circle cases require one action. The public
 executor projects that record as
 `CADCaseResult(outcome: .invalidSubmission)`. These decisions are not promoted
-to `expectedUnsupported`, because all twenty-four activated cases have already
+to `expectedUnsupported`, because all twenty-five activated cases have already
 proved their creation capability through the production controller. A
 candidate-thrown error remains the typed executor `candidateFailure`, also
 before publication. No adapter may catch these paths and substitute a reference
@@ -431,7 +437,8 @@ entry; their reference/action test seams remain internal.
 
 The public associated-value enums `CADCandidateDecision`,
 `CADCandidateAction`, `CADAutomationAction`, and `CADSketchAction` use explicit
-Codable v1 objects with a string `kind` discriminator and named fields.
+Codable objects with a string `kind` discriminator and named fields; the
+containing JSON adapter envelope owns their external schema version.
 `CADOutputRoleSelector` follows the same rule for a transitive `finish` payload.
 This keeps decision meaning in its existing owner and avoids adapter-local flat
 line/rectangle DTOs. The project is unreleased and the previous synthesized
@@ -441,8 +448,60 @@ new shape before the external adapter is released. These codecs do not change
 the catalog, challenge, private expectation, or manifest digest.
 
 The executor performs one candidate decision for the currently activated
-line/rectangle contract. It does not generalize multi-round continuation,
-activate `CIR-001`, schedule several cases, or establish a benchmark baseline.
+line/rectangle/circle contract. It does not generalize multi-round
+continuation, activate `CIR-002`, schedule several cases, or establish a
+benchmark baseline.
+
+### CIR-001 circle foundation and activation boundary
+
+Before `T12-CIR-001`, confirmed authority was the exact ordered twenty-four-case
+line/rectangle prefix and CIR-001 was inactive. The completed circle gate added
+category-local `CADCircleChallengeProjection`, `CADCircleGeometryMapping`,
+`CADCircleReferenceCandidate`, `CADActivatedCircleCase`, `CADCircleCaseRunner`,
+`CADCircleCaseResult`, route evidence, telemetry, and `CADCircleOracle`. It
+reuses `CADCaseActionRouting` and `CADCaseLifecycleHarness` unchanged and does
+not refactor the completed line/rectangle facades or create a generic
+all-category runner.
+
+The public projection decodes only CIR-001's candidate-visible instruction:
+radius 5 mm, XY, world centre (0, 0, 0). The mapping constructs the canonical
+source plane from the target centre, projects the submitted world centre into
+that plane using the fresh document's `ModelingTolerance`, and rejects normal
+distance beyond that tolerance before dispatch. The route emits exactly one
+`AutomationCommand.createCircleSketch` with a local centre and SI radius through
+the registered production controller. An in-plane centre remains publishable
+so the oracle—not action validation—owns exact placement.
+
+The oracle resolves the bound `circle` role to the sole published feature in
+the immutable final view. It requires one unsuppressed profile sketch on the
+canonical plane, exactly one source entity whose stored analytic kind is
+`circle`, exact world centre and positive radius within the document tolerance,
+one matching immutable sketch/entity/profile observation, no substitute arc,
+polygon, spline, Mesh, or extra source entity, and zero evaluated bodies. It
+never derives truth from candidate values or rendered/tessellated geometry.
+
+Behavioral evidence includes exact CIR-001 realization; independent 6 mm
+wrong-radius and world (1, 0, 0) mm wrong-centre actions that each publish once,
+are rejected by the oracle, retain the committed coordinate, and are never
+retried; a world (0, 0, 2) mm centre rejected before command/publication; typed
+timeout, unconditional registration cleanup, action/command/read/entity/
+feature/body counts, positive planning/route/oracle/total timings, and public-
+challenge-only candidate construction. Circle result/evidence/telemetry remain
+circle-local value types because reusing rectangle-named validators would
+misstate entity/profile invariants; the shared lifecycle record remains the
+common implementation boundary.
+
+`CADSketchAction` gains the required explicit `kind: "circle"` payload. This is
+a closed-enum wire expansion, so the containing candidate-response envelope
+advances from v1 to v2 for every decision; v1 responses are rejected as typed
+unsupported schema with no compatibility fallback. Request, evaluation, error,
+context-fingerprint, manifest, catalog, expectation, capability, and tolerance
+versions remain unchanged. Existing request bytes/digests through twenty-four
+must remain frozen; the exact ordered twenty-five-request aggregate ending in
+CIR-001 establishes a new digest. Executor, adapter, and CLI advance together
+to twenty-five only after the internal production/oracle gate passes, bounded
+CIR-001 request/v2 response/evaluation and actual process success are proven,
+and CIR-002 remains typed inactive.
 
 ### Vertical Case Gate
 
@@ -751,9 +810,9 @@ isolation remain mandatory.
 
 Activation advances executor, JSON adapter, and CLI together to the ordered
 twenty-four-case prefix ending in REC-012. The rectangle catalog ends at
-REC-012, so no REC-013 boundary is invented: CIR-001 remains typed inactive at
-the executor, adapter, and CLI until the rectangle category gate and the later
-CIR-001 vertical gate pass. The first-twenty, twenty-one-, twenty-two-, and
+REC-012, so no REC-013 boundary was invented: CIR-001 remained typed inactive
+at the executor, adapter, and CLI until the rectangle category gate and the
+later CIR-001 vertical gate passed. The first-twenty, twenty-one-, twenty-two-, and
 twenty-three-request aggregates must retain their frozen digests before the
 actual ordered twenty-four requests establish the new digest. Bounded JSON and
 actual CLI request/evaluation must realize REC-012 through the unchanged
@@ -1155,6 +1214,7 @@ through the following vertical work items:
 | REC-011 authority transition | T12-REC-011 | Existing rectangle route/oracle only; exact 35 by 35 mm YZ square at (0, 15, -15) mm, same-square wrong in-plane centre postpublication rejection/no-retry, x = 2 mm prepublication rejection, timeout/cleanup/telemetry/privacy, preserved twenty-/twenty-one-/twenty-two-request digests, exact twenty-three-ID order and refrozen aggregate, bounded JSON/CLI success, REC-012 typed inactivity, and unchanged catalog/wire versions |
 | REC-012 authority transition | T12-REC-012 | Existing rectangle route/oracle only; exact 750 by 80 mm high-aspect XY rectangle at (-100, -40, 0) mm, same-dimension wrong in-plane centre postpublication rejection/no-retry, z = 2 mm prepublication rejection, timeout/cleanup/telemetry/privacy, preserved twenty-/twenty-one-/twenty-two-/twenty-three-request digests, exact twenty-four-ID order and refrozen aggregate, bounded JSON/CLI success, CIR-001 typed inactivity, and unchanged catalog/wire versions |
 | Rectangle category stability | T12-REC-G | One serialized exact-order replay of REC-001...012 through the existing production/oracle path; exact plane/unit coverage, publication/cleanup/count/phase invariants, composed per-case adversarial/privacy evidence, exact twenty-four-ID external authority, CIR-001 typed inactivity, designer review, and no geometry/API/schema change |
+| First circle behavior and wire transition | T12-CIR-001 | CIR-001-only circle facade through the unchanged lifecycle and production `createCircleSketch` route; exact analytic source entity/centre/radius/plane/profile and zero-body oracle; independent wrong-radius and wrong-centre postpublication no-retry rejection, off-plane prepublication rejection, timeout/cleanup/telemetry/privacy; explicit circle discriminator under candidate-response v2 with v1 rejection; preserved request digests through twenty-four, exact twenty-five-ID authority/refrozen aggregate, bounded JSON/CLI success, and CIR-002 typed inactivity |
 | Parallelism, baselines, and aggregate report | T12-I | Only after all 100 gates: serial replay, bounded-parallel equivalence and measurement, capability/execution baselines, deterministic report, cleanup, and timed integration tests |
 | Final cumulative correctness | T12-IV | Review every case/category/integration artifact and actual path; verify design synchronization, static audits, commits, and eligible normal push |
 

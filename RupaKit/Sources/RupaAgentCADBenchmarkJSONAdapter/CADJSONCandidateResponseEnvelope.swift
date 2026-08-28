@@ -75,7 +75,11 @@ public struct CADJSONCandidateResponseEnvelope: Codable, Equatable, Sendable {
         let container: KeyedDecodingContainer<CodingKeys>
         do {
             container = try decoder.container(keyedBy: CodingKeys.self)
-            self.schema = try container.decode(String.self, forKey: .schema)
+            let schema = try container.decode(String.self, forKey: .schema)
+            guard schema == CADJSONAdapterSchema.candidateResponse else {
+                throw CADJSONAdapterError.unsupportedSchema
+            }
+            self.schema = schema
             self.caseID = try container.decode(CADBenchmarkCaseID.self, forKey: .caseID)
             self.contextFingerprint = try container.decode(String.self, forKey: .contextFingerprint)
             do {

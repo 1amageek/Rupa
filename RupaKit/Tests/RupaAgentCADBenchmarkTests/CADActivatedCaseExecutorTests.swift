@@ -6,10 +6,11 @@ import Testing
 struct CADActivatedCaseExecutorTests {
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func executorActivatesOnlyReviewedLineAndRectangleCases() throws {
+    func executorActivatesOnlyReviewedLineRectangleAndCircleCases() throws {
         let executor = DefaultCADActivatedCaseExecutor()
         let expected = (1...12).map { String(format: "LIN-%03d", $0) }
             + (1...12).map { String(format: "REC-%03d", $0) }
+            + ["CIR-001"]
         #expect(executor.activatedCaseIDs.map(\.rawValue) == expected)
     }
 
@@ -228,15 +229,15 @@ struct CADActivatedCaseExecutorTests {
     func inactiveCaseIsRejectedBeforeCategoryDispatch() async throws {
         let executor = DefaultCADActivatedCaseExecutor()
         do {
-            _ = try executor.context(for: "CIR-001")
+            _ = try executor.context(for: "CIR-002")
             Issue.record("Inactive case must be rejected.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("CIR-001"))
+            #expect(error == .inactiveCase("CIR-002"))
         }
     }
 
     @Test
-    func candidateCodableUsesVersionOneDiscriminatorsAndNamedPayloads() throws {
+    func candidateCodableUsesExplicitDiscriminatorsAndNamedPayloads() throws {
         let line = CADCandidateAction.automation(.sketch(.line(
             name: "segment",
             plane: .xy,
@@ -250,9 +251,16 @@ struct CADActivatedCaseExecutorTests {
             width: CADLength(value: 40),
             height: CADLength(value: 20)
         )))
+        let circle = CADCandidateAction.automation(.sketch(.circle(
+            name: "round",
+            plane: .xy,
+            center: CADPoint3D(x: 0, y: 0, z: 0),
+            radius: CADLength(value: 5)
+        )))
 
         let lineJSON = try canonicalJSON(line)
         let rectangleJSON = try canonicalJSON(rectangle)
+        let circleJSON = try canonicalJSON(circle)
         let actionDecisionJSON = try canonicalJSON(CADCandidateDecision.action(line))
         let finishJSON = try canonicalJSON(
             CADCandidateDecision.finish(CADOutputRoleBindings(bindings: []))
@@ -260,11 +268,13 @@ struct CADActivatedCaseExecutorTests {
 
         #expect(lineJSON == "{\"automation\":{\"kind\":\"sketch\",\"sketch\":{\"end\":{\"unit\":\"millimeter\",\"x\":25,\"y\":0,\"z\":0},\"kind\":\"line\",\"name\":\"segment\",\"plane\":\"xy\",\"start\":{\"unit\":\"millimeter\",\"x\":0,\"y\":0,\"z\":0}}},\"kind\":\"automation\"}")
         #expect(rectangleJSON == "{\"automation\":{\"kind\":\"sketch\",\"sketch\":{\"center\":{\"unit\":\"millimeter\",\"x\":10,\"y\":20,\"z\":0},\"height\":{\"unit\":\"millimeter\",\"value\":20},\"kind\":\"rectangle\",\"name\":\"frame\",\"plane\":\"xy\",\"width\":{\"unit\":\"millimeter\",\"value\":40}}},\"kind\":\"automation\"}")
+        #expect(circleJSON == "{\"automation\":{\"kind\":\"sketch\",\"sketch\":{\"center\":{\"unit\":\"millimeter\",\"x\":0,\"y\":0,\"z\":0},\"kind\":\"circle\",\"name\":\"round\",\"plane\":\"xy\",\"radius\":{\"unit\":\"millimeter\",\"value\":5}}},\"kind\":\"automation\"}")
         #expect(actionDecisionJSON == "{\"action\":{\"automation\":{\"kind\":\"sketch\",\"sketch\":{\"end\":{\"unit\":\"millimeter\",\"x\":25,\"y\":0,\"z\":0},\"kind\":\"line\",\"name\":\"segment\",\"plane\":\"xy\",\"start\":{\"unit\":\"millimeter\",\"x\":0,\"y\":0,\"z\":0}}},\"kind\":\"automation\"},\"kind\":\"action\"}")
         #expect(finishJSON == "{\"finish\":{\"bindings\":[]},\"kind\":\"finish\"}")
 
         #expect(try JSONDecoder().decode(CADCandidateAction.self, from: Data(lineJSON.utf8)) == line)
         #expect(try JSONDecoder().decode(CADCandidateAction.self, from: Data(rectangleJSON.utf8)) == rectangle)
+        #expect(try JSONDecoder().decode(CADCandidateAction.self, from: Data(circleJSON.utf8)) == circle)
     }
 
     @Test

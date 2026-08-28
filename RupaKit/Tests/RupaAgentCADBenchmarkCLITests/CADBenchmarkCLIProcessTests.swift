@@ -22,8 +22,8 @@ struct CADBenchmarkCLIProcessTests {
 
     @Test(.timeLimit(.minutes(2)))
     @MainActor
-    func requestEmitsBoundedLineAndRectangleObjectsAndRejectsInactiveCase() throws {
-        for rawCaseID in ["LIN-001", "REC-001", "REC-009", "REC-010", "REC-011", "REC-012"] {
+    func requestEmitsBoundedLineRectangleAndCircleObjectsAndRejectsInactiveCase() throws {
+        for rawCaseID in ["LIN-001", "REC-001", "REC-009", "REC-010", "REC-011", "REC-012", "CIR-001"] {
             let result = try runCADBenchmarkCLI(["request", rawCaseID])
             #expect(result.terminationStatus == 0, Comment(rawValue: result.standardError))
             #expect(result.standardOutputData.count <= CADJSONAdapterSchema.maximumDocumentBytes)
@@ -36,20 +36,20 @@ struct CADBenchmarkCLIProcessTests {
             #expect(result.standardError.isEmpty)
         }
 
-        let inactive = try runCADBenchmarkCLI(["request", "CIR-001"])
+        let inactive = try runCADBenchmarkCLI(["request", "CIR-002"])
         #expect(inactive.terminationStatus == 64)
         let error = try CADJSONBoundedCodec.decode(
             CADJSONErrorEnvelope.self,
             from: inactive.standardOutputData
         )
         #expect(error.code == .inactiveCase)
-        #expect(error.caseID?.rawValue == "CIR-001")
+        #expect(error.caseID?.rawValue == "CIR-002")
         #expect(isPrivateFree(inactive.standardOutput))
     }
 
     @Test(.timeLimit(.minutes(2)))
     @MainActor
-    func validLineAndRectangleResponsesUseFileAndStandardInputRoutes() throws {
+    func validLineRectangleAndCircleResponsesUseFileAndStandardInputRoutes() throws {
         let lineResponse = try responseData(
             for: "LIN-001",
             action: lineAction(name: "LIN-001")
@@ -61,6 +61,10 @@ struct CADBenchmarkCLIProcessTests {
         let inchRectangleResponse = try responseData(
             for: "REC-009",
             action: rec009RectangleAction(name: "REC-009")
+        )
+        let circleResponse = try responseData(
+            for: "CIR-001",
+            action: circleAction(name: "CIR-001")
         )
 
         let lineFileResult = try withTemporaryData(lineResponse) { path in
@@ -79,6 +83,12 @@ struct CADBenchmarkCLIProcessTests {
             standardInput: inchRectangleResponse
         )
         try assertRealizedEvaluation(inchRectangleStandardInputResult, caseID: "REC-009")
+
+        let circleStandardInputResult = try runCADBenchmarkCLI(
+            ["evaluate", "--response", "-"],
+            standardInput: circleResponse
+        )
+        try assertRealizedEvaluation(circleStandardInputResult, caseID: "CIR-001")
 
         let metreRectangleResponse = try responseData(
             for: "REC-010",
@@ -166,7 +176,7 @@ struct CADBenchmarkCLIProcessTests {
         let schemaMismatch = replacing(
             validResponse,
             from: CADJSONAdapterSchema.candidateResponse,
-            to: "rupa.agent-cad-benchmark.candidate-response.v2"
+            to: "rupa.agent-cad-benchmark.candidate-response.v1"
         )
         let schemaResult = try runCADBenchmarkCLI(
             ["evaluate", "--response", "-"],
@@ -186,15 +196,15 @@ struct CADBenchmarkCLIProcessTests {
         try assertError(fingerprintResult, code: .fingerprintMismatch, exit: 64, caseID: "LIN-001")
 
         let inactiveResponse = try responseData(
-            for: "CIR-001",
+            for: "CIR-002",
             contextFingerprint: String(repeating: "0", count: 64),
-            action: rectangleAction(name: "CIR-001")
+            action: circleAction(name: "CIR-002")
         )
         let inactiveResult = try runCADBenchmarkCLI(
             ["evaluate", "--response", "-"],
             standardInput: inactiveResponse
         )
-        try assertError(inactiveResult, code: .inactiveCase, exit: 64, caseID: "CIR-001")
+        try assertError(inactiveResult, code: .inactiveCase, exit: 64, caseID: "CIR-002")
 
         let finishResponse = try finishResponseData(for: request)
         let finishResult = try runCADBenchmarkCLI(
@@ -401,6 +411,15 @@ private func rectangleAction(name: String) -> CADCandidateAction {
         center: CADPoint3D(x: 0, y: 0, z: 0),
         width: CADLength(value: 40),
         height: CADLength(value: 20)
+    )))
+}
+
+private func circleAction(name: String) -> CADCandidateAction {
+    .automation(.sketch(.circle(
+        name: name,
+        plane: .xy,
+        center: CADPoint3D(x: 0, y: 0, z: 0),
+        radius: CADLength(value: 5)
     )))
 }
 
