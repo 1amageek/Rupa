@@ -1724,9 +1724,9 @@ struct CADCircleCaseTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func executorRetainsCIR001ThroughCIR012AfterANG004Activation() async throws {
+    func executorRetainsCIR001ThroughCIR012AfterANG005Activation() async throws {
         let executor = DefaultCADActivatedCaseExecutor()
-        #expect(executor.activatedCaseIDs.last?.rawValue == "ANG-004")
+        #expect(executor.activatedCaseIDs.last?.rawValue == "ANG-005")
         #expect(executor.activatedCaseIDs.contains("CIR-001"))
         #expect(executor.activatedCaseIDs.contains("CIR-002"))
         #expect(executor.activatedCaseIDs.contains("CIR-003"))
@@ -1741,10 +1741,10 @@ struct CADCircleCaseTests {
         #expect(executor.activatedCaseIDs.contains("CIR-012"))
 
         do {
-            _ = try executor.context(for: "ANG-005")
-            Issue.record("ANG-005 must remain inactive.")
+            _ = try executor.context(for: "ANG-006")
+            Issue.record("ANG-006 must remain inactive.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("ANG-005"))
+            #expect(error == .inactiveCase("ANG-006"))
         }
 
         let result = try await executor.evaluate(
