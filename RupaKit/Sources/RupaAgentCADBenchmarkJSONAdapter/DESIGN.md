@@ -22,8 +22,10 @@ The target owns:
 - the canonical fingerprint of one candidate-visible `CADCandidateContext`;
 - schema, case-ID, fingerprint, and decision validation before a decision can
   enter benchmark execution;
-- a `CADCandidateProtocol` adapter that returns the validated external decision
-  when the executor presents the exact matching live public context;
+- a public Data-based evaluation entry that performs the fixed bounded decode
+  before any executor call, plus an internal `CADCandidateProtocol` bridge that
+  returns the validated external decision only when the executor presents the
+  exact matching live public context;
 - bounded JSON reads from either standard input or one explicitly selected
   local file, plus bounded deterministic JSON encoding.
 
@@ -50,8 +52,8 @@ flowchart LR
     Canonical --> Request["Request envelope v1"]
     External["External Agent"] --> Response["Candidate response envelope v1"]
     Request --> External
-    Response --> Validate["Bounded decode +\nschema/case/fingerprint validation"]
-    Validate --> Candidate["JSON candidate\nCADCandidateProtocol"]
+    Response --> Validate["Public Data entry\nbounded decode + validation"]
+    Validate --> Candidate["Internal JSON candidate\nCADCandidateProtocol"]
     Candidate --> Executor["Activated-case executor"]
     Executor --> Evaluation["Sanitized evaluation envelope v1"]
     Private["Private expectation / oracle"] -. "not importable or encodable" .-> Response
@@ -66,7 +68,7 @@ right. The adapter has no dependency on `RupaCLIKit`.
 
 ### Envelope contract
 
-The adapter owns three top-level envelopes. Every envelope is one UTF-8 JSON
+The adapter owns four top-level envelopes. Every envelope is one UTF-8 JSON
 object, rejects unknown schema versions, and validates all required fields.
 
 | Envelope | Required fields | Meaning |
@@ -74,6 +76,7 @@ object, rejects unknown schema versions, and validates all required fields.
 | request v1 | `schema`, `caseID`, `contextFingerprint`, `context` | Exact public context offered to the external Agent. |
 | candidate response v1 | `schema`, `caseID`, `contextFingerprint`, `decision` | One decision to be returned by the JSON candidate. |
 | evaluation v1 | `schema`, `caseID`, `contextFingerprint`, exactly one of `result` or `error` | Sanitized terminal outcome returned by the executable. |
+| error v1 | `schema`, `code`, `message`; optional `caseID` | Stable private-free failure before a case is known, or a case-bound failure when a validated ID is available. |
 
 The benchmark-owned `CADBenchmarkCaseID` is a validated single-value string in
 every position, including top-level `caseID`, `context.challenge.id`, and
@@ -92,6 +95,13 @@ semantics. Because the benchmark package is unreleased and the old synthesized
 enum encoding has only round-trip tests, v1 intentionally adopts the explicit
 shape without a compatibility decoder; golden JSON and rejection tests freeze
 that decision before the CLI is released.
+
+Public production evaluation accepts candidate-response `Data`, not a decoded
+envelope or candidate value. It always applies the fixed 65,536-byte decode
+before constructing the internal typed response and candidate bridge. Typed
+evaluation and candidate construction remain module-internal test/composition
+seams, so a caller cannot construct a large in-memory response and bypass the
+JSON input authority.
 
 The activated twenty cases accept one action decision. `unsupported` and
 `finish` remain valid protocol values but are not converted to successful
@@ -145,13 +155,14 @@ sequenceDiagram
     CLI->>J: request envelope + fingerprint
     J-->>CLI: bounded canonical JSON
     Note over CLI: external Agent returns response JSON
-    CLI->>J: bounded response bytes
-    J->>J: schema/case/fingerprint-shape validation
-    CLI->>X: evaluate(caseID, C)
+    CLI->>J: evaluate(responseData)
+    J->>J: fixed bounded decode + schema/case/fingerprint-shape validation
+    J->>X: evaluate(caseID, internal C)
     X->>C: exact live public context
     C->>C: recompute and compare fingerprint
     C-->>X: existing typed decision
-    X-->>CLI: sanitized result after production route + oracle
+    X-->>J: sanitized result after production route + oracle
+    J-->>CLI: evaluation envelope
 ```
 
 ## State, Ownership, and Lifecycle
@@ -179,7 +190,7 @@ classification and are projected only to stable non-private codes.
 |---|---|
 | Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON for line and rectangle decisions; every direct and nested case ID is the same scalar string; synthesized case-ID objects, synthesized legacy enum shapes, and unknown discriminators are rejected. |
 | Exact public-context binding | The request fingerprint equals the live executor context; changed schema, case, context byte, capability, budget, or fingerprint is rejected before publication. |
-| Bounded I/O | Exact-limit input succeeds, `limit + 1` fails before decode, chunked stdin and file paths behave identically, and encoded output cannot exceed the same bound. |
+| Bounded I/O | Exact-limit input succeeds, `limit + 1` fails before decode and leaves executor evaluation count zero, chunked stdin and file paths behave identically, no public typed-response execution bypass exists, and encoded output cannot exceed the same bound. |
 | Candidate/oracle separation | Static dependency and source scans prove the adapter imports only public benchmark contracts; encoded fixtures contain no expectation/oracle/source snapshot fields or values. |
 | Same production route | JSON candidates for at least one activated line and rectangle realize through the public executor; wrong geometry publishes once then exact oracle rejects without retry. |
 | Non-action honesty | Valid `unsupported` and `finish` responses reach the benchmark candidate boundary, produce typed prepublication `invalidSubmission`, zero publication, and no fallback reference action. |

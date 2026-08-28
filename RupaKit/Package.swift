@@ -97,6 +97,10 @@ let package = Package(
             targets: ["RupaAgentCADBenchmark"]
         ),
         .library(
+            name: "RupaAgentCADBenchmarkJSONAdapter",
+            targets: ["RupaAgentCADBenchmarkJSONAdapter"]
+        ),
+        .library(
             name: "RupaAgent",
             targets: ["RupaAgent"]
         ),
@@ -350,6 +354,11 @@ let package = Package(
                 "RupaCoreTypes",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
             ],
+            exclude: ["DESIGN.md"]
+        ),
+        .target(
+            name: "RupaAgentCADBenchmarkJSONAdapter",
+            dependencies: ["RupaAgentCADBenchmark", "RupaCoreTypes"],
             exclude: ["DESIGN.md"]
         ),
         .target(
@@ -670,6 +679,13 @@ let package = Package(
         .testTarget(
             name: "RupaAgentCADBenchmarkTests",
             dependencies: [
+                "RupaAgentCADBenchmark",
+            ]
+        ),
+        .testTarget(
+            name: "RupaAgentCADBenchmarkJSONAdapterTests",
+            dependencies: [
+                "RupaAgentCADBenchmarkJSONAdapter",
                 "RupaAgentCADBenchmark",
             ]
         ),
