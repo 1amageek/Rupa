@@ -558,23 +558,132 @@ struct CADCircleCaseTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func executorActivatesCIR001ThroughCIR004AndRejectsCIR005() async throws {
+    func cir005CreatesExactLargeTranslatedXYCircleThroughProductionController() async throws {
+        let result = try await CADCircleCaseRunner(case: .cir005).runReference()
+
+        try result.validate()
+        #expect(result.caseID == "CIR-005")
+        #expect(result.outcome == .realized)
+        #expect(result.realized)
+        #expect(result.candidateResult?.status == .published)
+        #expect(result.candidateResult?.createdFeatureIDs.count == 1)
+        #expect(result.candidateResult?.primaryFeatureID == result.candidateResult?.createdFeatureIDs.first)
+        #expect(result.roleBindings?.bindings.count == 1)
+        #expect(result.routeEvidence.didPublish)
+        #expect(result.routeEvidence.finalPublicationSequence == result.routeEvidence.initialPublicationSequence + 1)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.planningWallNanoseconds > 0)
+        #expect(result.telemetry.routeWallNanoseconds > 0)
+        #expect(result.telemetry.oracleWallNanoseconds > 0)
+        #expect(result.telemetry.totalWallNanoseconds > 0)
+        #expect(result.telemetry.readCount >= 1)
+        #expect(result.telemetry.entityCount == 1)
+        #expect(result.telemetry.featureCount == 1)
+        #expect(result.telemetry.bodyCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func cir005OracleRejectsWrongRadiusAfterOnePublicationWithoutRetry() async throws {
+        let action = circleAction(
+            name: "CIR-005.wrong-radius",
+            center: CADPoint3D(x: 100, y: 100, z: 0, unit: .millimeter),
+            radius: CADLength(value: 50, unit: .millimeter)
+        )
+        let result = try await CADCircleCaseRunner(case: .cir005).run(action: action)
+
+        try result.validate()
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish)
+        #expect(result.routeEvidence.finalPublicationSequence == result.routeEvidence.initialPublicationSequence + 1)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.readCount == 2)
+        #expect(result.telemetry.entityCount == 1)
+        #expect(result.telemetry.featureCount == 1)
+        #expect(result.telemetry.bodyCount == 0)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        #expect(result.diagnostics.contains { $0.contains("oracle mismatch") })
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func cir005RejectsOffPlaneCenterBeforePublication() async throws {
+        let action = circleAction(
+            name: "CIR-005.off-plane",
+            center: CADPoint3D(x: 100, y: 100, z: 2, unit: .millimeter),
+            radius: CADLength(value: 100, unit: .millimeter)
+        )
+        let result = try await CADCircleCaseRunner(case: .cir005).run(action: action)
+
+        try result.validate()
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish == false)
+        #expect(result.routeEvidence.initialPublicationSequence == result.routeEvidence.finalPublicationSequence)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 0)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func cir005TimeoutIsTypedAndCleansUp() async throws {
+        let result = try await CADCircleCaseRunner(
+            case: .cir005,
+            timeoutWallNanoseconds: 1
+        ).runReference()
+
+        try result.validate()
+        #expect(result.outcome == .timeout)
+        #expect(result.routeEvidence.didPublish == false)
+        #expect(result.telemetry.totalWallNanoseconds >= result.telemetry.timeoutWallNanoseconds)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @Test
+    func cir005ReferenceCandidatePreservesPublicTranslatedXYCircleValues() async throws {
+        let challenge = try CADBenchmarkCatalog().challenge(for: "CIR-005")
+        let decision = try await CADCircleReferenceCandidate().decide(
+            for: candidateContext(challenge)
+        )
+
+        guard case .action(.automation(.sketch(.circle(
+            _, let plane, let center, let radius
+        )))) = decision else {
+            Issue.record("CIR-005 candidate did not produce one circle action.")
+            return
+        }
+        #expect(plane == .xy)
+        #expect(center == CADPoint3D(x: 100, y: 100, z: 0, unit: .millimeter))
+        #expect(radius == CADLength(value: 100, unit: .millimeter))
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func executorActivatesCIR001ThroughCIR005AndRejectsCIR006() async throws {
         let executor = DefaultCADActivatedCaseExecutor()
-        #expect(executor.activatedCaseIDs.last?.rawValue == "CIR-004")
+        #expect(executor.activatedCaseIDs.last?.rawValue == "CIR-005")
         #expect(executor.activatedCaseIDs.contains("CIR-001"))
         #expect(executor.activatedCaseIDs.contains("CIR-002"))
         #expect(executor.activatedCaseIDs.contains("CIR-003"))
         #expect(executor.activatedCaseIDs.contains("CIR-004"))
+        #expect(executor.activatedCaseIDs.contains("CIR-005"))
 
         do {
-            _ = try executor.context(for: "CIR-005")
-            Issue.record("CIR-005 must remain inactive.")
+            _ = try executor.context(for: "CIR-006")
+            Issue.record("CIR-006 must remain inactive.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("CIR-005"))
+            #expect(error == .inactiveCase("CIR-006"))
         }
 
         let result = try await executor.evaluate(
-            caseID: "CIR-004",
+            caseID: "CIR-005",
             candidate: CADCircleReferenceCandidate()
         )
         #expect(result.outcome == .realized)
