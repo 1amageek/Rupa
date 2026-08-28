@@ -425,7 +425,7 @@ workspace publication and records validated `invalidSubmission` plus cleanup
 evidence because activated cases require one bounded action. The public
 executor projects that record as
 `CADCaseResult(outcome: .invalidSubmission)`. These decisions are not promoted
-to `expectedUnsupported`, because all thirty-seven activated cases have already
+to `expectedUnsupported`, because all thirty-eight activated cases have already
 proved their creation capability through the production controller. A
 candidate-thrown error remains the typed executor `candidateFailure`, also
 before publication. No adapter may catch these paths and substitute a reference
@@ -799,6 +799,57 @@ atomically from the exact thirty-six-ID prefix to thirty-seven, freeze the
 newly observed request aggregate, realize an actual bounded ANG-001 request/v3
 response/evaluation, and reject ANG-002 as typed inactive. This foundation does
 not activate ANG-002...016 or add multi-round execution.
+
+### ANG-002...016 activation matrix
+
+ANG-002...016 reuse the ANG-001 public action, affine mapping, two-command
+atomic batch, lifecycle harness, result projection, exact source oracle, JSON
+v3 wire, and CLI without another foundation or schema change. Each row is one
+serial vertical case and one commit. Its exact success uses the catalog values
+below; its postpublication discriminator must reach the same two-command
+production batch once and be rejected by the immutable oracle without retry;
+its normal-offset discriminator must fail before command dispatch and
+publication. All lengths, intersections, and offsets are millimetres, and
+directions are world-space vectors.
+
+| Case | Exact public target | Independent postpublication discriminator | Prepublication normal-offset discriminator | External authority and next boundary |
+|---|---|---|---|---|
+| ANG-002 | XY, intersection (10, -10, 50); first 30 along (1, 0, 0), second 50 along (0.707106781187, 0.707106781187, 0); unsigned 45 degrees | Preserve intersection, directions, and angle but swap the segment lengths to first 50 and second 30 | First endpoint uses z = 52 instead of 50 | 37→38; preserve the frozen 37-request aggregate, freeze 38, ANG-003 inactive |
+| ANG-003 | XY, intersection (-25, 15, 125); first 45 along (1, 0, 0), second 75 along (0.5, 0.866025403784, 0); unsigned 60 degrees | Preserve intersection and lengths but use second direction (0.707106781187, 0.707106781187, 0), yielding 45 degrees | First endpoint uses z = 127 instead of 125 | 38→39; preserve 38, freeze 39, ANG-004 inactive |
+| ANG-004 | XY, intersection (30, 25, 150); first 60 along (1, 0, 0), second 100 along (0.258819045103, 0.965925826289, 0); unsigned 75 degrees | Translate only the complete second segment by +1 on world X, preserving its length and direction but breaking the shared intersection | First endpoint uses z = 152 instead of 150 | 39→40; preserve 39, freeze 40, ANG-005 inactive |
+| ANG-005 | XY, intersection (0, 0, 200); first 75 along (1, 0, 0), second 125 along (0, 1, 0); unsigned 90 degrees | Preserve intersection and lengths but use second direction (0, -1, 0), retaining an unsigned 90 degrees while reversing the required direction | First endpoint uses z = 202 instead of 200 | 40→41; preserve 40, freeze 41, ANG-006 inactive |
+| ANG-006 | XY, intersection (-50, 40, 250); first 90 along (1, 0, 0), second 150 along (-0.258819045103, 0.965925826289, 0); unsigned 105 degrees | Preserve intersection and lengths but use second direction (0.258819045103, 0.965925826289, 0), yielding 75 degrees | First endpoint uses z = 252 instead of 250 | 41→42; preserve 41, freeze 42, ANG-007 inactive |
+| ANG-007 | XY, intersection (20, -35, 300); first 105 along (1, 0, 0), second 200 along (-0.5, 0.866025403784, 0); unsigned 120 degrees | Preserve the second segment and both lengths but reverse the first direction to (-1, 0, 0), yielding 60 degrees | First endpoint uses z = 302 instead of 300 | 42→43; preserve 42, freeze 43, ANG-008 inactive |
+| ANG-008 | XY, intersection (0, 0, 350); first 120 along (1, 0, 0), second 250 along (-0.707106781187, 0.707106781187, 0); unsigned 135 degrees | Preserve intersection, directions, and first length but shorten the second segment to 125 | First endpoint uses z = 352 instead of 350 | 43→44; preserve 43, freeze 44, ANG-009 inactive |
+| ANG-009 | XY, intersection (75, 50, 400); first 135 along (1, 0, 0), second 300 along (-0.866025403784, 0.5, 0); unsigned 150 degrees | Translate both complete segments by +10 on world Y, preserving their lengths, directions, and shared intersection with each other but using the wrong world placement | First endpoint uses z = 402 instead of 400 | 44→45; preserve 44, freeze 45, ANG-010 inactive |
+| ANG-010 | XY, intersection (-75, -50, 450); first 150 along (1, 0, 0), second 350 along (-0.965925826289, 0.258819045103, 0); unsigned 165 degrees | Preserve intersection and lengths but use second direction (-0.866025403784, 0.5, 0), yielding 150 degrees | First endpoint uses z = 452 instead of 450 | 45→46; preserve 45, freeze 46, ANG-011 inactive |
+| ANG-011 | XZ with canonical +Y normal, intersection (0, 0, 80); first 30 along (1, 0, 0), second 60 along (0.707106781187, 0, 0.707106781187); unsigned 45 degrees | Preserve intersection and lengths but use second direction (0.866025403784, 0, 0.5), yielding 30 degrees on XZ | First endpoint uses y = 2 instead of 0 | 46→47; preserve 46, freeze 47, ANG-012 inactive |
+| ANG-012 | YZ with canonical +X normal, intersection (10, -20, 120); first 40 along (0, 1, 0), second 100 along (0, 0.5, 0.866025403784); unsigned 60 degrees | Swap the complete first and second segment geometries between their ordered roles, preserving the two source lines but violating role, order, lengths, and directions | First endpoint uses x = 12 instead of 10 | 47→48; preserve 47, freeze 48, ANG-013 inactive |
+| ANG-013 | XZ with canonical +Y normal, intersection (-15, 25, 180); first 50 along (1, 0, 0), second 150 along (0, 0, 1); unsigned 90 degrees | Preserve intersection and lengths but use second direction (0, 0, -1), retaining an unsigned 90 degrees while reversing the required direction | First endpoint uses y = 27 instead of 25 | 48→49; preserve 48, freeze 49, ANG-014 inactive |
+| ANG-014 | YZ with canonical +X normal, intersection (-25, 30, 275); first 75 along (0, 1, 0), second 225 along (0, -0.5, 0.866025403784); unsigned 120 degrees | Translate only the complete second segment by +1 on world Y, preserving its length and direction but breaking the shared intersection | First endpoint uses x = -23 instead of -25 | 49→50; preserve 49, freeze 50, ANG-015 inactive |
+| ANG-015 | XZ with canonical +Y normal, intersection (40, -40, 325); first 100 along (1, 0, 0), second 300 along (-0.707106781187, 0, 0.707106781187); unsigned 135 degrees | Preserve intersection, lengths, and unsigned 135 degrees but use second direction (-0.707106781187, 0, -0.707106781187), reversing the required local-Z orientation | First endpoint uses y = -38 instead of -40 | 50→51; preserve 50, freeze 51, ANG-016 inactive |
+| ANG-016 | YZ with canonical +X normal, intersection (60, 60, 425); first 125 along (0, 1, 0), second 375 along (0, -0.866025403784, 0.5); unsigned 150 degrees | Preserve intersection and lengths but use second direction (0, -0.5, 0.866025403784), yielding 120 degrees | First endpoint uses x = 62 instead of 60 | 51→52; preserve 51, freeze 52, BOX-001 inactive; no ANG-017 is invented |
+
+Every row also owns the unchanged ANG-001 timeout, unconditional cleanup,
+positive phase telemetry, action 1/command 2/read at least 1/entity 2/feature
+2/body 0 counts, public-candidate-only construction, exact JSON/CLI success,
+focused and affected tests, static privacy audit, diff-check, original-designer
+review, and its named case commit. Activation is lexical and the immediately
+preceding aggregate remains frozen before the new aggregate is recorded.
+Manifest/catalog, candidate-response v3, request/evaluation/error schemas,
+context fingerprint, capability, expectation, and tolerance contracts do not
+change after ANG-001.
+
+After ANG-016, `T12-ANG-G` serially replays ANG-001...016 through the production
+controller and exact oracle in activated order. The checkpoint requires sixteen
+unique IDs, plane coverage XY 10/XZ 3/YZ 3, millimetre unit coverage 16, and for
+each case one project publication, two source-generation increments,
+unconditional cleanup with zero registrations, action 1/command 2/read at least
+1/entity 2/feature 2/body 0 counts, and positive phase timings. It inventories
+the already-owned per-case postpublication no-retry, normal-offset,
+timeout/cleanup, and privacy evidence without duplicating those fixtures, and
+confirms exact external authority 52 with the ANG-016 aggregate and BOX-001
+typed inactive.
 
 ### Vertical Case Gate
 

@@ -9,8 +9,8 @@ between an external Agent process and the activated-case executor owned by
 [benchmark CLI](../RupaAgentCADBenchmarkCLI/DESIGN.md) supplies process arguments
 and standard streams; this target owns the JSON meaning used by that process.
 
-The adapter is limited to the thirty-seven reviewed cases `LIN-001`...`LIN-012`,
-`REC-001`...`REC-012`, `CIR-001`...`CIR-012`, and `ANG-001`. It does not
+The adapter is limited to the thirty-eight reviewed cases `LIN-001`...`LIN-012`,
+`REC-001`...`REC-012`, `CIR-001`...`CIR-012`, and `ANG-001`...`ANG-002`. It does not
 activate a catalog case and does not make the remaining target specifications
 executable.
 
@@ -53,7 +53,7 @@ executor.
 flowchart LR
     PublicContext["CADCandidateContext\npublic values only"] --> Canonical["Canonical context payload\nSHA-256 fingerprint"]
     Canonical --> Request["Request envelope v1"]
-    External["External Agent"] --> Response["Candidate response envelope v2"]
+    External["External Agent"] --> Response["Candidate response envelope v3"]
     Request --> External
     Response --> Validate["Public Data entry\nbounded decode + validation"]
     Validate --> Candidate["Internal JSON candidate\nCADCandidateProtocol"]
@@ -77,7 +77,7 @@ object, rejects unknown schema versions, and validates all required fields.
 | Envelope | Required fields | Meaning |
 |---|---|---|
 | request v1 | `schema`, `caseID`, `contextFingerprint`, `context` | Exact public context offered to the external Agent. |
-| candidate response v2 | `schema`, `caseID`, `contextFingerprint`, `decision` | One decision, including the activated circle action, returned by the JSON candidate. |
+| candidate response v3 | `schema`, `caseID`, `contextFingerprint`, `decision` | One decision, including the activated circle or angle action, returned by the JSON candidate. |
 | evaluation v1 | `schema`, `caseID`, `contextFingerprint`, exactly one of `result` or `error` | Sanitized terminal outcome returned by the executable. |
 | error v1 | `schema`, `code`, `message`; optional `caseID` | Stable private-free failure before a case is known, or a case-bound failure when a validated ID is available. |
 
@@ -114,7 +114,7 @@ evaluation and candidate construction remain module-internal test/composition
 seams, so a caller cannot construct a large in-memory response and bypass the
 JSON input authority.
 
-The activated thirty-seven cases accept one action decision. `unsupported` and
+The activated thirty-eight cases accept one action decision. `unsupported` and
 `finish` remain valid protocol values but are not converted to successful
 actions; the T12-XA-A executor contract projects either as typed
 `invalidSubmission` without publication. Multi-round continuation is not added
@@ -264,6 +264,17 @@ production route composes two exposed `createLineSketch` primitives.
 One bounded v3 angle response traverses the same executor, production atomic
 batch, and immutable source oracle; ANG-002 is rejected before evaluation.
 
+### ANG-002 external authority
+
+ANG-002 extends the exact ordered authority from 37 to 38 IDs while preserving
+the frozen 37-request aggregate. The observed 38-request aggregate is
+`6bd274e57fae5345c067f63a5191b60ccfbf35a76d794491b7a10df9a0c985d6`.
+The request reports the same intersection capability as ANG-001
+because the production route composes two exposed `createLineSketch`
+primitives. One bounded v3 angle response traverses the same executor,
+production atomic batch, and immutable source oracle; ANG-003 is rejected
+before evaluation.
+
 ## Runtime Flows
 
 ```mermaid
@@ -312,7 +323,7 @@ classification and are projected only to stable non-private codes.
 |---|---|
 | Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON for line, rectangle, circle, and angle decisions; candidate-response v3 carries `kind: angle`, v1/v2 and unknown discriminators are rejected, and every direct and nested case ID is the same scalar string. |
 | Exact public-context binding | The request fingerprint equals the live executor context; changed schema, case, context byte, capability, budget, or fingerprint is rejected before publication. |
-| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, CIR-001...012, and ANG-001; the thirty-six-request aggregate remains `5c8cd7cbe83738f91459b1103d291194143042bde7e6f9c8415aa91f66ce5a28`, the thirty-seven-request aggregate is `b66ed71a2efccf115a81033c3bda0e9335c0a2a4c695ba5c58b49c9df7341b4e`, ANG-001 traverses the atomic production batch/source oracle, and ANG-002 is rejected before evaluation. |
+| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, CIR-001...012, and ANG-001...002; the thirty-six-request aggregate remains `5c8cd7cbe83738f91459b1103d291194143042bde7e6f9c8415aa91f66ce5a28`, the thirty-seven-request aggregate remains `b66ed71a2efccf115a81033c3bda0e9335c0a2a4c695ba5c58b49c9df7341b4e`, the thirty-eight-request aggregate is frozen from observed bytes, ANG-001 and ANG-002 traverse the atomic production batch/source oracle, and ANG-003 is rejected before evaluation. |
 | Bounded I/O | Exact-limit input succeeds, `limit + 1` fails before decode and leaves executor evaluation count zero, chunked stdin and file paths behave identically, no public typed-response execution bypass exists, encoded output cannot exceed the same bound, and the guaranteed infrastructure document is byte-equal to normal encoding, bounded, and decodable. |
 | Candidate/oracle separation | Static dependency and source scans prove the adapter imports only public benchmark contracts; encoded fixtures contain no expectation/oracle/source snapshot fields or values. |
 | Same production route | JSON candidates for an activated line, rectangle, circle, and angle realize through the public executor; wrong geometry publishes once then the category's exact oracle rejects without retry. |

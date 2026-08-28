@@ -3,6 +3,7 @@ import Foundation
 /// The angle cases whose production route has been independently activated.
 enum CADActivatedAngleCase: String, CaseIterable, Equatable, Hashable, Sendable {
     case ang001 = "ANG-001"
+    case ang002 = "ANG-002"
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)
