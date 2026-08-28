@@ -199,7 +199,7 @@ implementation permission to add a parallel authority.
 | `CADActivatedCaseExecuting` / `DefaultCADActivatedCaseExecutor` | Public; exact activated-ID list, candidate context, one candidate evaluation, and sanitized result | Dispatches only reviewed category facades; no private expectation, live view, internal evidence, or direct mutation escapes |
 | `CADActivatedLineCase` | Internal; the reviewed line IDs that may enter behavioral execution | Adds exactly one ID only when that case's vertical implementation begins; catalog presence alone is never activation |
 | `CADActivatedRectangleCase` | Internal; the reviewed rectangle IDs that may enter behavioral execution | Contains only REC-001 when introduced and advances one reviewed case per commit |
-| `CADActivatedCircleCase` | Internal; the reviewed circle IDs that may enter behavioral execution | Began with CIR-001, currently contains CIR-001...007, and advances one reviewed case per later commit |
+| `CADActivatedCircleCase` | Internal; the reviewed circle IDs that may enter behavioral execution | Began with CIR-001, currently contains CIR-001...008, and advances one reviewed case per later commit |
 | `CADCaseActionRouting` | Internal; converts an activated category action plus public challenge context into a typed production Agent request | Has no workspace/source mutation authority and cannot read a private expectation |
 | `CADCaseLifecycleHarness` | Internal; owns the shared fresh controller/workspace, pre-owned registration UUID, exact coordinate binding, deadline, production dispatch, final immutable view capture, and unconditional cleanup | The only shared mutable lifecycle owner; it does not select cases, map geometry, run an oracle, or project a category result |
 | `CADCaseLifecycleRecord` | Internal immutable output from the harness | Preserves initial/final coordinates, typed response, publication/no-retry state, cleanup state, and common count/timing telemetry without geometry assertions |
@@ -449,7 +449,7 @@ the catalog, challenge, private expectation, or manifest digest.
 
 The executor performs one candidate decision for the currently activated
 line/rectangle/circle contract. It does not generalize multi-round
-continuation, activate unreviewed IDs such as `CIR-008`, schedule several cases, or establish a
+continuation, activate unreviewed IDs such as `CIR-009`, schedule several cases, or establish a
 benchmark baseline.
 
 ### CIR-001 circle foundation and activation boundary
@@ -589,11 +589,17 @@ observed thirty-request aggregate as
 `bc8aa8e33085d405126a86a4a78b8ae212566e0660c6325b23033d2120a156f8`, and
 kept CIR-007 typed inactive at that gate.
 
-`T12-CIR-007` advances the same authority to the exact thirty-one-case prefix
+`T12-CIR-007` advanced the same authority to the exact thirty-one-case prefix
 ending in CIR-007. It preserves the frozen thirty-request aggregate, freezes the
 observed thirty-one-request aggregate as
 `7469957587756d1f498f45f8718aa5b16d16261ed9a9f73c14afbd1802e77c81`, and
-keeps CIR-008 typed inactive. No shared circle infrastructure, schema, catalog,
+kept CIR-008 typed inactive at that gate.
+
+`T12-CIR-008` advances the same authority to the exact thirty-two-case prefix
+ending in CIR-008. It preserves the frozen thirty-one-request aggregate,
+freezes the observed thirty-two-request aggregate as
+`d73110c966919f5583df9ff7987fd9cd25a899a588031031f4880be220bf1f22`, and
+keeps CIR-009 typed inactive. No shared circle infrastructure, schema, catalog,
 fingerprint, or tolerance authority changes in these transitions.
 
 ### CIR-004 through CIR-012 case matrix
