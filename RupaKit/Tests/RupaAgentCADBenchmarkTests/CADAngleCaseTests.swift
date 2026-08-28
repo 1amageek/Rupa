@@ -505,6 +505,98 @@ struct CADAngleCaseTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
+    func ang007CreatesTheOneHundredTwentyDegreePairAtTranslatedPlacement() async throws {
+        let result = try await CADAngleCaseRunner(case: .ang007).runReference()
+
+        try result.validate()
+        #expect(result.caseID == "ANG-007")
+        #expect(result.outcome == .realized)
+        #expect(result.candidateResults.map(\.stepIndex) == [0, 1])
+        #expect(result.candidateResults.allSatisfy { $0.status == .published })
+        #expect(result.roleBindings?.bindings.map(\.role) == ["first-line", "second-line"])
+        #expect(result.routeEvidence.didPublish)
+        #expect(
+            result.routeEvidence.finalPublicationSequence
+                == result.routeEvidence.initialPublicationSequence + 1
+        )
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 2)
+        #expect(result.telemetry.readCount >= 1)
+        #expect(result.telemetry.entityCount == 2)
+        #expect(result.telemetry.featureCount == 2)
+        #expect(result.telemetry.bodyCount == 0)
+        #expect(result.telemetry.planningWallNanoseconds > 0)
+        #expect(result.telemetry.routeWallNanoseconds > 0)
+        #expect(result.telemetry.oracleWallNanoseconds > 0)
+        #expect(result.telemetry.totalWallNanoseconds > 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func ang007RejectsReversedFirstDirectionAfterOnePublicationWithoutRetry() async throws {
+        let result = try await CADAngleCaseRunner(case: .ang007).run(
+            action: angle007Action(
+                firstEnd: CADPoint3D(x: -85, y: -35, z: 300, unit: .millimeter)
+            )
+        )
+
+        try result.validate()
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish)
+        #expect(
+            result.routeEvidence.finalPublicationSequence
+                == result.routeEvidence.initialPublicationSequence + 1
+        )
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 2)
+        #expect(result.telemetry.readCount == 2)
+        #expect(result.telemetry.entityCount == 2)
+        #expect(result.telemetry.featureCount == 2)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        #expect(result.diagnostics.contains { $0.contains("oracle mismatch") })
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func ang007RejectsOffPlaneEndpointBeforePublication() async throws {
+        let result = try await CADAngleCaseRunner(case: .ang007).run(
+            action: angle007Action(
+                firstEnd: CADPoint3D(x: 125, y: -35, z: 302, unit: .millimeter)
+            )
+        )
+
+        try result.validate()
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish == false)
+        #expect(
+            result.routeEvidence.finalPublicationSequence
+                == result.routeEvidence.initialPublicationSequence
+        )
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 0)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func ang007TimeoutRetainsAtomicCleanupEvidence() async throws {
+        let result = try await CADAngleCaseRunner(
+            case: .ang007,
+            timeoutWallNanoseconds: 1
+        ).runReference()
+
+        try result.validate()
+        #expect(result.outcome == .timeout)
+        #expect(result.routeEvidence.didPublish == false)
+        #expect(result.telemetry.totalWallNanoseconds >= result.telemetry.timeoutWallNanoseconds)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
     func ang001RejectsNonintersectingPairAfterOnePublicationWithoutRetry() async throws {
         let action = angleAction(
             secondStart: CADPoint3D(x: 1, y: 0, z: 35, unit: .millimeter),
@@ -914,6 +1006,31 @@ struct CADAngleCaseTests {
             .sketch(
                 .angle(
                     name: "ANG-006",
+                    plane: .xy,
+                    firstStart: firstStart,
+                    firstEnd: firstEnd,
+                    secondStart: secondStart,
+                    secondEnd: secondEnd
+                )
+            )
+        )
+    }
+
+    private func angle007Action(
+        firstStart: CADPoint3D = CADPoint3D(x: 20, y: -35, z: 300, unit: .millimeter),
+        firstEnd: CADPoint3D = CADPoint3D(x: 125, y: -35, z: 300, unit: .millimeter),
+        secondStart: CADPoint3D = CADPoint3D(x: 20, y: -35, z: 300, unit: .millimeter),
+        secondEnd: CADPoint3D = CADPoint3D(
+            x: 20 - 200 * 0.5,
+            y: -35 + 200 * 0.866025403784,
+            z: 300,
+            unit: .millimeter
+        )
+    ) -> CADCandidateAction {
+        .automation(
+            .sketch(
+                .angle(
+                    name: "ANG-007",
                     plane: .xy,
                     firstStart: firstStart,
                     firstEnd: firstEnd,
