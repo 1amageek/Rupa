@@ -107,6 +107,13 @@ pairs. Candidate-response advances to v3; v1 and v2 are rejected by the schema
 guard before decision decoding. Request, evaluation, error, and fingerprint
 schemas remain unchanged.
 
+BOX-001 adds `CADAutomationAction.kind: "solid"` carrying
+`CADSolidAction.kind: "box"` with a name, lower-corner origin, width, depth,
+and height. Candidate-response advances to v4; v1, v2, and v3 are rejected by
+the schema guard before decision decoding. Request, evaluation, error,
+fingerprint, manifest/catalog, expectation, capability, and tolerance schemas
+remain unchanged. No adapter-owned box DTO duplicates the benchmark action.
+
 Public production evaluation accepts candidate-response `Data`, not a decoded
 envelope or candidate value. It always applies the fixed 65,536-byte decode
 before constructing the internal typed response and candidate bridge. Typed
@@ -474,6 +481,29 @@ a 125 mm +Y first segment and a 375 mm second segment directed along
 v3 response traverses the same production atomic batch and immutable source
 oracle; BOX-001 is rejected before evaluation. Envelope versions, fingerprint,
 byte ceiling, and candidate action shape remain unchanged.
+
+### BOX-001 through BOX-012 sequential authority
+
+BOX activation is a serial expansion from the current 52-ID prefix to 64 IDs.
+BOX-001 first advances candidate-response v3 to v4 for the benchmark-owned
+solid/box discriminators. The request envelope and public context do not carry
+the candidate-response schema, so the exact 52-request aggregate
+`53836e6352b776f1b2a0eccd81cc17d7046a489782a5ad678236d920e36f8a7a`
+must remain byte-identical. Each BOX gate derives its ordered ID set only from
+`DefaultCADActivatedCaseExecutor`, preserves the immediately preceding
+aggregate literal, freezes the newly observed aggregate, and keeps the largest
+request and response below one quarter of the 65,536-byte ceiling.
+
+For each activated BOX case, bounded request generation preserves the public
+lower-corner origin, dimensions, and unit. A v4 response traverses the same
+benchmark executor, production `createExtrudedRectangle` controller route, and
+exact source/B-Rep oracle. The case-specific valid mismatch remains an
+`invalidSubmission` after exactly one publication and no retry; zero dimension,
+wrong action kind, malformed or legacy schema, context mismatch, and inactive
+case failures occur before evaluation or publication as owned by the
+corresponding layer. The next lexical BOX ID remains inactive until its own
+gate; after BOX-012, CYL-001 is the typed inactive boundary. BOX adds no direct
+source, workspace, or oracle access to this adapter.
 
 ## Runtime Flows
 

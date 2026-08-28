@@ -195,12 +195,13 @@ implementation permission to add a parallel authority.
 | `CADChallenge` | Public projection; candidate-visible instruction, capability metadata, roles, and budget | No structured expected geometry, feature IDs, topology, tolerance, or plan |
 | `CADExpectedGeometry` | Internal; oracle-private source/B-Rep expectation and role checks | Category-facade/oracle boundary only; never enters the shared lifecycle harness or public candidate files |
 | `CADCandidateProtocol` | Public; bounded request/response continuation | No workspace, controller, or expectation reference |
-| `CADCandidateAction` | Public; reviewed line/rectangle/circle intent and, beginning with ANG-001, one bounded two-segment angle intent | No session, authority coordinate, expectation, or future-category transform fields |
+| `CADCandidateAction` | Public; reviewed sketch intent and, beginning with BOX-001, one bounded solid intent | No session, authority coordinate, expectation, or future-category transform fields |
 | `CADActivatedCaseExecuting` / `DefaultCADActivatedCaseExecutor` | Public; exact activated-ID list, candidate context, one candidate evaluation, and sanitized result | Dispatches only reviewed category facades; no private expectation, live view, internal evidence, or direct mutation escapes |
 | `CADActivatedLineCase` | Internal; the reviewed line IDs that may enter behavioral execution | Adds exactly one ID only when that case's vertical implementation begins; catalog presence alone is never activation |
 | `CADActivatedRectangleCase` | Internal; the reviewed rectangle IDs that may enter behavioral execution | Contains only REC-001 when introduced and advances one reviewed case per commit |
 | `CADActivatedCircleCase` | Internal; the reviewed circle IDs that may enter behavioral execution | Contains the complete reviewed CIR-001...012 category in catalog order; no CIR-013 exists |
 | `CADActivatedAngleCase` | Internal; the reviewed angle IDs that may enter behavioral execution | Contains only ANG-001 when introduced and advances one reviewed case per commit |
+| `CADActivatedBoxCase` | Internal; the reviewed box IDs that may enter behavioral execution | Begins with BOX-001 and advances one reviewed case per commit; catalog presence never activates a box |
 | `CADCaseActionPlan` / `CADCaseActionRouting` | Internal; converts an activated category action plus public challenge context into either one command or one bounded atomic batch | Has no session/coordinate/workspace/source authority and cannot read a private expectation; completed single-command facades keep their existing branch |
 | `CADCaseLifecycleHarness` | Internal; owns the shared fresh controller/workspace, pre-owned registration UUID, exact coordinate binding, deadline, production dispatch, final immutable view capture, and unconditional cleanup | The only shared mutable lifecycle owner; it does not select cases, map geometry, run an oracle, or project a category result |
 | `CADCaseLifecycleRecord` | Internal immutable output from the harness | Preserves initial/final coordinates, typed response, publication/no-retry state, cleanup state, and common count/timing telemetry without geometry assertions |
@@ -209,6 +210,7 @@ implementation permission to add a parallel authority.
 | `CADRectangleCaseRunner` / `CADRectangleOracle` | Internal thin REC-001 facade and exact rectangle oracle | Own rectangle projection/routing/mapping, private rectangle expectation, four-line/profile checks, and rectangle result projection; delegate lifecycle only |
 | `CADCircleCaseRunner` / `CADCircleOracle` | Internal thin CIR-001 facade and exact analytic-circle oracle | Own circle projection/routing/mapping, private circle expectation, analytic entity/centre/radius/profile checks, and circle-local result projection; delegate lifecycle only |
 | `CADAngleCaseRunner` / `CADAngleOracle` | Internal thin ANG-001 facade and exact two-line source oracle | Own angle projection, affine intersection mapping, ordered two-command batch, private angle expectation, role/intersection/length/unsigned-angle checks, and angle-local result projection; delegate lifecycle only |
+| `CADBoxCaseRunner` / `CADBoxOracle` | Internal thin BOX-001 facade and exact closed-box source/B-Rep oracle | Own box projection, lower-corner-to-profile mapping, one-command solid routing, private box expectation, source profile/extrude/body/topology checks, and box-local result projection; delegate lifecycle only |
 | `CADCaseOutcome` / score | Public result projection; failure taxonomy and binary scoring | No fallback success |
 | `CADBenchmarkReport` | Public result projection; deterministic run and measurement projection | Value/report only |
 
@@ -850,6 +852,110 @@ the already-owned per-case postpublication no-retry, normal-offset,
 timeout/cleanup, and privacy evidence without duplicating those fixtures, and
 confirms exact external authority 52 with the ANG-016 aggregate and BOX-001
 typed inactive.
+
+### Box foundation and sequential case contract
+
+| Classification | BOX decision |
+|---|---|
+| Confirmed current fact | `ProjectAgentCommandController` exposes `createExtrudedRectangle`; its Automation/Editor path creates a rectangle sketch plus extrude body, commits one source generation, publishes one evaluated body, and existing topology tests prove 1 body/6 faces/12 edges/8 vertices. The benchmark currently exposes no solid candidate action and BOX-001 is inactive. |
+| Required ideal contract | A candidate describes one axis-aligned box by lower-corner origin and X/Y/Z dimensions; the existing production command remains mutation authority and an independent immutable source/B-Rep oracle remains result authority. |
+| Minimal difference | Add one benchmark-owned solid/box action, box projection/mapping/facade/oracle/result types, BOX activation dispatch, candidate-response v4, and focused/adapter/CLI evidence. Do not add a kernel command or a generic future-solid runner. |
+| Unresolved at design completion | No semantic or authority blocker remains. Each new aggregate digest and measured timing is intentionally observed and frozen only by its implementation gate rather than guessed here. |
+
+The existing production solid route is the authority for BOX. One
+`AutomationCommand.createExtrudedRectangle` reaches
+`ProjectAgentCommandController`, one project source transaction, and one
+`EditorCommand.createExtrudedRectangle`. That command creates a centered
+rectangle-sketch source and an extrude body source, commits once, evaluates one
+closed body, and reports the body as `primaryFeatureID` while both source
+features occur in `createdFeatureIDs`. BOX does not introduce a second box
+kernel command or mutate `DesignDocument` directly.
+
+BOX-001 adds the smallest public solid action contract:
+
+- `CADAutomationAction.solid(CADSolidAction)` uses explicit `kind: "solid"`;
+- `CADSolidAction.box` uses explicit `kind: "box"` with `name`, lower-corner
+  `origin`, `width`, `depth`, and `height` fields;
+- `CADBoxChallengeProjection` and the reference candidate derive those values
+  only from public challenge text;
+- `CADBoxGeometryMapping` maps the public lower corner and X/Y/Z dimensions to
+  an XY affine source plane whose origin is the bottom-face center, then routes
+  width=X, sketch height=Y depth, extrusion distance=Z height, and normal +Z;
+- `CADBoxCaseRunner` remains a thin facade over `CADCaseLifecycleHarness`; its
+  action route exposes the actual production operation name
+  `createExtrudedRectangle`, while public capability status remains the
+  challenge-owned `cad.solid.box` classification;
+- the `solid` output role binds to the production primary body ID. The source
+  order contains exactly the consumed rectangle sketch followed by that body;
+  the primary ID may alias the second created ID and must not be normalized to
+  the first.
+
+This public Codable expansion advances only candidate-response schema v3 to
+v4. The schema guard rejects v1, v2, and v3 before decision decoding; there is
+no legacy fallback. Request/evaluation/error schemas, public-context
+fingerprint, manifest/catalog, expectation, capability, and tolerance versions
+remain unchanged. Because the response schema is absent from request context,
+the frozen 52-request aggregate must remain byte-identical when BOX-001 is
+added; implementation evidence then freezes the observed 53-request aggregate.
+
+```text
+public BOX action
+    -> CADBoxCaseRunner / lower-corner mapping
+        -> CADCaseLifecycleHarness
+            -> ProjectAgentCommandController
+                -> AutomationCommand.createExtrudedRectangle
+                    -> rectangle sketch + extrude body / one publication
+                        -> immutable source + exact B-Rep oracle
+```
+
+The exact oracle accepts no visual or Mesh substitute. It requires exactly two
+unsuppressed source features: one four-line closed rectangle sketch on the
+expected bottom-center +Z plane and one `.cube`-typed normal extrude referencing
+that profile. It checks the bound primary body ID, resolved width/depth/height,
+lower-corner placement, evaluated body count one, B-Rep body/face/edge/vertex
+counts 1/6/12/8, six planar faces, twelve linear edges, world vertex bounds, and
+exact-B-Rep volume against `width * depth * height` under the fresh document's
+`ModelingTolerance`. Cubes additionally require all three resolved dimensions
+to agree. Candidate claims, display Mesh bounds, and tessellated measurement
+bounds are not oracle authority.
+
+| Case | Exact public target: width × depth × height, lower-corner origin | Independent valid postpublication mismatch | Prepublication invalid/substitute | Authority transition |
+|---|---|---|---|---|
+| BOX-001 | 10 × 10 × 10 mm at (0, 0, 0); cube | Width 12 mm with the other values unchanged | Height 0 mm; a rectangle-sketch action is also rejected as a solid substitute | 52→53; preserve frozen 52, freeze 53, BOX-002 inactive |
+| BOX-002 | 25 × 25 × 25 mm at (20, -20, 0); translated cube | Same cube at (25, -20, 0) mm | Width 0 mm | 53→54; preserve 53, freeze 54, BOX-003 inactive |
+| BOX-003 | 50 × 30 × 20 mm at (-25, 15, 5) | Swap depth and height to 20 × 30 mm | Depth 0 mm | 54→55; preserve 54, freeze 55, BOX-004 inactive |
+| BOX-004 | 100 × 50 × 75 mm at (0, 0, -25) | Same dimensions at z = 0 mm | Height 0 mm | 55→56; preserve 55, freeze 56, BOX-005 inactive |
+| BOX-005 | 250 × 100 × 125 mm at (-125, -50, 0) | Height 100 mm | Width 0 mm | 56→57; preserve 56, freeze 57, BOX-006 inactive |
+| BOX-006 | 0.1 × 0.05 × 0.025 m at (0, 0, 0) | Same numeric values and origin in centimetres | Depth 0 m | 57→58; preserve 57, freeze 58, BOX-007 inactive |
+| BOX-007 | 1 × 2 × 3 in at (-1, -1, 0) | Same numeric values and origin in millimetres | Height 0 in | 58→59; preserve 58, freeze 59, BOX-008 inactive |
+| BOX-008 | 300 × 300 × 300 mm at (100, 100, 100); translated cube | Same cube at (0, 100, 100) mm | Width 0 mm | 59→60; preserve 59, freeze 60, BOX-009 inactive |
+| BOX-009 | 12 × 12 × 12 mm at (-12, 0, 0); cube | Height 10 mm | Depth 0 mm | 60→61; preserve 60, freeze 61, BOX-010 inactive |
+| BOX-010 | 400 × 200 × 50 mm at (0, -100, 50) | Swap width and depth to 200 × 400 mm | Height 0 mm | 61→62; preserve 61, freeze 62, BOX-011 inactive |
+| BOX-011 | 0.5 × 0.5 × 0.5 m at (-0.25, -0.25, 0); cube | Same numeric values and origin in centimetres | Width 0 m | 62→63; preserve 62, freeze 63, BOX-012 inactive |
+| BOX-012 | 75 × 125 × 175 mm at (25, 25, -75) | Same dimensions at z = -50 mm | Depth 0 mm | 63→64; preserve 63, freeze 64, CYL-001 inactive; no BOX-013 is invented |
+
+Every BOX row is a separate Vertical Case Gate and commit. It owns exact
+production success, its listed mismatch publishing exactly once before oracle
+rejection with no retry, its listed invalid input rejecting before command and
+publication, timeout/no-publication, unconditional cleanup, positive phase
+telemetry, public-candidate-only construction, exact JSON/CLI request and
+evaluation, previous aggregate preservation, new aggregate freezing, next-ID
+inactivity, focused/affected/static tests, original-designer review, and the
+named case commit. A realized case records publication +1, document generation
+`+1`, transaction revision +1, workspace revision unchanged, action 1, command
+1, read at least 1, source entity 4, source feature 2, evaluated body 1, and
+topology 1 body/6 faces/12 edges/8 vertices. A postpublication mismatch records
+the published state and the second immutable diagnostic read rather than
+retrying or rounding failure telemetry to zero.
+
+After BOX-012, `T12-BOX-G` serially replays BOX-001...012 in exact lexical
+order. It requires twelve unique IDs, unit coverage millimetre 9/metre 2/inch
+1, cube 5/non-cube 7, all positive and negative placement variants, and the
+per-case publication/generation/cleanup/count/timing contract above. It
+inventories the already-owned postpublication, invalid/substitute, timeout,
+and privacy evidence without duplicating those fixtures, confirms exact
+executor/JSON/CLI authority 64 with the BOX-012 aggregate, and proves CYL-001
+typed inactive. Parallelism remains disabled through the category gate.
 
 ### Vertical Case Gate
 

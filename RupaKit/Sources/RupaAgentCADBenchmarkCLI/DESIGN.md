@@ -365,6 +365,29 @@ frozen; the observed 52-request aggregate is
 arguments, schemas, byte limits, exit mapping, cleanup, and no-retry behavior
 remain unchanged.
 
+### BOX-001 through BOX-012 process boundary
+
+BOX adds no CLI command. `request <BOX-ID>` emits the same bounded request v1;
+`evaluate --response <PATH|->` accepts the adapter-owned candidate-response v4
+that carries the benchmark-owned `solid` / `box` discriminators. BOX-001 must
+prove the complete actual process route for a 10 × 10 × 10 mm box at the world
+origin and must reject candidate-response v1 through v3 with input exit `64`.
+Each following BOX case reuses the command and schema, proves its exact public
+unit/dimensions/lower-corner response through the production controller and
+source/B-Rep oracle, and advances process authority by one only after its case
+gate passes. A valid wrong box exits `2` after one publication and no retry;
+decode, schema, fingerprint, and inactive-ID failures exit `64`; benchmark
+infrastructure or cleanup-invalidating failures retain exit `70`.
+
+The ordered process boundary advances from 52 IDs through 64, preserving each
+immediately preceding aggregate and freezing the emitted aggregate after every
+case. The next lexical BOX ID remains inactive at each intermediate gate;
+after BOX-012, `CYL-001` is inactive. Actual process evidence covers both file
+and standard-input evaluation without exposing private dimensions, topology
+predicates, source identities, or diagnostics. The 65,536-byte bound, one-JSON
+stdout rule, exit mapping, request/evaluation/error schemas, and generic `rupa`
+CLI remain unchanged.
+
 The explicit `evaluate --response <PATH|->` contract has no separate expected
 case argument, so a case-mismatch process fixture cannot be constructed without
 changing the command. Compositional tests instead prove that the adapter rejects
