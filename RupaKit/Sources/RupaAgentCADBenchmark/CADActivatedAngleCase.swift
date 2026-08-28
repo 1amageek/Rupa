@@ -4,6 +4,7 @@ import Foundation
 enum CADActivatedAngleCase: String, CaseIterable, Equatable, Hashable, Sendable {
     case ang001 = "ANG-001"
     case ang002 = "ANG-002"
+    case ang003 = "ANG-003"
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)

@@ -425,7 +425,7 @@ workspace publication and records validated `invalidSubmission` plus cleanup
 evidence because activated cases require one bounded action. The public
 executor projects that record as
 `CADCaseResult(outcome: .invalidSubmission)`. These decisions are not promoted
-to `expectedUnsupported`, because all thirty-eight activated cases have already
+to `expectedUnsupported`, because all thirty-nine activated cases have already
 proved their creation capability through the production controller. A
 candidate-thrown error remains the typed executor `candidateFailure`, also
 before publication. No adapter may catch these paths and substitute a reference
