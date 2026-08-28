@@ -55,7 +55,7 @@ rupa-agent-cad-benchmark request <CASE-ID>
 rupa-agent-cad-benchmark evaluate --response <PATH|->
 ```
 
-`request` validates that the ID is in the activated forty-one-case set and emits
+`request` validates that the ID is in the activated forty-two-case set and emits
 exactly one request-envelope JSON object to standard output. `evaluate` reads
 exactly one candidate-response envelope from the selected file, or from
 standard input when `-` is selected, then emits exactly one evaluation- or
@@ -128,8 +128,8 @@ Process-level tests build and invoke the actual executable and prove:
 
 - `request` emits valid v1 JSON for an activated line, rectangle, REC-009
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
-  millimetre/XY case, the complete CIR-001...012 category, and ANG-001...005,
-  and rejects inactive `ANG-006`;
+  millimetre/XY case, the complete CIR-001...012 category, and ANG-001...006,
+  and rejects inactive `ANG-007`;
 - JSON line, rectangle, circle, and angle responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
@@ -258,6 +258,15 @@ command or changing candidate-response v3. An actual bounded response with
 `kind: "angle"` executes the orthogonal 75/125 mm pair through the same
 production atomic batch and immutable source oracle, while ANG-006 remains
 inactive with exit `64`. The preceding 40-request aggregate remains frozen;
+the new aggregate is measured from the exact emitted requests. Commands,
+arguments, schemas, byte limits, exit mapping, cleanup, and no-retry behavior
+remain unchanged.
+
+ANG-006 advances the process authority to 42 reviewed IDs without adding a
+command or changing candidate-response v3. An actual bounded response with
+`kind: "angle"` executes the negative-X 90/150 mm, 105-degree pair through the
+same production atomic batch and immutable source oracle, while ANG-007 remains
+inactive with exit `64`. The preceding 41-request aggregate remains frozen;
 the new aggregate is measured from the exact emitted requests. Commands,
 arguments, schemas, byte limits, exit mapping, cleanup, and no-retry behavior
 remain unchanged.

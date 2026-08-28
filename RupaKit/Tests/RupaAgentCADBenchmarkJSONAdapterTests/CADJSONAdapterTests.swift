@@ -302,6 +302,26 @@ struct CADJSONAdapterTests {
         #expect(orthogonalAngleEvaluation.result?.outcome == .realized)
         #expect(orthogonalAngleEvaluation.error == nil)
 
+        let negativePlacementAngleRequest = try adapter.makeRequest(for: "ANG-006")
+        let negativePlacementAngleResponse = try CADJSONCandidateResponseEnvelope(
+            caseID: negativePlacementAngleRequest.caseID,
+            context: negativePlacementAngleRequest.context,
+            decision: .action(angle006Action(name: "ANG-006"))
+        )
+        let negativePlacementAngleResponseData = try CADJSONBoundedCodec.encode(
+            negativePlacementAngleResponse
+        )
+        let negativePlacementAngleJSON = try #require(
+            String(data: negativePlacementAngleResponseData, encoding: .utf8)
+        )
+        #expect(negativePlacementAngleJSON.contains("\"kind\":\"angle\""))
+        #expect(negativePlacementAngleJSON.contains("\"caseID\":\"ANG-006\""))
+        let negativePlacementAngleEvaluation = try await adapter.evaluate(
+            responseData: negativePlacementAngleResponseData
+        )
+        #expect(negativePlacementAngleEvaluation.result?.outcome == .realized)
+        #expect(negativePlacementAngleEvaluation.error == nil)
+
         let inchRectangleRequest = try adapter.makeRequest(for: "REC-009")
         let inchRectangleResponse = try CADJSONCandidateResponseEnvelope(
             caseID: inchRectangleRequest.caseID,
@@ -475,6 +495,8 @@ struct CADJSONAdapterTests {
                 action = angle004Action(name: caseID.rawValue)
             } else if caseID.rawValue == "ANG-005" {
                 action = angle005Action(name: caseID.rawValue)
+            } else if caseID.rawValue == "ANG-006" {
+                action = angle006Action(name: caseID.rawValue)
             } else if caseID.category == .angle {
                 action = angleAction(name: caseID.rawValue)
             } else if caseID.rawValue == "CIR-002" {
@@ -510,7 +532,7 @@ struct CADJSONAdapterTests {
             #expect(try CADJSONBoundedCodec.encode(response).count < 16_384)
         }
 
-        #expect(executor.activatedCaseIDs.count == 41)
+        #expect(executor.activatedCaseIDs.count == 42)
         #expect(largestRequest < 16_384)
     }
 
@@ -521,7 +543,7 @@ struct CADJSONAdapterTests {
         let adapter = CADJSONAdapter(executor: executor)
         let historicalIDs = (1...12).map { String(format: "LIN-%03d", $0) }
             + (1...8).map { String(format: "REC-%03d", $0) }
-        let currentIDs = historicalIDs + ["REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005"]
+        let currentIDs = historicalIDs + ["REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006"]
         #expect(executor.activatedCaseIDs.map(\.rawValue) == currentIDs)
 
         // Each activated record is case ID, request byte count, and request SHA-256, all length-prefixed.
@@ -682,6 +704,13 @@ struct CADJSONAdapterTests {
         appendLengthPrefixed(bigEndianBytes(UInt64(ang005Request.count)), to: &currentAggregate)
         appendLengthPrefixed(Data(SHA256.hash(data: ang005Request)), to: &currentAggregate)
         #expect(sha256Hex(currentAggregate) == "fb0228298f5bd1b38ddcafeeda2632236e487f2be8600e3abffed335f9f3df6d")
+
+        let ang006ID: CADBenchmarkCaseID = "ANG-006"
+        let ang006Request = try adapter.encodeRequest(for: ang006ID)
+        appendLengthPrefixed(Data(ang006ID.rawValue.utf8), to: &currentAggregate)
+        appendLengthPrefixed(bigEndianBytes(UInt64(ang006Request.count)), to: &currentAggregate)
+        appendLengthPrefixed(Data(SHA256.hash(data: ang006Request)), to: &currentAggregate)
+        #expect(sha256Hex(currentAggregate) == "a15fbc50a8f6476bd353b9508a10c88b6da03377aa173b413987e829642f16eb")
     }
 
     @MainActor
@@ -812,7 +841,7 @@ struct CADJSONAdapterTests {
         }
 
         do {
-            _ = try await adapter.evaluate(response: response, for: "ANG-006")
+            _ = try await adapter.evaluate(response: response, for: "ANG-007")
             Issue.record("An inactive case must be rejected before context resolution.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
@@ -1384,6 +1413,22 @@ private func angle005Action(name: String) -> CADCandidateAction {
         firstEnd: CADPoint3D(x: 75, y: 0, z: 200, unit: .millimeter),
         secondStart: CADPoint3D(x: 0, y: 0, z: 200, unit: .millimeter),
         secondEnd: CADPoint3D(x: 0, y: 125, z: 200, unit: .millimeter)
+    )))
+}
+
+private func angle006Action(name: String) -> CADCandidateAction {
+    .automation(.sketch(.angle(
+        name: name,
+        plane: .xy,
+        firstStart: CADPoint3D(x: -50, y: 40, z: 250, unit: .millimeter),
+        firstEnd: CADPoint3D(x: 40, y: 40, z: 250, unit: .millimeter),
+        secondStart: CADPoint3D(x: -50, y: 40, z: 250, unit: .millimeter),
+        secondEnd: CADPoint3D(
+            x: -50 - 150 * 0.258819045103,
+            y: 40 + 150 * 0.965925826289,
+            z: 250,
+            unit: .millimeter
+        )
     )))
 }
 
