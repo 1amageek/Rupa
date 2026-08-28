@@ -75,6 +75,13 @@ object, rejects unknown schema versions, and validates all required fields.
 | candidate response v1 | `schema`, `caseID`, `contextFingerprint`, `decision` | One decision to be returned by the JSON candidate. |
 | evaluation v1 | `schema`, `caseID`, `contextFingerprint`, exactly one of `result` or `error` | Sanitized terminal outcome returned by the executable. |
 
+The benchmark-owned `CADBenchmarkCaseID` is a validated single-value string in
+every position, including top-level `caseID`, `context.challenge.id`, and
+`result.id`. The adapter consumes that scalar contract directly and does not
+wrap or mirror it. The former synthesized `{ "rawValue": ... }` object is
+rejected before context fingerprinting or evaluation; v1 has no legacy
+fallback because no external adapter release used that shape.
+
 The candidate response carries the existing benchmark-owned
 `CADCandidateDecision`. The benchmark's associated-value enums
 `CADCandidateDecision`, `CADCandidateAction`, `CADAutomationAction`, and
@@ -170,7 +177,7 @@ classification and are projected only to stable non-private codes.
 
 | Invariant | Behavioral evidence |
 |---|---|
-| Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON for line and rectangle decisions; synthesized legacy enum shapes and unknown discriminators are rejected. |
+| Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON for line and rectangle decisions; every direct and nested case ID is the same scalar string; synthesized case-ID objects, synthesized legacy enum shapes, and unknown discriminators are rejected. |
 | Exact public-context binding | The request fingerprint equals the live executor context; changed schema, case, context byte, capability, budget, or fingerprint is rejected before publication. |
 | Bounded I/O | Exact-limit input succeeds, `limit + 1` fails before decode, chunked stdin and file paths behave identically, and encoded output cannot exceed the same bound. |
 | Candidate/oracle separation | Static dependency and source scans prove the adapter imports only public benchmark contracts; encoded fixtures contain no expectation/oracle/source snapshot fields or values. |
@@ -180,4 +187,6 @@ classification and are projected only to stable non-private codes.
 Changes to public candidate Codable shapes, public context fields, capability
 snapshot generation, activation boundary, fingerprint algorithm, byte bound,
 executor result projection, or CLI exit mapping require rechecking this design,
-the benchmark design, the CLI design, golden JSON, and process-level tests.
+the benchmark design, the CLI design, golden JSON, and process-level tests. A
+case-ID Codable change also requires the benchmark-owned manifest/catalog and
+expectation version/digest transition before adapter fingerprints are refrozen.

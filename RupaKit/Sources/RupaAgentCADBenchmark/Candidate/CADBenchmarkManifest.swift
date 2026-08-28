@@ -2,8 +2,8 @@ import Foundation
 import RupaCoreTypes
 
 public struct CADBenchmarkManifest: Codable, Equatable, Sendable {
-    public static let schemaVersion = "t12.manifest.v1"
-    public static let catalogVersion = "t12.catalog.v2"
+    public static let schemaVersion = "t12.manifest.v2"
+    public static let catalogVersion = "t12.catalog.v3"
     public static let tolerancePolicyVersion = "t12.tolerance.v1"
 
     public let schema: String

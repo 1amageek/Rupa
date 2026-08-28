@@ -26,16 +26,22 @@ func publicManifestDigestIsDeterministicAndFrozen() throws {
     let second = try CADBenchmarkCatalog()
 
     #expect(first.manifest == second.manifest)
-    #expect(first.manifest.schema == "t12.manifest.v1")
-    #expect(first.manifest.catalog == "t12.catalog.v2")
+    #expect(first.manifest.schema == "t12.manifest.v2")
+    #expect(first.manifest.catalog == "t12.catalog.v3")
     #expect(first.manifest.tolerancePolicy == "t12.tolerance.v1")
-    #expect(first.manifest.challengeInputDigest == "e2bc50a74db4247c36a6a51758466d30bc21d3b3d0db11ff648895b51a3ed08e")
-    #expect(first.manifest.digest == "d5805cf0abed8f52d3f9c3c231d07f33fbe1b4cb5360a076a88983e0298f86d4")
+    #expect(first.manifest.challengeInputDigest == "d8c296dabd0056f247352f4a11585da36708e1f262a59fb69165ca7f48b8593c")
+    #expect(first.manifest.digest == "431a0aa29398f8fa61ade21aff31b882f0bd3e7db055b2587af433486250efb2")
 
     let encoded = try JSONEncoder().encode(first.manifest)
     let encodedText = String(decoding: encoded, as: UTF8.self)
     #expect(encodedText.contains("CADExpectedGeometry") == false)
     #expect(encodedText.contains("oracle") == false)
+
+    let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    let orderedCaseIDs = try #require(object["orderedCaseIDs"] as? [Any])
+    #expect(orderedCaseIDs.count == 100)
+    #expect(orderedCaseIDs.allSatisfy { $0 is String })
+    #expect(orderedCaseIDs.contains { ($0 as? String) == "LIN-001" })
 }
 
 @Test
@@ -43,13 +49,13 @@ func internalExpectationAndCapabilityDigestsAreVersionedAndFrozen() throws {
     let contract = try CADInternalCatalogStore.expectationContract()
     try contract.validate()
 
-    #expect(contract.schemaVersion == "t12.expectation.v2")
-    #expect(contract.expectationVersion == "t12.expectation-contract.v2")
+    #expect(contract.schemaVersion == "t12.expectation.v3")
+    #expect(contract.expectationVersion == "t12.expectation-contract.v3")
     #expect(contract.capabilityClassificationVersion == "t12.capability-classification.v1")
     #expect(contract.capabilityBaselineContractVersion == "t12.capability-baseline.v1")
     #expect(contract.tolerancePolicyVersion == "t12.tolerance.v1")
     #expect(contract.entries.count == 100)
-    #expect(contract.expectationDigest == "15c8e060d27e5b6b385372aa8956dbb6609e51d198f58935f0f544ef80a17874")
+    #expect(contract.expectationDigest == "a3ce61a5c4503717d7a5d9dbcc8571e27067fdb03f0924e8c67594e4707e3451")
     #expect(contract.capabilityClassificationDigest.count == 64)
     #expect(contract.capabilityBaseline.digest.count == 64)
 
@@ -62,6 +68,109 @@ func internalExpectationAndCapabilityDigestsAreVersionedAndFrozen() throws {
     let decoded = try JSONDecoder().decode(CADBenchmarkExpectationContract.self, from: mutated)
     requireCatalogDrift {
         try decoded.validate()
+    }
+}
+
+@Test
+func benchmarkCaseIDUsesValidatedSingleValueCodable() throws {
+    let valid: CADBenchmarkCaseID = "LIN-001"
+    let encoded = try JSONEncoder().encode(valid)
+    #expect(String(decoding: encoded, as: UTF8.self) == "\"LIN-001\"")
+    #expect(try JSONDecoder().decode(CADBenchmarkCaseID.self, from: encoded) == valid)
+
+    requireDecodingFailure {
+        try JSONDecoder().decode(
+            CADBenchmarkCaseID.self,
+            from: Data(#"{"rawValue":"LIN-001"}"#.utf8)
+        )
+    }
+    requireDecodingFailure {
+        try JSONDecoder().decode(
+            CADBenchmarkCaseID.self,
+            from: Data(#""LIN-999""#.utf8)
+        )
+    }
+    requireEncodingFailure {
+        try JSONEncoder().encode(CADBenchmarkCaseID(rawValue: "LIN-999"))
+    }
+}
+
+@Test
+func scalarCaseIDsPropagateThroughNestedCandidateWireValues() throws {
+    let catalog = try CADBenchmarkCatalog()
+    let challenge = try catalog.challenge(for: "LIN-001")
+
+    let challengeObject = try #require(JSONSerialization.jsonObject(
+        with: JSONEncoder().encode(challenge),
+        options: []
+    ) as? [String: Any])
+    #expect(challengeObject["id"] as? String == "LIN-001")
+    #expect(!(challengeObject["id"] is [String: Any]))
+
+    let context = CADCandidateContext(
+        challenge: challenge,
+        capabilities: CADCapabilitySnapshot(
+            version: "agent-capabilities.v1",
+            statuses: [CADCapabilityStatus(
+                id: challenge.requiredCapability.id,
+                version: challenge.requiredCapability.version,
+                available: true
+            )]
+        ),
+        remainingRounds: challenge.budget.maximumRounds,
+        remainingActions: challenge.budget.maximumActions
+    )
+    let contextObject = try #require(JSONSerialization.jsonObject(
+        with: JSONEncoder().encode(context),
+        options: []
+    ) as? [String: Any])
+    let nestedChallenge = try #require(contextObject["challenge"] as? [String: Any])
+    #expect(nestedChallenge["id"] as? String == "LIN-001")
+    #expect(!(nestedChallenge["id"] is [String: Any]))
+
+    let result = CADCaseResult(id: "LIN-001", category: .line, outcome: .realized)
+    let resultObject = try #require(JSONSerialization.jsonObject(
+        with: JSONEncoder().encode(result),
+        options: []
+    ) as? [String: Any])
+    #expect(resultObject["id"] as? String == "LIN-001")
+    #expect(!(resultObject["id"] is [String: Any]))
+}
+
+@Test
+func manifestAndExpectationRejectLegacyCaseIDObjectWireShape() throws {
+    let catalog = try CADBenchmarkCatalog()
+    let manifestText = String(
+        decoding: try JSONEncoder().encode(catalog.manifest),
+        as: UTF8.self
+    )
+    let legacyManifest = Data(
+        manifestText.replacingOccurrences(
+            of: "\"LIN-001\"",
+            with: "{\"rawValue\":\"LIN-001\"}",
+            options: .literal,
+            range: manifestText.startIndex..<manifestText.endIndex
+        ).utf8
+    )
+    requireDecodingFailure {
+        try JSONDecoder().decode(CADBenchmarkManifest.self, from: legacyManifest)
+    }
+
+    let contract = try CADInternalCatalogStore.expectationContract()
+    let contractText = String(
+        decoding: try JSONEncoder().encode(contract),
+        as: UTF8.self
+    )
+    let legacyContract = Data(
+        contractText.replacingOccurrences(
+            of: "\"LIN-001\"",
+            with: "{\"rawValue\":\"LIN-001\"}",
+            options: .literal,
+            range: contractText.startIndex..<contractText.endIndex
+        ).utf8
+    )
+    requireDecodingFailure {
+        try JSONDecoder().decode(CADBenchmarkExpectationContract.self, from: legacyContract)
     }
 }
 
@@ -482,6 +591,29 @@ private func requireCatalogDrift(_ operation: () throws -> Void) {
         Issue.record("Digest drift must be rejected.")
     } catch let error as CADBenchmarkError {
         guard case .catalogDrift = error else {
+            Issue.record("Unexpected typed error: \(error)")
+            return
+        }
+    } catch {
+        Issue.record("Unexpected untyped error: \(error)")
+    }
+}
+
+private func requireDecodingFailure<Value>(_ operation: () throws -> Value) {
+    do {
+        _ = try operation()
+        Issue.record("Legacy or invalid case ID wire data must be rejected.")
+    } catch {
+        // Both a non-string JSON value and an invalid validated ID are expected failures.
+    }
+}
+
+private func requireEncodingFailure<Value>(_ operation: () throws -> Value) {
+    do {
+        _ = try operation()
+        Issue.record("Invalid case ID must not be encoded.")
+    } catch let error as CADBenchmarkError {
+        guard case .invalidCaseID = error else {
             Issue.record("Unexpected typed error: \(error)")
             return
         }

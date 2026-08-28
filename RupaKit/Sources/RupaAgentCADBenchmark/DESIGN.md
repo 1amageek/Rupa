@@ -189,7 +189,7 @@ implementation permission to add a parallel authority.
 
 | Component | Visibility and responsibility | State/authority |
 |---|---|---|
-| `CADBenchmarkCaseID` / category | Public; stable identity and category validation | Immutable value only |
+| `CADBenchmarkCaseID` / category | Public; stable identity, category validation, and one single-value string Codable representation | Immutable scalar value only; decoding validates the ID and rejects the synthesized object shape without fallback |
 | `CADChallenge` | Public projection; candidate-visible instruction, capability metadata, roles, and budget | No structured expected geometry, feature IDs, topology, tolerance, or plan |
 | `CADExpectedGeometry` | Internal; oracle-private source/B-Rep expectation and role checks | Category-facade/oracle boundary only; never enters the shared lifecycle harness or public candidate files |
 | `CADCandidateProtocol` | Public; bounded request/response continuation | No workspace, controller, or expectation reference |
@@ -232,6 +232,13 @@ case's Vertical Case Gate passes and its evidence is committed.
 | `TRN` | `TRN-001`...`TRN-008` | 8 | Translation/rotation placements of source geometry |
 | **Total** | **all IDs above** | **100** | **No implicit or generated cases** |
 
+`CADBenchmarkCaseID` is the wire authority for a case identity. Every direct or
+nested Codable occurrence encodes as the same validated string, for example
+`"LIN-001"`; `{ "rawValue": "LIN-001" }` is not a second accepted form. The
+benchmark is unreleased, so the synthesized object representation is rejected
+instead of migrated or silently accepted. An adapter consumes this owner
+contract and must not introduce a parallel case-ID wrapper.
+
 The public target-specification manifest is a versioned value containing the
 ordered IDs, category counts, public challenge-text digest, and public catalog
 version. The internal expectation contract separately contains aggregate
@@ -245,6 +252,14 @@ id/version/availability/reason-code records, and digest. Any change to an ID,
 challenge text, expected geometry, role, tolerance rule, or capability
 classification advances the owning version and digest. Duplicate IDs, gaps,
 non-finite values, or a count other than 100 are typed specification errors.
+The single-value case-ID wire is recorded by manifest schema
+`t12.manifest.v2` and catalog version `t12.catalog.v3`, with refrozen
+challenge-input and manifest digests. The internal aggregate is recorded by
+expectation schema `t12.expectation.v3` and expectation version
+`t12.expectation-contract.v3`, with a refrozen expectation digest, because
+those payloads contain case IDs. Capability-classification,
+capability-baseline, capability-availability, and tolerance-policy versions
+remain at v1 because their meanings and payloads are unchanged.
 The manifest and digests prove specification identity only; per-case production
 evidence proves implementation.
 

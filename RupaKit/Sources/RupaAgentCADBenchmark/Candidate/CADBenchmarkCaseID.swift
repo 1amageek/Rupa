@@ -44,4 +44,16 @@ public struct CADBenchmarkCaseID: Codable, Comparable, Equatable, Hashable, Send
     public static func < (lhs: Self, rhs: Self) -> Bool {
         lhs.rawValue < rhs.rawValue
     }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        try self.init(validating: rawValue)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        try validate()
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
