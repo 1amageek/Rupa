@@ -8,6 +8,7 @@ import Foundation
 enum CADActivatedLineCase: String, CaseIterable, Equatable, Hashable, Sendable {
     case lin001 = "LIN-001"
     case lin002 = "LIN-002"
+    case lin003 = "LIN-003"
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)
