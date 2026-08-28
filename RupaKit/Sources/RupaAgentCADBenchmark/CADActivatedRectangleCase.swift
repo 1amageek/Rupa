@@ -5,6 +5,7 @@ import Foundation
 enum CADActivatedRectangleCase: String, CaseIterable, Equatable, Hashable, Sendable {
     case rec001 = "REC-001"
     case rec002 = "REC-002"
+    case rec003 = "REC-003"
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)
