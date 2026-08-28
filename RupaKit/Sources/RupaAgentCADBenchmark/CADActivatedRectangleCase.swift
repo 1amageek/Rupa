@@ -7,6 +7,7 @@ enum CADActivatedRectangleCase: String, CaseIterable, Equatable, Hashable, Senda
     case rec002 = "REC-002"
     case rec003 = "REC-003"
     case rec004 = "REC-004"
+    case rec005 = "REC-005"
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)
