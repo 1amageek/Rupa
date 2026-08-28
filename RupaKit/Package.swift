@@ -100,6 +100,10 @@ let package = Package(
             name: "RupaAgentCADBenchmarkJSONAdapter",
             targets: ["RupaAgentCADBenchmarkJSONAdapter"]
         ),
+        .executable(
+            name: "rupa-agent-cad-benchmark",
+            targets: ["RupaAgentCADBenchmarkCLI"]
+        ),
         .library(
             name: "RupaAgent",
             targets: ["RupaAgent"]
@@ -359,6 +363,14 @@ let package = Package(
         .target(
             name: "RupaAgentCADBenchmarkJSONAdapter",
             dependencies: ["RupaAgentCADBenchmark", "RupaCoreTypes"],
+            exclude: ["DESIGN.md"]
+        ),
+        .executableTarget(
+            name: "RupaAgentCADBenchmarkCLI",
+            dependencies: [
+                "RupaAgentCADBenchmarkJSONAdapter",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
             exclude: ["DESIGN.md"]
         ),
         .target(
@@ -685,6 +697,14 @@ let package = Package(
         .testTarget(
             name: "RupaAgentCADBenchmarkJSONAdapterTests",
             dependencies: [
+                "RupaAgentCADBenchmarkJSONAdapter",
+                "RupaAgentCADBenchmark",
+            ]
+        ),
+        .testTarget(
+            name: "RupaAgentCADBenchmarkCLITests",
+            dependencies: [
+                "RupaAgentCADBenchmarkCLI",
                 "RupaAgentCADBenchmarkJSONAdapter",
                 "RupaAgentCADBenchmark",
             ]

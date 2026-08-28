@@ -27,7 +27,9 @@ The target owns:
   returns the validated external decision only when the executor presents the
   exact matching live public context;
 - bounded JSON reads from either standard input or one explicitly selected
-  local file, plus bounded deterministic JSON encoding.
+  local file, plus bounded deterministic JSON encoding and the canonical
+  prevalidated infrastructure-error document used when runtime encoding itself
+  fails.
 
 It does not own challenge meaning, decision/action meaning, activated-case
 selection, a project/workspace, command routing, an oracle, private expected
@@ -141,6 +143,11 @@ inactive case, case mismatch, fingerprint mismatch, invalid decision,
 candidate rejection, timeout/cancellation, oracle/infrastructure failure, and
 output overflow. Error envelopes contain no private expectation, observed
 source geometry, feature identity, or oracle diagnostic text.
+The adapter owns one guaranteed infrastructure-error document whose bytes equal
+the normal deterministic encoding of error v1, remain within the same bound,
+and decode to that exact envelope. The CLI may use it only after runtime error
+encoding fails, so a machine command never substitutes empty output for its
+terminal JSON error.
 
 ## Runtime Flows
 
@@ -190,7 +197,7 @@ classification and are projected only to stable non-private codes.
 |---|---|
 | Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON for line and rectangle decisions; every direct and nested case ID is the same scalar string; synthesized case-ID objects, synthesized legacy enum shapes, and unknown discriminators are rejected. |
 | Exact public-context binding | The request fingerprint equals the live executor context; changed schema, case, context byte, capability, budget, or fingerprint is rejected before publication. |
-| Bounded I/O | Exact-limit input succeeds, `limit + 1` fails before decode and leaves executor evaluation count zero, chunked stdin and file paths behave identically, no public typed-response execution bypass exists, and encoded output cannot exceed the same bound. |
+| Bounded I/O | Exact-limit input succeeds, `limit + 1` fails before decode and leaves executor evaluation count zero, chunked stdin and file paths behave identically, no public typed-response execution bypass exists, encoded output cannot exceed the same bound, and the guaranteed infrastructure document is byte-equal to normal encoding, bounded, and decodable. |
 | Candidate/oracle separation | Static dependency and source scans prove the adapter imports only public benchmark contracts; encoded fixtures contain no expectation/oracle/source snapshot fields or values. |
 | Same production route | JSON candidates for at least one activated line and rectangle realize through the public executor; wrong geometry publishes once then exact oracle rejects without retry. |
 | Non-action honesty | Valid `unsupported` and `finish` responses reach the benchmark candidate boundary, produce typed prepublication `invalidSubmission`, zero publication, and no fallback reference action. |

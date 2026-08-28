@@ -58,8 +58,8 @@ rupa-agent-cad-benchmark evaluate --response <PATH|->
 `request` validates that the ID is in the activated twenty-case set and emits
 exactly one request-envelope JSON object to standard output. `evaluate` reads
 exactly one candidate-response envelope from the selected file, or from
-standard input when `-` is selected, then emits exactly one evaluation-envelope
-JSON object to standard output. Machine output never mixes logs or human
+standard input when `-` is selected, then emits exactly one evaluation- or
+error-envelope JSON object to standard output. Machine output never mixes logs or human
 diagnostics into standard output. `--help` and argument-parser usage remain
 human-readable process metadata and are not evaluation envelopes.
 
@@ -70,10 +70,12 @@ Exit status is stable and orthogonal to JSON decoding:
 | `0` | Request emitted, or evaluation completed with `realized`. |
 | `2` | A valid response was evaluated to a non-realized candidate outcome such as invalid submission, expected/unexpected unsupported, timeout, or cancellation. |
 | `64` | CLI usage, malformed/oversize JSON, unsupported schema, inactive case, case mismatch, fingerprint mismatch, or invalid decision. |
-| `70` | Oracle, production infrastructure, cleanup, or unexpected internal failure invalidated evaluation. |
+| `70` | Production execution, oracle, infrastructure, cleanup, or unexpected internal failure invalidated evaluation. |
 
 For every `evaluate` invocation whose arguments select an input source, the
 tool attempts to emit a bounded evaluation or error envelope before exiting.
+If runtime error encoding itself fails, the CLI emits the adapter-owned
+canonical bounded infrastructure-error document rather than empty output.
 It never prints a Swift error description, source snapshot, expected geometry,
 feature identity, or private oracle diagnostic. It never retries a candidate
 or production command.
@@ -111,11 +113,14 @@ evaluation. Output redirection or persistence is the caller's responsibility.
 
 The executable runs one case and one candidate response at a time. It does not
 spawn concurrent case work, background readers, or detached tasks. Standard
-input must reach EOF within the process/test deadline; the byte ceiling is
-enforced while reading. File open/read failures are stable input errors.
-Signals and task cancellation propagate to the benchmark attempt, which still
-owns unconditional registration cleanup. No failure falls back to the
-reference candidate or to direct source mutation.
+input must reach EOF within the caller-owned process deadline; the byte ceiling
+is enforced while reading. File open/read failures are stable input errors.
+Once evaluation enters the benchmark, its existing deadline, cancellation, and
+unconditional registration-cleanup contract remains authoritative. External
+process termination is only a safety ceiling and is not evidence of in-process
+cleanup. The CLI adds no hidden option or environment hook to inject lifecycle
+failures. No failure falls back to the reference candidate or to direct source
+mutation.
 
 ## Verification and Change Impact
 
@@ -127,12 +132,22 @@ Process-level tests build and invoke the actual executable and prove:
   production controller, and exact oracle and exit `0` with `realized`;
 - wrong geometry is published once, rejected without retry, returned as a
   non-realized envelope, and exits `2`;
-- malformed, oversize, unknown-schema, mismatched-case, mismatched-fingerprint,
-  and inactive responses exit `64` without publication;
+- malformed, oversize, unknown-schema, mismatched-fingerprint, and inactive
+  responses exit `64` without publication;
 - valid `unsupported` and `finish` decisions exit `2` with typed
   `invalidSubmission`, zero publication, and no fallback action;
-- infrastructure/oracle failure exits `70`, all emitted error JSON is bounded
-  and private-data free, and process timeout tests leave no registration.
+- all emitted evaluation/error JSON is bounded and private-data free.
+
+The explicit `evaluate --response <PATH|->` contract has no separate expected
+case argument, so a case-mismatch process fixture cannot be constructed without
+changing the command. Compositional tests instead prove that the adapter rejects
+an explicitly mismatched expected case before publication and that the CLI maps
+typed `caseMismatch` to exit `64`. Similarly, benchmark lifecycle tests own
+deadline, cancellation, no-retry, and unconditional cleanup behavior, while CLI
+mapping tests prove timeout/cancellation exit `2` and production execution,
+oracle, infrastructure, and cleanup-invalidating outcomes exit `70`. Actual
+process tests retain an external safety deadline but do not claim that killing a
+process proves benchmark cleanup.
 
 Changing command names, arguments, input source rules, JSON schema, result
 classification, byte ceiling, or exit mapping requires updating this design,

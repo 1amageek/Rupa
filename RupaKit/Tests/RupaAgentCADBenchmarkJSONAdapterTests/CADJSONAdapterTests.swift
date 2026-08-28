@@ -556,6 +556,20 @@ struct CADJSONAdapterTests {
         }
     }
 
+    @Test
+    func guaranteedInfrastructureFailureDocumentIsCanonicalBoundedAndDecodable() throws {
+        let envelope = try CADJSONErrorEnvelope(code: .infrastructureFailure)
+        let canonical = try CADJSONBoundedCodec.encode(envelope)
+        let guaranteed = CADJSONBoundedCodec.guaranteedInfrastructureFailureDocument
+
+        #expect(guaranteed == canonical)
+        #expect(guaranteed.count <= CADJSONAdapterSchema.maximumDocumentBytes)
+        #expect(
+            try CADJSONBoundedCodec.decode(CADJSONErrorEnvelope.self, from: guaranteed)
+                == envelope
+        )
+    }
+
     @MainActor
     @Test(.timeLimit(.minutes(1)))
     func fakeCandidateOracleAndInfrastructureFailuresAreSanitized() async throws {

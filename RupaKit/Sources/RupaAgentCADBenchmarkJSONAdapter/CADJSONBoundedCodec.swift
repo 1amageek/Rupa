@@ -1,6 +1,10 @@
 import Foundation
 
 public enum CADJSONBoundedCodec {
+    public static let guaranteedInfrastructureFailureDocument = Data(
+        #"{"code":"infrastructure_failure","message":"The benchmark infrastructure failed.","schema":"rupa.agent-cad-benchmark.error.v1"}"#.utf8
+    )
+
     static func encode(_ value: CADJSONRequestEnvelope) throws -> Data {
         try value.validate()
         return try encodeEnvelope(value)
