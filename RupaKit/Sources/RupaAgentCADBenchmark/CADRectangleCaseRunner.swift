@@ -29,10 +29,14 @@ struct CADRectangleCaseRunner {
     private var caseID: CADBenchmarkCaseID { activatedCase.caseID }
 
     func runReference() async throws -> CADRectangleCaseResult {
+        try await run(candidate: CADRectangleReferenceCandidate())
+    }
+
+    func run(candidate: any CADCandidateProtocol) async throws -> CADRectangleCaseResult {
         let totalStart = now()
         let entry = try activatedCase.catalogEntry
         let record = try await harness(challenge: entry.challenge).runReference(
-            candidate: CADRectangleReferenceCandidate()
+            candidate: candidate
         )
         return await project(record, entry: entry, totalStart: totalStart)
     }

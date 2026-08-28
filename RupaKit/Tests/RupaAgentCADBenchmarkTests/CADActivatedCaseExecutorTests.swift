@@ -1,0 +1,362 @@
+import Foundation
+import Testing
+@testable import RupaAgentCADBenchmark
+
+@Suite(.serialized)
+struct CADActivatedCaseExecutorTests {
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func executorActivatesOnlyReviewedLineAndRectangleCases() throws {
+        let executor = DefaultCADActivatedCaseExecutor()
+        let expected = (1...12).map { String(format: "LIN-%03d", $0) }
+            + (1...8).map { String(format: "REC-%03d", $0) }
+        #expect(executor.activatedCaseIDs.map(\.rawValue) == expected)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func requestContextMatchesTheLiveHarnessContext() async throws {
+        let executor = DefaultCADActivatedCaseExecutor()
+        let caseID: CADBenchmarkCaseID = "LIN-001"
+        let requestContext = try executor.context(for: caseID)
+
+        let result = try await executor.evaluate(
+            caseID: caseID,
+            candidate: ContextCheckingCandidate(expected: requestContext)
+        )
+
+        #expect(result.outcome == .realized)
+
+        let rectangleID: CADBenchmarkCaseID = "REC-001"
+        let rectangleContext = try executor.context(for: rectangleID)
+        let rectangleResult = try await executor.evaluate(
+            caseID: rectangleID,
+            candidate: RectangleContextCheckingCandidate(expected: rectangleContext)
+        )
+        #expect(rectangleResult.outcome == .realized)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func activatedLineAndRectangleCandidatesUseProductionLifecycle() async throws {
+        let executor = DefaultCADActivatedCaseExecutor()
+
+        let line = try await executor.evaluate(
+            caseID: "LIN-001",
+            candidate: ReferenceLineCandidate()
+        )
+        #expect(line.id == "LIN-001")
+        #expect(line.category == .line)
+        #expect(line.outcome == .realized)
+        try line.validate()
+
+        let rectangle = try await executor.evaluate(
+            caseID: "REC-001",
+            candidate: ReferenceRectangleCandidate()
+        )
+        #expect(rectangle.id == "REC-001")
+        #expect(rectangle.category == .rectangle)
+        #expect(rectangle.outcome == .realized)
+        try rectangle.validate()
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func wrongGeometryIsReturnedAsValidatedInvalidSubmission() async throws {
+        let executor = DefaultCADActivatedCaseExecutor()
+
+        let line = try await executor.evaluate(
+            caseID: "LIN-001",
+            candidate: WrongLineCandidate()
+        )
+        #expect(line.outcome == .invalidSubmission)
+        try line.validate()
+        let encoded = try canonicalJSON(line)
+        for forbidden in ["FeatureID", "diagnostics", "telemetry", "expectation", "workspace"] {
+            #expect(encoded.contains(forbidden) == false)
+        }
+
+        let rectangle = try await executor.evaluate(
+            caseID: "REC-001",
+            candidate: WrongRectangleCandidate()
+        )
+        #expect(rectangle.outcome == .invalidSubmission)
+        try rectangle.validate()
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func nonActionDecisionsAreSanitizedBeforePublication() async throws {
+        let executor = DefaultCADActivatedCaseExecutor()
+
+        let finish = try await executor.evaluate(
+            caseID: "LIN-001",
+            candidate: FinishCandidate()
+        )
+        #expect(finish.outcome == .invalidSubmission)
+        #expect(finish.durationMilliseconds != nil)
+        try finish.validate()
+
+        let unsupported = try await executor.evaluate(
+            caseID: "REC-001",
+            candidate: UnsupportedCandidate()
+        )
+        #expect(unsupported.outcome == .invalidSubmission)
+        try unsupported.validate()
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func nonActionDecisionsDoNotPublishOrLeakRegistrations() async throws {
+        let line = try await CADLineCaseRunner(case: .lin001)
+            .run(candidate: FinishCandidate())
+        #expect(line.outcome == .invalidSubmission)
+        #expect(line.routeEvidence.didPublish == false)
+        #expect(line.routeEvidence.remainingRegistrationCount == 0)
+        #expect(line.routeEvidence.cleanupCompleted)
+
+        let rectangle = try await CADRectangleCaseRunner(case: .rec001)
+            .run(candidate: UnsupportedCandidate())
+        #expect(rectangle.outcome == .invalidSubmission)
+        #expect(rectangle.routeEvidence.didPublish == false)
+        #expect(rectangle.routeEvidence.remainingRegistrationCount == 0)
+        #expect(rectangle.routeEvidence.cleanupCompleted)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func candidateFailureIsTypedAndNeverProjectedAsSuccess() async throws {
+        let executor = DefaultCADActivatedCaseExecutor()
+
+        do {
+            _ = try await executor.evaluate(
+                caseID: "LIN-001",
+                candidate: ThrowingCandidate()
+            )
+            Issue.record("Candidate failure must be thrown.")
+        } catch let error as CADActivatedCaseExecutorError {
+            #expect(error == .candidateFailure("LIN-001"))
+        }
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func cancellationDuringCandidatePlanningIsProjectedAsCancellation() async throws {
+        let executor = DefaultCADActivatedCaseExecutor()
+        let signal = CandidateStartSignal()
+        let task = Task { @MainActor in
+            try await executor.evaluate(
+                caseID: "LIN-001",
+                candidate: CancellationAwareCandidate(signal: signal)
+            )
+        }
+
+        await signal.waitUntilStarted()
+        task.cancel()
+        let result = try await task.value
+
+        #expect(result.outcome == .cancellation)
+        #expect(result.durationMilliseconds != nil)
+        try result.validate()
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func inactiveCaseIsRejectedBeforeCategoryDispatch() async throws {
+        let executor = DefaultCADActivatedCaseExecutor()
+        do {
+            _ = try executor.context(for: "REC-009")
+            Issue.record("Inactive case must be rejected.")
+        } catch let error as CADActivatedCaseExecutorError {
+            #expect(error == .inactiveCase("REC-009"))
+        }
+    }
+
+    @Test
+    func candidateCodableUsesVersionOneDiscriminatorsAndNamedPayloads() throws {
+        let line = CADCandidateAction.automation(.sketch(.line(
+            name: "segment",
+            plane: .xy,
+            start: CADPoint3D(x: 0, y: 0, z: 0),
+            end: CADPoint3D(x: 25, y: 0, z: 0)
+        )))
+        let rectangle = CADCandidateAction.automation(.sketch(.rectangle(
+            name: "frame",
+            plane: .xy,
+            center: CADPoint3D(x: 10, y: 20, z: 0),
+            width: CADLength(value: 40),
+            height: CADLength(value: 20)
+        )))
+
+        let lineJSON = try canonicalJSON(line)
+        let rectangleJSON = try canonicalJSON(rectangle)
+        let actionDecisionJSON = try canonicalJSON(CADCandidateDecision.action(line))
+        let finishJSON = try canonicalJSON(
+            CADCandidateDecision.finish(CADOutputRoleBindings(bindings: []))
+        )
+
+        #expect(lineJSON == "{\"automation\":{\"kind\":\"sketch\",\"sketch\":{\"end\":{\"unit\":\"millimeter\",\"x\":25,\"y\":0,\"z\":0},\"kind\":\"line\",\"name\":\"segment\",\"plane\":\"xy\",\"start\":{\"unit\":\"millimeter\",\"x\":0,\"y\":0,\"z\":0}}},\"kind\":\"automation\"}")
+        #expect(rectangleJSON == "{\"automation\":{\"kind\":\"sketch\",\"sketch\":{\"center\":{\"unit\":\"millimeter\",\"x\":10,\"y\":20,\"z\":0},\"height\":{\"unit\":\"millimeter\",\"value\":20},\"kind\":\"rectangle\",\"name\":\"frame\",\"plane\":\"xy\",\"width\":{\"unit\":\"millimeter\",\"value\":40}}},\"kind\":\"automation\"}")
+        #expect(actionDecisionJSON == "{\"action\":{\"automation\":{\"kind\":\"sketch\",\"sketch\":{\"end\":{\"unit\":\"millimeter\",\"x\":25,\"y\":0,\"z\":0},\"kind\":\"line\",\"name\":\"segment\",\"plane\":\"xy\",\"start\":{\"unit\":\"millimeter\",\"x\":0,\"y\":0,\"z\":0}}},\"kind\":\"automation\"},\"kind\":\"action\"}")
+        #expect(finishJSON == "{\"finish\":{\"bindings\":[]},\"kind\":\"finish\"}")
+
+        #expect(try JSONDecoder().decode(CADCandidateAction.self, from: Data(lineJSON.utf8)) == line)
+        #expect(try JSONDecoder().decode(CADCandidateAction.self, from: Data(rectangleJSON.utf8)) == rectangle)
+    }
+
+    @Test
+    func legacyUnknownAndMissingDiscriminatorsAreRejected() throws {
+        let legacy = Data(#"{"automation":{"sketch":{"line":{"name":"segment","plane":"xy","start":{"x":0,"y":0,"z":0,"unit":"millimeter"},"end":{"x":25,"y":0,"z":0,"unit":"millimeter"}}}}}"#.utf8)
+        let unknown = Data(#"{"kind":"future","automation":{}}"#.utf8)
+        let missing = Data(#"{"automation":{"kind":"sketch","sketch":{"kind":"line"}}}"#.utf8)
+
+        for data in [legacy, unknown, missing] {
+            do {
+                _ = try JSONDecoder().decode(CADCandidateAction.self, from: data)
+                Issue.record("Invalid discriminator payload was accepted.")
+            } catch {
+                // Expected typed decoding failure.
+            }
+        }
+    }
+
+    @Test
+    func outputRoleSelectorUsesExplicitDiscriminator() throws {
+        #expect(try canonicalJSON(CADOutputRoleSelector.primary) == "{\"kind\":\"primary\"}")
+        #expect(try canonicalJSON(CADOutputRoleSelector.created(index: 2)) == "{\"index\":2,\"kind\":\"created\"}")
+
+        let unknown = Data(#"{"kind":"future"}"#.utf8)
+        do {
+            _ = try JSONDecoder().decode(CADOutputRoleSelector.self, from: unknown)
+            Issue.record("Unknown output role selector kind was accepted.")
+        } catch {
+            // Expected typed decoding failure.
+        }
+    }
+}
+
+private struct ReferenceLineCandidate: CADCandidateProtocol {
+    func decide(for context: CADCandidateContext) async throws -> CADCandidateDecision {
+        try await CADLineReferenceCandidate().decide(for: context)
+    }
+}
+
+private struct ReferenceRectangleCandidate: CADCandidateProtocol {
+    func decide(for context: CADCandidateContext) async throws -> CADCandidateDecision {
+        try await CADRectangleReferenceCandidate().decide(for: context)
+    }
+}
+
+private struct ContextCheckingCandidate: CADCandidateProtocol {
+    let expected: CADCandidateContext
+
+    func decide(for context: CADCandidateContext) async throws -> CADCandidateDecision {
+        guard context == expected else {
+            throw ContextMismatch()
+        }
+        return try await CADLineReferenceCandidate().decide(for: context)
+    }
+}
+
+private struct RectangleContextCheckingCandidate: CADCandidateProtocol {
+    let expected: CADCandidateContext
+
+    func decide(for context: CADCandidateContext) async throws -> CADCandidateDecision {
+        guard context == expected else {
+            throw ContextMismatch()
+        }
+        return try await CADRectangleReferenceCandidate().decide(for: context)
+    }
+}
+
+private struct WrongLineCandidate: CADCandidateProtocol {
+    func decide(for context: CADCandidateContext) async throws -> CADCandidateDecision {
+        .action(.automation(.sketch(.line(
+            name: "wrong-line",
+            plane: .xy,
+            start: CADPoint3D(x: 0, y: 0, z: 0),
+            end: CADPoint3D(x: 30, y: 0, z: 0)
+        ))))
+    }
+}
+
+private struct WrongRectangleCandidate: CADCandidateProtocol {
+    func decide(for context: CADCandidateContext) async throws -> CADCandidateDecision {
+        let projection = try CADRectangleChallengeProjection.decode(context.challenge)
+        return .action(.automation(.sketch(.rectangle(
+            name: "wrong-rectangle",
+            plane: projection.orientation,
+            center: projection.center,
+            width: CADLength(value: 1),
+            height: CADLength(value: 1)
+        ))))
+    }
+}
+
+private struct FinishCandidate: CADCandidateProtocol {
+    func decide(for context: CADCandidateContext) async throws -> CADCandidateDecision {
+        .finish(CADOutputRoleBindings(bindings: []))
+    }
+}
+
+private struct UnsupportedCandidate: CADCandidateProtocol {
+    func decide(for context: CADCandidateContext) async throws -> CADCandidateDecision {
+        .unsupported(CADUnsupportedDeclaration(
+            capabilityID: context.challenge.requiredCapability.id,
+            capabilityVersion: context.challenge.requiredCapability.version,
+            reason: .capabilityUnavailable
+        ))
+    }
+}
+
+private struct ThrowingCandidate: CADCandidateProtocol {
+    func decide(for context: CADCandidateContext) async throws -> CADCandidateDecision {
+        throw CandidateFailure()
+    }
+}
+
+private struct CancellationAwareCandidate: CADCandidateProtocol {
+    let signal: CandidateStartSignal
+
+    func decide(for context: CADCandidateContext) async throws -> CADCandidateDecision {
+        await signal.markStarted()
+        try await Task.sleep(for: .seconds(60))
+        return .finish(CADOutputRoleBindings(bindings: []))
+    }
+}
+
+private actor CandidateStartSignal {
+    private var started = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func markStarted() {
+        started = true
+        let pending = waiters
+        waiters.removeAll(keepingCapacity: false)
+        for waiter in pending {
+            waiter.resume()
+        }
+    }
+
+    func waitUntilStarted() async {
+        if started {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            if started {
+                continuation.resume()
+            } else {
+                waiters.append(continuation)
+            }
+        }
+    }
+}
+
+private struct ContextMismatch: Error, Sendable {}
+private struct CandidateFailure: Error, Sendable {}
+
+private func canonicalJSON<T: Encodable>(_ value: T) throws -> String {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+    return String(decoding: try encoder.encode(value), as: UTF8.self)
+}

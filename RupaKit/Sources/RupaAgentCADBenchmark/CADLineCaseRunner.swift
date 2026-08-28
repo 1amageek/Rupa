@@ -42,10 +42,14 @@ struct CADLineCaseRunner {
     }
 
     func runReference() async throws -> CADLineCaseResult {
+        try await run(candidate: CADLineReferenceCandidate())
+    }
+
+    func run(candidate: any CADCandidateProtocol) async throws -> CADLineCaseResult {
         let totalStart = now()
         let entry = try catalogEntry()
         let record = try await makeHarness(challenge: entry.challenge)
-            .runReference(candidate: CADLineReferenceCandidate())
+            .runReference(candidate: candidate)
         return await project(record, entry: entry, totalStart: totalStart)
     }
 

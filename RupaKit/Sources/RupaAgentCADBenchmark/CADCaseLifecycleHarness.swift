@@ -74,9 +74,15 @@ struct CADCaseLifecycleHarness {
             )
         }
         guard case .action(let action) = decision else {
-            throw CADBenchmarkError.invalidInput(
-                caseID: caseID.rawValue,
-                reason: "The activated candidate must produce one action."
+            return await preflightResult(
+                outcome: .invalidSubmission,
+                controller: controller,
+                deadline: deadline,
+                totalStart: totalStart,
+                planningWallNanoseconds: elapsed(since: planningStart),
+                diagnostics: [
+                    "\(caseID.rawValue) candidate returned a non-action decision before publication."
+                ]
             )
         }
         return await perform(
@@ -631,22 +637,10 @@ struct CADCaseLifecycleHarness {
     private func candidateContext(
         controller: ProjectAgentCommandController
     ) -> CADCandidateContext {
-        let available = controller.capabilityDescriptors().contains {
-            $0.name == routing.operationName
-        }
-        return CADCandidateContext(
+        CADActivatedCaseContextFactory.make(
             challenge: challenge,
-            capabilities: CADCapabilitySnapshot(
-                version: "agent-capabilities.v1",
-                statuses: [CADCapabilityStatus(
-                    id: challenge.requiredCapability.id,
-                    version: challenge.requiredCapability.version,
-                    available: available,
-                    reasonCode: available ? nil : "not-exposed"
-                )]
-            ),
-            remainingRounds: challenge.budget.maximumRounds,
-            remainingActions: challenge.budget.maximumActions
+            operationName: routing.operationName,
+            controller: controller
         )
     }
 

@@ -396,16 +396,16 @@ error never escapes as an untyped transport string. Route/oracle attempts that
 completed normally remain represented by `CADCaseOutcome`, including
 `invalidSubmission`, `timeout`, `oracleFailure`, and `infrastructureFailure`.
 
-The current lifecycle harness throws `CADBenchmarkError.invalidInput` when a
-candidate returns `unsupported` or `finish` because activated line/rectangle
-cases require one action. T12-XA-A changes that boundary before it becomes
-public: both non-action decisions terminate before workspace publication and
-are projected as validated `CADCaseResult(outcome: .invalidSubmission)` with
-cleanup evidence. They are not promoted to `expectedUnsupported`, because all
-twenty activated cases have already proved their creation capability through
-the production controller. A candidate-thrown error remains the typed executor
-`candidateFailure`, also before publication. No adapter may catch these paths
-and substitute a reference action.
+The lifecycle harness terminates `unsupported` and `finish` decisions before
+workspace publication and records validated `invalidSubmission` plus cleanup
+evidence because activated line/rectangle cases require one action. The public
+executor projects that record as
+`CADCaseResult(outcome: .invalidSubmission)`. These decisions are not promoted
+to `expectedUnsupported`, because all twenty activated cases have already
+proved their creation capability through the production controller. A
+candidate-thrown error remains the typed executor `candidateFailure`, also
+before publication. No adapter may catch these paths and substitute a reference
+action.
 
 `context(for:)` and the context created inside evaluation use one internal
 context factory and the production controller's current capability descriptors.
