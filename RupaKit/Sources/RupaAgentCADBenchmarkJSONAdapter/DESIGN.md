@@ -9,8 +9,8 @@ between an external Agent process and the activated-case executor owned by
 [benchmark CLI](../RupaAgentCADBenchmarkCLI/DESIGN.md) supplies process arguments
 and standard streams; this target owns the JSON meaning used by that process.
 
-The adapter is limited to the forty-seven reviewed cases `LIN-001`...`LIN-012`,
-`REC-001`...`REC-012`, `CIR-001`...`CIR-012`, and `ANG-001`...`ANG-011`. It does not
+The adapter is limited to the forty-eight reviewed cases `LIN-001`...`LIN-012`,
+`REC-001`...`REC-012`, `CIR-001`...`CIR-012`, and `ANG-001`...`ANG-012`. It does not
 activate a catalog case and does not make the remaining target specifications
 executable.
 
@@ -114,7 +114,7 @@ evaluation and candidate construction remain module-internal test/composition
 seams, so a caller cannot construct a large in-memory response and bypass the
 JSON input authority.
 
-The activated forty-seven cases accept one action decision. `unsupported` and
+The activated forty-eight cases accept one action decision. `unsupported` and
 `finish` remain valid protocol values but are not converted to successful
 actions; the T12-XA-A executor contract projects either as typed
 `invalidSubmission` without publication. Multi-round continuation is not added
@@ -398,6 +398,22 @@ immutable source oracle; ANG-012 is rejected before evaluation. Envelope
 versions, fingerprint, byte ceiling, and candidate action shape remain
 unchanged.
 
+### ANG-012 external authority
+
+ANG-012 extends the exact ordered authority from 47 to 48 IDs while preserving
+the frozen 47-request aggregate
+`08a9f3fa73e242fe7116dfb904e5d254fabe3a1cb61c2004021e239f42cde3de`.
+The observed 48-request aggregate is
+`f7476b4da91164043c29215821395b37b98537441e1d3e99542973809eea9efd`, measured
+from the exact bounded request bytes after the production route passes. The
+request describes the canonical YZ plane with +X normal and intersection
+(10, -20, 120) mm, with a 40 mm +Y
+first segment and a 100 mm second segment directed along
+(0, 0.5, 0.866025403784), producing an unsigned 60-degree angle. One bounded
+v3 response traverses the same production atomic batch and immutable source
+oracle; ANG-013 is rejected before evaluation. Envelope versions, fingerprint,
+byte ceiling, and candidate action shape remain unchanged.
+
 ## Runtime Flows
 
 ```mermaid
@@ -446,7 +462,7 @@ classification and are projected only to stable non-private codes.
 |---|---|
 | Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON for line, rectangle, circle, and angle decisions; candidate-response v3 carries `kind: angle`, v1/v2 and unknown discriminators are rejected, and every direct and nested case ID is the same scalar string. |
 | Exact public-context binding | The request fingerprint equals the live executor context; changed schema, case, context byte, capability, budget, or fingerprint is rejected before publication. |
-| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, CIR-001...012, and ANG-001...011; the thirty-six-request aggregate remains `5c8cd7cbe83738f91459b1103d291194143042bde7e6f9c8415aa91f66ce5a28`, the thirty-seven-request aggregate remains `b66ed71a2efccf115a81033c3bda0e9335c0a2a4c695ba5c58b49c9df7341b4e`, the thirty-eight-request aggregate remains `6bd274e57fae5345c067f63a5191b60ccfbf35a76d794491b7a10df9a0c985d6`, the thirty-nine-request aggregate remains `83f7c7b54c95ed2fc0304b98c455d3981dcd51380da7414f397de191333b5e6a`, the forty-request aggregate remains `e2f928ac390783e8bcf5fdbb4e368156a188e3b49e81fee845d72602fd1d0649`, the forty-one-request aggregate remains `fb0228298f5bd1b38ddcafeeda2632236e487f2be8600e3abffed335f9f3df6d`, the forty-two-request aggregate remains `a15fbc50a8f6476bd353b9508a10c88b6da03377aa173b413987e829642f16eb`, the forty-three-request aggregate remains `b276bc61ebd50a39b603ba627890f6342121c2889f906b8349140f4bb932fbcd`, the forty-four-request aggregate is `47914bc2ecec829f01c24bfd62626a41e4a605a0a14c945bf6fc15913231d82c`, the forty-five-request aggregate is `6c9014e08de0670558528695d21790d489f0bc9516a6e1febefc6c3437b69c87`, the forty-six-request aggregate is `4f4f451db3ab64d9d5f5d657cb7b0ebe3c79a02d370ab2b56070b1d7e3396e65`, the forty-seven-request aggregate is `08a9f3fa73e242fe7116dfb904e5d254fabe3a1cb61c2004021e239f42cde3de`, and ANG-001 through ANG-011 traverse the atomic production batch/source oracle while ANG-012 is rejected before evaluation. |
+| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, CIR-001...012, and ANG-001...012; the thirty-six-request aggregate remains `5c8cd7cbe83738f91459b1103d291194143042bde7e6f9c8415aa91f66ce5a28`, the thirty-seven-request aggregate remains `b66ed71a2efccf115a81033c3bda0e9335c0a2a4c695ba5c58b49c9df7341b4e`, the thirty-eight-request aggregate remains `6bd274e57fae5345c067f63a5191b60ccfbf35a76d794491b7a10df9a0c985d6`, the thirty-nine-request aggregate remains `83f7c7b54c95ed2fc0304b98c455d3981dcd51380da7414f397de191333b5e6a`, the forty-request aggregate remains `e2f928ac390783e8bcf5fdbb4e368156a188e3b49e81fee845d72602fd1d0649`, the forty-one-request aggregate remains `fb0228298f5bd1b38ddcafeeda2632236e487f2be8600e3abffed335f9f3df6d`, the forty-two-request aggregate remains `a15fbc50a8f6476bd353b9508a10c88b6da03377aa173b413987e829642f16eb`, the forty-three-request aggregate remains `b276bc61ebd50a39b603ba627890f6342121c2889f906b8349140f4bb932fbcd`, the forty-four-request aggregate is `47914bc2ecec829f01c24bfd62626a41e4a605a0a14c945bf6fc15913231d82c`, the forty-five-request aggregate is `6c9014e08de0670558528695d21790d489f0bc9516a6e1febefc6c3437b69c87`, the forty-six-request aggregate is `4f4f451db3ab64d9d5f5d657cb7b0ebe3c79a02d370ab2b56070b1d7e3396e65`, the forty-seven-request aggregate is `08a9f3fa73e242fe7116dfb904e5d254fabe3a1cb61c2004021e239f42cde3de`, the forty-eight-request aggregate is `f7476b4da91164043c29215821395b37b98537441e1d3e99542973809eea9efd`, and ANG-001 through ANG-012 traverse the atomic production batch/source oracle while ANG-013 is rejected before evaluation. |
 | Bounded I/O | Exact-limit input succeeds, `limit + 1` fails before decode and leaves executor evaluation count zero, chunked stdin and file paths behave identically, no public typed-response execution bypass exists, encoded output cannot exceed the same bound, and the guaranteed infrastructure document is byte-equal to normal encoding, bounded, and decodable. |
 | Candidate/oracle separation | Static dependency and source scans prove the adapter imports only public benchmark contracts; encoded fixtures contain no expectation/oracle/source snapshot fields or values. |
 | Same production route | JSON candidates for an activated line, rectangle, circle, and angle realize through the public executor; wrong geometry publishes once then the category's exact oracle rejects without retry. |
