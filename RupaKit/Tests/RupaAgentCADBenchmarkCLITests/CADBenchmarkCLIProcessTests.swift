@@ -23,7 +23,7 @@ struct CADBenchmarkCLIProcessTests {
     @Test(.timeLimit(.minutes(2)))
     @MainActor
     func requestEmitsBoundedLineAndRectangleObjectsAndRejectsInactiveCase() throws {
-        for rawCaseID in ["LIN-001", "REC-001", "REC-009"] {
+        for rawCaseID in ["LIN-001", "REC-001", "REC-009", "REC-010"] {
             let result = try runCADBenchmarkCLI(["request", rawCaseID])
             #expect(result.terminationStatus == 0, Comment(rawValue: result.standardError))
             #expect(result.standardOutputData.count <= CADJSONAdapterSchema.maximumDocumentBytes)
@@ -36,14 +36,14 @@ struct CADBenchmarkCLIProcessTests {
             #expect(result.standardError.isEmpty)
         }
 
-        let inactive = try runCADBenchmarkCLI(["request", "REC-010"])
+        let inactive = try runCADBenchmarkCLI(["request", "REC-011"])
         #expect(inactive.terminationStatus == 64)
         let error = try CADJSONBoundedCodec.decode(
             CADJSONErrorEnvelope.self,
             from: inactive.standardOutputData
         )
         #expect(error.code == .inactiveCase)
-        #expect(error.caseID?.rawValue == "REC-010")
+        #expect(error.caseID?.rawValue == "REC-011")
         #expect(isPrivateFree(inactive.standardOutput))
     }
 
@@ -79,6 +79,16 @@ struct CADBenchmarkCLIProcessTests {
             standardInput: inchRectangleResponse
         )
         try assertRealizedEvaluation(inchRectangleStandardInputResult, caseID: "REC-009")
+
+        let metreRectangleResponse = try responseData(
+            for: "REC-010",
+            action: rec010RectangleAction(name: "REC-010")
+        )
+        let metreRectangleStandardInputResult = try runCADBenchmarkCLI(
+            ["evaluate", "--response", "-"],
+            standardInput: metreRectangleResponse
+        )
+        try assertRealizedEvaluation(metreRectangleStandardInputResult, caseID: "REC-010")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -156,15 +166,15 @@ struct CADBenchmarkCLIProcessTests {
         try assertError(fingerprintResult, code: .fingerprintMismatch, exit: 64, caseID: "LIN-001")
 
         let inactiveResponse = try responseData(
-            for: "REC-010",
+            for: "REC-011",
             contextFingerprint: String(repeating: "0", count: 64),
-            action: rectangleAction(name: "REC-010")
+            action: rectangleAction(name: "REC-011")
         )
         let inactiveResult = try runCADBenchmarkCLI(
             ["evaluate", "--response", "-"],
             standardInput: inactiveResponse
         )
-        try assertError(inactiveResult, code: .inactiveCase, exit: 64, caseID: "REC-010")
+        try assertError(inactiveResult, code: .inactiveCase, exit: 64, caseID: "REC-011")
 
         let finishResponse = try finishResponseData(for: request)
         let finishResult = try runCADBenchmarkCLI(
@@ -381,6 +391,16 @@ private func rec009RectangleAction(name: String) -> CADCandidateAction {
         center: CADPoint3D(x: 0, y: 0, z: 0, unit: .inch),
         width: CADLength(value: 1, unit: .inch),
         height: CADLength(value: 0.5, unit: .inch)
+    )))
+}
+
+private func rec010RectangleAction(name: String) -> CADCandidateAction {
+    .automation(.sketch(.rectangle(
+        name: name,
+        plane: .xy,
+        center: CADPoint3D(x: 0, y: 0, z: 0, unit: .meter),
+        width: CADLength(value: 2, unit: .meter),
+        height: CADLength(value: 1, unit: .meter)
     )))
 }
 

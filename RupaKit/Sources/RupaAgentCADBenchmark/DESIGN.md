@@ -384,7 +384,7 @@ The public `CADActivatedCaseExecuting` contract exposes exactly three
 operations: the ordered activated case IDs, the candidate-visible context for
 one activated ID, and asynchronous evaluation of one caller-supplied
 `CADCandidateProtocol`. Its default `@MainActor` implementation recognizes only
-`LIN-001`...`LIN-012` and `REC-001`...`REC-009`, dispatches to the existing thin
+`LIN-001`...`LIN-012` and `REC-001`...`REC-010`, dispatches to the existing thin
 line or rectangle facade, and returns a validated `CADCaseResult`. A catalog ID
 outside that allow-list is a typed inactive-case error. The public result does
 not contain private expectations, source snapshots, FeatureIDs, workspace
@@ -416,7 +416,7 @@ workspace publication and records validated `invalidSubmission` plus cleanup
 evidence because activated line/rectangle cases require one action. The public
 executor projects that record as
 `CADCaseResult(outcome: .invalidSubmission)`. These decisions are not promoted
-to `expectedUnsupported`, because all twenty-one activated cases have already
+to `expectedUnsupported`, because all twenty-two activated cases have already
 proved their creation capability through the production controller. A
 candidate-thrown error remains the typed executor `candidateFailure`, also
 before publication. No adapter may catch these paths and substitute a reference
@@ -442,7 +442,7 @@ the catalog, challenge, private expectation, or manifest digest.
 
 The executor performs one candidate decision for the currently activated
 line/rectangle contract. It does not generalize multi-round continuation,
-activate `REC-010`, schedule several cases, or establish a benchmark baseline.
+activate `REC-011`, schedule several cases, or establish a benchmark baseline.
 
 ### Vertical Case Gate
 
@@ -645,11 +645,10 @@ runner, oracle, action, schema, or modeling authority.
 The historical `T12-REC-008G` test must stop deriving its rectangle subset from
 `CADActivatedRectangleCase.allCases`. It explicitly replays the frozen subset
 `REC-001`...`REC-008` with all twelve line cases and retains its original twenty-
-case coverage assertions. Its inactive assertion advances to `REC-010`...
-`REC-012`. Current authority is owned separately by the REC-009 gate and must be
-exactly the ordered twenty-one IDs `LIN-001`...`LIN-012`, then
-`REC-001`...`REC-009`; `REC-010` remains typed inactive in the executor, JSON
-adapter, and CLI.
+case coverage assertions. At the REC-009 checkpoint, its inactive assertion
+advanced to `REC-010`...`REC-012`, authority was exactly the ordered twenty-one
+IDs `LIN-001`...`LIN-012`, then `REC-001`...`REC-009`, and `REC-010` remained
+typed inactive in the executor, JSON adapter, and CLI.
 
 REC-009 proves the first inch rectangle on XZ. The reference candidate preserves
 the public inch unit, XZ orientation, world-origin centre, width 1.0, and height
@@ -662,13 +661,44 @@ candidate/private separation evidence.
 Activation is an additive availability change over the existing catalog and
 wire contracts. The catalog, manifest, expectation contract, capability
 classification, tolerance, and JSON schema versions/digests do not change.
-The adapter's ordered activated-request aggregate is instead refrozen from the
-actual twenty-one requests, while the first twenty request bytes and their
-historical aggregate digest remain unchanged and every request remains within
-its existing size budget. The dedicated CLI must emit a bounded request and a
-realized exact-oracle evaluation for REC-009, while both request and evaluation of REC-010
-remain typed inactive with exit `64`. These external checks are part of the
-REC-009 gate rather than a new generic adapter sprint.
+The REC-009 gate refroze the adapter's ordered activated-request aggregate from
+the then-current twenty-one requests, while the first twenty request bytes and
+their historical aggregate digest remained unchanged and every request stayed
+within its existing size budget. The dedicated CLI emitted a bounded request
+and a realized exact-oracle evaluation for REC-009, while both request and
+evaluation of REC-010 remained typed inactive with exit `64`. Those external
+checks belong to the REC-009 gate rather than a generic adapter sprint.
+
+### REC-010 design-first activation boundary
+
+Before `T12-REC-010` passed, the confirmed authority was the ordered twenty-one-
+case prefix through `REC-009`. The case adds only `REC-010` after its vertical
+evidence passes. Its catalog target is already fixed: a rectangle
+centred at world origin on XY, 2.0 metres wide along world X and 1.0 metre high
+along world Y. It reuses the existing rectangle projection, mapping, shared
+lifecycle, production `createRectangleSketch` route, and exact source/profile
+oracle without adding a runner, action, schema, catalog version, or modeling
+authority.
+
+The discriminating postpublication fixture submits the same numeric 2.0 by 1.0
+dimensions in millimetres. It must publish exactly once, fail the exact oracle,
+retain its committed coordinate, and never retry. A candidate centre at world
+z = 0.01 m is outside the XY plane under the document `ModelingTolerance` and
+must fail before command dispatch or publication. The reference candidate must
+preserve the public metre unit, XY orientation, world-origin centre, width 2.0,
+and height 1.0. Exact success, timeout, unconditional registration cleanup,
+action/command/read/entity/feature/body counts, all phase timings, and the
+candidate/private-expectation boundary remain owned by this case.
+
+Activation advances the public executor, JSON adapter, and CLI atomically to
+the ordered twenty-two-case prefix ending in `REC-010`; `REC-011` remains typed
+inactive at every boundary. The frozen first-twenty request aggregate and the
+twenty-one-request aggregate established by REC-009 must both recompute to their
+existing digests before a new aggregate digest is frozen from the actual
+twenty-two ordered requests. REC-010 must traverse bounded JSON request and
+evaluation plus the actual CLI process to the unchanged production controller
+and exact oracle. This availability-only change does not advance catalog,
+expectation, capability, tolerance, envelope, or fingerprint versions.
 
 A gate passes only after focused success, failure, and boundary tests are green,
 the measurements are captured, the original T12 task designer reviews the
@@ -1032,6 +1062,7 @@ through the following vertical work items:
 | Exactly 100 implemented cases | T12-LIN through T12-SPH | Catalog identity plus one reviewed vertical evidence commit per stable case; catalog structure alone is insufficient |
 | External candidate executor | T12-XA-A | Exact activated twenty-ID allow-list, value-equal request/live contexts, arbitrary protocol candidate line/rectangle success and mismatch through the production route/oracle, explicit discriminator golden JSON, legacy-shape rejection, typed inactive/error projection, cleanup, privacy/static boundary, and focused tests |
 | REC-009 authority transition | T12-REC-009 | Frozen first-twenty replay and request bytes/digest remain unchanged; exact current twenty-one-ID order, 1.0 by 0.5 inch XZ realization, same-numeric millimetre postpublication rejection/no-retry, off-XZ prepublication rejection, timeout/cleanup/telemetry, refrozen twenty-one-request aggregate, bounded CLI request/evaluation, REC-010 typed inactivity, and unchanged catalog/wire versions |
+| REC-010 authority transition | T12-REC-010 | Existing rectangle route/oracle only; exact 2.0 by 1.0 metre XY realization, same-numeric millimetre postpublication rejection/no-retry, z = 0.01 m prepublication rejection, timeout/cleanup/telemetry/privacy, preserved twenty- and twenty-one-request digests, exact twenty-two-ID order and refrozen aggregate, bounded JSON/CLI success, REC-011 typed inactivity, and unchanged catalog/wire versions |
 | Parallelism, baselines, and aggregate report | T12-I | Only after all 100 gates: serial replay, bounded-parallel equivalence and measurement, capability/execution baselines, deterministic report, cleanup, and timed integration tests |
 | Final cumulative correctness | T12-IV | Review every case/category/integration artifact and actual path; verify design synchronization, static audits, commits, and eligible normal push |
 

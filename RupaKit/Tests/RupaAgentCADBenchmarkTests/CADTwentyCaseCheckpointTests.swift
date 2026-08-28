@@ -82,7 +82,7 @@ struct CADTwentyCaseCheckpointTests {
 
     @Test
     func twentyCaseBoundaryRejectsUnreviewedRectangleCases() throws {
-        for caseID in ["REC-010", "REC-011", "REC-012"] {
+        for caseID in ["REC-011", "REC-012"] {
             do {
                 _ = try CADActivatedRectangleCase(caseID: caseID)
                 Issue.record("\(caseID) must remain outside the historical first-twenty boundary.")
