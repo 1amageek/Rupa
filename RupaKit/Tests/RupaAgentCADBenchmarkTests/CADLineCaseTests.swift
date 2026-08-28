@@ -496,15 +496,145 @@ func lin003ReferenceCandidateUsesOnlyPublicContext() async throws {
     #expect(end == CADPoint3D(x: 30, y: 15, z: 0, unit: .millimeter))
 }
 
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func lin004CreatesExactXZLineThroughProductionController() async throws {
+    let result = try await CADLineCaseRunner(case: .lin004).runReference()
+
+    try result.validate()
+    #expect(result.caseID == "LIN-004")
+    #expect(result.outcome == .realized)
+    #expect(result.realized)
+    #expect(result.candidateResult?.status == .published)
+    #expect(result.candidateResult?.createdFeatureIDs.count == 1)
+    #expect(result.candidateResult?.primaryFeatureID == result.candidateResult?.createdFeatureIDs.first)
+    #expect(result.roleBindings?.bindings.count == 1)
+    #expect(result.routeEvidence.didPublish)
+    #expect(result.routeEvidence.cleanupCompleted)
+    #expect(result.routeEvidence.cleanupWallNanoseconds > 0)
+    #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    #expect(result.telemetry.actionCount == 1)
+    #expect(result.telemetry.commandCount == 1)
+    #expect(result.telemetry.readCount >= 1)
+    #expect(result.telemetry.entityCount == 1)
+    #expect(result.telemetry.featureCount == 1)
+    #expect(result.telemetry.bodyCount == 0)
+    #expect(result.telemetry.cancellationCheckpointCount >= 1)
+    #expect(result.telemetry.planningWallNanoseconds <= result.telemetry.totalWallNanoseconds)
+    #expect(result.telemetry.routeWallNanoseconds <= result.telemetry.totalWallNanoseconds)
+    #expect(result.telemetry.oracleWallNanoseconds <= result.telemetry.totalWallNanoseconds)
+    print(
+        "LIN-004 telemetry: planning=\(result.telemetry.planningWallNanoseconds)ns "
+            + "route=\(result.telemetry.routeWallNanoseconds)ns "
+            + "oracle=\(result.telemetry.oracleWallNanoseconds)ns "
+            + "total=\(result.telemetry.totalWallNanoseconds)ns"
+    )
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func lin004OracleRejectsReversedPublishedEndpointsWithoutRetry() async throws {
+    let reversed = CADCandidateAction.automation(.sketch(.line(
+        name: "LIN-004.reversed",
+        plane: .xz,
+        start: CADPoint3D(x: 0, y: 0, z: 100, unit: .millimeter),
+        end: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter)
+    )))
+
+    let result = try await CADLineCaseRunner(case: .lin004).run(action: reversed)
+
+    try result.validate()
+    #expect(result.outcome == .invalidSubmission)
+    #expect(result.candidateResult?.status == .published)
+    #expect(result.routeEvidence.didPublish)
+    #expect(result.routeEvidence.finalPublicationSequence == result.routeEvidence.initialPublicationSequence + 1)
+    #expect(result.telemetry.actionCount == 1)
+    #expect(result.telemetry.commandCount == 1)
+    #expect(result.telemetry.readCount == 2)
+    #expect(result.telemetry.entityCount == 1)
+    #expect(result.telemetry.featureCount == 1)
+    #expect(result.routeEvidence.cleanupCompleted)
+    #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    #expect(result.diagnostics.contains { $0.contains("oracle mismatch") })
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func lin004RejectsOffXZPlaneInputBeforePublication() async throws {
+    let offPlane = CADCandidateAction.automation(.sketch(.line(
+        name: "LIN-004.off-plane",
+        plane: .xz,
+        start: CADPoint3D(x: 0, y: 2, z: 0, unit: .millimeter),
+        end: CADPoint3D(x: 0, y: 2, z: 100, unit: .millimeter)
+    )))
+
+    let result = try await CADLineCaseRunner(case: .lin004).run(action: offPlane)
+
+    try result.validate()
+    #expect(result.outcome == .invalidSubmission)
+    #expect(!result.routeEvidence.didPublish)
+    #expect(result.routeEvidence.initialPublicationSequence == result.routeEvidence.finalPublicationSequence)
+    #expect(result.telemetry.actionCount == 1)
+    #expect(result.telemetry.commandCount == 0)
+    #expect(result.routeEvidence.cleanupCompleted)
+    #expect(result.routeEvidence.remainingRegistrationCount == 0)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func lin004TimeoutIsTypedAndCleansUp() async throws {
+    let result = try await CADLineCaseRunner(
+        case: .lin004,
+        timeoutWallNanoseconds: 1
+    ).runReference()
+
+    try result.validate()
+    #expect(result.outcome == .timeout)
+    #expect(!result.routeEvidence.didPublish)
+    #expect(result.telemetry.totalWallNanoseconds >= result.telemetry.timeoutWallNanoseconds)
+    #expect(result.routeEvidence.cleanupCompleted)
+    #expect(result.routeEvidence.remainingRegistrationCount == 0)
+}
+
+@MainActor
+@Test
+func lin004ReferenceCandidateUsesOnlyPublicContext() async throws {
+    let challenge = try CADBenchmarkCatalog().challenge(for: "LIN-004")
+    let context = CADCandidateContext(
+        challenge: challenge,
+        capabilities: CADCapabilitySnapshot(
+            version: "test.v1",
+            statuses: [CADCapabilityStatus(
+                id: challenge.requiredCapability.id,
+                version: challenge.requiredCapability.version,
+                available: true
+            )]
+        ),
+        remainingRounds: challenge.budget.maximumRounds,
+        remainingActions: challenge.budget.maximumActions
+    )
+    let candidate: any CADCandidateProtocol = CADLineReferenceCandidate()
+
+    let decision = try await candidate.decide(for: context)
+
+    guard case .action(.automation(.sketch(.line(_, let plane, let start, let end)))) = decision else {
+        Issue.record("LIN-004 public context did not produce one line action.")
+        return
+    }
+    #expect(plane == .xz)
+    #expect(start == CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter))
+    #expect(end == CADPoint3D(x: 0, y: 0, z: 100, unit: .millimeter))
+}
+
 @Test
 func activatedLineBoundaryContainsExactlyReviewedCases() throws {
-    #expect(CADActivatedLineCase.allCases.map(\.rawValue) == ["LIN-001", "LIN-002", "LIN-003"])
+    #expect(CADActivatedLineCase.allCases.map(\.rawValue) == ["LIN-001", "LIN-002", "LIN-003", "LIN-004"])
 
     do {
-        _ = try CADActivatedLineCase(caseID: "LIN-004")
-        Issue.record("LIN-004 must remain inactive until its own vertical gate.")
+        _ = try CADActivatedLineCase(caseID: "LIN-005")
+        Issue.record("LIN-005 must remain inactive until its own vertical gate.")
     } catch let error as CADBenchmarkError {
-        guard case .invalidCaseID("LIN-004") = error else {
+        guard case .invalidCaseID("LIN-005") = error else {
             Issue.record("Unexpected typed error: \(error)")
             return
         }
