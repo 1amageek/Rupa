@@ -12,6 +12,7 @@ enum CADActivatedCircleCase: String, CaseIterable, Equatable, Hashable, Sendable
     case cir008 = "CIR-008"
     case cir009 = "CIR-009"
     case cir010 = "CIR-010"
+    case cir011 = "CIR-011"
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)
