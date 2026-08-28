@@ -4,6 +4,7 @@ import Foundation
 enum CADActivatedCircleCase: String, CaseIterable, Equatable, Hashable, Sendable {
     case cir001 = "CIR-001"
     case cir002 = "CIR-002"
+    case cir003 = "CIR-003"
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)

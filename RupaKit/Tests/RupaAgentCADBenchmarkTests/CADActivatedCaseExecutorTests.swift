@@ -10,7 +10,7 @@ struct CADActivatedCaseExecutorTests {
         let executor = DefaultCADActivatedCaseExecutor()
         let expected = (1...12).map { String(format: "LIN-%03d", $0) }
             + (1...12).map { String(format: "REC-%03d", $0) }
-            + ["CIR-001", "CIR-002"]
+            + ["CIR-001", "CIR-002", "CIR-003"]
         #expect(executor.activatedCaseIDs.map(\.rawValue) == expected)
     }
 
@@ -229,10 +229,10 @@ struct CADActivatedCaseExecutorTests {
     func inactiveCaseIsRejectedBeforeCategoryDispatch() async throws {
         let executor = DefaultCADActivatedCaseExecutor()
         do {
-            _ = try executor.context(for: "CIR-003")
+            _ = try executor.context(for: "CIR-004")
             Issue.record("Inactive case must be rejected.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("CIR-003"))
+            #expect(error == .inactiveCase("CIR-004"))
         }
     }
 
