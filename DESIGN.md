@@ -2,21 +2,25 @@
 
 ## Purpose and Scope
 
-This is the system design master for the Rupa system. It indexes two separate
-scopes: T10 Agent-to-project geometry integration and T11 professional bicycle
-reference design. T10 connects the already implemented Agent CAD route and T09
-Authored Mesh use cases without adding a second project authority or a
-modeling-specific transport. T11 defines a bounded L2 engineering-reference
-design and evidence contract; it does not extend the T10 runtime.
+This is the system design master for the Rupa system. It indexes three separate
+scopes: T10 Agent-to-project geometry integration, T11 professional bicycle
+reference design, and T12 Agent CAD basic-geometry benchmarking. T10 connects
+the already implemented Agent CAD route and T09 Authored Mesh use cases without
+adding a second project authority or a modeling-specific transport. T11 defines
+a bounded L2 engineering-reference design and evidence contract; it does not
+extend the T10 runtime. T12 measures basic CAD realization through that
+existing route; it adds no CAD authority, transport, renderer, or LLM route.
 
 This document has no parent. Its direct children are the
 [RupaKit package design](RupaKit/DESIGN.md), which indexes the changed module
 designs, and the [professional bicycle reference design](Artifacts/professional-bicycle/DESIGN.md),
 which defines the T11 engineering-reference acceptance boundary without adding
-production code. The T09 Geometry/Core/Project/Mesh contracts remain the
-verified lower foundation. T10 changes only their application and Agent
-composition boundary; T11 consumes that boundary as an observed capability and
-design-evidence dependency.
+production code. The T12 exactly-100-case benchmark design is reached through
+the RupaKit package design rather than being a direct system child. The T09
+Geometry/Core/Project/Mesh contracts remain the verified lower foundation. T10
+changes only their application and Agent composition boundary; T11 consumes
+that boundary as an observed capability and design-evidence dependency; T12
+consumes it as a route and immutable source/B-Rep observation dependency.
 
 ## Responsibilities and Boundaries
 
@@ -25,10 +29,14 @@ serves CAD automation, Make Editable, Authored Mesh reads and edits, history,
 presentation evaluation, and application-owned persistence.
 
 It does not add an MCP server, CLI command, bicycle-specific command, new Mesh
-kernel operation, renderer, or Agent file-lifecycle authority. T10's bicycle
-workflow is a capability fixture composed from existing CAD automation
-commands. The T11 child is a separate evidence/design branch and does not
-change this runtime boundary.
+kernel operation, renderer, Agent file-lifecycle authority, benchmark-specific
+CAD command, or LLM integration. T10's bicycle workflow is a capability
+fixture composed from existing CAD automation commands. The T11 child is a
+separate evidence/design branch and does not change this runtime boundary. T12
+is a benchmark composition above the registered Agent route. Its runner may
+mutate only fresh isolated project authorities through
+`ProjectAgentCommandController`; its oracle alone is read-only and may inspect
+the final immutable source/B-Rep snapshot.
 
 ## Related Designs
 
@@ -37,7 +45,7 @@ change this runtime boundary.
 | [RupaKit package](RupaKit/DESIGN.md) | child | T10 dependency and verification composition | Indexes Project, RupaKit, AgentProtocol, and AgentRuntime ownership. | Details remain in the owning module. |
 | [CAD/Mesh responsibility](Rupa/CAD_MESH_RESPONSIBILITY_CONTRACT.md) | depends on | CAD modeling and Authored Mesh presentation authority | Defines retained representation meaning. | A derived evaluation snapshot is never persisted source. |
 | [State/project contract](Rupa/STATE_AND_PROJECT_CONTRACT.md) | depends on | exact coordinates, staging, history, rollback, save ownership | Defines the sole project publication lifecycle. | Agent mutations never bypass `ProjectController`. |
-| [Current task progress](RupaKit/PROGRESS.md) | coordinates with | work order and evidence ownership | Tracks the cumulative T10/T11 design, implementation, and integration proof. | A design checkbox is not behavior evidence. |
+| [Current task progress](RupaKit/PROGRESS.md) | coordinates with | work order and evidence ownership | Tracks the cumulative T10/T11/T12 design, implementation, and integration proof. | A design checkbox is not behavior evidence. |
 | [Professional bicycle reference](Artifacts/professional-bicycle/DESIGN.md) | child | T11 L2 fidelity, provenance, CAD authority, and rejection contract | Defines the bounded engineering-reference outcome for a later Agent-generated bicycle assembly. | It is a design/acceptance contract; it does not claim manufacturing, safety, certification, or production implementation. |
 
 ## Architecture
@@ -60,7 +68,14 @@ flowchart LR
         Reference --> Acceptance["Validator and acceptance specifications"]
         Acceptance --> ArtifactEvidence["Persisted/rendered evidence plan"]
     end
+    subgraph T12["T12 CAD benchmark branch"]
+        Challenge["100 candidate-visible challenges"] --> Runner["Fresh isolated runner"]
+        Runner --> AgentRoute["ProjectAgentCommandController"]
+        AgentRoute --> SourceSnapshot["Immutable source/B-Rep view"]
+        SourceSnapshot --> Oracle["Independent oracle + binary score"]
+    end
     Runtime -. "observed by T11-R" .-> Sources
+    Runtime -. "route observed by T12-0" .-> AgentRoute
 ```
 
 ## Contracts and Invariants
@@ -86,6 +101,28 @@ flowchart LR
    Agent save request remains unsupported.
 7. Authored Mesh presentation evaluation shares immutable source buffers. A
    necessary Mesh edit copy is attributed at the T09 execution boundary.
+8. T12 benchmark cases use fresh `ProjectController`/`ProjectWorkspace`
+   authorities and route every candidate mutation/read through the registered
+   `ProjectAgentCommandController`. Candidate/reference code may construct
+   only immutable public payload values required by `AgentRequest` or
+   `AutomationCommand` (for example `Sketch`, `SketchEntity`, or
+   `SketchConstraint`) and may pass them solely through that controller route;
+   it may not mutate `EditorSession`, `DesignDocument`, or
+   `CADDocumentStore`, evaluate the CAD kernel, construct B-Rep, or bypass the
+   route with direct swift-CAD or Mesh operations.
+9. T12 candidate-visible challenge values and typed prior results are separate
+   from oracle-private expected source/B-Rep geometry. The T12 oracle uses
+   immutable source and exact B-Rep observations, never renderer Mesh output or
+   candidate assertions.
+10. T12 has exactly 100 stable case IDs and fixed category denominators. Each
+    case is binary for realization; expected unsupported capability decisions,
+    infrastructure validity, and natural-language reasoning claims are reported
+    separately.
+11. T12 keeps a versioned capability-availability baseline/digest separate from
+    the evidence-derived execution-regression baseline/digest. The latter is
+    established or updated only by a complete valid production run; exact
+    environment/catalog/capability drift is explicit, and infrastructure or
+    oracle failure never becomes a canonical case failure.
 
 T10's bicycle workflow is a capability fixture for the Agent route, authority
 transition, application-owned save/load, and renderer traversal. Its
@@ -116,13 +153,34 @@ sequenceDiagram
     V-->>V: deterministic acceptance PNG
 ```
 
+T12 composes a separate bounded flow over the Agent route:
+
+```mermaid
+sequenceDiagram
+    participant C as Candidate
+    participant B as T12 benchmark runner
+    participant A as ProjectAgentCommandController
+    participant W as Fresh ProjectWorkspace
+    participant O as Read-only source/B-Rep oracle
+    C->>B: challenge + capability + own prior typed results
+    B->>A: bound AgentRequest through fresh registration
+    A->>W: registered workspace use case
+    W-->>A: typed result and exact coordinates
+    A-->>B: candidate step result
+    B->>O: final immutable view + typed output bindings
+    O-->>B: binary checks + typed outcome
+```
+
 ## State, Ownership, and Lifecycle
 
 `ProjectController` owns Product, CAD, Authored Mesh, package, evaluation,
 history, and publication sequence. `ProjectWorkspace` owns the observable exact
 view. AgentProtocol owns only Codable messages; AgentRuntime owns only request
 routing and registration leases. The acceptance PNG is generated test evidence
-from loaded presentation triangles and is not source or package authority.
+from loaded presentation triangles and is not source or package authority. T12
+owns benchmark catalog, capability-availability and execution-regression
+baseline evidence, candidate-response, oracle-result, and report values plus
+one isolated case runner at a time; it owns no project or CAD source state.
 
 ## Failure, Concurrency, and Constraints
 
@@ -130,7 +188,12 @@ Project actor isolation and registration operation leases remain the ordering
 boundaries. Heavy bounded reads and geometry work use immutable snapshots
 outside the actor and revalidate before return/publication. No retry is allowed
 after a source mutation has published. Existing read/plan hard ceilings remain
-the maximum accepted through Agent decoding.
+the maximum accepted through Agent decoding. T12 adds per-case action/read/time/
+entity/evaluation/report bounds selected from measured reference runs; it does
+not guess success counts or concurrency speedup. MainActor/project-actor
+serialization is recorded as an observed constraint. A capability or
+environment mismatch is an explicit baseline drift; an oracle or infrastructure
+failure invalidates the run without updating the execution-regression baseline.
 
 ## Verification and Change Impact
 
@@ -140,8 +203,11 @@ the maximum accepted through Agent decoding.
 | Make Editable authority | Project/RupaKit tests for exact snapshot, CAD/modeling retention, presentation switch, provenance, zero-copy handoff, stale/cancel rollback, and one history entry. |
 | Agent routing | Runtime tests proving each request reaches the registered workspace use case and preserves typed stale/cancel/no-retry failures. |
 | T10 capability fixture | Agent CAD route, representation transition, application-owned save/load, renderer triangle traversal, and deterministic presentation output are exercised through the existing path. The fixture is not evidence of T11 L2 dimensional coherence, semantic bicycle parts, interfaces, manufacturing readiness, structural safety, or certification. |
+| T12 benchmark contract | `RupaAgentCADBenchmark` design and later catalog/oracle/runner/report tests prove exactly 100 stable cases, candidate/oracle separation, typed unsupported and failure behavior, source/B-Rep authority, fixed-denominator binary scoring, fresh isolation, measured bounds, separate capability-availability and execution-regression baselines, explicit drift, and invalid-run non-canonicalization. A reference-plan score is control-path evidence, not LLM reasoning evidence. |
 | Portability | Focused Native runtime tests and compile/link evidence only for portable targets supported by their dependency graph; unavailable target entry failures are reported, not treated as success. |
 
 Changes to Agent wire values, project authority, representation selection, file
-lifecycle, or renderer input require rechecking the owning child design and this
-system composition.
+lifecycle, renderer input, capability descriptors, topology/sketch read
+services, or publication coordinates require rechecking the owning child design
+and this system composition. T12 does not make the existing concept bicycle
+fixture or any screenshot a CAD benchmark oracle.

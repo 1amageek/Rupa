@@ -4,9 +4,10 @@
 
 This document is the package-level design for the `RupaKit` Swift package. It
 composes the verified T09 Mesh-editing foundation with the T10 Agent-to-project
-geometry route while keeping one existing project authority.
+geometry route and the T12 Agent CAD benchmark while keeping one existing
+project authority.
 
-Parent: [system design](../DESIGN.md). Direct children used by T10 are:
+Parent: [system design](../DESIGN.md). Direct children used by T10/T12 are:
 
 - [RupaGeometry](Sources/RupaGeometry/DESIGN.md)
 - [RupaCore](Sources/RupaCore/DESIGN.md)
@@ -14,6 +15,7 @@ Parent: [system design](../DESIGN.md). Direct children used by T10 are:
 - [RupaKit integration target](Sources/RupaKit/DESIGN.md)
 - [RupaAgentProtocol](Sources/RupaAgentProtocol/DESIGN.md)
 - [RupaAgentRuntime](Sources/RupaAgentRuntime/DESIGN.md)
+- [RupaAgentCADBenchmark](Sources/RupaAgentCADBenchmark/DESIGN.md)
 
 Package dependencies are the local targets and external packages declared by
 [`Package.swift`](Package.swift), notably `swift-CAD`, Swift Collections, and
@@ -24,8 +26,10 @@ The package also contains existing targets such as `RupaEvaluation`,
 `RupaProjectModel`, `RupaProjectPackage`, UI, rendering, and transport adapters.
 Their current ownership remains indexed by [ARCHITECTURE.md](ARCHITECTURE.md).
 
-The package design is the parent of the changed and reused module designs. It is not
-a replacement for the system source-authority or state contracts linked below.
+The package design is the parent of the changed and reused module designs. It is
+not a replacement for the system source-authority or state contracts linked
+below. The T12 benchmark design is intentionally documented before its future
+target is added to `Package.swift`.
 
 ## Responsibilities and Boundaries
 
@@ -34,11 +38,14 @@ The package design owns:
 - the dependency direction between provider-independent Mesh editing, source
   authority, project orchestration, and application integration;
 - the rule that every T09/T10 layer uses the existing `ProjectController` authority;
-- package-wide API and verification boundaries for T10.
+- package-wide API and verification boundaries for T10 and T12.
 
 It does not own Mesh topology algorithms, CAD semantics, source asset mutation,
-archive encoding, socket I/O, MCP, CLI, or a bicycle-specific command. Those
-are delegated to child designs or existing normative contracts.
+archive encoding, socket I/O, MCP, CLI, LLM reasoning, or a bicycle-specific or
+benchmark-specific CAD command. Those are delegated to child designs or
+existing normative contracts. T12's runner, catalog, source/B-Rep oracle, and
+score values are owned by its child design; they do not become another project
+authority.
 
 ```mermaid
 flowchart LR
@@ -60,6 +67,10 @@ flowchart LR
     ProjectModel --> AgentProtocol
     AgentProtocol --> AgentRuntime[RupaAgentRuntime]
     Kit --> AgentRuntime
+    AgentRuntime --> Benchmark["RupaAgentCADBenchmark\nfuture upper-level target"]
+    Core --> Benchmark
+    Automation[RupaAutomation] --> Benchmark
+    Kit --> Benchmark
 ```
 
 ## Related Designs
@@ -76,6 +87,7 @@ flowchart LR
 | [RupaKit integration design](Sources/RupaKit/DESIGN.md) | child | Transport-neutral read/edit and Make Editable use cases | Owns application-facing exact-snapshot adaptation. | T10 adds only AgentProtocol/Runtime adapters; CLI/MCP remain unchanged. |
 | [RupaAgentProtocol design](Sources/RupaAgentProtocol/DESIGN.md) | child | Codable Agent Mesh and Make Editable messages | Reuses RupaKit value contracts without duplicating geometry meaning. | It must not import runtime or transport. |
 | [RupaAgentRuntime design](Sources/RupaAgentRuntime/DESIGN.md) | child | Registered-workspace request routing | Binds wire values to the exact current full project view. | It never creates a session or saves a package. |
+| [RupaAgentCADBenchmark design](Sources/RupaAgentCADBenchmark/DESIGN.md) | child | Exactly-100-case candidate/oracle/runner/scoring contract | Measures basic CAD realization through the registered Agent route using immutable source/B-Rep reads. | It is not in `Package.swift` during T12-0; production authority modules must not depend on it. |
 
 ## Architecture
 
@@ -89,10 +101,16 @@ flowchart TD
     C --> P["RupaProject\ntransaction staging"]
     P --> K["RupaKit\nworkspace use cases"]
     P --> E["evaluation + package\nexisting boundaries"]
+    K --> R["RupaAgentRuntime\nregistered route"]
+    R --> B["RupaAgentCADBenchmark\nrunner / oracle / report"]
+    C --> B
+    A["RupaAutomation\ncommand values"] --> B
 ```
 
 This direction avoids leaking project coordinates into the geometry kernel and
-avoids making `RupaGeometry` depend on `RupaCore` or `RupaProject`.
+avoids making `RupaGeometry` depend on `RupaCore` or `RupaProject`. The
+benchmark is an upper-level consumer: no source, project, runtime, protocol, or
+geometry target depends back on it.
 
 ## Contracts and Invariants
 
@@ -107,10 +125,13 @@ records are owned by the four child designs:
 | `RupaCore` is the source-authority boundary; `RupaProject` is the publication boundary. | [RupaCore design](Sources/RupaCore/DESIGN.md), [RupaProject design](Sources/RupaProject/DESIGN.md) |
 | `RupaKit` is the application use-case boundary over existing Project authority. | [RupaKit integration design](Sources/RupaKit/DESIGN.md) |
 | Existing CAD/Mesh and state contracts remain authoritative for their domains. | [CAD/Mesh responsibility](../Rupa/CAD_MESH_RESPONSIBILITY_CONTRACT.md), [state/project contract](../Rupa/STATE_AND_PROJECT_CONTRACT.md) |
+| `RupaAgentCADBenchmark` is a bounded verification composition above the production Agent route: its runner mutates only fresh isolated project authorities through `ProjectAgentCommandController`, while its oracle alone reads immutable source/B-Rep values; capability-availability and execution-regression baselines remain separate, and invalid runs cannot update the latter. | [RupaAgentCADBenchmark design](Sources/RupaAgentCADBenchmark/DESIGN.md) |
 
 The package design does not repeat those contracts and does not introduce a
 second authority or source clone. T10 adds only the typed Agent adapter surface
-over the existing RupaKit use cases.
+over the existing RupaKit use cases. T12 adds only the benchmark consumer
+contract; it does not add a modeling route, source persistence, Mesh path, or
+reasoning engine.
 
 ## Runtime Flows
 
@@ -121,14 +142,17 @@ See the [system runtime flow](../DESIGN.md#runtime-flows), then the local flows
 in [RupaGeometry](Sources/RupaGeometry/DESIGN.md#runtime-flows),
 [RupaCore](Sources/RupaCore/DESIGN.md#runtime-flows),
 [RupaProject](Sources/RupaProject/DESIGN.md#runtime-flows), and
-[RupaKit](Sources/RupaKit/DESIGN.md#runtime-flows).
+[RupaKit](Sources/RupaKit/DESIGN.md#runtime-flows), then the
+[Agent benchmark](Sources/RupaAgentCADBenchmark/DESIGN.md#runtime-flows).
 
 ## State, Ownership, and Lifecycle
 
-The package owns no shared mutable T10 state. State and lifetime are delegated
-to the child owners: Mesh buffers to `RupaGeometry`, source assets to
-`RupaCore`, project publication to `RupaProject`, and observable workspace view
-to `RupaKit`.
+The package owns no shared mutable T10/T12 state. State and lifetime are
+delegated to the child owners: Mesh buffers to `RupaGeometry`, source assets to
+`RupaCore`, project publication to `RupaProject`, observable workspace view to
+`RupaKit`, request routing to `RupaAgentRuntime`, and benchmark catalog,
+capability-availability/execution-regression baseline evidence, case/oracle,
+and report values to `RupaAgentCADBenchmark`.
 
 ## Failure, Concurrency, and Constraints
 
@@ -136,6 +160,11 @@ The package preserves the native target dependency graph and does not weaken
 the isolation contracts owned by its children. Child failures remain typed and
 are not converted at the package boundary. Concurrency, resource, and
 zero-copy constraints are defined and verified by the owning module designs.
+The T12 benchmark uses per-case fresh authorities and reports
+MainActor/project-actor serialization; it cannot claim parallelism from
+scheduler intent alone. Baseline environment/catalog/capability drift is
+explicit; oracle or infrastructure failure invalidates a run without
+canonicalizing failures or updating the execution-regression baseline.
 
 ## Verification and Change Impact
 
@@ -150,6 +179,7 @@ contracts rather than duplicating their behavioral cases:
 | Application use case | `RupaKit` target | T09-C tests for bounded read/preview/commit. |
 | Full package | Integration | T09-IV build/test and actual save/load path. |
 | Agent wire and dispatch | `RupaAgentProtocol` / `RupaAgentRuntime` | T10-B codec, malformed-input, registered-workspace, stale/cancel, and no-retry tests. |
+| Agent CAD benchmark | `RupaAgentCADBenchmark` | T12-0 design, then exactly-100-case catalog, independent source/B-Rep oracle, production-route runner, typed outcome/scoring, fresh isolation, and measured resource/concurrency evidence. Reference-plan results are control-path evidence only. |
 | Actual rendered workflow | T10 integration | Agent CAD bicycle assembly, Make Editable for every generated body, one representative Mesh edit, application save/load, all-Authored-Mesh presentation evaluation, renderer triangles, and deterministic PNG. |
 
 Any public contract or dependency change requires rechecking the system root,
