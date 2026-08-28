@@ -3,6 +3,7 @@ import Foundation
 /// The circle cases whose production route has been independently activated.
 enum CADActivatedCircleCase: String, CaseIterable, Equatable, Hashable, Sendable {
     case cir001 = "CIR-001"
+    case cir002 = "CIR-002"
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)

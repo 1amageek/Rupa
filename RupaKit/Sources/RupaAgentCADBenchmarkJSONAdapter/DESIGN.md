@@ -108,7 +108,7 @@ evaluation and candidate construction remain module-internal test/composition
 seams, so a caller cannot construct a large in-memory response and bypass the
 JSON input authority.
 
-The activated twenty-five cases accept one action decision. `unsupported` and
+The activated twenty-six cases accept one action decision. `unsupported` and
 `finish` remain valid protocol values but are not converted to successful
 actions; the T12-XA-A executor contract projects either as typed
 `invalidSubmission` without publication. Multi-round continuation is not added
@@ -198,8 +198,18 @@ rejects candidate-response v1 before evaluation, derives the exact ordered
 twenty-five IDs from the executor, preserves request bytes/digests through
 twenty-four, and freezes the actual twenty-five-request digest. A bounded CIR-
 001 request and v2 response realize through the circle production route
-and exact oracle; CIR-002 remains typed inactive. Request/evaluation/error v1,
+and exact oracle; CIR-002 remained typed inactive at that gate. Request/evaluation/error v1,
 fingerprint v1, the byte ceiling, and catalog/expectation versions do not move.
+
+`T12-CIR-002` is a completed case-only authority transition. Before its internal
+production and oracle evidence passed, this adapter was authoritative for the
+exact twenty-five-case prefix through CIR-001. The gate derives an ordered
+twenty-six-case prefix ending in CIR-002 from the executor, preserves the frozen
+twenty-five-request aggregate, freezes the observed twenty-six-request
+aggregate, and proves a bounded exact CIR-002 request and candidate-response-v2
+evaluation through the unchanged circle route/oracle. CIR-003 remains typed
+inactive. No envelope, fingerprint, byte-bound, error, benchmark catalog, or
+candidate action schema changes in this transition.
 
 ## Runtime Flows
 
@@ -249,7 +259,7 @@ classification and are projected only to stable non-private codes.
 |---|---|
 | Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON for line, rectangle, and circle decisions; candidate-response v2 carries `kind: circle`, v1 and unknown discriminators are rejected, and every direct and nested case ID is the same scalar string. |
 | Exact public-context binding | The request fingerprint equals the live executor context; changed schema, case, context byte, capability, budget, or fingerprint is rejected before publication. |
-| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, and CIR-001; the historical request bytes/digests through twenty-four are unchanged, the twenty-five-request aggregate digest is `aee0de92d235870b031871fa822746738ebec7e070ed19fd92263fb10a336d84`, CIR-001 traverses the production circle route/oracle, and CIR-002 is rejected before evaluation. |
+| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, and CIR-001...002; the historical twenty-five-request aggregate remains `aee0de92d235870b031871fa822746738ebec7e070ed19fd92263fb10a336d84`, the twenty-six-request aggregate is `c20b165d825b3333722f3b813af4392a9361d3dff9124d62cb3512ef4b870e40`, CIR-002 traverses the production circle route/oracle, and CIR-003 is rejected before evaluation. |
 | Bounded I/O | Exact-limit input succeeds, `limit + 1` fails before decode and leaves executor evaluation count zero, chunked stdin and file paths behave identically, no public typed-response execution bypass exists, encoded output cannot exceed the same bound, and the guaranteed infrastructure document is byte-equal to normal encoding, bounded, and decodable. |
 | Candidate/oracle separation | Static dependency and source scans prove the adapter imports only public benchmark contracts; encoded fixtures contain no expectation/oracle/source snapshot fields or values. |
 | Same production route | JSON candidates for an activated line, rectangle, and circle realize through the public executor; wrong geometry publishes once then the category's exact oracle rejects without retry. |

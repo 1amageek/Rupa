@@ -23,7 +23,7 @@ struct CADBenchmarkCLIProcessTests {
     @Test(.timeLimit(.minutes(2)))
     @MainActor
     func requestEmitsBoundedLineRectangleAndCircleObjectsAndRejectsInactiveCase() throws {
-        for rawCaseID in ["LIN-001", "REC-001", "REC-009", "REC-010", "REC-011", "REC-012", "CIR-001"] {
+        for rawCaseID in ["LIN-001", "REC-001", "REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002"] {
             let result = try runCADBenchmarkCLI(["request", rawCaseID])
             #expect(result.terminationStatus == 0, Comment(rawValue: result.standardError))
             #expect(result.standardOutputData.count <= CADJSONAdapterSchema.maximumDocumentBytes)
@@ -36,14 +36,14 @@ struct CADBenchmarkCLIProcessTests {
             #expect(result.standardError.isEmpty)
         }
 
-        let inactive = try runCADBenchmarkCLI(["request", "CIR-002"])
+        let inactive = try runCADBenchmarkCLI(["request", "CIR-003"])
         #expect(inactive.terminationStatus == 64)
         let error = try CADJSONBoundedCodec.decode(
             CADJSONErrorEnvelope.self,
             from: inactive.standardOutputData
         )
         #expect(error.code == .inactiveCase)
-        #expect(error.caseID?.rawValue == "CIR-002")
+        #expect(error.caseID?.rawValue == "CIR-003")
         #expect(isPrivateFree(inactive.standardOutput))
     }
 
@@ -65,6 +65,10 @@ struct CADBenchmarkCLIProcessTests {
         let circleResponse = try responseData(
             for: "CIR-001",
             action: circleAction(name: "CIR-001")
+        )
+        let translatedCircleResponse = try responseData(
+            for: "CIR-002",
+            action: cir002CircleAction(name: "CIR-002")
         )
 
         let lineFileResult = try withTemporaryData(lineResponse) { path in
@@ -89,6 +93,12 @@ struct CADBenchmarkCLIProcessTests {
             standardInput: circleResponse
         )
         try assertRealizedEvaluation(circleStandardInputResult, caseID: "CIR-001")
+
+        let translatedCircleStandardInputResult = try runCADBenchmarkCLI(
+            ["evaluate", "--response", "-"],
+            standardInput: translatedCircleResponse
+        )
+        try assertRealizedEvaluation(translatedCircleStandardInputResult, caseID: "CIR-002")
 
         let metreRectangleResponse = try responseData(
             for: "REC-010",
@@ -196,15 +206,15 @@ struct CADBenchmarkCLIProcessTests {
         try assertError(fingerprintResult, code: .fingerprintMismatch, exit: 64, caseID: "LIN-001")
 
         let inactiveResponse = try responseData(
-            for: "CIR-002",
+            for: "CIR-003",
             contextFingerprint: String(repeating: "0", count: 64),
-            action: circleAction(name: "CIR-002")
+            action: circleAction(name: "CIR-003")
         )
         let inactiveResult = try runCADBenchmarkCLI(
             ["evaluate", "--response", "-"],
             standardInput: inactiveResponse
         )
-        try assertError(inactiveResult, code: .inactiveCase, exit: 64, caseID: "CIR-002")
+        try assertError(inactiveResult, code: .inactiveCase, exit: 64, caseID: "CIR-003")
 
         let finishResponse = try finishResponseData(for: request)
         let finishResult = try runCADBenchmarkCLI(
@@ -420,6 +430,15 @@ private func circleAction(name: String) -> CADCandidateAction {
         plane: .xy,
         center: CADPoint3D(x: 0, y: 0, z: 0),
         radius: CADLength(value: 5)
+    )))
+}
+
+private func cir002CircleAction(name: String) -> CADCandidateAction {
+    .automation(.sketch(.circle(
+        name: name,
+        plane: .xy,
+        center: CADPoint3D(x: 25, y: -10, z: 0, unit: .millimeter),
+        radius: CADLength(value: 12.5, unit: .millimeter)
     )))
 }
 
