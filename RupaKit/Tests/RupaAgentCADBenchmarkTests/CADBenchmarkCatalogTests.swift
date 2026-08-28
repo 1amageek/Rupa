@@ -26,7 +26,11 @@ func publicManifestDigestIsDeterministicAndFrozen() throws {
     let second = try CADBenchmarkCatalog()
 
     #expect(first.manifest == second.manifest)
-    #expect(first.manifest.digest == "b2a623e301375de1131c6c166582b2680ced3b2970fa7ebf508298c4ca320c85")
+    #expect(first.manifest.schema == "t12.manifest.v1")
+    #expect(first.manifest.catalog == "t12.catalog.v2")
+    #expect(first.manifest.tolerancePolicy == "t12.tolerance.v1")
+    #expect(first.manifest.challengeInputDigest == "e2bc50a74db4247c36a6a51758466d30bc21d3b3d0db11ff648895b51a3ed08e")
+    #expect(first.manifest.digest == "d5805cf0abed8f52d3f9c3c231d07f33fbe1b4cb5360a076a88983e0298f86d4")
 
     let encoded = try JSONEncoder().encode(first.manifest)
     let encodedText = String(decoding: encoded, as: UTF8.self)
@@ -39,13 +43,13 @@ func internalExpectationAndCapabilityDigestsAreVersionedAndFrozen() throws {
     let contract = try CADInternalCatalogStore.expectationContract()
     try contract.validate()
 
-    #expect(contract.schemaVersion == CADBenchmarkExpectationContract.schemaVersion)
-    #expect(contract.expectationVersion == CADBenchmarkExpectationContract.expectationVersion)
-    #expect(contract.capabilityClassificationVersion == CADBenchmarkExpectationContract.capabilityClassificationVersion)
-    #expect(contract.capabilityBaselineContractVersion == CADBenchmarkExpectationContract.capabilityBaselineContractVersion)
-    #expect(contract.tolerancePolicyVersion == CADBenchmarkTolerancePolicy.version)
+    #expect(contract.schemaVersion == "t12.expectation.v2")
+    #expect(contract.expectationVersion == "t12.expectation-contract.v2")
+    #expect(contract.capabilityClassificationVersion == "t12.capability-classification.v1")
+    #expect(contract.capabilityBaselineContractVersion == "t12.capability-baseline.v1")
+    #expect(contract.tolerancePolicyVersion == "t12.tolerance.v1")
     #expect(contract.entries.count == 100)
-    #expect(contract.expectationDigest == "d24c4ad24217aeabcd9f6cd504bc5b9a11d45fe0ad2b2d9938a25d33f0a8c5d6")
+    #expect(contract.expectationDigest == "15c8e060d27e5b6b385372aa8956dbb6609e51d198f58935f0f544ef80a17874")
     #expect(contract.capabilityClassificationDigest.count == 64)
     #expect(contract.capabilityBaseline.digest.count == 64)
 
@@ -59,6 +63,112 @@ func internalExpectationAndCapabilityDigestsAreVersionedAndFrozen() throws {
     requireCatalogDrift {
         try decoded.validate()
     }
+}
+
+@Test
+func rectangleInstructionsUseExplicitCenteredPlacement() throws {
+    let catalog = try CADBenchmarkCatalog()
+    let rectangleChallenges = catalog.challenges.filter { $0.category == .rectangle }
+    #expect(rectangleChallenges.count == 12)
+    for challenge in rectangleChallenges {
+        #expect(challenge.instruction.contains(" centered at "))
+        #expect(challenge.instruction.contains(" on the "))
+        #expect(challenge.instruction.contains("rectangle"))
+        #expect(challenge.instruction.contains("origin") == false)
+    }
+
+    for caseID in ["TRN-002", "TRN-007"] {
+        let challenge = try catalog.challenge(for: CADBenchmarkCaseID(rawValue: caseID))
+        #expect(challenge.instruction.contains("rectangle"))
+        #expect(challenge.instruction.contains(" centered at "))
+        #expect(challenge.instruction.contains("origin") == false)
+    }
+}
+
+@Test
+func rectanglePrivateInputsEncodeCenterWithoutOrigin() throws {
+    let entries = try CADInternalCatalogStore.entries()
+    let rectangleEntries = entries.filter { $0.challenge.category == .rectangle }
+    #expect(rectangleEntries.count == 12)
+
+    func assertCenterEncoding(_ input: CADRectangleChallengeInput) throws {
+        let object = try #require(JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(input),
+            options: []
+        ) as? [String: Any])
+        #expect(object["center"] != nil)
+        #expect(object["origin"] == nil)
+    }
+
+    for entry in rectangleEntries {
+        guard case let .rectangle(input) = entry.input else {
+            Issue.record("Rectangle catalog entry must retain rectangle input.")
+            continue
+        }
+        try assertCenterEncoding(input)
+    }
+
+    var transformRectangleCount = 0
+    for entry in entries {
+        guard case let .transform(input) = entry.input,
+              case let .rectangle(source) = input.source else {
+            continue
+        }
+        transformRectangleCount += 1
+        try assertCenterEncoding(source)
+        let sourceObject = try #require(JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(input.source),
+            options: []
+        ) as? [String: Any])
+        let rectangleObject = try #require(sourceObject["rectangle"] as? [String: Any])
+        let encodedInput = try #require(rectangleObject["_0"] as? [String: Any])
+        #expect(encodedInput["center"] != nil)
+        #expect(encodedInput["origin"] == nil)
+    }
+    #expect(transformRectangleCount == 2)
+}
+
+@Test
+func rectangleValidationNamesCenterField() throws {
+    let invalid = CADRectangleChallengeInput(
+        center: CADPoint3D(x: .nan, y: 0, z: 0, unit: .millimeter),
+        width: CADLength(value: 40, unit: .millimeter),
+        height: CADLength(value: 20, unit: .millimeter),
+        plane: .xy
+    )
+
+    do {
+        try CADChallengeGeometryValidator.validate(.rectangle(invalid), caseID: "REC-001")
+        Issue.record("Non-finite rectangle center must be rejected.")
+    } catch let error as CADBenchmarkError {
+        guard case let .invalidInput(_, reason) = error else {
+            Issue.record("Unexpected typed error: \(error)")
+            return
+        }
+        #expect(reason.contains("rectangle.center"))
+    }
+}
+
+@Test
+func completedLineExpectationDigestsRemainFrozenAfterRectangleCenterMigration() throws {
+    let expected: [String: String] = [
+        "LIN-001": "41f425437d9547d8a5c894c5c3309dc385c88d4bc8074e3cc6d84abf24ea3ea2",
+        "LIN-002": "9ce14293d884fa3c71cee3708e91bd038a3059c7e65e40bacd7e03568caab971",
+        "LIN-003": "5bb8fea3dc9e5ac3c86b63de452c28145c33530e1380dc49cc451cb44a14b195",
+        "LIN-004": "43a59890ac0b759b9dfdbb63f1c1cd591a4afb8d5ac7f6e1e2449da86ef92ef9",
+        "LIN-005": "524389d7b38f230b16e8af4620d768f36fa09bdf4e8495676044689e7aa8798d",
+        "LIN-006": "6f87bd449219990276f4a0bf1c28a256c64c6f734517c46e6bae6d47ffbc8051",
+        "LIN-007": "eaf2a872053f19dd17a060bdaf693834d44e838a7c79f9b78f30f91405f9a671",
+        "LIN-008": "946353bc894ccd97977cdb82d5d63ab2823ddd37974948ff2fbc81a13bd71557",
+        "LIN-009": "d6024a3a8de1666d4f017929c2c24ae927e2776f74caf219e393fd4a6467d510",
+        "LIN-010": "da18add1cc70d564d16789f4768e57c1febf2d9fb3394ffc1d5620eaf757d478",
+        "LIN-011": "541bbde631913cf52fe48c20e8696e60a4ea68b43ccc28e6f127a7f79c27aba3",
+        "LIN-012": "e735845452f28ab367878416525596041afc8850c97f97d3d662d59975a730ab",
+    ]
+    let observed = Dictionary(uniqueKeysWithValues: try CADInternalCatalogStore.entries()
+        .filter { $0.challenge.id.rawValue.hasPrefix("LIN-") }
+        .map { ($0.challenge.id.rawValue, $0.expectationDigest) })
+    #expect(observed == expected)
 }
 
 @Test

@@ -120,12 +120,12 @@ enum CADSketchChallengeCatalog {
         _ height: Double,
         _ unit: CADLengthUnit,
         _ plane: CADSketchPlane,
-        _ x: Double,
-        _ y: Double,
-        _ z: Double
+        _ centerX: Double,
+        _ centerY: Double,
+        _ centerZ: Double
     ) -> CADCanonicalChallengeDefinition {
         let input = CADRectangleChallengeInput(
-            origin: CADPoint3D(x: x, y: y, z: z, unit: unit),
+            center: CADPoint3D(x: centerX, y: centerY, z: centerZ, unit: unit),
             width: CADLength(value: width, unit: unit),
             height: CADLength(value: height, unit: unit),
             plane: plane

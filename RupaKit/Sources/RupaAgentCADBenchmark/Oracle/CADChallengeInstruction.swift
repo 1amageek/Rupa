@@ -4,7 +4,7 @@ enum CADChallengeInstruction {
         case let .line(input):
             return "Construct \(id) as a finite line segment of length \(length(input.length)) from \(point(input.start)) to \(point(input.end)) on the \(input.plane.rawValue.uppercased())-oriented plane through \(point(input.start))."
         case let .rectangle(input):
-            return "Construct \(id) as a rectangle of width \(length(input.width)) and height \(length(input.height)) with origin \(point(input.origin)) on the \(input.plane.rawValue) plane."
+            return "Construct \(id) as a rectangle of width \(length(input.width)) and height \(length(input.height)) centered at \(point(input.center)) on the \(input.plane.rawValue) plane."
         case let .circle(input):
             return "Construct \(id) as a circle of radius \(length(input.radius)) centered at \(point(input.center)) on the \(input.plane.rawValue) plane."
         case let .angle(input):
@@ -58,7 +58,7 @@ enum CADChallengeInstruction {
         case let .line(input):
             "line \(point(input.start)) to \(point(input.end))"
         case let .rectangle(input):
-            "rectangle width \(length(input.width)) height \(length(input.height)) at \(point(input.origin))"
+            "rectangle width \(length(input.width)) height \(length(input.height)) centered at \(point(input.center))"
         case let .circle(input):
             "circle radius \(length(input.radius)) at \(point(input.center))"
         case let .box(input):

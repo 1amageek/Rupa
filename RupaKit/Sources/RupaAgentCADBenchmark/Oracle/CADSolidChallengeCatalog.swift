@@ -129,9 +129,9 @@ enum CADSolidChallengeCatalog {
         )
     }
 
-    private static func rectangleInput(_ name: String, _ width: Double, _ height: Double, _ plane: CADSketchPlane, _ x: Double, _ y: Double) -> CADRectangleChallengeInput {
+    private static func rectangleInput(_ name: String, _ width: Double, _ height: Double, _ plane: CADSketchPlane, _ centerX: Double, _ centerY: Double) -> CADRectangleChallengeInput {
         CADRectangleChallengeInput(
-            origin: CADPoint3D(x: x, y: y, z: 0.0),
+            center: CADPoint3D(x: centerX, y: centerY, z: 0.0),
             width: CADLength(value: width),
             height: CADLength(value: height),
             plane: plane
