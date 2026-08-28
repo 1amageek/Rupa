@@ -108,7 +108,7 @@ evaluation and candidate construction remain module-internal test/composition
 seams, so a caller cannot construct a large in-memory response and bypass the
 JSON input authority.
 
-The activated thirty-three cases accept one action decision. `unsupported` and
+The activated thirty-four cases accept one action decision. `unsupported` and
 `finish` remain valid protocol values but are not converted to successful
 actions; the T12-XA-A executor contract projects either as typed
 `invalidSubmission` without publication. Multi-round continuation is not added
@@ -296,7 +296,7 @@ classification and are projected only to stable non-private codes.
 |---|---|
 | Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON for line, rectangle, and circle decisions; candidate-response v2 carries `kind: circle`, v1 and unknown discriminators are rejected, and every direct and nested case ID is the same scalar string. |
 | Exact public-context binding | The request fingerprint equals the live executor context; changed schema, case, context byte, capability, budget, or fingerprint is rejected before publication. |
-| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, and CIR-001...009; the historical thirty-two-request aggregate remains `d73110c966919f5583df9ff7987fd9cd25a899a588031031f4880be220bf1f22`, the thirty-three-request aggregate is `0a2348cfddafa83d023bda2ee635a84ab3f9990c08aff969edfa1e4ba02987e5`, CIR-009 traverses the production XZ circle route/oracle, and CIR-010 is rejected before evaluation. |
+| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, and CIR-001...010; the historical thirty-three-request aggregate remains `0a2348cfddafa83d023bda2ee635a84ab3f9990c08aff969edfa1e4ba02987e5`, the thirty-four-request aggregate is `e03c0148b189dc10b41ced6de9718846d3c20ee76c148b561d0108c1ba4c57e5`, CIR-010 traverses the production XY circle route/oracle, and CIR-011 is rejected before evaluation. |
 | Bounded I/O | Exact-limit input succeeds, `limit + 1` fails before decode and leaves executor evaluation count zero, chunked stdin and file paths behave identically, no public typed-response execution bypass exists, encoded output cannot exceed the same bound, and the guaranteed infrastructure document is byte-equal to normal encoding, bounded, and decodable. |
 | Candidate/oracle separation | Static dependency and source scans prove the adapter imports only public benchmark contracts; encoded fixtures contain no expectation/oracle/source snapshot fields or values. |
 | Same production route | JSON candidates for an activated line, rectangle, and circle realize through the public executor; wrong geometry publishes once then the category's exact oracle rejects without retry. |
