@@ -164,6 +164,18 @@ struct CADJSONAdapterTests {
         #expect(inchCircleEvaluation.result?.outcome == .realized)
         #expect(inchCircleEvaluation.error == nil)
 
+        let negativeZCircleRequest = try adapter.makeRequest(for: "CIR-009")
+        let negativeZCircleResponse = try CADJSONCandidateResponseEnvelope(
+            caseID: negativeZCircleRequest.caseID,
+            context: negativeZCircleRequest.context,
+            decision: .action(cir009CircleAction(name: "CIR-009"))
+        )
+        let negativeZCircleEvaluation = try await adapter.evaluate(
+            responseData: CADJSONBoundedCodec.encode(negativeZCircleResponse)
+        )
+        #expect(negativeZCircleEvaluation.result?.outcome == .realized)
+        #expect(negativeZCircleEvaluation.error == nil)
+
         let inchRectangleRequest = try adapter.makeRequest(for: "REC-009")
         let inchRectangleResponse = try CADJSONCandidateResponseEnvelope(
             caseID: inchRectangleRequest.caseID,
@@ -310,7 +322,7 @@ struct CADJSONAdapterTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func requestAndLiveContextsAreValueEqualAndAllThirtyTwoRequestsStayBounded() throws {
+    func requestAndLiveContextsAreValueEqualAndAllThirtyThreeRequestsStayBounded() throws {
         let executor = DefaultCADActivatedCaseExecutor()
         let adapter = CADJSONAdapter(executor: executor)
         var largestRequest = 0
@@ -343,6 +355,8 @@ struct CADJSONAdapterTests {
                 action = cir007CircleAction(name: caseID.rawValue)
             } else if caseID.rawValue == "CIR-008" {
                 action = cir008CircleAction(name: caseID.rawValue)
+            } else if caseID.rawValue == "CIR-009" {
+                action = cir009CircleAction(name: caseID.rawValue)
             } else {
                 action = circleAction(name: caseID.rawValue)
             }
@@ -354,7 +368,7 @@ struct CADJSONAdapterTests {
             #expect(try CADJSONBoundedCodec.encode(response).count < 16_384)
         }
 
-        #expect(executor.activatedCaseIDs.count == 32)
+        #expect(executor.activatedCaseIDs.count == 33)
         #expect(largestRequest < 16_384)
     }
 
@@ -365,7 +379,7 @@ struct CADJSONAdapterTests {
         let adapter = CADJSONAdapter(executor: executor)
         let historicalIDs = (1...12).map { String(format: "LIN-%03d", $0) }
             + (1...8).map { String(format: "REC-%03d", $0) }
-        let currentIDs = historicalIDs + ["REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008"]
+        let currentIDs = historicalIDs + ["REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009"]
         #expect(executor.activatedCaseIDs.map(\.rawValue) == currentIDs)
 
         // Each activated record is case ID, request byte count, and request SHA-256, all length-prefixed.
@@ -463,6 +477,13 @@ struct CADJSONAdapterTests {
         appendLengthPrefixed(bigEndianBytes(UInt64(cir008Request.count)), to: &currentAggregate)
         appendLengthPrefixed(Data(SHA256.hash(data: cir008Request)), to: &currentAggregate)
         #expect(sha256Hex(currentAggregate) == "d73110c966919f5583df9ff7987fd9cd25a899a588031031f4880be220bf1f22")
+
+        let cir009ID: CADBenchmarkCaseID = "CIR-009"
+        let cir009Request = try adapter.encodeRequest(for: cir009ID)
+        appendLengthPrefixed(Data(cir009ID.rawValue.utf8), to: &currentAggregate)
+        appendLengthPrefixed(bigEndianBytes(UInt64(cir009Request.count)), to: &currentAggregate)
+        appendLengthPrefixed(Data(SHA256.hash(data: cir009Request)), to: &currentAggregate)
+        #expect(sha256Hex(currentAggregate) == "0a2348cfddafa83d023bda2ee635a84ab3f9990c08aff969edfa1e4ba02987e5")
     }
 
     @MainActor
@@ -593,7 +614,7 @@ struct CADJSONAdapterTests {
         }
 
         do {
-            _ = try await adapter.evaluate(response: response, for: "CIR-009")
+            _ = try await adapter.evaluate(response: response, for: "CIR-010")
             Issue.record("An inactive case must be rejected before context resolution.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
@@ -1133,6 +1154,15 @@ private func cir008CircleAction(name: String) -> CADCandidateAction {
         plane: .xy,
         center: CADPoint3D(x: -2, y: 3, z: 0, unit: .inch),
         radius: CADLength(value: 1, unit: .inch)
+    )))
+}
+
+private func cir009CircleAction(name: String) -> CADCandidateAction {
+    .automation(.sketch(.circle(
+        name: name,
+        plane: .xz,
+        center: CADPoint3D(x: 0, y: 0, z: -125, unit: .millimeter),
+        radius: CADLength(value: 250, unit: .millimeter)
     )))
 }
 
