@@ -177,8 +177,8 @@ implementation permission to add a parallel authority.
 | `CADExpectedGeometry` | Internal; oracle-private source/B-Rep expectation and role checks | Runner/oracle boundary only; never in public candidate files |
 | `CADCandidateProtocol` | Public; bounded request/response continuation | No workspace, controller, or expectation reference |
 | `CADCandidateAction` | Public; the currently active LIN-001 line automation intent | No session, coordinate, expectation, or future-category transform fields |
-| `CADCaseRunner` | Internal; public challenge projection, fresh lifecycle, route dispatch, response capture, cleanup | Owns ephemeral case orchestration and is the sole expectation-to-oracle handoff |
-| `CADGeometryOracle` | Internal; source and exact B-Rep verification | Read-only immutable input plus internal expectation |
+| `CADLIN001CaseRunner` | Internal; LIN-001 public challenge projection, fresh lifecycle, route dispatch, response capture, cleanup | Owns only the ephemeral LIN-001 orchestration and the private expectation-to-oracle handoff |
+| `CADLIN001Oracle` | Internal; exact LIN-001 source verification and zero-body evaluation check | Read-only immutable input plus the LIN-001 internal expectation |
 | `CADCaseOutcome` / score | Public result projection; failure taxonomy and binary scoring | No fallback success |
 | `CADBenchmarkReport` | Public result projection; deterministic run and measurement projection | Value/report only |
 
@@ -280,11 +280,13 @@ vertical case owns a production contract; transform pivot and composition-order
 semantics belong to `T12-TRN-001` and are not part of this foundation. The line
 payload is immutable request data and is valid only when passed through the
 controller route. An action does not contain a session ID, workspace reference,
-project authority coordinate, `EditorSession`, or a direct CAD object. The
-future runner will own the mapping from this action to an `AgentRequest`, attach
-the fresh session ID and current generation/transaction/workspace coordinates,
-then call `ProjectAgentCommandController.handle`. This rule applies equally to
-the reference-plan candidate and a future natural-language/LLM adapter.
+project authority coordinate, `EditorSession`, or a direct CAD object.
+`CADLIN001CaseRunner` owns the mapping from this action to an `AgentRequest`,
+attaches the fresh session ID and current generation/workspace coordinates,
+then calls `ProjectAgentCommandController.handle`. A later case must add only
+its own reviewed vertical mapping; LIN-001 does not provide a generic category
+runner. The same boundary applies to the reference-plan candidate and a future
+natural-language/LLM adapter.
 
 Candidate/reference code may not mutate `EditorSession`, `DesignDocument`, or
 `CADDocumentStore`, evaluate the CAD kernel, construct B-Rep, construct Mesh
@@ -354,6 +356,22 @@ Each case must satisfy all six gate axes in one vertical slice:
 | Tolerance and plane semantics | Canonical units, plane origin/orientation, placement, and comparisons are unambiguous and use the fresh document's `ModelingTolerance`; candidate output cannot widen acceptance. |
 | Timeout and resource envelope | A bounded focused run terminates and records planning, route, oracle, and total wall time plus action, Automation-command, read-record, and observed source entity/feature/body counts. |
 | Candidate information boundary | The candidate receives challenge text, capability metadata, roles, budget, and only its own prior typed results; private structured expectations, tolerance values, and oracle predicates are unreachable. |
+
+LIN-001 activates that contract with one 25 mm XY line from the origin. Its
+reference candidate implements `CADCandidateProtocol` and derives the action
+only from the public `CADChallenge`. The runner copies the production
+`AutomationResult` primary/created FeatureIDs without normalization, binds the
+segment role to the primary alias, and passes the private line expectation only
+to `CADLIN001Oracle`. The oracle requires one unsuppressed curve-owning sketch
+feature, one line entity, exact oriented endpoints and length under the fresh
+document's `ModelingTolerance`, and zero evaluated bodies.
+
+| LIN-001 boundary | Required evidence |
+|---|---|
+| Successful publication | The runner owns the session UUID before registration. The fresh registered controller route advances generation, transaction revision, and publication sequence exactly once; cleanup leaves zero registrations. |
+| Prepublication rejection | Invalid plane, stale coordinates, and the harness timeout retain the observed pre-attempt coordinates and publish nothing; pre-planning cancellation creates no workspace registration or publication. A registration timeout unregisters the runner-owned UUID even when the register child stored its entry before returning. |
+| Postpublication semantic rejection | A syntactically valid wrong-length line is read from the immutable final view, rejected by the oracle, retains its committed coordinate, and is not retried. |
+| Measurement | Serial execution records all four phase durations, action/command/read counts, entity/feature/body counts, cancellation checkpoints, and cleanup duration. Candidate planning, workspace setup, registration, production dispatch, and oracle evaluation share one 10-second attempt deadline; the serial focused test owns the one-minute end-to-end safety ceiling including cleanup. |
 
 A gate passes only after focused success, failure, and boundary tests are green,
 the measurements are captured, the original T12 task designer reviews the
