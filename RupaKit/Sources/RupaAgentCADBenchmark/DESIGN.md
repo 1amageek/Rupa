@@ -108,6 +108,8 @@ tests, not in the future benchmark API:
 | Project authority | Source mutation is staged, validated against project/generation/transaction/publication coordinates, and published by the existing `ProjectController` actor. | [`ProjectController.swift`](../RupaProject/ProjectController.swift), [`ProjectSourceTransaction.swift`](../RupaProject/ProjectSourceTransaction.swift) |
 | Batch isolation | `AutomationRunner` uses isolated source/workspace/read transactions and returns typed execution context/results. | [`AutomationRunner+Batch.swift`](../RupaAutomation/AutomationRunner+Batch.swift), [`AutomationStagedBatchExecutor.swift`](../RupaAutomation/AutomationStagedBatchExecutor.swift) |
 | Result identity | `AutomationResult` defaults `primaryFeatureID` to `createdFeatureIDs.first`, so a successful creation response may intentionally expose the same FeatureID through both primary and created selectors. | [`AutomationResult.swift`](../RupaAutomation/AutomationResult.swift) |
+| Rectangle mutation | `AutomationCommand.createRectangleSketch` reaches `EditorCommand.createRectangleSketch`; `SketchBuilder.rectangle` creates four constrained lines centred on the selected source-plane origin. The command has width, height, and plane inputs but no separate centre input. | [`AutomationCommand.swift`](../RupaAutomation/AutomationCommand.swift), [`AutomationRunner.swift`](../RupaAutomation/AutomationRunner.swift), [`DesignDocument+SketchCreation.swift`](../RupaCore/DesignDocument+SketchCreation.swift) |
+| Rectangle observation | `SketchEntitySnapshotService` exposes the stored sketch plane, exact line endpoints and entity counts, and closed profile-region data needed by a read-only rectangle oracle. | [`SketchEntitySnapshotService.swift`](../RupaCore/SketchEntitySnapshotService.swift) |
 | Immutable observation | Sketch summaries and exact topology snapshots read source/evaluation values without providing mutation authority. | [`SketchEntitySnapshotService.swift`](../RupaCore/SketchEntitySnapshotService.swift), [`TopologySnapshotService.swift`](../RupaCore/TopologySnapshotService.swift), [`ProjectViewSnapshot.swift`](../RupaKit/ProjectViewSnapshot.swift) |
 | Failure/rollback | Stale Agent mutations are rejected and existing state remains unchanged; registered-session and cancellation/no-retry behavior are typed. | [`ProjectAgentCommandControllerTests.swift`](../../Tests/RupaUIPackageTests/ProjectAgentCommandControllerTests.swift) |
 
@@ -377,7 +379,7 @@ document's `ModelingTolerance`, and zero evaluated bodies.
 | Postpublication semantic rejection | A syntactically valid wrong-length line is read from the immutable final view, rejected by the oracle, retains its committed coordinate, and is not retried. |
 | Measurement | Serial execution records all four phase durations, action/command/read counts, entity/feature/body counts, cancellation checkpoints, and cleanup duration. Candidate planning, workspace setup, registration, production dispatch, and oracle evaluation share one 10-second attempt deadline; the serial focused test owns the one-minute end-to-end safety ceiling including cleanup. |
 
-### Activated line parameter contract through LIN-010
+### Activated line parameter contract through LIN-012
 
 LIN-002 may extract only the line-category behavior already established by
 LIN-001: one public finite-line action, one production `createLineSketch`
@@ -426,6 +428,8 @@ outside global XY.
 | `LIN-008` | Centimeter input | Global `.xy`; conversion to meters preserves placement and 125 cm length |
 | `LIN-009` | Meter input on XZ, along world +X | Global `.zx`; the world-X direction occupies the second local axis |
 | `LIN-010` | Inch input on YZ at world x = -5 inches | Affine `.plane` with public anchor and +X normal; built-in `.yz` at x = 0 is a wrong placement |
+| `LIN-011` | Two-metre XZ line along world -Z | Global `.zx`; the negative first-local-axis direction and endpoint order are both required |
+| `LIN-012` | Translated 375 mm XY line | Global `.xy`; exact world placement distinguishes it from a same-length origin line |
 
 Each case owns serial behavioral tests for exact realization, a syntactically
 valid published wrong endpoint/orientation that the oracle rejects without
@@ -442,6 +446,73 @@ per-case publication/no-retry/cleanup and telemetry evidence at serial
 concurrency 1, reruns the candidate/private boundary audit, and confirms that no
 aggregate execution baseline or score has been inferred from the two remaining
 unmeasured line specifications.
+
+After LIN-012, `T12-LIN-G` replays all twelve committed cases at serial
+concurrency 1. The cumulative coverage is seven XY, three XZ, and two YZ cases,
+with eight millimetre, one centimetre, two metre, and one inch inputs. The gate
+reviews endpoint order, affine placement, route authority, rollback/no-retry,
+cleanup, candidate privacy, and measured telemetry before rectangle work starts.
+
+### Rectangle centre contract through REC-008
+
+The current target specification names rectangle placement `origin` and the
+public instruction does not say whether that point is a corner or centre.
+Production `createRectangleSketch` is centre-based: its four lines are generated
+around the selected source-plane origin. `T12-REC-F` therefore resolves the
+specification before any rectangle is activated by renaming the private target
+value to `center` and making the public challenge say that the rectangle is
+centred at that world point. The foundation advances the owning public and
+private manifest versions/digests and proves that all completed line entries are
+unchanged. It does not add a rectangle runner/oracle or claim behavior for any
+rectangle case.
+
+`T12-REC-001` is the first rectangle behavior owner. It adds one bounded public
+rectangle action containing name, orientation, centre, width, and height, and a
+rectangle-local activated-case enum containing only `REC-001`. The adapter uses
+`AutomationCommand.createRectangleSketch`; it does not construct source sketch
+entities directly. The public orientation and centre define the target affine
+plane. A submitted centre outside that plane is rejected before publication
+under the fresh document's `ModelingTolerance`; an in-plane centre is encoded as
+the source plane origin and must still be verified by the oracle. Later IDs are
+added one at a time only by their own reviewed commits. REC-009 and later remain
+unactivated target specifications during the requested first-twenty checkpoint.
+
+| Public orientation | Canonical positive normal | Rectangle width axis | Rectangle height axis |
+|---|---|---|---|
+| `xy` | world +Z | world X | world Y |
+| `xz` | world +Y | world X | world Z |
+| `yz` | world +X | world Y | world Z |
+
+The rectangle oracle receives private expected geometry only after production
+execution. From the immutable final view it requires exactly one bound,
+unsuppressed source sketch feature, exactly four finite non-degenerate line
+entities, exactly four unique expected world corners at centre plus or minus the
+canonical half-width and half-height axes, one connected closed loop, two width
+edges, two height edges, perpendicular adjacent edges, one profile region with
+the expected area, and zero evaluated bodies. It verifies the stored affine
+plane origin and positive normal and rejects every extra or unbound source
+entity. Entity dictionary order is irrelevant; geometric role completeness is
+not. All comparisons use the fresh document's `ModelingTolerance` through the
+versioned tolerance policy; no case may widen it from observed error.
+
+| Case | New capability proved | Required discriminating evidence |
+|---|---|---|
+| `REC-001` | First unequal-sided XY rectangle and exact closed-profile topology | A same-area 20 by 40 mm publication is rejected; width/height and corner roles cannot collapse to area alone |
+| `REC-002` | In-plane translated centre independent of dimensions | A same-size rectangle at the wrong XY centre publishes once and is rejected by the oracle |
+| `REC-003` | First XZ frame and translated world-Z centre | Width spans world X and height spans world Z; a swapped-dimension publication is rejected |
+| `REC-004` | First offset YZ affine plane | The source plane is x = -50 mm with +X normal; wrong normal placement is rejected before publication and wrong YZ centre after publication |
+| `REC-005` | Centimetre conversion | Same numeric width/height in millimetres publishes once and is rejected |
+| `REC-006` | Metre conversion on XZ | Same numeric width/height in centimetres publishes once and is rejected |
+| `REC-007` | High aspect ratio plus simultaneous normal and in-plane YZ offsets | A same-area dimension swap is rejected while the exact x/y centre is retained |
+| `REC-008` | Large translated XY extent under the versioned modeling-tolerance rule | Same dimensions at a wrong centre publish once and are rejected |
+
+Each rectangle case also owns exact success through the registered production
+controller, one publication and no retry after semantic rejection, off-plane
+prepublication rejection, typed timeout, unconditional registration cleanup,
+public-candidate/private-expectation separation, action/command/read/source
+counts, phase timings, focused serial tests, designer approval, and its own
+commit. No rectangle category runner is generalized before REC-001, and no
+case beyond REC-008 is activated by this first-twenty expansion.
 
 A gate passes only after focused success, failure, and boundary tests are green,
 the measurements are captured, the original T12 task designer reviews the
