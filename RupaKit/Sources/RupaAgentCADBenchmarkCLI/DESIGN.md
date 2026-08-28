@@ -129,8 +129,8 @@ Process-level tests build and invoke the actual executable and prove:
 - `request` emits valid v1 JSON for an activated line, rectangle, REC-009
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
   millimetre/XY case, the complete CIR-001...012 category, ANG-001...016, and
-  BOX-001...004, and rejects inactive `BOX-005`;
-- JSON line, rectangle, circle, angle, and BOX-001...004 responses traverse the adapter, production
+  BOX-001...005, and rejects inactive `BOX-006`;
+- JSON line, rectangle, circle, angle, and BOX-001...005 responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
@@ -402,11 +402,16 @@ aggregate
 `74353ca8a790b520689404973dbc370b59ec77f50ec81ac3a48c4387b94862c3`, and
 executes a v4 50 × 30 × 20 mm solid/box response at lower corner
 (-25, 15, 5) mm through the production controller.
-BOX-004 is the current process boundary: it preserves that frozen 55-request
-aggregate, observes the 56-request aggregate
+BOX-004 preserves that frozen 55-request aggregate and observes the 56-request
+aggregate
 `dc4c6fa1f96ae4181f54d48b34ae77b95d2548bc90935a3c7f0d7c51743efd9a`, and
 executes a v4 100 × 50 × 75 mm solid/box response at lower corner
-(0, 0, -25) mm through the production controller. BOX-005 remains inactive
+(0, 0, -25) mm through the production controller.
+BOX-005 is the current process boundary: it preserves that frozen 56-request
+aggregate, observes the 57-request aggregate
+`a7ae81207efbb6d315d2a11b61f7cbfa17d997e59ca74db7404c310bbecc24bb`, and
+executes a v4 250 × 100 × 125 mm solid/box response at lower corner
+(-125, -50, 0) mm through the production controller. BOX-006 remains inactive
 with exit `64`.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected

@@ -857,7 +857,7 @@ typed inactive.
 
 | Classification | BOX decision |
 |---|---|
-| Confirmed current fact | `ProjectAgentCommandController` exposes `createExtrudedRectangle`; its Automation/Editor path creates a rectangle sketch plus extrude body, commits one source generation, publishes one evaluated body, and topology tests prove 1 body/6 faces/12 edges/8 vertices. BOX-001 through BOX-004 expose this route through the reviewed solid/box action while BOX-005 remains inactive. |
+| Confirmed current fact | `ProjectAgentCommandController` exposes `createExtrudedRectangle`; its Automation/Editor path creates a rectangle sketch plus extrude body, commits one source generation, publishes one evaluated body, and topology tests prove 1 body/6 faces/12 edges/8 vertices. BOX-001 through BOX-005 expose this route through the reviewed solid/box action while BOX-006 remains inactive. |
 | Required ideal contract | A candidate describes one axis-aligned box by lower-corner origin and X/Y/Z dimensions; the existing production command remains mutation authority and an independent immutable source/B-Rep oracle remains result authority. |
 | Minimal difference | Add one benchmark-owned solid/box action, box projection/mapping/facade/oracle/result types, BOX activation dispatch, candidate-response v4, and focused/adapter/CLI evidence. Do not add a kernel command or a generic future-solid runner. |
 | Unresolved at design completion | No semantic or authority blocker remains. Each new aggregate digest and measured timing is intentionally observed and frozen only by its implementation gate rather than guessed here. |
@@ -985,6 +985,15 @@ Its 100 × 50 × 75 mm rectangular solid uses the same v4 solid/box response and
 production source/B-Rep route. A valid box at the wrong normal placement
 publishes once and is rejected by the immutable oracle without retry; zero
 height and BOX-005 remain typed prepublication/inactive failures.
+
+BOX-005 preserves the exact frozen 56-request aggregate
+`dc4c6fa1f96ae4181f54d48b34ae77b95d2548bc90935a3c7f0d7c51743efd9a` and
+advances the observed 57-request aggregate to
+`a7ae81207efbb6d315d2a11b61f7cbfa17d997e59ca74db7404c310bbecc24bb`.
+Its 250 × 100 × 125 mm rectangular solid uses the same v4 solid/box response
+and production source/B-Rep route. A valid box with height 100 mm is rejected
+by the immutable oracle after exactly one publication without retry; zero width
+and BOX-006 remain typed prepublication/inactive failures.
 
 After BOX-012, `T12-BOX-G` serially replays BOX-001...012 in exact lexical
 order. It requires twelve unique IDs, unit coverage millimetre 9/metre 2/inch
