@@ -55,7 +55,7 @@ rupa-agent-cad-benchmark request <CASE-ID>
 rupa-agent-cad-benchmark evaluate --response <PATH|->
 ```
 
-`request` validates that the ID is in the activated 96-case set and emits
+`request` validates that the ID is in the activated 97-case set and emits
 exactly one request-envelope JSON object to standard output. `evaluate` reads
 exactly one candidate-response envelope from the selected file, or from
 standard input when `-` is selected, then emits exactly one evaluation- or
@@ -130,10 +130,10 @@ Process-level tests build and invoke the actual executable and prove:
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
   millimetre/XY case, the complete CIR-001...012 category, ANG-001...016, and
   BOX-001...012, `CYL-001...008`, `CON-001...008`, `TRN-001...008`, and
-  `CMP-001...007`, and `SPH-001`, and rejects inactive `SPH-002`;
+  `CMP-001...007`, and `SPH-001...002`, and rejects inactive `SPH-003`;
 - JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, CON-001...008, TRN-001...008 transform, and CMP-001...007 compound responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`; the exact
-  SPH-001 unsupported declaration traverses the same executor and exits `2`
+  SPH-001...002 unsupported declarations traverse the same executor and exit `2`
   with `expectedUnsupported` because no analytic-sphere action is exposed;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
@@ -149,7 +149,7 @@ Process-level tests build and invoke the actual executable and prove:
   non-realized envelope, and exits `2`;
 - malformed, oversize, unknown-schema, mismatched-fingerprint, and inactive
   responses exit `64` without publication;
-- SPH-001's exact `analyticSphereUnavailable` decision exits `2` with
+- SPH-001...002 exact `analyticSphereUnavailable` decisions exit `2` with
   `expectedUnsupported`; substitute actions, generic unsupported declarations,
   and `finish` exit `2` with typed `invalidSubmission` and no fallback action;
 - all emitted evaluation/error JSON is bounded and private-data free.
@@ -934,10 +934,10 @@ known 94-request aggregate remains
 appending the actual `CMP-007` request freezes the 95-request aggregate as
 `f9060999bba0bfa121bca51593fe5468c67b0237eebb0b0f82acd2feaf66fe1a`.
 
-### SPH-001 current process boundary
+### SPH-001 frozen process checkpoint
 
-The current executable authority appends `SPH-001` as the 96th case and leaves
-`SPH-002` inactive. `request SPH-001` emits one bounded private-free context
+The frozen 96-case executable authority appends `SPH-001`.
+`request SPH-001` emits one bounded private-free context
 for a radius-5 mm analytic sphere centered at the origin. Its public capability
 snapshot reports `cad.solid.analytic-sphere@1` as unavailable with reason
 `not-exposed`.
@@ -947,13 +947,33 @@ An exact candidate-response v8 `unsupported` declaration with reason
 production executor and exits `2` with `expectedUnsupported`. A substitute box
 action or generic `capabilityUnavailable` declaration exits `2` with
 `invalidSubmission`; no reference action or synthetic sphere is executed.
-`request SPH-002` exits `64`.
 
 Schema v8, command surface, byte bound, and exit mapping remain unchanged. The
 frozen 95-request aggregate remains
 `f9060999bba0bfa121bca51593fe5468c67b0237eebb0b0f82acd2feaf66fe1a`;
 appending the actual `SPH-001` request freezes the 96-request aggregate as
 `2fef808b9d545a3867364ca1bd724029e5fc7fd9065d34b9933991fb8b91b0c4`.
+
+### SPH-002 current process boundary
+
+The current executable authority appends `SPH-002` as the 97th case and leaves
+`SPH-003` inactive. `request SPH-002` emits one bounded private-free context for
+a radius-25 mm analytic sphere centered at `(50, -25, 10)` mm. Its public
+capability snapshot reports `cad.solid.analytic-sphere@1` as unavailable with
+reason `not-exposed`.
+
+An exact candidate-response v8 `unsupported` declaration with reason
+`analyticSphereUnavailable`, supplied by file or standard input, traverses the
+production executor and exits `2` with `expectedUnsupported`. A substitute box
+action or generic `capabilityUnavailable` declaration exits `2` with
+`invalidSubmission`; no reference action or synthetic sphere is executed.
+`request SPH-003` exits `64`.
+
+Schema v8, command surface, byte bound, and exit mapping remain unchanged. The
+frozen 96-request aggregate remains
+`2fef808b9d545a3867364ca1bd724029e5fc7fd9065d34b9933991fb8b91b0c4`;
+appending the actual `SPH-002` request freezes the 97-request aggregate as
+`c92d00ee7d48e3be11aa0d3880bb21f4998b8c037d35a838f0c1a1a691eea66c`.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected
 case argument, so a case-mismatch process fixture cannot be constructed without

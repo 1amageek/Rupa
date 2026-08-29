@@ -9,10 +9,10 @@ between an external Agent process and the activated-case executor owned by
 [benchmark CLI](../RupaAgentCADBenchmarkCLI/DESIGN.md) supplies process arguments
 and standard streams; this target owns the JSON meaning used by that process.
 
-The adapter is limited to the 96 reviewed cases `LIN-001`...`LIN-012`,
+The adapter is limited to the 97 reviewed cases `LIN-001`...`LIN-012`,
 `REC-001`...`REC-012`, `CIR-001`...`CIR-012`, `ANG-001`...`ANG-016`,
 `BOX-001`...`BOX-012`, `CYL-001`...`CYL-008`, `CON-001`...`CON-008`, and
-`TRN-001`...`TRN-008`, `CMP-001`...`CMP-007`, and `SPH-001`. It does not activate a catalog case and does not make the
+`TRN-001`...`TRN-008`, `CMP-001`...`CMP-007`, and `SPH-001`...`SPH-002`. It does not activate a catalog case and does not make the
 remaining target specifications executable.
 
 ## Responsibilities and Boundaries
@@ -1182,10 +1182,9 @@ not change. The 94-request aggregate remains
 appending the actual bounded `CMP-007` request freezes the 95-request aggregate
 as `f9060999bba0bfa121bca51593fe5468c67b0237eebb0b0f82acd2feaf66fe1a`.
 
-### SPH-001 current external authority contract
+### SPH-001 frozen external authority checkpoint
 
-The current adapter authority appends `SPH-001` as the 96th case and leaves
-`SPH-002` typed inactive. Its public challenge requests one analytic sphere of
+The frozen 96-case adapter authority appends `SPH-001`. Its public challenge requests one analytic sphere of
 radius 5 mm centered at the origin. The public capability snapshot reports
 `cad.solid.analytic-sphere@1` as unavailable with reason `not-exposed`; the
 request does not expose private expectation, topology, telemetry, workspace,
@@ -1205,6 +1204,30 @@ not change. The frozen 95-request aggregate remains
 `f9060999bba0bfa121bca51593fe5468c67b0237eebb0b0f82acd2feaf66fe1a`;
 appending the actual bounded `SPH-001` request freezes the 96-request aggregate
 as `2fef808b9d545a3867364ca1bd724029e5fc7fd9065d34b9933991fb8b91b0c4`.
+
+### SPH-002 current external authority contract
+
+The current adapter authority appends `SPH-002` as the 97th case and leaves
+`SPH-003` typed inactive. Its public challenge requests one analytic sphere of
+radius 25 mm centered at `(50, -25, 10)` mm. The public capability snapshot
+reports `cad.solid.analytic-sphere@1` as unavailable with reason `not-exposed`;
+the translated case does not expose private expectation, topology, telemetry,
+workspace, or feature identity.
+
+An exact candidate-response v8 `unsupported` decision with reason
+`analyticSphereUnavailable` traverses the production executor and produces
+`expectedUnsupported`. A substitute box action and a generic
+`capabilityUnavailable` declaration each produce `invalidSubmission` without
+creating a fallback sphere action. The response remains a bounded, private-free
+non-realized result, and the adapter does not acquire sphere construction
+authority.
+
+The request, candidate-response v8, evaluation, error, manifest, catalog,
+expectation, capability, tolerance, fingerprint, and byte-bound contracts do
+not change. The frozen 96-request aggregate remains
+`2fef808b9d545a3867364ca1bd724029e5fc7fd9065d34b9933991fb8b91b0c4`;
+appending the actual bounded `SPH-002` request freezes the 97-request aggregate
+as `c92d00ee7d48e3be11aa0d3880bb21f4998b8c037d35a838f0c1a1a691eea66c`.
 
 ## Runtime Flows
 
@@ -1252,13 +1275,13 @@ classification and are projected only to stable non-private codes.
 
 | Invariant | Behavioral evidence |
 |---|---|
-| Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON includes BOX-001...012 `solid/box`, CYL-001...008 `solid/cylinder`, CON-001...008 `sketch/constraint`, TRN-001...008 `transform`, CMP-001...007 ordered role-bearing `compound`, and SPH-001 `unsupported`; candidate-response v8 carries the explicit discriminators, v1 through v7 and unknown current-schema discriminators are rejected, and every direct and nested case ID is the same scalar string. |
+| Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON includes BOX-001...012 `solid/box`, CYL-001...008 `solid/cylinder`, CON-001...008 `sketch/constraint`, TRN-001...008 `transform`, CMP-001...007 ordered role-bearing `compound`, and SPH-001...002 `unsupported`; candidate-response v8 carries the explicit discriminators, v1 through v7 and unknown current-schema discriminators are rejected, and every direct and nested case ID is the same scalar string. |
 | Exact public-context binding | The request fingerprint equals the live executor context; changed schema, case, context byte, capability, budget, or fingerprint is rejected before publication. |
-| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, CIR-001...012, ANG-001...016, BOX-001...012, CYL-001...008, CON-001...008, TRN-001...008, CMP-001...007, and SPH-001; SPH-002 remains typed inactive. The frozen 80-request prefix remains `91f68ea42c6e131263b499995637e9f9b7dbce64fcf441bdcdf385c9f341efb0`; TRN-001 preserves 81-request aggregate `e4c0ad812c421428ed59c7dd2671922e9e1f667af3f574d0ea87a461e53aab82`, TRN-002 produces 82-request aggregate `9ca519a087729b5aa46e549ef3ec6f903158a8aff159dce2bcce09182f0b46ef`, TRN-003 produces 83-request aggregate `02a7bfa19eed2aa8cdef578058a97b48b5e88822840cbd23343590a8281b579a`, TRN-004 produces 84-request aggregate `c4d86468d4992df1030e0ed45c98b823f33caa9bf904ea7a6252950c95f017d0`, TRN-005 produces 85-request aggregate `c5c61320be710e1fe290b86e25ad9afb83b2d687c608c13aa3b4c6e2ee100779`, TRN-006 produces 86-request aggregate `f7061d03903393f8384f3c23eed29c4eb4ef8529e27f03fca5e268e698b01f90`, TRN-007 produces 87-request aggregate `d1c0aaf385f5f67658a5052f26f3b38cf4970ce5377a9f282e8022f3dcd482ec`, TRN-008 produces 88-request aggregate `8a8c89deee4c596749cd6411823ab475bfd13ef7da7ccbff1c66b0425ee53795`, CMP-001 produces 89-request aggregate `858477370524c450594b67700087b9f38ba13dd9883cd322ba821142cb1c1678`, CMP-002 produces 90-request aggregate `bec563a757811e492c5ce3bf89514cfe3526ead2f69041ca2f15eabd2c035855`, CMP-003 produces 91-request aggregate `c3da3fd9024e8a568da27b9961abbd06b6d1e99dab621d297af8b8f222f07813`, CMP-004 produces 92-request aggregate `e1984e09864c758b0876c386ddef9bab3f810716f9c1b44dbe1e3c46df082a27`, CMP-005 produces 93-request aggregate `bcb6db981a67668a16a18c2654ec2b6465668d7a8396761bfc3bacdcbe7d67dc`, CMP-006 produces 94-request aggregate `978ee6b0ac70c3d90a87b0f44fb634d4aec0fbaf42126db9ed8721bec7431c43`, CMP-007 produces 95-request aggregate `f9060999bba0bfa121bca51593fe5468c67b0237eebb0b0f82acd2feaf66fe1a`, and SPH-001 produces 96-request aggregate `2fef808b9d545a3867364ca1bd724029e5fc7fd9065d34b9933991fb8b91b0c4`. |
+| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, CIR-001...012, ANG-001...016, BOX-001...012, CYL-001...008, CON-001...008, TRN-001...008, CMP-001...007, and SPH-001...002; SPH-003 remains typed inactive. The frozen 80-request prefix remains `91f68ea42c6e131263b499995637e9f9b7dbce64fcf441bdcdf385c9f341efb0`; TRN-001 preserves 81-request aggregate `e4c0ad812c421428ed59c7dd2671922e9e1f667af3f574d0ea87a461e53aab82`, TRN-002 produces 82-request aggregate `9ca519a087729b5aa46e549ef3ec6f903158a8aff159dce2bcce09182f0b46ef`, TRN-003 produces 83-request aggregate `02a7bfa19eed2aa8cdef578058a97b48b5e88822840cbd23343590a8281b579a`, TRN-004 produces 84-request aggregate `c4d86468d4992df1030e0ed45c98b823f33caa9bf904ea7a6252950c95f017d0`, TRN-005 produces 85-request aggregate `c5c61320be710e1fe290b86e25ad9afb83b2d687c608c13aa3b4c6e2ee100779`, TRN-006 produces 86-request aggregate `f7061d03903393f8384f3c23eed29c4eb4ef8529e27f03fca5e268e698b01f90`, TRN-007 produces 87-request aggregate `d1c0aaf385f5f67658a5052f26f3b38cf4970ce5377a9f282e8022f3dcd482ec`, TRN-008 produces 88-request aggregate `8a8c89deee4c596749cd6411823ab475bfd13ef7da7ccbff1c66b0425ee53795`, CMP-001 produces 89-request aggregate `858477370524c450594b67700087b9f38ba13dd9883cd322ba821142cb1c1678`, CMP-002 produces 90-request aggregate `bec563a757811e492c5ce3bf89514cfe3526ead2f69041ca2f15eabd2c035855`, CMP-003 produces 91-request aggregate `c3da3fd9024e8a568da27b9961abbd06b6d1e99dab621d297af8b8f222f07813`, CMP-004 produces 92-request aggregate `e1984e09864c758b0876c386ddef9bab3f810716f9c1b44dbe1e3c46df082a27`, CMP-005 produces 93-request aggregate `bcb6db981a67668a16a18c2654ec2b6465668d7a8396761bfc3bacdcbe7d67dc`, CMP-006 produces 94-request aggregate `978ee6b0ac70c3d90a87b0f44fb634d4aec0fbaf42126db9ed8721bec7431c43`, CMP-007 produces 95-request aggregate `f9060999bba0bfa121bca51593fe5468c67b0237eebb0b0f82acd2feaf66fe1a`, SPH-001 produces 96-request aggregate `2fef808b9d545a3867364ca1bd724029e5fc7fd9065d34b9933991fb8b91b0c4`, and SPH-002 produces 97-request aggregate `c92d00ee7d48e3be11aa0d3880bb21f4998b8c037d35a838f0c1a1a691eea66c`. |
 | Bounded I/O | Exact-limit input succeeds, `limit + 1` fails before decode and leaves executor evaluation count zero, chunked stdin and file paths behave identically, no public typed-response execution bypass exists, encoded output cannot exceed the same bound, and the guaranteed infrastructure document is byte-equal to normal encoding, bounded, and decodable. |
 | Candidate/oracle separation | Static dependency and source scans prove the adapter imports only public benchmark contracts; encoded fixtures contain no expectation/oracle/source snapshot fields or values. |
-| Same production route | JSON candidates for activated line, rectangle, circle, angle, box, cylinder, constraint, TRN-001...008 transform, and CMP-001...007 compound cases realize through the public executor; SPH-001 traverses the same executor, observes the unavailable production capability, and returns `expectedUnsupported` without synthesizing geometry. Wrong geometry publishes once then the category's exact oracle rejects without retry, while invalid transform and compound inputs fail before publication. |
-| Non-action honesty | SPH-001's exact `analyticSphereUnavailable` declaration produces `expectedUnsupported`; substitute actions, generic unsupported declarations, and `finish` produce `invalidSubmission` with no fallback reference action. |
+| Same production route | JSON candidates for activated line, rectangle, circle, angle, box, cylinder, constraint, TRN-001...008 transform, and CMP-001...007 compound cases realize through the public executor; SPH-001...002 traverse the same executor, observe the unavailable production capability, and return `expectedUnsupported` without synthesizing geometry. Wrong geometry publishes once then the category's exact oracle rejects without retry, while invalid transform and compound inputs fail before publication. |
+| Non-action honesty | SPH-001...002 exact `analyticSphereUnavailable` declarations produce `expectedUnsupported`; substitute actions, generic unsupported declarations, and `finish` produce `invalidSubmission` with no fallback reference action. |
 
 Changes to public candidate Codable shapes, public context fields, capability
 snapshot generation, activation boundary, fingerprint algorithm, byte bound,

@@ -124,4 +124,67 @@ struct CADSphereOracleTests {
             }
         }
     }
+
+    @Test
+    func sphere002RejectsWrongCenterAndNonAnalyticSubstitute() throws {
+        let entry = try CADSpherePreparationCase.sph002.catalogEntry
+        guard case let .sphere(expected) = entry.input else {
+            Issue.record("SPH-002 must retain a sphere expectation.")
+            return
+        }
+        let volume = 4.0 * Double.pi * pow(expected.radius.meters, 3.0) / 3.0
+        let wrongCenter = CADSphereObservedGeometry(
+            representation: .analyticSphere,
+            center: CADPoint3D(x: 50, y: -25, z: 0, unit: .millimeter),
+            radiusMeters: expected.radius.meters,
+            bodyCount: 1,
+            faceCount: 8,
+            edgeCount: 12,
+            vertexCount: 6,
+            analyticSurfaceCount: 8,
+            featureCount: 1,
+            volumeCubicMeters: volume,
+            isClosed: true,
+            sourceIsAuthoritative: true
+        )
+        let cylinderSubstitute = CADSphereObservedGeometry(
+            representation: .cylinder,
+            center: expected.center,
+            radiusMeters: expected.radius.meters,
+            bodyCount: 1,
+            faceCount: 8,
+            edgeCount: 12,
+            vertexCount: 6,
+            analyticSurfaceCount: 8,
+            featureCount: 1,
+            volumeCubicMeters: volume,
+            isClosed: true,
+            sourceIsAuthoritative: true
+        )
+
+        do {
+            _ = try CADSphereOracle.evaluate(
+                expected: expected,
+                challenge: entry.challenge,
+                observed: wrongCenter
+            )
+            Issue.record("SPH-002 must reject an analytic sphere at the wrong center.")
+        } catch let error as CADSphereOracleError {
+            guard case .mismatch = error else {
+                Issue.record("Unexpected SPH-002 center error: \(error)")
+                return
+            }
+        }
+
+        do {
+            _ = try CADSphereOracle.evaluate(
+                expected: expected,
+                challenge: entry.challenge,
+                observed: cylinderSubstitute
+            )
+            Issue.record("SPH-002 must reject a non-analytic cylinder substitute.")
+        } catch let error as CADSphereOracleError {
+            #expect(error == .substitute(.cylinder))
+        }
+    }
 }

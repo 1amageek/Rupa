@@ -585,7 +585,7 @@ struct CADCylinderCaseTests {
     func executorActivatesReviewedCylindersAndUsesProductionCapability() async throws {
         let executor = DefaultCADActivatedCaseExecutor()
 
-        #expect(executor.activatedCaseIDs.count == 96)
+        #expect(executor.activatedCaseIDs.count == 97)
         #expect(executor.activatedCaseIDs.prefix(72).last == "CYL-008")
         #expect(executor.activatedCaseIDs.prefix(88).last == "TRN-008")
         #expect(executor.activatedCaseIDs.prefix(89).last == "CMP-001")
@@ -595,7 +595,8 @@ struct CADCylinderCaseTests {
         #expect(executor.activatedCaseIDs.prefix(93).last == "CMP-005")
         #expect(executor.activatedCaseIDs.prefix(94).last == "CMP-006")
         #expect(executor.activatedCaseIDs.prefix(95).last == "CMP-007")
-        #expect(executor.activatedCaseIDs.last == "SPH-001")
+        #expect(executor.activatedCaseIDs.prefix(96).last == "SPH-001")
+        #expect(executor.activatedCaseIDs.last == "SPH-002")
         #expect(try executor.context(for: "CYL-001").capabilities.statuses.first?.available == true)
         let result = try await executor.evaluate(
             caseID: "CYL-001",
@@ -603,17 +604,17 @@ struct CADCylinderCaseTests {
         )
         #expect(result.outcome == .realized)
         do {
-            _ = try executor.context(for: "SPH-002")
-            Issue.record("SPH-002 must remain inactive.")
+            _ = try executor.context(for: "SPH-003")
+            Issue.record("SPH-003 must remain inactive.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("SPH-002"))
+            #expect(error == .inactiveCase("SPH-003"))
         }
     }
 
     @Test
     func activatedCylinderBoundaryContainsOnlyReviewedCases() throws {
         #expect(CADActivatedCylinderCase.allCases == [.cylinder001, .cylinder002, .cylinder003, .cylinder004, .cylinder005, .cylinder006, .cylinder007, .cylinder008])
-        for rejected in ["CYL-009", "BOX-001", "SPH-002"] {
+        for rejected in ["CYL-009", "BOX-001", "SPH-003"] {
             do {
                 _ = try CADActivatedCylinderCase(caseID: rejected)
                 Issue.record("\(rejected) must remain outside the cylinder activation boundary.")

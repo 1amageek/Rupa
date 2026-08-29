@@ -56,13 +56,13 @@ struct CADSphereCaseTests {
     }
 
     @Test
-    func sphereActivationBoundaryContainsOnlySPH001() throws {
-        #expect(CADActivatedSphereCase.allCases.map(\.rawValue) == ["SPH-001"])
+    func sphereActivationBoundaryContainsSPH001ThroughSPH002() throws {
+        #expect(CADActivatedSphereCase.allCases.map(\.rawValue) == ["SPH-001", "SPH-002"])
         #expect(CADSpherePreparationCase.allCases.map(\.rawValue) == [
             "SPH-001", "SPH-002", "SPH-003", "SPH-004", "SPH-005",
         ])
 
-        for inactiveID in ["SPH-002", "SPH-003", "SPH-004", "SPH-005"] {
+        for inactiveID in ["SPH-003", "SPH-004", "SPH-005"] {
             do {
                 _ = try CADActivatedSphereCase(caseID: inactiveID)
                 Issue.record("\(inactiveID) must remain outside the sphere activation boundary.")
@@ -218,12 +218,13 @@ struct CADSphereCaseTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func executorActivatesSphereCapabilityObservationAndLeavesSPH002Inactive() async throws {
+    func executorActivatesSphereCapabilityObservationAndLeavesSPH003Inactive() async throws {
         let executor = DefaultCADActivatedCaseExecutor()
 
-        #expect(executor.activatedCaseIDs.count == 96)
+        #expect(executor.activatedCaseIDs.count == 97)
         #expect(executor.activatedCaseIDs.prefix(95).last == "CMP-007")
-        #expect(executor.activatedCaseIDs.last == "SPH-001")
+        #expect(executor.activatedCaseIDs.prefix(96).last == "SPH-001")
+        #expect(executor.activatedCaseIDs.last == "SPH-002")
 
         let context = try executor.context(for: "SPH-001")
         #expect(context.challenge.category == .sphere)
@@ -246,10 +247,56 @@ struct CADSphereCaseTests {
         try result.validate()
 
         do {
-            _ = try executor.context(for: "SPH-002")
-            Issue.record("SPH-002 must remain inactive.")
+            _ = try executor.context(for: "SPH-003")
+            Issue.record("SPH-003 must remain inactive.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("SPH-002"))
+            #expect(error == .inactiveCase("SPH-003"))
+        }
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func sphere002PreservesItsPublicTargetAndRejectsSolidSubstitutesBeforePublication() async throws {
+        let entry = try CADSpherePreparationCase.sph002.catalogEntry
+        guard case let .sphere(expected) = entry.input else {
+            Issue.record("SPH-002 must retain an analytic sphere target.")
+            return
+        }
+        #expect(expected.center == CADPoint3D(x: 50, y: -25, z: 10, unit: .millimeter))
+        #expect(expected.radius == CADLength(value: 25, unit: .millimeter))
+
+        let decisions: [CADCandidateDecision] = [
+            .action(.automation(.solid(.box(
+                name: "sphere-substitute-box",
+                origin: CADPoint3D(x: 25, y: -50, z: -15, unit: .millimeter),
+                width: CADLength(value: 50, unit: .millimeter),
+                depth: CADLength(value: 50, unit: .millimeter),
+                height: CADLength(value: 50, unit: .millimeter)
+            )))),
+            .action(.automation(.solid(.cylinder(
+                name: "sphere-substitute-cylinder",
+                baseCenter: CADPoint3D(x: 50, y: -25, z: -15, unit: .millimeter),
+                axis: CADDirection3D(x: 0, y: 0, z: 1),
+                radius: CADLength(value: 25, unit: .millimeter),
+                depth: CADLength(value: 50, unit: .millimeter)
+            )))),
+        ]
+
+        for decision in decisions {
+            let result = try await CADSphereCaseRunner(case: .sphere002).run(
+                candidate: FixedSphereDecisionCandidate(decision: decision)
+            )
+            try result.validate()
+            #expect(result.outcome == .invalidSubmission)
+            #expect(result.routeEvidence.didPublish == false)
+            #expect(result.routeEvidence.commandCount == 0)
+            #expect(result.routeEvidence.sourceMutationCount == 0)
+            #expect(result.telemetry.capabilityRequestCount == 1)
+            #expect(result.telemetry.readCount == 1)
+            #expect(result.telemetry.actionCount == 0)
+            #expect(result.telemetry.publicationCount == 0)
+            #expect(result.routeEvidence.cleanupCompleted)
+            #expect(result.routeEvidence.remainingRegistrationCount == 0)
         }
     }
 
