@@ -1532,9 +1532,41 @@ Authority remains exactly 75 until the internal CON-004 gate passes. Frozen
 `9a9759ff74dbe5222940164edbbb60040f732453889fe2648ed0c2e205e6e69c`
 must remain byte-identical, after which the 76-request aggregate
 `8878fa7dc59023aba4097c833bcca24f793829df83d8ad42106c8efebb985b79`
-is frozen across executor, adapter, and CLI evidence. CON-005 remains typed
-inactive. Schema, catalog, fingerprint, tolerance, shared constraint
+is frozen across executor, adapter, and CLI evidence. At CON-004 completion,
+CON-005 remained typed inactive. Schema, catalog, fingerprint, tolerance, shared constraint
 infrastructure, kernel, renderer/Mesh, and later cases do not change.
+
+### CON-005 vertical single-line activation
+
+CON-005 reuses candidate-response v6 and the existing constraint projection,
+mapping, runner, lifecycle, production `createSketch` controller route, and
+immutable source oracle unchanged. Its public target is one XY millimetre line
+(0, 0, 0)→(0, 25, 0) under the `vertical` relation. Mapping assigns one fresh
+entity ID and must write exactly `.vertical(first)` on the affine XY plane
+anchored at the line start. The oracle requires the exact oriented world line,
+one ordered curve entity, the exact unary relation reference, canonical
+`relation` primary binding, and zero second entities, dimensions, regions, or
+bodies.
+
+Changing only the relation to `horizontal` is structurally valid and must
+publish once before relation-sensitive oracle rejection without retry. Adding
+any second line to a `vertical` action violates the unary relation shape and
+fails before command/publication. Timeout publishes nothing and cleanup always
+removes the owned registration. Success advances publication, document
+generation, and transaction revision +1 with workspace unchanged and records
+action 1, command 1, read at least 1, entity 1, feature 1, body 0, and positive
+planning, route, oracle, total, and cleanup timings. Candidate-visible data
+contains only the public vertical relation, plane, unit, and line geometry.
+
+Authority remains exactly 76 until the internal CON-005 gate passes. Frozen
+76-request aggregate
+`8878fa7dc59023aba4097c833bcca24f793829df83d8ad42106c8efebb985b79`
+must remain byte-identical; the 77-request aggregate
+`c4734be651136aa602367bbbc1ff1db68c5e933153146be1ca751325eca6f98e`
+is frozen as a literal shared by executor, adapter, and CLI evidence. CON-006
+remains typed inactive. Schema, catalog, fingerprint,
+tolerance, shared constraint infrastructure, kernel, renderer/Mesh, and later
+cases do not change.
 
 ### Vertical Case Gate
 

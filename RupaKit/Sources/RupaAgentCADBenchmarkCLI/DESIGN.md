@@ -129,8 +129,8 @@ Process-level tests build and invoke the actual executable and prove:
 - `request` emits valid v1 JSON for an activated line, rectangle, REC-009
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
   millimetre/XY case, the complete CIR-001...012 category, ANG-001...016, and
-  BOX-001...012, `CYL-001...008`, and `CON-001...004`, and rejects inactive `CON-005`;
-- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, and CON-001...004 responses traverse the adapter, production
+  BOX-001...012, `CYL-001...008`, and `CON-001...005`, and rejects inactive `CON-006`;
+- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, and CON-001...005 responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
@@ -669,9 +669,30 @@ aggregate
 `9a9759ff74dbe5222940164edbbb60040f732453889fe2648ed0c2e205e6e69c`,
 then freezes the 76-request aggregate
 `8878fa7dc59023aba4097c833bcca24f793829df83d8ad42106c8efebb985b79`.
-`CON-005` remains inactive and
-exits `64`. Candidate-response v6, bounded/private-free one-JSON output,
+At CON-004 completion, `CON-005` remained inactive and exited `64`.
+Candidate-response v6, bounded/private-free one-JSON output,
 deadline ownership, and exit mapping remain unchanged.
+
+### CON-005 process contract
+
+CON-005 adds no CLI command or argument. `request CON-005` emits its bounded v1
+public context; `evaluate --response <PATH|->` consumes the exact v6 unary
+`vertical` action through the adapter, activated executor, production
+`ProjectAgentCommandController`/`createSketch` transaction, and immutable
+source-relation oracle. Exact file and stdin responses exit `0` with one
+private-free `realized` JSON document.
+
+The same-line `horizontal` substitute exits `2` after one publication without
+retry, while a vertical response containing a second line exits `2` before
+publication. Authority remains 76 until the internal gate passes and preserves
+aggregate
+`8878fa7dc59023aba4097c833bcca24f793829df83d8ad42106c8efebb985b79`.
+The 77-request aggregate
+`c4734be651136aa602367bbbc1ff1db68c5e933153146be1ca751325eca6f98e`
+is frozen as a literal shared with executor and adapter evidence. `CON-006`
+remains inactive and exits `64`.
+Candidate-response v6, bounded/private-free one-JSON output, deadline
+ownership, and exit mapping remain unchanged.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected
 case argument, so a case-mismatch process fixture cannot be constructed without
