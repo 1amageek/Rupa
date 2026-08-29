@@ -932,13 +932,43 @@ and preserves aggregate
 `c4734be651136aa602367bbbc1ff1db68c5e933153146be1ca751325eca6f98e`.
 The 78-request aggregate
 `95be7c1009a42bc3f81b0a7df50bec09256829f6034a6a76b37d70271486e590`
-is frozen as a literal in the adapter tests and this design. The
-ordered executor-derived set then ends in CON-006 and CON-007 remains typed
-inactive. Exact and wrong bounded responses, degenerate-geometry failure,
+is frozen as a literal in the adapter tests and this design. At CON-006
+completion, the ordered executor-derived set ended in CON-006 and CON-007
+remained typed inactive. Exact and wrong bounded responses, degenerate-geometry failure,
 production evaluation, inactive boundary, prefix-digest, aggregate-digest, and
 privacy tests own this transition. Candidate-response v6,
 request/evaluation/error, manifest/catalog, fingerprint, expectation,
 capability, tolerance, failure projection, and byte bounds remain unchanged.
+
+### CON-007 external authority contract
+
+CON-007 reuses candidate-response v6 and the existing `sketch/constraint` wire.
+Its bounded response preserves `concentric` and two ordered public XY
+millimetre circles at center (0, 0, 0), with radii 10 mm and 25 mm, then
+traverses the live-fingerprint check, activated executor, production
+`createSketch` transaction, and immutable source oracle. The private oracle
+separately proves the exact authored circles/relation and the one derived
+annular profile region required by the production FeatureNode `.profile`
+output; derived-region expectations never enter the request, response, or
+sanitized failure envelope. An
+`equalRadius` substitute whose second radius is 10 mm becomes sanitized
+`invalidSubmission` only after one publication without retry; a zero first
+radius fails before mutation.
+
+External authority remains exactly 78 until the internal CON-007 gate passes
+and preserves aggregate
+`95be7c1009a42bc3f81b0a7df50bec09256829f6034a6a76b37d70271486e590`.
+The 79-request aggregate
+`d893db3650a26a276826b09dd4825d1f032d03a4faf11abf3e1d2d65caa13136`
+is frozen as a literal in the adapter tests and this design. The
+ordered executor-derived set then ends in CON-007 and CON-008 remains typed
+inactive. Exact and wrong bounded responses, zero-radius failure, production
+evaluation, inactive boundary, prefix-digest, aggregate-digest, and privacy
+tests own this transition. Candidate-response v6,
+request/evaluation/error, manifest/catalog, fingerprint, expectation,
+capability, tolerance, failure projection, and byte bounds remain unchanged.
+The benchmark-owned oracle-policy change does not alter adapter schema or
+external authority.
 
 ## Runtime Flows
 
@@ -986,9 +1016,9 @@ classification and are projected only to stable non-private codes.
 
 | Invariant | Behavioral evidence |
 |---|---|
-| Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON includes BOX-001...012 `solid/box`, CYL-001...008 `solid/cylinder`, and CON-001...006 `sketch/constraint`; candidate-response v6 carries the explicit discriminators, v1 through v5 and unknown current-schema discriminators are rejected, and every direct and nested case ID is the same scalar string. |
+| Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON includes BOX-001...012 `solid/box`, CYL-001...008 `solid/cylinder`, and CON-001...007 `sketch/constraint`; candidate-response v6 carries the explicit discriminators, v1 through v5 and unknown current-schema discriminators are rejected, and every direct and nested case ID is the same scalar string. |
 | Exact public-context binding | The request fingerprint equals the live executor context; changed schema, case, context byte, capability, budget, or fingerprint is rejected before publication. |
-| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, CIR-001...012, ANG-001...016, BOX-001...012, CYL-001...008, and CON-001...006. The frozen 77-request prefix remains `c4734be651136aa602367bbbc1ff1db68c5e933153146be1ca751325eca6f98e`; the frozen 78-request aggregate is `95be7c1009a42bc3f81b0a7df50bec09256829f6034a6a76b37d70271486e590`; all activated constraints traverse production `createSketch` and the exact source-relation oracle, while CON-007 remains typed inactive. |
+| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, CIR-001...012, ANG-001...016, BOX-001...012, CYL-001...008, and CON-001...007. The frozen 78-request prefix remains `95be7c1009a42bc3f81b0a7df50bec09256829f6034a6a76b37d70271486e590`; the frozen 79-request aggregate is `d893db3650a26a276826b09dd4825d1f032d03a4faf11abf3e1d2d65caa13136`; all activated constraints traverse production `createSketch` and the exact source-relation oracle, while CON-008 remains typed inactive. |
 | Bounded I/O | Exact-limit input succeeds, `limit + 1` fails before decode and leaves executor evaluation count zero, chunked stdin and file paths behave identically, no public typed-response execution bypass exists, encoded output cannot exceed the same bound, and the guaranteed infrastructure document is byte-equal to normal encoding, bounded, and decodable. |
 | Candidate/oracle separation | Static dependency and source scans prove the adapter imports only public benchmark contracts; encoded fixtures contain no expectation/oracle/source snapshot fields or values. |
 | Same production route | JSON candidates for activated line, rectangle, circle, angle, box, cylinder, and constraint cases realize through the public executor; wrong geometry publishes once then the category's exact oracle rejects without retry. |

@@ -1597,10 +1597,69 @@ Authority remains exactly 77 until the internal CON-006 gate passes. Frozen
 `c4734be651136aa602367bbbc1ff1db68c5e933153146be1ca751325eca6f98e`
 must remain byte-identical; the 78-request aggregate
 `95be7c1009a42bc3f81b0a7df50bec09256829f6034a6a76b37d70271486e590`
-is frozen as a literal shared by executor, adapter, and CLI evidence. CON-007
-remains typed inactive. Schema, catalog, fingerprint,
+is frozen as a literal shared by executor, adapter, and CLI evidence. At
+CON-006 completion, CON-007 remained typed inactive. Schema, catalog, fingerprint,
 tolerance, shared constraint infrastructure, kernel, renderer/Mesh, and later
 cases do not change.
+
+### CON-007 concentric two-circle activation
+
+CON-007 reuses candidate-response v6 and the existing constraint projection,
+mapping, runner, lifecycle, and production `createSketch` controller route.
+It makes one local extension to the private constraint oracle: authored source
+state and derived profile observation are validated as separate authorities.
+Its public target is two ordered XY
+millimetre circles sharing world center (0, 0, 0): first radius 10 mm and
+second radius 25 mm, under the `concentric` relation. Mapping assigns two fresh
+entity IDs and must write exactly `.concentric(first, second)` on the affine XY
+plane anchored at the first circle center. The oracle requires the exact
+ordered world centers and radii, exact binary relation references, canonical
+`relation` primary binding, zero authored dimensions and bodies, and no
+missing, extra, or substituted authored source.
+
+Confirmed production behavior is that `appendSketchFeature` publishes both
+`.profile` and `.curve` FeatureNode outputs even when the product-facing
+`geometryRole` is `.curve`. `SketchEntitySnapshotService` therefore derives a
+profile region from closed circles. Feature output capability and product
+geometry role are different authorities: CON-007 must not change RupaCore to
+suppress `.profile`. For the exact nested circles, the private oracle requires
+exactly one derived annular region whose source feature and profile index are
+canonical, whose plane and sketch-local center (0, 0), corresponding to world
+center (0, 0, 0), match the expected affine XY source,
+whose area is `pi * (0.025^2 - 0.010^2)` square metres within the benchmark's
+`ModelingTolerance`-derived comparison, and whose outer boundary has one
+circular segment. The exact two authored circles plus the annular area prove
+the inner hole without exposing derived-region data to the candidate. Existing
+line constraints CON-001...006 continue to require zero derived regions.
+
+Changing the relation to `equalRadius` and the second radius to 10 mm creates a
+structurally and geometrically valid substitute. It must publish once before
+the relation-and-geometry-sensitive oracle rejects it without retry. Setting
+the first radius to 0 mm fails non-degenerate circle validation before
+command/publication. Timeout publishes nothing and cleanup always removes the
+owned registration. Success advances publication, document generation, and
+transaction revision +1 with workspace unchanged and records action 1,
+command 1, read at least 1, entity 2, feature 1, body 0, and positive planning,
+route, oracle, total, and cleanup timings. Candidate-visible data contains only
+the public concentric relation, plane, unit, ordered centers, and radii.
+
+Authority remains exactly 78 until the internal CON-007 gate passes. Frozen
+78-request aggregate
+`95be7c1009a42bc3f81b0a7df50bec09256829f6034a6a76b37d70271486e590`
+must remain byte-identical; the 79-request aggregate
+`d893db3650a26a276826b09dd4825d1f032d03a4faf11abf3e1d2d65caa13136`
+is frozen as a literal shared by executor, adapter, and CLI evidence. CON-008
+remains typed inactive. Schema, catalog, fingerprint,
+tolerance, projection/mapping, lifecycle, RupaCore FeatureNode output
+semantics, kernel, renderer/Mesh, and CON-008 behavior do not change. Focused
+oracle-policy tests reject zero, extra, wrong-source, wrong-selection,
+wrong-plane, wrong-center, wrong-area, out-of-tolerance-area, and
+wrong-boundary derived-region observations, while accepting area implied by
+source radii inside the linear tolerance interval. The actual production route
+accepts the exact annulus, while existing line-case tests regress their
+zero-region contract. The oracle computes the expected annular observation
+analytically from private case expectations rather than reusing the production
+profile extractor as its authority.
 
 ### Vertical Case Gate
 

@@ -129,8 +129,8 @@ Process-level tests build and invoke the actual executable and prove:
 - `request` emits valid v1 JSON for an activated line, rectangle, REC-009
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
   millimetre/XY case, the complete CIR-001...012 category, ANG-001...016, and
-  BOX-001...012, `CYL-001...008`, and `CON-001...006`, and rejects inactive `CON-007`;
-- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, and CON-001...006 responses traverse the adapter, production
+  BOX-001...012, `CYL-001...008`, and `CON-001...007`, and rejects inactive `CON-008`;
+- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, and CON-001...007 responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
@@ -710,7 +710,30 @@ aggregate
 `c4734be651136aa602367bbbc1ff1db68c5e933153146be1ca751325eca6f98e`.
 The 78-request aggregate
 `95be7c1009a42bc3f81b0a7df50bec09256829f6034a6a76b37d70271486e590`
-is frozen as a literal shared with executor and adapter evidence. `CON-007`
+is frozen as a literal shared with executor and adapter evidence. At CON-006
+completion, `CON-007` remained inactive and exited `64`.
+Candidate-response v6, bounded/private-free one-JSON output, deadline
+ownership, and exit mapping remain unchanged.
+
+### CON-007 process contract
+
+CON-007 adds no CLI command or argument. `request CON-007` emits its bounded v1
+public context; `evaluate --response <PATH|->` consumes the exact v6 binary
+`concentric` action through the adapter, activated executor, production
+`ProjectAgentCommandController`/`createSketch` transaction, and immutable
+source oracle. Exact file and stdin responses exit `0` only after the private
+oracle proves both the authored circles/relation and the expected derived
+annular profile region; the CLI exposes neither derived-region expectations nor
+source authority and emits one private-free `realized` JSON document.
+
+The `equalRadius`/10 mm second-circle substitute exits `2` after one
+publication without retry, while a response whose first radius is 0 mm exits
+`2` before publication. Authority remains 78 until the internal gate passes
+and preserves aggregate
+`95be7c1009a42bc3f81b0a7df50bec09256829f6034a6a76b37d70271486e590`.
+The 79-request aggregate
+`d893db3650a26a276826b09dd4825d1f032d03a4faf11abf3e1d2d65caa13136`
+is frozen as a literal shared with executor and adapter evidence. `CON-008`
 remains inactive and exits `64`.
 Candidate-response v6, bounded/private-free one-JSON output, deadline
 ownership, and exit mapping remain unchanged.

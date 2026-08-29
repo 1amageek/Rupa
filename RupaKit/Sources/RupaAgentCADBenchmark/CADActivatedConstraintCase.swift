@@ -8,6 +8,7 @@ enum CADActivatedConstraintCase: String, CaseIterable, Equatable, Hashable, Send
     case constraint004 = "CON-004"
     case constraint005 = "CON-005"
     case constraint006 = "CON-006"
+    case constraint007 = "CON-007"
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)

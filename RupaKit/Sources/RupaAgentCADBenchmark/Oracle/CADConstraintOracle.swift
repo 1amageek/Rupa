@@ -128,7 +128,6 @@ enum CADConstraintOracle {
               source.counts.entityCount == expectedCount,
               source.counts.constraintCount == 1,
               source.counts.dimensionCount == 0,
-              source.counts.regionCount == 0,
               source.sketches.count == 1,
               let sketchEntry = source.sketches.first,
               sketchEntry.sourceFeatureID == featureDescription,
@@ -147,6 +146,14 @@ enum CADConstraintOracle {
         guard affectedEntries.count == expectedAffectedCount else {
             throw mismatch("The immutable relation references do not match the source relation.")
         }
+        try CADConstraintDerivedRegionOracle.validate(
+            source: source,
+            expected: expected,
+            expectedPlane: expectedPlane,
+            sourceFeatureID: featureDescription,
+            sceneNodeID: sketchEntry.sceneNodeID,
+            tolerance: tolerance
+        )
         guard snapshot.evaluationSnapshot.bodyCount == 0 else {
             throw mismatch("A constraint case must leave zero evaluated bodies.")
         }
