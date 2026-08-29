@@ -742,6 +742,48 @@ struct CADJSONAdapterTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
+    func cylinder004WireActionExecutesNegativeZProductionRoute() async throws {
+        let adapter = CADJSONAdapter()
+        let request = try adapter.makeRequest(for: "CYL-004")
+        let response = try CADJSONCandidateResponseEnvelope(
+            caseID: request.caseID,
+            context: request.context,
+            decision: .action(cylinder004Action(name: "CYL-004"))
+        )
+        let requestJSON = String(decoding: try CADJSONBoundedCodec.encode(request), as: UTF8.self)
+        let responseJSON = String(decoding: try CADJSONBoundedCodec.encode(response), as: UTF8.self)
+        #expect(requestJSON.contains("base center (0.0, 0.0, -100.0) mm"))
+        #expect(requestJSON.contains("radius 50.0 mm and depth 250.0 mm"))
+        #expect(responseJSON.contains("\"axis\":{\"x\":0,\"y\":0,\"z\":-1}"))
+
+        let evaluation = try await adapter.evaluate(responseData: CADJSONBoundedCodec.encode(response))
+        #expect(evaluation.result?.outcome == .realized)
+        #expect(evaluation.error == nil)
+
+        let wrongResponse = try CADJSONCandidateResponseEnvelope(
+            caseID: request.caseID,
+            context: request.context,
+            decision: .action(cylinder004Action(
+                name: "CYL-004.reversed-axis",
+                axis: CADDirection3D(x: 0, y: 0, z: 1)
+            ))
+        )
+        let wrongEvaluation = try await adapter.evaluate(
+            responseData: CADJSONBoundedCodec.encode(wrongResponse)
+        )
+        #expect(wrongEvaluation.result?.outcome == .invalidSubmission)
+        #expect(wrongEvaluation.error == nil)
+
+        do {
+            _ = try adapter.makeRequest(for: "CYL-005")
+            Issue.record("CYL-005 must remain inactive.")
+        } catch let error as CADJSONAdapterError {
+            #expect(error == .inactiveCase)
+        }
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
     func box002WireActionExecutesTheTranslatedProductionSolidRoute() async throws {
         let adapter = CADJSONAdapter()
         let request = try adapter.makeRequest(for: "BOX-002")
@@ -1330,7 +1372,7 @@ struct CADJSONAdapterTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func requestAndLiveContextsAreValueEqualAndAllSixtySevenRequestsStayBounded() throws {
+    func requestAndLiveContextsAreValueEqualAndAllSixtyEightRequestsStayBounded() throws {
         let executor = DefaultCADActivatedCaseExecutor()
         let adapter = CADJSONAdapter(executor: executor)
         var largestRequest = 0
@@ -1377,6 +1419,8 @@ struct CADJSONAdapterTests {
                 action = cylinder002Action(name: caseID.rawValue)
             } else if caseID.rawValue == "CYL-003" {
                 action = cylinder003Action(name: caseID.rawValue)
+            } else if caseID.rawValue == "CYL-004" {
+                action = cylinder004Action(name: caseID.rawValue)
             } else if caseID.category == .cylinder {
                 action = cylinder001Action(name: caseID.rawValue)
             } else if caseID.rawValue == "ANG-002" {
@@ -1444,7 +1488,7 @@ struct CADJSONAdapterTests {
             #expect(try CADJSONBoundedCodec.encode(response).count < 16_384)
         }
 
-        #expect(executor.activatedCaseIDs.count == 67)
+        #expect(executor.activatedCaseIDs.count == 68)
         #expect(largestRequest < 16_384)
     }
 
@@ -1455,7 +1499,7 @@ struct CADJSONAdapterTests {
         let adapter = CADJSONAdapter(executor: executor)
         let historicalIDs = (1...12).map { String(format: "LIN-%03d", $0) }
             + (1...8).map { String(format: "REC-%03d", $0) }
-        let currentIDs = historicalIDs + ["REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012", "CYL-001", "CYL-002", "CYL-003"]
+        let currentIDs = historicalIDs + ["REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012", "CYL-001", "CYL-002", "CYL-003", "CYL-004"]
         #expect(executor.activatedCaseIDs.map(\.rawValue) == currentIDs)
 
         // Each activated record is case ID, request byte count, and request SHA-256, all length-prefixed.
@@ -1798,6 +1842,13 @@ struct CADJSONAdapterTests {
         appendLengthPrefixed(bigEndianBytes(UInt64(cylinder003Request.count)), to: &currentAggregate)
         appendLengthPrefixed(Data(SHA256.hash(data: cylinder003Request)), to: &currentAggregate)
         #expect(sha256Hex(currentAggregate) == "c6d27d83af09579d4d4526dbd3f27c212af7ccaa1d17b878c60dd3ae9f7991e8")
+
+        let cylinder004ID: CADBenchmarkCaseID = "CYL-004"
+        let cylinder004Request = try adapter.encodeRequest(for: cylinder004ID)
+        appendLengthPrefixed(Data(cylinder004ID.rawValue.utf8), to: &currentAggregate)
+        appendLengthPrefixed(bigEndianBytes(UInt64(cylinder004Request.count)), to: &currentAggregate)
+        appendLengthPrefixed(Data(SHA256.hash(data: cylinder004Request)), to: &currentAggregate)
+        #expect(sha256Hex(currentAggregate) == "ff509e72f694e60034ee330591408c0dbb49b7bdbf1a0246f022abcb1cf8b342")
     }
 
     @MainActor
@@ -1929,9 +1980,9 @@ struct CADJSONAdapterTests {
 
         let inactiveResponse = try CADJSONCandidateResponseEnvelope(
             schema: CADJSONAdapterSchema.candidateResponse,
-            caseID: "CYL-004",
+            caseID: "CYL-005",
             contextFingerprint: String(repeating: "0", count: 64),
-            decision: .action(cylinder003Action(name: "CYL-004"))
+            decision: .action(cylinder004Action(name: "CYL-005"))
         )
         do {
             _ = try await adapter.evaluate(response: inactiveResponse)
@@ -2493,6 +2544,19 @@ private func cylinder003Action(
         axis: axis,
         radius: CADLength(value: 25, unit: .millimeter),
         depth: CADLength(value: 100, unit: .millimeter)
+    )))
+}
+
+private func cylinder004Action(
+    name: String,
+    axis: CADDirection3D = CADDirection3D(x: 0, y: 0, z: -1)
+) -> CADCandidateAction {
+    .automation(.solid(.cylinder(
+        name: name,
+        baseCenter: CADPoint3D(x: 0, y: 0, z: -100, unit: .millimeter),
+        axis: axis,
+        radius: CADLength(value: 50, unit: .millimeter),
+        depth: CADLength(value: 250, unit: .millimeter)
     )))
 }
 

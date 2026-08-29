@@ -1197,6 +1197,30 @@ and leaves CYL-004 typed inactive.
 Schema, catalog, fingerprint, tolerance, runner, oracle, lifecycle, kernel, and
 renderer/Mesh contracts do not change.
 
+### CYL-004 negative-axis activation contract
+
+CYL-004 reuses the completed v5 solid/cylinder projection, mapping, lifecycle,
+runner, production controller route, and immutable source/B-Rep oracle. Its
+exact public target is base centre (0, 0, -100) mm, normalized -Z axis, radius
+50 mm, and depth 250 mm. The source plane origin must equal that submitted
+base, its normal must retain -Z, the circle remains at local origin, and the
+second cap and terminal vertices must lie 250 mm along world -Z. Existing exact
+source/extrude/body binding, analytic face/edge, topology 1/6/12/8, and πr²h
+volume authority apply unchanged.
+
+An otherwise exact +Z-axis cylinder publishes exactly once and must be rejected
+without retry, proving that the oracle preserves directed axis semantics rather
+than only parallelism. A zero axis fails before command/publication. Existing
+timeout, cleanup, count-and-positive-phase telemetry, and privacy evidence remain
+required. Activation advances authority 67→68 only after these checks,
+preserves frozen aggregate
+`c6d27d83af09579d4d4526dbd3f27c212af7ccaa1d17b878c60dd3ae9f7991e8`,
+freezes the observed 68-request aggregate
+`ff509e72f694e60034ee330591408c0dbb49b7bdbf1a0246f022abcb1cf8b342`,
+and leaves CYL-005 typed inactive.
+Schema, catalog, fingerprint, tolerance, runner, oracle, lifecycle, kernel, and
+renderer/Mesh contracts do not change.
+
 ### Vertical Case Gate
 
 Cases are activated in the lexical/category order recorded in
