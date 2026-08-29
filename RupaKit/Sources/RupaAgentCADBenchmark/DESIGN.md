@@ -1151,6 +1151,29 @@ the 65-request aggregate as
 CYL-002 remains typed inactive. Public results expose no FeatureID, diagnostics,
 telemetry, expectation, source snapshot, or workspace data.
 
+### CYL-002 +X-axis activation contract
+
+CYL-002 reuses the completed cylinder projection, geometry mapping, lifecycle,
+runner, production controller route, and immutable source/B-Rep oracle without
+changing their contracts. Its exact public target is base centre
+(25, -25, 0) mm, normalized +X axis, radius 10 mm, and depth 50 mm. This first
+non-Z-axis cylinder must retain the submitted base as source-plane origin, +X
+as normal, the circle at local origin, and the second cap 50 mm along world +X.
+The oracle retains one circle plus one normal extrude, topology 1/6/12/8, four
+analytic cylindrical faces, eight circular edges, directed caps, primary body
+binding, and exact volume πr²h.
+
+An otherwise exact +Z-axis cylinder publishes exactly once and is rejected by
+the immutable oracle without retry; a zero axis is rejected before command and
+publication. Existing timeout, cleanup, telemetry, and privacy contracts apply
+unchanged. Activation advances authority 65→66 only after the internal gate,
+preserves the frozen 65-request aggregate, freezes the observed 66-request
+aggregate, and leaves CYL-003 typed inactive. Candidate-response remains v5.
+The frozen 66-request aggregate is
+`53b35fd441b1bbb210c20c55e4913e5bcea19213dba1b684ab1cf9b916797702`.
+Schema, catalog, fingerprint, tolerance, runner, oracle, lifecycle, kernel, and
+renderer/Mesh contracts do not change.
+
 ### Vertical Case Gate
 
 Cases are activated in the lexical/category order recorded in

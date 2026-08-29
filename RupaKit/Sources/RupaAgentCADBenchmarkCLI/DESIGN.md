@@ -129,8 +129,8 @@ Process-level tests build and invoke the actual executable and prove:
 - `request` emits valid v1 JSON for an activated line, rectangle, REC-009
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
   millimetre/XY case, the complete CIR-001...012 category, ANG-001...016, and
-  BOX-001...012 and `CYL-001`, and rejects inactive `CYL-002`;
-- JSON line, rectangle, circle, angle, BOX-001...012, and CYL-001 responses traverse the adapter, production
+  BOX-001...012 and `CYL-001...002`, and rejects inactive `CYL-003`;
+- JSON line, rectangle, circle, angle, BOX-001...012, and CYL-001...002 responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
@@ -480,6 +480,20 @@ output remains one bounded private-free JSON document; timeout, cancellation,
 oracle, infrastructure, and cleanup classifications retain the existing
 compositional benchmark/CLI ownership and exit mapping. Generic `rupa`, the
 65,536-byte ceiling, and request/evaluation/error schemas do not change.
+
+### CYL-002 process contract
+
+CYL-002 adds no CLI command. `request CYL-002` emits bounded request v1 and
+`evaluate --response <PATH|->` consumes the existing candidate-response v5
+`solid/cylinder` action with base centre (25, -25, 0) mm, +X axis, radius 10 mm,
+and depth 50 mm. File or stdin evaluation traverses the adapter, production
+`createExtrudedCircle` controller route, and immutable oracle and exits `0`
+with `realized`. The +Z-axis mismatch exits `2` after one publication without
+retry; malformed, binding, and inactive inputs retain exit `64`. Authority
+advances 65→66 only after the internal gate, preserves the frozen 65-request
+aggregate, freezes the observed 66-request aggregate, and leaves CYL-003
+inactive. Commands, schemas, bounds, privacy, one-JSON stdout, and exit mapping
+remain unchanged.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected
 case argument, so a case-mismatch process fixture cannot be constructed without

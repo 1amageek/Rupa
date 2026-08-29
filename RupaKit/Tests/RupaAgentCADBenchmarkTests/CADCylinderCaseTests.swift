@@ -157,11 +157,121 @@ struct CADCylinderCaseTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func executorActivatesOnlyFirstCylinderAndUsesProductionCapability() async throws {
+    func cylinder002CreatesExactTranslatedXAxisSolidThroughProductionController() async throws {
+        let result = try await CADCylinderCaseRunner(case: .cylinder002).runReference()
+
+        try result.validate()
+        #expect(result.caseID == "CYL-002")
+        #expect(result.outcome == .realized)
+        #expect(result.realized)
+        #expect(result.candidateResult?.status == .published)
+        #expect(result.candidateResult?.createdFeatureIDs.count == 2)
+        #expect(result.candidateResult?.primaryFeatureID == result.candidateResult?.createdFeatureIDs.last)
+        #expect(result.roleBindings?.bindings.first?.role == "solid")
+        #expect(result.routeEvidence.didPublish)
+        #expect(result.routeEvidence.finalDocumentGeneration.value == result.routeEvidence.initialDocumentGeneration.value + 1)
+        #expect(result.routeEvidence.finalTransactionRevision.value == result.routeEvidence.initialTransactionRevision.value + 1)
+        #expect(result.routeEvidence.finalPublicationSequence == result.routeEvidence.initialPublicationSequence + 1)
+        #expect(result.routeEvidence.finalWorkspaceRevision == result.routeEvidence.initialWorkspaceRevision)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        #expect(result.telemetry.planningWallNanoseconds > 0)
+        #expect(result.telemetry.routeWallNanoseconds > 0)
+        #expect(result.telemetry.oracleWallNanoseconds > 0)
+        #expect(result.telemetry.totalWallNanoseconds > 0)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.readCount >= 1)
+        #expect(result.telemetry.entityCount == 1)
+        #expect(result.telemetry.featureCount == 2)
+        #expect(result.telemetry.bodyCount == 1)
+        #expect(result.telemetry.faceCount == 6)
+        #expect(result.telemetry.edgeCount == 12)
+        #expect(result.telemetry.vertexCount == 8)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func cylinder002OracleRejectsWrongAxisAfterOnePublicationWithoutRetry() async throws {
+        let result = try await CADCylinderCaseRunner(case: .cylinder002).run(
+            action: Self.cylinder002Action(axis: CADDirection3D(x: 0, y: 0, z: 1))
+        )
+
+        try result.validate()
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish)
+        #expect(result.routeEvidence.finalPublicationSequence == result.routeEvidence.initialPublicationSequence + 1)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.readCount == 2)
+        #expect(result.telemetry.entityCount == 1)
+        #expect(result.telemetry.featureCount == 2)
+        #expect(result.telemetry.bodyCount == 1)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        #expect(result.diagnostics.contains { $0.contains("oracle mismatch") })
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func cylinder002RejectsZeroAxisBeforePublication() async throws {
+        let result = try await CADCylinderCaseRunner(case: .cylinder002).run(
+            action: Self.cylinder002Action(axis: CADDirection3D(x: 0, y: 0, z: 0))
+        )
+
+        try result.validate()
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish == false)
+        #expect(result.routeEvidence.finalPublicationSequence == result.routeEvidence.initialPublicationSequence)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 0)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func cylinder002TimeoutIsTypedAndCleansUp() async throws {
+        let result = try await CADCylinderCaseRunner(
+            case: .cylinder002,
+            timeoutWallNanoseconds: 1
+        ).runReference()
+
+        try result.validate()
+        #expect(result.outcome == .timeout)
+        #expect(result.routeEvidence.didPublish == false)
+        #expect(result.telemetry.totalWallNanoseconds >= result.telemetry.timeoutWallNanoseconds)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @Test
+    func cylinder002ReferenceCandidatePreservesTranslatedXAxisPublicValues() async throws {
+        let challenge = try CADBenchmarkCatalog().challenge(for: "CYL-002")
+        let decision = try await CADCylinderReferenceCandidate().decide(
+            for: candidateContext(challenge)
+        )
+
+        guard case .action(.automation(.solid(.cylinder(
+            let name, let baseCenter, let axis, let radius, let depth
+        )))) = decision else {
+            Issue.record("CYL-002 candidate did not produce one solid cylinder action.")
+            return
+        }
+        #expect(name == "CYL-002")
+        #expect(baseCenter == CADPoint3D(x: 25, y: -25, z: 0, unit: .millimeter))
+        #expect(axis == CADDirection3D(x: 1, y: 0, z: 0))
+        #expect(radius == CADLength(value: 10, unit: .millimeter))
+        #expect(depth == CADLength(value: 50, unit: .millimeter))
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func executorActivatesReviewedCylindersAndUsesProductionCapability() async throws {
         let executor = DefaultCADActivatedCaseExecutor()
 
-        #expect(executor.activatedCaseIDs.count == 65)
-        #expect(executor.activatedCaseIDs.last == "CYL-001")
+        #expect(executor.activatedCaseIDs.count == 66)
+        #expect(executor.activatedCaseIDs.last == "CYL-002")
         #expect(try executor.context(for: "CYL-001").capabilities.statuses.first?.available == true)
         let result = try await executor.evaluate(
             caseID: "CYL-001",
@@ -169,17 +279,17 @@ struct CADCylinderCaseTests {
         )
         #expect(result.outcome == .realized)
         do {
-            _ = try executor.context(for: "CYL-002")
-            Issue.record("CYL-002 must remain inactive.")
+            _ = try executor.context(for: "CYL-003")
+            Issue.record("CYL-003 must remain inactive.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("CYL-002"))
+            #expect(error == .inactiveCase("CYL-003"))
         }
     }
 
     @Test
-    func activatedCylinderBoundaryContainsOnlyReviewedCase() throws {
-        #expect(CADActivatedCylinderCase.allCases == [.cylinder001])
-        for rejected in ["CYL-002", "BOX-001", "SPH-001"] {
+    func activatedCylinderBoundaryContainsOnlyReviewedCases() throws {
+        #expect(CADActivatedCylinderCase.allCases == [.cylinder001, .cylinder002])
+        for rejected in ["CYL-003", "BOX-001", "SPH-001"] {
             do {
                 _ = try CADActivatedCylinderCase(caseID: rejected)
                 Issue.record("\(rejected) must remain outside the cylinder activation boundary.")
@@ -204,6 +314,18 @@ struct CADCylinderCaseTests {
             axis: axis,
             radius: CADLength(value: radius, unit: .millimeter),
             depth: CADLength(value: depth, unit: .millimeter)
+        )))
+    }
+
+    private static func cylinder002Action(
+        axis: CADDirection3D = CADDirection3D(x: 1, y: 0, z: 0)
+    ) -> CADCandidateAction {
+        .automation(.solid(.cylinder(
+            name: "CYL-002",
+            baseCenter: CADPoint3D(x: 25, y: -25, z: 0, unit: .millimeter),
+            axis: axis,
+            radius: CADLength(value: 10, unit: .millimeter),
+            depth: CADLength(value: 50, unit: .millimeter)
         )))
     }
 }

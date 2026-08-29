@@ -3,6 +3,7 @@ import Foundation
 /// The cylinder cases whose solid production route has been independently activated.
 enum CADActivatedCylinderCase: String, CaseIterable, Equatable, Hashable, Sendable {
     case cylinder001 = "CYL-001"
+    case cylinder002 = "CYL-002"
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)
