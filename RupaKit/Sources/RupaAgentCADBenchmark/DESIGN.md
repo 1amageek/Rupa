@@ -1307,11 +1307,40 @@ isolation evidence apply unchanged. Authority advances 70→71 only after these
 checks, the frozen 70-request aggregate
 `88afcea2f1db7041f6093c9784f4e37eefcbceba28ec12497656ca21ef92a462` remains
 unchanged, the 71-request aggregate is frozen as
-`f4960441dea3fe2dc3984b3c093d8a77699990a7f5e055c5a300cf09133baf5d`, and
-CYL-008 stays typed inactive. Schema, catalog, fingerprint, tolerance, mapping, runner, oracle,
+`f4960441dea3fe2dc3984b3c093d8a77699990a7f5e055c5a300cf09133baf5d`.
+At CYL-007 completion, CYL-008 remained typed inactive. Schema, catalog,
+fingerprint, tolerance, mapping, runner, oracle,
 lifecycle, kernel, and renderer/Mesh contracts do not change. No new kernel gap
 is predicted; a contrary production observation reopens this case's Conflict
 Gate before activation.
+
+### CYL-008 XYZ-oblique category-terminal contract
+
+CYL-008 reuses candidate-response v5, the existing cylinder mapping/lifecycle/
+runner, the production `ProjectAgentCommandController` →
+`createExtrudedCircle` route, and the immutable source/B-Rep oracle. Its public
+target is base centre (100, 100, 100) mm, radius 75 mm, depth 150 mm, and raw
+axis (0.57735026919, 0.57735026919, 0.57735026919). It is the first cylinder
+whose axis has three non-zero components and proves normalization plus exact
+analytic placement from a fully translated world-space base. Exact source
+circle/extrude, directed base/end caps and vertices, analytic faces/edges,
+primary body binding, topology 1/6/12/8, and πr²h remain oracle authority.
+
+The same base, radius, and depth with equal-length axis
+(0.57735026919, 0.57735026919, -0.57735026919) must publish exactly once and
+then fail direction-sensitive oracle evaluation without retry. A zero axis
+fails before command/publication. Existing timeout, cleanup, positive
+phase/count telemetry, and candidate/private isolation evidence apply
+unchanged. Authority advances 71→72 only after these checks, frozen aggregate
+`f4960441dea3fe2dc3984b3c093d8a77699990a7f5e055c5a300cf09133baf5d` remains
+unchanged, and the 72-request aggregate is frozen as
+`842be9af6961688359198c5d7cda9d8134c36e9a07d56cbf5fe1e4b409cc9cea`.
+CYL-008 closes the
+cylinder case sequence: CON-001 remains typed inactive and T12-CYL-G becomes
+ready. Schema, catalog, fingerprint, tolerance, mapping, runner, oracle,
+lifecycle, kernel, and renderer/Mesh contracts do not change. The committed
+oblique p-curve correction is expected to cover this arbitrary plane; any
+contrary production observation reopens the Conflict Gate before activation.
 
 ### Vertical Case Gate
 

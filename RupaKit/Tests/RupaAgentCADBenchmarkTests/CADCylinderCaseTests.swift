@@ -526,13 +526,67 @@ struct CADCylinderCaseTests {
         #expect(depth == CADLength(value: 4, unit: .inch))
     }
 
+    @MainActor @Test(.timeLimit(.minutes(1)))
+    func cylinder008CreatesExactThreeAxisDiagonalSolidThroughProductionController() async throws {
+        let result = try await CADCylinderCaseRunner(case: .cylinder008).runReference()
+        try assertRealizedCylinder(result, caseID: "CYL-008")
+    }
+
+    @MainActor @Test(.timeLimit(.minutes(1)))
+    func cylinder008OracleRejectsNegativeZAxisSubstituteAfterOnePublicationWithoutRetry() async throws {
+        let result = try await CADCylinderCaseRunner(case: .cylinder008).run(
+            action: Self.cylinder008Action(
+                axis: CADDirection3D(
+                    x: 0.57735026919,
+                    y: 0.57735026919,
+                    z: -0.57735026919
+                )
+            )
+        )
+        try assertRejectedPublishedCylinder(result)
+    }
+
+    @MainActor @Test(.timeLimit(.minutes(1)))
+    func cylinder008RejectsZeroAxisBeforePublication() async throws {
+        let result = try await CADCylinderCaseRunner(case: .cylinder008).run(
+            action: Self.cylinder008Action(axis: CADDirection3D(x: 0, y: 0, z: 0))
+        )
+        try assertRejectedPrepublicationCylinder(result)
+    }
+
+    @MainActor @Test(.timeLimit(.minutes(1)))
+    func cylinder008TimeoutIsTypedAndCleansUp() async throws {
+        let result = try await CADCylinderCaseRunner(
+            case: .cylinder008,
+            timeoutWallNanoseconds: 1
+        ).runReference()
+        try assertTimedOutCylinder(result)
+    }
+
+    @Test
+    func cylinder008ReferenceCandidatePreservesThreeAxisDiagonalPublicValues() async throws {
+        let challenge = try CADBenchmarkCatalog().challenge(for: "CYL-008")
+        let decision = try await CADCylinderReferenceCandidate().decide(for: candidateContext(challenge))
+        guard case .action(.automation(.solid(.cylinder(
+            let name, let baseCenter, let axis, let radius, let depth
+        )))) = decision else {
+            Issue.record("CYL-008 candidate did not produce one solid cylinder action.")
+            return
+        }
+        #expect(name == "CYL-008")
+        #expect(baseCenter == CADPoint3D(x: 100, y: 100, z: 100, unit: .millimeter))
+        #expect(axis == CADDirection3D(x: 0.57735026919, y: 0.57735026919, z: 0.57735026919))
+        #expect(radius == CADLength(value: 75, unit: .millimeter))
+        #expect(depth == CADLength(value: 150, unit: .millimeter))
+    }
+
     @MainActor
     @Test(.timeLimit(.minutes(1)))
     func executorActivatesReviewedCylindersAndUsesProductionCapability() async throws {
         let executor = DefaultCADActivatedCaseExecutor()
 
-        #expect(executor.activatedCaseIDs.count == 71)
-        #expect(executor.activatedCaseIDs.last == "CYL-007")
+        #expect(executor.activatedCaseIDs.count == 72)
+        #expect(executor.activatedCaseIDs.last == "CYL-008")
         #expect(try executor.context(for: "CYL-001").capabilities.statuses.first?.available == true)
         let result = try await executor.evaluate(
             caseID: "CYL-001",
@@ -540,17 +594,17 @@ struct CADCylinderCaseTests {
         )
         #expect(result.outcome == .realized)
         do {
-            _ = try executor.context(for: "CYL-008")
-            Issue.record("CYL-008 must remain inactive.")
+            _ = try executor.context(for: "CON-001")
+            Issue.record("CON-001 must remain inactive.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("CYL-008"))
+            #expect(error == .inactiveCase("CON-001"))
         }
     }
 
     @Test
     func activatedCylinderBoundaryContainsOnlyReviewedCases() throws {
-        #expect(CADActivatedCylinderCase.allCases == [.cylinder001, .cylinder002, .cylinder003, .cylinder004, .cylinder005, .cylinder006, .cylinder007])
-        for rejected in ["CYL-008", "BOX-001", "SPH-001"] {
+        #expect(CADActivatedCylinderCase.allCases == [.cylinder001, .cylinder002, .cylinder003, .cylinder004, .cylinder005, .cylinder006, .cylinder007, .cylinder008])
+        for rejected in ["CYL-009", "BOX-001", "SPH-001"] {
             do {
                 _ = try CADActivatedCylinderCase(caseID: rejected)
                 Issue.record("\(rejected) must remain outside the cylinder activation boundary.")
@@ -656,6 +710,22 @@ struct CADCylinderCaseTests {
             axis: axis,
             radius: CADLength(value: 1, unit: unit),
             depth: CADLength(value: 4, unit: unit)
+        )))
+    }
+
+    private static func cylinder008Action(
+        axis: CADDirection3D = CADDirection3D(
+            x: 0.57735026919,
+            y: 0.57735026919,
+            z: 0.57735026919
+        )
+    ) -> CADCandidateAction {
+        .automation(.solid(.cylinder(
+            name: "CYL-008",
+            baseCenter: CADPoint3D(x: 100, y: 100, z: 100, unit: .millimeter),
+            axis: axis,
+            radius: CADLength(value: 75, unit: .millimeter),
+            depth: CADLength(value: 150, unit: .millimeter)
         )))
     }
 }
