@@ -1282,10 +1282,36 @@ telemetry, and privacy evidence remain required. Activation advances authority
 69→70 after these checks, preserves frozen aggregate
 `c4d812e19e6f9fd20a56a909ac5315b2289763987e2cb05f648b9064b9bca5c0`,
 freezes the 70-request aggregate
-`88afcea2f1db7041f6093c9784f4e37eefcbceba28ec12497656ca21ef92a462`, and
-leaves CYL-007 typed inactive.
+`88afcea2f1db7041f6093c9784f4e37eefcbceba28ec12497656ca21ef92a462`.
+At CYL-006 completion, CYL-007 remained typed inactive.
 Schema, catalog, fingerprint, tolerance, Rupa runner, oracle, lifecycle, and
 renderer/Mesh contracts do not change.
+
+### CYL-007 inch and negative-X contract
+
+CYL-007 reuses candidate-response v5, the cylinder mapping/lifecycle/runner,
+the production `ProjectAgentCommandController` → `createExtrudedCircle` route,
+and the immutable source/B-Rep oracle. Its public target is base centre
+(2, 3, -1) inch, radius 1 inch, depth 4 inch, and submitted axis (-1, 0, 0).
+This is the first activated inch-valued cylinder and proves conversion of its
+mixed-sign translated base, radius, and depth together with directed -X
+placement. Exact source circle/extrude, base/end caps and vertices, analytic
+faces/edges, primary body binding, topology 1/6/12/8, and πr²h remain the
+oracle authority.
+
+An otherwise identical action that submits the same numeric base, radius, and
+depth in millimetres must publish exactly once and then fail independent oracle
+evaluation without retry. A zero axis fails before command/publication.
+Existing timeout, cleanup, positive phase/count telemetry, and candidate/private
+isolation evidence apply unchanged. Authority advances 70→71 only after these
+checks, the frozen 70-request aggregate
+`88afcea2f1db7041f6093c9784f4e37eefcbceba28ec12497656ca21ef92a462` remains
+unchanged, the 71-request aggregate is frozen as
+`f4960441dea3fe2dc3984b3c093d8a77699990a7f5e055c5a300cf09133baf5d`, and
+CYL-008 stays typed inactive. Schema, catalog, fingerprint, tolerance, mapping, runner, oracle,
+lifecycle, kernel, and renderer/Mesh contracts do not change. No new kernel gap
+is predicted; a contrary production observation reopens this case's Conflict
+Gate before activation.
 
 ### Vertical Case Gate
 

@@ -759,8 +759,25 @@ zero axis fails before command/publication. Frozen 69-request aggregate
 `c4d812e19e6f9fd20a56a909ac5315b2289763987e2cb05f648b9064b9bca5c0`
 remains unchanged and the 70-request aggregate is frozen as
 `88afcea2f1db7041f6093c9784f4e37eefcbceba28ec12497656ca21ef92a462`.
-CYL-007 remains typed inactive. Envelopes, fingerprint, byte bound, catalog,
+At CYL-006 completion, CYL-007 remained typed inactive. Envelopes, fingerprint, byte bound, catalog,
 tolerance, privacy, and error projection do not change.
+
+### CYL-007 external authority contract
+
+CYL-007 reuses candidate-response v5 and the existing `solid/cylinder` wire
+shape. Its bounded response preserves base centre (2, 3, -1) inch, axis
+(-1, 0, 0), radius 1 inch, and depth 4 inch and traverses the unchanged
+executor, production `createExtrudedCircle` route, and immutable source/B-Rep
+oracle. The same numeric base/radius/depth submitted as millimetres becomes a
+sanitized `invalidSubmission` after exactly one publication without retry; a
+zero axis fails before command/publication. External authority remains 70 until
+the internal gate succeeds, preserves frozen aggregate
+`88afcea2f1db7041f6093c9784f4e37eefcbceba28ec12497656ca21ef92a462`, then
+freezes the 71-request aggregate as
+`f4960441dea3fe2dc3984b3c093d8a77699990a7f5e055c5a300cf09133baf5d` and
+leaves CYL-008 typed inactive.
+Envelope schema, fingerprint, byte bound, catalog, tolerance, privacy, and
+error projection do not change.
 
 ## Runtime Flows
 
@@ -808,9 +825,9 @@ classification and are projected only to stable non-private codes.
 
 | Invariant | Behavioral evidence |
 |---|---|
-| Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON includes the BOX-001...012 `solid/box` decisions and CYL-001...006 `solid/cylinder`; candidate-response v5 carries the explicit discriminators, v1 through v4 and unknown current-schema discriminators are rejected, and every direct and nested case ID is the same scalar string. |
+| Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON includes the BOX-001...012 `solid/box` decisions and CYL-001...007 `solid/cylinder`; candidate-response v5 carries the explicit discriminators, v1 through v4 and unknown current-schema discriminators are rejected, and every direct and nested case ID is the same scalar string. |
 | Exact public-context binding | The request fingerprint equals the live executor context; changed schema, case, context byte, capability, budget, or fingerprint is rejected before publication. |
-| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, CIR-001...012, ANG-001...016, BOX-001...012, and CYL-001...006. The 69-request prefix remains `c4d812e19e6f9fd20a56a909ac5315b2289763987e2cb05f648b9064b9bca5c0`; the frozen 70-request aggregate is `88afcea2f1db7041f6093c9784f4e37eefcbceba28ec12497656ca21ef92a462`; all six cylinders traverse production `createExtrudedCircle` and the exact source/B-Rep oracle, while CYL-007 remains typed inactive. |
+| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, CIR-001...012, ANG-001...016, BOX-001...012, and CYL-001...007. The 70-request prefix remains `88afcea2f1db7041f6093c9784f4e37eefcbceba28ec12497656ca21ef92a462`; the frozen 71-request aggregate is `f4960441dea3fe2dc3984b3c093d8a77699990a7f5e055c5a300cf09133baf5d`; all seven cylinders traverse production `createExtrudedCircle` and the exact source/B-Rep oracle, while CYL-008 remains typed inactive. |
 | Bounded I/O | Exact-limit input succeeds, `limit + 1` fails before decode and leaves executor evaluation count zero, chunked stdin and file paths behave identically, no public typed-response execution bypass exists, encoded output cannot exceed the same bound, and the guaranteed infrastructure document is byte-equal to normal encoding, bounded, and decodable. |
 | Candidate/oracle separation | Static dependency and source scans prove the adapter imports only public benchmark contracts; encoded fixtures contain no expectation/oracle/source snapshot fields or values. |
 | Same production route | JSON candidates for activated line, rectangle, circle, angle, box, and cylinder cases realize through the public executor; wrong geometry publishes once then the category's exact oracle rejects without retry. |

@@ -129,8 +129,8 @@ Process-level tests build and invoke the actual executable and prove:
 - `request` emits valid v1 JSON for an activated line, rectangle, REC-009
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
   millimetre/XY case, the complete CIR-001...012 category, ANG-001...016, and
-  BOX-001...012 and `CYL-001...006`, and rejects inactive `CYL-007`;
-- JSON line, rectangle, circle, angle, BOX-001...012, and CYL-001...006 responses traverse the adapter, production
+  BOX-001...012 and `CYL-001...007`, and rejects inactive `CYL-008`;
+- JSON line, rectangle, circle, angle, BOX-001...012, and CYL-001...007 responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
@@ -551,9 +551,26 @@ file/stdin evaluation traverses the production
 publication without retry; malformed, binding, and inactive inputs retain exit
 `64`. Authority advances 69→70 only after the internal gate, preserves the
 frozen 69-request aggregate, freezes the 70-request aggregate
-`88afcea2f1db7041f6093c9784f4e37eefcbceba28ec12497656ca21ef92a462`, and
-leaves CYL-007 inactive. Commands, schemas, bounds, privacy, one-JSON stdout,
+`88afcea2f1db7041f6093c9784f4e37eefcbceba28ec12497656ca21ef92a462`.
+At CYL-006 completion, CYL-007 remained inactive. Commands, schemas, bounds, privacy, one-JSON stdout,
 and exit mapping remain unchanged.
+
+### CYL-007 process contract
+
+CYL-007 adds no CLI command. `request CYL-007` emits bounded request v1 and
+`evaluate --response <PATH|->` consumes candidate-response v5 with base centre
+(2, 3, -1) inch, axis (-1, 0, 0), radius 1 inch, and depth 4 inch. File and
+stdin evaluation must traverse the unchanged adapter, production
+`createExtrudedCircle` controller route, and immutable oracle and exit `0` with
+`realized`. The same numeric millimetre substitute exits `2` after one
+publication without retry; malformed, binding, and inactive inputs retain exit
+`64`. Process authority remains 70 until the internal gate succeeds, preserves
+the frozen 70-request aggregate
+`88afcea2f1db7041f6093c9784f4e37eefcbceba28ec12497656ca21ef92a462`, then
+freezes the 71-request aggregate as
+`f4960441dea3fe2dc3984b3c093d8a77699990a7f5e055c5a300cf09133baf5d` and
+leaves CYL-008 inactive. Commands,
+schemas, bounds, privacy, one-JSON stdout, and exit mapping remain unchanged.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected
 case argument, so a case-mismatch process fixture cannot be constructed without
