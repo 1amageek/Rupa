@@ -262,11 +262,11 @@ challenge text, expected geometry, role, tolerance rule, or capability
 classification advances the owning version and digest. Duplicate IDs, gaps,
 non-finite values, or a count other than 100 are typed specification errors.
 The single-value case-ID wire is recorded by manifest schema
-`t12.manifest.v2` and catalog version `t12.catalog.v4`, with refrozen
+`t12.manifest.v2` and catalog version `t12.catalog.v5`, with frozen
 challenge-input and manifest digests. The internal aggregate is recorded by
-expectation schema `t12.expectation.v3` and expectation version
-`t12.expectation-contract.v3`, with a refrozen expectation digest, because
-those payloads contain case IDs. Capability-classification,
+expectation schema `t12.expectation.v4` and expectation version
+`t12.expectation-contract.v4`, with a frozen expectation digest, because those
+payloads contain case IDs. Capability-classification,
 capability-baseline, capability-availability, and tolerance-policy versions
 remain at v1 because their meanings and payloads are unchanged.
 The manifest and digests prove specification identity only; per-case production
@@ -327,9 +327,10 @@ automation payloads proven by activated cases. The angle payload contains a
 name, plane orientation, and two ordered world-space endpoint pairs; it neither
 contains an expected angle nor exposes the private oracle. Later category actions
 remain target specifications until their vertical case owns a production
-contract. Transform pivot and
-composition-order semantics belong to `T12-TRN-001` and are not part of this
-foundation. The line payload is immutable world-space request data and is valid
+contract. The shared catalog's transform pivot and composition semantics are
+fixed before parallel remaining-category preparation; no transform candidate
+action or activation exists until the TRN vertical gates integrate that contract.
+The line payload is immutable world-space request data and is valid
 only when passed through the controller route. An action does not contain a
 session ID, workspace reference, project authority coordinate, `EditorSession`,
 or a direct CAD object. At LIN-002, the lifecycle proven by LIN-001 is extracted
@@ -1747,6 +1748,88 @@ This gate adds only
 it changes no production geometry, public API, schema, catalog, fingerprint,
 tolerance, lifecycle, kernel, renderer/Mesh, or transform behavior.
 
+### Remaining target-semantics foundation
+
+Confirmed production behavior provides a scene-node local transform and
+evaluates world placement as parent times local, but the original transform
+catalog names only an axis direction. An axis direction does not define a
+rotation line, and the original catalog also leaves rotation/translation order
+ambiguous. Category-local code must not invent either missing value.
+
+Before the three remaining-category preparation worktrees start,
+`CADTransformChallengeInput` therefore adds an explicit `axisPoint` in the
+source geometry's world coordinate frame. Each catalog target uses its source
+geometric centre, expressed in millimetres:
+
+| Case | Source centre / `axisPoint` |
+|---|---|
+| TRN-001 | line midpoint (50, 0, 0) |
+| TRN-002 | rectangle centre (0, 0, 0) |
+| TRN-003 | circle centre (0, 0, 0) |
+| TRN-004 | box centroid (10, 15, 20) |
+| TRN-005 | cylinder mid-axis point (0, 0, 20) |
+| TRN-006 | line midpoint (0, 0, 0) |
+| TRN-007 | rectangle centre (0, 0, 0) |
+| TRN-008 | circle centre (25, -25, 0) |
+
+Using column vectors, the requested source-to-world placement is exactly:
+
+```text
+world = Translation(translation)
+      * Translation(axisPoint)
+      * Rotation(normalizedAxis, angle)
+      * Translation(-axisPoint)
+      * source
+```
+
+Rotation about the explicit source-world axis line occurs first and translation
+occurs afterward. `axisPoint` and translation use their submitted length units;
+the axis is finite and non-zero before normalization; the angle retains its
+submitted unit. There is no implicit origin, centroid, object-local pivot, or
+matrix-order fallback. Parent placement, when present, composes outside this
+local transform under the existing parent-times-local scene contract.
+The canonical candidate instruction states this order directly as first rotate
+about the explicit axis line, then translate the rotated result. It also retains
+the complete source orientation: line, rectangle, and circle sources include
+their sketch plane, and cylinder sources include their axis. A candidate never
+needs the private expectation or a primitive-default assumption to reconstruct
+any of the eight transform targets.
+
+Compound inputs already retain each cylinder member's axis privately, but the
+original compound instruction omits it. Before parallel preparation, canonical
+member text for a cylinder therefore becomes `cylinder radius ... depth ... at
+... along axis (x, y, z)`. This exposes the existing target value without
+adding a new authority: candidate projection must preserve member order, role,
+base centre, radius, depth, unit, and raw axis. It must not infer +Z from the
+primitive kind. Boxes retain their current public fields. This closes the
+public reconstruction gap for the cylinder members in CMP-001, CMP-003,
+CMP-004, CMP-006, and CMP-007.
+
+These are shared target-specification corrections rather than TRN or CMP case
+activations. They update all eight transform public instructions/private inputs
+and the compound cylinder-member public instructions together, advance manifest
+catalog version `t12.catalog.v4` to `t12.catalog.v5` and private expectation
+schema/contract v3 to v4, freeze the observed challenge, manifest, and
+expectation digests, and add exact encoding, instruction, validation, and
+case-matrix tests. Manifest schema v2, tolerance policy, capability baseline,
+candidate-response v6, activated executor authority, and JSON/CLI current
+boundary do not change. Because no activated challenge changes, the existing
+80-request aggregate
+`91f68ea42c6e131263b499995637e9f9b7dbce64fcf441bdcdf385c9f341efb0`
+must remain byte-identical. The TRN preparation patchset may then add only new
+`CADTransform*` projection, mapping, runner, exact oracle, result, telemetry,
+and focused-test files that consume this contract; the CMP patchset similarly
+owns only new `CADCompound*` consumers of the public member axis. Shared
+action/wire and authority changes remain owned by the later serial integrations.
+
+The kernel's analytic sphere constructor is a separate lower-level capability;
+the production Agent route currently exposes no sphere action or capability
+ingress. T12 measures that Agent boundary honestly: the SPH preparation records
+typed `analyticSphereUnavailable`, maps it to expectedUnsupported, issues zero
+commands and publications, and keeps the exact analytic-sphere oracle solely as
+a substitute-rejection authority. General `appendFeatureGraph` exposure or a
+new Agent sphere command would change product API scope and is not part of T12.
+
 ### Vertical Case Gate
 
 Cases are activated in the lexical/category order recorded in
@@ -2141,9 +2224,10 @@ not a silent baseline rewrite or a failure assigned to each case. A new
 baseline requires another complete valid execution and review.
 
 The five `SPH` cases require an analytic sphere source and exact B-Rep sphere
-surface/topology. Under a baseline that has no such capability, the reference
+surface/topology. The kernel constructor alone is insufficient: while the
+production Agent capability snapshot has no sphere ingress, the reference
 candidate declares typed unsupported before mutation and the runner proves zero
-publication. A circle, cylinder, polygon/polyhedron, extruded disc, or Mesh
+command/publication. A circle, cylinder, polygon/polyhedron, extruded disc, or Mesh
 cannot satisfy an `SPH` case. If a future capability is exposed, the baseline
 version must advance and the unchanged sphere oracle must observe genuine
 analytic sphere geometry before the cases can be realized. A capability
@@ -2450,7 +2534,7 @@ through the following vertical work items:
 | Shared lifecycle extraction | T12-REC-001 | All completed line tests remain green with unchanged route coordinates, timeout/late-registration cleanup, cancellation/stale rejection, publication no-retry, counts, and telemetry; static review proves both facades dispatch only through `ProjectAgentCommandController` and the harness cannot access private expectations |
 | First rectangle behavior | T12-REC-001 | REC-001 alone is activated; exact 40 by 20 mm centred XY four-line/profile realization, same-area swapped-dimension postpublication rejection without retry, off-plane prepublication rejection, typed timeout, zero leaked registrations, candidate privacy, count/timing telemetry, and designer review pass through the shared harness and thin rectangle facade |
 | Cumulative semantic stability | Every `T12-<CATEGORY>-G` | Review all committed cases in the category for shared assumptions, false positives/negatives, route authority, tolerance/plane semantics, and measured bounds before the next category |
-| Sphere honesty | T12-SPH-001...005 | Production capability observation yields typed expected unsupported with zero publication when analytic sphere is absent; substitutes remain rejected by the unchanged exact contract |
+| Sphere honesty | T12-SPH-001...005 | Production Agent capability observation yields typed `analyticSphereUnavailable` and expected unsupported with zero command/publication while Agent ingress is absent, even though the kernel has an analytic constructor; substitutes remain rejected by the unchanged exact contract |
 | Exactly 100 implemented cases | T12-LIN through T12-SPH | Catalog identity plus one reviewed vertical evidence commit per stable case; catalog structure alone is insufficient |
 | External candidate executor | T12-XA-A | Exact activated twenty-ID allow-list, value-equal request/live contexts, arbitrary protocol candidate line/rectangle success and mismatch through the production route/oracle, explicit discriminator golden JSON, legacy-shape rejection, typed inactive/error projection, cleanup, privacy/static boundary, and focused tests |
 | REC-009 authority transition | T12-REC-009 | Frozen first-twenty replay and request bytes/digest remain unchanged; exact current twenty-one-ID order, 1.0 by 0.5 inch XZ realization, same-numeric millimetre postpublication rejection/no-retry, off-XZ prepublication rejection, timeout/cleanup/telemetry, refrozen twenty-one-request aggregate, bounded CLI request/evaluation, REC-010 typed inactivity, and unchanged catalog/wire versions |

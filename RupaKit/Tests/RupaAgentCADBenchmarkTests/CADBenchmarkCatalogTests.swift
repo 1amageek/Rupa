@@ -27,10 +27,10 @@ func publicManifestDigestIsDeterministicAndFrozen() throws {
 
     #expect(first.manifest == second.manifest)
     #expect(first.manifest.schema == "t12.manifest.v2")
-    #expect(first.manifest.catalog == "t12.catalog.v4")
+    #expect(first.manifest.catalog == "t12.catalog.v5")
     #expect(first.manifest.tolerancePolicy == "t12.tolerance.v1")
-    #expect(first.manifest.challengeInputDigest == "7a9e3be7ec08961e9372f2449c8abc642afdb70140c6674f59e2bae3c67d50f8")
-    #expect(first.manifest.digest == "be933d060bc7c569cea0b7a266577191c85e397109361af5a1eb6dea70abdf4b")
+    #expect(first.manifest.challengeInputDigest == "370832f17157aba9712995f151f9f2a94e93012836f6f2fdf055d0fcb4435c00")
+    #expect(first.manifest.digest == "20943d63e56ae23a974ca9e6c249cf326822398c131645558769588e1676d912")
 
     let encoded = try JSONEncoder().encode(first.manifest)
     let encodedText = String(decoding: encoded, as: UTF8.self)
@@ -49,13 +49,13 @@ func internalExpectationAndCapabilityDigestsAreVersionedAndFrozen() throws {
     let contract = try CADInternalCatalogStore.expectationContract()
     try contract.validate()
 
-    #expect(contract.schemaVersion == "t12.expectation.v3")
-    #expect(contract.expectationVersion == "t12.expectation-contract.v3")
+    #expect(contract.schemaVersion == "t12.expectation.v4")
+    #expect(contract.expectationVersion == "t12.expectation-contract.v4")
     #expect(contract.capabilityClassificationVersion == "t12.capability-classification.v1")
     #expect(contract.capabilityBaselineContractVersion == "t12.capability-baseline.v1")
     #expect(contract.tolerancePolicyVersion == "t12.tolerance.v1")
     #expect(contract.entries.count == 100)
-    #expect(contract.expectationDigest == "a3ce61a5c4503717d7a5d9dbcc8571e27067fdb03f0924e8c67594e4707e3451")
+    #expect(contract.expectationDigest == "ffcf29fc51d18b10416eecc91983fae3fb8c2e35089cb78b8cb42e95f2e885ee")
     #expect(contract.capabilityClassificationDigest.count == 64)
     #expect(contract.capabilityBaseline.digest.count == 64)
 
@@ -256,6 +256,116 @@ func rectangleValidationNamesCenterField() throws {
         }
         #expect(reason.contains("rectangle.center"))
     }
+}
+
+@Test
+func transformCatalogUsesExplicitSourceCentersAndRequiredAxisPointWireShape() throws {
+    let expectedAxisPoints: [String: CADPoint3D] = [
+        "TRN-001": CADPoint3D(x: 50.0, y: 0.0, z: 0.0),
+        "TRN-002": CADPoint3D(x: 0.0, y: 0.0, z: 0.0),
+        "TRN-003": CADPoint3D(x: 0.0, y: 0.0, z: 0.0),
+        "TRN-004": CADPoint3D(x: 10.0, y: 15.0, z: 20.0),
+        "TRN-005": CADPoint3D(x: 0.0, y: 0.0, z: 20.0),
+        "TRN-006": CADPoint3D(x: 0.0, y: 0.0, z: 0.0),
+        "TRN-007": CADPoint3D(x: 0.0, y: 0.0, z: 0.0),
+        "TRN-008": CADPoint3D(x: 25.0, y: -25.0, z: 0.0),
+    ]
+    let transformEntries = try CADInternalCatalogStore.entries().filter {
+        $0.challenge.category == .transform
+    }
+    #expect(transformEntries.map { $0.challenge.id.rawValue } == expectedAxisPoints.keys.sorted())
+
+    for entry in transformEntries {
+        guard case let .transform(input) = entry.input,
+              let expected = expectedAxisPoints[entry.challenge.id.rawValue] else {
+            Issue.record("Transform catalog entry must retain a transform input and expected axis point.")
+            continue
+        }
+        #expect(input.axisPoint == expected)
+        let object = try #require(JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(input),
+            options: []
+        ) as? [String: Any])
+        let axisPoint = try #require(object["axisPoint"] as? [String: Any])
+        #expect(axisPoint["x"] as? Double == expected.x)
+        #expect(axisPoint["y"] as? Double == expected.y)
+        #expect(axisPoint["z"] as? Double == expected.z)
+        #expect(axisPoint["unit"] as? String == "millimeter")
+    }
+
+    let source = try #require(transformEntries.first.flatMap { entry -> CADTransformChallengeInput? in
+        guard case let .transform(input) = entry.input else { return nil }
+        return input
+    })
+    let encoded = try JSONEncoder().encode(source)
+    let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    var missingAxisPoint = object
+    missingAxisPoint.removeValue(forKey: "axisPoint")
+    requireDecodingFailure {
+        try JSONDecoder().decode(
+            CADTransformChallengeInput.self,
+            from: JSONSerialization.data(withJSONObject: missingAxisPoint)
+        )
+    }
+}
+
+@Test
+func transformValidationRejectsNonFiniteAxisPointAndZeroAxis() throws {
+    let source = CADTransformSource.line(CADLineChallengeInput(
+        start: CADPoint3D(x: 0.0, y: 0.0, z: 0.0),
+        end: CADPoint3D(x: 100.0, y: 0.0, z: 0.0),
+        length: CADLength(value: 100.0),
+        plane: .xy
+    ))
+    let nonFinitePoint = CADTransformChallengeInput(
+        source: source,
+        translation: CADPoint3D(x: 0.0, y: 0.0, z: 0.0),
+        axisPoint: CADPoint3D(x: .infinity, y: 0.0, z: 0.0),
+        rotationAxis: CADDirection3D(x: 0.0, y: 0.0, z: 1.0),
+        rotation: CADAngle(value: 30.0)
+    )
+    requireInvalidInput {
+        try nonFinitePoint.validate(caseID: "TRN-001")
+    }
+
+    let zeroAxis = CADTransformChallengeInput(
+        source: source,
+        translation: CADPoint3D(x: 0.0, y: 0.0, z: 0.0),
+        axisPoint: CADPoint3D(x: 50.0, y: 0.0, z: 0.0),
+        rotationAxis: CADDirection3D(x: 0.0, y: 0.0, z: 0.0),
+        rotation: CADAngle(value: 30.0)
+    )
+    requireInvalidDirection {
+        try zeroAxis.validate(caseID: "TRN-001")
+    }
+}
+
+@Test
+func transformAndCompoundInstructionsExposePlacementAxes() throws {
+    let catalog = try CADBenchmarkCatalog()
+    let expectedTransformFragments: [String: [String]] = [
+        "TRN-001": ["line (0.0, 0.0, 0.0) mm to (100.0, 0.0, 0.0) mm on the xy plane", "axis through (50.0, 0.0, 0.0) mm"],
+        "TRN-002": ["rectangle width 40.0 mm height 20.0 mm centered at (0.0, 0.0, 0.0) mm on the xy plane", "axis through (0.0, 0.0, 0.0) mm"],
+        "TRN-003": ["circle radius 10.0 mm at (0.0, 0.0, 0.0) mm on the xy plane", "axis through (0.0, 0.0, 0.0) mm"],
+        "TRN-004": ["box 20.0 mm x 30.0 mm x 40.0 mm at (0.0, 0.0, 0.0) mm", "axis through (10.0, 15.0, 20.0) mm"],
+        "TRN-005": ["cylinder radius 8.0 mm depth 40.0 mm at (0.0, 0.0, 0.0) mm along axis (0.0, 0.0, 1.0)", "axis through (0.0, 0.0, 20.0) mm"],
+        "TRN-006": ["line (-30.0, -30.0, 0.0) mm to (30.0, 30.0, 0.0) mm on the xy plane", "axis through (0.0, 0.0, 0.0) mm"],
+        "TRN-007": ["rectangle width 100.0 mm height 50.0 mm centered at (0.0, 0.0, 0.0) mm on the yz plane", "axis through (0.0, 0.0, 0.0) mm"],
+        "TRN-008": ["circle radius 50.0 mm at (25.0, -25.0, 0.0) mm on the xy plane", "axis through (25.0, -25.0, 0.0) mm"],
+    ]
+    for (caseID, fragments) in expectedTransformFragments {
+        let instruction = try catalog.challenge(for: CADBenchmarkCaseID(rawValue: caseID)).instruction
+        for fragment in fragments {
+            #expect(instruction.contains(fragment))
+        }
+        #expect(instruction.contains("by first rotating"))
+        #expect(instruction.contains("then translating the rotated result"))
+    }
+
+    let compoundWithCylinder = try catalog.challenge(for: "CMP-001")
+    #expect(compoundWithCylinder.instruction.contains("along axis (0.0, 0.0, 1.0)"))
+    let xAxisCompound = try catalog.challenge(for: "CMP-003")
+    #expect(xAxisCompound.instruction.contains("along axis (1.0, 0.0, 0.0)"))
 }
 
 @Test
@@ -533,6 +643,20 @@ private func requireInvalidInput(_ operation: () throws -> Void) {
         Issue.record("Invalid geometry must be rejected.")
     } catch let error as CADBenchmarkError {
         guard case .invalidInput = error else {
+            Issue.record("Unexpected typed error: \(error)")
+            return
+        }
+    } catch {
+        Issue.record("Unexpected untyped error: \(error)")
+    }
+}
+
+private func requireInvalidDirection(_ operation: () throws -> Void) {
+    do {
+        try operation()
+        Issue.record("Invalid direction must be rejected.")
+    } catch let error as CADBenchmarkError {
+        guard case .invalidDirection = error else {
             Issue.record("Unexpected typed error: \(error)")
             return
         }

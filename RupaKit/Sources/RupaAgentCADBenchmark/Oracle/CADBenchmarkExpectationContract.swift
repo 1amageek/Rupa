@@ -3,8 +3,8 @@ import SwiftCAD
 import RupaCoreTypes
 
 struct CADBenchmarkExpectationContract: Codable, Equatable, Sendable {
-    static let schemaVersion = "t12.expectation.v3"
-    static let expectationVersion = "t12.expectation-contract.v3"
+    static let schemaVersion = "t12.expectation.v4"
+    static let expectationVersion = "t12.expectation-contract.v4"
     static let capabilityClassificationVersion = "t12.capability-classification.v1"
     static let capabilityBaselineContractVersion = "t12.capability-baseline.v1"
 

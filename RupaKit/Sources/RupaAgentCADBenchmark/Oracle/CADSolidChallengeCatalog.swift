@@ -33,14 +33,14 @@ enum CADSolidChallengeCatalog {
         constraint("CON-007", .concentric, circleInput("first", 10.0, 0.0, 0.0), circleInput("second", 25.0, 0.0, 0.0)),
         constraint("CON-008", .equalRadius, circleInput("first", 15.0, 0.0, 0.0), circleInput("second", 15.0, 50.0, 0.0)),
 
-        transform("TRN-001", .line(lineInput("source", 0.0, 0.0, 100.0, 0.0)), 25.0, 0.0, 0.0, 0.0, 0.0, 1.0, 30.0),
-        transform("TRN-002", .rectangle(rectangleInput("source", 40.0, 20.0, .xy, 0.0, 0.0)), 0.0, 25.0, 0.0, 0.0, 0.0, 1.0, 45.0),
-        transform("TRN-003", .circle(circleInput("source", 10.0, 0.0, 0.0)), 0.0, 0.0, 50.0, 1.0, 0.0, 0.0, 90.0),
-        transform("TRN-004", .box(boxInput("source", 20.0, 30.0, 40.0, .millimeter, 0.0, 0.0, 0.0)), 100.0, -50.0, 25.0, 0.0, 0.0, 1.0, 15.0),
-        transform("TRN-005", .cylinder(cylinderInput("source", 8.0, 40.0, .millimeter, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0)), -25.0, 50.0, 75.0, 0.0, 1.0, 0.0, 30.0),
-        transform("TRN-006", .line(lineInput("source", -30.0, -30.0, 30.0, 30.0)), 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 120.0),
-        transform("TRN-007", .rectangle(rectangleInput("source", 100.0, 50.0, .yz, 0.0, 0.0)), 0.0, 0.0, -100.0, 0.0, 0.0, 1.0, 180.0),
-        transform("TRN-008", .circle(circleInput("source", 50.0, 25.0, -25.0)), 250.0, 125.0, 0.0, 0.57735026919, 0.57735026919, 0.57735026919, 60.0),
+        transform("TRN-001", .line(lineInput("source", 0.0, 0.0, 100.0, 0.0)), 25.0, 0.0, 0.0, 50.0, 0.0, 0.0, 0.0, 0.0, 1.0, 30.0),
+        transform("TRN-002", .rectangle(rectangleInput("source", 40.0, 20.0, .xy, 0.0, 0.0)), 0.0, 25.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 45.0),
+        transform("TRN-003", .circle(circleInput("source", 10.0, 0.0, 0.0)), 0.0, 0.0, 50.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 90.0),
+        transform("TRN-004", .box(boxInput("source", 20.0, 30.0, 40.0, .millimeter, 0.0, 0.0, 0.0)), 100.0, -50.0, 25.0, 10.0, 15.0, 20.0, 0.0, 0.0, 1.0, 15.0),
+        transform("TRN-005", .cylinder(cylinderInput("source", 8.0, 40.0, .millimeter, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0)), -25.0, 50.0, 75.0, 0.0, 0.0, 20.0, 0.0, 1.0, 0.0, 30.0),
+        transform("TRN-006", .line(lineInput("source", -30.0, -30.0, 30.0, 30.0)), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 120.0),
+        transform("TRN-007", .rectangle(rectangleInput("source", 100.0, 50.0, .yz, 0.0, 0.0)), 0.0, 0.0, -100.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 180.0),
+        transform("TRN-008", .circle(circleInput("source", 50.0, 25.0, -25.0)), 250.0, 125.0, 0.0, 25.0, -25.0, 0.0, 0.57735026919, 0.57735026919, 0.57735026919, 60.0),
 
         compound("CMP-001", [member("base", boxInput("base", 100.0, 50.0, 20.0, .millimeter, 0.0, 0.0, 0.0)), member("post", cylinderInput("post", 10.0, 80.0, .millimeter, 50.0, 25.0, 20.0, 0.0, 0.0, 1.0))]),
         compound("CMP-002", [member("left", boxInput("left", 25.0, 25.0, 25.0, .millimeter, -40.0, 0.0, 0.0)), member("right", boxInput("right", 25.0, 25.0, 25.0, .millimeter, 15.0, 0.0, 0.0))]),
@@ -198,6 +198,9 @@ enum CADSolidChallengeCatalog {
         _ tx: Double,
         _ ty: Double,
         _ tz: Double,
+        _ axisPointX: Double,
+        _ axisPointY: Double,
+        _ axisPointZ: Double,
         _ axisX: Double,
         _ axisY: Double,
         _ axisZ: Double,
@@ -206,6 +209,7 @@ enum CADSolidChallengeCatalog {
         let input = CADTransformChallengeInput(
             source: source,
             translation: CADPoint3D(x: tx, y: ty, z: tz),
+            axisPoint: CADPoint3D(x: axisPointX, y: axisPointY, z: axisPointZ),
             rotationAxis: CADDirection3D(x: axisX, y: axisY, z: axisZ),
             rotation: CADAngle(value: degrees)
         )

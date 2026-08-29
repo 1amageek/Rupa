@@ -17,7 +17,7 @@ enum CADChallengeInstruction {
             let secondGeometry = input.second.map { " and \(constraintGeometry($0))" } ?? ""
             return "Construct \(id) by applying the \(input.relation.rawValue) relation to \(constraintGeometry(input.first))\(secondGeometry)."
         case let .transform(input):
-            return "Construct \(id) by transforming \(transformSource(input.source)) with translation \(point(input.translation)), rotation axis \(direction(input.rotationAxis)), and rotation \(angle(input.rotation))."
+            return "Construct \(id) by first rotating \(transformSource(input.source)) by \(angle(input.rotation)) about the axis through \(point(input.axisPoint)) in direction \(direction(input.rotationAxis)), then translating the rotated result by \(point(input.translation))."
         case let .compound(input):
             let members = input.members.map { member in
                 "\(member.role)=\(memberGeometry(member))"
@@ -56,15 +56,15 @@ enum CADChallengeInstruction {
     private static func transformSource(_ value: CADTransformSource) -> String {
         switch value {
         case let .line(input):
-            "line \(point(input.start)) to \(point(input.end))"
+            "line \(point(input.start)) to \(point(input.end)) on the \(input.plane.rawValue) plane"
         case let .rectangle(input):
-            "rectangle width \(length(input.width)) height \(length(input.height)) centered at \(point(input.center))"
+            "rectangle width \(length(input.width)) height \(length(input.height)) centered at \(point(input.center)) on the \(input.plane.rawValue) plane"
         case let .circle(input):
-            "circle radius \(length(input.radius)) at \(point(input.center))"
+            "circle radius \(length(input.radius)) at \(point(input.center)) on the \(input.plane.rawValue) plane"
         case let .box(input):
             "box \(length(input.width)) x \(length(input.depth)) x \(length(input.height)) at \(point(input.origin))"
         case let .cylinder(input):
-            "cylinder radius \(length(input.radius)) depth \(length(input.depth)) at \(point(input.baseCenter))"
+            "cylinder radius \(length(input.radius)) depth \(length(input.depth)) at \(point(input.baseCenter)) along axis \(direction(input.axis))"
         }
     }
 
@@ -75,7 +75,7 @@ enum CADChallengeInstruction {
             return "box \(length(input.width)) x \(length(input.depth)) x \(length(input.height)) at \(point(input.origin))"
         case .cylinder:
             guard let input = value.cylinder else { return "cylinder" }
-            return "cylinder radius \(length(input.radius)) depth \(length(input.depth)) at \(point(input.baseCenter))"
+            return "cylinder radius \(length(input.radius)) depth \(length(input.depth)) at \(point(input.baseCenter)) along axis \(direction(input.axis))"
         }
     }
 }
