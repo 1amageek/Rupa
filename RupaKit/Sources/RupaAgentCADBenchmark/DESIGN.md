@@ -1711,6 +1711,42 @@ inactive until the transform category begins. Schema, catalog, fingerprint,
 tolerance, projection/mapping, lifecycle, RupaCore FeatureNode outputs, kernel,
 renderer/Mesh, and transform behavior do not change.
 
+### Constraint category cumulative checkpoint
+
+After all eight constraint case commits, one dedicated serialized checkpoint
+replays `CON-001...008` in exact lexical order through
+`CADConstraintCaseRunner.runReference()`. Every realized result therefore
+composes the shared lifecycle and production
+`ProjectAgentCommandController`/`createSketch` route with both the immutable
+authored-source oracle and the benchmark-private derived-region oracle. The
+checkpoint must prove eight unique XY/millimetre cases; relations in order
+`coincident`, `parallel`, `perpendicular`, `horizontal`, `vertical`,
+`equalLength`, `concentric`, and `equalRadius`; six line cases and two circle
+cases; two unary and six binary relations; and entity counts
+`[2, 2, 2, 1, 1, 2, 2, 2]`.
+
+For each replay, validation requires realized publication, the primary
+`relation` binding, publication/document-generation/transaction-revision +1,
+unchanged workspace revision, measured cleanup with zero remaining
+registrations, action 1, command 1, read at least 1, feature 1, body 0, and
+positive planning, route, oracle, total, and cleanup timings. Exact oracle
+success is the compositional evidence for the derived-region policy: zero
+regions for CON-001...006, one canonical annulus for CON-007, and two canonical
+disks for CON-008. The checkpoint does not expose private region expectations
+through result types or reproduce corrupt-region fixtures; the individual case
+tests remain the evidence owner for relation mismatch/no-retry, prepublication
+failure, timeout, privacy, and derived-region corruption.
+
+The boundary test also requires executor authority to be exactly 80 with
+constraint suffix `CON-001...008` and `TRN-001` typed inactive. The external
+request aggregate remains
+`91f68ea42c6e131263b499995637e9f9b7dbce64fcf441bdcdf385c9f341efb0`;
+its byte-level proof remains owned by the existing JSON adapter and CLI tests.
+This gate adds only
+`Tests/RupaAgentCADBenchmarkTests/CADConstraintCategoryCheckpointTests.swift`;
+it changes no production geometry, public API, schema, catalog, fingerprint,
+tolerance, lifecycle, kernel, renderer/Mesh, or transform behavior.
+
 ### Vertical Case Gate
 
 Cases are activated in the lexical/category order recorded in
