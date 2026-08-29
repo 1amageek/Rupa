@@ -3,9 +3,10 @@ import Foundation
 /// The transform cases whose production route has been independently activated.
 ///
 /// Transform catalog entries remain prepared until their own vertical gate is
-/// complete.  Only TRN-001 is part of the measured authority in this sprint.
+/// complete.  TRN-001 and TRN-002 are part of the measured authority in this sprint.
 enum CADActivatedTransformCase: String, CaseIterable, Equatable, Hashable, Sendable {
     case trn001 = "TRN-001"
+    case trn002 = "TRN-002"
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)
@@ -22,6 +23,8 @@ enum CADActivatedTransformCase: String, CaseIterable, Equatable, Hashable, Senda
         switch self {
         case .trn001:
             .transform001
+        case .trn002:
+            .transform002
         }
     }
 

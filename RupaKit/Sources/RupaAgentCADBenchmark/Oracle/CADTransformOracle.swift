@@ -90,9 +90,20 @@ enum CADTransformOracle {
         return CADTransformOracleObservation(
             readCount: initialSourceObservation.readCount,
             featureCount: finalDocument.cadDocument.designGraph.nodes.count,
-            sceneNodeCount: finalDocument.productMetadata.sceneNodes.count,
+            sceneNodeCount: authoredSceneNodeCount(in: finalDocument.productMetadata),
             bodyCount: final.evaluationSnapshot.bodyCount
         )
+    }
+
+    /// Counts authored scene nodes while excluding the document's structural roots.
+    /// Root nodes are runtime scaffolding and are not candidate-authored geometry.
+    static func authoredSceneNodeCount(in metadata: ProductMetadata) -> Int {
+        let rootIDs = Set(metadata.rootSceneNodeIDs)
+        return metadata.sceneNodes.keys.reduce(into: 0) { count, id in
+            if rootIDs.contains(id) == false {
+                count += 1
+            }
+        }
     }
 
     static func validateSourceAndLocalPlacement(

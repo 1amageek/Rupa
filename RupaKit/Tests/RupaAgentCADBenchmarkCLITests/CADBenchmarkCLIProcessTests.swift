@@ -91,8 +91,8 @@ struct CADBenchmarkCLIProcessTests {
         )
         try assertError(legacyResult, code: .unsupportedSchema, exit: 64, caseID: nil)
 
-        let inactive = try runCADBenchmarkCLI(["request", "TRN-002"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "TRN-002")
+        let inactive = try runCADBenchmarkCLI(["request", "TRN-003"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "TRN-003")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -173,8 +173,93 @@ struct CADBenchmarkCLIProcessTests {
         )
         try assertError(unsupportedSchemaResult, code: .unsupportedSchema, exit: 64, caseID: nil)
 
-        let inactive = try runCADBenchmarkCLI(["request", "TRN-002"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "TRN-002")
+        let inactive = try runCADBenchmarkCLI(["request", "TRN-003"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "TRN-003")
+    }
+
+    @Test(.timeLimit(.minutes(2)))
+    @MainActor
+    func trn002UsesBoundedRequestFileAndStandardInputProductionRoutes() throws {
+        let requestResult = try runCADBenchmarkCLI(["request", "TRN-002"])
+        #expect(requestResult.terminationStatus == 0)
+        #expect(requestResult.standardOutputData.count <= CADJSONAdapterSchema.maximumDocumentBytes)
+        let request = try CADJSONBoundedCodec.decode(
+            CADJSONRequestEnvelope.self,
+            from: requestResult.standardOutputData
+        )
+        #expect(request.caseID == "TRN-002")
+        #expect(request.context.challenge.category == .transform)
+        #expect(request.context.challenge.instruction.contains("rectangle width 40.0 mm height 20.0 mm"))
+        #expect(request.context.challenge.instruction.contains("then translating the rotated result by (0.0, 25.0, 0.0) mm"))
+        #expect(isPrivateFree(requestResult.standardOutput))
+
+        let exact = try responseData(
+            for: "TRN-002",
+            action: transform002Action()
+        )
+        let fileResult = try withTemporaryData(exact) { path in
+            try runCADBenchmarkCLI(["evaluate", "--response", path])
+        }
+        try assertRealizedEvaluation(fileResult, caseID: "TRN-002")
+
+        let standardInputResult = try runCADBenchmarkCLI(
+            ["evaluate", "--response", "-"],
+            standardInput: exact
+        )
+        try assertRealizedEvaluation(standardInputResult, caseID: "TRN-002")
+
+        let wrongOrder = try responseData(
+            for: "TRN-002",
+            action: transform002Action(
+                translationX: -17.67766952966369,
+                translationY: 17.67766952966369
+            )
+        )
+        let wrongResult = try runCADBenchmarkCLI(
+            ["evaluate", "--response", "-"],
+            standardInput: wrongOrder
+        )
+        let wrongEvaluation = try CADJSONBoundedCodec.decode(
+            CADJSONEvaluationEnvelope.self,
+            from: wrongResult.standardOutputData
+        )
+        #expect(wrongResult.terminationStatus == 2)
+        #expect(wrongEvaluation.caseID == "TRN-002")
+        #expect(wrongEvaluation.result?.outcome == .invalidSubmission)
+        #expect(wrongEvaluation.error == nil)
+        #expect(isPrivateFree(wrongResult.standardOutput))
+
+        let invalid = try responseData(
+            for: "TRN-002",
+            action: transform002Action(axis: CADDirection3D(x: 0, y: 0, z: 0))
+        )
+        let invalidResult = try runCADBenchmarkCLI(
+            ["evaluate", "--response", "-"],
+            standardInput: invalid
+        )
+        let invalidEvaluation = try CADJSONBoundedCodec.decode(
+            CADJSONEvaluationEnvelope.self,
+            from: invalidResult.standardOutputData
+        )
+        #expect(invalidResult.terminationStatus == 2)
+        #expect(invalidEvaluation.caseID == "TRN-002")
+        #expect(invalidEvaluation.result?.outcome == .invalidSubmission)
+        #expect(invalidEvaluation.error == nil)
+        #expect(isPrivateFree(invalidResult.standardOutput))
+
+        let unsupportedSchema = replacing(
+            exact,
+            from: CADJSONAdapterSchema.candidateResponse,
+            to: "rupa.agent-cad-benchmark.candidate-response.v6"
+        )
+        let unsupportedSchemaResult = try runCADBenchmarkCLI(
+            ["evaluate", "--response", "-"],
+            standardInput: unsupportedSchema
+        )
+        try assertError(unsupportedSchemaResult, code: .unsupportedSchema, exit: 64, caseID: nil)
+
+        let inactive = try runCADBenchmarkCLI(["request", "TRN-003"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "TRN-003")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -452,7 +537,7 @@ struct CADBenchmarkCLIProcessTests {
     @Test(.timeLimit(.minutes(2)))
     @MainActor
     func requestEmitsBoundedReviewedObjectsAndRejectsInactiveCase() throws {
-        for rawCaseID in ["LIN-001", "REC-001", "REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012", "CYL-001", "CYL-002", "CYL-003", "CYL-004", "CYL-005", "CYL-006", "CYL-007", "CYL-008", "CON-001", "CON-002", "CON-003", "CON-004", "CON-005", "CON-006", "CON-007", "CON-008", "TRN-001"] {
+        for rawCaseID in ["LIN-001", "REC-001", "REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012", "CYL-001", "CYL-002", "CYL-003", "CYL-004", "CYL-005", "CYL-006", "CYL-007", "CYL-008", "CON-001", "CON-002", "CON-003", "CON-004", "CON-005", "CON-006", "CON-007", "CON-008", "TRN-001", "TRN-002"] {
             let result = try runCADBenchmarkCLI(["request", rawCaseID])
             #expect(result.terminationStatus == 0, Comment(rawValue: result.standardError))
             #expect(result.standardOutputData.count <= CADJSONAdapterSchema.maximumDocumentBytes)
@@ -465,14 +550,14 @@ struct CADBenchmarkCLIProcessTests {
             #expect(result.standardError.isEmpty)
         }
 
-        let inactive = try runCADBenchmarkCLI(["request", "TRN-002"])
+        let inactive = try runCADBenchmarkCLI(["request", "TRN-003"])
         #expect(inactive.terminationStatus == 64)
         let error = try CADJSONBoundedCodec.decode(
             CADJSONErrorEnvelope.self,
             from: inactive.standardOutputData
         )
         #expect(error.code == .inactiveCase)
-        #expect(error.caseID?.rawValue == "TRN-002")
+        #expect(error.caseID?.rawValue == "TRN-003")
         #expect(isPrivateFree(inactive.standardOutput))
     }
 
@@ -1626,15 +1711,15 @@ struct CADBenchmarkCLIProcessTests {
         try assertError(fingerprintResult, code: .fingerprintMismatch, exit: 64, caseID: "LIN-001")
 
         let inactiveResponse = try responseData(
-            for: "TRN-002",
+            for: "TRN-003",
             contextFingerprint: String(repeating: "0", count: 64),
-            action: constraint001Action(name: "TRN-002")
+            action: constraint001Action(name: "TRN-003")
         )
         let inactiveResult = try runCADBenchmarkCLI(
             ["evaluate", "--response", "-"],
             standardInput: inactiveResponse
         )
-        try assertError(inactiveResult, code: .inactiveCase, exit: 64, caseID: "TRN-002")
+        try assertError(inactiveResult, code: .inactiveCase, exit: 64, caseID: "TRN-003")
 
         let finishResponse = try finishResponseData(for: request)
         let finishResult = try runCADBenchmarkCLI(
@@ -1834,6 +1919,24 @@ private func transform001Action(
         axisPoint: CADPoint3D(x: 50, y: 0, z: 0, unit: .millimeter),
         rotationAxis: axis,
         rotation: CADAngle(value: 30, unit: .degree)
+    )))
+}
+
+private func transform002Action(
+    translationX: Double = 0,
+    translationY: Double = 25,
+    axis: CADDirection3D = CADDirection3D(x: 0, y: 0, z: 1)
+) -> CADCandidateAction {
+    .automation(.transform(CADTransformAction(
+        translation: CADPoint3D(
+            x: translationX,
+            y: translationY,
+            z: 0,
+            unit: .millimeter
+        ),
+        axisPoint: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
+        rotationAxis: axis,
+        rotation: CADAngle(value: 45, unit: .degree)
     )))
 }
 

@@ -313,7 +313,11 @@ struct CADTransformCaseRunner {
                     ?? view?.document.document.cadDocument.designGraph.nodes.count
                     ?? 0,
                 sceneNodeCount: observation?.sceneNodeCount
-                    ?? view?.document.document.productMetadata.sceneNodes.count
+                    ?? view.map {
+                        CADTransformOracle.authoredSceneNodeCount(
+                            in: $0.document.document.productMetadata
+                        )
+                    }
                     ?? 0,
                 bodyCount: observation?.bodyCount ?? view?.evaluationSnapshot.bodyCount ?? 0,
                 timeoutWallNanoseconds: record.telemetry.timeoutWallNanoseconds,
