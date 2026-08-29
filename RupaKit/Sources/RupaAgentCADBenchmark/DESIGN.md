@@ -1342,6 +1342,33 @@ lifecycle, kernel, and renderer/Mesh contracts do not change. The committed
 oblique p-curve correction is expected to cover this arbitrary plane; any
 contrary production observation reopens the Conflict Gate before activation.
 
+### Cylinder category cumulative gate
+
+T12-CYL-G adds no geometry or execution authority. Its sole new owner is
+`CADCylinderCategoryCheckpointTests`, a serialized test suite that replays
+`CADActivatedCylinderCase.allCases` in exact lexical order through the existing
+`CADCylinderCaseRunner`. The expected set is exactly CYL-001...008 with eight
+unique IDs. Public challenge projections must yield unit coverage millimetre 5,
+centimetre 1, metre 1, and inch 1; axis coverage is five aligned directions
+(+X, -X, +Y, +Z, -Z) and three oblique directions in XY, YZ, and XYZ.
+
+For each fresh replay, the existing production controller and immutable oracle
+must return `realized`, publish exactly once, advance document generation and
+transaction revision exactly once, leave workspace revision unchanged, and
+unregister the workspace. Telemetry must report action 1, command 1, read at
+least 1, entity 1, feature 2, body 1, topology 1/6/12/8, and positive planning,
+route, oracle, total, and cleanup wall time. The gate composes rather than
+duplicates the eight case-owned postpublication/no-retry, zero-axis
+prepublication, timeout/cleanup, public-candidate/privacy, and exact source/
+B-Rep fixtures.
+
+The same snapshot must retain exactly 72 activated IDs, frozen aggregate
+`842be9af6961688359198c5d7cda9d8134c36e9a07d56cbf5fe1e4b409cc9cea`, and
+typed inactivity for CON-001 across executor, JSON adapter, and CLI evidence.
+Passing this gate changes no production source, public contract, schema,
+catalog, fingerprint, tolerance, shared infrastructure, kernel, or
+renderer/Mesh behavior.
+
 ### Vertical Case Gate
 
 Cases are activated in the lexical/category order recorded in
