@@ -202,7 +202,7 @@ implementation permission to add a parallel authority.
 | `CADActivatedCircleCase` | Internal; the reviewed circle IDs that may enter behavioral execution | Contains the complete reviewed CIR-001...012 category in catalog order; no CIR-013 exists |
 | `CADActivatedAngleCase` | Internal; the reviewed angle IDs that may enter behavioral execution | Contains only ANG-001 when introduced and advances one reviewed case per commit |
 | `CADActivatedBoxCase` | Internal; the reviewed box IDs that may enter behavioral execution | Begins with BOX-001 and advances one reviewed case per commit; catalog presence never activates a box |
-| `CADActivatedTransformCase` | Internal; the reviewed transform IDs that may enter behavioral execution | Contains TRN-001...006; TRN-007...008 remain catalog-only until their own vertical gates |
+| `CADActivatedTransformCase` | Internal; the reviewed transform IDs that may enter behavioral execution | Contains TRN-001...007; TRN-008 remains catalog-only until its own vertical gate |
 | `CADCaseActionPlan` / `CADCaseActionRouting` | Internal; converts an activated category action plus public challenge context into either one command or one bounded atomic batch | Has no session/coordinate/workspace/source authority and cannot read a private expectation; completed single-command facades keep their existing branch |
 | `CADCaseLifecycleHarness` | Internal; owns the shared fresh controller/workspace, category-neutral initial-document provider, pre-owned registration UUID, exact coordinate binding, deadline, production dispatch, final immutable view capture, and unconditional cleanup | The only shared mutable lifecycle owner; every execution entry checks cancellation before invoking the provider or any later lifecycle stage, its default provider preserves the existing named-empty document, and an injected provider may seed only a bounded immutable challenge source before registration; it does not select cases, map target geometry, run an oracle, or project a category result |
 | `CADCaseLifecycleRecord` | Internal immutable output from the harness | Preserves initial/final coordinates, typed response, publication/no-retry state, cleanup state, and common count/timing telemetry without geometry assertions |
@@ -325,15 +325,15 @@ Candidate-visible challenge text + CapabilitySnapshot + prior CandidateStepResul
 ```
 
 `CADCandidateAction` exposes the line, rectangle, circle, reviewed angle, and
-TRN-001...006 transform automation payloads proven by activated cases. The angle
+TRN-001...007 transform automation payloads proven by activated cases. The angle
 payload contains a name, plane orientation, and two ordered world-space endpoint
 pairs; it neither contains an expected angle nor exposes the private oracle. The
 transform payload contains translation, explicit axis point, finite rotation
 axis, and rotation angle; it does not contain a source snapshot, expectation, or
 controller coordinate. Later category actions remain target specifications until
 their vertical case owns a production contract. The shared catalog's transform
-pivot and composition semantics are fixed, and TRN-007...008 remain catalog-only
-until their own vertical gates.
+pivot and composition semantics are fixed, and TRN-008 remains catalog-only
+until its own vertical gate.
 The line payload is immutable world-space request data and is valid
 only when passed through the controller route. An action does not contain a
 session ID, workspace reference, project authority coordinate, `EditorSession`,
@@ -433,7 +433,7 @@ workspace publication and records validated `invalidSubmission` plus cleanup
 evidence because activated cases require one bounded action. The public
 executor projects that record as
 `CADCaseResult(outcome: .invalidSubmission)`. These decisions are not promoted
-to `expectedUnsupported`, because all eighty-six activated cases have already
+to `expectedUnsupported`, because all eighty-seven activated cases have already
 proved their creation capability through the production controller. A
 candidate-thrown error remains the typed executor `candidateFailure`, also
 before publication. No adapter may catch these paths and substitute a reference
@@ -2232,13 +2232,13 @@ contract/design is updated before retrying the same case. After the last case
 of a category, a cumulative category gate reviews the shared contract against
 all committed cases before the next category begins.
 
-### TRN-001 through TRN-006 current activation boundary
+### TRN-001 through TRN-007 current activation boundary
 
-TRN-001 through TRN-006 have crossed their individual vertical gates. The
-executor-owned ordered authority is now exactly 86 IDs: LIN-001...012,
+TRN-001 through TRN-007 have crossed their individual vertical gates. The
+executor-owned ordered authority is now exactly 87 IDs: LIN-001...012,
 REC-001...012, CIR-001...012, ANG-001...016, BOX-001...012, CYL-001...008,
-CON-001...008, and TRN-001...006. TRN-007...008 remain catalog-only and are
-rejected as typed inactive cases at the benchmark, JSON-adapter, and CLI
+CON-001...008, and TRN-001...007. TRN-008 remains catalog-only and is
+rejected as a typed inactive case at the benchmark, JSON-adapter, and CLI
 boundaries.
 
 The transform action is a single bounded value containing translation, the
@@ -2254,7 +2254,10 @@ and TRN-005's wrong-order translation
 `(15.849364905389024, 50, 77.4519052838329)` mm publish once and fail without
 retry. Because TRN-006 has a zero pivot and translation, order permutations are
 identical; its finite inverse-axis substitute publishes once and fails without
-retry. A zero axis fails before publication.
+retry. TRN-007's translation is parallel to its rotation axis, while the
+180-degree rotation also makes the two axis signs equivalent; its 90-degree
+wrong-angle substitute therefore provides the bounded semantic counterexample,
+publishes once, and fails without retry. A zero axis fails before publication.
 TRN-002 and TRN-003 are sketch-only sources with two reads, one feature, one
 authored scene node, and zero bodies. TRN-004 is a solid box source with three
 reads, two features, two authored scene nodes, one body, and exact topology of
@@ -2263,6 +2266,8 @@ owns cleanup and telemetry. TRN-005 is a solid cylinder source with three reads,
 two features, two authored scene nodes, one body, and exact topology of one body,
 six faces, twelve edges, and eight vertices. TRN-006 is a sketch-only finite-line
 source with two reads, one feature, one authored scene node, and zero bodies.
+TRN-007 is a sketch-only rectangle source with two reads, one feature, one
+authored scene node, and zero bodies.
 
 The frozen 80-request aggregate remains
 `91f68ea42c6e131263b499995637e9f9b7dbce64fcf441bdcdf385c9f341efb0`; appending
@@ -2282,7 +2287,9 @@ aggregate as
 `c5c61320be710e1fe290b86e25ad9afb83b2d687c608c13aa3b4c6e2ee100779`, and
 appending the actual bounded TRN-006 request bytes freezes the 86-request
 aggregate as
-`f7061d03903393f8384f3c23eed29c4eb4ef8529e27f03fca5e268e698b01f90`. The
+`f7061d03903393f8384f3c23eed29c4eb4ef8529e27f03fca5e268e698b01f90`, and
+appending the actual bounded TRN-007 request bytes freezes the 87-request
+aggregate as `d1c0aaf385f5f67658a5052f26f3b38cf4970ce5377a9f282e8022f3dcd482ec`. The
 candidate-response schema is v7 and v1...v6 are rejected before decision
 decoding. Request/live context identity, candidate privacy, bounded I/O, and
 the JSON/CLI process routes remain the adapter and executable's respective
