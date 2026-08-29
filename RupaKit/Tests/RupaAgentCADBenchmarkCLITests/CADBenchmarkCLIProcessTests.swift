@@ -91,8 +91,8 @@ struct CADBenchmarkCLIProcessTests {
         )
         try assertError(legacyResult, code: .unsupportedSchema, exit: 64, caseID: nil)
 
-        let inactive = try runCADBenchmarkCLI(["request", "CON-003"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "CON-003")
+        let inactive = try runCADBenchmarkCLI(["request", "CON-004"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "CON-004")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -142,8 +142,52 @@ struct CADBenchmarkCLIProcessTests {
 
     @Test(.timeLimit(.minutes(2)))
     @MainActor
+    func con003UsesBoundedFileAndStandardInputProductionRoutes() throws {
+        let requestResult = try runCADBenchmarkCLI(["request", "CON-003"])
+        #expect(requestResult.terminationStatus == 0)
+        let request = try CADJSONBoundedCodec.decode(
+            CADJSONRequestEnvelope.self,
+            from: requestResult.standardOutputData
+        )
+        #expect(request.caseID == "CON-003")
+        #expect(request.context.challenge.instruction.contains("perpendicular relation"))
+        #expect(isPrivateFree(requestResult.standardOutput))
+
+        let exact = try responseData(
+            for: "CON-003",
+            action: constraint003Action(name: "CON-003")
+        )
+        let fileResult = try withTemporaryData(exact) { path in
+            try runCADBenchmarkCLI(["evaluate", "--response", path])
+        }
+        try assertRealizedEvaluation(fileResult, caseID: "CON-003")
+        let standardInputResult = try runCADBenchmarkCLI(
+            ["evaluate", "--response", "-"],
+            standardInput: exact
+        )
+        try assertRealizedEvaluation(standardInputResult, caseID: "CON-003")
+
+        let wrong = try responseData(
+            for: "CON-003",
+            action: constraint003Action(name: "CON-003.wrong", relation: .parallel)
+        )
+        let wrongResult = try runCADBenchmarkCLI(
+            ["evaluate", "--response", "-"],
+            standardInput: wrong
+        )
+        let evaluation = try CADJSONBoundedCodec.decode(
+            CADJSONEvaluationEnvelope.self,
+            from: wrongResult.standardOutputData
+        )
+        #expect(wrongResult.terminationStatus == 2)
+        #expect(evaluation.result?.outcome == .invalidSubmission)
+        #expect(isPrivateFree(wrongResult.standardOutput))
+    }
+
+    @Test(.timeLimit(.minutes(2)))
+    @MainActor
     func requestEmitsBoundedReviewedObjectsAndRejectsInactiveCase() throws {
-        for rawCaseID in ["LIN-001", "REC-001", "REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012", "CYL-001", "CYL-002", "CYL-003", "CYL-004", "CYL-005", "CYL-006", "CYL-007", "CYL-008", "CON-001", "CON-002"] {
+        for rawCaseID in ["LIN-001", "REC-001", "REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012", "CYL-001", "CYL-002", "CYL-003", "CYL-004", "CYL-005", "CYL-006", "CYL-007", "CYL-008", "CON-001", "CON-002", "CON-003"] {
             let result = try runCADBenchmarkCLI(["request", rawCaseID])
             #expect(result.terminationStatus == 0, Comment(rawValue: result.standardError))
             #expect(result.standardOutputData.count <= CADJSONAdapterSchema.maximumDocumentBytes)
@@ -156,14 +200,14 @@ struct CADBenchmarkCLIProcessTests {
             #expect(result.standardError.isEmpty)
         }
 
-        let inactive = try runCADBenchmarkCLI(["request", "CON-003"])
+        let inactive = try runCADBenchmarkCLI(["request", "CON-004"])
         #expect(inactive.terminationStatus == 64)
         let error = try CADJSONBoundedCodec.decode(
             CADJSONErrorEnvelope.self,
             from: inactive.standardOutputData
         )
         #expect(error.code == .inactiveCase)
-        #expect(error.caseID?.rawValue == "CON-003")
+        #expect(error.caseID?.rawValue == "CON-004")
         #expect(isPrivateFree(inactive.standardOutput))
     }
 
@@ -1316,15 +1360,15 @@ struct CADBenchmarkCLIProcessTests {
         try assertError(fingerprintResult, code: .fingerprintMismatch, exit: 64, caseID: "LIN-001")
 
         let inactiveResponse = try responseData(
-            for: "CON-003",
+            for: "CON-004",
             contextFingerprint: String(repeating: "0", count: 64),
-            action: constraint001Action(name: "CON-003")
+            action: constraint001Action(name: "CON-004")
         )
         let inactiveResult = try runCADBenchmarkCLI(
             ["evaluate", "--response", "-"],
             standardInput: inactiveResponse
         )
-        try assertError(inactiveResult, code: .inactiveCase, exit: 64, caseID: "CON-003")
+        try assertError(inactiveResult, code: .inactiveCase, exit: 64, caseID: "CON-004")
 
         let finishResponse = try finishResponseData(for: request)
         let finishResult = try runCADBenchmarkCLI(
@@ -1678,6 +1722,26 @@ private func constraint002Action(
         second: .line(
             start: CADPoint3D(x: 0, y: 10, z: 0),
             end: CADPoint3D(x: 50, y: 10, z: 0)
+        )
+    ))))
+}
+
+private func constraint003Action(
+    name: String,
+    relation: CADConstraintRelation = .perpendicular,
+    firstEndX: Double = 30
+) -> CADCandidateAction {
+    .automation(.sketch(.constraint(CADConstraintAction(
+        name: name,
+        plane: .xy,
+        relation: relation,
+        first: .line(
+            start: CADPoint3D(x: 0, y: 0, z: 0),
+            end: CADPoint3D(x: firstEndX, y: 0, z: 0)
+        ),
+        second: .line(
+            start: CADPoint3D(x: 0, y: 15, z: 0),
+            end: CADPoint3D(x: 0, y: 45, z: 0)
         )
     ))))
 }

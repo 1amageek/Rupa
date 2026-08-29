@@ -129,8 +129,8 @@ Process-level tests build and invoke the actual executable and prove:
 - `request` emits valid v1 JSON for an activated line, rectangle, REC-009
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
   millimetre/XY case, the complete CIR-001...012 category, ANG-001...016, and
-  BOX-001...012, `CYL-001...008`, and `CON-001...002`, and rejects inactive `CON-003`;
-- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, and CON-001...002 responses traverse the adapter, production
+  BOX-001...012, `CYL-001...008`, and `CON-001...003`, and rejects inactive `CON-004`;
+- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, and CON-001...003 responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
@@ -630,8 +630,27 @@ preserves frozen aggregate
 `efc4fac5670c6739132f6145b5fc18ed38f69b1fe5dfd9889e2b38603de75468`,
 then freezes the 74-request aggregate
 `6f9d75f040f25352de1a8b3b7b7cfa68fb5fe06118bf93875dfbf696ebc2b851`.
-`CON-003` remains inactive and
-exits `64`. Candidate-response v6, byte limits, one-JSON stdout, privacy,
+At CON-002 completion, `CON-003` remained inactive and
+exited `64`. Candidate-response v6, byte limits, one-JSON stdout, privacy,
+deadline ownership, and exit mapping remain unchanged.
+
+### CON-003 process contract
+
+CON-003 adds no CLI command or argument. `request CON-003` emits its bounded v1
+public context; `evaluate --response <PATH|->` consumes the exact v6
+`perpendicular` action through the adapter, activated executor, production
+`ProjectAgentCommandController`/`createSketch` transaction, and immutable
+source-relation oracle. Exact file and stdin responses exit `0` with one
+private-free `realized` JSON document.
+
+The exact-geometry `parallel` substitute exits `2` after one publication without
+retry, and the zero-length first-line response exits `2` before publication.
+Authority remains 74 until the internal gate passes, preserves aggregate
+`6f9d75f040f25352de1a8b3b7b7cfa68fb5fe06118bf93875dfbf696ebc2b851`,
+then freezes the 75-request aggregate
+`9a9759ff74dbe5222940164edbbb60040f732453889fe2648ed0c2e205e6e69c`.
+`CON-004` remains inactive and
+exits `64`. Candidate-response v6, bounded/private-free one-JSON output,
 deadline ownership, and exit mapping remain unchanged.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected

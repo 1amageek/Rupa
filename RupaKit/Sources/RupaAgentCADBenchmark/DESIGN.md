@@ -1469,9 +1469,41 @@ Authority remains exactly 73 until the internal CON-002 gate passes. The frozen
 `efc4fac5670c6739132f6145b5fc18ed38f69b1fe5dfd9889e2b38603de75468`
 must remain byte-identical, after which the 74-request aggregate
 `6f9d75f040f25352de1a8b3b7b7cfa68fb5fe06118bf93875dfbf696ebc2b851`
-is frozen across executor, adapter, and CLI evidence. CON-003 remains typed
-inactive. No shared constraint infrastructure or later constraint case belongs
+is frozen across executor, adapter, and CLI evidence. At CON-002 completion,
+CON-003 remained typed inactive. No shared constraint infrastructure or later constraint case belongs
 to this activation.
+
+### CON-003 perpendicular-relation activation
+
+CON-003 reuses the v6 constraint action and the CON-001/002 projection,
+mapping, runner, lifecycle, production `createSketch` controller route, and
+immutable source oracle unchanged. Its public target is two ordered XY
+millimetre lines: first (0, 0, 0)→(30, 0, 0), second
+(0, 15, 0)→(0, 45, 0), under the `perpendicular` relation. Fresh internal IDs
+must produce the sole source relation `.perpendicular(first, second)` on the
+affine XY plane anchored at the first start. The oracle requires exact oriented
+world geometry and order, exact relation references, one curve sketch, the
+canonical `relation` primary binding, and zero dimensions/regions/bodies.
+
+Changing only the relation to `parallel` is a structurally valid submission
+that must publish exactly once before the independent oracle rejects it without
+retry. Making the first line zero-length fails submitted-geometry validation
+before command/publication. The existing timeout and cleanup contract remains:
+timeout publishes nothing; the owned registration is always removed; success
+advances publication, document generation, and transaction revision +1 with
+workspace unchanged and records action 1, command 1, read at least 1, entity 2,
+feature 1, body 0, and positive planning, route, oracle, total, and cleanup
+timings. Candidate-visible data contains only the public perpendicular relation,
+plane, units, and line geometry.
+
+Authority remains exactly 74 until the internal CON-003 gate passes. Frozen
+74-request aggregate
+`6f9d75f040f25352de1a8b3b7b7cfa68fb5fe06118bf93875dfbf696ebc2b851`
+must remain byte-identical, after which the 75-request aggregate
+`9a9759ff74dbe5222940164edbbb60040f732453889fe2648ed0c2e205e6e69c`
+is frozen across executor, adapter, and CLI evidence. CON-004 remains typed
+inactive. Schema, catalog, fingerprint, tolerance, shared constraint
+infrastructure, kernel, renderer/Mesh, and later cases do not change.
 
 ### Vertical Case Gate
 
