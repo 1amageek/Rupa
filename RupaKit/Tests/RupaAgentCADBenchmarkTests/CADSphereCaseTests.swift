@@ -56,20 +56,17 @@ struct CADSphereCaseTests {
     }
 
     @Test
-    func sphereActivationBoundaryContainsSPH001ThroughSPH004() throws {
-        #expect(CADActivatedSphereCase.allCases.map(\.rawValue) == ["SPH-001", "SPH-002", "SPH-003", "SPH-004"])
+    func sphereActivationBoundaryEqualsTheCompletePreparedSphereCatalog() throws {
+        #expect(CADActivatedSphereCase.allCases.map(\.rawValue) == [
+            "SPH-001", "SPH-002", "SPH-003", "SPH-004", "SPH-005",
+        ])
         #expect(CADSpherePreparationCase.allCases.map(\.rawValue) == [
             "SPH-001", "SPH-002", "SPH-003", "SPH-004", "SPH-005",
         ])
-
-        for inactiveID in ["SPH-005"] {
-            do {
-                _ = try CADActivatedSphereCase(caseID: inactiveID)
-                Issue.record("\(inactiveID) must remain outside the sphere activation boundary.")
-            } catch let error as CADBenchmarkError {
-                #expect(error == .invalidCaseID(inactiveID))
-            }
-        }
+        #expect(
+            CADActivatedSphereCase.allCases.map(\.caseID)
+                == CADSpherePreparationCase.allCases.map(\.caseID)
+        )
     }
 
     @MainActor
@@ -218,15 +215,17 @@ struct CADSphereCaseTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func executorActivatesSphereCapabilityObservationAndLeavesSPH005Inactive() async throws {
+    func executorActivatesAllSphereCapabilityObservationsAndCompletesTheCatalog() async throws {
         let executor = DefaultCADActivatedCaseExecutor()
 
-        #expect(executor.activatedCaseIDs.count == 99)
+        #expect(executor.activatedCaseIDs.count == 100)
         #expect(executor.activatedCaseIDs.prefix(95).last == "CMP-007")
         #expect(executor.activatedCaseIDs.prefix(96).last == "SPH-001")
         #expect(executor.activatedCaseIDs.prefix(97).last == "SPH-002")
         #expect(executor.activatedCaseIDs.prefix(98).last == "SPH-003")
-        #expect(executor.activatedCaseIDs.last == "SPH-004")
+        #expect(executor.activatedCaseIDs.prefix(99).last == "SPH-004")
+        #expect(executor.activatedCaseIDs.last == "SPH-005")
+        #expect(Set(executor.activatedCaseIDs) == Set(try CADBenchmarkCatalog().caseIDs))
 
         let context = try executor.context(for: "SPH-001")
         #expect(context.challenge.category == .sphere)
@@ -248,12 +247,10 @@ struct CADSphereCaseTests {
         #expect(result.outcome == .expectedUnsupported)
         try result.validate()
 
-        do {
-            _ = try executor.context(for: "SPH-005")
-            Issue.record("SPH-005 must remain inactive.")
-        } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("SPH-005"))
-        }
+        let finalContext = try executor.context(for: "SPH-005")
+        #expect(finalContext.challenge.id == "SPH-005")
+        #expect(finalContext.challenge.category == .sphere)
+        #expect(finalContext.capabilities.statuses == context.capabilities.statuses)
     }
 
     @MainActor
@@ -378,6 +375,52 @@ struct CADSphereCaseTests {
 
         for decision in decisions {
             let result = try await CADSphereCaseRunner(case: .sphere004).run(
+                candidate: FixedSphereDecisionCandidate(decision: decision)
+            )
+            try result.validate()
+            #expect(result.outcome == .invalidSubmission)
+            #expect(result.routeEvidence.didPublish == false)
+            #expect(result.routeEvidence.commandCount == 0)
+            #expect(result.routeEvidence.sourceMutationCount == 0)
+            #expect(result.telemetry.capabilityRequestCount == 1)
+            #expect(result.telemetry.readCount == 1)
+            #expect(result.telemetry.actionCount == 0)
+            #expect(result.telemetry.publicationCount == 0)
+            #expect(result.routeEvidence.cleanupCompleted)
+            #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        }
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func sphere005PreservesMillimeterValuesAndRejectsSolidSubstitutesBeforePublication() async throws {
+        let entry = try CADSpherePreparationCase.sph005.catalogEntry
+        guard case let .sphere(expected) = entry.input else {
+            Issue.record("SPH-005 must retain an analytic sphere target.")
+            return
+        }
+        #expect(expected.center == CADPoint3D(x: -100, y: 100, z: -50, unit: .millimeter))
+        #expect(expected.radius == CADLength(value: 100, unit: .millimeter))
+
+        let decisions: [CADCandidateDecision] = [
+            .action(.automation(.solid(.box(
+                name: "sphere-substitute-box",
+                origin: CADPoint3D(x: -200, y: 0, z: -150, unit: .millimeter),
+                width: CADLength(value: 200, unit: .millimeter),
+                depth: CADLength(value: 200, unit: .millimeter),
+                height: CADLength(value: 200, unit: .millimeter)
+            )))),
+            .action(.automation(.solid(.cylinder(
+                name: "sphere-substitute-cylinder",
+                baseCenter: CADPoint3D(x: -100, y: 100, z: -150, unit: .millimeter),
+                axis: CADDirection3D(x: 0, y: 0, z: 1),
+                radius: CADLength(value: 100, unit: .millimeter),
+                depth: CADLength(value: 200, unit: .millimeter)
+            )))),
+        ]
+
+        for decision in decisions {
+            let result = try await CADSphereCaseRunner(case: .sphere005).run(
                 candidate: FixedSphereDecisionCandidate(decision: decision)
             )
             try result.validate()

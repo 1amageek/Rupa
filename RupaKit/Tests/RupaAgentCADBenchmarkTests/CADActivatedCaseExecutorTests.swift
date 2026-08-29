@@ -6,12 +6,13 @@ import Testing
 struct CADActivatedCaseExecutorTests {
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func executorActivatesOnlyReviewedCasesThroughSph004() throws {
+    func executorActivatesTheCompleteReviewedCatalogThroughSph005() throws {
         let executor = DefaultCADActivatedCaseExecutor()
         let expected = (1...12).map { String(format: "LIN-%03d", $0) }
             + (1...12).map { String(format: "REC-%03d", $0) }
-            + ["CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012", "CYL-001", "CYL-002", "CYL-003", "CYL-004", "CYL-005", "CYL-006", "CYL-007", "CYL-008", "CON-001", "CON-002", "CON-003", "CON-004", "CON-005", "CON-006", "CON-007", "CON-008", "TRN-001", "TRN-002", "TRN-003", "TRN-004", "TRN-005", "TRN-006", "TRN-007", "TRN-008", "CMP-001", "CMP-002", "CMP-003", "CMP-004", "CMP-005", "CMP-006", "CMP-007", "SPH-001", "SPH-002", "SPH-003", "SPH-004"]
+            + ["CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012", "CYL-001", "CYL-002", "CYL-003", "CYL-004", "CYL-005", "CYL-006", "CYL-007", "CYL-008", "CON-001", "CON-002", "CON-003", "CON-004", "CON-005", "CON-006", "CON-007", "CON-008", "TRN-001", "TRN-002", "TRN-003", "TRN-004", "TRN-005", "TRN-006", "TRN-007", "TRN-008", "CMP-001", "CMP-002", "CMP-003", "CMP-004", "CMP-005", "CMP-006", "CMP-007", "SPH-001", "SPH-002", "SPH-003", "SPH-004", "SPH-005"]
         #expect(executor.activatedCaseIDs.map(\.rawValue) == expected)
+        #expect(Set(executor.activatedCaseIDs) == Set(try CADBenchmarkCatalog().caseIDs))
     }
 
     @MainActor
@@ -577,14 +578,13 @@ struct CADActivatedCaseExecutorTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func nextSphereCaseIsRejectedBeforeCategoryDispatch() async throws {
+    func activatedAuthorityCoversTheCompleteCatalogWithoutAFabricatedNextSphereCase() async throws {
         let executor = DefaultCADActivatedCaseExecutor()
-        do {
-            _ = try executor.context(for: "SPH-005")
-            Issue.record("Inactive case must be rejected.")
-        } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("SPH-005"))
-        }
+        let catalog = try CADBenchmarkCatalog()
+
+        #expect(executor.activatedCaseIDs.count == 100)
+        #expect(Set(executor.activatedCaseIDs) == Set(catalog.caseIDs))
+        #expect(executor.activatedCaseIDs.last == "SPH-005")
     }
 
     @MainActor

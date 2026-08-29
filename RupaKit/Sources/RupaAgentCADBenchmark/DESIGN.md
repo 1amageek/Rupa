@@ -842,6 +842,25 @@ a non-analytic cylinder with otherwise matching measurements. Shared failure
 and cleanup behavior remains unchanged; the separately owned JSON and CLI
 designs synchronize external authority and the measured request digest.
 
+### SPH-005 sphere capability activation boundary
+
+SPH-005 advances the activated authority from 99 to the complete 100-case
+catalog without changing the production capability path. Its public target is
+a radius-100 mm sphere centered at `(-100, 100, -50)` mm. The activated sphere
+identities now equal all prepared sphere identities, SPH-001 through SPH-005;
+there is no fabricated SPH-006 inactive boundary.
+
+The absent sphere ingress still yields typed `analyticSphereUnavailable` and
+`expectedUnsupported`, one capability request/read, and zero action, command,
+source mutation, geometry, publication, or registration. Case-local tests
+reject a matching 200 mm cube at `(-200, 0, -150)` mm and a matching +Z
+radius-100 mm, depth-200 mm cylinder based at `(-100, 100, -150)` mm before
+publication. The independent oracle rejects an analytic sphere whose center Z
+sign is flipped to `(-100, 100, 50)` mm and a non-analytic cylinder with
+otherwise matching measurements. Shared failure and cleanup behavior remains
+unchanged; the separately owned JSON and CLI designs own the synchronized
+100-case authority and measured aggregate request digest.
+
 ### CIR-001 circle foundation and activation boundary
 
 Before `T12-CIR-001`, confirmed authority was the exact ordered twenty-four-case

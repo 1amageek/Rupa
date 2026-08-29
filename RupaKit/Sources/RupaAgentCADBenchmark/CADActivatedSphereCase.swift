@@ -3,14 +3,14 @@ import Foundation
 /// The sphere cases whose production capability boundary has been reviewed.
 ///
 /// The kernel may support analytic sphere construction, but the Agent surface
-/// currently exposes no sphere ingress. SPH-001 through SPH-004 are activated
-/// as honest capability-observation cases; the remaining prepared cases stay out
-/// of the production authority until their own gates are complete.
+/// currently exposes no sphere ingress. SPH-001 through SPH-005 are activated
+/// as honest capability-observation cases after their individual gates.
 enum CADActivatedSphereCase: String, CaseIterable, Equatable, Hashable, Sendable {
     case sphere001 = "SPH-001"
     case sphere002 = "SPH-002"
     case sphere003 = "SPH-003"
     case sphere004 = "SPH-004"
+    case sphere005 = "SPH-005"
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)
@@ -40,6 +40,8 @@ enum CADActivatedSphereCase: String, CaseIterable, Equatable, Hashable, Sendable
             .sph003
         case .sphere004:
             .sph004
+        case .sphere005:
+            .sph005
         }
     }
 
