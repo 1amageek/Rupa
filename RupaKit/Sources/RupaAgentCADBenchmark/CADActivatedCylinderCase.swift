@@ -6,6 +6,7 @@ enum CADActivatedCylinderCase: String, CaseIterable, Equatable, Hashable, Sendab
     case cylinder002 = "CYL-002"
     case cylinder003 = "CYL-003"
     case cylinder004 = "CYL-004"
+    case cylinder005 = "CYL-005"
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)

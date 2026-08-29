@@ -1221,6 +1221,29 @@ and leaves CYL-005 typed inactive.
 Schema, catalog, fingerprint, tolerance, runner, oracle, lifecycle, kernel, and
 renderer/Mesh contracts do not change.
 
+### CYL-005 oblique-axis centimetre contract
+
+CYL-005 reuses the completed v5 solid/cylinder projection, mapping, lifecycle,
+runner, production controller route, and immutable source/B-Rep oracle. Its
+public target is base centre (0, 0, 0) cm, radius 2 cm, depth 10 cm, and the
+submitted XY-diagonal axis (0.707106781187, 0.707106781187, 0). The mapping owns
+normalization; the public candidate retains the catalog values exactly. The
+source plane normal, directed cap/vertex placement, and analytic topology must
+follow the normalized diagonal after cm→metre conversion. Existing source,
+body binding, topology 1/6/12/8, and πr²h authority remain unchanged.
+
+An otherwise exact +X-axis cylinder publishes exactly once and is rejected
+without retry, isolating oblique direction from base and dimensions. A zero
+axis fails before command/publication. Existing timeout, cleanup,
+count-and-positive-phase telemetry, and privacy evidence remain required.
+Activation advances authority 68→69 only after these checks, preserves frozen
+aggregate `ff509e72f694e60034ee330591408c0dbb49b7bdbf1a0246f022abcb1cf8b342`,
+freezes the observed 69-request aggregate
+`c4d812e19e6f9fd20a56a909ac5315b2289763987e2cb05f648b9064b9bca5c0`,
+and leaves CYL-006 typed inactive.
+Schema, catalog, fingerprint, tolerance, runner, oracle, lifecycle, kernel, and
+renderer/Mesh contracts do not change.
+
 ### Vertical Case Gate
 
 Cases are activated in the lexical/category order recorded in
