@@ -203,7 +203,7 @@ implementation permission to add a parallel authority.
 | `CADActivatedAngleCase` | Internal; the reviewed angle IDs that may enter behavioral execution | Contains only ANG-001 when introduced and advances one reviewed case per commit |
 | `CADActivatedBoxCase` | Internal; the reviewed box IDs that may enter behavioral execution | Begins with BOX-001 and advances one reviewed case per commit; catalog presence never activates a box |
 | `CADCaseActionPlan` / `CADCaseActionRouting` | Internal; converts an activated category action plus public challenge context into either one command or one bounded atomic batch | Has no session/coordinate/workspace/source authority and cannot read a private expectation; completed single-command facades keep their existing branch |
-| `CADCaseLifecycleHarness` | Internal; owns the shared fresh controller/workspace, category-neutral initial-document provider, pre-owned registration UUID, exact coordinate binding, deadline, production dispatch, final immutable view capture, and unconditional cleanup | The only shared mutable lifecycle owner; its default provider preserves the existing named-empty document, while an injected provider may seed only a bounded immutable challenge source before registration; it does not select cases, map target geometry, run an oracle, or project a category result |
+| `CADCaseLifecycleHarness` | Internal; owns the shared fresh controller/workspace, category-neutral initial-document provider, pre-owned registration UUID, exact coordinate binding, deadline, production dispatch, final immutable view capture, and unconditional cleanup | The only shared mutable lifecycle owner; every execution entry checks cancellation before invoking the provider or any later lifecycle stage, its default provider preserves the existing named-empty document, and an injected provider may seed only a bounded immutable challenge source before registration; it does not select cases, map target geometry, run an oracle, or project a category result |
 | `CADCaseLifecycleRecord` | Internal immutable output from the harness | Preserves initial/final coordinates, typed response, publication/no-retry state, cleanup state, and common count/timing telemetry without geometry assertions |
 | `CADLineCaseRunner` | Internal thin line facade | Owns line activation, public projection, line routing/mapping, private expectation-to-line-oracle handoff, and line result projection; delegates lifecycle only |
 | `CADLineOracle` | Internal line-category extraction beginning at LIN-002; exact finite-line source verification and zero-body evaluation check | Read-only immutable input plus the selected activated line's internal expectation |
@@ -1835,13 +1835,24 @@ Before the three category preparations branch, the harness therefore accepts
 one internal, category-neutral initial-document provider. The default provider
 must remain the existing named-empty document so all completed cases retain
 identical behavior. A non-default provider is synchronous, in-memory, invoked
-once per fresh attempt, and returns a value `DesignDocument`; the harness still
-alone constructs and evaluates `ProjectWorkspace`, registers the pre-owned
+once per fresh attempt that passes preflight cancellation, and returns a value
+`DesignDocument`; the harness still alone constructs and evaluates
+`ProjectWorkspace`, registers the pre-owned
 UUID, binds coordinates, dispatches through `ProjectAgentCommandController`,
 captures the immutable final view, and cleans up. Provider failure is a typed
 prepublication infrastructure failure with zero registration, command, and
 publication. No live workspace/controller injection or private expected target
 is permitted.
+
+The common `perform` entry checks `Task.isCancelled` before invoking that
+provider. This single gate applies equally to direct `run(action:)`, direct
+`runStale(action:)`, and a reference-candidate action after planning. A
+pre-cancelled attempt returns typed `cancellation` with no initial or final
+view, zero action and command counts, no publication, and completed cleanup
+with zero registrations; neither the provider nor category routing may run.
+The earlier `runReference(candidate:)` check remains the candidate-planning
+boundary, while category facades must not duplicate or weaken this shared
+preflight rule.
 
 The transform facade uses this contract to build the public source primitive
 as the initial challenge condition with a pre-owned `SceneNodeID`. Its routing
@@ -2461,6 +2472,8 @@ stateDiagram-v2
 `CADCaseLifecycleHarness` pre-owns the registration UUID before registration
 and applies one shared attempt deadline to setup, registration, candidate
 planning, category routing, controller dispatch, and immutable-view capture.
+At the common execution entry it terminates a pre-cancelled attempt before
+initial-document creation, routing, workspace construction, or registration.
 Cleanup remains unconditional after deadline/cancellation and is bounded by the
 focused safety ceiling rather than skipped by an expired attempt deadline. The
 harness unregisters its UUID on every terminal path even when registration
@@ -2546,6 +2559,12 @@ harness must unregister its pre-owned UUID in deadline, cancellation, route,
 oracle-independent projection, and unexpected-error paths. A failed cleanup,
 leaked task, shared mutable fixture, or cross-case state observation is an
 infrastructure failure.
+
+Preflight cancellation is not an infrastructure failure. Before a direct or
+reference-planned action enters setup, the common gate must return typed
+`cancellation` without invoking the initial-document provider or routing and
+with nil views, zero action/command/publication telemetry, and zero remaining
+registrations after cleanup.
 
 The benchmark's source boundary scan must allow immutable public payload values
 required by `AgentRequest`/`AutomationCommand` (for example `Sketch`,

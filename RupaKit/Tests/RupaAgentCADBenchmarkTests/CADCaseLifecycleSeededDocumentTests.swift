@@ -88,6 +88,56 @@ struct CADCaseLifecycleSeededDocumentTests {
     }
 
     @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func preCancelledDirectRunStopsBeforeProviderAndRouting() async throws {
+        var providerInvocationCount = 0
+        var routingInvocationCount = 0
+        let subject = try harness(
+            initialDocumentProvider: {
+                providerInvocationCount += 1
+                return .empty(named: "unexpected")
+            },
+            planBuilder: {
+                routingInvocationCount += 1
+                return .command(lineCommand())
+            }
+        )
+
+        let record = try await preCancelledRecord {
+            try await subject.run(action: fixtureAction())
+        }
+
+        assertPreflightCancellation(record)
+        #expect(providerInvocationCount == 0)
+        #expect(routingInvocationCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func preCancelledStaleRunStopsBeforeProviderAndRouting() async throws {
+        var providerInvocationCount = 0
+        var routingInvocationCount = 0
+        let subject = try harness(
+            initialDocumentProvider: {
+                providerInvocationCount += 1
+                return .empty(named: "unexpected")
+            },
+            planBuilder: {
+                routingInvocationCount += 1
+                return .command(lineCommand())
+            }
+        )
+
+        let record = try await preCancelledRecord {
+            try await subject.runStale(action: fixtureAction())
+        }
+
+        assertPreflightCancellation(record)
+        #expect(providerInvocationCount == 0)
+        #expect(routingInvocationCount == 0)
+    }
+
+    @MainActor
     private func harness(
         initialDocumentProvider: CADCaseLifecycleHarness.InitialDocumentProvider? = nil,
         planBuilder: @escaping @MainActor () throws -> CADCaseActionPlan
@@ -102,6 +152,30 @@ struct CADCaseLifecycleSeededDocumentTests {
             timeoutWallNanoseconds: 10_000_000_000,
             initialDocumentProvider: initialDocumentProvider
         )
+    }
+
+    @MainActor
+    private func preCancelledRecord(
+        operation: @escaping @MainActor () async throws -> CADCaseLifecycleRecord
+    ) async throws -> CADCaseLifecycleRecord {
+        try await Task { @MainActor in
+            withUnsafeCurrentTask { task in
+                task?.cancel()
+            }
+            return try await operation()
+        }.value
+    }
+
+    private func assertPreflightCancellation(_ record: CADCaseLifecycleRecord) {
+        #expect(record.outcome == .cancellation)
+        #expect(record.initialView == nil)
+        #expect(record.finalView == nil)
+        #expect(record.response == nil)
+        #expect(record.routeEvidence.didPublish == false)
+        #expect(record.telemetry.actionCount == 0)
+        #expect(record.telemetry.commandCount == 0)
+        #expect(record.routeEvidence.cleanupCompleted)
+        #expect(record.routeEvidence.remainingRegistrationCount == 0)
     }
 
     @MainActor

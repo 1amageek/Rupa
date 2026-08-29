@@ -142,6 +142,17 @@ struct CADCaseLifecycleHarness {
         planningWallNanoseconds: UInt64,
         totalStart: UInt64
     ) async -> CADCaseLifecycleRecord {
+        guard !Task.isCancelled else {
+            return await preflightResult(
+                outcome: .cancellation,
+                controller: controller,
+                deadline: deadline,
+                totalStart: totalStart,
+                planningWallNanoseconds: planningWallNanoseconds,
+                diagnostics: ["\(caseID.rawValue) was cancelled before lifecycle setup."]
+            )
+        }
+
         let initialDocument: DesignDocument
         do {
             initialDocument = try initialDocumentProvider()
