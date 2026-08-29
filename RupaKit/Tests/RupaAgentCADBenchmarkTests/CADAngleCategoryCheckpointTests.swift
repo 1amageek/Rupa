@@ -68,19 +68,19 @@ struct CADAngleCategoryCheckpointTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func executorRetainsExactAngleRangeAfterBox007Activation() throws {
+    func executorRetainsExactAngleRangeAfterBox008Activation() throws {
         let executor = DefaultCADActivatedCaseExecutor()
         let expectedAngles = CADActivatedAngleCase.allCases.map(\.caseID)
 
-        #expect(executor.activatedCaseIDs.count == 59)
+        #expect(executor.activatedCaseIDs.count == 60)
         #expect(Array(executor.activatedCaseIDs.prefix(52).suffix(16)) == expectedAngles)
-        #expect(executor.activatedCaseIDs.suffix(7).map(\.rawValue) == ["BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007"])
+        #expect(executor.activatedCaseIDs.suffix(8).map(\.rawValue) == ["BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008"])
 
         do {
-            _ = try executor.context(for: "BOX-008")
-            Issue.record("BOX-008 must remain inactive until its box case gate.")
+            _ = try executor.context(for: "BOX-009")
+            Issue.record("BOX-009 must remain inactive until its box case gate.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("BOX-008"))
+            #expect(error == .inactiveCase("BOX-009"))
         }
     }
 }

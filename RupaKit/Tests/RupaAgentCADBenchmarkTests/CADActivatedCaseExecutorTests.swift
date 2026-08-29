@@ -10,7 +10,7 @@ struct CADActivatedCaseExecutorTests {
         let executor = DefaultCADActivatedCaseExecutor()
         let expected = (1...12).map { String(format: "LIN-%03d", $0) }
             + (1...12).map { String(format: "REC-%03d", $0) }
-            + ["CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007"]
+            + ["CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008"]
         #expect(executor.activatedCaseIDs.map(\.rawValue) == expected)
     }
 
@@ -408,6 +408,19 @@ struct CADActivatedCaseExecutorTests {
         for forbidden in ["FeatureID", "diagnostics", "telemetry", "expectation", "workspace"] {
             #expect(imperialBoxEncoded.contains(forbidden) == false)
         }
+
+        let translatedCube = try await executor.evaluate(
+            caseID: "BOX-008",
+            candidate: CADBoxReferenceCandidate()
+        )
+        #expect(translatedCube.id == "BOX-008")
+        #expect(translatedCube.category == .box)
+        #expect(translatedCube.outcome == .realized)
+        try translatedCube.validate()
+        let translatedCubeEncoded = try canonicalJSON(translatedCube)
+        for forbidden in ["FeatureID", "diagnostics", "telemetry", "expectation", "workspace"] {
+            #expect(translatedCubeEncoded.contains(forbidden) == false)
+        }
     }
 
     @MainActor
@@ -515,10 +528,10 @@ struct CADActivatedCaseExecutorTests {
     func inactiveCaseIsRejectedBeforeCategoryDispatch() async throws {
         let executor = DefaultCADActivatedCaseExecutor()
         do {
-            _ = try executor.context(for: "BOX-008")
+            _ = try executor.context(for: "BOX-009")
             Issue.record("Inactive case must be rejected.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("BOX-008"))
+            #expect(error == .inactiveCase("BOX-009"))
         }
     }
 
