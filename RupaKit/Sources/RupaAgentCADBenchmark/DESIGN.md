@@ -1436,9 +1436,42 @@ frozen 72-request aggregate
 `842be9af6961688359198c5d7cda9d8134c36e9a07d56cbf5fe1e4b409cc9cea`
 must remain byte-identical; the observed 73-request aggregate is frozen as
 `efc4fac5670c6739132f6145b5fc18ed38f69b1fe5dfd9889e2b38603de75468`
-and shared by executor, adapter, and CLI evidence. CON-002 remains typed
-inactive. No kernel, renderer/Mesh, shared lifecycle, generic multi-round, or
+and shared by executor, adapter, and CLI evidence. At CON-001 completion,
+CON-002 remained typed inactive. No kernel, renderer/Mesh, shared lifecycle, generic multi-round, or
 later-constraint behavior belongs to this case.
+
+### CON-002 parallel-relation activation
+
+CON-002 reuses the CON-001 constraint projection, mapping, runner, lifecycle,
+production `createSketch` controller route, and immutable source oracle without
+changing the public v6 action or any catalog, fingerprint, tolerance, kernel,
+or renderer contract. Its public target is two ordered XY millimetre lines:
+first (0, 0, 0)→(40, 0, 0), second (0, 10, 0)→(50, 10, 0), under the
+`parallel` relation. Mapping assigns fresh entity IDs and the sole source
+relation must be exactly `.parallel(first, second)` on the affine XY plane
+anchored by the first line's start. The oracle requires the exact oriented
+unequal-length geometry, entity order, relation references, one curve sketch,
+zero dimensions/regions/bodies, and the canonical `relation` primary binding.
+
+An otherwise exact action with only its relation changed to `perpendicular` is
+a structurally valid source submission: it must publish once and then fail the
+relation-sensitive oracle without retry. A `parallel` action with no second
+geometry fails shape validation before command/publication. Success retains
+the CON-001 lifecycle and telemetry contract: publication, document generation,
+and transaction revision +1, workspace unchanged, zero remaining registration,
+action 1, command 1, read at least 1, entity 2, feature 1, body 0, and positive
+planning, route, oracle, total, and cleanup timings. Public candidate values
+contain the relation, plane, units, and geometry only; source IDs and private
+expectations remain unavailable.
+
+Authority remains exactly 73 until the internal CON-002 gate passes. The frozen
+73-request aggregate
+`efc4fac5670c6739132f6145b5fc18ed38f69b1fe5dfd9889e2b38603de75468`
+must remain byte-identical, after which the 74-request aggregate
+`6f9d75f040f25352de1a8b3b7b7cfa68fb5fe06118bf93875dfbf696ebc2b851`
+is frozen across executor, adapter, and CLI evidence. CON-003 remains typed
+inactive. No shared constraint infrastructure or later constraint case belongs
+to this activation.
 
 ### Vertical Case Gate
 

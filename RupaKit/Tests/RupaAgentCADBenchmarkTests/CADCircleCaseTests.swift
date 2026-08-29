@@ -1728,7 +1728,7 @@ struct CADCircleCaseTests {
         let executor = DefaultCADActivatedCaseExecutor()
         #expect(executor.activatedCaseIDs.prefix(64).last?.rawValue == "BOX-012")
         #expect(executor.activatedCaseIDs.prefix(72).last?.rawValue == "CYL-008")
-        #expect(executor.activatedCaseIDs.last?.rawValue == "CON-001")
+        #expect(executor.activatedCaseIDs.last?.rawValue == "CON-002")
         #expect(executor.activatedCaseIDs.contains("CIR-001"))
         #expect(executor.activatedCaseIDs.contains("CIR-002"))
         #expect(executor.activatedCaseIDs.contains("CIR-003"))
@@ -1744,10 +1744,10 @@ struct CADCircleCaseTests {
 
         #expect(try executor.context(for: "BOX-001").challenge.id == "BOX-001")
         do {
-            _ = try executor.context(for: "CON-002")
-            Issue.record("CON-002 must remain inactive until its vertical gate.")
+            _ = try executor.context(for: "CON-003")
+            Issue.record("CON-003 must remain inactive until its vertical gate.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("CON-002"))
+            #expect(error == .inactiveCase("CON-003"))
         }
 
         let result = try await executor.evaluate(

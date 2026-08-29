@@ -3,6 +3,7 @@ import Foundation
 /// Constraint cases whose production source-relation route has been reviewed.
 enum CADActivatedConstraintCase: String, CaseIterable, Equatable, Hashable, Sendable {
     case constraint001 = "CON-001"
+    case constraint002 = "CON-002"
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)

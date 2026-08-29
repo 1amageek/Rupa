@@ -195,22 +195,116 @@ struct CADConstraintCaseTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func executorActivatesOnlyCon001AndLeavesCon002Inactive() async throws {
+    func con002CreatesExactParallelSourceRelationThroughProductionController() async throws {
+        let result = try await CADConstraintCaseRunner(case: .constraint002).runReference()
+
+        try result.validate()
+        #expect(result.caseID == "CON-002")
+        #expect(result.outcome == .realized)
+        #expect(result.routeEvidence.didPublish)
+        #expect(result.routeEvidence.finalPublicationSequence == result.routeEvidence.initialPublicationSequence + 1)
+        #expect(result.routeEvidence.finalDocumentGeneration.value == result.routeEvidence.initialDocumentGeneration.value + 1)
+        #expect(result.routeEvidence.finalTransactionRevision.value == result.routeEvidence.initialTransactionRevision.value + 1)
+        #expect(result.routeEvidence.finalWorkspaceRevision == result.routeEvidence.initialWorkspaceRevision)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.readCount >= 1)
+        #expect(result.telemetry.entityCount == 2)
+        #expect(result.telemetry.featureCount == 1)
+        #expect(result.telemetry.bodyCount == 0)
+        #expect(result.telemetry.planningWallNanoseconds > 0)
+        #expect(result.telemetry.routeWallNanoseconds > 0)
+        #expect(result.telemetry.oracleWallNanoseconds > 0)
+        #expect(result.telemetry.totalWallNanoseconds > 0)
+        #expect(result.routeEvidence.cleanupWallNanoseconds > 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func con002OracleRejectsPerpendicularRelationAfterOnePublicationWithoutRetry() async throws {
+        let result = try await CADConstraintCaseRunner(case: .constraint002).run(
+            action: Self.constraint002Action(relation: .perpendicular)
+        )
+
+        try result.validate()
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish)
+        #expect(result.routeEvidence.finalPublicationSequence == result.routeEvidence.initialPublicationSequence + 1)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.readCount == 2)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        #expect(result.diagnostics.contains { $0.contains("oracle mismatch") })
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func con002RejectsMissingSecondLineBeforePublication() async throws {
+        let result = try await CADConstraintCaseRunner(case: .constraint002).run(
+            action: Self.constraint002Action(includeSecond: false)
+        )
+
+        try result.validate()
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish == false)
+        #expect(result.routeEvidence.finalPublicationSequence == result.routeEvidence.initialPublicationSequence)
+        #expect(result.telemetry.commandCount == 0)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func con002TimeoutPublishesNothingAndCleansUp() async throws {
+        let result = try await CADConstraintCaseRunner(
+            case: .constraint002,
+            timeoutWallNanoseconds: 1
+        ).runReference()
+
+        try result.validate()
+        #expect(result.outcome == .timeout)
+        #expect(result.routeEvidence.didPublish == false)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @Test
+    func con002ReferenceCandidatePreservesPublicParallelGeometryWithoutSourceIDs() async throws {
+        let challenge = try CADBenchmarkCatalog().challenge(for: "CON-002")
+        let decision = try await CADConstraintReferenceCandidate().decide(
+            for: candidateContext(challenge)
+        )
+
+        guard case .action(.automation(.sketch(.constraint(let action)))) = decision else {
+            Issue.record("CON-002 candidate did not produce one constraint action.")
+            return
+        }
+        #expect(action == Self.constraint002Value())
+        let encoded = String(decoding: try JSONEncoder().encode(action), as: UTF8.self)
+        for privateName in ["FeatureID", "EntityID", "expectation", "tolerance", "oracle"] {
+            #expect(encoded.contains(privateName) == false)
+        }
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func executorActivatesThroughCon002AndLeavesCon003Inactive() async throws {
         let executor = DefaultCADActivatedCaseExecutor()
 
-        #expect(executor.activatedCaseIDs.count == 73)
-        #expect(executor.activatedCaseIDs.last == "CON-001")
-        #expect(try executor.context(for: "CON-001").capabilities.statuses.first?.available == true)
+        #expect(executor.activatedCaseIDs.count == 74)
+        #expect(executor.activatedCaseIDs.last == "CON-002")
+        #expect(try executor.context(for: "CON-002").capabilities.statuses.first?.available == true)
         let result = try await executor.evaluate(
-            caseID: "CON-001",
+            caseID: "CON-002",
             candidate: CADConstraintReferenceCandidate()
         )
         #expect(result.outcome == .realized)
         do {
-            _ = try executor.context(for: "CON-002")
-            Issue.record("CON-002 must remain inactive.")
+            _ = try executor.context(for: "CON-003")
+            Issue.record("CON-003 must remain inactive.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("CON-002"))
+            #expect(error == .inactiveCase("CON-003"))
         }
     }
 
@@ -231,6 +325,32 @@ struct CADConstraintCaseTests {
                 end: CADPoint3D(x: 0, y: secondEndY, z: 0)
             )
         ))))
+    }
+
+    private static func constraint002Action(
+        relation: CADConstraintRelation = .parallel,
+        includeSecond: Bool = true
+    ) -> CADCandidateAction {
+        .automation(.sketch(.constraint(CADConstraintAction(
+            name: "CON-002",
+            plane: .xy,
+            relation: relation,
+            first: .line(
+                start: CADPoint3D(x: 0, y: 0, z: 0),
+                end: CADPoint3D(x: 40, y: 0, z: 0)
+            ),
+            second: includeSecond ? .line(
+                start: CADPoint3D(x: 0, y: 10, z: 0),
+                end: CADPoint3D(x: 50, y: 10, z: 0)
+            ) : nil
+        ))))
+    }
+
+    private static func constraint002Value() -> CADConstraintAction {
+        guard case .automation(.sketch(.constraint(let value))) = constraint002Action() else {
+            preconditionFailure("The CON-002 fixture must contain one constraint value.")
+        }
+        return value
     }
 
     @MainActor

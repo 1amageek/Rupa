@@ -129,8 +129,8 @@ Process-level tests build and invoke the actual executable and prove:
 - `request` emits valid v1 JSON for an activated line, rectangle, REC-009
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
   millimetre/XY case, the complete CIR-001...012 category, ANG-001...016, and
-  BOX-001...012, `CYL-001...008`, and `CON-001`, and rejects inactive `CON-002`;
-- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, and CON-001 responses traverse the adapter, production
+  BOX-001...012, `CYL-001...008`, and `CON-001...002`, and rejects inactive `CON-003`;
+- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, and CON-001...002 responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
@@ -603,8 +603,9 @@ response exit `0` with one `realized` JSON document.
 
 The published wrong-first-start response exits `2` after exactly one
 publication without retry. A response with no unique shared endpoint exits `2`
-without publication; candidate-response v1 through v5, malformed input, and
-`CON-002` inactive requests exit `64`. Authority advances 72→73 only after the
+without publication; candidate-response v1 through v5 and malformed input exit
+`64`; at CON-001 completion, inactive `CON-002` requests also exited `64`.
+Authority advances 72→73 only after the
 internal gate, preserves the frozen 72-request aggregate
 `842be9af6961688359198c5d7cda9d8134c36e9a07d56cbf5fe1e4b409cc9cea`,
 and freezes the observed 73-request aggregate as
@@ -612,6 +613,26 @@ and freezes the observed 73-request aggregate as
 Existing byte limits,
 private-free one-JSON stdout, failure exit mapping, and process safety deadline
 remain unchanged.
+
+### CON-002 process contract
+
+CON-002 adds no CLI command or argument. `request CON-002` emits the bounded
+request v1 public context and `evaluate --response <PATH|->` consumes the exact
+candidate-response v6 `parallel` action through the adapter, activated executor,
+production `ProjectAgentCommandController`/`createSketch` transaction, and
+immutable source-relation oracle. File and stdin evaluation of the exact
+external response exit `0` with one private-free `realized` JSON document.
+
+The exact-geometry `perpendicular` substitute exits `2` after one publication
+without retry, while a `parallel` response missing its second geometry exits `2`
+before publication. Authority remains 73 until the internal gate passes,
+preserves frozen aggregate
+`efc4fac5670c6739132f6145b5fc18ed38f69b1fe5dfd9889e2b38603de75468`,
+then freezes the 74-request aggregate
+`6f9d75f040f25352de1a8b3b7b7cfa68fb5fe06118bf93875dfbf696ebc2b851`.
+`CON-003` remains inactive and
+exits `64`. Candidate-response v6, byte limits, one-JSON stdout, privacy,
+deadline ownership, and exit mapping remain unchanged.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected
 case argument, so a case-mismatch process fixture cannot be constructed without
