@@ -4,6 +4,7 @@ import Foundation
 enum CADActivatedCompoundCase: String, CaseIterable, Equatable, Hashable, Sendable {
     case compound001 = "CMP-001"
     case compound002 = "CMP-002"
+    case compound003 = "CMP-003"
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)

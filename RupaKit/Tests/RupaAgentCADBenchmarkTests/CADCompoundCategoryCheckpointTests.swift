@@ -10,7 +10,9 @@ struct CADCompoundCategoryCheckpointTests {
     @MainActor
     @Test(.timeLimit(.minutes(2)))
     func activatedCompoundPrefixReplaysThroughTheProductionRoute() async throws {
-        #expect(CADActivatedCompoundCase.allCases.map(\.rawValue) == ["CMP-001", "CMP-002"])
+        #expect(CADActivatedCompoundCase.allCases.map(\.rawValue) == [
+            "CMP-001", "CMP-002", "CMP-003",
+        ])
 
         for activatedCase in CADActivatedCompoundCase.allCases {
             let result = try await CADCompoundCaseRunner(case: activatedCase).runReference()
@@ -31,6 +33,16 @@ struct CADCompoundCategoryCheckpointTests {
             #expect(result.telemetry.actionCount == 1)
             #expect(result.telemetry.commandCount == 2)
             #expect(result.telemetry.readCount == 2)
+            let expectedEntityCount: Int
+            switch activatedCase {
+            case .compound001:
+                expectedEntityCount = 5
+            case .compound002:
+                expectedEntityCount = 8
+            case .compound003:
+                expectedEntityCount = 2
+            }
+            #expect(result.telemetry.entityCount == expectedEntityCount)
             #expect(result.telemetry.featureCount == 4)
             #expect(result.telemetry.bodyCount == 2)
             #expect(result.telemetry.faceCount == 12)

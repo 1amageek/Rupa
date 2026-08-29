@@ -689,8 +689,8 @@ struct CADJSONAdapterTests {
         #expect(wrongEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-003")
-            Issue.record("CMP-003 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-004")
+            Issue.record("CMP-004 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -733,8 +733,8 @@ struct CADJSONAdapterTests {
         #expect(wrongEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-003")
-            Issue.record("CMP-003 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-004")
+            Issue.record("CMP-004 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -775,8 +775,8 @@ struct CADJSONAdapterTests {
         #expect(wrongEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-003")
-            Issue.record("CMP-003 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-004")
+            Issue.record("CMP-004 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -813,8 +813,8 @@ struct CADJSONAdapterTests {
         #expect(wrongEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-003")
-            Issue.record("CMP-003 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-004")
+            Issue.record("CMP-004 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -915,8 +915,8 @@ struct CADJSONAdapterTests {
         #expect(wrongEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-003")
-            Issue.record("CMP-003 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-004")
+            Issue.record("CMP-004 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -965,8 +965,8 @@ struct CADJSONAdapterTests {
         #expect(invalidEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-003")
-            Issue.record("CMP-003 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-004")
+            Issue.record("CMP-004 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -1020,8 +1020,8 @@ struct CADJSONAdapterTests {
         #expect(invalidEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-003")
-            Issue.record("CMP-003 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-004")
+            Issue.record("CMP-004 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -1060,8 +1060,8 @@ struct CADJSONAdapterTests {
         ).result?.outcome == .invalidSubmission)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-003")
-            Issue.record("CMP-003 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-004")
+            Issue.record("CMP-004 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -1096,8 +1096,8 @@ struct CADJSONAdapterTests {
         #expect(try await adapter.evaluate(responseData: CADJSONBoundedCodec.encode(invalid)).result?.outcome == .invalidSubmission)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-003")
-            Issue.record("CMP-003 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-004")
+            Issue.record("CMP-004 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -1132,8 +1132,8 @@ struct CADJSONAdapterTests {
         #expect(try await adapter.evaluate(responseData: CADJSONBoundedCodec.encode(invalid)).result?.outcome == .invalidSubmission)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-003")
-            Issue.record("CMP-003 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-004")
+            Issue.record("CMP-004 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -1168,8 +1168,8 @@ struct CADJSONAdapterTests {
         #expect(try await adapter.evaluate(responseData: CADJSONBoundedCodec.encode(invalid)).result?.outcome == .invalidSubmission)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-003")
-            Issue.record("CMP-003 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-004")
+            Issue.record("CMP-004 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -1204,8 +1204,8 @@ struct CADJSONAdapterTests {
         #expect(try await adapter.evaluate(responseData: CADJSONBoundedCodec.encode(invalid)).result?.outcome == .invalidSubmission)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-003")
-            Issue.record("CMP-003 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-004")
+            Issue.record("CMP-004 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -1244,8 +1244,8 @@ struct CADJSONAdapterTests {
         #expect(try await adapter.evaluate(responseData: CADJSONBoundedCodec.encode(invalid)).result?.outcome == .invalidSubmission)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-003")
-            Issue.record("CMP-003 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-004")
+            Issue.record("CMP-004 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -1886,8 +1886,8 @@ struct CADJSONAdapterTests {
         #expect(zeroAxisEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-003")
-            Issue.record("CMP-003 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-004")
+            Issue.record("CMP-004 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -1953,8 +1953,8 @@ struct CADJSONAdapterTests {
         #expect(zeroAxisEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-003")
-            Issue.record("CMP-003 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-004")
+            Issue.record("CMP-004 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -2016,8 +2016,8 @@ struct CADJSONAdapterTests {
         #expect(zeroAxisEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-003")
-            Issue.record("CMP-003 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-004")
+            Issue.record("CMP-004 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -2080,8 +2080,8 @@ struct CADJSONAdapterTests {
         #expect(zeroAxisEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-003")
-            Issue.record("CMP-003 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-004")
+            Issue.record("CMP-004 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -2144,8 +2144,8 @@ struct CADJSONAdapterTests {
         #expect(zeroAxisEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-003")
-            Issue.record("CMP-003 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-004")
+            Issue.record("CMP-004 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -2207,8 +2207,8 @@ struct CADJSONAdapterTests {
         #expect(zeroAxisEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-003")
-            Issue.record("CMP-003 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-004")
+            Issue.record("CMP-004 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -2268,8 +2268,8 @@ struct CADJSONAdapterTests {
         #expect(zeroAxisEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-003")
-            Issue.record("CMP-003 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-004")
+            Issue.record("CMP-004 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -2333,8 +2333,8 @@ struct CADJSONAdapterTests {
         #expect(zeroAxisEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-003")
-            Issue.record("CMP-003 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-004")
+            Issue.record("CMP-004 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -2403,8 +2403,8 @@ struct CADJSONAdapterTests {
         #expect(invalidEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-003")
-            Issue.record("CMP-003 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-004")
+            Issue.record("CMP-004 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -2473,8 +2473,8 @@ struct CADJSONAdapterTests {
         #expect(invalidEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-003")
-            Issue.record("CMP-003 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-004")
+            Issue.record("CMP-004 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -2482,7 +2482,77 @@ struct CADJSONAdapterTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func requestAndLiveContextsAreValueEqualAndAllNinetyRequestsStayBounded() throws {
+    func compound003UsesTheBoundedResponseRouteForExactSwappedPayloadsAndZeroRadius() async throws {
+        let adapter = CADJSONAdapter()
+        let request = try adapter.makeRequest(for: "CMP-003")
+        #expect(request.context.challenge.category == .compound)
+        #expect(request.context.challenge.instruction == "Construct CMP-003 as a compound containing shaft=cylinder radius 5.0 mm depth 100.0 mm at (0.0, 0.0, 0.0) mm along axis (1.0, 0.0, 0.0), collar=cylinder radius 12.0 mm depth 10.0 mm at (45.0, 0.0, 0.0) mm along axis (1.0, 0.0, 0.0).")
+        #expect(request.context.challenge.outputRoles.map(\.name) == ["shaft", "collar"])
+        #expect(request.context.capabilities.statuses.first?.available == true)
+
+        let exactResponse = try CADJSONCandidateResponseEnvelope(
+            caseID: request.caseID,
+            context: request.context,
+            decision: .action(compound003Action())
+        )
+        let exactData = try CADJSONBoundedCodec.encode(exactResponse)
+        let requestText = String(decoding: try CADJSONBoundedCodec.encode(request), as: UTF8.self)
+        let responseText = String(decoding: exactData, as: UTF8.self)
+        #expect(exactData.count < 16_384)
+        #expect(responseText.contains("\"schema\":\"rupa.agent-cad-benchmark.candidate-response.v8\""))
+        #expect(responseText.contains("\"kind\":\"compound\""))
+        let shaftRole = try #require(responseText.range(of: "\"role\":\"shaft\""))
+        let collarRole = try #require(responseText.range(of: "\"role\":\"collar\""))
+        #expect(shaftRole.lowerBound < collarRole.lowerBound)
+        for forbidden in ["expectation", "oracle", "sourceTopology", "telemetry", "workspace", "FeatureID"] {
+            #expect(requestText.contains(forbidden) == false)
+            #expect(responseText.contains(forbidden) == false)
+        }
+        #expect(try CADJSONBoundedCodec.decode(
+            CADJSONCandidateResponseEnvelope.self,
+            from: exactData
+        ) == exactResponse)
+
+        let exactEvaluation = try await adapter.evaluate(responseData: exactData)
+        #expect(exactEvaluation.caseID == "CMP-003")
+        #expect(exactEvaluation.result?.outcome == .realized)
+        #expect(exactEvaluation.error == nil)
+
+        let wrongResponse = try CADJSONCandidateResponseEnvelope(
+            caseID: request.caseID,
+            context: request.context,
+            decision: .action(compound003Action(swappingPayloads: true))
+        )
+        let wrongEvaluation = try await adapter.evaluate(
+            responseData: CADJSONBoundedCodec.encode(wrongResponse)
+        )
+        #expect(wrongEvaluation.caseID == "CMP-003")
+        #expect(wrongEvaluation.result?.outcome == .invalidSubmission)
+        #expect(wrongEvaluation.error == nil)
+
+        let invalidResponse = try CADJSONCandidateResponseEnvelope(
+            caseID: request.caseID,
+            context: request.context,
+            decision: .action(compound003Action(collarRadius: 0))
+        )
+        let invalidEvaluation = try await adapter.evaluate(
+            responseData: CADJSONBoundedCodec.encode(invalidResponse)
+        )
+        #expect(invalidEvaluation.caseID == "CMP-003")
+        #expect(invalidEvaluation.result?.outcome == .invalidSubmission)
+        #expect(invalidEvaluation.error == nil)
+
+        do {
+            _ = try adapter.makeRequest(for: "CMP-004")
+            Issue.record("CMP-004 must remain inactive.")
+        } catch let error as CADJSONAdapterError {
+            #expect(error == .inactiveCase)
+        }
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func requestAndLiveContextsAreValueEqualAndAllNinetyOneRequestsStayBounded() throws {
         let executor = DefaultCADActivatedCaseExecutor()
         let adapter = CADJSONAdapter(executor: executor)
         var largestRequest = 0
@@ -2615,6 +2685,8 @@ struct CADJSONAdapterTests {
                 action = compound001Action()
             } else if caseID.rawValue == "CMP-002" {
                 action = compound002Action()
+            } else if caseID.rawValue == "CMP-003" {
+                action = compound003Action()
             } else if caseID.category == .constraint {
                 action = constraint001Action(name: caseID.rawValue)
             } else {
@@ -2628,7 +2700,7 @@ struct CADJSONAdapterTests {
             #expect(try CADJSONBoundedCodec.encode(response).count < 16_384)
         }
 
-        #expect(executor.activatedCaseIDs.count == 90)
+        #expect(executor.activatedCaseIDs.count == 91)
         #expect(largestRequest < 16_384)
     }
 
@@ -2639,7 +2711,7 @@ struct CADJSONAdapterTests {
         let adapter = CADJSONAdapter(executor: executor)
         let historicalIDs = (1...12).map { String(format: "LIN-%03d", $0) }
             + (1...8).map { String(format: "REC-%03d", $0) }
-        let currentIDs = historicalIDs + ["REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012", "CYL-001", "CYL-002", "CYL-003", "CYL-004", "CYL-005", "CYL-006", "CYL-007", "CYL-008", "CON-001", "CON-002", "CON-003", "CON-004", "CON-005", "CON-006", "CON-007", "CON-008", "TRN-001", "TRN-002", "TRN-003", "TRN-004", "TRN-005", "TRN-006", "TRN-007", "TRN-008", "CMP-001", "CMP-002"]
+        let currentIDs = historicalIDs + ["REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012", "CYL-001", "CYL-002", "CYL-003", "CYL-004", "CYL-005", "CYL-006", "CYL-007", "CYL-008", "CON-001", "CON-002", "CON-003", "CON-004", "CON-005", "CON-006", "CON-007", "CON-008", "TRN-001", "TRN-002", "TRN-003", "TRN-004", "TRN-005", "TRN-006", "TRN-007", "TRN-008", "CMP-001", "CMP-002", "CMP-003"]
         #expect(executor.activatedCaseIDs.map(\.rawValue) == currentIDs)
 
         // Each activated record is case ID, request byte count, and request SHA-256, all length-prefixed.
@@ -3143,6 +3215,13 @@ struct CADJSONAdapterTests {
         appendLengthPrefixed(bigEndianBytes(UInt64(compound002Request.count)), to: &currentAggregate)
         appendLengthPrefixed(Data(SHA256.hash(data: compound002Request)), to: &currentAggregate)
         #expect(sha256Hex(currentAggregate) == "bec563a757811e492c5ce3bf89514cfe3526ead2f69041ca2f15eabd2c035855")
+
+        let compound003ID: CADBenchmarkCaseID = "CMP-003"
+        let compound003Request = try adapter.encodeRequest(for: compound003ID)
+        appendLengthPrefixed(Data(compound003ID.rawValue.utf8), to: &currentAggregate)
+        appendLengthPrefixed(bigEndianBytes(UInt64(compound003Request.count)), to: &currentAggregate)
+        appendLengthPrefixed(Data(SHA256.hash(data: compound003Request)), to: &currentAggregate)
+        #expect(sha256Hex(currentAggregate) == "c3da3fd9024e8a568da27b9961abbd06b6d1e99dab621d297af8b8f222f07813")
     }
 
     @MainActor
@@ -3274,9 +3353,9 @@ struct CADJSONAdapterTests {
 
         let inactiveResponse = try CADJSONCandidateResponseEnvelope(
             schema: CADJSONAdapterSchema.candidateResponse,
-            caseID: "CMP-003",
+            caseID: "CMP-004",
             contextFingerprint: String(repeating: "0", count: 64),
-            decision: .action(constraint001Action(name: "CMP-003"))
+            decision: .action(constraint001Action(name: "CMP-004"))
         )
         do {
             _ = try await adapter.evaluate(response: inactiveResponse)
@@ -4027,6 +4106,38 @@ private func compound002Action(
             width: CADLength(value: rightWidth, unit: .millimeter),
             depth: CADLength(value: 25, unit: .millimeter),
             height: CADLength(value: 25, unit: .millimeter)
+        ),
+    ]))
+}
+
+private func compound003Action(
+    swappingPayloads: Bool = false,
+    collarRadius: Double = 12
+) -> CADCandidateAction {
+    let shaftBaseX = swappingPayloads ? 45.0 : 0.0
+    let shaftRadius = swappingPayloads ? 12.0 : 5.0
+    let shaftDepth = swappingPayloads ? 10.0 : 100.0
+    let collarBaseX = swappingPayloads ? 0.0 : 45.0
+    let resolvedCollarRadius = swappingPayloads ? 5.0 : collarRadius
+    let collarDepth = swappingPayloads ? 100.0 : 10.0
+    let axis = CADDirection3D(x: 1, y: 0, z: 0)
+
+    return .compound(CADCompoundAction(members: [
+        CADCompoundMemberAction(
+            role: "shaft",
+            name: "CMP-003.shaft",
+            baseCenter: CADPoint3D(x: shaftBaseX, y: 0, z: 0, unit: .millimeter),
+            axis: axis,
+            radius: CADLength(value: shaftRadius, unit: .millimeter),
+            depth: CADLength(value: shaftDepth, unit: .millimeter)
+        ),
+        CADCompoundMemberAction(
+            role: "collar",
+            name: "CMP-003.collar",
+            baseCenter: CADPoint3D(x: collarBaseX, y: 0, z: 0, unit: .millimeter),
+            axis: axis,
+            radius: CADLength(value: resolvedCollarRadius, unit: .millimeter),
+            depth: CADLength(value: collarDepth, unit: .millimeter)
         ),
     ]))
 }

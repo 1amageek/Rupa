@@ -203,7 +203,7 @@ implementation permission to add a parallel authority.
 | `CADActivatedAngleCase` | Internal; the reviewed angle IDs that may enter behavioral execution | Contains only ANG-001 when introduced and advances one reviewed case per commit |
 | `CADActivatedBoxCase` | Internal; the reviewed box IDs that may enter behavioral execution | Begins with BOX-001 and advances one reviewed case per commit; catalog presence never activates a box |
 | `CADActivatedTransformCase` | Internal; the reviewed transform IDs that may enter behavioral execution | Contains the complete reviewed TRN-001...008 category in catalog order; no TRN-009 exists |
-| `CADActivatedCompoundCase` | Internal; the reviewed compound IDs that may enter behavioral execution | Contains CMP-001 and CMP-002; CMP-003...007 remain catalog-only until their own gates |
+| `CADActivatedCompoundCase` | Internal; the reviewed compound IDs that may enter behavioral execution | Contains CMP-001, CMP-002, and CMP-003; CMP-004...007 remain catalog-only until their own gates |
 | `CADCaseActionPlan` / `CADCaseActionRouting` | Internal; converts an activated category action plus public challenge context into either one command or one bounded atomic batch | Has no session/coordinate/workspace/source authority and cannot read a private expectation; completed single-command facades keep their existing branch |
 | `CADCaseLifecycleHarness` | Internal; owns the shared fresh controller/workspace, category-neutral initial-document provider, pre-owned registration UUID, exact coordinate binding, deadline, production dispatch, final immutable view capture, and unconditional cleanup | The only shared mutable lifecycle owner; every execution entry checks cancellation before invoking the provider or any later lifecycle stage, its default provider preserves the existing named-empty document, and an injected provider may seed only a bounded immutable challenge source before registration; it does not select cases, map target geometry, run an oracle, or project a category result |
 | `CADCaseLifecycleRecord` | Internal immutable output from the harness | Preserves initial/final coordinates, typed response, publication/no-retry state, cleanup state, and common count/timing telemetry without geometry assertions |
@@ -216,7 +216,7 @@ implementation permission to add a parallel authority.
 | `CADCylinderCaseRunner` / `CADCylinderOracle` | Internal thin CYL facade and exact analytic-cylinder source/B-Rep oracle introduced by CYL-001 | Own public cylinder projection, submitted base-centre/axis mapping, one-command solid routing, private cylinder expectation, source circle/extrude/body/topology checks, and cylinder-local result projection; delegate lifecycle only |
 | `CADTransformCaseRunner` / `CADTransformOracle` | Internal thin TRN facade and exact source-identity/placement oracle introduced by TRN-001 | Own public transform projection, seeded source, one-command `setSceneNodeTransform` routing, private placement expectation, immutable initial/final identity checks, and transform-local result projection; delegate lifecycle only |
 | `CADCompoundAction` / `CADCompoundMemberAction` | Public; one ordered compound action envelope containing only role and primitive solid values | Immutable candidate intent; no plan store, source IDs, expectation, tolerance, or route coordinates |
-| `CADCompoundCaseRunner` / `CADCompoundOracle` | Internal thin CMP facade and exact ordered member/source/B-Rep oracle introduced by CMP-001 and extended by CMP-002 | Lowers every member only after all public members are validated, dispatches one atomic batch, and reads private expectation only after final publication |
+| `CADCompoundCaseRunner` / `CADCompoundOracle` | Internal thin CMP facade and exact ordered member/source/B-Rep oracle introduced by CMP-001 and extended by CMP-002 and CMP-003 | Lowers every member only after all public members are validated, dispatches one atomic batch, and reads private expectation only after final publication |
 | `CADCaseOutcome` / score | Public result projection; failure taxonomy and binary scoring | No fallback success |
 | `CADBenchmarkReport` | Public result projection; deterministic run and measurement projection | Value/report only |
 
@@ -511,12 +511,12 @@ separately owned module contracts; their sibling designs record the coordinated
 transport boundary for the current external activation. Catalog/manifest, Mesh,
 and renderer changes remain outside this activation.
 
-### CMP-002 compound activation boundary
+### CMP-002 frozen compound checkpoint
 
-CMP-002 is the second compound case and advances the internal benchmark
-authority from 89 to 90. `CADActivatedCompoundCase` contains CMP-001 and
-CMP-002 in catalog order; CMP-003...007 remain catalog-only and are rejected
-before category dispatch. The candidate returns one public `.compound` action
+At its gate, CMP-002 was the second compound case and advanced the internal
+benchmark authority from 89 to 90. `CADActivatedCompoundCase` then contained
+CMP-001 and CMP-002 in catalog order; CMP-003...007 were catalog-only and were
+rejected before category dispatch. The candidate returns one public `.compound` action
 with ordered `left` and `right` cube members. Each cube is 25 by 25 by 25 mm;
 their lower-corner origins are `(-40, 0, 0)` mm and `(15, 0, 0)` mm,
 respectively. Member order and role are semantic, even though the two solids
@@ -539,11 +539,47 @@ publication. The existing shared lifecycle continues to own stale, candidate
 failure, timeout, cancellation, telemetry, and cleanup evidence; no new
 controller, runner, oracle, mapping, schema, or lifecycle contract is added.
 
-The focused compound and executor suites replay CMP-001 and CMP-002 through
-the same production route and assert CMP-003 typed inactivity. Adapter, CLI,
-and schema remain separately owned module contracts; their sibling designs
-record the coordinated external 90-case boundary, unchanged candidate-response
-v8 contract, and measured aggregate digest in this snapshot.
+The focused compound and executor suites replayed CMP-001 and CMP-002 through
+the same production route and established the pre-CMP-003 boundary. Adapter,
+CLI, and schema remain separately owned module contracts; their sibling designs
+recorded the coordinated external 90-case boundary, unchanged candidate-response
+v8 contract, and measured aggregate digest at that checkpoint.
+
+### CMP-003 compound activation boundary
+
+CMP-003 is the third compound case and advances the internal benchmark
+authority from 90 to 91. `CADActivatedCompoundCase` contains CMP-001,
+CMP-002, and CMP-003 in catalog order; CMP-004...007 remain catalog-only and
+are rejected before category dispatch. The candidate returns one public
+`.compound` action with ordered `shaft` and `collar` cylinder members. The
+shaft has radius 5 mm, depth 100 mm, base centre `(0, 0, 0)` mm, and axis
+`+X`; the collar has radius 12 mm, depth 10 mm, base centre `(45, 0, 0)` mm,
+and the same `+X` axis. Role order is semantic even though both members use
+the same primitive operation.
+
+The compound context derives one stable, de-duplicated required operation,
+`createExtrudedCircle`, and reports the aggregate compound capability only when
+that operation is available. The runner validates and lowers both public
+members before dispatching one atomic two-command batch. A malformed or
+degenerate collar therefore cannot publish a partial shaft/collar sequence.
+
+The private oracle checks the ordered source and independent evaluated solids:
+two source reads, two sketch entities, four features, two bodies, twelve
+faces, twenty-four edges, and sixteen vertices, with document generation plus
+two, transaction revision plus one, publication sequence plus one, one
+evaluation pass, and one history entry. Swapping the two cylinder payloads
+while retaining the public roles publishes once and is rejected by the
+role-sensitive oracle without retry. A zero collar radius or zero collar axis
+fails before publication. The shared lifecycle continues to own stale, candidate failure,
+timeout, cancellation, telemetry, and cleanup evidence without a new route or
+controller contract.
+
+The focused compound and executor suites replay CMP-001...003 through the
+same production route, prove CMP-003 source/B-Rep and lifecycle evidence, and
+assert CMP-004 typed inactivity. Adapter, CLI, and schema remain separately
+owned module contracts; their sibling designs record the coordinated external
+activation boundary. Catalog/manifest, Mesh, and renderer changes remain
+outside this activation.
 
 ### CIR-001 circle foundation and activation boundary
 
@@ -2320,11 +2356,10 @@ TRN-001 through TRN-008 have crossed their individual vertical gates. The
 transform executor prefix contains exactly 88 IDs: LIN-001...012,
 REC-001...012, CIR-001...012, ANG-001...016, BOX-001...012, CYL-001...008,
 CON-001...008, and TRN-001...008. Compound activation is a separate boundary;
-the benchmark-internal authority now advances to 90 through the CMP-001 and
-CMP-002 contracts above. The separately owned external adapter and CLI
-contracts advance to the same reviewed 90-ID transport boundary in this
-snapshot; their sibling designs own the transport details and measured
-aggregate digest.
+the benchmark-internal authority now advances to 91 through the CMP-001,
+CMP-002, and CMP-003 contracts above. The separately owned external adapter
+and CLI contracts advance to the same reviewed 91-ID transport boundary in this
+snapshot; their sibling designs own the transport details and aggregate digest.
 
 The transform action is a single bounded value containing translation, the
 explicit source-world axis point, a finite non-zero rotation axis, and the

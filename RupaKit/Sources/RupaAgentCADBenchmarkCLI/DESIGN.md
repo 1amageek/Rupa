@@ -55,7 +55,7 @@ rupa-agent-cad-benchmark request <CASE-ID>
 rupa-agent-cad-benchmark evaluate --response <PATH|->
 ```
 
-`request` validates that the ID is in the activated 90-case set and emits
+`request` validates that the ID is in the activated 91-case set and emits
 exactly one request-envelope JSON object to standard output. `evaluate` reads
 exactly one candidate-response envelope from the selected file, or from
 standard input when `-` is selected, then emits exactly one evaluation- or
@@ -130,8 +130,8 @@ Process-level tests build and invoke the actual executable and prove:
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
   millimetre/XY case, the complete CIR-001...012 category, ANG-001...016, and
   BOX-001...012, `CYL-001...008`, `CON-001...008`, `TRN-001...008`, and
-  `CMP-001...002`, and rejects inactive `CMP-003`;
-- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, CON-001...008, TRN-001...008 transform, and CMP-001...002 compound responses traverse the adapter, production
+  `CMP-001...003`, and rejects inactive `CMP-004`;
+- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, CON-001...008, TRN-001...008 transform, and CMP-001...003 compound responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
@@ -823,21 +823,39 @@ frozen 88-case transform checkpoint remain unchanged; appending the actual
 `CMP-001` request freezes the 89-request aggregate as
 `858477370524c450594b67700087b9f38ba13dd9883cd322ba821142cb1c1678`.
 
-### CMP-002 current process boundary
+### CMP-002 frozen process checkpoint
 
-The current executable authority appends `CMP-002` as the 90th case and leaves
-`CMP-003` inactive. `request CMP-002` emits one bounded private-free context
+The frozen 90-case executable authority appends `CMP-002`. `request CMP-002` emits one bounded private-free context
 with ordered roles `left`, `right` and two 25 mm boxes at x = -40 mm and
 x = 15 mm. Exact candidate-response v8 documents supplied by file and standard
 input execute one atomic production batch and exit `0` with `realized`.
 
 Swapping the origins exits `2` as postpublication `invalidSubmission` without
 retry. A zero member dimension exits `2` as prepublication
-`invalidSubmission`; `request CMP-003` exits `64`. Schema v8, command surface,
+`invalidSubmission`. Schema v8, command surface,
 byte bound, and exit mapping remain unchanged. The known 89-request aggregate
 remains `858477370524c450594b67700087b9f38ba13dd9883cd322ba821142cb1c1678`;
 appending the actual `CMP-002` request freezes the 90-request aggregate as
 `bec563a757811e492c5ce3bf89514cfe3526ead2f69041ca2f15eabd2c035855`.
+
+### CMP-003 current process boundary
+
+The current executable authority appends `CMP-003` as the 91st case and leaves
+`CMP-004` inactive. `request CMP-003` emits one bounded private-free context
+with ordered roles `shaft`, `collar`. The shaft is a cylinder with radius 5 mm
+and depth 100 mm at the origin along +X. The collar is a cylinder with radius
+12 mm and depth 10 mm at x = 45 mm along +X. Exact candidate-response v8
+documents supplied by file and standard input execute one atomic production
+batch and exit `0` with `realized`.
+
+Swapping the two public cylinder payloads while preserving role and member
+order exits `2` as postpublication `invalidSubmission` without retry. A zero
+collar radius exits `2` as prepublication `invalidSubmission`; `request CMP-004`
+exits `64`. Schema v8, command surface, byte bound, and exit mapping remain
+unchanged. The known 90-request aggregate remains
+`bec563a757811e492c5ce3bf89514cfe3526ead2f69041ca2f15eabd2c035855`;
+appending the actual `CMP-003` request freezes the 91-request aggregate as
+`c3da3fd9024e8a568da27b9961abbd06b6d1e99dab621d297af8b8f222f07813`.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected
 case argument, so a case-mismatch process fixture cannot be constructed without
