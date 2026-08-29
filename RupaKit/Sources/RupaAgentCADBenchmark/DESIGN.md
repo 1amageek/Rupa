@@ -857,7 +857,7 @@ typed inactive.
 
 | Classification | BOX decision |
 |---|---|
-| Confirmed current fact | `ProjectAgentCommandController` exposes `createExtrudedRectangle`; its Automation/Editor path creates a rectangle sketch plus extrude body, commits one source generation, publishes one evaluated body, and topology tests prove 1 body/6 faces/12 edges/8 vertices. BOX-001 through BOX-010 expose this route through the reviewed solid/box action while BOX-011 remains inactive. |
+| Confirmed current fact | `ProjectAgentCommandController` exposes `createExtrudedRectangle`; its Automation/Editor path creates a rectangle sketch plus extrude body, commits one source generation, publishes one evaluated body, and topology tests prove 1 body/6 faces/12 edges/8 vertices. BOX-001 through BOX-011 expose this route through the reviewed solid/box action while BOX-012 remains inactive. |
 | Required ideal contract | A candidate describes one axis-aligned box by lower-corner origin and X/Y/Z dimensions; the existing production command remains mutation authority and an independent immutable source/B-Rep oracle remains result authority. |
 | Minimal difference | Add one benchmark-owned solid/box action, box projection/mapping/facade/oracle/result types, BOX activation dispatch, candidate-response v4, and focused/adapter/CLI evidence. Do not add a kernel command or a generic future-solid runner. |
 | Unresolved at design completion | No semantic or authority blocker remains. Each new aggregate digest and measured timing is intentionally observed and frozen only by its implementation gate rather than guessed here. |
@@ -1048,6 +1048,20 @@ extruded-rectangle/source/B-Rep route. Swapping width and depth to 200 × 400 mm
 is rejected by the immutable oracle after exactly one publication without
 retry, while zero height is a typed prepublication failure; BOX-011 is the
 next reviewed case.
+
+BOX-011 is the current authority boundary. It preserves the exact frozen
+62-request aggregate
+`7cce27a557abbfed9b6d8f1f020e14fff0b366497b79373071c7df625aa2078b` and
+observes the 63-request aggregate as
+`404f138058b2e8826a582a2f957ffc6fae0174ef4a11b6f0820dccb14378917a`.
+Its v4 response describes a
+0.5 × 0.5 × 0.5 m cube with lower-corner origin (-0.25, -0.25, 0) m and is
+evaluated through the production extruded-rectangle/source/B-Rep route.
+Submitting the same numeric values and origin in centimetres is rejected by
+the immutable oracle after exactly one publication without retry, while zero
+width is a typed prepublication failure; BOX-012 remains inactive. Request,
+evaluation, error, fingerprint, and geometry authority contracts remain
+unchanged.
 
 After BOX-012, `T12-BOX-G` serially replays BOX-001...012 in exact lexical
 order. It requires twelve unique IDs, unit coverage millimetre 9/metre 2/inch
