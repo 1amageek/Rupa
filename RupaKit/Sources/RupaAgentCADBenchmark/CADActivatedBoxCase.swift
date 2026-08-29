@@ -10,6 +10,7 @@ enum CADActivatedBoxCase: String, CaseIterable, Equatable, Hashable, Sendable {
     case box006 = "BOX-006"
     case box007 = "BOX-007"
     case box008 = "BOX-008"
+    case box009 = "BOX-009"
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)
