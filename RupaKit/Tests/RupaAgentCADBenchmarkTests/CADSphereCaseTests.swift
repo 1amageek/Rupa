@@ -7,14 +7,14 @@ import SwiftCAD
 @Suite(.serialized)
 struct CADSphereCaseTests {
     @MainActor
-    @Test(.timeLimit(.minutes(1)), arguments: CADSpherePreparationCase.allCases)
-    func allSphereCasesMapUnavailableCapabilityToExpectedUnsupported(
-        preparationCase: CADSpherePreparationCase
+    @Test(.timeLimit(.minutes(1)), arguments: CADActivatedSphereCase.allCases)
+    func activatedSphereCaseMapsUnavailableCapabilityToExpectedUnsupported(
+        activatedCase: CADActivatedSphereCase
     ) async throws {
-        let result = try await CADSphereCaseRunner(case: preparationCase).runReference()
+        let result = try await CADSphereCaseRunner(case: activatedCase).runReference()
 
         try result.validate()
-        #expect(result.caseID == preparationCase.caseID)
+        #expect(result.caseID == activatedCase.caseID)
         #expect(result.outcome == .expectedUnsupported)
         #expect(result.realized == false)
         #expect(result.routeEvidence.capabilityObservedThroughController)
@@ -32,6 +32,7 @@ struct CADSphereCaseTests {
         #expect(result.telemetry.actionCount == 0)
         #expect(result.telemetry.commandCount == 0)
         #expect(result.telemetry.readCount == 1)
+        #expect(result.telemetry.oracleWallNanoseconds == 0)
         #expect(result.telemetry.entityCount == 0)
         #expect(result.telemetry.featureCount == 0)
         #expect(result.telemetry.bodyCount == 0)
@@ -51,6 +52,23 @@ struct CADSphereCaseTests {
         guard case .analyticSphereUnavailable = result.capabilityError else {
             Issue.record("The result must retain the typed analyticSphereUnavailable observation.")
             return
+        }
+    }
+
+    @Test
+    func sphereActivationBoundaryContainsOnlySPH001() throws {
+        #expect(CADActivatedSphereCase.allCases.map(\.rawValue) == ["SPH-001"])
+        #expect(CADSpherePreparationCase.allCases.map(\.rawValue) == [
+            "SPH-001", "SPH-002", "SPH-003", "SPH-004", "SPH-005",
+        ])
+
+        for inactiveID in ["SPH-002", "SPH-003", "SPH-004", "SPH-005"] {
+            do {
+                _ = try CADActivatedSphereCase(caseID: inactiveID)
+                Issue.record("\(inactiveID) must remain outside the sphere activation boundary.")
+            } catch let error as CADBenchmarkError {
+                #expect(error == .invalidCaseID(inactiveID))
+            }
         }
     }
 
@@ -90,7 +108,7 @@ struct CADSphereCaseTests {
     @Test(.timeLimit(.minutes(1)))
     func timeoutIsTypedAndCleanupRemainsObservableWithoutMutation() async throws {
         let result = try await CADSphereCaseRunner(
-            case: .sph001,
+            case: .sphere001,
             timeoutWallNanoseconds: 1
         ).runReference()
 
@@ -114,7 +132,7 @@ struct CADSphereCaseTests {
     @Test(.timeLimit(.minutes(1)))
     func cancellationBeforeObservationHasNoRegistrationOrPublication() async throws {
         let task = Task { @MainActor in
-            try await CADSphereCaseRunner(case: .sph001).runReference()
+            try await CADSphereCaseRunner(case: .sphere001).runReference()
         }
         task.cancel()
         let result = try await task.value
@@ -133,7 +151,7 @@ struct CADSphereCaseTests {
     @MainActor
     @Test(.timeLimit(.minutes(1)))
     func actionOrFinishDecisionCannotTurnUnavailableSphereIntoACommand() async throws {
-        let result = try await CADSphereCaseRunner(case: .sph001).run(
+        let result = try await CADSphereCaseRunner(case: .sphere001).run(
             candidate: ActionReturningSphereCandidate()
         )
 
@@ -150,6 +168,123 @@ struct CADSphereCaseTests {
         #expect(result.telemetry.publicationCount == 0)
         #expect(result.routeEvidence.cleanupCompleted)
         #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func finishDecisionCannotTurnUnavailableSphereIntoACommand() async throws {
+        let result = try await CADSphereCaseRunner(case: .sphere001).run(
+            candidate: FixedSphereDecisionCandidate(
+                decision: .finish(CADOutputRoleBindings(bindings: []))
+            )
+        )
+
+        try result.validate()
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish == false)
+        #expect(result.routeEvidence.commandCount == 0)
+        #expect(result.routeEvidence.sourceMutationCount == 0)
+        #expect(result.telemetry.capabilityRequestCount == 1)
+        #expect(result.telemetry.readCount == 1)
+        #expect(result.telemetry.publicationCount == 0)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func wrongUnsupportedReasonCannotBecomeExpectedUnsupported() async throws {
+        let result = try await CADSphereCaseRunner(case: .sphere001).run(
+            candidate: FixedSphereDecisionCandidate(
+                decision: .unsupported(CADUnsupportedDeclaration(
+                    capabilityID: "cad.solid.analytic-sphere",
+                    capabilityVersion: "1",
+                    reason: .capabilityUnavailable
+                ))
+            )
+        )
+
+        try result.validate()
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish == false)
+        #expect(result.routeEvidence.commandCount == 0)
+        #expect(result.routeEvidence.sourceMutationCount == 0)
+        #expect(result.telemetry.capabilityRequestCount == 1)
+        #expect(result.telemetry.readCount == 1)
+        #expect(result.telemetry.publicationCount == 0)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func executorActivatesSphereCapabilityObservationAndLeavesSPH002Inactive() async throws {
+        let executor = DefaultCADActivatedCaseExecutor()
+
+        #expect(executor.activatedCaseIDs.count == 96)
+        #expect(executor.activatedCaseIDs.prefix(95).last == "CMP-007")
+        #expect(executor.activatedCaseIDs.last == "SPH-001")
+
+        let context = try executor.context(for: "SPH-001")
+        #expect(context.challenge.category == .sphere)
+        #expect(context.capabilities.statuses == [
+            CADCapabilityStatus(
+                id: "cad.solid.analytic-sphere",
+                version: "1",
+                available: false,
+                reasonCode: "not-exposed"
+            ),
+        ])
+
+        let result = try await executor.evaluate(
+            caseID: "SPH-001",
+            candidate: CADSphereReferenceCandidate()
+        )
+        #expect(result.id == "SPH-001")
+        #expect(result.category == .sphere)
+        #expect(result.outcome == .expectedUnsupported)
+        try result.validate()
+
+        do {
+            _ = try executor.context(for: "SPH-002")
+            Issue.record("SPH-002 must remain inactive.")
+        } catch let error as CADActivatedCaseExecutorError {
+            #expect(error == .inactiveCase("SPH-002"))
+        }
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func sphereContextUsesTheSamePureClassifierAsLiveObservation() async throws {
+        let challenge = try CADBenchmarkCatalog().challenge(for: "SPH-001")
+        let executor = DefaultCADActivatedCaseExecutor()
+        let context = try executor.context(for: "SPH-001")
+        let controller = ProjectAgentCommandController(name: "SPH-001.context")
+        let observation = try await CADSphereCapabilityObservation.observe(
+            challenge: challenge,
+            controller: controller
+        )
+
+        #expect(context.capabilities == observation.snapshot)
+        #expect(context.challenge == observation.challenge)
+        #expect(context.remainingActions == challenge.budget.maximumActions)
+        #expect(context.remainingRounds == challenge.budget.maximumRounds)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func executorPreservesCandidateFailureAsTypedError() async throws {
+        let executor = DefaultCADActivatedCaseExecutor()
+
+        do {
+            _ = try await executor.evaluate(
+                caseID: "SPH-001",
+                candidate: ThrowingSphereCandidate()
+            )
+            Issue.record("Candidate failure must be thrown as a typed executor error.")
+        } catch let error as CADActivatedCaseExecutorError {
+            #expect(error == .candidateFailure("SPH-001"))
+        }
     }
 
     @Test
@@ -206,4 +341,22 @@ private struct ActionReturningSphereCandidate: CADCandidateProtocol {
             height: CADLength(value: 1, unit: .millimeter)
         ))))
     }
+}
+
+private struct ThrowingSphereCandidate: CADCandidateProtocol {
+    func decide(for context: CADCandidateContext) async throws -> CADCandidateDecision {
+        throw SphereCandidateError.failed
+    }
+}
+
+private struct FixedSphereDecisionCandidate: CADCandidateProtocol {
+    let decision: CADCandidateDecision
+
+    func decide(for context: CADCandidateContext) async throws -> CADCandidateDecision {
+        decision
+    }
+}
+
+private enum SphereCandidateError: Error {
+    case failed
 }

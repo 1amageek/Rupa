@@ -61,6 +61,23 @@ struct CADSphereCapabilityObservation: Equatable, Sendable {
         )
     }
 
+    /// Classifies only the production descriptor names. This pure classifier
+    /// is shared by request-context construction and live observation so a
+    /// sphere capability cannot appear available in one path and absent in
+    /// the other.
+    static func capabilityStatus(
+        for challenge: CADChallenge,
+        descriptorNames: [String]
+    ) -> CADCapabilityStatus {
+        let exposed = descriptorNames.contains { sphereIngressNames.contains($0) }
+        return CADCapabilityStatus(
+            id: challenge.requiredCapability.id,
+            version: challenge.requiredCapability.version,
+            available: exposed,
+            reasonCode: exposed ? nil : "not-exposed"
+        )
+    }
+
     static func observe(
         challenge: CADChallenge,
         controller: ProjectAgentCommandController
@@ -76,17 +93,9 @@ struct CADSphereCapabilityObservation: Equatable, Sendable {
         }
 
         let names = descriptors.map(\.name).sorted()
-        let exposed = names.contains { sphereIngressNames.contains($0) }
         let snapshot = CADCapabilitySnapshot(
             version: Self.snapshotVersion,
-            statuses: [
-                CADCapabilityStatus(
-                    id: challenge.requiredCapability.id,
-                    version: challenge.requiredCapability.version,
-                    available: exposed,
-                    reasonCode: exposed ? nil : "not-exposed"
-                ),
-            ]
+            statuses: [Self.capabilityStatus(for: challenge, descriptorNames: names)]
         )
         try snapshot.validate()
         return CADSphereCapabilityObservation(

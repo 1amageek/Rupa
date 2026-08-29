@@ -2,7 +2,7 @@ import Foundation
 import RupaAgentProtocol
 import RupaAgentRuntime
 
-/// Runs sphere preparation through the production Agent capability surface.
+/// Runs one activated sphere case through the production Agent capability surface.
 ///
 /// The current Agent has no sphere ingress, so this runner deliberately owns
 /// no project document and dispatches no action or command. It observes
@@ -12,17 +12,17 @@ import RupaAgentRuntime
 struct CADSphereCaseRunner {
     private static let defaultTimeoutWallNanoseconds: UInt64 = 10_000_000_000
 
-    private let preparationCase: CADSpherePreparationCase
+    private let activatedCase: CADActivatedSphereCase
     private let timeoutWallNanoseconds: UInt64
     private let preObservationDelayNanoseconds: UInt64
     private let recorder = CADSphereRecorder()
 
     init(
-        case preparationCase: CADSpherePreparationCase,
+        case activatedCase: CADActivatedSphereCase,
         timeoutWallNanoseconds: UInt64 = Self.defaultTimeoutWallNanoseconds,
         preObservationDelayNanoseconds: UInt64 = 0
     ) {
-        self.preparationCase = preparationCase
+        self.activatedCase = activatedCase
         self.timeoutWallNanoseconds = max(1, timeoutWallNanoseconds)
         self.preObservationDelayNanoseconds = preObservationDelayNanoseconds
     }
@@ -33,14 +33,14 @@ struct CADSphereCaseRunner {
         preObservationDelayNanoseconds: UInt64 = 0
     ) throws {
         self.init(
-            case: try CADSpherePreparationCase(caseID: caseID),
+            case: try CADActivatedSphereCase(caseID: caseID),
             timeoutWallNanoseconds: timeoutWallNanoseconds,
             preObservationDelayNanoseconds: preObservationDelayNanoseconds
         )
     }
 
     var caseID: CADBenchmarkCaseID {
-        preparationCase.caseID
+        activatedCase.caseID
     }
 
     func runReference() async throws -> CADSphereCaseResult {
@@ -77,7 +77,7 @@ struct CADSphereCaseRunner {
 
         let entry: CADCatalogEntry
         do {
-            entry = try preparationCase.catalogEntry
+            entry = try activatedCase.catalogEntry
         } catch {
             let pending = result(
                 outcome: .infrastructureFailure,
@@ -258,27 +258,10 @@ struct CADSphereCaseRunner {
                 totalStart: totalStart
             )
         } catch {
-            let pending = result(
-                outcome: .executionFailure,
-                capabilityError: observation.typedUnavailable,
-                routeEvidence: routeEvidence(capabilityObserved: true),
-                telemetry: telemetry(
-                    planningWallNanoseconds: elapsed(since: planningStart),
-                    routeWallNanoseconds: routeWall,
-                    totalStart: totalStart,
-                    capabilityRequestCount: observation.requestCount,
-                    readCount: observation.requestCount,
-                    cancellationCheckpointCount: 3
-                ),
-                diagnostics: [
-                    "\(caseID.rawValue) candidate planning failed: \(message(error))"
-                ]
-            )
-            return await finalizeCleanup(
-                pending,
-                controller: controller,
-                totalStart: totalStart
-            )
+            // Candidate failures are owned by the activated executor, which
+            // converts them to its typed candidateFailure error. Do not turn
+            // an arbitrary candidate error into an execution outcome here.
+            throw error
         }
 
         if Task.isCancelled {
