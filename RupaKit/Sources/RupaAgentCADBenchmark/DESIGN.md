@@ -857,7 +857,7 @@ typed inactive.
 
 | Classification | BOX decision |
 |---|---|
-| Confirmed current fact | `ProjectAgentCommandController` exposes `createExtrudedRectangle`; its Automation/Editor path creates a rectangle sketch plus extrude body, commits one source generation, publishes one evaluated body, and topology tests prove 1 body/6 faces/12 edges/8 vertices. BOX-001 through BOX-006 expose this route through the reviewed solid/box action while BOX-007 remains inactive. |
+| Confirmed current fact | `ProjectAgentCommandController` exposes `createExtrudedRectangle`; its Automation/Editor path creates a rectangle sketch plus extrude body, commits one source generation, publishes one evaluated body, and topology tests prove 1 body/6 faces/12 edges/8 vertices. BOX-001 through BOX-007 expose this route through the reviewed solid/box action while BOX-008 remains inactive. |
 | Required ideal contract | A candidate describes one axis-aligned box by lower-corner origin and X/Y/Z dimensions; the existing production command remains mutation authority and an independent immutable source/B-Rep oracle remains result authority. |
 | Minimal difference | Add one benchmark-owned solid/box action, box projection/mapping/facade/oracle/result types, BOX activation dispatch, candidate-response v4, and focused/adapter/CLI evidence. Do not add a kernel command or a generic future-solid runner. |
 | Unresolved at design completion | No semantic or authority blocker remains. Each new aggregate digest and measured timing is intentionally observed and frozen only by its implementation gate rather than guessed here. |
@@ -1003,7 +1003,18 @@ Its bounded v4 response describes a 0.1 × 0.05 × 0.025 m rectangular solid
 with lower-corner origin (0, 0, 0) m and is evaluated through the production
 extruded-rectangle/source/B-Rep route. Submitting the same numeric values in
 centimetres is rejected by the immutable oracle after exactly one publication
-without retry, while zero depth and BOX-007 are typed prepublication/inactive
+without retry, while zero depth is a typed prepublication failure; BOX-007 is
+the next reviewed case.
+
+BOX-007 preserves the exact frozen 58-request aggregate
+`1f0ecb07744e6525d6e68df789fb529ff3ad91220ff515603ea26a2f123d88d9` and
+advances the observed 59-request aggregate to
+`22a57a1631712e9cc4cac3a50c5d2886909e804d2e44338b15911637318b74be`.
+Its bounded v4 response describes a 1 × 2 × 3 inch rectangular solid with
+lower-corner origin (-1, -1, 0) inches and is evaluated through the production
+extruded-rectangle/source/B-Rep route. Submitting the same numeric values in
+millimetres is rejected by the immutable oracle after exactly one publication
+without retry, while zero height and BOX-008 are typed prepublication/inactive
 failures.
 
 After BOX-012, `T12-BOX-G` serially replays BOX-001...012 in exact lexical
