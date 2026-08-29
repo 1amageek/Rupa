@@ -124,14 +124,14 @@ struct CADConstraintCategoryCheckpointTests {
         let executor = DefaultCADActivatedCaseExecutor()
         let expectedConstraints = CADActivatedConstraintCase.allCases.map(\.caseID)
 
-        #expect(executor.activatedCaseIDs.count == 82)
+        #expect(executor.activatedCaseIDs.count == 83)
         #expect(Array(executor.activatedCaseIDs.prefix(80).suffix(8)) == expectedConstraints)
-        #expect(executor.activatedCaseIDs.last == "TRN-002")
+        #expect(executor.activatedCaseIDs.last == "TRN-003")
         do {
-            _ = try executor.context(for: "TRN-003")
-            Issue.record("TRN-003 must remain inactive until its vertical gate.")
+            _ = try executor.context(for: "TRN-004")
+            Issue.record("TRN-004 must remain inactive until its vertical gate.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("TRN-003"))
+            #expect(error == .inactiveCase("TRN-004"))
         }
     }
 }

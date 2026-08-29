@@ -947,11 +947,11 @@ struct CADConstraintCaseTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func executorActivatesThroughTrn002AndLeavesTrn003Inactive() async throws {
+    func executorActivatesThroughTrn003AndLeavesTrn004Inactive() async throws {
         let executor = DefaultCADActivatedCaseExecutor()
 
-        #expect(executor.activatedCaseIDs.count == 82)
-        #expect(executor.activatedCaseIDs.last == "TRN-002")
+        #expect(executor.activatedCaseIDs.count == 83)
+        #expect(executor.activatedCaseIDs.last == "TRN-003")
         #expect(try executor.context(for: "CON-008").capabilities.statuses.first?.available == true)
         let result = try await executor.evaluate(
             caseID: "CON-008",
@@ -959,10 +959,10 @@ struct CADConstraintCaseTests {
         )
         #expect(result.outcome == .realized)
         do {
-            _ = try executor.context(for: "TRN-003")
-            Issue.record("TRN-003 must remain inactive.")
+            _ = try executor.context(for: "TRN-004")
+            Issue.record("TRN-004 must remain inactive.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("TRN-003"))
+            #expect(error == .inactiveCase("TRN-004"))
         }
     }
 

@@ -25,13 +25,13 @@ struct CADTransformCaseTests {
     }
 
     @Test
-    func transformActivationBoundaryContainsTrn001AndTrn002Only() throws {
-        #expect(CADActivatedTransformCase.allCases == [.trn001, .trn002])
+    func transformActivationBoundaryContainsTrn001ThroughTrn003Only() throws {
+        #expect(CADActivatedTransformCase.allCases == [.trn001, .trn002, .trn003])
         do {
-            _ = try CADActivatedTransformCase(caseID: "TRN-003")
-            Issue.record("TRN-003 must remain outside the transform activation boundary.")
+            _ = try CADActivatedTransformCase(caseID: "TRN-004")
+            Issue.record("TRN-004 must remain outside the transform activation boundary.")
         } catch let error as CADBenchmarkError {
-            #expect(error == .invalidCaseID("TRN-003"))
+            #expect(error == .invalidCaseID("TRN-004"))
         }
     }
 
@@ -154,6 +154,105 @@ struct CADTransformCaseTests {
         let task = Task { @MainActor in
             try await CADTransformCaseRunner(
                 case: .transform002,
+                preRouteDelayNanoseconds: 100_000_000
+            ).run(candidate: CADTransformReferenceCandidate())
+        }
+        task.cancel()
+        let cancelled = try await task.value
+        #expect(cancelled.outcome == .cancellation)
+        #expect(cancelled.routeEvidence.didPublish == false)
+        #expect(cancelled.routeEvidence.cleanupCompleted)
+        #expect(cancelled.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func transform003CandidateActionUsesTheProductionRouteAndExactOracle() async throws {
+        let result = try await CADTransformCaseRunner(case: .transform003)
+            .run(candidate: CADTransformReferenceCandidate())
+
+        #expect(result.caseID == "TRN-003")
+        #expect(result.outcome == .realized)
+        #expect(result.routeEvidence.didPublish)
+        #expect(result.routeEvidence.finalPublicationSequence
+            == result.routeEvidence.initialPublicationSequence + 1)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.readCount == 2)
+        #expect(result.telemetry.featureCount == 1)
+        #expect(result.telemetry.sceneNodeCount == 1)
+        #expect(result.telemetry.bodyCount == 0)
+        try result.validate()
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func transform003WrongOrderPublishesOnceThenFailsWithoutRetry() async throws {
+        let challenge = try CADTransformPreparedCase.transform003.catalogEntry.challenge
+        let valid = try CADTransformReferenceCandidate().submission(for: challenge)
+        let wrongOrder = CADTransformAction(
+            translation: CADPoint3D(
+                x: 0,
+                y: -50,
+                z: 0,
+                unit: valid.translation.unit
+            ),
+            axisPoint: valid.axisPoint,
+            rotationAxis: valid.rotationAxis,
+            rotation: valid.rotation
+        )
+        let result = try await CADTransformCaseRunner(case: .transform003).run(
+            candidate: TransformActionCandidate(action: .automation(.transform(wrongOrder)))
+        )
+
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish)
+        #expect(result.routeEvidence.finalPublicationSequence
+            == result.routeEvidence.initialPublicationSequence + 1)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 1)
+        #expect(result.routeEvidence.cleanupCompleted)
+        try result.validate()
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func transform003InvalidAxisFailsBeforePublicationAndCleansUp() async throws {
+        let challenge = try CADTransformPreparedCase.transform003.catalogEntry.challenge
+        let valid = try CADTransformReferenceCandidate().submission(for: challenge)
+        let invalid = CADTransformAction(
+            translation: valid.translation,
+            axisPoint: valid.axisPoint,
+            rotationAxis: CADDirection3D(x: 0, y: 0, z: 0),
+            rotation: valid.rotation
+        )
+        let result = try await CADTransformCaseRunner(case: .transform003).run(
+            candidate: TransformActionCandidate(action: .automation(.transform(invalid)))
+        )
+
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish == false)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 0)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func transform003DeadlineAndCancellationDoNotPublishAndCleanUp() async throws {
+        let timeout = try await CADTransformCaseRunner(
+            case: .transform003,
+            timeoutWallNanoseconds: 1
+        ).run(candidate: CADTransformReferenceCandidate())
+        #expect(timeout.outcome == .timeout)
+        #expect(timeout.routeEvidence.didPublish == false)
+        #expect(timeout.telemetry.commandCount == 0)
+        #expect(timeout.routeEvidence.cleanupCompleted)
+
+        let task = Task { @MainActor in
+            try await CADTransformCaseRunner(
+                case: .transform003,
                 preRouteDelayNanoseconds: 100_000_000
             ).run(candidate: CADTransformReferenceCandidate())
         }
@@ -396,7 +495,11 @@ struct CADTransformCaseTests {
 
     @Test
     func categoryLocalSubmissionContainsNoPrivateOracleAuthority() throws {
-        for preparedCase in [CADTransformPreparedCase.transform002, .transform008] {
+        for preparedCase in [
+            CADTransformPreparedCase.transform002,
+            .transform003,
+            .transform008,
+        ] {
             let challenge = try preparedCase.catalogEntry.challenge
             let submission = try CADTransformReferenceCandidate().submission(for: challenge)
             let encoded = try JSONEncoder().encode(submission)
