@@ -55,7 +55,7 @@ rupa-agent-cad-benchmark request <CASE-ID>
 rupa-agent-cad-benchmark evaluate --response <PATH|->
 ```
 
-`request` validates that the ID is in the activated 94-case set and emits
+`request` validates that the ID is in the activated 95-case set and emits
 exactly one request-envelope JSON object to standard output. `evaluate` reads
 exactly one candidate-response envelope from the selected file, or from
 standard input when `-` is selected, then emits exactly one evaluation- or
@@ -130,8 +130,8 @@ Process-level tests build and invoke the actual executable and prove:
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
   millimetre/XY case, the complete CIR-001...012 category, ANG-001...016, and
   BOX-001...012, `CYL-001...008`, `CON-001...008`, `TRN-001...008`, and
-  `CMP-001...006`, and rejects inactive `CMP-007`;
-- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, CON-001...008, TRN-001...008 transform, and CMP-001...006 compound responses traverse the adapter, production
+  `CMP-001...007`, and rejects inactive `SPH-001`;
+- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, CON-001...008, TRN-001...008 transform, and CMP-001...007 compound responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
@@ -893,25 +893,44 @@ remains `e1984e09864c758b0876c386ddef9bab3f810716f9c1b44dbe1e3c46df082a27`;
 appending the actual `CMP-005` request freezes the 93-request aggregate as
 `bcb6db981a67668a16a18c2654ec2b6465668d7a8396761bfc3bacdcbe7d67dc`.
 
-### CMP-006 current process boundary
+### CMP-006 frozen process checkpoint
 
-The current executable authority appends `CMP-006` as the 94th case and leaves
-`CMP-007` inactive. `request CMP-006` emits one bounded private-free context
-with ordered roles `hub`, `arm-a`, `arm-b`. The hub is a cylinder with radius
-20 mm and depth 50 mm at the origin along +Z. Both arms are
-100 mm x 10 mm x 10 mm boxes based at `(20, -5, 20)` mm and
-`(-120, -5, 20)` mm respectively. Exact candidate-response v8 documents
-supplied by file and standard input execute one atomic production batch and
-exit `0` with `realized`.
+The frozen 94-case executable authority appends `CMP-006`.
+`request CMP-006` emits one bounded private-free context with ordered roles
+`hub`, `arm-a`, `arm-b`. The hub is a cylinder with radius 20 mm and depth
+50 mm at the origin along +Z. Both arms are 100 mm x 10 mm x 10 mm boxes
+based at `(20, -5, 20)` mm and `(-120, -5, 20)` mm respectively. Exact
+candidate-response v8 documents supplied by file and standard input execute
+one atomic production batch and exit `0` with `realized`.
 
 Swapping the public arm payloads while preserving role and member order exits
 `2` as postpublication `invalidSubmission` without retry. A zero width on the
-third `arm-b` member exits `2` as prepublication `invalidSubmission`;
-`request CMP-007` exits `64`. Schema v8, command surface, byte bound, and exit
-mapping remain unchanged. The known 93-request aggregate remains
+third `arm-b` member exits `2` as prepublication `invalidSubmission`. Schema
+v8, command surface, byte bound, and exit mapping remain unchanged. The known
+93-request aggregate remains
 `bcb6db981a67668a16a18c2654ec2b6465668d7a8396761bfc3bacdcbe7d67dc`;
 appending the actual `CMP-006` request freezes the 94-request aggregate as
 `978ee6b0ac70c3d90a87b0f44fb634d4aec0fbaf42126db9ed8721bec7431c43`.
+
+### CMP-007 current process boundary
+
+The current executable authority appends `CMP-007` as the 95th and final
+compound case and leaves the next catalog category boundary `SPH-001`
+inactive. `request CMP-007` emits one bounded private-free context with ordered
+roles `block`, `bore`. `block` is a 50 mm cube at the origin. `bore` is an
+independent positive cylinder with radius 10 mm and depth 50 mm at
+`(25, 25, 0)` mm along +Z; no boolean subtraction is part of this case.
+Exact candidate-response v8 documents supplied by file and standard input
+execute one atomic production batch and exit `0` with `realized`.
+
+Moving the public `bore` base to x=26 mm exits `2` as postpublication
+`invalidSubmission` without retry. A zero radius or zero axis on `bore` exits
+`2` as prepublication `invalidSubmission`; `request SPH-001` exits `64`.
+Schema v8, command surface, byte bound, and exit mapping remain unchanged. The
+known 94-request aggregate remains
+`978ee6b0ac70c3d90a87b0f44fb634d4aec0fbaf42126db9ed8721bec7431c43`;
+appending the actual `CMP-007` request freezes the 95-request aggregate as
+`f9060999bba0bfa121bca51593fe5468c67b0237eebb0b0f82acd2feaf66fe1a`.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected
 case argument, so a case-mismatch process fixture cannot be constructed without

@@ -124,7 +124,7 @@ struct CADConstraintCategoryCheckpointTests {
         let executor = DefaultCADActivatedCaseExecutor()
         let expectedConstraints = CADActivatedConstraintCase.allCases.map(\.caseID)
 
-        #expect(executor.activatedCaseIDs.count == 94)
+        #expect(executor.activatedCaseIDs.count == 95)
         #expect(Array(executor.activatedCaseIDs.prefix(80).suffix(8)) == expectedConstraints)
         #expect(executor.activatedCaseIDs.prefix(88).last == "TRN-008")
         #expect(executor.activatedCaseIDs.prefix(89).last == "CMP-001")
@@ -132,12 +132,13 @@ struct CADConstraintCategoryCheckpointTests {
         #expect(executor.activatedCaseIDs.prefix(91).last == "CMP-003")
         #expect(executor.activatedCaseIDs.prefix(92).last == "CMP-004")
         #expect(executor.activatedCaseIDs.prefix(93).last == "CMP-005")
-        #expect(executor.activatedCaseIDs.last == "CMP-006")
+        #expect(executor.activatedCaseIDs.prefix(94).last == "CMP-006")
+        #expect(executor.activatedCaseIDs.last == "CMP-007")
         do {
-            _ = try executor.context(for: "CMP-007")
-            Issue.record("CMP-007 must remain inactive until its vertical gate.")
+            _ = try executor.context(for: "SPH-001")
+            Issue.record("SPH-001 must remain inactive until its vertical gate.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("CMP-007"))
+            #expect(error == .inactiveCase("SPH-001"))
         }
     }
 }

@@ -91,8 +91,8 @@ struct CADBenchmarkCLIProcessTests {
         )
         try assertError(legacyResult, code: .unsupportedSchema, exit: 64, caseID: nil)
 
-        let inactive = try runCADBenchmarkCLI(["request", "CMP-007"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "CMP-007")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-001"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-001")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -173,8 +173,8 @@ struct CADBenchmarkCLIProcessTests {
         )
         try assertError(unsupportedSchemaResult, code: .unsupportedSchema, exit: 64, caseID: nil)
 
-        let inactive = try runCADBenchmarkCLI(["request", "CMP-007"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "CMP-007")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-001"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-001")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -258,8 +258,8 @@ struct CADBenchmarkCLIProcessTests {
         )
         try assertError(unsupportedSchemaResult, code: .unsupportedSchema, exit: 64, caseID: nil)
 
-        let inactive = try runCADBenchmarkCLI(["request", "CMP-007"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "CMP-007")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-001"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-001")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -337,8 +337,8 @@ struct CADBenchmarkCLIProcessTests {
         )
         try assertError(unsupportedSchemaResult, code: .unsupportedSchema, exit: 64, caseID: nil)
 
-        let inactive = try runCADBenchmarkCLI(["request", "CMP-007"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "CMP-007")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-001"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-001")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -419,8 +419,8 @@ struct CADBenchmarkCLIProcessTests {
         )
         try assertError(unsupportedSchemaResult, code: .unsupportedSchema, exit: 64, caseID: nil)
 
-        let inactive = try runCADBenchmarkCLI(["request", "CMP-007"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "CMP-007")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-001"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-001")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -502,8 +502,8 @@ struct CADBenchmarkCLIProcessTests {
         )
         try assertError(unsupportedSchemaResult, code: .unsupportedSchema, exit: 64, caseID: nil)
 
-        let inactive = try runCADBenchmarkCLI(["request", "CMP-007"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "CMP-007")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-001"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-001")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -581,8 +581,8 @@ struct CADBenchmarkCLIProcessTests {
         )
         try assertError(unsupportedSchemaResult, code: .unsupportedSchema, exit: 64, caseID: nil)
 
-        let inactive = try runCADBenchmarkCLI(["request", "CMP-007"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "CMP-007")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-001"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-001")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -660,8 +660,8 @@ struct CADBenchmarkCLIProcessTests {
         )
         try assertError(unsupportedSchemaResult, code: .unsupportedSchema, exit: 64, caseID: nil)
 
-        let inactive = try runCADBenchmarkCLI(["request", "CMP-007"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "CMP-007")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-001"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-001")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -744,8 +744,8 @@ struct CADBenchmarkCLIProcessTests {
         )
         try assertError(unsupportedSchemaResult, code: .unsupportedSchema, exit: 64, caseID: nil)
 
-        let inactive = try runCADBenchmarkCLI(["request", "CMP-007"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "CMP-007")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-001"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-001")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -828,8 +828,8 @@ struct CADBenchmarkCLIProcessTests {
         )
         try assertError(unsupportedSchemaResult, code: .unsupportedSchema, exit: 64, caseID: nil)
 
-        let inactive = try runCADBenchmarkCLI(["request", "CMP-007"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "CMP-007")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-001"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-001")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -901,8 +901,8 @@ struct CADBenchmarkCLIProcessTests {
         #expect(invalidEvaluation.error == nil)
         #expect(isPrivateFree(invalidResult.standardOutput))
 
-        let inactive = try runCADBenchmarkCLI(["request", "CMP-007"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "CMP-007")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-001"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-001")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -974,8 +974,8 @@ struct CADBenchmarkCLIProcessTests {
         #expect(invalidEvaluation.error == nil)
         #expect(isPrivateFree(invalidResult.standardOutput))
 
-        let inactive = try runCADBenchmarkCLI(["request", "CMP-007"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "CMP-007")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-001"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-001")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -1047,8 +1047,8 @@ struct CADBenchmarkCLIProcessTests {
         #expect(invalidEvaluation.error == nil)
         #expect(isPrivateFree(invalidResult.standardOutput))
 
-        let inactive = try runCADBenchmarkCLI(["request", "CMP-007"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "CMP-007")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-001"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-001")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -1120,8 +1120,8 @@ struct CADBenchmarkCLIProcessTests {
         #expect(invalidEvaluation.error == nil)
         #expect(isPrivateFree(invalidResult.standardOutput))
 
-        let inactive = try runCADBenchmarkCLI(["request", "CMP-007"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "CMP-007")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-001"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-001")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -1193,8 +1193,83 @@ struct CADBenchmarkCLIProcessTests {
         #expect(invalidEvaluation.error == nil)
         #expect(isPrivateFree(invalidResult.standardOutput))
 
-        let inactive = try runCADBenchmarkCLI(["request", "CMP-007"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "CMP-007")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-001"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-001")
+    }
+
+    @Test(.timeLimit(.minutes(2)))
+    @MainActor
+    func cmp007UsesBoundedRequestFileAndStandardInputProductionRoutes() throws {
+        let requestResult = try runCADBenchmarkCLI(["request", "CMP-007"])
+        #expect(requestResult.terminationStatus == 0)
+        #expect(requestResult.standardOutputData.count <= CADJSONAdapterSchema.maximumDocumentBytes)
+        let request = try CADJSONBoundedCodec.decode(
+            CADJSONRequestEnvelope.self,
+            from: requestResult.standardOutputData
+        )
+        #expect(request.caseID == "CMP-007")
+        #expect(request.context.challenge.category == .compound)
+        #expect(request.context.challenge.instruction == "Construct CMP-007 as a compound containing block=box 50.0 mm x 50.0 mm x 50.0 mm at (0.0, 0.0, 0.0) mm, bore=cylinder radius 10.0 mm depth 50.0 mm at (25.0, 25.0, 0.0) mm along axis (0.0, 0.0, 1.0).")
+        #expect(request.context.challenge.outputRoles.map(\.name) == ["block", "bore"])
+        #expect(request.context.capabilities.statuses.first?.available == true)
+        #expect(isPrivateFree(requestResult.standardOutput))
+
+        let exact = try responseData(for: "CMP-007", action: compound007Action())
+        #expect(exact.count <= CADJSONAdapterSchema.maximumDocumentBytes)
+        let exactText = String(decoding: exact, as: UTF8.self)
+        #expect(exactText.contains("\"kind\":\"compound\""))
+        #expect(isPrivateFree(exactText))
+        let fileResult = try withTemporaryData(exact) { path in
+            try runCADBenchmarkCLI(["evaluate", "--response", path])
+        }
+        try assertRealizedEvaluation(fileResult, caseID: "CMP-007")
+
+        let standardInputResult = try runCADBenchmarkCLI(
+            ["evaluate", "--response", "-"],
+            standardInput: exact
+        )
+        try assertRealizedEvaluation(standardInputResult, caseID: "CMP-007")
+
+        let wrong = try responseData(
+            for: "CMP-007",
+            action: compound007Action(boreBaseX: 26)
+        )
+        let wrongResult = try runCADBenchmarkCLI(
+            ["evaluate", "--response", "-"],
+            standardInput: wrong
+        )
+        let wrongEvaluation = try CADJSONBoundedCodec.decode(
+            CADJSONEvaluationEnvelope.self,
+            from: wrongResult.standardOutputData
+        )
+        #expect(wrongResult.terminationStatus == 2)
+        #expect(wrongEvaluation.caseID == "CMP-007")
+        #expect(wrongEvaluation.result?.outcome == .invalidSubmission)
+        #expect(wrongEvaluation.error == nil)
+        #expect(isPrivateFree(wrongResult.standardOutput))
+
+        for invalidAction in [
+            compound007Action(boreRadius: 0),
+            compound007Action(boreAxis: CADDirection3D(x: 0, y: 0, z: 0)),
+        ] {
+            let invalid = try responseData(for: "CMP-007", action: invalidAction)
+            let invalidResult = try runCADBenchmarkCLI(
+                ["evaluate", "--response", "-"],
+                standardInput: invalid
+            )
+            let invalidEvaluation = try CADJSONBoundedCodec.decode(
+                CADJSONEvaluationEnvelope.self,
+                from: invalidResult.standardOutputData
+            )
+            #expect(invalidResult.terminationStatus == 2)
+            #expect(invalidEvaluation.caseID == "CMP-007")
+            #expect(invalidEvaluation.result?.outcome == .invalidSubmission)
+            #expect(invalidEvaluation.error == nil)
+            #expect(isPrivateFree(invalidResult.standardOutput))
+        }
+
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-001"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-001")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -1472,7 +1547,7 @@ struct CADBenchmarkCLIProcessTests {
     @Test(.timeLimit(.minutes(2)))
     @MainActor
     func requestEmitsBoundedReviewedObjectsAndRejectsInactiveCase() throws {
-        for rawCaseID in ["LIN-001", "REC-001", "REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012", "CYL-001", "CYL-002", "CYL-003", "CYL-004", "CYL-005", "CYL-006", "CYL-007", "CYL-008", "CON-001", "CON-002", "CON-003", "CON-004", "CON-005", "CON-006", "CON-007", "CON-008", "TRN-001", "TRN-002", "TRN-003", "TRN-004", "TRN-005", "TRN-006", "TRN-007", "TRN-008", "CMP-001", "CMP-002", "CMP-003", "CMP-004", "CMP-005", "CMP-006"] {
+        for rawCaseID in ["LIN-001", "REC-001", "REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012", "CYL-001", "CYL-002", "CYL-003", "CYL-004", "CYL-005", "CYL-006", "CYL-007", "CYL-008", "CON-001", "CON-002", "CON-003", "CON-004", "CON-005", "CON-006", "CON-007", "CON-008", "TRN-001", "TRN-002", "TRN-003", "TRN-004", "TRN-005", "TRN-006", "TRN-007", "TRN-008", "CMP-001", "CMP-002", "CMP-003", "CMP-004", "CMP-005", "CMP-006", "CMP-007"] {
             let result = try runCADBenchmarkCLI(["request", rawCaseID])
             #expect(result.terminationStatus == 0, Comment(rawValue: result.standardError))
             #expect(result.standardOutputData.count <= CADJSONAdapterSchema.maximumDocumentBytes)
@@ -1485,14 +1560,14 @@ struct CADBenchmarkCLIProcessTests {
             #expect(result.standardError.isEmpty)
         }
 
-        let inactive = try runCADBenchmarkCLI(["request", "CMP-007"])
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-001"])
         #expect(inactive.terminationStatus == 64)
         let error = try CADJSONBoundedCodec.decode(
             CADJSONErrorEnvelope.self,
             from: inactive.standardOutputData
         )
         #expect(error.code == .inactiveCase)
-        #expect(error.caseID?.rawValue == "CMP-007")
+        #expect(error.caseID?.rawValue == "SPH-001")
         #expect(isPrivateFree(inactive.standardOutput))
     }
 
@@ -2647,15 +2722,15 @@ struct CADBenchmarkCLIProcessTests {
         try assertError(fingerprintResult, code: .fingerprintMismatch, exit: 64, caseID: "LIN-001")
 
         let inactiveResponse = try responseData(
-            for: "CMP-007",
+            for: "SPH-001",
             contextFingerprint: String(repeating: "0", count: 64),
-            action: constraint001Action(name: "CMP-007")
+            action: constraint001Action(name: "SPH-001")
         )
         let inactiveResult = try runCADBenchmarkCLI(
             ["evaluate", "--response", "-"],
             standardInput: inactiveResponse
         )
-        try assertError(inactiveResult, code: .inactiveCase, exit: 64, caseID: "CMP-007")
+        try assertError(inactiveResult, code: .inactiveCase, exit: 64, caseID: "SPH-001")
 
         let finishResponse = try finishResponseData(for: request)
         let finishResult = try runCADBenchmarkCLI(
@@ -3160,6 +3235,31 @@ private func compound006Action(
             width: CADLength(value: armBWidth, unit: .millimeter),
             depth: CADLength(value: 10, unit: .millimeter),
             height: CADLength(value: 10, unit: .millimeter)
+        ),
+    ]))
+}
+
+private func compound007Action(
+    boreBaseX: Double = 25,
+    boreRadius: Double = 10,
+    boreAxis: CADDirection3D = CADDirection3D(x: 0, y: 0, z: 1)
+) -> CADCandidateAction {
+    .compound(CADCompoundAction(members: [
+        CADCompoundMemberAction(
+            role: "block",
+            name: "CMP-007.block",
+            origin: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
+            width: CADLength(value: 50, unit: .millimeter),
+            depth: CADLength(value: 50, unit: .millimeter),
+            height: CADLength(value: 50, unit: .millimeter)
+        ),
+        CADCompoundMemberAction(
+            role: "bore",
+            name: "CMP-007.bore",
+            baseCenter: CADPoint3D(x: boreBaseX, y: 25, z: 0, unit: .millimeter),
+            axis: boreAxis,
+            radius: CADLength(value: boreRadius, unit: .millimeter),
+            depth: CADLength(value: 50, unit: .millimeter)
         ),
     ]))
 }

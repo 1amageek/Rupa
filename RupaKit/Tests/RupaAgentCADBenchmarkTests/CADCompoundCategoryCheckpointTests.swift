@@ -11,7 +11,7 @@ struct CADCompoundCategoryCheckpointTests {
     @Test(.timeLimit(.minutes(2)))
     func activatedCompoundPrefixReplaysThroughTheProductionRoute() async throws {
         #expect(CADActivatedCompoundCase.allCases.map(\.rawValue) == [
-            "CMP-001", "CMP-002", "CMP-003", "CMP-004", "CMP-005", "CMP-006",
+            "CMP-001", "CMP-002", "CMP-003", "CMP-004", "CMP-005", "CMP-006", "CMP-007",
         ])
 
         for activatedCase in CADActivatedCompoundCase.allCases {
@@ -92,6 +92,17 @@ struct CADCompoundCategoryCheckpointTests {
                 expectedFaceCount = 18
                 expectedEdgeCount = 36
                 expectedVertexCount = 24
+            case .compound007:
+                expectedMemberCount = 2
+                expectedCommandCount = 2
+                expectedGenerationIncrement = 2
+                expectedReadCount = 2
+                expectedEntityCount = 5
+                expectedFeatureCount = 4
+                expectedBodyCount = 2
+                expectedFaceCount = 12
+                expectedEdgeCount = 24
+                expectedVertexCount = 16
             }
             let result = try await CADCompoundCaseRunner(case: activatedCase).runReference()
 
