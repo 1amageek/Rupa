@@ -786,22 +786,183 @@ struct CADConstraintCaseTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func executorActivatesThroughCon007AndLeavesCon008Inactive() async throws {
+    func con008CreatesExactEqualRadiusSourceRelationThroughProductionController() async throws {
+        let result = try await CADConstraintCaseRunner(case: .constraint008).runReference()
+        try result.validate()
+        #expect(result.caseID == "CON-008")
+        #expect(
+            result.outcome == .realized,
+            Comment(rawValue: result.diagnostics.joined(separator: " | "))
+        )
+        #expect(result.routeEvidence.didPublish)
+        #expect(result.routeEvidence.finalPublicationSequence == result.routeEvidence.initialPublicationSequence + 1)
+        #expect(result.routeEvidence.finalDocumentGeneration.value == result.routeEvidence.initialDocumentGeneration.value + 1)
+        #expect(result.routeEvidence.finalTransactionRevision.value == result.routeEvidence.initialTransactionRevision.value + 1)
+        #expect(result.routeEvidence.finalWorkspaceRevision == result.routeEvidence.initialWorkspaceRevision)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.readCount >= 1)
+        #expect(result.telemetry.entityCount == 2)
+        #expect(result.telemetry.featureCount == 1)
+        #expect(result.telemetry.bodyCount == 0)
+        #expect(result.telemetry.planningWallNanoseconds > 0)
+        #expect(result.telemetry.routeWallNanoseconds > 0)
+        #expect(result.telemetry.oracleWallNanoseconds > 0)
+        #expect(result.telemetry.totalWallNanoseconds > 0)
+        #expect(result.routeEvidence.cleanupWallNanoseconds > 0)
+    }
+
+    @Test
+    func con008DerivedDiskOracleRejectsMissingExtraReorderedAndCorruptEvidence() throws {
+        let fixture = try exactEqualRadiusRegionFixture()
+        try validateDerivedEqualRadiusRegions(fixture.source, fixture: fixture)
+
+        var missing = fixture.source
+        missing.counts.regionCount = 1
+        missing.regions.removeLast()
+        #expect(throws: CADConstraintOracleError.self) {
+            try validateDerivedEqualRadiusRegions(missing, fixture: fixture)
+        }
+
+        var extra = fixture.source
+        var duplicate = try #require(extra.regions.last)
+        duplicate.profileIndex = 2
+        extra.counts.regionCount = 3
+        extra.regions.append(duplicate)
+        #expect(throws: CADConstraintOracleError.self) {
+            try validateDerivedEqualRadiusRegions(extra, fixture: fixture)
+        }
+
+        var reordered = fixture.source
+        reordered.regions.swapAt(0, 1)
+        #expect(throws: CADConstraintOracleError.self) {
+            try validateDerivedEqualRadiusRegions(reordered, fixture: fixture)
+        }
+
+        var wrongSource = fixture.source
+        wrongSource.regions[0].sourceFeatureID = FeatureID().description
+        #expect(throws: CADConstraintOracleError.self) {
+            try validateDerivedEqualRadiusRegions(wrongSource, fixture: fixture)
+        }
+
+        var wrongSelection = fixture.source
+        wrongSelection.regions[1].selectionComponentID = "arbitrary-selection"
+        #expect(throws: CADConstraintOracleError.self) {
+            try validateDerivedEqualRadiusRegions(wrongSelection, fixture: fixture)
+        }
+
+        var wrongPlane = fixture.source
+        wrongPlane.regions[0].plane = .yz
+        #expect(throws: CADConstraintOracleError.self) {
+            try validateDerivedEqualRadiusRegions(wrongPlane, fixture: fixture)
+        }
+
+        var wrongCenter = fixture.source
+        wrongCenter.regions[1].center.x += 0.001
+        #expect(throws: CADConstraintOracleError.self) {
+            try validateDerivedEqualRadiusRegions(wrongCenter, fixture: fixture)
+        }
+
+        var wrongArea = fixture.source
+        wrongArea.regions[0].areaSquareMeters += 0.001
+        #expect(throws: CADConstraintOracleError.self) {
+            try validateDerivedEqualRadiusRegions(wrongArea, fixture: fixture)
+        }
+
+        let acceptedRadiusDelta = fixture.tolerance.modelingTolerance.distance * 0.5
+        var acceptedArea = fixture.source
+        acceptedArea.regions[0].areaSquareMeters = Double.pi * pow(0.015 + acceptedRadiusDelta, 2)
+        try validateDerivedEqualRadiusRegions(acceptedArea, fixture: fixture)
+
+        let rejectedRadiusDelta = fixture.tolerance.modelingTolerance.distance * 2.0
+        var rejectedArea = fixture.source
+        rejectedArea.regions[0].areaSquareMeters = Double.pi * pow(0.015 + rejectedRadiusDelta, 2)
+        #expect(throws: CADConstraintOracleError.self) {
+            try validateDerivedEqualRadiusRegions(rejectedArea, fixture: fixture)
+        }
+
+        var wrongBoundary = fixture.source
+        wrongBoundary.regions[1].boundarySegmentCount += 1
+        #expect(throws: CADConstraintOracleError.self) {
+            try validateDerivedEqualRadiusRegions(wrongBoundary, fixture: fixture)
+        }
+    }
+
+    @MainActor @Test(.timeLimit(.minutes(1)))
+    func con008OracleRejectsConcentricSubstituteAfterOnePublicationWithoutRetry() async throws {
+        let result = try await CADConstraintCaseRunner(case: .constraint008).run(
+            action: Self.constraint008Action(relation: .concentric, secondCenterX: 0)
+        )
+        try result.validate()
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish)
+        #expect(result.routeEvidence.finalPublicationSequence == result.routeEvidence.initialPublicationSequence + 1)
+        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.readCount == 2)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        #expect(result.diagnostics.contains { $0.contains("oracle mismatch") })
+    }
+
+    @MainActor @Test(.timeLimit(.minutes(1)))
+    func con008RejectsZeroSecondRadiusBeforePublication() async throws {
+        let result = try await CADConstraintCaseRunner(case: .constraint008).run(
+            action: Self.constraint008Action(secondRadius: 0)
+        )
+        try result.validate()
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish == false)
+        #expect(result.telemetry.commandCount == 0)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor @Test(.timeLimit(.minutes(1)))
+    func con008TimeoutPublishesNothingAndCleansUp() async throws {
+        let result = try await CADConstraintCaseRunner(
+            case: .constraint008,
+            timeoutWallNanoseconds: 1
+        ).runReference()
+        try result.validate()
+        #expect(result.outcome == .timeout)
+        #expect(result.routeEvidence.didPublish == false)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @Test
+    func con008ReferenceCandidatePreservesPublicEqualRadiusGeometryWithoutSourceIDs() async throws {
+        let challenge = try CADBenchmarkCatalog().challenge(for: "CON-008")
+        let decision = try await CADConstraintReferenceCandidate().decide(for: candidateContext(challenge))
+        guard case .action(.automation(.sketch(.constraint(let action)))) = decision else {
+            Issue.record("CON-008 candidate did not produce one constraint action.")
+            return
+        }
+        #expect(action == Self.constraint008Value())
+        let encoded = String(decoding: try JSONEncoder().encode(action), as: UTF8.self)
+        for privateName in ["FeatureID", "EntityID", "expectation", "tolerance", "oracle"] {
+            #expect(encoded.contains(privateName) == false)
+        }
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func executorActivatesThroughCon008AndLeavesTrn001Inactive() async throws {
         let executor = DefaultCADActivatedCaseExecutor()
 
-        #expect(executor.activatedCaseIDs.count == 79)
-        #expect(executor.activatedCaseIDs.last == "CON-007")
-        #expect(try executor.context(for: "CON-007").capabilities.statuses.first?.available == true)
+        #expect(executor.activatedCaseIDs.count == 80)
+        #expect(executor.activatedCaseIDs.last == "CON-008")
+        #expect(try executor.context(for: "CON-008").capabilities.statuses.first?.available == true)
         let result = try await executor.evaluate(
-            caseID: "CON-007",
+            caseID: "CON-008",
             candidate: CADConstraintReferenceCandidate()
         )
         #expect(result.outcome == .realized)
         do {
-            _ = try executor.context(for: "CON-008")
-            Issue.record("CON-008 must remain inactive.")
+            _ = try executor.context(for: "TRN-001")
+            Issue.record("TRN-001 must remain inactive.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("CON-008"))
+            #expect(error == .inactiveCase("TRN-001"))
         }
     }
 
@@ -981,6 +1142,33 @@ struct CADConstraintCaseTests {
         return value
     }
 
+    private static func constraint008Action(
+        relation: CADConstraintRelation = .equalRadius,
+        secondCenterX: Double = 50,
+        secondRadius: Double = 15
+    ) -> CADCandidateAction {
+        .automation(.sketch(.constraint(CADConstraintAction(
+            name: "CON-008",
+            plane: .xy,
+            relation: relation,
+            first: .circle(
+                center: CADPoint3D(x: 0, y: 0, z: 0),
+                radius: CADLength(value: 15, unit: .millimeter)
+            ),
+            second: .circle(
+                center: CADPoint3D(x: secondCenterX, y: 0, z: 0),
+                radius: CADLength(value: secondRadius, unit: .millimeter)
+            )
+        ))))
+    }
+
+    private static func constraint008Value() -> CADConstraintAction {
+        guard case .automation(.sketch(.constraint(let value))) = constraint008Action() else {
+            preconditionFailure("The CON-008 fixture must contain one constraint value.")
+        }
+        return value
+    }
+
     private struct ConcentricRegionFixture {
         let source: SketchEntitySnapshot
         let expected: CADConstraintChallengeInput
@@ -1031,6 +1219,67 @@ struct CADConstraintCaseTests {
     private func validateDerivedConcentricRegion(
         _ source: SketchEntitySnapshot,
         fixture: ConcentricRegionFixture
+    ) throws {
+        try CADConstraintDerivedRegionOracle.validate(
+            source: source,
+            expected: fixture.expected,
+            expectedPlane: fixture.plane,
+            sourceFeatureID: fixture.sourceFeatureID,
+            sceneNodeID: fixture.sceneNodeID,
+            tolerance: fixture.tolerance
+        )
+    }
+
+    private struct EqualRadiusRegionFixture {
+        let source: SketchEntitySnapshot
+        let expected: CADConstraintChallengeInput
+        let plane: SketchPlane
+        let sourceFeatureID: String
+        let sceneNodeID: String?
+        let tolerance: CADBenchmarkTolerancePolicy
+    }
+
+    private func exactEqualRadiusRegionFixture() throws -> EqualRadiusRegionFixture {
+        guard case .automation(.sketch(.constraint(let action))) = Self.constraint008Action() else {
+            throw CADBenchmarkError.invalidInput(
+                caseID: "CON-008",
+                reason: "The exact equal-radius fixture has no constraint action."
+            )
+        }
+        let sketch = try CADConstraintGeometryMapping.sketch(
+            from: action,
+            modelingTolerance: .standard,
+            caseID: "CON-008"
+        )
+        var document = DesignDocument.empty()
+        let featureID = try document.createSketch(
+            name: "CON-008.region-fixture",
+            sketch: sketch,
+            geometryRole: .curve
+        )
+        let source = try SketchEntitySnapshotService().snapshot(document: document)
+        let entry = try CADActivatedConstraintCase.constraint008.catalogEntry
+        guard case .constraint(let expected) = entry.expected else {
+            throw CADBenchmarkError.invalidInput(
+                caseID: "CON-008",
+                reason: "The exact equal-radius fixture has no private expectation."
+            )
+        }
+        return EqualRadiusRegionFixture(
+            source: source,
+            expected: expected,
+            plane: sketch.plane,
+            sourceFeatureID: featureID.description,
+            sceneNodeID: source.sketches.first?.sceneNodeID,
+            tolerance: try CADBenchmarkTolerancePolicy(
+                modelingTolerance: document.modelingSettings.tolerance
+            )
+        )
+    }
+
+    private func validateDerivedEqualRadiusRegions(
+        _ source: SketchEntitySnapshot,
+        fixture: EqualRadiusRegionFixture
     ) throws {
         try CADConstraintDerivedRegionOracle.validate(
             source: source,

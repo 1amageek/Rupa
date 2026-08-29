@@ -129,8 +129,8 @@ Process-level tests build and invoke the actual executable and prove:
 - `request` emits valid v1 JSON for an activated line, rectangle, REC-009
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
   millimetre/XY case, the complete CIR-001...012 category, ANG-001...016, and
-  BOX-001...012, `CYL-001...008`, and `CON-001...007`, and rejects inactive `CON-008`;
-- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, and CON-001...007 responses traverse the adapter, production
+  BOX-001...012, `CYL-001...008`, and `CON-001...008`, and rejects inactive `TRN-001`;
+- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, and CON-001...008 responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
@@ -733,10 +733,33 @@ and preserves aggregate
 `95be7c1009a42bc3f81b0a7df50bec09256829f6034a6a76b37d70271486e590`.
 The 79-request aggregate
 `d893db3650a26a276826b09dd4825d1f032d03a4faf11abf3e1d2d65caa13136`
-is frozen as a literal shared with executor and adapter evidence. `CON-008`
-remains inactive and exits `64`.
+is frozen as a literal shared with executor and adapter evidence. At CON-007
+completion, `CON-008` remained inactive and exited `64`.
 Candidate-response v6, bounded/private-free one-JSON output, deadline
 ownership, and exit mapping remain unchanged.
+
+### CON-008 process contract
+
+CON-008 adds no CLI command or argument. `request CON-008` emits its bounded v1
+public context; `evaluate --response <PATH|->` consumes the exact v6
+`equalRadius` action through the adapter, activated executor, production
+`ProjectAgentCommandController`/`createSketch` transaction, exact
+authored-source oracle, and private two-disk derived-region oracle. Exact file
+and stdin responses exit `0` with one private-free `realized` JSON document;
+no profile index, selection identity, region geometry, tolerance, or private
+expectation is emitted.
+
+The `concentric`/shared-center substitute exits `2` after one publication
+without retry, while a response whose second radius is 0 mm exits `2` before
+publication. Authority remains 79 until the internal gate passes and preserves
+aggregate
+`d893db3650a26a276826b09dd4825d1f032d03a4faf11abf3e1d2d65caa13136`.
+The 80-request aggregate
+`91f68ea42c6e131263b499995637e9f9b7dbce64fcf441bdcdf385c9f341efb0`
+is frozen as one literal shared with executor and adapter evidence. `TRN-001` remains inactive and exits `64`
+until the transform category begins. Candidate-response v6,
+bounded/private-free one-JSON output, command surface, deadline ownership, and
+exit mapping remain unchanged.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected
 case argument, so a case-mismatch process fixture cannot be constructed without

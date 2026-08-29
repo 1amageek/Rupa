@@ -1648,8 +1648,8 @@ Authority remains exactly 78 until the internal CON-007 gate passes. Frozen
 `95be7c1009a42bc3f81b0a7df50bec09256829f6034a6a76b37d70271486e590`
 must remain byte-identical; the 79-request aggregate
 `d893db3650a26a276826b09dd4825d1f032d03a4faf11abf3e1d2d65caa13136`
-is frozen as a literal shared by executor, adapter, and CLI evidence. CON-008
-remains typed inactive. Schema, catalog, fingerprint,
+is frozen as a literal shared by executor, adapter, and CLI evidence. At
+CON-007 completion, CON-008 remained typed inactive. Schema, catalog, fingerprint,
 tolerance, projection/mapping, lifecycle, RupaCore FeatureNode output
 semantics, kernel, renderer/Mesh, and CON-008 behavior do not change. Focused
 oracle-policy tests reject zero, extra, wrong-source, wrong-selection,
@@ -1660,6 +1660,56 @@ accepts the exact annulus, while existing line-case tests regress their
 zero-region contract. The oracle computes the expected annular observation
 analytically from private case expectations rather than reusing the production
 profile extractor as its authority.
+
+### CON-008 equal-radius two-circle activation
+
+CON-008 is the terminal constraint case. It reuses candidate-response v6, the
+constraint projection/mapping, shared runner and lifecycle, the production
+`ProjectAgentCommandController`/`createSketch` route, and the authored-source
+oracle established by CON-001...007. Its public target is two ordered XY
+millimetre circles: first center (0, 0, 0), radius 15 mm; second center
+(50, 0, 0), radius 15 mm; relation `equalRadius`. Mapping anchors the affine XY
+source plane at the first center, assigns fresh entity IDs in public order, and
+writes exactly `.equalRadius(first, second)`.
+
+The circles are disjoint and non-contained. Confirmed kernel behavior for
+independent closed circles is one material profile per circle; canonical loop
+ordering places the first circle at profile 0 and the second at profile 1.
+`SketchEntitySnapshotService` therefore exposes exactly two derived disk
+regions. The benchmark-private derived-region oracle computes expectations
+analytically and requires, for both entries, the bound source feature and
+scene, canonical `profileRegion` selection ID, expected profile index and
+plane, one circular boundary segment, bounded outer-radius samples, and disk
+area `pi * 0.015^2` square metres under the existing radius-derived area
+tolerance. Profile 0 has sketch-local center (0, 0), corresponding to world
+center (0, 0, 0); profile 1 has sketch-local center (0.05, 0), corresponding to
+world center (0.05, 0, 0). These are derived observations, not authored
+entities and not candidate-visible data. CON-007 keeps its one-annulus policy,
+and line-based CON-001...006 keep zero derived regions.
+
+A `concentric` substitute that moves the second 15 mm circle to world center
+(0, 0, 0) is structurally valid and must publish once before the exact
+authored-source oracle rejects its relation and placement without retry. A
+second radius of 0 mm fails before command/publication. Timeout publishes
+nothing, unconditional cleanup leaves zero registrations, and success advances
+publication, document generation, and transaction revision +1 with workspace
+unchanged. Telemetry records action 1, command 1, read at least 1, entity 2,
+feature 1, body 0, and positive planning, route, oracle, total, and cleanup
+timings. Focused derived-policy tests reject missing, extra, reordered,
+wrong-source, wrong-selection, wrong-plane, wrong-center, wrong-area,
+out-of-tolerance-area, and wrong-boundary evidence from a real
+`SketchEntitySnapshotService` snapshot.
+
+Authority remains exactly 79 until the internal CON-008 gate passes. Frozen
+79-request aggregate
+`d893db3650a26a276826b09dd4825d1f032d03a4faf11abf3e1d2d65caa13136`
+must remain byte-identical; the 80-request aggregate
+`91f68ea42c6e131263b499995637e9f9b7dbce64fcf441bdcdf385c9f341efb0`
+is frozen as one literal shared by executor, adapter, CLI, tests, and this
+design. The ordered authority then ends in CON-008 and `TRN-001` remains typed
+inactive until the transform category begins. Schema, catalog, fingerprint,
+tolerance, projection/mapping, lifecycle, RupaCore FeatureNode outputs, kernel,
+renderer/Mesh, and transform behavior do not change.
 
 ### Vertical Case Gate
 

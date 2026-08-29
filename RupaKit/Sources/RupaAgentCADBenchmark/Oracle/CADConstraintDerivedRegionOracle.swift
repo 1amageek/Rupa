@@ -22,9 +22,82 @@ enum CADConstraintDerivedRegionOracle {
                 sceneNodeID: sceneNodeID,
                 tolerance: tolerance
             )
+        case .equalRadius:
+            try validateEqualRadiusDisks(
+                source: source,
+                expected: expected,
+                expectedPlane: expectedPlane,
+                sourceFeatureID: sourceFeatureID,
+                sceneNodeID: sceneNodeID,
+                tolerance: tolerance
+            )
         default:
             guard source.counts.regionCount == 0, source.regions.isEmpty else {
                 throw mismatch("A non-circular constraint produced unexpected derived regions.")
+            }
+        }
+    }
+
+    private static func validateEqualRadiusDisks(
+        source: SketchEntitySnapshot,
+        expected: CADConstraintChallengeInput,
+        expectedPlane: SketchPlane,
+        sourceFeatureID: String,
+        sceneNodeID: String?,
+        tolerance: CADBenchmarkTolerancePolicy
+    ) throws {
+        guard case .circle(let first) = expected.first,
+              let secondGeometry = expected.second,
+              case .circle(let second) = secondGeometry else {
+            throw mismatch("An equal-radius expectation requires two circles.")
+        }
+        guard let sourceFeatureUUID = UUID(uuidString: sourceFeatureID) else {
+            throw mismatch("The derived equal-radius disks have a malformed source feature identifier.")
+        }
+        let firstWorldCenter = first.center.meters
+        let secondWorldCenter = second.center.meters
+        let localCenters = [
+            Point2D(x: 0.0, y: 0.0),
+            Point2D(
+                x: secondWorldCenter.x - firstWorldCenter.x,
+                y: secondWorldCenter.y - firstWorldCenter.y
+            ),
+        ]
+        let circles = [first, second]
+        guard source.counts.regionCount == circles.count,
+              source.regions.count == circles.count else {
+            throw mismatch("The equal-radius source must produce exactly two disk regions.")
+        }
+        for index in circles.indices {
+            let circle = circles[index]
+            let center = localCenters[index]
+            let region = source.regions[index]
+            let expectedSelectionComponentID = SelectionComponentID.profileRegion(
+                featureID: FeatureID(sourceFeatureUUID),
+                profileIndex: index
+            ).rawValue
+            guard region.sourceFeatureID == sourceFeatureID,
+                  region.sceneNodeID == sceneNodeID,
+                  region.profileIndex == index,
+                  region.selectionComponentID == expectedSelectionComponentID,
+                  region.plane == expectedPlane,
+                  tolerance.acceptsLinear(expected: center.x, observed: region.center.x),
+                  tolerance.acceptsLinear(expected: center.y, observed: region.center.y),
+                  acceptsDiskArea(
+                      observed: region.areaSquareMeters,
+                      radius: circle.radius.meters,
+                      tolerance: tolerance.modelingTolerance
+                  ),
+                  region.boundarySegmentCount == 1,
+                  region.boundaryPointCount == region.boundaryPoints.count,
+                  region.boundaryPointCount >= 3,
+                  region.boundaryPoints.allSatisfy({ point in
+                      tolerance.acceptsLinear(
+                          expected: circle.radius.meters,
+                          observed: hypot(point.x - center.x, point.y - center.y)
+                      )
+                  }) else {
+                throw mismatch("A derived equal-radius disk has incorrect source, order, selection, plane, center, area, or boundary evidence.")
             }
         }
     }
@@ -107,6 +180,18 @@ enum CADConstraintDerivedRegionOracle {
             outerBounds.upperBound * outerBounds.upperBound
                 - innerBounds.lowerBound * innerBounds.lowerBound
         )
+        return observed >= minimumArea && observed <= maximumArea
+    }
+
+    private static func acceptsDiskArea(
+        observed: Double,
+        radius: Double,
+        tolerance: ModelingTolerance
+    ) -> Bool {
+        guard observed.isFinite else { return false }
+        let radiusBounds = acceptedRadiusBounds(expected: radius, tolerance: tolerance)
+        let minimumArea = Double.pi * radiusBounds.lowerBound * radiusBounds.lowerBound
+        let maximumArea = Double.pi * radiusBounds.upperBound * radiusBounds.upperBound
         return observed >= minimumArea && observed <= maximumArea
     }
 
