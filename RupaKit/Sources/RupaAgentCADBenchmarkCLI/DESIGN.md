@@ -129,8 +129,8 @@ Process-level tests build and invoke the actual executable and prove:
 - `request` emits valid v1 JSON for an activated line, rectangle, REC-009
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
   millimetre/XY case, the complete CIR-001...012 category, ANG-001...016, and
-  BOX-001...011, and rejects inactive `BOX-012`;
-- JSON line, rectangle, circle, angle, and BOX-001...011 responses traverse the adapter, production
+  BOX-001...012, and rejects inactive `CYL-001`;
+- JSON line, rectangle, circle, angle, and BOX-001...012 responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
@@ -439,14 +439,24 @@ aggregate, observes the 62-request aggregate
 v4 400 × 200 × 50 mm solid/box response at lower corner (0, -100, 50) mm
 through the production controller.
 
-BOX-011 is the current process boundary: it preserves that frozen 62-request
+BOX-011 preserves that frozen 62-request
 aggregate, observes the 63-request aggregate as
 `404f138058b2e8826a582a2f957ffc6fae0174ef4a11b6f0820dccb14378917a`, and executes
 a v4 0.5 × 0.5 × 0.5 m cube
 response at lower corner (-0.25, -0.25, 0) m through the production controller.
 The same numeric values and origin submitted in centimetres are rejected after
 one publication without retry, zero width is rejected before publication, and
-BOX-012 remains inactive with exit `64`.
+BOX-012 is the next reviewed case.
+
+BOX-012 is the current process boundary: it preserves that frozen 63-request
+aggregate `404f138058b2e8826a582a2f957ffc6fae0174ef4a11b6f0820dccb14378917a`,
+observes the 64-request aggregate as
+`e7f1f8084f0c61855d28fe7e7e28a0860eba3ab6993ae5b9859d28448948618c`, and executes
+a v4 75 × 125 × 175 mm solid/box
+response at lower corner (25, 25, -75) mm through the production controller.
+The same dimensions at z = -50 mm are rejected after one publication without
+retry, zero depth is rejected before publication, and CYL-001 remains inactive
+with exit `64`.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected
 case argument, so a case-mismatch process fixture cannot be constructed without
