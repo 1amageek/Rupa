@@ -25,13 +25,13 @@ struct CADTransformCaseTests {
     }
 
     @Test
-    func transformActivationBoundaryContainsTrn001ThroughTrn004Only() throws {
-        #expect(CADActivatedTransformCase.allCases == [.trn001, .trn002, .trn003, .trn004])
+    func transformActivationBoundaryContainsTrn001ThroughTrn005Only() throws {
+        #expect(CADActivatedTransformCase.allCases == [.trn001, .trn002, .trn003, .trn004, .trn005])
         do {
-            _ = try CADActivatedTransformCase(caseID: "TRN-005")
-            Issue.record("TRN-005 must remain outside the transform activation boundary.")
+            _ = try CADActivatedTransformCase(caseID: "TRN-006")
+            Issue.record("TRN-006 must remain outside the transform activation boundary.")
         } catch let error as CADBenchmarkError {
-            #expect(error == .invalidCaseID("TRN-005"))
+            #expect(error == .invalidCaseID("TRN-006"))
         }
     }
 
@@ -365,6 +365,106 @@ struct CADTransformCaseTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
+    func transform005CandidateActionUsesTheProductionRouteAndExactSolidOracle() async throws {
+        let result = try await CADTransformCaseRunner(case: .transform005)
+            .run(candidate: CADTransformReferenceCandidate())
+
+        #expect(result.caseID == "TRN-005")
+        #expect(result.outcome == .realized)
+        #expect(result.routeEvidence.didPublish)
+        #expect(result.routeEvidence.finalPublicationSequence
+            == result.routeEvidence.initialPublicationSequence + 1)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.readCount == 3)
+        #expect(result.telemetry.featureCount == 2)
+        #expect(result.telemetry.sceneNodeCount == 2)
+        #expect(result.telemetry.bodyCount == 1)
+        try result.validate()
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func transform005WrongOrderPublishesOnceThenFailsWithoutRetry() async throws {
+        let challenge = try CADTransformPreparedCase.transform005.catalogEntry.challenge
+        let valid = try CADTransformReferenceCandidate().submission(for: challenge)
+        let wrongOrder = CADTransformAction(
+            translation: CADPoint3D(
+                x: 15.849364905389024,
+                y: 50.0,
+                z: 77.4519052838329,
+                unit: valid.translation.unit
+            ),
+            axisPoint: valid.axisPoint,
+            rotationAxis: valid.rotationAxis,
+            rotation: valid.rotation
+        )
+        let result = try await CADTransformCaseRunner(case: .transform005).run(
+            candidate: TransformActionCandidate(action: .automation(.transform(wrongOrder)))
+        )
+
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish)
+        #expect(result.routeEvidence.finalPublicationSequence
+            == result.routeEvidence.initialPublicationSequence + 1)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 1)
+        #expect(result.routeEvidence.cleanupCompleted)
+        try result.validate()
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func transform005InvalidAxisFailsBeforePublicationAndCleansUp() async throws {
+        let challenge = try CADTransformPreparedCase.transform005.catalogEntry.challenge
+        let valid = try CADTransformReferenceCandidate().submission(for: challenge)
+        let invalid = CADTransformAction(
+            translation: valid.translation,
+            axisPoint: valid.axisPoint,
+            rotationAxis: CADDirection3D(x: 0, y: 0, z: 0),
+            rotation: valid.rotation
+        )
+
+        let result = try await CADTransformCaseRunner(case: .transform005).run(
+            candidate: TransformActionCandidate(action: .automation(.transform(invalid)))
+        )
+
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish == false)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 0)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func transform005DeadlineAndCancellationDoNotPublishAndCleanUp() async throws {
+        let timeout = try await CADTransformCaseRunner(
+            case: .transform005,
+            timeoutWallNanoseconds: 1
+        ).run(candidate: CADTransformReferenceCandidate())
+        #expect(timeout.outcome == .timeout)
+        #expect(timeout.routeEvidence.didPublish == false)
+        #expect(timeout.telemetry.commandCount == 0)
+        #expect(timeout.routeEvidence.cleanupCompleted)
+
+        let task = Task { @MainActor in
+            try await CADTransformCaseRunner(
+                case: .transform005,
+                preRouteDelayNanoseconds: 100_000_000
+            ).run(candidate: CADTransformReferenceCandidate())
+        }
+        task.cancel()
+        let cancelled = try await task.value
+        #expect(cancelled.outcome == .cancellation)
+        #expect(cancelled.routeEvidence.didPublish == false)
+        #expect(cancelled.routeEvidence.cleanupCompleted)
+        #expect(cancelled.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
     func wrongTransformActionPublishesOnceThenFailsWithoutRetry() async throws {
         let challenge = try CADTransformPreparedCase.transform001.catalogEntry.challenge
         let valid = try CADTransformReferenceCandidate().submission(for: challenge)
@@ -598,6 +698,7 @@ struct CADTransformCaseTests {
             CADTransformPreparedCase.transform002,
             .transform003,
             .transform004,
+            .transform005,
             .transform008,
         ] {
             let challenge = try preparedCase.catalogEntry.challenge
