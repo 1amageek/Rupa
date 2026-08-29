@@ -6,11 +6,11 @@ import Testing
 struct CADActivatedCaseExecutorTests {
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func executorActivatesOnlyReviewedCasesThroughCon008() throws {
+    func executorActivatesOnlyReviewedCasesThroughTrn001() throws {
         let executor = DefaultCADActivatedCaseExecutor()
         let expected = (1...12).map { String(format: "LIN-%03d", $0) }
             + (1...12).map { String(format: "REC-%03d", $0) }
-            + ["CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012", "CYL-001", "CYL-002", "CYL-003", "CYL-004", "CYL-005", "CYL-006", "CYL-007", "CYL-008", "CON-001", "CON-002", "CON-003", "CON-004", "CON-005", "CON-006", "CON-007", "CON-008"]
+            + ["CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012", "CYL-001", "CYL-002", "CYL-003", "CYL-004", "CYL-005", "CYL-006", "CYL-007", "CYL-008", "CON-001", "CON-002", "CON-003", "CON-004", "CON-005", "CON-006", "CON-007", "CON-008", "TRN-001"]
         #expect(executor.activatedCaseIDs.map(\.rawValue) == expected)
     }
 
@@ -577,13 +577,46 @@ struct CADActivatedCaseExecutorTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func inactiveCaseIsRejectedBeforeCategoryDispatch() async throws {
+    func nextTransformCaseIsRejectedBeforeCategoryDispatch() async throws {
         let executor = DefaultCADActivatedCaseExecutor()
         do {
-            _ = try executor.context(for: "TRN-001")
+            _ = try executor.context(for: "TRN-002")
             Issue.record("Inactive case must be rejected.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("TRN-001"))
+            #expect(error == .inactiveCase("TRN-002"))
+        }
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func transform001UsesTheProductionLifecycle() async throws {
+        let executor = DefaultCADActivatedCaseExecutor()
+        let context = try executor.context(for: "TRN-001")
+        #expect(context.capabilities.statuses.first?.available == true)
+        let result = try await executor.evaluate(
+            caseID: "TRN-001",
+            candidate: CADTransformReferenceCandidate()
+        )
+
+        #expect(result.id == "TRN-001")
+        #expect(result.category == .transform)
+        #expect(result.outcome == .realized)
+        try result.validate()
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func transformCandidateFailureIsTyped() async throws {
+        let executor = DefaultCADActivatedCaseExecutor()
+
+        do {
+            _ = try await executor.evaluate(
+                caseID: "TRN-001",
+                candidate: ThrowingCandidate()
+            )
+            Issue.record("Candidate failure must be thrown.")
+        } catch let error as CADActivatedCaseExecutorError {
+            #expect(error == .candidateFailure("TRN-001"))
         }
     }
 
@@ -616,11 +649,18 @@ struct CADActivatedCaseExecutorTests {
             secondStart: CADPoint3D(x: 0, y: 0, z: 35),
             secondEnd: CADPoint3D(x: 21.6506350946, y: 12.5, z: 35)
         )))
+        let transform = CADCandidateAction.automation(.transform(CADTransformAction(
+            translation: CADPoint3D(x: 25, y: 0, z: 0),
+            axisPoint: CADPoint3D(x: 50, y: 0, z: 0),
+            rotationAxis: CADDirection3D(x: 0, y: 0, z: 1),
+            rotation: CADAngle(value: 30)
+        )))
 
         let lineJSON = try canonicalJSON(line)
         let rectangleJSON = try canonicalJSON(rectangle)
         let circleJSON = try canonicalJSON(circle)
         let angleJSON = try canonicalJSON(angle)
+        let transformJSON = try canonicalJSON(transform)
         let actionDecisionJSON = try canonicalJSON(CADCandidateDecision.action(line))
         let finishJSON = try canonicalJSON(
             CADCandidateDecision.finish(CADOutputRoleBindings(bindings: []))
@@ -630,6 +670,7 @@ struct CADActivatedCaseExecutorTests {
         #expect(rectangleJSON == "{\"automation\":{\"kind\":\"sketch\",\"sketch\":{\"center\":{\"unit\":\"millimeter\",\"x\":10,\"y\":20,\"z\":0},\"height\":{\"unit\":\"millimeter\",\"value\":20},\"kind\":\"rectangle\",\"name\":\"frame\",\"plane\":\"xy\",\"width\":{\"unit\":\"millimeter\",\"value\":40}}},\"kind\":\"automation\"}")
         #expect(circleJSON == "{\"automation\":{\"kind\":\"sketch\",\"sketch\":{\"center\":{\"unit\":\"millimeter\",\"x\":0,\"y\":0,\"z\":0},\"kind\":\"circle\",\"name\":\"round\",\"plane\":\"xy\",\"radius\":{\"unit\":\"millimeter\",\"value\":5}}},\"kind\":\"automation\"}")
         #expect(angleJSON == "{\"automation\":{\"kind\":\"sketch\",\"sketch\":{\"firstEnd\":{\"unit\":\"millimeter\",\"x\":15,\"y\":0,\"z\":35},\"firstStart\":{\"unit\":\"millimeter\",\"x\":0,\"y\":0,\"z\":35},\"kind\":\"angle\",\"name\":\"angle\",\"plane\":\"xy\",\"secondEnd\":{\"unit\":\"millimeter\",\"x\":21.6506350946,\"y\":12.5,\"z\":35},\"secondStart\":{\"unit\":\"millimeter\",\"x\":0,\"y\":0,\"z\":35}}},\"kind\":\"automation\"}")
+        #expect(transformJSON == "{\"automation\":{\"kind\":\"transform\",\"transform\":{\"axisPoint\":{\"unit\":\"millimeter\",\"x\":50,\"y\":0,\"z\":0},\"rotation\":{\"unit\":\"degree\",\"value\":30},\"rotationAxis\":{\"x\":0,\"y\":0,\"z\":1},\"translation\":{\"unit\":\"millimeter\",\"x\":25,\"y\":0,\"z\":0}}},\"kind\":\"automation\"}")
         #expect(actionDecisionJSON == "{\"action\":{\"automation\":{\"kind\":\"sketch\",\"sketch\":{\"end\":{\"unit\":\"millimeter\",\"x\":25,\"y\":0,\"z\":0},\"kind\":\"line\",\"name\":\"segment\",\"plane\":\"xy\",\"start\":{\"unit\":\"millimeter\",\"x\":0,\"y\":0,\"z\":0}}},\"kind\":\"automation\"},\"kind\":\"action\"}")
         #expect(finishJSON == "{\"finish\":{\"bindings\":[]},\"kind\":\"finish\"}")
 
@@ -637,6 +678,7 @@ struct CADActivatedCaseExecutorTests {
         #expect(try JSONDecoder().decode(CADCandidateAction.self, from: Data(rectangleJSON.utf8)) == rectangle)
         #expect(try JSONDecoder().decode(CADCandidateAction.self, from: Data(circleJSON.utf8)) == circle)
         #expect(try JSONDecoder().decode(CADCandidateAction.self, from: Data(angleJSON.utf8)) == angle)
+        #expect(try JSONDecoder().decode(CADCandidateAction.self, from: Data(transformJSON.utf8)) == transform)
     }
 
     @Test

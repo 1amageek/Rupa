@@ -9,10 +9,11 @@ between an external Agent process and the activated-case executor owned by
 [benchmark CLI](../RupaAgentCADBenchmarkCLI/DESIGN.md) supplies process arguments
 and standard streams; this target owns the JSON meaning used by that process.
 
-The adapter is limited to the fifty-two reviewed cases `LIN-001`...`LIN-012`,
-`REC-001`...`REC-012`, `CIR-001`...`CIR-012`, and `ANG-001`...`ANG-016`. It does not
-activate a catalog case and does not make the remaining target specifications
-executable.
+The adapter is limited to the 81 reviewed cases `LIN-001`...`LIN-012`,
+`REC-001`...`REC-012`, `CIR-001`...`CIR-012`, `ANG-001`...`ANG-016`,
+`BOX-001`...`BOX-012`, `CYL-001`...`CYL-008`, `CON-001`...`CON-008`, and
+`TRN-001`. It does not activate a catalog case and does not make the remaining
+target specifications executable.
 
 ## Responsibilities and Boundaries
 
@@ -53,7 +54,7 @@ executor.
 flowchart LR
     PublicContext["CADCandidateContext\npublic values only"] --> Canonical["Canonical context payload\nSHA-256 fingerprint"]
     Canonical --> Request["Request envelope v1"]
-    External["External Agent"] --> Response["Candidate response envelope v3"]
+    External["External Agent"] --> Response["Candidate response envelope v7"]
     Request --> External
     Response --> Validate["Public Data entry\nbounded decode + validation"]
     Validate --> Candidate["Internal JSON candidate\nCADCandidateProtocol"]
@@ -77,7 +78,7 @@ object, rejects unknown schema versions, and validates all required fields.
 | Envelope | Required fields | Meaning |
 |---|---|---|
 | request v1 | `schema`, `caseID`, `contextFingerprint`, `context` | Exact public context offered to the external Agent. |
-| candidate response v3 | `schema`, `caseID`, `contextFingerprint`, `decision` | One decision, including the activated circle or angle action, returned by the JSON candidate. |
+| candidate response v7 | `schema`, `caseID`, `contextFingerprint`, `decision` | One decision, including the reviewed transform action, returned by the JSON candidate. |
 | evaluation v1 | `schema`, `caseID`, `contextFingerprint`, exactly one of `result` or `error` | Sanitized terminal outcome returned by the executable. |
 | error v1 | `schema`, `code`, `message`; optional `caseID` | Stable private-free failure before a case is known, or a case-bound failure when a validated ID is available. |
 
@@ -121,7 +122,7 @@ evaluation and candidate construction remain module-internal test/composition
 seams, so a caller cannot construct a large in-memory response and bypass the
 JSON input authority.
 
-The activated fifty-two cases accept one action decision. `unsupported` and
+The activated eighty-one cases accept one action decision. `unsupported` and
 `finish` remain valid protocol values but are not converted to successful
 actions; the T12-XA-A executor contract projects either as typed
 `invalidSubmission` without publication. Multi-round continuation is not added
@@ -996,6 +997,28 @@ request/evaluation/error envelopes, manifest/catalog, fingerprint,
 expectation, capability, tolerance, failure projection, and I/O limits remain
 unchanged.
 
+### TRN-001 current external authority contract
+
+The current adapter authority is the exact ordered 81-case prefix
+`LIN-001`...`LIN-012`, `REC-001`...`REC-012`, `CIR-001`...`CIR-012`,
+`ANG-001`...`ANG-016`, `BOX-001`...`BOX-012`, `CYL-001`...`CYL-008`,
+`CON-001`...`CON-008`, and `TRN-001`. `TRN-002`...`TRN-008` remain typed
+inactive cases and are not made executable by catalog presence. The frozen
+80-request aggregate remains
+`91f68ea42c6e131263b499995637e9f9b7dbce64fcf441bdcdf385c9f341efb0`; appending
+the actual bounded TRN-001 request bytes produces the frozen 81-request
+aggregate
+`e4c0ad812c421428ed59c7dd2671922e9e1f667af3f574d0ea87a461e53aab82`.
+
+TRN-001 uses candidate-response schema v7 with the explicit `transform`
+automation discriminator and translation, axis point, rotation axis, and
+rotation fields. Candidate-response v1...v6 are rejected before decision
+decoding. An exact response is evaluated through the existing transform
+production route; a translation with x = 26 mm is a bounded non-realized
+result, and a zero rotation axis is rejected before publication. No source
+snapshot, oracle expectation, or private lifecycle evidence crosses this
+adapter boundary.
+
 ## Runtime Flows
 
 ```mermaid
@@ -1042,12 +1065,12 @@ classification and are projected only to stable non-private codes.
 
 | Invariant | Behavioral evidence |
 |---|---|
-| Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON includes BOX-001...012 `solid/box`, CYL-001...008 `solid/cylinder`, and CON-001...008 `sketch/constraint`; candidate-response v6 carries the explicit discriminators, v1 through v5 and unknown current-schema discriminators are rejected, and every direct and nested case ID is the same scalar string. |
+| Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON includes BOX-001...012 `solid/box`, CYL-001...008 `solid/cylinder`, CON-001...008 `sketch/constraint`, and TRN-001 `transform`; candidate-response v7 carries the explicit discriminators, v1 through v6 and unknown current-schema discriminators are rejected, and every direct and nested case ID is the same scalar string. |
 | Exact public-context binding | The request fingerprint equals the live executor context; changed schema, case, context byte, capability, budget, or fingerprint is rejected before publication. |
-| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, CIR-001...012, ANG-001...016, BOX-001...012, CYL-001...008, and CON-001...008. The frozen 79-request prefix remains `d893db3650a26a276826b09dd4825d1f032d03a4faf11abf3e1d2d65caa13136`; the frozen 80-request aggregate is `91f68ea42c6e131263b499995637e9f9b7dbce64fcf441bdcdf385c9f341efb0`; all activated constraints traverse production `createSketch` and the exact authored/derived oracle, while TRN-001 remains typed inactive. |
+| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, CIR-001...012, ANG-001...016, BOX-001...012, CYL-001...008, CON-001...008, and TRN-001. The frozen 80-request prefix remains `91f68ea42c6e131263b499995637e9f9b7dbce64fcf441bdcdf385c9f341efb0`; appending the actual bounded TRN-001 request produces frozen 81-request aggregate `e4c0ad812c421428ed59c7dd2671922e9e1f667af3f574d0ea87a461e53aab82`; TRN-002...008 remain typed inactive. |
 | Bounded I/O | Exact-limit input succeeds, `limit + 1` fails before decode and leaves executor evaluation count zero, chunked stdin and file paths behave identically, no public typed-response execution bypass exists, encoded output cannot exceed the same bound, and the guaranteed infrastructure document is byte-equal to normal encoding, bounded, and decodable. |
 | Candidate/oracle separation | Static dependency and source scans prove the adapter imports only public benchmark contracts; encoded fixtures contain no expectation/oracle/source snapshot fields or values. |
-| Same production route | JSON candidates for activated line, rectangle, circle, angle, box, cylinder, and constraint cases realize through the public executor; wrong geometry publishes once then the category's exact oracle rejects without retry. |
+| Same production route | JSON candidates for activated line, rectangle, circle, angle, box, cylinder, constraint, and TRN-001 transform cases realize through the public executor; wrong geometry publishes once then the category's exact oracle rejects without retry, while a zero transform axis fails before publication. |
 | Non-action honesty | Valid `unsupported` and `finish` responses reach the benchmark candidate boundary, produce typed prepublication `invalidSubmission`, zero publication, and no fallback reference action. |
 
 Changes to public candidate Codable shapes, public context fields, capability

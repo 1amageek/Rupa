@@ -12,6 +12,7 @@ public struct DefaultCADActivatedCaseExecutor: CADActivatedCaseExecuting, Sendab
         + CADActivatedBoxCase.allCases.map(\.caseID)
         + CADActivatedCylinderCase.allCases.map(\.caseID)
         + CADActivatedConstraintCase.allCases.map(\.caseID)
+        + CADActivatedTransformCase.allCases.map(\.caseID)
 
     public init() {}
 
@@ -128,6 +129,22 @@ public struct DefaultCADActivatedCaseExecutor: CADActivatedCaseExecuting, Sendab
                 )
             }
 
+            if CADActivatedTransformCase.allCases.contains(where: { $0.caseID == caseID }) {
+                let activatedCase = try CADActivatedTransformCase(caseID: caseID)
+                let internalResult = try await CADTransformCaseRunner(
+                    case: activatedCase.preparedCase
+                ).run(candidate: capturingCandidate)
+                try internalResult.validate()
+                return try publicResult(
+                    caseID: caseID,
+                    category: challenge.category,
+                    outcome: internalResult.outcome,
+                    durationMilliseconds: milliseconds(
+                        from: internalResult.telemetry.totalWallNanoseconds
+                    )
+                )
+            }
+
             let activatedCase = try CADActivatedRectangleCase(caseID: caseID)
             let internalResult = try await CADRectangleCaseRunner(case: activatedCase)
                 .run(candidate: capturingCandidate)
@@ -185,6 +202,9 @@ public struct DefaultCADActivatedCaseExecutor: CADActivatedCaseExecuting, Sendab
         }
         if CADActivatedConstraintCase.allCases.contains(where: { $0.caseID == caseID }) {
             return "createSketch"
+        }
+        if CADActivatedTransformCase.allCases.contains(where: { $0.caseID == caseID }) {
+            return "setSceneNodeTransform"
         }
         return "createRectangleSketch"
     }
