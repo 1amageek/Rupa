@@ -203,7 +203,7 @@ implementation permission to add a parallel authority.
 | `CADActivatedAngleCase` | Internal; the reviewed angle IDs that may enter behavioral execution | Contains only ANG-001 when introduced and advances one reviewed case per commit |
 | `CADActivatedBoxCase` | Internal; the reviewed box IDs that may enter behavioral execution | Begins with BOX-001 and advances one reviewed case per commit; catalog presence never activates a box |
 | `CADActivatedTransformCase` | Internal; the reviewed transform IDs that may enter behavioral execution | Contains the complete reviewed TRN-001...008 category in catalog order; no TRN-009 exists |
-| `CADActivatedCompoundCase` | Internal; the reviewed compound IDs that may enter behavioral execution | Contains CMP-001...CMP-005; CMP-006...007 remain catalog-only until their own gates |
+| `CADActivatedCompoundCase` | Internal; the reviewed compound IDs that may enter behavioral execution | Contains CMP-001...CMP-006; CMP-007 remains catalog-only until its own gate |
 | `CADCaseActionPlan` / `CADCaseActionRouting` | Internal; converts an activated category action plus public challenge context into either one command or one bounded atomic batch | Has no session/coordinate/workspace/source authority and cannot read a private expectation; completed single-command facades keep their existing branch |
 | `CADCaseLifecycleHarness` | Internal; owns the shared fresh controller/workspace, category-neutral initial-document provider, pre-owned registration UUID, exact coordinate binding, deadline, production dispatch, final immutable view capture, and unconditional cleanup | The only shared mutable lifecycle owner; every execution entry checks cancellation before invoking the provider or any later lifecycle stage, its default provider preserves the existing named-empty document, and an injected provider may seed only a bounded immutable challenge source before registration; it does not select cases, map target geometry, run an oracle, or project a category result |
 | `CADCaseLifecycleRecord` | Internal immutable output from the harness | Preserves initial/final coordinates, typed response, publication/no-retry state, cleanup state, and common count/timing telemetry without geometry assertions |
@@ -216,7 +216,7 @@ implementation permission to add a parallel authority.
 | `CADCylinderCaseRunner` / `CADCylinderOracle` | Internal thin CYL facade and exact analytic-cylinder source/B-Rep oracle introduced by CYL-001 | Own public cylinder projection, submitted base-centre/axis mapping, one-command solid routing, private cylinder expectation, source circle/extrude/body/topology checks, and cylinder-local result projection; delegate lifecycle only |
 | `CADTransformCaseRunner` / `CADTransformOracle` | Internal thin TRN facade and exact source-identity/placement oracle introduced by TRN-001 | Own public transform projection, seeded source, one-command `setSceneNodeTransform` routing, private placement expectation, immutable initial/final identity checks, and transform-local result projection; delegate lifecycle only |
 | `CADCompoundAction` / `CADCompoundMemberAction` | Public; one ordered compound action envelope containing only role and primitive solid values | Immutable candidate intent; no plan store, source IDs, expectation, tolerance, or route coordinates |
-| `CADCompoundCaseRunner` / `CADCompoundOracle` | Internal thin CMP facade and exact ordered member/source/B-Rep oracle introduced by CMP-001 and extended by CMP-002, CMP-003, CMP-004, and CMP-005 | Lowers every member only after all public members are validated, dispatches one atomic batch, and reads private expectation only after final publication |
+| `CADCompoundCaseRunner` / `CADCompoundOracle` | Internal thin CMP facade and exact ordered member/source/B-Rep oracle introduced by CMP-001 and extended by CMP-002, CMP-003, CMP-004, CMP-005, and CMP-006 | Lowers every member only after all public members are validated, dispatches one atomic batch, and reads private expectation only after final publication |
 | `CADCaseOutcome` / score | Public result projection; failure taxonomy and binary scoring | No fallback success |
 | `CADBenchmarkReport` | Public result projection; deterministic run and measurement projection | Value/report only |
 
@@ -662,6 +662,46 @@ same production route, prove CMP-005 source/B-Rep and lifecycle evidence, and
 assert CMP-006 typed inactivity. Adapter, CLI, and schema remain separately
 owned module contracts; their sibling designs record the coordinated external
 93-case boundary. Catalog/manifest, Mesh, and renderer changes remain outside
+this activation.
+
+### CMP-006 compound activation boundary
+
+CMP-006 is the sixth compound case and advances the internal benchmark
+authority from 93 to 94. `CADActivatedCompoundCase` contains CMP-001...CMP-006
+in catalog order; CMP-007 remains catalog-only and is rejected before category
+dispatch. The candidate returns one public `.compound` action with ordered
+`hub`, `arm-a`, and `arm-b` members. The hub is a cylinder of radius 20 mm and
+depth 50 mm whose base centre is `(0, 0, 0)` mm and axis is `+Z`. Both arms
+are 100 by 10 by 10 mm boxes starting at z = 20 mm: `arm-a` has origin
+`(20, -5, 20)` mm and `arm-b` has origin `(-120, -5, 20)` mm. Member role
+and order are semantic even though the two arm members use the same primitive
+operation.
+
+The compound context derives the stable, de-duplicated required operations
+`createExtrudedCircle` and `createExtrudedRectangle`, and reports the aggregate
+compound capability only when both are available. The runner validates and
+lowers all three public members before dispatching one atomic three-command
+batch. A malformed or degenerate arm therefore cannot publish a partial
+hub/arm sequence.
+
+The private oracle checks the ordered source and independent evaluated solids:
+two immutable snapshot reads—one authored-source and one evaluated-topology—
+nine sketch entities, six features, three independent bodies, eighteen faces,
+thirty-six edges, and twenty-four vertices, with document generation plus
+three, transaction revision plus one, publication sequence plus one, one
+evaluation pass, and one history entry. Swapping the two arm payloads while
+retaining their roles publishes once and is rejected by the role-sensitive
+oracle without retry. A zero dimension on the third arm fails before command
+dispatch or publication. The shared lifecycle continues to own stale,
+candidate failure, timeout, cancellation, telemetry, and cleanup evidence;
+the generic three-command rollback proven by CMP-004 is reused without a
+case-specific rollback route.
+
+The focused compound and executor suites replay CMP-001...CMP-006 through the
+same production route, prove CMP-006 source/B-Rep and lifecycle evidence, and
+assert CMP-007 typed inactivity. Adapter, CLI, and schema remain separately
+owned module contracts; their sibling designs record the coordinated external
+94-case boundary. Catalog/manifest, Mesh, and renderer changes remain outside
 this activation.
 
 ### CIR-001 circle foundation and activation boundary
@@ -2439,9 +2479,9 @@ TRN-001 through TRN-008 have crossed their individual vertical gates. The
 transform executor prefix contains exactly 88 IDs: LIN-001...012,
 REC-001...012, CIR-001...012, ANG-001...016, BOX-001...012, CYL-001...008,
 CON-001...008, and TRN-001...008. Compound activation is a separate boundary;
-the benchmark-internal authority now advances to exactly 93 through the
-CMP-001...CMP-005 contracts above. The separately owned external adapter and
-CLI contracts advance to the same reviewed 93-ID transport boundary in this
+the benchmark-internal authority now advances to exactly 94 through the
+CMP-001...CMP-006 contracts above. The separately owned external adapter and
+CLI contracts advance to the same reviewed 94-ID transport boundary in this
 snapshot; their sibling designs own the transport details and aggregate digest.
 
 The transform action is a single bounded value containing translation, the
@@ -2502,7 +2542,7 @@ appending the actual bounded TRN-008 request bytes freezes the 88-request
 aggregate as `8a8c89deee4c596749cd6411823ab475bfd13ef7da7ccbff1c66b0425ee53795`.
 The transform checkpoint used candidate-response schema v7; the current
 compound boundary uses schema v8 and rejects v1...v7 before decision decoding.
-The current 93-request aggregate is owned by the sibling adapter/CLI designs.
+The current 94-request aggregate is owned by the sibling adapter/CLI designs.
 Request/live context identity, candidate privacy, bounded I/O, and the JSON/CLI
 process routes remain the adapter and executable's respective responsibilities.
 
