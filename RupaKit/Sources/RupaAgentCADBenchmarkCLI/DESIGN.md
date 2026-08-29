@@ -55,7 +55,7 @@ rupa-agent-cad-benchmark request <CASE-ID>
 rupa-agent-cad-benchmark evaluate --response <PATH|->
 ```
 
-`request` validates that the ID is in the activated 85-case set and emits
+`request` validates that the ID is in the activated 86-case set and emits
 exactly one request-envelope JSON object to standard output. `evaluate` reads
 exactly one candidate-response envelope from the selected file, or from
 standard input when `-` is selected, then emits exactly one evaluation- or
@@ -129,8 +129,8 @@ Process-level tests build and invoke the actual executable and prove:
 - `request` emits valid v1 JSON for an activated line, rectangle, REC-009
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
   millimetre/XY case, the complete CIR-001...012 category, ANG-001...016, and
-  BOX-001...012, `CYL-001...008`, `CON-001...008`, and `TRN-001...005`, and rejects inactive `TRN-006`;
-- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, CON-001...008, and TRN-001...005 transform responses traverse the adapter, production
+  BOX-001...012, `CYL-001...008`, `CON-001...008`, and `TRN-001...006`, and rejects inactive `TRN-007`;
+- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, CON-001...008, and TRN-001...006 transform responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
@@ -761,17 +761,17 @@ until the transform category begins. Candidate-response v6,
 bounded/private-free one-JSON output, command surface, deadline ownership, and
 exit mapping remain unchanged.
 
-### TRN-001 through TRN-005 current process boundary
+### TRN-001 through TRN-006 current process boundary
 
-The current executable authority is the exact ordered 85-case prefix
+The current executable authority is the exact ordered 86-case prefix
 `LIN-001`...`LIN-012`, `REC-001`...`REC-012`, `CIR-001`...`CIR-012`,
 `ANG-001`...`ANG-016`, `BOX-001`...`BOX-012`, `CYL-001`...`CYL-008`,
-`CON-001`...`CON-008`, and `TRN-001`...`TRN-005`. `TRN-006`...`TRN-008` remain
+`CON-001`...`CON-008`, and `TRN-001`...`TRN-006`. `TRN-007`...`TRN-008` remain
 inactive and are rejected with exit `64` by both `request` and `evaluate` before
 production execution. The candidate-response schema is v7; v1...v6 are
 rejected as unsupported schema.
 
-`request TRN-001` through `request TRN-005` emit one bounded transform context. An
+`request TRN-001` through `request TRN-006` emit one bounded transform context. An
 exact v7 response
 from either a file or standard input exits `0` after the existing
 `setSceneNodeTransform` production route and oracle realize the source. A
@@ -780,7 +780,8 @@ TRN-001 translation with x = 26 mm, TRN-002 wrong-order translation
 translation `(0, -50, 0)` mm, and TRN-004 wrong-order translation
 `(109.53353488403286, -22.41438680420134, 25)` mm, and TRN-005 wrong-order
 translation `(15.849364905389024, 50, 77.4519052838329)` mm exit `2` as
-`invalidSubmission` after one publication without retry; a zero rotation axis
+`invalidSubmission` after one publication without retry. TRN-006's inverse-axis
+substitute has the same postpublication result; a zero rotation axis
 exits `2` before publication. All output remains one bounded private-free JSON
 object. The historical
 80-request aggregate remains
@@ -794,7 +795,9 @@ appending the actual TRN-003 request freezes the 83-request aggregate as
 appending the actual TRN-004 request freezes the 84-request aggregate as
 `c4d86468d4992df1030e0ed45c98b823f33caa9bf904ea7a6252950c95f017d0`;
 appending the actual TRN-005 request freezes the 85-request aggregate as
-`c5c61320be710e1fe290b86e25ad9afb83b2d687c608c13aa3b4c6e2ee100779`.
+`c5c61320be710e1fe290b86e25ad9afb83b2d687c608c13aa3b4c6e2ee100779`;
+appending the actual TRN-006 request freezes the 86-request aggregate as
+`f7061d03903393f8384f3c23eed29c4eb4ef8529e27f03fca5e268e698b01f90`.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected
 case argument, so a case-mismatch process fixture cannot be constructed without
