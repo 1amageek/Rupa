@@ -55,7 +55,7 @@ rupa-agent-cad-benchmark request <CASE-ID>
 rupa-agent-cad-benchmark evaluate --response <PATH|->
 ```
 
-`request` validates that the ID is in the activated 92-case set and emits
+`request` validates that the ID is in the activated 93-case set and emits
 exactly one request-envelope JSON object to standard output. `evaluate` reads
 exactly one candidate-response envelope from the selected file, or from
 standard input when `-` is selected, then emits exactly one evaluation- or
@@ -130,8 +130,8 @@ Process-level tests build and invoke the actual executable and prove:
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
   millimetre/XY case, the complete CIR-001...012 category, ANG-001...016, and
   BOX-001...012, `CYL-001...008`, `CON-001...008`, `TRN-001...008`, and
-  `CMP-001...004`, and rejects inactive `CMP-005`;
-- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, CON-001...008, TRN-001...008 transform, and CMP-001...004 compound responses traverse the adapter, production
+  `CMP-001...005`, and rejects inactive `CMP-006`;
+- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, CON-001...008, TRN-001...008 transform, and CMP-001...005 compound responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
@@ -856,10 +856,9 @@ unchanged. The known 90-request aggregate remains
 appending the actual `CMP-003` request freezes the 91-request aggregate as
 `c3da3fd9024e8a568da27b9961abbd06b6d1e99dab621d297af8b8f222f07813`.
 
-### CMP-004 current process boundary
+### CMP-004 frozen process checkpoint
 
-The current executable authority appends `CMP-004` as the 92nd case and leaves
-`CMP-005` inactive. `request CMP-004` emits one bounded private-free context
+The frozen 92-case executable authority appends `CMP-004`. `request CMP-004` emits one bounded private-free context
 with ordered roles `plate`, `pin-a`, `pin-b`. The plate is a
 200 mm x 100 mm x 10 mm box at the origin. Both pins are cylinders with radius
 8 mm and depth 50 mm along +Z, based at `(25, 25, 10)` mm and
@@ -870,11 +869,30 @@ with `realized`.
 Swapping the public pin payloads while preserving role and member order exits
 `2` as postpublication `invalidSubmission` without retry. A zero radius on the
 third `pin-b` member exits `2` as prepublication `invalidSubmission`;
-`request CMP-005` exits `64`. Schema v8, command surface, byte bound, and exit mapping
-remain unchanged. The known 91-request aggregate remains
+Schema v8, command surface, byte bound, and exit mapping remain unchanged. The known 91-request aggregate remains
 `c3da3fd9024e8a568da27b9961abbd06b6d1e99dab621d297af8b8f222f07813`;
 appending the actual `CMP-004` request freezes the 92-request aggregate as
 `e1984e09864c758b0876c386ddef9bab3f810716f9c1b44dbe1e3c46df082a27`.
+
+### CMP-005 current process boundary
+
+The current executable authority appends `CMP-005` as the 93rd case and leaves
+`CMP-006` inactive. `request CMP-005` emits one bounded private-free context
+with ordered roles `frame`, `upright-a`, `upright-b`. The frame is a
+300 mm x 20 mm x 20 mm box at the origin. Both uprights are
+20 mm x 20 mm x 100 mm boxes based at `(0, 0, 20)` mm and `(280, 0, 20)` mm
+respectively. Exact candidate-response v8 documents supplied by file and
+standard input execute one atomic production batch and exit `0` with
+`realized`.
+
+Swapping the public upright payloads while preserving role and member order
+exits `2` as postpublication `invalidSubmission` without retry. A zero
+dimension on the third `upright-b` member exits `2` as prepublication
+`invalidSubmission`; `request CMP-006` exits `64`. Schema v8, command surface,
+byte bound, and exit mapping remain unchanged. The known 92-request aggregate
+remains `e1984e09864c758b0876c386ddef9bab3f810716f9c1b44dbe1e3c46df082a27`;
+appending the actual `CMP-005` request freezes the 93-request aggregate as
+`bcb6db981a67668a16a18c2654ec2b6465668d7a8396761bfc3bacdcbe7d67dc`.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected
 case argument, so a case-mismatch process fixture cannot be constructed without

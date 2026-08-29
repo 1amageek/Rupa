@@ -947,15 +947,16 @@ struct CADConstraintCaseTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func executorPreservesEarlierPrefixesAfterCmp004ActivationAndLeavesCmp005Inactive() async throws {
+    func executorPreservesEarlierPrefixesAfterCmp005ActivationAndLeavesCmp006Inactive() async throws {
         let executor = DefaultCADActivatedCaseExecutor()
 
-        #expect(executor.activatedCaseIDs.count == 92)
+        #expect(executor.activatedCaseIDs.count == 93)
         #expect(executor.activatedCaseIDs.prefix(88).last == "TRN-008")
         #expect(executor.activatedCaseIDs.prefix(89).last == "CMP-001")
         #expect(executor.activatedCaseIDs.prefix(90).last == "CMP-002")
         #expect(executor.activatedCaseIDs.prefix(91).last == "CMP-003")
-        #expect(executor.activatedCaseIDs.last == "CMP-004")
+        #expect(executor.activatedCaseIDs.prefix(92).last == "CMP-004")
+        #expect(executor.activatedCaseIDs.last == "CMP-005")
         #expect(try executor.context(for: "CON-008").capabilities.statuses.first?.available == true)
         let result = try await executor.evaluate(
             caseID: "CON-008",
@@ -963,10 +964,10 @@ struct CADConstraintCaseTests {
         )
         #expect(result.outcome == .realized)
         do {
-            _ = try executor.context(for: "CMP-005")
-            Issue.record("CMP-005 must remain inactive.")
+            _ = try executor.context(for: "CMP-006")
+            Issue.record("CMP-006 must remain inactive.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("CMP-005"))
+            #expect(error == .inactiveCase("CMP-006"))
         }
     }
 
