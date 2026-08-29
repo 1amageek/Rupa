@@ -689,8 +689,8 @@ struct CADJSONAdapterTests {
         #expect(wrongEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CON-004")
-            Issue.record("CON-004 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CON-005")
+            Issue.record("CON-005 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -733,8 +733,8 @@ struct CADJSONAdapterTests {
         #expect(wrongEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CON-004")
-            Issue.record("CON-004 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CON-005")
+            Issue.record("CON-005 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -775,8 +775,8 @@ struct CADJSONAdapterTests {
         #expect(wrongEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CON-004")
-            Issue.record("CON-004 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CON-005")
+            Issue.record("CON-005 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -813,8 +813,8 @@ struct CADJSONAdapterTests {
         #expect(wrongEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CON-004")
-            Issue.record("CON-004 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CON-005")
+            Issue.record("CON-005 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -915,8 +915,8 @@ struct CADJSONAdapterTests {
         #expect(wrongEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CON-004")
-            Issue.record("CON-004 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CON-005")
+            Issue.record("CON-005 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -965,8 +965,8 @@ struct CADJSONAdapterTests {
         #expect(invalidEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CON-004")
-            Issue.record("CON-004 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CON-005")
+            Issue.record("CON-005 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -1020,8 +1020,8 @@ struct CADJSONAdapterTests {
         #expect(invalidEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CON-004")
-            Issue.record("CON-004 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CON-005")
+            Issue.record("CON-005 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -1060,8 +1060,44 @@ struct CADJSONAdapterTests {
         ).result?.outcome == .invalidSubmission)
 
         do {
-            _ = try adapter.makeRequest(for: "CON-004")
-            Issue.record("CON-004 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CON-005")
+            Issue.record("CON-005 must remain inactive.")
+        } catch let error as CADJSONAdapterError {
+            #expect(error == .inactiveCase)
+        }
+    }
+
+    @MainActor @Test(.timeLimit(.minutes(1)))
+    func con004WireActionExecutesExactHorizontalProductionRoute() async throws {
+        let adapter = CADJSONAdapter()
+        let request = try adapter.makeRequest(for: "CON-004")
+        let exact = try CADJSONCandidateResponseEnvelope(
+            caseID: request.caseID,
+            context: request.context,
+            decision: .action(constraint004Action(name: "CON-004"))
+        )
+        let exactData = try CADJSONBoundedCodec.encode(exact)
+        #expect(request.context.challenge.instruction.contains("horizontal relation"))
+        #expect(String(decoding: exactData, as: UTF8.self).contains("\"relation\":\"horizontal\""))
+        #expect(try await adapter.evaluate(responseData: exactData).result?.outcome == .realized)
+
+        let wrong = try CADJSONCandidateResponseEnvelope(
+            caseID: request.caseID,
+            context: request.context,
+            decision: .action(constraint004Action(name: "CON-004.wrong", relation: .vertical))
+        )
+        #expect(try await adapter.evaluate(responseData: CADJSONBoundedCodec.encode(wrong)).result?.outcome == .invalidSubmission)
+
+        let invalid = try CADJSONCandidateResponseEnvelope(
+            caseID: request.caseID,
+            context: request.context,
+            decision: .action(constraint004Action(name: "CON-004.invalid", includeSecond: true))
+        )
+        #expect(try await adapter.evaluate(responseData: CADJSONBoundedCodec.encode(invalid)).result?.outcome == .invalidSubmission)
+
+        do {
+            _ = try adapter.makeRequest(for: "CON-005")
+            Issue.record("CON-005 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -1657,7 +1693,7 @@ struct CADJSONAdapterTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-        func requestAndLiveContextsAreValueEqualAndAllSeventyFiveRequestsStayBounded() throws {
+        func requestAndLiveContextsAreValueEqualAndAllSeventySixRequestsStayBounded() throws {
         let executor = DefaultCADActivatedCaseExecutor()
         let adapter = CADJSONAdapter(executor: executor)
         var largestRequest = 0
@@ -1783,7 +1819,7 @@ struct CADJSONAdapterTests {
             #expect(try CADJSONBoundedCodec.encode(response).count < 16_384)
         }
 
-        #expect(executor.activatedCaseIDs.count == 75)
+        #expect(executor.activatedCaseIDs.count == 76)
         #expect(largestRequest < 16_384)
     }
 
@@ -1794,7 +1830,7 @@ struct CADJSONAdapterTests {
         let adapter = CADJSONAdapter(executor: executor)
         let historicalIDs = (1...12).map { String(format: "LIN-%03d", $0) }
             + (1...8).map { String(format: "REC-%03d", $0) }
-        let currentIDs = historicalIDs + ["REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012", "CYL-001", "CYL-002", "CYL-003", "CYL-004", "CYL-005", "CYL-006", "CYL-007", "CYL-008", "CON-001", "CON-002", "CON-003"]
+        let currentIDs = historicalIDs + ["REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012", "CYL-001", "CYL-002", "CYL-003", "CYL-004", "CYL-005", "CYL-006", "CYL-007", "CYL-008", "CON-001", "CON-002", "CON-003", "CON-004"]
         #expect(executor.activatedCaseIDs.map(\.rawValue) == currentIDs)
 
         // Each activated record is case ID, request byte count, and request SHA-256, all length-prefixed.
@@ -2193,6 +2229,13 @@ struct CADJSONAdapterTests {
         appendLengthPrefixed(bigEndianBytes(UInt64(constraint003Request.count)), to: &currentAggregate)
         appendLengthPrefixed(Data(SHA256.hash(data: constraint003Request)), to: &currentAggregate)
         #expect(sha256Hex(currentAggregate) == "9a9759ff74dbe5222940164edbbb60040f732453889fe2648ed0c2e205e6e69c")
+
+        let constraint004ID: CADBenchmarkCaseID = "CON-004"
+        let constraint004Request = try adapter.encodeRequest(for: constraint004ID)
+        appendLengthPrefixed(Data(constraint004ID.rawValue.utf8), to: &currentAggregate)
+        appendLengthPrefixed(bigEndianBytes(UInt64(constraint004Request.count)), to: &currentAggregate)
+        appendLengthPrefixed(Data(SHA256.hash(data: constraint004Request)), to: &currentAggregate)
+        #expect(sha256Hex(currentAggregate) == "8878fa7dc59023aba4097c833bcca24f793829df83d8ad42106c8efebb985b79")
     }
 
     @MainActor
@@ -2324,9 +2367,9 @@ struct CADJSONAdapterTests {
 
         let inactiveResponse = try CADJSONCandidateResponseEnvelope(
             schema: CADJSONAdapterSchema.candidateResponse,
-            caseID: "CON-004",
+            caseID: "CON-005",
             contextFingerprint: String(repeating: "0", count: 64),
-            decision: .action(constraint001Action(name: "CON-004"))
+            decision: .action(constraint001Action(name: "CON-005"))
         )
         do {
             _ = try await adapter.evaluate(response: inactiveResponse)
@@ -3046,6 +3089,26 @@ private func constraint003Action(
             start: CADPoint3D(x: 0, y: 15, z: 0),
             end: CADPoint3D(x: 0, y: 45, z: 0)
         )
+    ))))
+}
+
+private func constraint004Action(
+    name: String,
+    relation: CADConstraintRelation = .horizontal,
+    includeSecond: Bool = false
+) -> CADCandidateAction {
+    .automation(.sketch(.constraint(CADConstraintAction(
+        name: name,
+        plane: .xy,
+        relation: relation,
+        first: .line(
+            start: CADPoint3D(x: 0, y: 0, z: 0),
+            end: CADPoint3D(x: 25, y: 0, z: 0)
+        ),
+        second: includeSecond ? .line(
+            start: CADPoint3D(x: 0, y: 10, z: 0),
+            end: CADPoint3D(x: 25, y: 10, z: 0)
+        ) : nil
     ))))
 }
 
