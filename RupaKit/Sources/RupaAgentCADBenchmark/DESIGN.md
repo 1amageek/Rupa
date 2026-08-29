@@ -794,8 +794,8 @@ and shared request/live classifier produce typed `analyticSphereUnavailable`
 and `expectedUnsupported` with one capability request/read and zero action,
 command, source mutation, geometry, publication, or registration.
 
-`CADActivatedSphereCase` contains SPH-001 and SPH-002 in catalog order;
-SPH-003 remains typed inactive. Case-local tests prove the exact target values,
+At this boundary, `CADActivatedSphereCase` contains SPH-001 and SPH-002 in
+catalog order and SPH-003 remains typed inactive. Case-local tests prove the exact target values,
 exercise the production route through the parameterized activated-case test,
 and reject box and cylinder actions that mimic the sphere's bounds before any
 command or publication. The independent exact oracle rejects both an analytic
@@ -804,6 +804,25 @@ matching measurements. Timeout, cancellation, candidate-failure, invalid
 unsupported, and cleanup behavior reuse the unchanged SPH-001 implementation
 and evidence. JSON and CLI remain separately owned; their sibling designs own
 the synchronized external authority and measured request digest.
+
+### SPH-003 sphere capability activation boundary
+
+SPH-003 advances the activated authority from 97 to 98 through the unchanged
+production Agent capability-observation path. Its public target preserves meter
+units: radius 0.1 m and center `(0, 0, 0.1)` m. These values describe a
+100 mm-radius sphere centered at world z 100 mm, but candidate-visible wire data
+is not rewritten into millimeters.
+
+`CADActivatedSphereCase` contains SPH-001 through SPH-003 in catalog order and
+SPH-004 remains typed inactive. The absent sphere ingress still yields typed
+`analyticSphereUnavailable` and `expectedUnsupported`, one capability
+request/read, and zero action, command, source mutation, geometry, publication,
+or registration. Case-local tests reject a 0.2 m bounding box and a radius-0.1 m,
+depth-0.2 m cylinder before publication. The independent oracle rejects an
+analytic sphere moved to z 0 m and a non-analytic cylinder even when its other
+measurements match. Shared failure and cleanup behavior remains unchanged;
+the separately owned JSON and CLI designs synchronize external authority and
+the measured request digest.
 
 ### CIR-001 circle foundation and activation boundary
 
@@ -2218,8 +2237,8 @@ the production Agent route currently exposes no sphere action or capability
 ingress. T12 measures that Agent boundary honestly: each activated sphere case
 records typed `analyticSphereUnavailable`, maps it to expectedUnsupported,
 issues zero commands and publications, and keeps the exact analytic-sphere
-oracle solely as a substitute-rejection authority. SPH-001 and SPH-002 are the
-active sphere cases today; the remaining three identities are preparation-only
+oracle solely as a substitute-rejection authority. SPH-001 through SPH-003 are
+the active sphere cases today; the remaining two identities are preparation-only
 until their individual gates. General `appendFeatureGraph` exposure or a new Agent
 sphere command would change product API scope and is not part of T12.
 

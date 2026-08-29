@@ -91,8 +91,8 @@ struct CADBenchmarkCLIProcessTests {
         )
         try assertError(legacyResult, code: .unsupportedSchema, exit: 64, caseID: nil)
 
-        let inactive = try runCADBenchmarkCLI(["request", "SPH-003"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-003")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-004"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-004")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -173,8 +173,8 @@ struct CADBenchmarkCLIProcessTests {
         )
         try assertError(unsupportedSchemaResult, code: .unsupportedSchema, exit: 64, caseID: nil)
 
-        let inactive = try runCADBenchmarkCLI(["request", "SPH-003"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-003")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-004"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-004")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -258,8 +258,8 @@ struct CADBenchmarkCLIProcessTests {
         )
         try assertError(unsupportedSchemaResult, code: .unsupportedSchema, exit: 64, caseID: nil)
 
-        let inactive = try runCADBenchmarkCLI(["request", "SPH-003"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-003")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-004"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-004")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -337,8 +337,8 @@ struct CADBenchmarkCLIProcessTests {
         )
         try assertError(unsupportedSchemaResult, code: .unsupportedSchema, exit: 64, caseID: nil)
 
-        let inactive = try runCADBenchmarkCLI(["request", "SPH-003"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-003")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-004"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-004")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -419,8 +419,8 @@ struct CADBenchmarkCLIProcessTests {
         )
         try assertError(unsupportedSchemaResult, code: .unsupportedSchema, exit: 64, caseID: nil)
 
-        let inactive = try runCADBenchmarkCLI(["request", "SPH-003"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-003")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-004"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-004")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -502,8 +502,8 @@ struct CADBenchmarkCLIProcessTests {
         )
         try assertError(unsupportedSchemaResult, code: .unsupportedSchema, exit: 64, caseID: nil)
 
-        let inactive = try runCADBenchmarkCLI(["request", "SPH-003"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-003")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-004"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-004")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -581,8 +581,8 @@ struct CADBenchmarkCLIProcessTests {
         )
         try assertError(unsupportedSchemaResult, code: .unsupportedSchema, exit: 64, caseID: nil)
 
-        let inactive = try runCADBenchmarkCLI(["request", "SPH-003"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-003")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-004"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-004")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -660,8 +660,8 @@ struct CADBenchmarkCLIProcessTests {
         )
         try assertError(unsupportedSchemaResult, code: .unsupportedSchema, exit: 64, caseID: nil)
 
-        let inactive = try runCADBenchmarkCLI(["request", "SPH-003"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-003")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-004"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-004")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -744,8 +744,8 @@ struct CADBenchmarkCLIProcessTests {
         )
         try assertError(unsupportedSchemaResult, code: .unsupportedSchema, exit: 64, caseID: nil)
 
-        let inactive = try runCADBenchmarkCLI(["request", "SPH-003"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-003")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-004"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-004")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -828,8 +828,8 @@ struct CADBenchmarkCLIProcessTests {
         )
         try assertError(unsupportedSchemaResult, code: .unsupportedSchema, exit: 64, caseID: nil)
 
-        let inactive = try runCADBenchmarkCLI(["request", "SPH-003"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-003")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-004"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-004")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -901,8 +901,8 @@ struct CADBenchmarkCLIProcessTests {
         #expect(invalidEvaluation.error == nil)
         #expect(isPrivateFree(invalidResult.standardOutput))
 
-        let inactive = try runCADBenchmarkCLI(["request", "SPH-003"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-003")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-004"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-004")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -974,8 +974,8 @@ struct CADBenchmarkCLIProcessTests {
         #expect(invalidEvaluation.error == nil)
         #expect(isPrivateFree(invalidResult.standardOutput))
 
-        let inactive = try runCADBenchmarkCLI(["request", "SPH-003"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-003")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-004"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-004")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -1047,8 +1047,8 @@ struct CADBenchmarkCLIProcessTests {
         #expect(invalidEvaluation.error == nil)
         #expect(isPrivateFree(invalidResult.standardOutput))
 
-        let inactive = try runCADBenchmarkCLI(["request", "SPH-003"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-003")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-004"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-004")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -1120,8 +1120,8 @@ struct CADBenchmarkCLIProcessTests {
         #expect(invalidEvaluation.error == nil)
         #expect(isPrivateFree(invalidResult.standardOutput))
 
-        let inactive = try runCADBenchmarkCLI(["request", "SPH-003"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-003")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-004"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-004")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -1193,8 +1193,8 @@ struct CADBenchmarkCLIProcessTests {
         #expect(invalidEvaluation.error == nil)
         #expect(isPrivateFree(invalidResult.standardOutput))
 
-        let inactive = try runCADBenchmarkCLI(["request", "SPH-003"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-003")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-004"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-004")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -1268,8 +1268,8 @@ struct CADBenchmarkCLIProcessTests {
             #expect(isPrivateFree(invalidResult.standardOutput))
         }
 
-        let inactive = try runCADBenchmarkCLI(["request", "SPH-003"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-003")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-004"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-004")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -1377,8 +1377,8 @@ struct CADBenchmarkCLIProcessTests {
         #expect(wrongEvaluation.error == nil)
         #expect(isPrivateFree(wrongResult.standardOutput))
 
-        let inactive = try runCADBenchmarkCLI(["request", "SPH-003"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-003")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-004"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-004")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -1486,8 +1486,117 @@ struct CADBenchmarkCLIProcessTests {
         #expect(wrongEvaluation.error == nil)
         #expect(isPrivateFree(wrongResult.standardOutput))
 
-        let inactive = try runCADBenchmarkCLI(["request", "SPH-003"])
-        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-003")
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-004"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-004")
+    }
+
+    @Test(.timeLimit(.minutes(2)))
+    @MainActor
+    func sph003UsesMeterScaleUnavailableRequestAndTypedUnsupportedProductionRoutes() throws {
+        let requestResult = try runCADBenchmarkCLI(["request", "SPH-003"])
+        #expect(requestResult.terminationStatus == 0)
+        #expect(requestResult.standardOutputData.count <= CADJSONAdapterSchema.maximumDocumentBytes)
+        let request = try CADJSONBoundedCodec.decode(
+            CADJSONRequestEnvelope.self,
+            from: requestResult.standardOutputData
+        )
+        #expect(request.caseID == "SPH-003")
+        #expect(request.context.challenge.category == .sphere)
+        #expect(request.context.challenge.instruction == "Construct SPH-003 as an analytic sphere of radius 0.1 m centered at (0.0, 0.0, 0.1) m.")
+        #expect(request.context.challenge.outputRoles.map(\.name) == ["sphere"])
+        let status = try #require(request.context.capabilities.statuses.first)
+        #expect(request.context.capabilities.statuses.count == 1)
+        #expect(status.id == request.context.challenge.requiredCapability.id)
+        #expect(status.version == request.context.challenge.requiredCapability.version)
+        #expect(status.available == false)
+        #expect(status.reasonCode == "not-exposed")
+        #expect(isPrivateFree(requestResult.standardOutput))
+
+        let exact = try responseData(
+            for: "SPH-003",
+            contextFingerprint: request.contextFingerprint,
+            decision: .unsupported(CADUnsupportedDeclaration(
+                capabilityID: request.context.challenge.requiredCapability.id,
+                capabilityVersion: request.context.challenge.requiredCapability.version,
+                reason: .analyticSphereUnavailable
+            ))
+        )
+        #expect(exact.count <= CADJSONAdapterSchema.maximumDocumentBytes)
+        let exactText = String(decoding: exact, as: UTF8.self)
+        #expect(exactText.contains("\"kind\":\"unsupported\""))
+        #expect(exactText.contains("\"reason\":\"analyticSphereUnavailable\""))
+        #expect(isPrivateFree(exactText))
+
+        let fileResult = try withTemporaryData(exact) { path in
+            try runCADBenchmarkCLI(["evaluate", "--response", path])
+        }
+        let fileEvaluation = try CADJSONBoundedCodec.decode(
+            CADJSONEvaluationEnvelope.self,
+            from: fileResult.standardOutputData
+        )
+        #expect(fileResult.terminationStatus == 2)
+        #expect(fileEvaluation.caseID == "SPH-003")
+        #expect(fileEvaluation.result?.outcome == .expectedUnsupported)
+        #expect(fileEvaluation.error == nil)
+        #expect(isPrivateFree(fileResult.standardOutput))
+
+        let standardInputResult = try runCADBenchmarkCLI(
+            ["evaluate", "--response", "-"],
+            standardInput: exact
+        )
+        let standardInputEvaluation = try CADJSONBoundedCodec.decode(
+            CADJSONEvaluationEnvelope.self,
+            from: standardInputResult.standardOutputData
+        )
+        #expect(standardInputResult.terminationStatus == 2)
+        #expect(standardInputEvaluation.caseID == "SPH-003")
+        #expect(standardInputEvaluation.result?.outcome == .expectedUnsupported)
+        #expect(standardInputEvaluation.error == nil)
+        #expect(isPrivateFree(standardInputResult.standardOutput))
+
+        let substitute = try responseData(
+            for: "SPH-003",
+            action: box001Action(name: "SPH-003.substitute")
+        )
+        let substituteResult = try runCADBenchmarkCLI(
+            ["evaluate", "--response", "-"],
+            standardInput: substitute
+        )
+        let substituteEvaluation = try CADJSONBoundedCodec.decode(
+            CADJSONEvaluationEnvelope.self,
+            from: substituteResult.standardOutputData
+        )
+        #expect(substituteResult.terminationStatus == 2)
+        #expect(substituteEvaluation.caseID == "SPH-003")
+        #expect(substituteEvaluation.result?.outcome == .invalidSubmission)
+        #expect(substituteEvaluation.error == nil)
+        #expect(isPrivateFree(substituteResult.standardOutput))
+
+        let wrong = try responseData(
+            for: "SPH-003",
+            contextFingerprint: request.contextFingerprint,
+            decision: .unsupported(CADUnsupportedDeclaration(
+                capabilityID: request.context.challenge.requiredCapability.id,
+                capabilityVersion: request.context.challenge.requiredCapability.version,
+                reason: .capabilityUnavailable
+            ))
+        )
+        let wrongResult = try runCADBenchmarkCLI(
+            ["evaluate", "--response", "-"],
+            standardInput: wrong
+        )
+        let wrongEvaluation = try CADJSONBoundedCodec.decode(
+            CADJSONEvaluationEnvelope.self,
+            from: wrongResult.standardOutputData
+        )
+        #expect(wrongResult.terminationStatus == 2)
+        #expect(wrongEvaluation.caseID == "SPH-003")
+        #expect(wrongEvaluation.result?.outcome == .invalidSubmission)
+        #expect(wrongEvaluation.error == nil)
+        #expect(isPrivateFree(wrongResult.standardOutput))
+
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-004"])
+        try assertError(inactive, code: .inactiveCase, exit: 64, caseID: "SPH-004")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -1765,7 +1874,7 @@ struct CADBenchmarkCLIProcessTests {
     @Test(.timeLimit(.minutes(2)))
     @MainActor
     func requestEmitsBoundedReviewedObjectsAndRejectsInactiveCase() throws {
-        for rawCaseID in ["LIN-001", "REC-001", "REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012", "CYL-001", "CYL-002", "CYL-003", "CYL-004", "CYL-005", "CYL-006", "CYL-007", "CYL-008", "CON-001", "CON-002", "CON-003", "CON-004", "CON-005", "CON-006", "CON-007", "CON-008", "TRN-001", "TRN-002", "TRN-003", "TRN-004", "TRN-005", "TRN-006", "TRN-007", "TRN-008", "CMP-001", "CMP-002", "CMP-003", "CMP-004", "CMP-005", "CMP-006", "CMP-007", "SPH-001", "SPH-002"] {
+        for rawCaseID in ["LIN-001", "REC-001", "REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012", "CYL-001", "CYL-002", "CYL-003", "CYL-004", "CYL-005", "CYL-006", "CYL-007", "CYL-008", "CON-001", "CON-002", "CON-003", "CON-004", "CON-005", "CON-006", "CON-007", "CON-008", "TRN-001", "TRN-002", "TRN-003", "TRN-004", "TRN-005", "TRN-006", "TRN-007", "TRN-008", "CMP-001", "CMP-002", "CMP-003", "CMP-004", "CMP-005", "CMP-006", "CMP-007", "SPH-001", "SPH-002", "SPH-003"] {
             let result = try runCADBenchmarkCLI(["request", rawCaseID])
             #expect(result.terminationStatus == 0, Comment(rawValue: result.standardError))
             #expect(result.standardOutputData.count <= CADJSONAdapterSchema.maximumDocumentBytes)
@@ -1778,14 +1887,14 @@ struct CADBenchmarkCLIProcessTests {
             #expect(result.standardError.isEmpty)
         }
 
-        let inactive = try runCADBenchmarkCLI(["request", "SPH-003"])
+        let inactive = try runCADBenchmarkCLI(["request", "SPH-004"])
         #expect(inactive.terminationStatus == 64)
         let error = try CADJSONBoundedCodec.decode(
             CADJSONErrorEnvelope.self,
             from: inactive.standardOutputData
         )
         #expect(error.code == .inactiveCase)
-        #expect(error.caseID?.rawValue == "SPH-003")
+        #expect(error.caseID?.rawValue == "SPH-004")
         #expect(isPrivateFree(inactive.standardOutput))
     }
 
@@ -2940,15 +3049,15 @@ struct CADBenchmarkCLIProcessTests {
         try assertError(fingerprintResult, code: .fingerprintMismatch, exit: 64, caseID: "LIN-001")
 
         let inactiveResponse = try responseData(
-            for: "SPH-003",
+            for: "SPH-004",
             contextFingerprint: String(repeating: "0", count: 64),
-            action: constraint001Action(name: "SPH-003")
+            action: constraint001Action(name: "SPH-004")
         )
         let inactiveResult = try runCADBenchmarkCLI(
             ["evaluate", "--response", "-"],
             standardInput: inactiveResponse
         )
-        try assertError(inactiveResult, code: .inactiveCase, exit: 64, caseID: "SPH-003")
+        try assertError(inactiveResult, code: .inactiveCase, exit: 64, caseID: "SPH-004")
 
         let finishResponse = try finishResponseData(for: request)
         let finishResult = try runCADBenchmarkCLI(
