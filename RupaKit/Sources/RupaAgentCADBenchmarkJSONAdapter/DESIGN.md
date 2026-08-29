@@ -744,6 +744,24 @@ is frozen.
 CYL-006 remains typed inactive. Envelopes, fingerprint, byte bound, catalog,
 tolerance, privacy, and error projection do not change.
 
+### CYL-006 external authority contract
+
+CYL-006 reuses candidate-response v5 and the existing `solid/cylinder` wire
+shape. Its bounded response preserves base centre (-0.1, 0.05, 0) m,
+YZ-diagonal axis (0, 0.707106781187, 0.707106781187), radius 0.05 m, and depth
+0.2 m. External authority advances to 70 after swift-CAD commit
+`1b46681fb97a8cb04f66a1d6dc87b0f519025baa` corrects the oblique p-curve and
+this same response traverses the executor, production `createExtrudedCircle`
+route, and immutable source/B-Rep oracle successfully.
+An otherwise exact +Y-axis response
+becomes sanitized `invalidSubmission` after one publication without retry; a
+zero axis fails before command/publication. Frozen 69-request aggregate
+`c4d812e19e6f9fd20a56a909ac5315b2289763987e2cb05f648b9064b9bca5c0`
+remains unchanged and the 70-request aggregate is frozen as
+`88afcea2f1db7041f6093c9784f4e37eefcbceba28ec12497656ca21ef92a462`.
+CYL-007 remains typed inactive. Envelopes, fingerprint, byte bound, catalog,
+tolerance, privacy, and error projection do not change.
+
 ## Runtime Flows
 
 ```mermaid
@@ -790,9 +808,9 @@ classification and are projected only to stable non-private codes.
 
 | Invariant | Behavioral evidence |
 |---|---|
-| Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON includes the BOX-001...012 `solid/box` decisions and CYL-001...005 `solid/cylinder`; candidate-response v5 carries the explicit discriminators, v1 through v4 and unknown current-schema discriminators are rejected, and every direct and nested case ID is the same scalar string. |
+| Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON includes the BOX-001...012 `solid/box` decisions and CYL-001...006 `solid/cylinder`; candidate-response v5 carries the explicit discriminators, v1 through v4 and unknown current-schema discriminators are rejected, and every direct and nested case ID is the same scalar string. |
 | Exact public-context binding | The request fingerprint equals the live executor context; changed schema, case, context byte, capability, budget, or fingerprint is rejected before publication. |
-| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, CIR-001...012, ANG-001...016, BOX-001...012, and CYL-001...005. The 68-request prefix remains `ff509e72f694e60034ee330591408c0dbb49b7bdbf1a0246f022abcb1cf8b342`; the observed 69-request aggregate is `c4d812e19e6f9fd20a56a909ac5315b2289763987e2cb05f648b9064b9bca5c0`; all five cylinders traverse production `createExtrudedCircle` and the exact source/B-Rep oracle, while CYL-006 remains typed inactive. |
+| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, CIR-001...012, ANG-001...016, BOX-001...012, and CYL-001...006. The 69-request prefix remains `c4d812e19e6f9fd20a56a909ac5315b2289763987e2cb05f648b9064b9bca5c0`; the frozen 70-request aggregate is `88afcea2f1db7041f6093c9784f4e37eefcbceba28ec12497656ca21ef92a462`; all six cylinders traverse production `createExtrudedCircle` and the exact source/B-Rep oracle, while CYL-007 remains typed inactive. |
 | Bounded I/O | Exact-limit input succeeds, `limit + 1` fails before decode and leaves executor evaluation count zero, chunked stdin and file paths behave identically, no public typed-response execution bypass exists, encoded output cannot exceed the same bound, and the guaranteed infrastructure document is byte-equal to normal encoding, bounded, and decodable. |
 | Candidate/oracle separation | Static dependency and source scans prove the adapter imports only public benchmark contracts; encoded fixtures contain no expectation/oracle/source snapshot fields or values. |
 | Same production route | JSON candidates for activated line, rectangle, circle, angle, box, and cylinder cases realize through the public executor; wrong geometry publishes once then the category's exact oracle rejects without retry. |

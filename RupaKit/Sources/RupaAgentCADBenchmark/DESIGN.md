@@ -1244,6 +1244,49 @@ and leaves CYL-006 typed inactive.
 Schema, catalog, fingerprint, tolerance, runner, oracle, lifecycle, kernel, and
 renderer/Mesh contracts do not change.
 
+### CYL-006 YZ-oblique metre contract
+
+CYL-006 reuses the completed v5 solid/cylinder projection, Rupa mapping,
+lifecycle, runner, production controller route, and immutable source/B-Rep
+oracle. Its public target is base centre (-0.1, 0.05, 0) m, radius 0.05 m,
+depth 0.2 m, and submitted YZ-diagonal axis
+(0, 0.707106781187, 0.707106781187). Rupa already normalizes that axis and
+constructs the corresponding arbitrary plane while retaining the raw public
+axis.
+
+Before the fixed dependency snapshot, the confirmed production path failed
+before publication downstream in swift-CAD at `SketchProfileExtractor` →
+`ExactProfileBoundaryConverter` → `ExactPrismaticFacePatchBuilder` →
+`BRepModel` correspondence validation with `A pcurve point has no verified
+projection onto its exact 3D edge`. CYL-006 therefore owned a lower-level
+prerequisite: swift-CAD had to make every oblique analytic circular-extrusion
+p-curve point map through its owning surface onto the corresponding exact 3D
+edge within the existing `ModelingTolerance`.
+Focused regression must realize this exact YZ-diagonal fixture, retain existing
+axis-aligned and oblique behavior, and keep invalid correspondence as a typed
+failure. It must not widen tolerance, fall back to tessellation, or refactor
+unrelated kernel code.
+
+The exact immutable swift-CAD correction commit
+`1b46681fb97a8cb04f66a1d6dc87b0f519025baa` resolves that production-path
+failure and is integration evidence. A green
+kernel fixture alone is not CYL-006 completion: the actual
+`ProjectAgentCommandController` →
+`createExtrudedCircle` route must then expose exact source/body binding,
+topology 1/6/12/8, analytic placement, and πr²h to the existing oracle.
+
+An otherwise exact +Y-axis cylinder publishes exactly once and is rejected
+without retry, isolating the diagonal Z component. A zero axis fails before
+command/publication. Existing timeout, cleanup, count-and-positive-phase
+telemetry, and privacy evidence remain required. Activation advances authority
+69→70 after these checks, preserves frozen aggregate
+`c4d812e19e6f9fd20a56a909ac5315b2289763987e2cb05f648b9064b9bca5c0`,
+freezes the 70-request aggregate
+`88afcea2f1db7041f6093c9784f4e37eefcbceba28ec12497656ca21ef92a462`, and
+leaves CYL-007 typed inactive.
+Schema, catalog, fingerprint, tolerance, Rupa runner, oracle, lifecycle, and
+renderer/Mesh contracts do not change.
+
 ### Vertical Case Gate
 
 Cases are activated in the lexical/category order recorded in

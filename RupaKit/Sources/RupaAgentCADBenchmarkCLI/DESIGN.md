@@ -129,8 +129,8 @@ Process-level tests build and invoke the actual executable and prove:
 - `request` emits valid v1 JSON for an activated line, rectangle, REC-009
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
   millimetre/XY case, the complete CIR-001...012 category, ANG-001...016, and
-  BOX-001...012 and `CYL-001...005`, and rejects inactive `CYL-006`;
-- JSON line, rectangle, circle, angle, BOX-001...012, and CYL-001...005 responses traverse the adapter, production
+  BOX-001...012 and `CYL-001...006`, and rejects inactive `CYL-007`;
+- JSON line, rectangle, circle, angle, BOX-001...012, and CYL-001...006 responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
@@ -535,6 +535,24 @@ publication without retry; malformed, binding, and inactive inputs retain exit
 `64`. Authority advances 68→69 only after the internal gate, preserves the
 frozen 68-request aggregate, freezes the observed 69-request aggregate, and
 leaves CYL-006 inactive. Commands, schemas, bounds, privacy, one-JSON stdout,
+and exit mapping remain unchanged.
+
+### CYL-006 process contract
+
+CYL-006 adds no CLI command. `request CYL-006` emits bounded request v1 and
+`evaluate --response <PATH|->` consumes candidate-response v5 with base centre
+(-0.1, 0.05, 0) m, YZ-diagonal axis (0, 0.707106781187, 0.707106781187), radius
+0.05 m, and depth 0.2 m. File or stdin evaluation traverses the unchanged
+adapter. Process authority advances to 70 after swift-CAD commit
+`1b46681fb97a8cb04f66a1d6dc87b0f519025baa` corrects the oblique p-curve and
+file/stdin evaluation traverses the production
+`createExtrudedCircle` controller route and immutable oracle and exits `0` with
+`realized`. The +Y-axis substitute exits `2` after one
+publication without retry; malformed, binding, and inactive inputs retain exit
+`64`. Authority advances 69→70 only after the internal gate, preserves the
+frozen 69-request aggregate, freezes the 70-request aggregate
+`88afcea2f1db7041f6093c9784f4e37eefcbceba28ec12497656ca21ef92a462`, and
+leaves CYL-007 inactive. Commands, schemas, bounds, privacy, one-JSON stdout,
 and exit mapping remain unchanged.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected
