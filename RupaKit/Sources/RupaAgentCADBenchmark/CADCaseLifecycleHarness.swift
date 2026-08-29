@@ -10,6 +10,8 @@ import RupaKit
 /// geometry expectations and category oracles remain outside this harness.
 @MainActor
 struct CADCaseLifecycleHarness {
+    typealias InitialDocumentProvider = @MainActor () throws -> DesignDocument
+
     enum Mode {
         case normal
         case stale
@@ -22,6 +24,7 @@ struct CADCaseLifecycleHarness {
     private let timeoutWallNanoseconds: UInt64
     private let preRouteDelayNanoseconds: UInt64
     private let postRegistrationDelayNanoseconds: UInt64
+    private let initialDocumentProvider: InitialDocumentProvider
 
     init(
         caseID: CADBenchmarkCaseID,
@@ -29,7 +32,8 @@ struct CADCaseLifecycleHarness {
         routing: CADCaseActionRouting,
         timeoutWallNanoseconds: UInt64,
         preRouteDelayNanoseconds: UInt64 = 0,
-        postRegistrationDelayNanoseconds: UInt64 = 0
+        postRegistrationDelayNanoseconds: UInt64 = 0,
+        initialDocumentProvider: InitialDocumentProvider? = nil
     ) {
         self.caseID = caseID
         self.challenge = challenge
@@ -37,6 +41,9 @@ struct CADCaseLifecycleHarness {
         self.timeoutWallNanoseconds = max(1, timeoutWallNanoseconds)
         self.preRouteDelayNanoseconds = preRouteDelayNanoseconds
         self.postRegistrationDelayNanoseconds = postRegistrationDelayNanoseconds
+        self.initialDocumentProvider = initialDocumentProvider ?? {
+            .empty(named: caseID.rawValue)
+        }
     }
 
     func runReference(
@@ -135,10 +142,26 @@ struct CADCaseLifecycleHarness {
         planningWallNanoseconds: UInt64,
         totalStart: UInt64
     ) async -> CADCaseLifecycleRecord {
+        let initialDocument: DesignDocument
+        do {
+            initialDocument = try initialDocumentProvider()
+        } catch {
+            return await preflightResult(
+                outcome: .infrastructureFailure,
+                controller: controller,
+                deadline: deadline,
+                totalStart: totalStart,
+                planningWallNanoseconds: planningWallNanoseconds,
+                diagnostics: [
+                    "\(caseID.rawValue) initial document provider failed: \(message(error))"
+                ]
+            )
+        }
+
         let workspace: ProjectWorkspace
         do {
             workspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
-                document: .empty(named: caseID.rawValue)
+                document: initialDocument
             )
             _ = try await deadline.run { @MainActor in
                 try await workspace.evaluate()

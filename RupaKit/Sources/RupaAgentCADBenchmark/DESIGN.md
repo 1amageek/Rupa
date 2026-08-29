@@ -203,7 +203,7 @@ implementation permission to add a parallel authority.
 | `CADActivatedAngleCase` | Internal; the reviewed angle IDs that may enter behavioral execution | Contains only ANG-001 when introduced and advances one reviewed case per commit |
 | `CADActivatedBoxCase` | Internal; the reviewed box IDs that may enter behavioral execution | Begins with BOX-001 and advances one reviewed case per commit; catalog presence never activates a box |
 | `CADCaseActionPlan` / `CADCaseActionRouting` | Internal; converts an activated category action plus public challenge context into either one command or one bounded atomic batch | Has no session/coordinate/workspace/source authority and cannot read a private expectation; completed single-command facades keep their existing branch |
-| `CADCaseLifecycleHarness` | Internal; owns the shared fresh controller/workspace, pre-owned registration UUID, exact coordinate binding, deadline, production dispatch, final immutable view capture, and unconditional cleanup | The only shared mutable lifecycle owner; it does not select cases, map geometry, run an oracle, or project a category result |
+| `CADCaseLifecycleHarness` | Internal; owns the shared fresh controller/workspace, category-neutral initial-document provider, pre-owned registration UUID, exact coordinate binding, deadline, production dispatch, final immutable view capture, and unconditional cleanup | The only shared mutable lifecycle owner; its default provider preserves the existing named-empty document, while an injected provider may seed only a bounded immutable challenge source before registration; it does not select cases, map target geometry, run an oracle, or project a category result |
 | `CADCaseLifecycleRecord` | Internal immutable output from the harness | Preserves initial/final coordinates, typed response, publication/no-retry state, cleanup state, and common count/timing telemetry without geometry assertions |
 | `CADLineCaseRunner` | Internal thin line facade | Owns line activation, public projection, line routing/mapping, private expectation-to-line-oracle handoff, and line result projection; delegates lifecycle only |
 | `CADLineOracle` | Internal line-category extraction beginning at LIN-002; exact finite-line source verification and zero-body evaluation check | Read-only immutable input plus the selected activated line's internal expectation |
@@ -1822,6 +1822,40 @@ and focused-test files that consume this contract; the CMP patchset similarly
 owns only new `CADCompound*` consumers of the public member axis. Shared
 action/wire and authority changes remain owned by the later serial integrations.
 
+The transform route has one additional shared lifecycle prerequisite. A newly
+created scene node cannot be transformed in the same concrete
+`CADCaseActionPlan`: `setSceneNodeTransform` requires its `SceneNodeID` before
+dispatch, while a create command returns that ID only after execution. The
+shared harness also currently fixes every initial document to named-empty, so
+a transform facade cannot supply an existing challenge source without either
+duplicating lifecycle ownership or bypassing the production Agent mutation
+route.
+
+Before the three category preparations branch, the harness therefore accepts
+one internal, category-neutral initial-document provider. The default provider
+must remain the existing named-empty document so all completed cases retain
+identical behavior. A non-default provider is synchronous, in-memory, invoked
+once per fresh attempt, and returns a value `DesignDocument`; the harness still
+alone constructs and evaluates `ProjectWorkspace`, registers the pre-owned
+UUID, binds coordinates, dispatches through `ProjectAgentCommandController`,
+captures the immutable final view, and cleans up. Provider failure is a typed
+prepublication infrastructure failure with zero registration, command, and
+publication. No live workspace/controller injection or private expected target
+is permitted.
+
+The transform facade uses this contract to build the public source primitive
+as the initial challenge condition with a pre-owned `SceneNodeID`. Its routing
+closure may then lower the candidate's public transform to exactly one
+`setSceneNodeTransform` command for that ID. Initial-source construction is not
+counted as an Agent mutation; the measured transform must still traverse the
+registered controller and publish exactly once. The transform oracle compares
+the immutable initial and final snapshots to prove source identity and geometry
+were preserved and only the requested local/world placement changed. Focused
+shared-harness tests must prove the default path is unchanged, a seeded known-ID
+source reaches the real transform command with one publication and cleanup,
+and provider failure cannot publish. This authority-neutral foundation changes
+neither activated IDs nor public candidate/JSON/CLI schemas.
+
 The kernel's analytic sphere constructor is a separate lower-level capability;
 the production Agent route currently exposes no sphere action or capability
 ingress. T12 measures that Agent boundary honestly: the SPH preparation records
@@ -2469,12 +2503,17 @@ establish the aggregate baselines and deterministic report.
 
 The catalog and private expectations are immutable values owned by each thin
 category facade. A candidate owns only its own decision state and prior typed
-responses. `CADCaseLifecycleHarness` owns the ephemeral per-case controller,
-workspace, pre-owned registration UUID, coordinate binding, action budget, and
-response log until cleanup and is the only benchmark component allowed to
-mutate a fresh project, always through the registered controller route. Its
-record is returned only after cleanup, retains no live controller/workspace/
-registration handle, and exposes only immutable values. A
+responses. `CADCaseLifecycleHarness` owns the ephemeral per-case
+initial-document value, controller, workspace, pre-owned registration UUID,
+coordinate binding, action budget, and response log until cleanup and is the
+only benchmark component allowed to mutate a fresh project, always through the
+registered controller route. The initial-document provider owns no live project
+state and returns a fresh value before workspace construction; the default is
+named-empty, while a category seed is an immutable public challenge condition
+rather than a candidate mutation or private target expectation. The harness
+record's `initialView` is the authority for that seed. The record is returned
+only after cleanup, retains no live controller/workspace/registration handle,
+and exposes only immutable values. A
 category oracle owns no live project state and is read-only; it consumes one
 immutable final view plus the private expectation held by its facade and returns
 a value report.
