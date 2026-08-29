@@ -14,10 +14,11 @@ struct CADTransformCategoryCheckpointTests {
         #expect(expectedCases.count == 8)
         #expect(Set(expectedCases).count == 8)
         let executor = DefaultCADActivatedCaseExecutor()
-        #expect(executor.activatedCaseIDs.count == 91)
+        #expect(executor.activatedCaseIDs.count == 92)
         #expect(executor.activatedCaseIDs.prefix(89).last == "CMP-001")
         #expect(executor.activatedCaseIDs.prefix(90).last == "CMP-002")
-        #expect(executor.activatedCaseIDs.last == "CMP-003")
+        #expect(executor.activatedCaseIDs.prefix(91).last == "CMP-003")
+        #expect(executor.activatedCaseIDs.last == "CMP-004")
         #expect(Array(executor.activatedCaseIDs.prefix(88).suffix(expectedCases.count))
             == expectedCases.map(\.caseID))
 

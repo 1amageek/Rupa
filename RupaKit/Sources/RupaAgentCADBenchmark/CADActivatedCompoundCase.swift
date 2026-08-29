@@ -5,6 +5,7 @@ enum CADActivatedCompoundCase: String, CaseIterable, Equatable, Hashable, Sendab
     case compound001 = "CMP-001"
     case compound002 = "CMP-002"
     case compound003 = "CMP-003"
+    case compound004 = "CMP-004"
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)

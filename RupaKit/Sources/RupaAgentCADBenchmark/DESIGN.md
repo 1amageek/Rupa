@@ -203,7 +203,7 @@ implementation permission to add a parallel authority.
 | `CADActivatedAngleCase` | Internal; the reviewed angle IDs that may enter behavioral execution | Contains only ANG-001 when introduced and advances one reviewed case per commit |
 | `CADActivatedBoxCase` | Internal; the reviewed box IDs that may enter behavioral execution | Begins with BOX-001 and advances one reviewed case per commit; catalog presence never activates a box |
 | `CADActivatedTransformCase` | Internal; the reviewed transform IDs that may enter behavioral execution | Contains the complete reviewed TRN-001...008 category in catalog order; no TRN-009 exists |
-| `CADActivatedCompoundCase` | Internal; the reviewed compound IDs that may enter behavioral execution | Contains CMP-001, CMP-002, and CMP-003; CMP-004...007 remain catalog-only until their own gates |
+| `CADActivatedCompoundCase` | Internal; the reviewed compound IDs that may enter behavioral execution | Contains CMP-001...CMP-004; CMP-005...007 remain catalog-only until their own gates |
 | `CADCaseActionPlan` / `CADCaseActionRouting` | Internal; converts an activated category action plus public challenge context into either one command or one bounded atomic batch | Has no session/coordinate/workspace/source authority and cannot read a private expectation; completed single-command facades keep their existing branch |
 | `CADCaseLifecycleHarness` | Internal; owns the shared fresh controller/workspace, category-neutral initial-document provider, pre-owned registration UUID, exact coordinate binding, deadline, production dispatch, final immutable view capture, and unconditional cleanup | The only shared mutable lifecycle owner; every execution entry checks cancellation before invoking the provider or any later lifecycle stage, its default provider preserves the existing named-empty document, and an injected provider may seed only a bounded immutable challenge source before registration; it does not select cases, map target geometry, run an oracle, or project a category result |
 | `CADCaseLifecycleRecord` | Internal immutable output from the harness | Preserves initial/final coordinates, typed response, publication/no-retry state, cleanup state, and common count/timing telemetry without geometry assertions |
@@ -216,7 +216,7 @@ implementation permission to add a parallel authority.
 | `CADCylinderCaseRunner` / `CADCylinderOracle` | Internal thin CYL facade and exact analytic-cylinder source/B-Rep oracle introduced by CYL-001 | Own public cylinder projection, submitted base-centre/axis mapping, one-command solid routing, private cylinder expectation, source circle/extrude/body/topology checks, and cylinder-local result projection; delegate lifecycle only |
 | `CADTransformCaseRunner` / `CADTransformOracle` | Internal thin TRN facade and exact source-identity/placement oracle introduced by TRN-001 | Own public transform projection, seeded source, one-command `setSceneNodeTransform` routing, private placement expectation, immutable initial/final identity checks, and transform-local result projection; delegate lifecycle only |
 | `CADCompoundAction` / `CADCompoundMemberAction` | Public; one ordered compound action envelope containing only role and primitive solid values | Immutable candidate intent; no plan store, source IDs, expectation, tolerance, or route coordinates |
-| `CADCompoundCaseRunner` / `CADCompoundOracle` | Internal thin CMP facade and exact ordered member/source/B-Rep oracle introduced by CMP-001 and extended by CMP-002 and CMP-003 | Lowers every member only after all public members are validated, dispatches one atomic batch, and reads private expectation only after final publication |
+| `CADCompoundCaseRunner` / `CADCompoundOracle` | Internal thin CMP facade and exact ordered member/source/B-Rep oracle introduced by CMP-001 and extended by CMP-002, CMP-003, and CMP-004 | Lowers every member only after all public members are validated, dispatches one atomic batch, and reads private expectation only after final publication |
 | `CADCaseOutcome` / score | Public result projection; failure taxonomy and binary scoring | No fallback success |
 | `CADBenchmarkReport` | Public result projection; deterministic run and measurement projection | Value/report only |
 
@@ -439,8 +439,8 @@ workspace publication and records validated `invalidSubmission` plus cleanup
 evidence because activated cases require one bounded action. The public
 executor projects that record as
 `CADCaseResult(outcome: .invalidSubmission)`. These decisions are not promoted
-to `expectedUnsupported`, because all eighty-eight activated cases have already
-proved their creation capability through the production controller. A
+to `expectedUnsupported`, because every currently activated case has already
+proved its creation capability through the production controller. A
 candidate-thrown error remains the typed executor `candidateFailure`, also
 before publication. No adapter may catch these paths and substitute a reference
 action.
@@ -545,12 +545,12 @@ CLI, and schema remain separately owned module contracts; their sibling designs
 recorded the coordinated external 90-case boundary, unchanged candidate-response
 v8 contract, and measured aggregate digest at that checkpoint.
 
-### CMP-003 compound activation boundary
+### CMP-003 frozen compound checkpoint
 
-CMP-003 is the third compound case and advances the internal benchmark
-authority from 90 to 91. `CADActivatedCompoundCase` contains CMP-001,
-CMP-002, and CMP-003 in catalog order; CMP-004...007 remain catalog-only and
-are rejected before category dispatch. The candidate returns one public
+At its gate, CMP-003 was the third compound case and advanced the internal
+benchmark authority from 90 to 91. `CADActivatedCompoundCase` then contained
+CMP-001, CMP-002, and CMP-003 in catalog order; CMP-004...007 were catalog-only
+and rejected before category dispatch. The candidate returns one public
 `.compound` action with ordered `shaft` and `collar` cylinder members. The
 shaft has radius 5 mm, depth 100 mm, base centre `(0, 0, 0)` mm, and axis
 `+X`; the collar has radius 12 mm, depth 10 mm, base centre `(45, 0, 0)` mm,
@@ -574,12 +574,56 @@ fails before publication. The shared lifecycle continues to own stale, candidate
 timeout, cancellation, telemetry, and cleanup evidence without a new route or
 controller contract.
 
-The focused compound and executor suites replay CMP-001...003 through the
-same production route, prove CMP-003 source/B-Rep and lifecycle evidence, and
-assert CMP-004 typed inactivity. Adapter, CLI, and schema remain separately
-owned module contracts; their sibling designs record the coordinated external
-activation boundary. Catalog/manifest, Mesh, and renderer changes remain
-outside this activation.
+The focused compound and executor suites replayed CMP-001...003 through the
+same production route, proved CMP-003 source/B-Rep and lifecycle evidence, and
+asserted CMP-004 typed inactivity at that checkpoint. Adapter, CLI, and schema
+remain separately owned module contracts; their sibling designs record the
+coordinated external 91-case boundary. Catalog/manifest, Mesh, and renderer
+changes remain outside this activation.
+
+### CMP-004 compound activation boundary
+
+CMP-004 is the fourth compound case and advances the internal benchmark
+authority from 91 to 92. `CADActivatedCompoundCase` contains CMP-001...004 in
+catalog order; CMP-005...007 remain catalog-only and are rejected before
+category dispatch. The candidate returns one public `.compound` action with
+ordered `plate`, `pin-a`, and `pin-b` members. The plate is a 200 by 100 by
+10 mm box at the world origin. `pin-a` is a cylinder of radius 8 mm and depth
+50 mm whose base centre is `(25, 25, 10)` mm and axis is `+Z`; `pin-b` has the
+same dimensions and axis with base centre `(175, 25, 10)` mm. Member role and
+order are semantic even though both pin solids share a primitive operation.
+
+The compound context derives the stable, de-duplicated required operations
+`createExtrudedRectangle` and `createExtrudedCircle`, and reports the
+aggregate compound capability only when both are available. The runner
+validates and lowers all three public members before dispatching one atomic
+three-command batch. A malformed or degenerate pin therefore cannot publish
+a partial plate/pin sequence.
+
+The private oracle checks the ordered source and independent evaluated solids:
+two immutable snapshot reads—one authored-source and one evaluated-topology—six
+sketch entities, six features, three independent
+bodies, eighteen faces, thirty-six edges, and twenty-four vertices, with
+document generation plus three, transaction revision plus one, publication
+sequence plus one, one evaluation pass, and one history entry. Swapping the
+two pin payloads while retaining their roles publishes once and is rejected
+by the role-sensitive oracle without retry. A zero pin radius or zero pin axis
+fails before command dispatch or publication. A production-level failure in
+the third command rolls back the first two as one batch: it reports
+`executionFailure`, leaves generation, transaction, and publication
+coordinates unchanged, leaves the final source empty, and completes cleanup
+with zero registrations; action/command telemetry still records one public
+action and three lowered commands, while evaluation and history remain zero.
+The shared lifecycle continues to own stale, candidate failure, timeout,
+cancellation, telemetry, and cleanup evidence without a new route or
+controller contract.
+
+The focused compound and executor suites replay CMP-001...004 through the
+same production route, prove CMP-004 source/B-Rep, atomic rollback, and
+lifecycle evidence, and assert CMP-005 typed inactivity. Adapter, CLI, and
+schema remain separately owned module contracts; their sibling designs record
+the coordinated external 92-case boundary. Catalog/manifest, Mesh, and
+renderer changes remain outside this activation.
 
 ### CIR-001 circle foundation and activation boundary
 
@@ -2350,15 +2394,15 @@ contract/design is updated before retrying the same case. After the last case
 of a category, a cumulative category gate reviews the shared contract against
 all committed cases before the next category begins.
 
-### TRN-001 through TRN-008 current activation boundary
+### Current activation boundary after TRN-001 through TRN-008
 
 TRN-001 through TRN-008 have crossed their individual vertical gates. The
 transform executor prefix contains exactly 88 IDs: LIN-001...012,
 REC-001...012, CIR-001...012, ANG-001...016, BOX-001...012, CYL-001...008,
 CON-001...008, and TRN-001...008. Compound activation is a separate boundary;
-the benchmark-internal authority now advances to 91 through the CMP-001,
-CMP-002, and CMP-003 contracts above. The separately owned external adapter
-and CLI contracts advance to the same reviewed 91-ID transport boundary in this
+the benchmark-internal authority now advances to exactly 92 through the
+CMP-001...CMP-004 contracts above. The separately owned external adapter and
+CLI contracts advance to the same reviewed 92-ID transport boundary in this
 snapshot; their sibling designs own the transport details and aggregate digest.
 
 The transform action is a single bounded value containing translation, the
@@ -2416,11 +2460,12 @@ aggregate as
 appending the actual bounded TRN-007 request bytes freezes the 87-request
 aggregate as `d1c0aaf385f5f67658a5052f26f3b38cf4970ce5377a9f282e8022f3dcd482ec`, and
 appending the actual bounded TRN-008 request bytes freezes the 88-request
-aggregate as `8a8c89deee4c596749cd6411823ab475bfd13ef7da7ccbff1c66b0425ee53795`. The
-candidate-response schema is v7 and v1...v6 are rejected before decision
-decoding. Request/live context identity, candidate privacy, bounded I/O, and
-the JSON/CLI process routes remain the adapter and executable's respective
-responsibilities.
+aggregate as `8a8c89deee4c596749cd6411823ab475bfd13ef7da7ccbff1c66b0425ee53795`.
+The transform checkpoint used candidate-response schema v7; the current
+compound boundary uses schema v8 and rejects v1...v7 before decision decoding.
+The current 92-request aggregate is owned by the sibling adapter/CLI designs.
+Request/live context identity, candidate privacy, bounded I/O, and the JSON/CLI
+process routes remain the adapter and executable's respective responsibilities.
 
 ### 4. Capability and execution baselines
 

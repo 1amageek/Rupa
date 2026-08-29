@@ -7,6 +7,7 @@ struct CADCompoundCaseTests {
     private static let activatedCase: CADActivatedCompoundCase = .compound001
     private static let secondActivatedCase: CADActivatedCompoundCase = .compound002
     private static let thirdActivatedCase: CADActivatedCompoundCase = .compound003
+    private static let fourthActivatedCase: CADActivatedCompoundCase = .compound004
 
     @Test
     func preparedAndActivatedBoundariesRemainDistinct() throws {
@@ -14,14 +15,16 @@ struct CADCompoundCaseTests {
             "CMP-001", "CMP-002", "CMP-003", "CMP-004", "CMP-005", "CMP-006", "CMP-007",
         ])
         #expect(CADActivatedCompoundCase.allCases.map(\.rawValue) == [
-            "CMP-001", "CMP-002", "CMP-003",
+            "CMP-001", "CMP-002", "CMP-003", "CMP-004",
         ])
         #expect(CADCompoundPreparedCase(rawValue: "CMP-002") != nil)
         #expect(CADActivatedCompoundCase(rawValue: "CMP-002") != nil)
         #expect(CADCompoundPreparedCase(rawValue: "CMP-003") != nil)
         #expect(CADActivatedCompoundCase(rawValue: "CMP-003") != nil)
         #expect(CADCompoundPreparedCase(rawValue: "CMP-004") != nil)
-        #expect(CADActivatedCompoundCase(rawValue: "CMP-004") == nil)
+        #expect(CADActivatedCompoundCase(rawValue: "CMP-004") != nil)
+        #expect(CADCompoundPreparedCase(rawValue: "CMP-005") != nil)
+        #expect(CADActivatedCompoundCase(rawValue: "CMP-005") == nil)
     }
 
     @Test
@@ -61,6 +64,12 @@ struct CADCompoundCaseTests {
         let thirdReference = try CADCompoundReferenceCandidate.members(for: thirdChallenge)
         #expect(CADCompoundGeometryMapping.requiredOperationNames(for: thirdReference) == [
             "createExtrudedCircle",
+        ])
+
+        let fourthChallenge = try Self.fourthActivatedCase.catalogEntry.challenge
+        let fourthReference = try CADCompoundReferenceCandidate.members(for: fourthChallenge)
+        #expect(CADCompoundGeometryMapping.requiredOperationNames(for: fourthReference) == [
+            "createExtrudedRectangle", "createExtrudedCircle",
         ])
     }
 
@@ -191,6 +200,48 @@ struct CADCompoundCaseTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(2)))
+    func compound004PublishesPlateAndOrderedPinsWithExactSourceAndTopology() async throws {
+        let result = try await CADCompoundCaseRunner(case: Self.fourthActivatedCase).runReference()
+
+        try result.validate()
+        #expect(result.caseID == "CMP-004")
+        #expect(result.outcome == .realized)
+        #expect(result.routeEvidence.didPublish)
+        #expect(
+            result.routeEvidence.finalDocumentGeneration.value
+                == result.routeEvidence.initialDocumentGeneration.value + 3
+        )
+        #expect(
+            result.routeEvidence.finalTransactionRevision.value
+                == result.routeEvidence.initialTransactionRevision.value + 1
+        )
+        #expect(
+            result.routeEvidence.finalPublicationSequence
+                == result.routeEvidence.initialPublicationSequence + 1
+        )
+        #expect(result.routeEvidence.memberCount == 3)
+        #expect(result.routeEvidence.commandCount == 3)
+        #expect(result.routeEvidence.evaluationPassCount == 1)
+        #expect(result.routeEvidence.historyEntryCount == 1)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        #expect(result.roleBindings?.bindings.map(\.role) == ["plate", "pin-a", "pin-b"])
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 3)
+        #expect(result.telemetry.readCount == 2)
+        #expect(result.telemetry.entityCount == 6)
+        #expect(result.telemetry.featureCount == 6)
+        #expect(result.telemetry.bodyCount == 3)
+        #expect(result.telemetry.faceCount == 18)
+        #expect(result.telemetry.edgeCount == 36)
+        #expect(result.telemetry.vertexCount == 24)
+        #expect(result.telemetry.planningWallNanoseconds > 0)
+        #expect(result.telemetry.routeWallNanoseconds > 0)
+        #expect(result.telemetry.oracleWallNanoseconds > 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(2)))
     func compound003SwappedCylinderPayloadsPublishOnceThenFailRoleSensitiveOracle() async throws {
         let reference = try CADCompoundReferenceCandidate.members(
             for: Self.thirdActivatedCase.catalogEntry.challenge
@@ -220,6 +271,43 @@ struct CADCompoundCaseTests {
         #expect(result.telemetry.entityCount == 2)
         #expect(result.telemetry.featureCount == 4)
         #expect(result.telemetry.bodyCount == 2)
+        #expect(result.diagnostics.contains { $0.lowercased().contains("oracle mismatch") })
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(2)))
+    func compound004SwappedPinPayloadsPublishOnceThenFailRoleSensitiveOracle() async throws {
+        let reference = try CADCompoundReferenceCandidate.members(
+            for: Self.fourthActivatedCase.catalogEntry.challenge
+        )
+        let members = [
+            reference[0],
+            CADCompoundMemberAction(role: reference[1].role, solid: reference[2].solid),
+            CADCompoundMemberAction(role: reference[2].role, solid: reference[1].solid),
+        ]
+
+        let result = try await CADCompoundCaseRunner(case: Self.fourthActivatedCase)
+            .run(actions: members)
+
+        try result.validate()
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish)
+        #expect(
+            result.routeEvidence.finalPublicationSequence
+                == result.routeEvidence.initialPublicationSequence + 1
+        )
+        #expect(result.routeEvidence.memberCount == 3)
+        #expect(result.routeEvidence.commandCount == 3)
+        #expect(result.routeEvidence.evaluationPassCount == 1)
+        #expect(result.routeEvidence.historyEntryCount == 1)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 3)
+        #expect(result.telemetry.readCount == 2)
+        #expect(result.telemetry.entityCount == 6)
+        #expect(result.telemetry.featureCount == 6)
+        #expect(result.telemetry.bodyCount == 3)
         #expect(result.diagnostics.contains { $0.lowercased().contains("oracle mismatch") })
         #expect(result.routeEvidence.cleanupCompleted)
         #expect(result.routeEvidence.remainingRegistrationCount == 0)
@@ -258,6 +346,57 @@ struct CADCompoundCaseTests {
                 laterMember,
             ]
             let result = try await CADCompoundCaseRunner(case: Self.thirdActivatedCase)
+                .run(actions: members)
+
+            try result.validate()
+            #expect(result.outcome == .invalidSubmission)
+            #expect(result.routeEvidence.didPublish == false)
+            #expect(result.routeEvidence.commandCount == 0)
+            #expect(
+                result.routeEvidence.finalPublicationSequence
+                    == result.routeEvidence.initialPublicationSequence
+            )
+            #expect(result.telemetry.actionCount == 1)
+            #expect(result.telemetry.commandCount == 0)
+            #expect(result.routeEvidence.cleanupCompleted)
+            #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        }
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(2)))
+    func compound004DegenerateThirdMemberFailsBeforePublication() async throws {
+        let reference = try CADCompoundReferenceCandidate.members(
+            for: Self.fourthActivatedCase.catalogEntry.challenge
+        )
+        guard case let .cylinder(name, baseCenter, axis, _, depth) = reference[2].solid else {
+            Issue.record("CMP-004 third member was not a cylinder.")
+            return
+        }
+        let zeroRadius = CADCompoundMemberAction(
+            role: reference[2].role,
+            name: name,
+            baseCenter: baseCenter,
+            axis: axis,
+            radius: CADLength(value: 0, unit: .millimeter),
+            depth: depth
+        )
+        let zeroAxis = CADCompoundMemberAction(
+            role: reference[2].role,
+            name: name,
+            baseCenter: baseCenter,
+            axis: CADDirection3D(x: 0, y: 0, z: 0),
+            radius: CADLength(value: 8, unit: .millimeter),
+            depth: depth
+        )
+
+        for thirdMember in [zeroRadius, zeroAxis] {
+            let members = [
+                reference[0],
+                reference[1],
+                thirdMember,
+            ]
+            let result = try await CADCompoundCaseRunner(case: Self.fourthActivatedCase)
                 .run(actions: members)
 
             try result.validate()
@@ -471,6 +610,7 @@ struct CADCompoundCaseTests {
     @Test(.timeLimit(.minutes(2)))
     func timeoutStaleAndCancellationRetainNoPublicationAndCleanup() async throws {
         for activatedCase in CADActivatedCompoundCase.allCases {
+            let expectedStaleCommandCount = try activatedCase.catalogEntry.challenge.outputRoles.count * 2
             let timeout = try await CADCompoundCaseRunner(
                 case: activatedCase,
                 timeoutWallNanoseconds: 1
@@ -488,7 +628,7 @@ struct CADCompoundCaseTests {
             #expect(stale.outcome == .executionFailure)
             #expect(stale.routeEvidence.didPublish == false)
             #expect(stale.telemetry.actionCount == 2)
-            #expect(stale.telemetry.commandCount == 4)
+            #expect(stale.telemetry.commandCount == expectedStaleCommandCount)
             #expect(stale.routeEvidence.cleanupCompleted)
             #expect(stale.routeEvidence.remainingRegistrationCount == 0)
 
