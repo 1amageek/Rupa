@@ -1563,7 +1563,41 @@ Authority remains exactly 76 until the internal CON-005 gate passes. Frozen
 `8878fa7dc59023aba4097c833bcca24f793829df83d8ad42106c8efebb985b79`
 must remain byte-identical; the 77-request aggregate
 `c4734be651136aa602367bbbc1ff1db68c5e933153146be1ca751325eca6f98e`
-is frozen as a literal shared by executor, adapter, and CLI evidence. CON-006
+is frozen as a literal shared by executor, adapter, and CLI evidence. At
+CON-005 completion, CON-006 remained typed inactive. Schema, catalog, fingerprint,
+tolerance, shared constraint infrastructure, kernel, renderer/Mesh, and later
+cases do not change.
+
+### CON-006 equal-length two-line activation
+
+CON-006 reuses candidate-response v6 and the existing constraint projection,
+mapping, runner, lifecycle, production `createSketch` controller route, and
+immutable source oracle unchanged. Its public target is two ordered XY
+millimetre lines: first (0, 0, 0)→(50, 0, 0), second
+(0, 10, 0)→(50, 10, 0), under the `equalLength` relation. Mapping assigns two
+fresh entity IDs and must write exactly `.equalLength(first, second)` on the
+affine XY plane anchored at the first line's start. The oracle requires the
+exact oriented equal-length world geometry and entity order, exact binary
+relation references, canonical `relation` primary binding, and zero dimensions,
+regions, or bodies.
+
+Changing only the relation to `parallel` is structurally and geometrically
+valid and must publish once before relation-sensitive oracle rejection without
+retry. Making the second line zero-length at (0, 10, 0) fails non-degenerate
+entity validation before command/publication. Timeout publishes nothing and
+cleanup always removes the owned registration. Success advances publication,
+document generation, and transaction revision +1 with workspace unchanged and
+records action 1, command 1, read at least 1, entity 2, feature 1, body 0, and
+positive planning, route, oracle, total, and cleanup timings. Candidate-visible
+data contains only the public equal-length relation, plane, unit, and ordered
+line geometry.
+
+Authority remains exactly 77 until the internal CON-006 gate passes. Frozen
+77-request aggregate
+`c4734be651136aa602367bbbc1ff1db68c5e933153146be1ca751325eca6f98e`
+must remain byte-identical; the 78-request aggregate
+`95be7c1009a42bc3f81b0a7df50bec09256829f6034a6a76b37d70271486e590`
+is frozen as a literal shared by executor, adapter, and CLI evidence. CON-007
 remains typed inactive. Schema, catalog, fingerprint,
 tolerance, shared constraint infrastructure, kernel, renderer/Mesh, and later
 cases do not change.

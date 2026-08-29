@@ -99,13 +99,13 @@ struct CADCylinderCategoryCheckpointTests {
         let executor = DefaultCADActivatedCaseExecutor()
         let expectedCylinders = CADActivatedCylinderCase.allCases.map(\.caseID)
 
-        #expect(executor.activatedCaseIDs.count == 77)
+        #expect(executor.activatedCaseIDs.count == 78)
         #expect(Array(executor.activatedCaseIDs.prefix(72).suffix(8)) == expectedCylinders)
         do {
-            _ = try executor.context(for: "CON-006")
-            Issue.record("CON-006 must remain inactive until its vertical gate.")
+            _ = try executor.context(for: "CON-007")
+            Issue.record("CON-007 must remain inactive until its vertical gate.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("CON-006"))
+            #expect(error == .inactiveCase("CON-007"))
         }
     }
 }
