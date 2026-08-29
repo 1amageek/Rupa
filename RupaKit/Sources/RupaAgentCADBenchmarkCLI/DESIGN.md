@@ -129,8 +129,8 @@ Process-level tests build and invoke the actual executable and prove:
 - `request` emits valid v1 JSON for an activated line, rectangle, REC-009
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
   millimetre/XY case, the complete CIR-001...012 category, ANG-001...016, and
-  BOX-001...009, and rejects inactive `BOX-010`;
-- JSON line, rectangle, circle, angle, and BOX-001...009 responses traverse the adapter, production
+  BOX-001...010, and rejects inactive `BOX-011`;
+- JSON line, rectangle, circle, angle, and BOX-001...010 responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
@@ -428,11 +428,16 @@ BOX-008 preserves that frozen 59-request aggregate, observes the 60-request aggr
 a v4 300 × 300 × 300 mm solid/box response at lower corner (100, 100, 100) mm
 through the production controller.
 
-BOX-009 is the current process boundary: it preserves that frozen 60-request
-aggregate, observes the 61-request aggregate
+BOX-009 preserves that frozen 60-request aggregate and observes the 61-request aggregate
 `01837d577b9eaecc860279b474e8190c852777cf359910ced4196a1ca5c2e403`, and executes
 a v4 12 × 12 × 12 mm solid/box response at lower corner (-12, 0, 0) mm through
-the production controller. BOX-010 remains inactive with exit `64`.
+the production controller.
+
+BOX-010 is the current process boundary: it preserves that frozen 61-request
+aggregate, observes the 62-request aggregate
+`7cce27a557abbfed9b6d8f1f020e14fff0b366497b79373071c7df625aa2078b`, and executes a
+v4 400 × 200 × 50 mm solid/box response at lower corner (0, -100, 50) mm
+through the production controller. BOX-011 remains inactive with exit `64`.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected
 case argument, so a case-mismatch process fixture cannot be constructed without
