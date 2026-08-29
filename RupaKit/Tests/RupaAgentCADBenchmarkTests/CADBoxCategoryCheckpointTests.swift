@@ -91,18 +91,12 @@ struct CADBoxCategoryCheckpointTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func executorRetainsBoxAuthorityAndKeepsCylinderInactive() throws {
+    func executorRetainsHistoricalBoxPrefixAfterCylinderActivation() throws {
         let executor = DefaultCADActivatedCaseExecutor()
         let expectedBoxes = CADActivatedBoxCase.allCases.map(\.caseID)
 
-        #expect(executor.activatedCaseIDs.count == 64)
-        #expect(Array(executor.activatedCaseIDs.suffix(expectedBoxes.count)) == expectedBoxes)
-
-        do {
-            _ = try executor.context(for: "CYL-001")
-            Issue.record("CYL-001 must remain inactive until the cylinder category gate.")
-        } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("CYL-001"))
-        }
+        #expect(executor.activatedCaseIDs.count == 65)
+        #expect(Array(executor.activatedCaseIDs.prefix(64).suffix(expectedBoxes.count)) == expectedBoxes)
+        #expect(executor.activatedCaseIDs.last == "CYL-001")
     }
 }

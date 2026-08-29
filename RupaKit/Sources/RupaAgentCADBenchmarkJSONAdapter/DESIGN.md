@@ -644,7 +644,7 @@ evaluation, error, and fingerprint contracts remain unchanged.
 
 ### BOX-012 external authority
 
-BOX-012 is the current authority boundary. It preserves the frozen 63-request
+BOX-012 is the BOX-category completion boundary. It preserves the frozen 63-request
 aggregate
 `404f138058b2e8826a582a2f957ffc6fae0174ef4a11b6f0820dccb14378917a` and observes
 the 64-request aggregate as
@@ -654,8 +654,31 @@ Its bounded v4 response describes a
 and is evaluated through the production extruded-rectangle/source/B-Rep route.
 Submitting the same dimensions at z = -50 mm is rejected by the immutable oracle
 after exactly one publication without retry, while zero depth is a typed
-prepublication failure; CYL-001 remains inactive. Request, evaluation, error,
-and fingerprint contracts remain unchanged.
+prepublication failure. This is the verified 64-ID BOX-category completion
+boundary. Request, evaluation, error, and fingerprint contracts remain
+unchanged.
+
+### CYL-001 external authority contract
+
+CYL-001 advances external authority from the verified 64-ID BOX boundary to
+exactly 65 IDs only after the benchmark's production/oracle gate succeeds. It
+preserves the exact 64-request aggregate
+`e7f1f8084f0c61855d28fe7e7e28a0860eba3ab6993ae5b9859d28448948618c`;
+the observed 65-request aggregate is
+`ad9d6ca086b3be46bcd2d778eb22beaa3b506a4f84216e0195f11aafbbef19e0`.
+CYL-002 remains typed inactive.
+
+The bounded candidate response adds `CADSolidAction` kind `cylinder` with
+`name`, `baseCenter`, `axis`, `radius`, and `depth`, so candidate-response
+advances from v4 to v5. The envelope guard rejects v1 through v4 before
+decision decoding. Request, evaluation, error, fingerprint, catalog,
+expectation, capability, tolerance, and the 65,536-byte ceiling remain
+unchanged. A correct CYL-001 v5 response traverses the same benchmark executor,
+production `createExtrudedCircle` controller route, and exact source/B-Rep
+oracle. Radius 6 mm returns the sanitized `invalidSubmission` result after one
+publication and no retry; degenerate dimensions/axis or a box substitute fail
+before publication. No private expectation, FeatureID, source/topology detail,
+diagnostic, telemetry, or workspace state enters any JSON envelope.
 
 ## Runtime Flows
 
@@ -703,9 +726,9 @@ classification and are projected only to stable non-private codes.
 
 | Invariant | Behavioral evidence |
 |---|---|
-| Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON includes the BOX-001, BOX-002, BOX-003, BOX-004, BOX-005, BOX-006, BOX-007, BOX-008, BOX-009, BOX-010, BOX-011, and BOX-012 `solid` / `box` decisions; candidate-response v4 carries the explicit discriminators, v1 through v3 and unknown current-schema discriminators are rejected, and every direct and nested case ID is the same scalar string. |
+| Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON includes the BOX-001...012 `solid/box` decisions and CYL-001 `solid/cylinder`; candidate-response v5 carries the explicit discriminators, v1 through v4 and unknown current-schema discriminators are rejected, and every direct and nested case ID is the same scalar string. |
 | Exact public-context binding | The request fingerprint equals the live executor context; changed schema, case, context byte, capability, budget, or fingerprint is rejected before publication. |
-| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, CIR-001...012, ANG-001...016, BOX-001, BOX-002, BOX-003, BOX-004, BOX-005, BOX-006, BOX-007, BOX-008, BOX-009, BOX-010, BOX-011, and BOX-012. The frozen 52-request prefix remains `53836e6352b776f1b2a0eccd81cc17d7046a489782a5ad678236d920e36f8a7a`; the 53-request aggregate remains `dd12c2cc346e37ec4f3dcecb396aa46bcfe69a82923a41041c36739b826d0b79`; the 54-request aggregate remains `36bf68952c6a605df9e9bb4187929752ee42317f0a45506f9847bc265ac065ec`; the observed 55-request aggregate remains `74353ca8a790b520689404973dbc370b59ec77f50ec81ac3a48c4387b94862c3`; the observed 56-request aggregate remains `dc4c6fa1f96ae4181f54d48b34ae77b95d2548bc90935a3c7f0d7c51743efd9a`; the observed 57-request aggregate remains `a7ae81207efbb6d315d2a11b61f7cbfa17d997e59ca74db7404c310bbecc24bb`; the observed 58-request aggregate remains `1f0ecb07744e6525d6e68df789fb529ff3ad91220ff515603ea26a2f123d88d9`; the observed 59-request aggregate remains `22a57a1631712e9cc4cac3a50c5d2886909e804d2e44338b15911637318b74be`; the observed 60-request aggregate remains `6f7467cbe5f511521c5a1ba79811fb38fc60a9f77c8585a1950eff7ea9033f81`; the observed 61-request aggregate is `01837d577b9eaecc860279b474e8190c852777cf359910ced4196a1ca5c2e403`; the frozen 62-request aggregate is `7cce27a557abbfed9b6d8f1f020e14fff0b366497b79373071c7df625aa2078b`; the frozen 63-request aggregate is `404f138058b2e8826a582a2f957ffc6fae0174ef4a11b6f0820dccb14378917a`; the observed 64-request aggregate is `e7f1f8084f0c61855d28fe7e7e28a0860eba3ab6993ae5b9859d28448948618c`; BOX-001 through BOX-012 traverse the production extruded-rectangle/source/B-Rep route and CYL-001 remains typed inactive. |
+| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, CIR-001...012, ANG-001...016, BOX-001...012, and CYL-001. The 64-request prefix remains `e7f1f8084f0c61855d28fe7e7e28a0860eba3ab6993ae5b9859d28448948618c`; the observed 65-request aggregate is `ad9d6ca086b3be46bcd2d778eb22beaa3b506a4f84216e0195f11aafbbef19e0`; CYL-001 traverses production `createExtrudedCircle` and the exact source/B-Rep oracle, while CYL-002 remains typed inactive. |
 | Bounded I/O | Exact-limit input succeeds, `limit + 1` fails before decode and leaves executor evaluation count zero, chunked stdin and file paths behave identically, no public typed-response execution bypass exists, encoded output cannot exceed the same bound, and the guaranteed infrastructure document is byte-equal to normal encoding, bounded, and decodable. |
 | Candidate/oracle separation | Static dependency and source scans prove the adapter imports only public benchmark contracts; encoded fixtures contain no expectation/oracle/source snapshot fields or values. |
 | Same production route | JSON candidates for activated line, rectangle, circle, angle, and box cases realize through the public executor; wrong geometry publishes once then the category's exact oracle rejects without retry. |

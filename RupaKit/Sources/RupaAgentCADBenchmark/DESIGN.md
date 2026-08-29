@@ -211,6 +211,7 @@ implementation permission to add a parallel authority.
 | `CADCircleCaseRunner` / `CADCircleOracle` | Internal thin CIR-001 facade and exact analytic-circle oracle | Own circle projection/routing/mapping, private circle expectation, analytic entity/centre/radius/profile checks, and circle-local result projection; delegate lifecycle only |
 | `CADAngleCaseRunner` / `CADAngleOracle` | Internal thin ANG-001 facade and exact two-line source oracle | Own angle projection, affine intersection mapping, ordered two-command batch, private angle expectation, role/intersection/length/unsigned-angle checks, and angle-local result projection; delegate lifecycle only |
 | `CADBoxCaseRunner` / `CADBoxOracle` | Internal thin BOX facade and exact closed-box source/B-Rep oracle | Own box projection, lower-corner-to-profile mapping, one-command solid routing, private box expectation, source profile/extrude/body/topology checks, and box-local result projection; delegate lifecycle only |
+| `CADCylinderCaseRunner` / `CADCylinderOracle` | Internal thin CYL facade and exact analytic-cylinder source/B-Rep oracle introduced by CYL-001 | Own public cylinder projection, submitted base-centre/axis mapping, one-command solid routing, private cylinder expectation, source circle/extrude/body/topology checks, and cylinder-local result projection; delegate lifecycle only |
 | `CADCaseOutcome` / score | Public result projection; failure taxonomy and binary scoring | No fallback success |
 | `CADBenchmarkReport` | Public result projection; deterministic run and measurement projection | Value/report only |
 
@@ -857,7 +858,7 @@ typed inactive.
 
 | Classification | BOX decision |
 |---|---|
-| Confirmed current fact | `ProjectAgentCommandController` exposes `createExtrudedRectangle`; its Automation/Editor path creates a rectangle sketch plus extrude body, commits one source generation, publishes one evaluated body, and topology tests prove 1 body/6 faces/12 edges/8 vertices. BOX-001 through BOX-012 expose this route through the reviewed solid/box action while CYL-001 remains inactive. |
+| Confirmed BOX completion fact | `ProjectAgentCommandController` exposes `createExtrudedRectangle`; its Automation/Editor path creates a rectangle sketch plus extrude body, commits one source generation, publishes one evaluated body, and topology tests prove 1 body/6 faces/12 edges/8 vertices. BOX-001 through BOX-012 expose this route through the reviewed solid/box action; the verified pre-CYL-001 boundary is 64 activated IDs. |
 | Required ideal contract | A candidate describes one axis-aligned box by lower-corner origin and X/Y/Z dimensions; the existing production command remains mutation authority and an independent immutable source/B-Rep oracle remains result authority. |
 | Minimal difference | Add one benchmark-owned solid/box action, box projection/mapping/facade/oracle/result types, BOX activation dispatch, candidate-response v4, and focused/adapter/CLI evidence. Do not add a kernel command or a generic future-solid runner. |
 | Unresolved at design completion | No semantic or authority blocker remains. Each new aggregate digest and measured timing is intentionally observed and frozen only by its implementation gate rather than guessed here. |
@@ -1073,8 +1074,9 @@ Its v4 response describes a
 and is evaluated through the production extruded-rectangle/source/B-Rep route.
 Submitting the same dimensions at z = -50 mm is rejected by the immutable
 oracle after exactly one publication without retry, while zero depth is a typed
-prepublication failure; CYL-001 remains inactive. Request, evaluation, error,
-fingerprint, and geometry authority contracts remain unchanged.
+prepublication failure. This is the verified 64-ID BOX-category completion
+boundary. Request, evaluation, error, fingerprint, and geometry authority
+contracts remain unchanged.
 
 After BOX-012, `T12-BOX-G` serially replays BOX-001...012 in exact lexical
 order. It requires twelve unique IDs, unit coverage millimetre 9/metre 2/inch
@@ -1084,6 +1086,70 @@ inventories the already-owned postpublication, invalid/substitute, timeout,
 and privacy evidence without duplicating those fixtures, confirms exact
 executor/JSON/CLI authority 64 with the BOX-012 aggregate, and proves CYL-001
 typed inactive. Parallelism remains disabled through the category gate.
+
+### Cylinder foundation and CYL-001 vertical contract
+
+| Classification | CYL-001 decision |
+|---|---|
+| Confirmed current fact | `ProjectAgentCommandController` exposes `createExtrudedCircle`; its Automation/Editor path creates one circle sketch plus one normal-extrude body in one source transaction and publication. Existing production tests observe one body with 6 faces, 12 edges, and 8 vertices, including 4 analytic cylindrical side faces and 8 circular edges. The verified pre-CYL-001 authority is 64 IDs and CYL-001 is typed inactive. |
+| Required ideal contract | A candidate describes one closed cylinder by base centre, finite nonzero axis direction, radius, and depth. The existing production command remains mutation authority and an independent immutable source/B-Rep oracle remains result authority. |
+| Minimal difference | Add one benchmark-owned `solid/cylinder` action, public-only projection and reference candidate, submitted-geometry mapping, a thin cylinder facade and exact oracle, CYL-001 activation dispatch, candidate-response v5, and focused executor/adapter/CLI evidence. |
+| Non-goals | Do not add a kernel command, refactor the existing category result types or shared lifecycle, activate CYL-002, generalize all eight cylinder cases, or change renderer/Mesh behavior. |
+
+`CADSolidAction.cylinder` carries `name`, `baseCenter`, `axis`, `radius`, and
+`depth` under explicit `kind: "cylinder"`. `CADCylinderChallengeProjection`
+and `CADCylinderReferenceCandidate` derive those values only from candidate-
+visible challenge text. `CADCylinderGeometryMapping` constructs the source
+plane solely from submitted geometry: its origin is the submitted base centre,
+its normal is the normalized submitted axis, and the production circle centre
+is local (0, 0). It validates finite arithmetic, non-degenerate radius/depth,
+and a finite nonzero axis before command dispatch; it does not compare a
+submission with the private target.
+
+```text
+public CYL action
+    -> CADCylinderCaseRunner / submitted base-centre-axis mapping
+        -> CADCaseLifecycleHarness
+            -> ProjectAgentCommandController
+                -> AutomationCommand.createExtrudedCircle
+                    -> circle sketch + normal extrude / one publication
+                        -> immutable source + exact B-Rep oracle
+```
+
+The `solid` role binds to the production primary body ID, which may alias the
+second created ID. The exact oracle requires the consumed source order to be
+one analytic-circle sketch followed by one `.cylinder`-typed normal extrude;
+the sketch has one circle and one region at local origin with exact radius, and
+the extrude has exact depth and direction. For CYL-001 it additionally proves
+world base centre (0, 0, 0) mm, +Z axis, radius 5 mm, depth 20 mm, one evaluated
+body, topology counts 1/6/12/8, 4 analytic cylindrical side faces with the
+expected axis and radius, 2 planar caps at the expected endpoints, 8 circular
+edges, and exact-B-Rep volume `pi * radius * radius * depth` under the fresh
+document's `ModelingTolerance`. Candidate claims, display Mesh bounds, and
+tessellated measurements are not oracle authority.
+
+CYL-001's independent valid mismatch uses radius 6 mm with the other submitted
+values unchanged. It must publish exactly once and then be rejected by the
+immutable oracle without retry. Zero radius or depth, a zero/non-finite axis,
+and a `solid/box` substitute are typed prepublication failures. Timeout publishes
+nothing and cleanup always removes the pre-owned registration. A successful
+result records publication, document generation, and transaction revision +1,
+workspace revision unchanged, action 1, command 1, read at least 1, entity 1,
+feature 2, body 1, topology 1/6/12/8, and positive planning/route/oracle/total
+timings. Oracle telemetry read failure remains `oracleFailure`; it is never
+rounded to zero or converted to success.
+
+Adding the cylinder discriminator advances only candidate-response schema v4
+to v5. The schema guard rejects v1 through v4 before decision decoding, with no
+legacy fallback. Request/evaluation/error schemas, public-context fingerprint,
+manifest/catalog, expectation, capability, and tolerance versions remain
+unchanged. The exact frozen 64-request aggregate
+`e7f1f8084f0c61855d28fe7e7e28a0860eba3ab6993ae5b9859d28448948618c`
+remains byte-identical. The internal production/oracle gate observes and freezes
+the 65-request aggregate as
+`ad9d6ca086b3be46bcd2d778eb22beaa3b506a4f84216e0195f11aafbbef19e0`.
+CYL-002 remains typed inactive. Public results expose no FeatureID, diagnostics,
+telemetry, expectation, source snapshot, or workspace data.
 
 ### Vertical Case Gate
 

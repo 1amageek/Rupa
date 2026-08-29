@@ -1,0 +1,229 @@
+import Testing
+@testable import RupaAgentCADBenchmark
+
+@Suite(.serialized)
+struct CADCylinderCaseTests {
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func cylinder001CreatesExactAnalyticSolidThroughProductionController() async throws {
+        let result = try await CADCylinderCaseRunner(case: .cylinder001).runReference()
+
+        try result.validate()
+        #expect(result.caseID == "CYL-001")
+        #expect(result.outcome == .realized)
+        #expect(result.realized)
+        #expect(result.candidateResult?.status == .published)
+        #expect(result.candidateResult?.createdFeatureIDs.count == 2)
+        #expect(result.candidateResult?.primaryFeatureID == result.candidateResult?.createdFeatureIDs.last)
+        #expect(result.roleBindings?.bindings.first?.role == "solid")
+        #expect(result.routeEvidence.didPublish)
+        #expect(result.routeEvidence.finalDocumentGeneration.value == result.routeEvidence.initialDocumentGeneration.value + 1)
+        #expect(result.routeEvidence.finalTransactionRevision.value == result.routeEvidence.initialTransactionRevision.value + 1)
+        #expect(result.routeEvidence.finalPublicationSequence == result.routeEvidence.initialPublicationSequence + 1)
+        #expect(result.routeEvidence.finalWorkspaceRevision == result.routeEvidence.initialWorkspaceRevision)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.cleanupWallNanoseconds > 0)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        #expect(result.telemetry.planningWallNanoseconds > 0)
+        #expect(result.telemetry.routeWallNanoseconds > 0)
+        #expect(result.telemetry.oracleWallNanoseconds > 0)
+        #expect(result.telemetry.totalWallNanoseconds > 0)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.readCount >= 1)
+        #expect(result.telemetry.entityCount == 1)
+        #expect(result.telemetry.featureCount == 2)
+        #expect(result.telemetry.bodyCount == 1)
+        #expect(result.telemetry.faceCount == 6)
+        #expect(result.telemetry.edgeCount == 12)
+        #expect(result.telemetry.vertexCount == 8)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func cylinder001OracleRejectsWrongRadiusAfterOnePublicationWithoutRetry() async throws {
+        let result = try await CADCylinderCaseRunner(case: .cylinder001).run(
+            action: Self.cylinderAction(radius: 6)
+        )
+
+        try result.validate()
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish)
+        #expect(result.routeEvidence.finalPublicationSequence == result.routeEvidence.initialPublicationSequence + 1)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.readCount == 2)
+        #expect(result.telemetry.entityCount == 1)
+        #expect(result.telemetry.featureCount == 2)
+        #expect(result.telemetry.bodyCount == 1)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        #expect(result.diagnostics.contains { $0.contains("oracle mismatch") })
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func cylinder001FailureTelemetryReadFailureIsOracleFailure() async throws {
+        let result = try await CADCylinderCaseRunner(
+            case: .cylinder001,
+            failureSourceReader: { _ in throw CylinderFailureSourceReadError.unavailable }
+        ).run(action: Self.cylinderAction(radius: 6))
+
+        try result.validate()
+        #expect(result.outcome == .oracleFailure)
+        #expect(result.routeEvidence.didPublish)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        #expect(result.diagnostics.contains { $0.contains("failure telemetry read failed") })
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)), arguments: [
+        cylinderAction(radius: 0),
+        cylinderAction(depth: 0),
+        cylinderAction(axis: CADDirection3D(x: 0, y: 0, z: 0)),
+        cylinderAction(axis: CADDirection3D(x: .infinity, y: 0, z: 1)),
+    ])
+    func cylinder001RejectsDegenerateInputBeforePublication(
+        action: CADCandidateAction
+    ) async throws {
+        let result = try await CADCylinderCaseRunner(case: .cylinder001).run(action: action)
+
+        try result.validate()
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish == false)
+        #expect(result.routeEvidence.finalPublicationSequence == result.routeEvidence.initialPublicationSequence)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 0)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func cylinder001RejectsBoxSubstituteBeforePublication() async throws {
+        let action = CADCandidateAction.automation(.solid(.box(
+            name: "CYL-001.box-substitute",
+            origin: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
+            width: CADLength(value: 10, unit: .millimeter),
+            depth: CADLength(value: 10, unit: .millimeter),
+            height: CADLength(value: 20, unit: .millimeter)
+        )))
+        let result = try await CADCylinderCaseRunner(case: .cylinder001).run(action: action)
+
+        try result.validate()
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish == false)
+        #expect(result.telemetry.commandCount == 0)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func cylinder001TimeoutIsTypedAndCleansUp() async throws {
+        let result = try await CADCylinderCaseRunner(
+            case: .cylinder001,
+            timeoutWallNanoseconds: 1
+        ).runReference()
+
+        try result.validate()
+        #expect(result.outcome == .timeout)
+        #expect(result.routeEvidence.didPublish == false)
+        #expect(result.telemetry.totalWallNanoseconds >= result.telemetry.timeoutWallNanoseconds)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @Test
+    func cylinder001ReferenceCandidateUsesOnlyPublicChallengeValues() async throws {
+        let challenge = try CADBenchmarkCatalog().challenge(for: "CYL-001")
+        let decision = try await CADCylinderReferenceCandidate().decide(
+            for: candidateContext(challenge)
+        )
+
+        guard case .action(.automation(.solid(.cylinder(
+            let name, let baseCenter, let axis, let radius, let depth
+        )))) = decision else {
+            Issue.record("CYL-001 candidate did not produce one solid cylinder action.")
+            return
+        }
+        #expect(name == "CYL-001")
+        #expect(baseCenter == CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter))
+        #expect(axis == CADDirection3D(x: 0, y: 0, z: 1))
+        #expect(radius == CADLength(value: 5, unit: .millimeter))
+        #expect(depth == CADLength(value: 20, unit: .millimeter))
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func executorActivatesOnlyFirstCylinderAndUsesProductionCapability() async throws {
+        let executor = DefaultCADActivatedCaseExecutor()
+
+        #expect(executor.activatedCaseIDs.count == 65)
+        #expect(executor.activatedCaseIDs.last == "CYL-001")
+        #expect(try executor.context(for: "CYL-001").capabilities.statuses.first?.available == true)
+        let result = try await executor.evaluate(
+            caseID: "CYL-001",
+            candidate: CADCylinderReferenceCandidate()
+        )
+        #expect(result.outcome == .realized)
+        do {
+            _ = try executor.context(for: "CYL-002")
+            Issue.record("CYL-002 must remain inactive.")
+        } catch let error as CADActivatedCaseExecutorError {
+            #expect(error == .inactiveCase("CYL-002"))
+        }
+    }
+
+    @Test
+    func activatedCylinderBoundaryContainsOnlyReviewedCase() throws {
+        #expect(CADActivatedCylinderCase.allCases == [.cylinder001])
+        for rejected in ["CYL-002", "BOX-001", "SPH-001"] {
+            do {
+                _ = try CADActivatedCylinderCase(caseID: rejected)
+                Issue.record("\(rejected) must remain outside the cylinder activation boundary.")
+            } catch let error as CADBenchmarkError {
+                guard case .invalidCaseID(let observed) = error else {
+                    Issue.record("Unexpected error for \(rejected): \(error)")
+                    continue
+                }
+                #expect(observed == rejected)
+            }
+        }
+    }
+
+    private static func cylinderAction(
+        radius: Double = 5,
+        depth: Double = 20,
+        axis: CADDirection3D = CADDirection3D(x: 0, y: 0, z: 1)
+    ) -> CADCandidateAction {
+        .automation(.solid(.cylinder(
+            name: "CYL-001",
+            baseCenter: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
+            axis: axis,
+            radius: CADLength(value: radius, unit: .millimeter),
+            depth: CADLength(value: depth, unit: .millimeter)
+        )))
+    }
+}
+
+private enum CylinderFailureSourceReadError: Error {
+    case unavailable
+}
+
+private func candidateContext(_ challenge: CADChallenge) -> CADCandidateContext {
+    CADCandidateContext(
+        challenge: challenge,
+        capabilities: CADCapabilitySnapshot(
+            version: "test.v1",
+            statuses: [CADCapabilityStatus(
+                id: challenge.requiredCapability.id,
+                version: challenge.requiredCapability.version,
+                available: true
+            )]
+        ),
+        remainingRounds: challenge.budget.maximumRounds,
+        remainingActions: challenge.budget.maximumActions
+    )
+}

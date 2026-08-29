@@ -129,8 +129,8 @@ Process-level tests build and invoke the actual executable and prove:
 - `request` emits valid v1 JSON for an activated line, rectangle, REC-009
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
   millimetre/XY case, the complete CIR-001...012 category, ANG-001...016, and
-  BOX-001...012, and rejects inactive `CYL-001`;
-- JSON line, rectangle, circle, angle, and BOX-001...012 responses traverse the adapter, production
+  BOX-001...012 and `CYL-001`, and rejects inactive `CYL-002`;
+- JSON line, rectangle, circle, angle, BOX-001...012, and CYL-001 responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
@@ -448,15 +448,38 @@ The same numeric values and origin submitted in centimetres are rejected after
 one publication without retry, zero width is rejected before publication, and
 BOX-012 is the next reviewed case.
 
-BOX-012 is the current process boundary: it preserves that frozen 63-request
+BOX-012 is the BOX-category completion boundary: it preserves that frozen 63-request
 aggregate `404f138058b2e8826a582a2f957ffc6fae0174ef4a11b6f0820dccb14378917a`,
 observes the 64-request aggregate as
 `e7f1f8084f0c61855d28fe7e7e28a0860eba3ab6993ae5b9859d28448948618c`, and executes
 a v4 75 × 125 × 175 mm solid/box
 response at lower corner (25, 25, -75) mm through the production controller.
 The same dimensions at z = -50 mm are rejected after one publication without
-retry, zero depth is rejected before publication, and CYL-001 remains inactive
-with exit `64`.
+retry, zero depth is rejected before publication, and this is the verified
+64-ID BOX-category completion boundary.
+
+### CYL-001 process contract
+
+CYL-001 adds no CLI command. After its internal production/oracle gate passes,
+`request CYL-001` emits the existing bounded request v1 and
+`evaluate --response <PATH|->` consumes candidate-response v5 with the
+benchmark-owned `solid` / `cylinder` discriminator. The v5 response preserves
+base centre (0, 0, 0) mm, +Z axis, radius 5 mm, and depth 20 mm, then traverses
+the adapter, `ProjectAgentCommandController`, production
+`createExtrudedCircle`, and exact source/B-Rep oracle. File and standard-input
+evaluation exit `0` with `realized`; radius 6 mm exits `2` after one publication
+without retry; malformed, v1-through-v4, binding, and inactive-ID inputs exit
+`64`. CYL-002 remains inactive.
+
+The process boundary advances from 64 to exactly 65 IDs while preserving the
+64-request aggregate
+`e7f1f8084f0c61855d28fe7e7e28a0860eba3ab6993ae5b9859d28448948618c`.
+The observed 65-request aggregate is
+`ad9d6ca086b3be46bcd2d778eb22beaa3b506a4f84216e0195f11aafbbef19e0`. CLI
+output remains one bounded private-free JSON document; timeout, cancellation,
+oracle, infrastructure, and cleanup classifications retain the existing
+compositional benchmark/CLI ownership and exit mapping. Generic `rupa`, the
+65,536-byte ceiling, and request/evaluation/error schemas do not change.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected
 case argument, so a case-mismatch process fixture cannot be constructed without
