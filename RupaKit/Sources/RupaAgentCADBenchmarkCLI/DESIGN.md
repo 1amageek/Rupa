@@ -129,8 +129,8 @@ Process-level tests build and invoke the actual executable and prove:
 - `request` emits valid v1 JSON for an activated line, rectangle, REC-009
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
   millimetre/XY case, the complete CIR-001...012 category, ANG-001...016, and
-  BOX-001...012 and `CYL-001...008`, and rejects inactive `CON-001`;
-- JSON line, rectangle, circle, angle, BOX-001...012, and CYL-001...008 responses traverse the adapter, production
+  BOX-001...012, `CYL-001...008`, and `CON-001`, and rejects inactive `CON-002`;
+- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, and CON-001 responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
@@ -587,9 +587,31 @@ the frozen 71-request aggregate
 `f4960441dea3fe2dc3984b3c093d8a77699990a7f5e055c5a300cf09133baf5d`, then
 freezes the 72-request aggregate as
 `842be9af6961688359198c5d7cda9d8134c36e9a07d56cbf5fe1e4b409cc9cea`.
-CON-001 remains inactive until its
-own reviewed foundation. Commands, schemas, bounds, privacy, one-JSON stdout,
+At the CYL-008 process gate, CON-001 remained inactive pending its reviewed
+foundation. Commands, schemas, bounds, privacy, one-JSON stdout,
 and exit mapping remain unchanged.
+
+### CON-001 process contract
+
+CON-001 adds no CLI command or argument. `request CON-001` emits the bounded
+request v1 public context. `evaluate --response <PATH|->` consumes
+candidate-response v6 carrying the exact coincident relation and two public XY
+millimetre lines, then traverses the adapter, activated executor, production
+`ProjectAgentCommandController`/`createSketch` transaction, and immutable
+source-relation oracle. File and stdin evaluation of the exact external
+response exit `0` with one `realized` JSON document.
+
+The published wrong-first-start response exits `2` after exactly one
+publication without retry. A response with no unique shared endpoint exits `2`
+without publication; candidate-response v1 through v5, malformed input, and
+`CON-002` inactive requests exit `64`. Authority advances 72→73 only after the
+internal gate, preserves the frozen 72-request aggregate
+`842be9af6961688359198c5d7cda9d8134c36e9a07d56cbf5fe1e4b409cc9cea`,
+and freezes the observed 73-request aggregate as
+`efc4fac5670c6739132f6145b5fc18ed38f69b1fe5dfd9889e2b38603de75468`.
+Existing byte limits,
+private-free one-JSON stdout, failure exit mapping, and process safety deadline
+remain unchanged.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected
 case argument, so a case-mismatch process fixture cannot be constructed without

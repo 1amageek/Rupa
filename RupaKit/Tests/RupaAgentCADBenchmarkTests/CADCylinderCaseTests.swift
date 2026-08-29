@@ -585,8 +585,9 @@ struct CADCylinderCaseTests {
     func executorActivatesReviewedCylindersAndUsesProductionCapability() async throws {
         let executor = DefaultCADActivatedCaseExecutor()
 
-        #expect(executor.activatedCaseIDs.count == 72)
-        #expect(executor.activatedCaseIDs.last == "CYL-008")
+        #expect(executor.activatedCaseIDs.count == 73)
+        #expect(executor.activatedCaseIDs.prefix(72).last == "CYL-008")
+        #expect(executor.activatedCaseIDs.last == "CON-001")
         #expect(try executor.context(for: "CYL-001").capabilities.statuses.first?.available == true)
         let result = try await executor.evaluate(
             caseID: "CYL-001",
@@ -594,10 +595,10 @@ struct CADCylinderCaseTests {
         )
         #expect(result.outcome == .realized)
         do {
-            _ = try executor.context(for: "CON-001")
-            Issue.record("CON-001 must remain inactive.")
+            _ = try executor.context(for: "CON-002")
+            Issue.record("CON-002 must remain inactive.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("CON-001"))
+            #expect(error == .inactiveCase("CON-002"))
         }
     }
 

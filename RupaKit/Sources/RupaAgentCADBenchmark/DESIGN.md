@@ -1369,6 +1369,77 @@ Passing this gate changes no production source, public contract, schema,
 catalog, fingerprint, tolerance, shared infrastructure, kernel, or
 renderer/Mesh behavior.
 
+### CON-001 coincident-relation foundation
+
+CON-001 is the first constraint case and adds only the public value contract
+needed to submit the catalog's closed constraint vocabulary: relation kind,
+line-or-circle geometry, and the existing public point, length, unit, and
+sketch-plane values. `CADSketchAction` gains an explicit `constraint`
+discriminator backed by a dedicated constraint action value. The relation enum
+contains the catalog's coincident, parallel, perpendicular, horizontal,
+vertical, equal-length, concentric, and equal-radius names, but this foundation
+activates only CON-001. Candidate-response advances v5→v6; v1 through v5 are
+rejected by the envelope schema guard before decision decoding. Request,
+evaluation, error, manifest/catalog, fingerprint, expectation, capability, and
+tolerance contracts do not change.
+
+The candidate-visible target is two XY millimetre lines, first from
+(20, 0, 0) to (0, 20, 0) and second from (0, 0, 0) to (0, 20, 0), under the
+`coincident` relation. The projection is decoded only from the public
+instruction. Mapping validates finite, non-degenerate, coplanar submitted
+geometry with the fresh document's `ModelingTolerance`, requires exactly one
+shared endpoint pair for coincident input, assigns fresh internal
+`SketchEntityID`s, and maps that pair to source references. For CON-001 the
+source relation is exactly `.coincident(.lineEnd(first), .lineEnd(second))`.
+Candidate-visible values never contain entity or feature IDs.
+
+```text
+public constraint action
+    -> constraint projection and submitted-geometry validation
+        -> one Sketch(two lines + one coincident constraint)
+            -> AutomationCommand.createSketch
+                -> ProjectAgentCommandController / one project transaction
+                    -> immutable DesignGraph + SketchEntitySnapshot oracle
+```
+
+This single-command path is intentional. Production `createSketch` accepts a
+complete validated constrained sketch and is exposed by the controller. The
+incremental `addSketchConstraint` command also exists, but it requires an
+already published FeatureID; the one-decision static batch contract cannot
+feed a first command's generated FeatureID into a second command. CON-001 does
+not add multi-round execution, result-ID placeholders, or a second mutation.
+The candidate capability remains `cad.sketch.constraint` version 1 and is
+available when the live controller exposes the `createSketch` primitive used
+by this route.
+
+The private oracle owns expected relation semantics. It resolves the single
+`relation` role to the production result's primary feature, requires exactly
+one ordered unsuppressed curve sketch and two ordered line entities, verifies
+their exact oriented world endpoints and XY source plane, and requires the
+source graph and immutable snapshot to contain exactly one coincident
+constraint with `lineEnd:first` and `lineEnd:second`, zero dimensions, zero
+regions, and zero evaluated bodies. Missing, extra, reordered, substituted, or
+incorrectly referenced geometry/relation is rejected.
+
+An otherwise valid action whose first start is (10, 0, 0) retains the unique
+shared end, publishes exactly once, and must then fail the independent oracle
+without retry. A submission whose second end is (0, 19, 0) has no shared
+endpoint and fails before command/publication. Timeout, cancellation, stale,
+and non-action paths publish nothing; cleanup always removes the owned
+registration. Success advances publication sequence, document generation, and
+transaction revision exactly once, leaves workspace revision unchanged, and
+records action 1, command 1, read at least 1, entity 2, feature 1, body 0, and
+positive planning, route, oracle, total, and cleanup timings.
+
+Authority advances 72→73 only after the internal vertical gate succeeds. The
+frozen 72-request aggregate
+`842be9af6961688359198c5d7cda9d8134c36e9a07d56cbf5fe1e4b409cc9cea`
+must remain byte-identical; the observed 73-request aggregate is frozen as
+`efc4fac5670c6739132f6145b5fc18ed38f69b1fe5dfd9889e2b38603de75468`
+and shared by executor, adapter, and CLI evidence. CON-002 remains typed
+inactive. No kernel, renderer/Mesh, shared lifecycle, generic multi-round, or
+later-constraint behavior belongs to this case.
+
 ### Vertical Case Gate
 
 Cases are activated in the lexical/category order recorded in

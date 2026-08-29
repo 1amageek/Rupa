@@ -23,6 +23,7 @@ public enum CADSketchAction: Codable, Equatable, Hashable, Sendable {
         secondStart: CADPoint3D,
         secondEnd: CADPoint3D
     )
+    case constraint(CADConstraintAction)
 
     private enum CodingKeys: String, CodingKey {
         case kind
@@ -38,6 +39,7 @@ public enum CADSketchAction: Codable, Equatable, Hashable, Sendable {
         case firstEnd
         case secondStart
         case secondEnd
+        case constraint
     }
 
     public init(from decoder: Decoder) throws {
@@ -74,6 +76,10 @@ public enum CADSketchAction: Codable, Equatable, Hashable, Sendable {
                 firstEnd: try container.decode(CADPoint3D.self, forKey: .firstEnd),
                 secondStart: try container.decode(CADPoint3D.self, forKey: .secondStart),
                 secondEnd: try container.decode(CADPoint3D.self, forKey: .secondEnd)
+            )
+        case "constraint":
+            self = .constraint(
+                try container.decode(CADConstraintAction.self, forKey: .constraint)
             )
         default:
             throw DecodingError.dataCorruptedError(
@@ -114,6 +120,9 @@ public enum CADSketchAction: Codable, Equatable, Hashable, Sendable {
             try container.encode(firstEnd, forKey: .firstEnd)
             try container.encode(secondStart, forKey: .secondStart)
             try container.encode(secondEnd, forKey: .secondEnd)
+        case .constraint(let constraint):
+            try container.encode("constraint", forKey: .kind)
+            try container.encode(constraint, forKey: .constraint)
         }
     }
 }
