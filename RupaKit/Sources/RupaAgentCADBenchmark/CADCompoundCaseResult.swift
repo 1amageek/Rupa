@@ -49,7 +49,7 @@ struct CADCompoundCaseResult: Equatable, Sendable {
     }
 
     func validate() throws {
-        guard CADCompoundActivatedCase(rawValue: caseID.rawValue) != nil,
+        guard CADActivatedCompoundCase(rawValue: caseID.rawValue) != nil,
               diagnostics.allSatisfy({ !$0.isEmpty }) else {
             throw CADBenchmarkError.invalidInput(
                 caseID: caseID.rawValue,
@@ -79,7 +79,7 @@ struct CADCompoundCaseResult: Equatable, Sendable {
             }
         }
         guard outcome == .realized else { return }
-        let entry = try CADCompoundActivatedCase(caseID: caseID).catalogEntry
+        let entry = try CADActivatedCompoundCase(caseID: caseID).catalogEntry
         guard case .compound(let expected) = entry.expected else {
             throw CADBenchmarkError.invalidInput(
                 caseID: caseID.rawValue,

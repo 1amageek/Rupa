@@ -195,7 +195,7 @@ implementation permission to add a parallel authority.
 | `CADChallenge` | Public projection; candidate-visible instruction, capability metadata, roles, and budget | No structured expected geometry, feature IDs, topology, tolerance, or plan |
 | `CADExpectedGeometry` | Internal; oracle-private source/B-Rep expectation and role checks | Category-facade/oracle boundary only; never enters the shared lifecycle harness or public candidate files |
 | `CADCandidateProtocol` | Public; bounded request/response continuation | No workspace, controller, or expectation reference |
-| `CADCandidateAction` | Public; reviewed sketch, solid, and transform intents | No session, authority coordinate, expectation, or direct workspace/CAD object |
+| `CADCandidateAction` | Public; reviewed sketch, solid, transform, and one-envelope compound intents | No session, authority coordinate, expectation, or direct workspace/CAD object |
 | `CADActivatedCaseExecuting` / `DefaultCADActivatedCaseExecutor` | Public; exact activated-ID list, candidate context, one candidate evaluation, and sanitized result | Dispatches only reviewed category facades; no private expectation, live view, internal evidence, or direct mutation escapes |
 | `CADActivatedLineCase` | Internal; the reviewed line IDs that may enter behavioral execution | Adds exactly one ID only when that case's vertical implementation begins; catalog presence alone is never activation |
 | `CADActivatedRectangleCase` | Internal; the reviewed rectangle IDs that may enter behavioral execution | Contains only REC-001 when introduced and advances one reviewed case per commit |
@@ -203,6 +203,7 @@ implementation permission to add a parallel authority.
 | `CADActivatedAngleCase` | Internal; the reviewed angle IDs that may enter behavioral execution | Contains only ANG-001 when introduced and advances one reviewed case per commit |
 | `CADActivatedBoxCase` | Internal; the reviewed box IDs that may enter behavioral execution | Begins with BOX-001 and advances one reviewed case per commit; catalog presence never activates a box |
 | `CADActivatedTransformCase` | Internal; the reviewed transform IDs that may enter behavioral execution | Contains the complete reviewed TRN-001...008 category in catalog order; no TRN-009 exists |
+| `CADActivatedCompoundCase` | Internal; the reviewed compound IDs that may enter behavioral execution | Contains only CMP-001; CMP-002...007 remain catalog-only until their own gates |
 | `CADCaseActionPlan` / `CADCaseActionRouting` | Internal; converts an activated category action plus public challenge context into either one command or one bounded atomic batch | Has no session/coordinate/workspace/source authority and cannot read a private expectation; completed single-command facades keep their existing branch |
 | `CADCaseLifecycleHarness` | Internal; owns the shared fresh controller/workspace, category-neutral initial-document provider, pre-owned registration UUID, exact coordinate binding, deadline, production dispatch, final immutable view capture, and unconditional cleanup | The only shared mutable lifecycle owner; every execution entry checks cancellation before invoking the provider or any later lifecycle stage, its default provider preserves the existing named-empty document, and an injected provider may seed only a bounded immutable challenge source before registration; it does not select cases, map target geometry, run an oracle, or project a category result |
 | `CADCaseLifecycleRecord` | Internal immutable output from the harness | Preserves initial/final coordinates, typed response, publication/no-retry state, cleanup state, and common count/timing telemetry without geometry assertions |
@@ -214,6 +215,8 @@ implementation permission to add a parallel authority.
 | `CADBoxCaseRunner` / `CADBoxOracle` | Internal thin BOX facade and exact closed-box source/B-Rep oracle | Own box projection, lower-corner-to-profile mapping, one-command solid routing, private box expectation, source profile/extrude/body/topology checks, and box-local result projection; delegate lifecycle only |
 | `CADCylinderCaseRunner` / `CADCylinderOracle` | Internal thin CYL facade and exact analytic-cylinder source/B-Rep oracle introduced by CYL-001 | Own public cylinder projection, submitted base-centre/axis mapping, one-command solid routing, private cylinder expectation, source circle/extrude/body/topology checks, and cylinder-local result projection; delegate lifecycle only |
 | `CADTransformCaseRunner` / `CADTransformOracle` | Internal thin TRN facade and exact source-identity/placement oracle introduced by TRN-001 | Own public transform projection, seeded source, one-command `setSceneNodeTransform` routing, private placement expectation, immutable initial/final identity checks, and transform-local result projection; delegate lifecycle only |
+| `CADCompoundAction` / `CADCompoundMemberAction` | Public; one ordered compound action envelope containing only role and primitive solid values | Immutable candidate intent; no plan store, source IDs, expectation, tolerance, or route coordinates |
+| `CADCompoundCaseRunner` / `CADCompoundOracle` | Internal thin CMP facade and exact ordered member/source/B-Rep oracle introduced by CMP-001 | Lowers every member only after all public members are validated, dispatches one atomic batch, and reads private expectation only after final publication |
 | `CADCaseOutcome` / score | Public result projection; failure taxonomy and binary scoring | No fallback success |
 | `CADBenchmarkReport` | Public result projection; deterministic run and measurement projection | Value/report only |
 
@@ -324,8 +327,11 @@ Candidate-visible challenge text + CapabilitySnapshot + prior CandidateStepResul
        -> finish(CADOutputRoleBindings)
 ```
 
-`CADCandidateAction` exposes the line, rectangle, circle, reviewed angle, and
-TRN-001...008 transform automation payloads proven by activated cases. The angle
+`CADCandidateAction` exposes the line, rectangle, circle, reviewed angle,
+TRN-001...008 transform automation payloads, and the reviewed compound envelope
+proven by activated cases. A compound action is one
+`CADCompoundAction(members:)` value whose ordered members contain only a public
+role and a `CADSolidAction` primitive. The angle
 payload contains a name, plane orientation, and two ordered world-space endpoint
 pairs; it neither contains an expected angle nor exposes the private oracle. The
 transform payload contains translation, explicit axis point, finite rotation
@@ -462,6 +468,47 @@ The executor performs one candidate decision for the currently activated
 contract. It does not generalize multi-round continuation, activate an
 unreviewed ID, schedule several cases, or establish a
 benchmark baseline.
+
+### CMP-001 compound activation boundary
+
+CMP-001 is the first compound case and advances the internal benchmark
+authority from 88 to 89. `CADActivatedCompoundCase` contains only CMP-001;
+CMP-002...007 remain catalog-only and are rejected before category dispatch.
+The candidate returns exactly one public `.compound` action. Its member order
+is the public order `base`, then `post`, with a 100 by 50 by 20 mm box at the
+world origin followed by a cylinder of radius 10 mm and depth 80 mm whose base
+centre is `(50, 25, 20)` mm and whose axis is `+Z`. These values are candidate
+inputs, not private source IDs or oracle authority.
+
+The compound facade derives the required primitive operations from member
+types using stable first-seen de-duplication. The candidate capability context
+publishes the compound capability's aggregate status, whose availability is
+the all-of result for those required operations; an empty requirement set is
+unavailable. The facade
+validates and lowers all members before dispatching one atomic batch. Thus one
+public action produces two primitive commands or no publication; it never
+publishes a partial member sequence and never uses a placeholder or a private
+plan store.
+
+The private oracle checks the immutable final view against the ordered member
+roles and exact source/B-Rep contract: two sketches, five entities, four
+features, two independent bodies, twelve faces, twenty-four edges, sixteen
+vertices, two source reads, one evaluation pass, one history entry, document
+generation plus two, transaction revision plus one, and publication sequence
+plus one. A wrong base or post placement publishes once and is rejected by the
+oracle without retry. Missing, extra, reordered, substituted, zero-axis, and
+degenerate-radius submissions fail before publication. A failure in a later
+member rolls back the earlier member, and candidate throw, timeout,
+cancellation, stale coordinates, telemetry-reader failure, and cleanup retain
+typed outcome and no-retry evidence through the shared lifecycle.
+
+The focused compound suite proves the public action codec, exact CMP-001
+activation boundary, all-member atomic lowering, source/B-Rep oracle, adversarial
+publication behavior, prepublication failures, stale/timeout/cancellation,
+candidate privacy, telemetry, and cleanup. Adapter, CLI, and schema remain
+separately owned module contracts; their sibling designs record the coordinated
+89-case, candidate-response-v8 transport boundary in this snapshot. CMP-002+,
+catalog/manifest, Mesh, and renderer changes remain outside this activation.
 
 ### CIR-001 circle foundation and activation boundary
 
@@ -2235,11 +2282,13 @@ all committed cases before the next category begins.
 ### TRN-001 through TRN-008 current activation boundary
 
 TRN-001 through TRN-008 have crossed their individual vertical gates. The
-executor-owned ordered authority is now exactly 88 IDs: LIN-001...012,
+transform executor prefix contains exactly 88 IDs: LIN-001...012,
 REC-001...012, CIR-001...012, ANG-001...016, BOX-001...012, CYL-001...008,
-CON-001...008, and TRN-001...008. CMP-001 remains catalog-only and is rejected
-as a typed inactive case at the benchmark, JSON-adapter, and CLI
-boundaries.
+CON-001...008, and TRN-001...008. Compound activation is a separate boundary;
+the benchmark-internal authority advances to 89 only through the CMP-001
+contract below. The separately owned external adapter and CLI contracts advance
+to the same 89-ID authority with candidate-response schema v8 in this snapshot;
+their sibling designs own the transport details and measured aggregate digest.
 
 The transform action is a single bounded value containing translation, the
 explicit source-world axis point, a finite non-zero rotation axis, and the

@@ -7,6 +7,48 @@ import SwiftCAD
 /// The mapping owns no source or project state; atomicity is provided by the
 /// enclosing `CADCaseActionPlan.batch` and production controller route.
 enum CADCompoundGeometryMapping {
+    /// Returns the primitive command capabilities required by an ordered
+    /// compound without exposing any private expectation data. The first
+    /// occurrence wins, so the result is stable and de-duplicated.
+    static func requiredOperationNames(
+        for members: [CADCompoundMemberAction]
+    ) -> [String] {
+        requiredOperationNames(for: members.map(\.primitive))
+    }
+
+    /// Returns the capabilities required by the candidate-visible challenge.
+    /// Malformed public text has no safely inferable requirement and therefore
+    /// produces an empty set; the context factory treats that set as
+    /// unavailable instead of falling back to a broader capability.
+    static func requiredOperationNames(for challenge: CADChallenge) -> [String] {
+        do {
+            let projection = try CADCompoundChallengeProjection.decode(challenge)
+            return requiredOperationNames(for: projection.members.map(\.primitive))
+        } catch {
+            return []
+        }
+    }
+
+    static func requiredOperationNames(
+        for primitives: [CADPrimitiveKind]
+    ) -> [String] {
+        var names: [String] = []
+        names.reserveCapacity(primitives.count)
+        for primitive in primitives {
+            let name: String
+            switch primitive {
+            case .box:
+                name = "createExtrudedRectangle"
+            case .cylinder:
+                name = "createExtrudedCircle"
+            }
+            if names.contains(name) == false {
+                names.append(name)
+            }
+        }
+        return names
+    }
+
     static func command(
         for submitted: CADCompoundMemberAction,
         expected: CADCompoundChallengeProjection.Member,

@@ -8,9 +8,19 @@ struct CADActivatedCaseContextFactory {
         operationName: String,
         controller: ProjectAgentCommandController
     ) -> CADCandidateContext {
-        let available = controller.capabilityDescriptors().contains {
-            $0.name == operationName
+        let requiredOperationNames: [String]
+        if challenge.category == .compound {
+            requiredOperationNames = CADCompoundGeometryMapping.requiredOperationNames(
+                for: challenge
+            )
+        } else {
+            requiredOperationNames = operationName.isEmpty ? [] : [operationName]
         }
+        let descriptors = controller.capabilityDescriptors()
+        let available = requiredOperationNames.isEmpty == false
+            && requiredOperationNames.allSatisfy { operation in
+                descriptors.contains { $0.name == operation }
+            }
         return CADCandidateContext(
             challenge: challenge,
             capabilities: CADCapabilitySnapshot(

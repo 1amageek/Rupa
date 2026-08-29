@@ -585,7 +585,7 @@ struct CADJSONAdapterTests {
         let responseJSON = String(decoding: try CADJSONBoundedCodec.encode(response), as: UTF8.self)
 
         #expect(requestJSON == #"{"caseID":"BOX-001","context":{"capabilities":{"statuses":[{"available":true,"id":"cad.solid.box","version":"1"}],"version":"agent-capabilities.v1"},"challenge":{"budget":{"maximumActions":32,"maximumReadRecords":64,"maximumRounds":16},"category":"BOX","id":"BOX-001","instruction":"Construct BOX-001 as a closed box with width 10.0 mm, depth 10.0 mm, and height 10.0 mm from origin (0.0, 0.0, 0.0) mm.","outputRoles":[{"description":"The requested closed box solid.","name":"solid"}],"requiredCapability":{"id":"cad.solid.box","version":"1"}},"priorResults":[],"remainingActions":32,"remainingRounds":16},"contextFingerprint":"cc334ec24aa58b08c216422200eeaba6040f82763b49cc4106b58e72e9b19290","schema":"rupa.agent-cad-benchmark.request.v1"}"#)
-        #expect(responseJSON == #"{"caseID":"BOX-001","contextFingerprint":"cc334ec24aa58b08c216422200eeaba6040f82763b49cc4106b58e72e9b19290","decision":{"action":{"automation":{"kind":"solid","solid":{"depth":{"unit":"millimeter","value":10},"height":{"unit":"millimeter","value":10},"kind":"box","name":"BOX-001","origin":{"unit":"millimeter","x":0,"y":0,"z":0},"width":{"unit":"millimeter","value":10}}},"kind":"automation"},"kind":"action"},"schema":"rupa.agent-cad-benchmark.candidate-response.v7"}"#)
+        #expect(responseJSON == #"{"caseID":"BOX-001","contextFingerprint":"cc334ec24aa58b08c216422200eeaba6040f82763b49cc4106b58e72e9b19290","decision":{"action":{"automation":{"kind":"solid","solid":{"depth":{"unit":"millimeter","value":10},"height":{"unit":"millimeter","value":10},"kind":"box","name":"BOX-001","origin":{"unit":"millimeter","x":0,"y":0,"z":0},"width":{"unit":"millimeter","value":10}}},"kind":"automation"},"kind":"action"},"schema":"rupa.agent-cad-benchmark.candidate-response.v8"}"#)
 
         let evaluation = try await adapter.evaluate(
             responseData: CADJSONBoundedCodec.encode(response)
@@ -622,7 +622,7 @@ struct CADJSONAdapterTests {
 
         #expect(requestJSON.contains("\"caseID\":\"CYL-001\""))
         #expect(requestJSON.contains("radius 5.0 mm and depth 20.0 mm"))
-        #expect(responseJSON.contains("\"schema\":\"rupa.agent-cad-benchmark.candidate-response.v7\""))
+        #expect(responseJSON.contains("\"schema\":\"rupa.agent-cad-benchmark.candidate-response.v8\""))
         #expect(responseJSON.contains("\"kind\":\"cylinder\""))
         #expect(responseJSON.contains("\"baseCenter\""))
         #expect(responseJSON.contains("\"axis\":{\"x\":0,\"y\":0,\"z\":1}"))
@@ -663,7 +663,7 @@ struct CADJSONAdapterTests {
         #expect(requestJSON.contains("\"caseID\":\"CYL-002\""))
         #expect(requestJSON.contains("base center (25.0, -25.0, 0.0) mm"))
         #expect(requestJSON.contains("radius 10.0 mm and depth 50.0 mm"))
-        #expect(responseJSON.contains("\"schema\":\"rupa.agent-cad-benchmark.candidate-response.v7\""))
+        #expect(responseJSON.contains("\"schema\":\"rupa.agent-cad-benchmark.candidate-response.v8\""))
         #expect(responseJSON.contains("\"axis\":{\"x\":1,\"y\":0,\"z\":0}"))
 
         let evaluation = try await adapter.evaluate(
@@ -689,8 +689,8 @@ struct CADJSONAdapterTests {
         #expect(wrongEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-001")
-            Issue.record("CMP-001 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-002")
+            Issue.record("CMP-002 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -733,8 +733,8 @@ struct CADJSONAdapterTests {
         #expect(wrongEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-001")
-            Issue.record("CMP-001 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-002")
+            Issue.record("CMP-002 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -775,8 +775,8 @@ struct CADJSONAdapterTests {
         #expect(wrongEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-001")
-            Issue.record("CMP-001 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-002")
+            Issue.record("CMP-002 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -813,8 +813,8 @@ struct CADJSONAdapterTests {
         #expect(wrongEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-001")
-            Issue.record("CMP-001 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-002")
+            Issue.record("CMP-002 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -915,8 +915,8 @@ struct CADJSONAdapterTests {
         #expect(wrongEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-001")
-            Issue.record("CMP-001 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-002")
+            Issue.record("CMP-002 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -934,7 +934,7 @@ struct CADJSONAdapterTests {
         let responseData = try CADJSONBoundedCodec.encode(response)
         let responseText = String(decoding: responseData, as: UTF8.self)
 
-        #expect(responseText.contains("\"schema\":\"rupa.agent-cad-benchmark.candidate-response.v7\""))
+        #expect(responseText.contains("\"schema\":\"rupa.agent-cad-benchmark.candidate-response.v8\""))
         #expect(responseText.contains("\"kind\":\"constraint\""))
         #expect(responseText.contains("\"relation\":\"coincident\""))
         #expect(responseData.count < 16_384)
@@ -965,8 +965,8 @@ struct CADJSONAdapterTests {
         #expect(invalidEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-001")
-            Issue.record("CMP-001 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-002")
+            Issue.record("CMP-002 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -1020,8 +1020,8 @@ struct CADJSONAdapterTests {
         #expect(invalidEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-001")
-            Issue.record("CMP-001 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-002")
+            Issue.record("CMP-002 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -1060,8 +1060,8 @@ struct CADJSONAdapterTests {
         ).result?.outcome == .invalidSubmission)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-001")
-            Issue.record("CMP-001 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-002")
+            Issue.record("CMP-002 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -1096,8 +1096,8 @@ struct CADJSONAdapterTests {
         #expect(try await adapter.evaluate(responseData: CADJSONBoundedCodec.encode(invalid)).result?.outcome == .invalidSubmission)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-001")
-            Issue.record("CMP-001 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-002")
+            Issue.record("CMP-002 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -1132,8 +1132,8 @@ struct CADJSONAdapterTests {
         #expect(try await adapter.evaluate(responseData: CADJSONBoundedCodec.encode(invalid)).result?.outcome == .invalidSubmission)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-001")
-            Issue.record("CMP-001 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-002")
+            Issue.record("CMP-002 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -1168,8 +1168,8 @@ struct CADJSONAdapterTests {
         #expect(try await adapter.evaluate(responseData: CADJSONBoundedCodec.encode(invalid)).result?.outcome == .invalidSubmission)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-001")
-            Issue.record("CMP-001 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-002")
+            Issue.record("CMP-002 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -1204,8 +1204,8 @@ struct CADJSONAdapterTests {
         #expect(try await adapter.evaluate(responseData: CADJSONBoundedCodec.encode(invalid)).result?.outcome == .invalidSubmission)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-001")
-            Issue.record("CMP-001 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-002")
+            Issue.record("CMP-002 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -1244,8 +1244,8 @@ struct CADJSONAdapterTests {
         #expect(try await adapter.evaluate(responseData: CADJSONBoundedCodec.encode(invalid)).result?.outcome == .invalidSubmission)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-001")
-            Issue.record("CMP-001 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-002")
+            Issue.record("CMP-002 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -1781,9 +1781,9 @@ struct CADJSONAdapterTests {
         let lineRequestFixture = #"{"caseID":"LIN-001","context":{"capabilities":{"statuses":[{"available":true,"id":"cad.sketch.line","version":"1"}],"version":"agent-capabilities.v1"},"challenge":{"budget":{"maximumActions":32,"maximumReadRecords":64,"maximumRounds":16},"category":"LIN","id":"LIN-001","instruction":"Construct LIN-001 as a finite line segment of length 25.0 mm from (0.0, 0.0, 0.0) mm to (25.0, 0.0, 0.0) mm on the XY-oriented plane through (0.0, 0.0, 0.0) mm.","outputRoles":[{"description":"The requested finite line segment.","name":"segment"}],"requiredCapability":{"id":"cad.sketch.line","version":"1"}},"priorResults":[],"remainingActions":32,"remainingRounds":16},"contextFingerprint":"f339619e0f34caca2a5a08eaf48080ffe7d783ce7bcf228197f494a86657eaaf","schema":"rupa.agent-cad-benchmark.request.v1"}"#
         let rectangleRequestFixture = #"{"caseID":"REC-001","context":{"capabilities":{"statuses":[{"available":true,"id":"cad.sketch.rectangle","version":"1"}],"version":"agent-capabilities.v1"},"challenge":{"budget":{"maximumActions":32,"maximumReadRecords":64,"maximumRounds":16},"category":"REC","id":"REC-001","instruction":"Construct REC-001 as a rectangle of width 40.0 mm and height 20.0 mm centered at (0.0, 0.0, 0.0) mm on the xy plane.","outputRoles":[{"description":"The requested closed rectangle.","name":"rectangle"}],"requiredCapability":{"id":"cad.sketch.rectangle","version":"1"}},"priorResults":[],"remainingActions":32,"remainingRounds":16},"contextFingerprint":"73e04af4c7a56666e42a84e0c10c3413e5cb860df59b74d707e7c504c05d7ea5","schema":"rupa.agent-cad-benchmark.request.v1"}"#
         let circleRequestFixture = #"{"caseID":"CIR-001","context":{"capabilities":{"statuses":[{"available":true,"id":"cad.sketch.circle","version":"1"}],"version":"agent-capabilities.v1"},"challenge":{"budget":{"maximumActions":32,"maximumReadRecords":64,"maximumRounds":16},"category":"CIR","id":"CIR-001","instruction":"Construct CIR-001 as a circle of radius 5.0 mm centered at (0.0, 0.0, 0.0) mm on the xy plane.","outputRoles":[{"description":"The requested analytic circle.","name":"circle"}],"requiredCapability":{"id":"cad.sketch.circle","version":"1"}},"priorResults":[],"remainingActions":32,"remainingRounds":16},"contextFingerprint":"934124a9a32a3830d1ae07b9b9ddffc9f21354f6edc6240cc8adc2850342a26a","schema":"rupa.agent-cad-benchmark.request.v1"}"#
-        let lineResponseFixture = #"{"caseID":"LIN-001","contextFingerprint":"f339619e0f34caca2a5a08eaf48080ffe7d783ce7bcf228197f494a86657eaaf","decision":{"action":{"automation":{"kind":"sketch","sketch":{"end":{"unit":"millimeter","x":25,"y":0,"z":0},"kind":"line","name":"LIN-001","plane":"xy","start":{"unit":"millimeter","x":0,"y":0,"z":0}}},"kind":"automation"},"kind":"action"},"schema":"rupa.agent-cad-benchmark.candidate-response.v7"}"#
-        let rectangleResponseFixture = #"{"caseID":"REC-001","contextFingerprint":"73e04af4c7a56666e42a84e0c10c3413e5cb860df59b74d707e7c504c05d7ea5","decision":{"action":{"automation":{"kind":"sketch","sketch":{"center":{"unit":"millimeter","x":0,"y":0,"z":0},"height":{"unit":"millimeter","value":20},"kind":"rectangle","name":"REC-001","plane":"xy","width":{"unit":"millimeter","value":40}}},"kind":"automation"},"kind":"action"},"schema":"rupa.agent-cad-benchmark.candidate-response.v7"}"#
-        let circleResponseFixture = #"{"caseID":"CIR-001","contextFingerprint":"934124a9a32a3830d1ae07b9b9ddffc9f21354f6edc6240cc8adc2850342a26a","decision":{"action":{"automation":{"kind":"sketch","sketch":{"center":{"unit":"millimeter","x":0,"y":0,"z":0},"kind":"circle","name":"CIR-001","plane":"xy","radius":{"unit":"millimeter","value":5}}},"kind":"automation"},"kind":"action"},"schema":"rupa.agent-cad-benchmark.candidate-response.v7"}"#
+        let lineResponseFixture = #"{"caseID":"LIN-001","contextFingerprint":"f339619e0f34caca2a5a08eaf48080ffe7d783ce7bcf228197f494a86657eaaf","decision":{"action":{"automation":{"kind":"sketch","sketch":{"end":{"unit":"millimeter","x":25,"y":0,"z":0},"kind":"line","name":"LIN-001","plane":"xy","start":{"unit":"millimeter","x":0,"y":0,"z":0}}},"kind":"automation"},"kind":"action"},"schema":"rupa.agent-cad-benchmark.candidate-response.v8"}"#
+        let rectangleResponseFixture = #"{"caseID":"REC-001","contextFingerprint":"73e04af4c7a56666e42a84e0c10c3413e5cb860df59b74d707e7c504c05d7ea5","decision":{"action":{"automation":{"kind":"sketch","sketch":{"center":{"unit":"millimeter","x":0,"y":0,"z":0},"height":{"unit":"millimeter","value":20},"kind":"rectangle","name":"REC-001","plane":"xy","width":{"unit":"millimeter","value":40}}},"kind":"automation"},"kind":"action"},"schema":"rupa.agent-cad-benchmark.candidate-response.v8"}"#
+        let circleResponseFixture = #"{"caseID":"CIR-001","contextFingerprint":"934124a9a32a3830d1ae07b9b9ddffc9f21354f6edc6240cc8adc2850342a26a","decision":{"action":{"automation":{"kind":"sketch","sketch":{"center":{"unit":"millimeter","x":0,"y":0,"z":0},"kind":"circle","name":"CIR-001","plane":"xy","radius":{"unit":"millimeter","value":5}}},"kind":"automation"},"kind":"action"},"schema":"rupa.agent-cad-benchmark.candidate-response.v8"}"#
         let lineEvaluationFixture = #"{"caseID":"LIN-001","contextFingerprint":"f339619e0f34caca2a5a08eaf48080ffe7d783ce7bcf228197f494a86657eaaf","result":{"category":"LIN","id":"LIN-001","outcome":"realized"},"schema":"rupa.agent-cad-benchmark.evaluation.v1"}"#
         let rectangleEvaluationFixture = #"{"caseID":"REC-001","contextFingerprint":"73e04af4c7a56666e42a84e0c10c3413e5cb860df59b74d707e7c504c05d7ea5","result":{"category":"REC","id":"REC-001","outcome":"realized"},"schema":"rupa.agent-cad-benchmark.evaluation.v1"}"#
         let circleEvaluationFixture = #"{"caseID":"CIR-001","contextFingerprint":"934124a9a32a3830d1ae07b9b9ddffc9f21354f6edc6240cc8adc2850342a26a","result":{"category":"CIR","id":"CIR-001","outcome":"realized"},"schema":"rupa.agent-cad-benchmark.evaluation.v1"}"#
@@ -1886,8 +1886,8 @@ struct CADJSONAdapterTests {
         #expect(zeroAxisEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-001")
-            Issue.record("CMP-001 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-002")
+            Issue.record("CMP-002 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -1953,8 +1953,8 @@ struct CADJSONAdapterTests {
         #expect(zeroAxisEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-001")
-            Issue.record("CMP-001 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-002")
+            Issue.record("CMP-002 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -2016,8 +2016,8 @@ struct CADJSONAdapterTests {
         #expect(zeroAxisEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-001")
-            Issue.record("CMP-001 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-002")
+            Issue.record("CMP-002 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -2080,8 +2080,8 @@ struct CADJSONAdapterTests {
         #expect(zeroAxisEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-001")
-            Issue.record("CMP-001 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-002")
+            Issue.record("CMP-002 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -2144,8 +2144,8 @@ struct CADJSONAdapterTests {
         #expect(zeroAxisEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-001")
-            Issue.record("CMP-001 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-002")
+            Issue.record("CMP-002 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -2207,8 +2207,8 @@ struct CADJSONAdapterTests {
         #expect(zeroAxisEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-001")
-            Issue.record("CMP-001 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-002")
+            Issue.record("CMP-002 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -2268,8 +2268,8 @@ struct CADJSONAdapterTests {
         #expect(zeroAxisEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-001")
-            Issue.record("CMP-001 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-002")
+            Issue.record("CMP-002 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -2333,8 +2333,8 @@ struct CADJSONAdapterTests {
         #expect(zeroAxisEvaluation.error == nil)
 
         do {
-            _ = try adapter.makeRequest(for: "CMP-001")
-            Issue.record("CMP-001 must remain inactive.")
+            _ = try adapter.makeRequest(for: "CMP-002")
+            Issue.record("CMP-002 must remain inactive.")
         } catch let error as CADJSONAdapterError {
             #expect(error == .inactiveCase)
         }
@@ -2342,7 +2342,77 @@ struct CADJSONAdapterTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func requestAndLiveContextsAreValueEqualAndAllEightyEightRequestsStayBounded() throws {
+    func compound001UsesTheBoundedResponseRouteForExactWrongAndInvalidActions() async throws {
+        let adapter = CADJSONAdapter()
+        let request = try adapter.makeRequest(for: "CMP-001")
+        #expect(request.context.challenge.category == .compound)
+        #expect(request.context.challenge.instruction == "Construct CMP-001 as a compound containing base=box 100.0 mm x 50.0 mm x 20.0 mm at (0.0, 0.0, 0.0) mm, post=cylinder radius 10.0 mm depth 80.0 mm at (50.0, 25.0, 20.0) mm along axis (0.0, 0.0, 1.0).")
+        #expect(request.context.challenge.outputRoles.map(\.name) == ["base", "post"])
+        #expect(request.context.capabilities.statuses.first?.available == true)
+
+        let exactResponse = try CADJSONCandidateResponseEnvelope(
+            caseID: request.caseID,
+            context: request.context,
+            decision: .action(compound001Action())
+        )
+        let exactData = try CADJSONBoundedCodec.encode(exactResponse)
+        let requestText = String(decoding: try CADJSONBoundedCodec.encode(request), as: UTF8.self)
+        let responseText = String(decoding: exactData, as: UTF8.self)
+        #expect(exactData.count < 16_384)
+        #expect(responseText.contains("\"schema\":\"rupa.agent-cad-benchmark.candidate-response.v8\""))
+        #expect(responseText.contains("\"kind\":\"compound\""))
+        let baseRole = try #require(responseText.range(of: "\"role\":\"base\""))
+        let postRole = try #require(responseText.range(of: "\"role\":\"post\""))
+        #expect(baseRole.lowerBound < postRole.lowerBound)
+        for forbidden in ["expectation", "oracle", "sourceTopology", "telemetry", "workspace", "FeatureID"] {
+            #expect(requestText.contains(forbidden) == false)
+            #expect(responseText.contains(forbidden) == false)
+        }
+        #expect(try CADJSONBoundedCodec.decode(
+            CADJSONCandidateResponseEnvelope.self,
+            from: exactData
+        ) == exactResponse)
+
+        let exactEvaluation = try await adapter.evaluate(responseData: exactData)
+        #expect(exactEvaluation.caseID == "CMP-001")
+        #expect(exactEvaluation.result?.outcome == .realized)
+        #expect(exactEvaluation.error == nil)
+
+        let wrongResponse = try CADJSONCandidateResponseEnvelope(
+            caseID: request.caseID,
+            context: request.context,
+            decision: .action(compound001Action(baseOriginZ: 1))
+        )
+        let wrongEvaluation = try await adapter.evaluate(
+            responseData: CADJSONBoundedCodec.encode(wrongResponse)
+        )
+        #expect(wrongEvaluation.caseID == "CMP-001")
+        #expect(wrongEvaluation.result?.outcome == .invalidSubmission)
+        #expect(wrongEvaluation.error == nil)
+
+        let invalidResponse = try CADJSONCandidateResponseEnvelope(
+            caseID: request.caseID,
+            context: request.context,
+            decision: .action(compound001Action(postRadius: 0))
+        )
+        let invalidEvaluation = try await adapter.evaluate(
+            responseData: CADJSONBoundedCodec.encode(invalidResponse)
+        )
+        #expect(invalidEvaluation.caseID == "CMP-001")
+        #expect(invalidEvaluation.result?.outcome == .invalidSubmission)
+        #expect(invalidEvaluation.error == nil)
+
+        do {
+            _ = try adapter.makeRequest(for: "CMP-002")
+            Issue.record("CMP-002 must remain inactive.")
+        } catch let error as CADJSONAdapterError {
+            #expect(error == .inactiveCase)
+        }
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func requestAndLiveContextsAreValueEqualAndAllEightyNineRequestsStayBounded() throws {
         let executor = DefaultCADActivatedCaseExecutor()
         let adapter = CADJSONAdapter(executor: executor)
         var largestRequest = 0
@@ -2471,6 +2541,8 @@ struct CADJSONAdapterTests {
                 action = transform007Action()
             } else if caseID.rawValue == "TRN-008" {
                 action = transform008Action()
+            } else if caseID.rawValue == "CMP-001" {
+                action = compound001Action()
             } else if caseID.category == .constraint {
                 action = constraint001Action(name: caseID.rawValue)
             } else {
@@ -2484,7 +2556,7 @@ struct CADJSONAdapterTests {
             #expect(try CADJSONBoundedCodec.encode(response).count < 16_384)
         }
 
-        #expect(executor.activatedCaseIDs.count == 88)
+        #expect(executor.activatedCaseIDs.count == 89)
         #expect(largestRequest < 16_384)
     }
 
@@ -2495,7 +2567,7 @@ struct CADJSONAdapterTests {
         let adapter = CADJSONAdapter(executor: executor)
         let historicalIDs = (1...12).map { String(format: "LIN-%03d", $0) }
             + (1...8).map { String(format: "REC-%03d", $0) }
-        let currentIDs = historicalIDs + ["REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012", "CYL-001", "CYL-002", "CYL-003", "CYL-004", "CYL-005", "CYL-006", "CYL-007", "CYL-008", "CON-001", "CON-002", "CON-003", "CON-004", "CON-005", "CON-006", "CON-007", "CON-008", "TRN-001", "TRN-002", "TRN-003", "TRN-004", "TRN-005", "TRN-006", "TRN-007", "TRN-008"]
+        let currentIDs = historicalIDs + ["REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012", "CYL-001", "CYL-002", "CYL-003", "CYL-004", "CYL-005", "CYL-006", "CYL-007", "CYL-008", "CON-001", "CON-002", "CON-003", "CON-004", "CON-005", "CON-006", "CON-007", "CON-008", "TRN-001", "TRN-002", "TRN-003", "TRN-004", "TRN-005", "TRN-006", "TRN-007", "TRN-008", "CMP-001"]
         #expect(executor.activatedCaseIDs.map(\.rawValue) == currentIDs)
 
         // Each activated record is case ID, request byte count, and request SHA-256, all length-prefixed.
@@ -2985,6 +3057,13 @@ struct CADJSONAdapterTests {
         appendLengthPrefixed(bigEndianBytes(UInt64(transform008Request.count)), to: &currentAggregate)
         appendLengthPrefixed(Data(SHA256.hash(data: transform008Request)), to: &currentAggregate)
         #expect(sha256Hex(currentAggregate) == "8a8c89deee4c596749cd6411823ab475bfd13ef7da7ccbff1c66b0425ee53795")
+
+        let compound001ID: CADBenchmarkCaseID = "CMP-001"
+        let compound001Request = try adapter.encodeRequest(for: compound001ID)
+        appendLengthPrefixed(Data(compound001ID.rawValue.utf8), to: &currentAggregate)
+        appendLengthPrefixed(bigEndianBytes(UInt64(compound001Request.count)), to: &currentAggregate)
+        appendLengthPrefixed(Data(SHA256.hash(data: compound001Request)), to: &currentAggregate)
+        #expect(sha256Hex(currentAggregate) == "858477370524c450594b67700087b9f38ba13dd9883cd322ba821142cb1c1678")
     }
 
     @MainActor
@@ -3116,9 +3195,9 @@ struct CADJSONAdapterTests {
 
         let inactiveResponse = try CADJSONCandidateResponseEnvelope(
             schema: CADJSONAdapterSchema.candidateResponse,
-            caseID: "CMP-001",
+            caseID: "CMP-002",
             contextFingerprint: String(repeating: "0", count: 64),
-            decision: .action(constraint001Action(name: "CMP-001"))
+            decision: .action(constraint001Action(name: "CMP-002"))
         )
         do {
             _ = try await adapter.evaluate(response: inactiveResponse)
@@ -3192,7 +3271,7 @@ struct CADJSONAdapterTests {
             )
         }
 
-        let legacy = Data(#"{"schema":"rupa.agent-cad-benchmark.candidate-response.v7","caseID":"LIN-001","contextFingerprint":"0000000000000000000000000000000000000000000000000000000000000000","decision":{"action":{"automation":{"sketch":{"line":{"name":"legacy"}}}}}}"#.utf8)
+        let legacy = Data(#"{"schema":"rupa.agent-cad-benchmark.candidate-response.v8","caseID":"LIN-001","contextFingerprint":"0000000000000000000000000000000000000000000000000000000000000000","decision":{"action":{"automation":{"sketch":{"line":{"name":"legacy"}}}}}}"#.utf8)
         expectAdapterError(.invalidDecision) {
             _ = try CADJSONBoundedCodec.decode(
                 CADJSONCandidateResponseEnvelope.self,
@@ -3200,7 +3279,7 @@ struct CADJSONAdapterTests {
             )
         }
 
-        let unknown = Data(#"{"schema":"rupa.agent-cad-benchmark.candidate-response.v7","caseID":"LIN-001","contextFingerprint":"0000000000000000000000000000000000000000000000000000000000000000","decision":{"kind":"future"}}"#.utf8)
+        let unknown = Data(#"{"schema":"rupa.agent-cad-benchmark.candidate-response.v8","caseID":"LIN-001","contextFingerprint":"0000000000000000000000000000000000000000000000000000000000000000","decision":{"kind":"future"}}"#.utf8)
         expectAdapterError(.invalidDecision) {
             _ = try CADJSONBoundedCodec.decode(
                 CADJSONCandidateResponseEnvelope.self,
@@ -3211,7 +3290,7 @@ struct CADJSONAdapterTests {
 
     @MainActor
     @Test
-    func candidateResponseV1ThroughV6AreRejectedBeforeDecisionDecode() throws {
+    func candidateResponseV1ThroughV7AreRejectedBeforeDecisionDecode() throws {
         let adapter = CADJSONAdapter()
         let request = try adapter.makeRequest(for: "LIN-001")
         let response = try CADJSONCandidateResponseEnvelope(
@@ -3320,6 +3399,26 @@ struct CADJSONAdapterTests {
             _ = try CADJSONBoundedCodec.decode(
                 CADJSONCandidateResponseEnvelope.self,
                 from: v6WithUnknownDecision
+            )
+        }
+
+        let v7 = replacing(
+            try CADJSONBoundedCodec.encode(response),
+            from: CADJSONAdapterSchema.candidateResponse,
+            to: "rupa.agent-cad-benchmark.candidate-response.v7"
+        )
+        expectAdapterError(.unsupportedSchema) {
+            _ = try CADJSONBoundedCodec.decode(
+                CADJSONCandidateResponseEnvelope.self,
+                from: v7
+            )
+        }
+
+        let v7WithUnknownDecision = Data(#"{"schema":"rupa.agent-cad-benchmark.candidate-response.v7","decision":{"kind":"future"}}"#.utf8)
+        expectAdapterError(.unsupportedSchema) {
+            _ = try CADJSONBoundedCodec.decode(
+                CADJSONCandidateResponseEnvelope.self,
+                from: v7WithUnknownDecision
             )
         }
 
@@ -3801,6 +3900,31 @@ private func transform008Action(
         rotationAxis: axis,
         rotation: CADAngle(value: 60, unit: .degree)
     )))
+}
+
+private func compound001Action(
+    baseOriginZ: Double = 0,
+    postRadius: Double = 10,
+    postAxis: CADDirection3D = CADDirection3D(x: 0, y: 0, z: 1)
+) -> CADCandidateAction {
+    .compound(CADCompoundAction(members: [
+        CADCompoundMemberAction(
+            role: "base",
+            name: "CMP-001.base",
+            origin: CADPoint3D(x: 0, y: 0, z: baseOriginZ, unit: .millimeter),
+            width: CADLength(value: 100, unit: .millimeter),
+            depth: CADLength(value: 50, unit: .millimeter),
+            height: CADLength(value: 20, unit: .millimeter)
+        ),
+        CADCompoundMemberAction(
+            role: "post",
+            name: "CMP-001.post",
+            baseCenter: CADPoint3D(x: 50, y: 25, z: 20, unit: .millimeter),
+            axis: postAxis,
+            radius: CADLength(value: postRadius, unit: .millimeter),
+            depth: CADLength(value: 80, unit: .millimeter)
+        ),
+    ]))
 }
 
 private func box001Action(name: String, width: Double = 10) -> CADCandidateAction {

@@ -14,8 +14,9 @@ struct CADTransformCategoryCheckpointTests {
         #expect(expectedCases.count == 8)
         #expect(Set(expectedCases).count == 8)
         let executor = DefaultCADActivatedCaseExecutor()
-        #expect(executor.activatedCaseIDs.count == 88)
-        #expect(Array(executor.activatedCaseIDs.suffix(expectedCases.count))
+        #expect(executor.activatedCaseIDs.count == 89)
+        #expect(executor.activatedCaseIDs.last == "CMP-001")
+        #expect(Array(executor.activatedCaseIDs.prefix(88).suffix(expectedCases.count))
             == expectedCases.map(\.caseID))
 
         let catalog = try CADBenchmarkCatalog()

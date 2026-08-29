@@ -5,14 +5,13 @@ import RupaAutomation
 import RupaCore
 import RupaKit
 import SwiftCAD
-import Synchronization
 
 /// Projects the category-neutral lifecycle into one ordered compound result.
 ///
-/// Compound preparation deliberately keeps the candidate contract local to this
-/// file set. The lifecycle still receives one category-neutral batch plan, so
-/// the production controller owns validation, staging, commit, evaluation, and
-/// history publication exactly as it does for every other batch.
+/// Candidate decisions cross the public CADCandidateProtocol and
+/// CADCandidateAction contracts. A public compound action is lowered to one
+/// ordered batch of primitive commands, while the production controller owns
+/// validation, staging, commit, evaluation, and history publication.
 @MainActor
 struct CADCompoundCaseRunner {
     struct SourceCounts: Equatable, Sendable {
@@ -25,10 +24,9 @@ struct CADCompoundCaseRunner {
         let vertexCount: Int
     }
 
-    private static let operationName = "compoundPreparation"
     private static let defaultTimeoutWallNanoseconds: UInt64 = 10_000_000_000
 
-    private let activatedCase: CADCompoundActivatedCase
+    private let activatedCase: CADActivatedCompoundCase
     private let recorder = CADCompoundRecorder()
     private let timeoutWallNanoseconds: UInt64
     private let preRouteDelayNanoseconds: UInt64
@@ -36,7 +34,7 @@ struct CADCompoundCaseRunner {
     private let failureSourceReader: @MainActor (ProjectViewSnapshot) throws -> SourceCounts
 
     init(
-        case activatedCase: CADCompoundActivatedCase,
+        case activatedCase: CADActivatedCompoundCase,
         timeoutWallNanoseconds: UInt64 = Self.defaultTimeoutWallNanoseconds,
         preRouteDelayNanoseconds: UInt64 = 0,
         postRegistrationDelayNanoseconds: UInt64 = 0,
@@ -57,32 +55,19 @@ struct CADCompoundCaseRunner {
         try await run(candidate: CADCompoundReferenceCandidate())
     }
 
-    func run(candidate: any CADCompoundCandidateProtocol) async throws -> CADCompoundCaseResult {
+    func run(candidate: any CADCandidateProtocol) async throws -> CADCompoundCaseResult {
         let totalStart = now()
         let entry = try activatedCase.catalogEntry
-        let planStore = CADCompoundPlanStore()
-        let adapter = CADCompoundCandidateAdapter(candidate: candidate, store: planStore)
-        let record = try await harness(
-            challenge: entry.challenge,
-            planStore: planStore
-        ).runReference(candidate: adapter)
+        let record = try await harness(challenge: entry.challenge).runReference(candidate: candidate)
         return await project(record, entry: entry, totalStart: totalStart)
     }
 
-    /// Runs a caller-provided ordered compound plan through one production batch.
-    func run(plan: CADCompoundCandidatePlan) async throws -> CADCompoundCaseResult {
-        try await run(actions: plan.members)
-    }
-
-    /// Runs caller-provided members through one production batch.
+    /// Runs one public compound action through one production batch.
     func run(actions: [CADCompoundMemberAction]) async throws -> CADCompoundCaseResult {
         let totalStart = now()
         let entry = try activatedCase.catalogEntry
-        let planStore = CADCompoundPlanStore(plan: CADCompoundCandidatePlan(members: actions))
-        let record = try await harness(
-            challenge: entry.challenge,
-            planStore: planStore
-        ).run(action: placeholderAction(from: actions.first))
+        let action = CADCandidateAction.compound(CADCompoundAction(members: actions))
+        let record = try await harness(challenge: entry.challenge).run(action: action)
         return await project(record, entry: entry, totalStart: totalStart)
     }
 
@@ -92,39 +77,25 @@ struct CADCompoundCaseRunner {
         return try await runStale(actions: members)
     }
 
-    func runStale(plan: CADCompoundCandidatePlan) async throws -> CADCompoundCaseResult {
-        try await runStale(actions: plan.members)
-    }
-
     func runStale(actions: [CADCompoundMemberAction]) async throws -> CADCompoundCaseResult {
         let totalStart = now()
         let entry = try activatedCase.catalogEntry
-        let planStore = CADCompoundPlanStore(plan: CADCompoundCandidatePlan(members: actions))
-        let record = try await harness(
-            challenge: entry.challenge,
-            planStore: planStore
-        ).runStale(action: placeholderAction(from: actions.first))
+        let action = CADCandidateAction.compound(CADCompoundAction(members: actions))
+        let record = try await harness(challenge: entry.challenge).runStale(action: action)
         return await project(record, entry: entry, totalStart: totalStart)
     }
 
     private func harness(
-        challenge: CADChallenge,
-        planStore: CADCompoundPlanStore
+        challenge: CADChallenge
     ) -> CADCaseLifecycleHarness {
         CADCaseLifecycleHarness(
             caseID: caseID,
             challenge: challenge,
             routing: CADCaseActionRouting(
-                operationName: Self.operationName,
-                planBuilder: { [self, planStore] _, challenge, tolerance in
-                    guard let candidatePlan = planStore.load() else {
-                        throw CADBenchmarkError.invalidInput(
-                            caseID: caseID.rawValue,
-                            reason: "The compound candidate plan was not retained before routing."
-                        )
-                    }
+                operationName: "",
+                planBuilder: { [self] action, challenge, tolerance in
                     return try makePlan(
-                        from: candidatePlan,
+                        from: action,
                         challenge: challenge,
                         modelingTolerance: tolerance
                     )
@@ -137,12 +108,18 @@ struct CADCompoundCaseRunner {
     }
 
     private func makePlan(
-        from candidatePlan: CADCompoundCandidatePlan,
+        from action: CADCandidateAction,
         challenge: CADChallenge,
         modelingTolerance: ModelingTolerance
     ) throws -> CADCaseActionPlan {
+        guard case .compound(let compound) = action else {
+            throw CADBenchmarkError.invalidInput(
+                caseID: caseID.rawValue,
+                reason: "A compound case requires one public compound action."
+            )
+        }
         let projection = try CADCompoundChallengeProjection.decode(challenge)
-        guard candidatePlan.members.count == projection.members.count else {
+        guard compound.members.count == projection.members.count else {
             throw CADBenchmarkError.invalidInput(
                 caseID: caseID.rawValue,
                 reason: "A compound candidate must provide exactly one member for every declared role."
@@ -150,8 +127,8 @@ struct CADCompoundCaseRunner {
         }
 
         var commands: [AutomationCommand] = []
-        commands.reserveCapacity(candidatePlan.members.count)
-        for (index, submitted) in candidatePlan.members.enumerated() {
+        commands.reserveCapacity(compound.members.count)
+        for (index, submitted) in compound.members.enumerated() {
             let expected = projection.members[index]
             commands.append(
                 try CADCompoundGeometryMapping.command(
@@ -163,23 +140,6 @@ struct CADCompoundCaseRunner {
             )
         }
         return .batch(commands)
-    }
-
-    private func placeholderAction(from first: CADCompoundMemberAction?) -> CADCandidateAction {
-        if let first {
-            return first.asCandidateAction()
-        }
-        return .automation(
-            .solid(
-                .box(
-                    name: "\(caseID.rawValue).empty",
-                    origin: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
-                    width: CADLength(value: 1, unit: .millimeter),
-                    depth: CADLength(value: 1, unit: .millimeter),
-                    height: CADLength(value: 1, unit: .millimeter)
-                )
-            )
-        )
     }
 
     private func project(
@@ -555,36 +515,6 @@ struct CADCompoundCaseRunner {
             return description
         }
         return String(describing: error)
-    }
-}
-
-private final class CADCompoundPlanStore: Sendable {
-    private let state = Mutex<CADCompoundCandidatePlan?>(nil)
-
-    init(plan: CADCompoundCandidatePlan? = nil) {
-        state.withLock { $0 = plan }
-    }
-
-    func store(_ plan: CADCompoundCandidatePlan) {
-        state.withLock { $0 = plan }
-    }
-
-    func load() -> CADCompoundCandidatePlan? {
-        state.withLock { $0 }
-    }
-}
-
-private struct CADCompoundCandidateAdapter: CADCandidateProtocol {
-    let candidate: any CADCompoundCandidateProtocol
-    let store: CADCompoundPlanStore
-
-    func decide(for context: CADCandidateContext) async throws -> CADCandidateDecision {
-        let plan = try await candidate.decide(for: context)
-        store.store(plan)
-        guard let first = plan.members.first else {
-            return .finish(CADOutputRoleBindings(bindings: []))
-        }
-        return .action(first.asCandidateAction())
     }
 }
 

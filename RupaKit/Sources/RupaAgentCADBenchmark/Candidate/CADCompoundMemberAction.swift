@@ -1,20 +1,16 @@
-import RupaAgentProtocol
+import Foundation
 
-/// One candidate-owned compound member intent.
-///
-/// The role is intentionally kept beside the public solid payload so that a
-/// compound plan can preserve semantic output order without exposing any
-/// authority or FeatureID information to the candidate.
-struct CADCompoundMemberAction: Equatable, Sendable {
-    let role: String
-    let solid: CADSolidAction
+/// One ordered candidate-owned primitive member in a compound intent.
+public struct CADCompoundMemberAction: Codable, Equatable, Hashable, Sendable {
+    public let role: String
+    public let solid: CADSolidAction
 
-    init(role: String, solid: CADSolidAction) {
+    public init(role: String, solid: CADSolidAction) {
         self.role = role
         self.solid = solid
     }
 
-    init(
+    public init(
         role: String,
         name: String,
         origin: CADPoint3D,
@@ -34,7 +30,7 @@ struct CADCompoundMemberAction: Equatable, Sendable {
         )
     }
 
-    init(
+    public init(
         role: String,
         name: String,
         baseCenter: CADPoint3D,
@@ -61,9 +57,5 @@ struct CADCompoundMemberAction: Equatable, Sendable {
         case .cylinder:
             .cylinder
         }
-    }
-
-    func asCandidateAction() -> CADCandidateAction {
-        .automation(.solid(solid))
     }
 }

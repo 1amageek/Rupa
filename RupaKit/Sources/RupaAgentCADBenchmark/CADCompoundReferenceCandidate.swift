@@ -1,14 +1,17 @@
 import RupaAgentProtocol
 
-/// Deterministic control candidate for the authority-neutral compound
-/// preparation path. It derives every member from candidate-visible text.
-struct CADCompoundReferenceCandidate: CADCompoundCandidateProtocol {
-    func decide(for context: CADCandidateContext) async throws -> CADCompoundCandidatePlan {
-        try Self.plan(for: context.challenge)
+/// Deterministic control candidate for the activated compound path.
+/// It derives one public compound action from candidate-visible text.
+struct CADCompoundReferenceCandidate: CADCandidateProtocol {
+    func decide(for context: CADCandidateContext) async throws -> CADCandidateDecision {
+        .action(try Self.action(for: context.challenge))
     }
 
-    static func plan(for challenge: CADChallenge) throws -> CADCompoundCandidatePlan {
-        _ = try CADCompoundActivatedCase(caseID: challenge.id)
+    static func action(for challenge: CADChallenge) throws -> CADCandidateAction {
+        .compound(CADCompoundAction(members: try members(for: challenge)))
+    }
+
+    static func members(for challenge: CADChallenge) throws -> [CADCompoundMemberAction] {
         let projection = try CADCompoundChallengeProjection.decode(challenge)
         var members: [CADCompoundMemberAction] = []
         members.reserveCapacity(projection.members.count)
@@ -46,10 +49,6 @@ struct CADCompoundReferenceCandidate: CADCompoundCandidateProtocol {
                 ))
             }
         }
-        return CADCompoundCandidatePlan(members: members)
-    }
-
-    static func members(for challenge: CADChallenge) throws -> [CADCompoundMemberAction] {
-        try plan(for: challenge).members
+        return members
     }
 }

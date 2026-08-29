@@ -10,7 +10,7 @@ struct CADCompoundCategoryCheckpointTests {
     @MainActor
     @Test(.timeLimit(.minutes(2)))
     func missingExtraReorderedAndSubstituteMembersFailBeforePublication() async throws {
-        let activatedCase: CADCompoundActivatedCase = .compound001
+        let activatedCase: CADActivatedCompoundCase = .compound001
         let reference = try referenceMembers(for: activatedCase)
         let variants: [[CADCompoundMemberAction]] = [
             Array(reference.dropLast()),
@@ -46,17 +46,17 @@ struct CADCompoundCategoryCheckpointTests {
     @MainActor
     @Test(.timeLimit(.minutes(2)))
     func wrongCylinderAxisPublishesOnceThenFailsTheSourceOracle() async throws {
-        let activatedCase: CADCompoundActivatedCase = .compound003
+        let activatedCase: CADActivatedCompoundCase = .compound001
         var members = try referenceMembers(for: activatedCase)
-        guard case let .cylinder(name, baseCenter, _, radius, depth) = members[0].solid else {
-            Issue.record("CMP-003 first member was not the expected cylinder.")
+        guard case let .cylinder(name, baseCenter, _, radius, depth) = members[1].solid else {
+            Issue.record("CMP-001 second member was not the expected cylinder.")
             return
         }
-        members[0] = CADCompoundMemberAction(
-            role: members[0].role,
+        members[1] = CADCompoundMemberAction(
+            role: members[1].role,
             name: name,
             baseCenter: baseCenter,
-            axis: CADDirection3D(x: 0, y: 0, z: 1),
+            axis: CADDirection3D(x: 1, y: 0, z: 0),
             radius: radius,
             depth: depth
         )
@@ -79,7 +79,7 @@ struct CADCompoundCategoryCheckpointTests {
     @MainActor
     @Test(.timeLimit(.minutes(2)))
     func laterMemberFailureRollsBackEarlierMemberThroughProductionBatch() async throws {
-        let activatedCase: CADCompoundActivatedCase = .compound001
+        let activatedCase: CADActivatedCompoundCase = .compound001
         let entry = try activatedCase.catalogEntry
         let projection = try CADCompoundChallengeProjection.decode(entry.challenge)
         let reference = try CADCompoundReferenceCandidate.members(for: entry.challenge)
@@ -117,7 +117,9 @@ struct CADCompoundCategoryCheckpointTests {
             timeoutWallNanoseconds: 10_000_000_000
         )
 
-        let record = try await harness.run(action: reference[0].asCandidateAction())
+        let record = try await harness.run(
+            action: .compound(CADCompoundAction(members: reference))
+        )
 
         #expect(record.outcome == .executionFailure)
         #expect(record.routeEvidence.didPublish == false)
@@ -138,7 +140,7 @@ struct CADCompoundCategoryCheckpointTests {
     }
 
     private func referenceMembers(
-        for activatedCase: CADCompoundActivatedCase
+        for activatedCase: CADActivatedCompoundCase
     ) throws -> [CADCompoundMemberAction] {
         let entry = try activatedCase.catalogEntry
         return try CADCompoundReferenceCandidate.members(for: entry.challenge)

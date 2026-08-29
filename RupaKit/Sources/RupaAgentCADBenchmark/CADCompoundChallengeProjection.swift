@@ -105,11 +105,11 @@ struct CADCompoundChallengeProjection: Equatable, Sendable {
     }
 
     func validate() throws {
-        guard CADCompoundActivatedCase(rawValue: id.rawValue) != nil,
+        guard CADCompoundPreparedCase(rawValue: id.rawValue) != nil,
               !members.isEmpty else {
             throw CADBenchmarkError.invalidInput(
                 caseID: id.rawValue,
-                reason: "The compound projection is empty or inactive."
+                reason: "The compound projection is empty or unprepared."
             )
         }
         var roles = Set<String>()

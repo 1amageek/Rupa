@@ -41,7 +41,7 @@ enum CADCompoundOracle {
         snapshot: ProjectViewSnapshot
     ) throws -> CADCompoundOracleObservation {
         let caseID = challenge.id
-        guard CADCompoundActivatedCase(rawValue: caseID.rawValue) != nil,
+        guard CADActivatedCompoundCase(rawValue: caseID.rawValue) != nil,
               challenge.category == .compound else {
             throw CADCompoundOracleError.mismatch(
                 "The oracle received an inactive or non-compound challenge."
@@ -73,14 +73,14 @@ enum CADCompoundOracle {
                 guard publicMember.box == expectedMember.box,
                       publicMember.cylinder == nil else {
                     throw CADCompoundOracleError.mismatch(
-                        "The public box member values disagree with the private expectation."
+                        "The submitted box member values disagree with the private expectation."
                     )
                 }
             case .cylinder:
                 guard publicMember.cylinder == expectedMember.cylinder,
                       publicMember.box == nil else {
                     throw CADCompoundOracleError.mismatch(
-                        "The public cylinder member values or axis disagree with the private expectation."
+                        "The submitted cylinder member values or axis disagree with the private expectation."
                     )
                 }
             }

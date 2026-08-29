@@ -55,7 +55,7 @@ rupa-agent-cad-benchmark request <CASE-ID>
 rupa-agent-cad-benchmark evaluate --response <PATH|->
 ```
 
-`request` validates that the ID is in the activated 88-case set and emits
+`request` validates that the ID is in the activated 89-case set and emits
 exactly one request-envelope JSON object to standard output. `evaluate` reads
 exactly one candidate-response envelope from the selected file, or from
 standard input when `-` is selected, then emits exactly one evaluation- or
@@ -129,8 +129,9 @@ Process-level tests build and invoke the actual executable and prove:
 - `request` emits valid v1 JSON for an activated line, rectangle, REC-009
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
   millimetre/XY case, the complete CIR-001...012 category, ANG-001...016, and
-  BOX-001...012, `CYL-001...008`, `CON-001...008`, and `TRN-001...008`, and rejects inactive `CMP-001`;
-- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, CON-001...008, and TRN-001...008 transform responses traverse the adapter, production
+  BOX-001...012, `CYL-001...008`, `CON-001...008`, `TRN-001...008`, and
+  `CMP-001`, and rejects inactive `CMP-002`;
+- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, CON-001...008, TRN-001...008 transform, and CMP-001 compound responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
@@ -761,18 +762,17 @@ until the transform category begins. Candidate-response v6,
 bounded/private-free one-JSON output, command surface, deadline ownership, and
 exit mapping remain unchanged.
 
-### TRN-001 through TRN-008 current process boundary
+### TRN-001 through TRN-008 frozen process checkpoint
 
-The current executable authority is the exact ordered 88-case prefix
+The frozen transform process checkpoint is the exact ordered 88-case prefix
 `LIN-001`...`LIN-012`, `REC-001`...`REC-012`, `CIR-001`...`CIR-012`,
 `ANG-001`...`ANG-016`, `BOX-001`...`BOX-012`, `CYL-001`...`CYL-008`,
-`CON-001`...`CON-008`, and `TRN-001`...`TRN-008`. `CMP-001` remains
-inactive and is rejected with exit `64` by both `request` and `evaluate` before
-production execution. The candidate-response schema is v7; v1...v6 are
-rejected as unsupported schema.
+`CON-001`...`CON-008`, and `TRN-001`...`TRN-008`. This checkpoint introduced
+candidate-response schema v7. The current executable requires v8, and v1...v7
+are rejected as unsupported schema.
 
 `request TRN-001` through `request TRN-008` emit one bounded transform context. An
-exact v7 response
+exact current-schema response
 from either a file or standard input exits `0` after the existing
 `setSceneNodeTransform` production route and oracle realize the source. A
 TRN-001 translation with x = 26 mm, TRN-002 wrong-order translation
@@ -805,6 +805,23 @@ appending the actual TRN-007 request freezes the 87-request aggregate as
 `d1c0aaf385f5f67658a5052f26f3b38cf4970ce5377a9f282e8022f3dcd482ec`;
 appending the actual TRN-008 request freezes the 88-request aggregate as
 `8a8c89deee4c596749cd6411823ab475bfd13ef7da7ccbff1c66b0425ee53795`.
+
+### CMP-001 current process boundary
+
+The current executable authority appends `CMP-001` as the 89th case and leaves
+`CMP-002` inactive. `request CMP-001` emits one bounded private-free compound
+context whose ordered roles are `base`, `post`. Candidate-response v8 carries
+one benchmark-owned compound action with the exact 100 mm x 50 mm x 20 mm base
+and radius 10 mm, depth 80 mm post. Exact file and standard-input responses
+execute one atomic production batch and exit `0` with `realized`.
+
+A base moved to z = 1 mm exits `2` as postpublication `invalidSubmission`
+without retry. A zero post radius exits `2` as prepublication
+`invalidSubmission`. A v7 response or `request CMP-002` exits `64`, and every
+path emits one bounded private-free JSON object. The request bytes for the
+frozen 88-case transform checkpoint remain unchanged; appending the actual
+`CMP-001` request freezes the 89-request aggregate as
+`858477370524c450594b67700087b9f38ba13dd9883cd322ba821142cb1c1678`.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected
 case argument, so a case-mismatch process fixture cannot be constructed without

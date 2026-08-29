@@ -1,7 +1,7 @@
 import Foundation
 
-/// The compound cases prepared for the later serial authority activation.
-enum CADCompoundActivatedCase: String, CaseIterable, Equatable, Hashable, Sendable {
+/// Compound cases present in the private catalog and prepared for later gates.
+enum CADCompoundPreparedCase: String, CaseIterable, Equatable, Hashable, Sendable {
     case compound001 = "CMP-001"
     case compound002 = "CMP-002"
     case compound003 = "CMP-003"
@@ -12,20 +12,6 @@ enum CADCompoundActivatedCase: String, CaseIterable, Equatable, Hashable, Sendab
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)
-    }
-
-    init(caseID: CADBenchmarkCaseID) throws {
-        guard let value = Self(rawValue: caseID.rawValue) else {
-            throw CADBenchmarkError.invalidCaseID(caseID.rawValue)
-        }
-        self = value
-    }
-
-    init(caseID: String) throws {
-        guard let value = Self(rawValue: caseID) else {
-            throw CADBenchmarkError.invalidCaseID(caseID)
-        }
-        self = value
     }
 
     var catalogEntry: CADCatalogEntry {
