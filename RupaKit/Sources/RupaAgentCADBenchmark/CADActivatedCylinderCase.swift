@@ -4,6 +4,7 @@ import Foundation
 enum CADActivatedCylinderCase: String, CaseIterable, Equatable, Hashable, Sendable {
     case cylinder001 = "CYL-001"
     case cylinder002 = "CYL-002"
+    case cylinder003 = "CYL-003"
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)

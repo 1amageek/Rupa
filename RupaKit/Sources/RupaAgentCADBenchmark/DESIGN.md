@@ -1174,6 +1174,29 @@ The frozen 66-request aggregate is
 Schema, catalog, fingerprint, tolerance, runner, oracle, lifecycle, kernel, and
 renderer/Mesh contracts do not change.
 
+### CYL-003 +Y-axis translated activation contract
+
+CYL-003 reuses the completed v5 solid/cylinder projection, mapping, lifecycle,
+runner, production controller route, and immutable source/B-Rep oracle. Its
+exact public target is base centre (-50, 20, 10) mm, normalized +Y axis, radius
+25 mm, and depth 100 mm. The source plane origin must equal that submitted
+base, its normal must equal +Y, the circle must remain at local origin, and the
+second cap must lie 100 mm along world +Y. Existing exact source/extrude/body
+binding, analytic face/edge, topology 1/6/12/8, directed cap/vertex, and πr²h
+volume authority apply unchanged.
+
+An otherwise exact +Z-axis cylinder publishes exactly once and is rejected by
+the immutable oracle without retry; a zero axis is rejected before command and
+publication. Existing timeout, cleanup, count-and-positive-phase telemetry, and
+privacy evidence remain case-gate requirements. Activation advances authority
+66→67 only after these checks, preserves the frozen 66-request aggregate
+`53b35fd441b1bbb210c20c55e4913e5bcea19213dba1b684ab1cf9b916797702`,
+freezes the observed 67-request aggregate
+`c6d27d83af09579d4d4526dbd3f27c212af7ccaa1d17b878c60dd3ae9f7991e8`,
+and leaves CYL-004 typed inactive.
+Schema, catalog, fingerprint, tolerance, runner, oracle, lifecycle, kernel, and
+renderer/Mesh contracts do not change.
+
 ### Vertical Case Gate
 
 Cases are activated in the lexical/category order recorded in

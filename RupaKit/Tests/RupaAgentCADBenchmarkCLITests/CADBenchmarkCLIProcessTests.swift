@@ -23,7 +23,7 @@ struct CADBenchmarkCLIProcessTests {
     @Test(.timeLimit(.minutes(2)))
     @MainActor
     func requestEmitsBoundedReviewedObjectsAndRejectsInactiveCase() throws {
-        for rawCaseID in ["LIN-001", "REC-001", "REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012", "CYL-001", "CYL-002"] {
+        for rawCaseID in ["LIN-001", "REC-001", "REC-009", "REC-010", "REC-011", "REC-012", "CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012", "CYL-001", "CYL-002", "CYL-003"] {
             let result = try runCADBenchmarkCLI(["request", rawCaseID])
             #expect(result.terminationStatus == 0, Comment(rawValue: result.standardError))
             #expect(result.standardOutputData.count <= CADJSONAdapterSchema.maximumDocumentBytes)
@@ -36,14 +36,14 @@ struct CADBenchmarkCLIProcessTests {
             #expect(result.standardError.isEmpty)
         }
 
-        let inactive = try runCADBenchmarkCLI(["request", "CYL-003"])
+        let inactive = try runCADBenchmarkCLI(["request", "CYL-004"])
         #expect(inactive.terminationStatus == 64)
         let error = try CADJSONBoundedCodec.decode(
             CADJSONErrorEnvelope.self,
             from: inactive.standardOutputData
         )
         #expect(error.code == .inactiveCase)
-        #expect(error.caseID?.rawValue == "CYL-003")
+        #expect(error.caseID?.rawValue == "CYL-004")
         #expect(isPrivateFree(inactive.standardOutput))
     }
 
@@ -600,6 +600,16 @@ struct CADBenchmarkCLIProcessTests {
             translatedCylinderStandardInputResult,
             caseID: "CYL-002"
         )
+
+        let yAxisCylinderResponse = try responseData(
+            for: "CYL-003",
+            action: cylinder003Action(name: "CYL-003")
+        )
+        let yAxisCylinderStandardInputResult = try runCADBenchmarkCLI(
+            ["evaluate", "--response", "-"],
+            standardInput: yAxisCylinderResponse
+        )
+        try assertRealizedEvaluation(yAxisCylinderStandardInputResult, caseID: "CYL-003")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -687,6 +697,27 @@ struct CADBenchmarkCLIProcessTests {
         #expect(translatedCylinderEvaluation.result?.outcome == .invalidSubmission)
         #expect(translatedCylinderEvaluation.error == nil)
         #expect(isPrivateFree(translatedCylinderResult.standardOutput))
+
+        let wrongYAxisCylinder = try responseData(
+            for: "CYL-003",
+            action: cylinder003Action(
+                name: "CYL-003.wrong-axis",
+                axis: CADDirection3D(x: 0, y: 0, z: 1)
+            )
+        )
+        let wrongYAxisCylinderResult = try runCADBenchmarkCLI(
+            ["evaluate", "--response", "-"],
+            standardInput: wrongYAxisCylinder
+        )
+        let wrongYAxisCylinderEvaluation = try CADJSONBoundedCodec.decode(
+            CADJSONEvaluationEnvelope.self,
+            from: wrongYAxisCylinderResult.standardOutputData
+        )
+        #expect(wrongYAxisCylinderResult.terminationStatus == 2)
+        #expect(wrongYAxisCylinderEvaluation.caseID == "CYL-003")
+        #expect(wrongYAxisCylinderEvaluation.result?.outcome == .invalidSubmission)
+        #expect(wrongYAxisCylinderEvaluation.error == nil)
+        #expect(isPrivateFree(wrongYAxisCylinderResult.standardOutput))
 
         let wrongTranslatedBox = try responseData(
             for: "BOX-002",
@@ -977,15 +1008,15 @@ struct CADBenchmarkCLIProcessTests {
         try assertError(fingerprintResult, code: .fingerprintMismatch, exit: 64, caseID: "LIN-001")
 
         let inactiveResponse = try responseData(
-            for: "CYL-003",
+            for: "CYL-004",
             contextFingerprint: String(repeating: "0", count: 64),
-            action: cylinder002Action(name: "CYL-003")
+            action: cylinder003Action(name: "CYL-004")
         )
         let inactiveResult = try runCADBenchmarkCLI(
             ["evaluate", "--response", "-"],
             standardInput: inactiveResponse
         )
-        try assertError(inactiveResult, code: .inactiveCase, exit: 64, caseID: "CYL-003")
+        try assertError(inactiveResult, code: .inactiveCase, exit: 64, caseID: "CYL-004")
 
         let finishResponse = try finishResponseData(for: request)
         let finishResult = try runCADBenchmarkCLI(
@@ -1210,6 +1241,19 @@ private func cylinder002Action(
         axis: axis,
         radius: CADLength(value: 10, unit: .millimeter),
         depth: CADLength(value: 50, unit: .millimeter)
+    )))
+}
+
+private func cylinder003Action(
+    name: String,
+    axis: CADDirection3D = CADDirection3D(x: 0, y: 1, z: 0)
+) -> CADCandidateAction {
+    .automation(.solid(.cylinder(
+        name: name,
+        baseCenter: CADPoint3D(x: -50, y: 20, z: 10, unit: .millimeter),
+        axis: axis,
+        radius: CADLength(value: 25, unit: .millimeter),
+        depth: CADLength(value: 100, unit: .millimeter)
     )))
 }
 
