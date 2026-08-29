@@ -5,15 +5,18 @@ import Testing
 @Suite(.serialized)
 struct CADCompoundCaseTests {
     private static let activatedCase: CADActivatedCompoundCase = .compound001
+    private static let secondActivatedCase: CADActivatedCompoundCase = .compound002
 
     @Test
     func preparedAndActivatedBoundariesRemainDistinct() throws {
         #expect(CADCompoundPreparedCase.allCases.map(\.rawValue) == [
             "CMP-001", "CMP-002", "CMP-003", "CMP-004", "CMP-005", "CMP-006", "CMP-007",
         ])
-        #expect(CADActivatedCompoundCase.allCases.map(\.rawValue) == ["CMP-001"])
+        #expect(CADActivatedCompoundCase.allCases.map(\.rawValue) == ["CMP-001", "CMP-002"])
         #expect(CADCompoundPreparedCase(rawValue: "CMP-002") != nil)
-        #expect(CADActivatedCompoundCase(rawValue: "CMP-002") == nil)
+        #expect(CADActivatedCompoundCase(rawValue: "CMP-002") != nil)
+        #expect(CADCompoundPreparedCase(rawValue: "CMP-003") != nil)
+        #expect(CADActivatedCompoundCase(rawValue: "CMP-003") == nil)
     }
 
     @Test
@@ -42,6 +45,12 @@ struct CADCompoundCaseTests {
         #expect(CADCompoundGeometryMapping.requiredOperationNames(for: [
             reference[1], reference[0], reference[1],
         ]) == ["createExtrudedCircle", "createExtrudedRectangle"])
+
+        let secondChallenge = try Self.secondActivatedCase.catalogEntry.challenge
+        let secondReference = try CADCompoundReferenceCandidate.members(for: secondChallenge)
+        #expect(CADCompoundGeometryMapping.requiredOperationNames(for: secondReference) == [
+            "createExtrudedRectangle",
+        ])
     }
 
     @MainActor
@@ -75,6 +84,48 @@ struct CADCompoundCaseTests {
         #expect(result.telemetry.commandCount == 2)
         #expect(result.telemetry.readCount == 2)
         #expect(result.telemetry.entityCount == 5)
+        #expect(result.telemetry.featureCount == 4)
+        #expect(result.telemetry.bodyCount == 2)
+        #expect(result.telemetry.faceCount == 12)
+        #expect(result.telemetry.edgeCount == 24)
+        #expect(result.telemetry.vertexCount == 16)
+        #expect(result.telemetry.planningWallNanoseconds > 0)
+        #expect(result.telemetry.routeWallNanoseconds > 0)
+        #expect(result.telemetry.oracleWallNanoseconds > 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(2)))
+    func compound002PublishesTwoOrderedCubesWithExactSourceAndTopology() async throws {
+        let result = try await CADCompoundCaseRunner(case: Self.secondActivatedCase).runReference()
+
+        try result.validate()
+        #expect(result.caseID == "CMP-002")
+        #expect(result.outcome == .realized)
+        #expect(result.routeEvidence.didPublish)
+        #expect(
+            result.routeEvidence.finalDocumentGeneration.value
+                == result.routeEvidence.initialDocumentGeneration.value + 2
+        )
+        #expect(
+            result.routeEvidence.finalTransactionRevision.value
+                == result.routeEvidence.initialTransactionRevision.value + 1
+        )
+        #expect(
+            result.routeEvidence.finalPublicationSequence
+                == result.routeEvidence.initialPublicationSequence + 1
+        )
+        #expect(result.routeEvidence.memberCount == 2)
+        #expect(result.routeEvidence.commandCount == 2)
+        #expect(result.routeEvidence.evaluationPassCount == 1)
+        #expect(result.routeEvidence.historyEntryCount == 1)
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        #expect(result.roleBindings?.bindings.map(\.role) == ["left", "right"])
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 2)
+        #expect(result.telemetry.readCount == 2)
+        #expect(result.telemetry.entityCount == 8)
         #expect(result.telemetry.featureCount == 4)
         #expect(result.telemetry.bodyCount == 2)
         #expect(result.telemetry.faceCount == 12)
@@ -125,6 +176,81 @@ struct CADCompoundCaseTests {
         #expect(result.telemetry.featureCount == 4)
         #expect(result.telemetry.bodyCount == 2)
         #expect(result.diagnostics.contains { $0.lowercased().contains("oracle mismatch") })
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(2)))
+    func compound002SwappedOriginsPublishOnceThenFailRoleSensitiveOracle() async throws {
+        let reference = try CADCompoundReferenceCandidate.members(
+            for: Self.secondActivatedCase.catalogEntry.challenge
+        )
+        let members = [
+            CADCompoundMemberAction(role: reference[0].role, solid: reference[1].solid),
+            CADCompoundMemberAction(role: reference[1].role, solid: reference[0].solid),
+        ]
+
+        let result = try await CADCompoundCaseRunner(case: Self.secondActivatedCase)
+            .run(actions: members)
+
+        try result.validate()
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish)
+        #expect(
+            result.routeEvidence.finalPublicationSequence
+                == result.routeEvidence.initialPublicationSequence + 1
+        )
+        #expect(result.routeEvidence.memberCount == 2)
+        #expect(result.routeEvidence.commandCount == 2)
+        #expect(result.routeEvidence.evaluationPassCount == 1)
+        #expect(result.routeEvidence.historyEntryCount == 1)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 2)
+        #expect(result.telemetry.readCount == 2)
+        #expect(result.telemetry.entityCount == 8)
+        #expect(result.telemetry.featureCount == 4)
+        #expect(result.telemetry.bodyCount == 2)
+        #expect(result.diagnostics.contains { $0.lowercased().contains("oracle mismatch") })
+        #expect(result.routeEvidence.cleanupCompleted)
+        #expect(result.routeEvidence.remainingRegistrationCount == 0)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(2)))
+    func compound002ZeroDimensionFailsBeforePublication() async throws {
+        let reference = try CADCompoundReferenceCandidate.members(
+            for: Self.secondActivatedCase.catalogEntry.challenge
+        )
+        guard case let .box(name, origin, _, depth, height) = reference[1].solid else {
+            Issue.record("CMP-002 right member was not a box.")
+            return
+        }
+        let members = [
+            reference[0],
+            CADCompoundMemberAction(
+                role: reference[1].role,
+                name: name,
+                origin: origin,
+                width: CADLength(value: 0, unit: .millimeter),
+                depth: depth,
+                height: height
+            ),
+        ]
+
+        let result = try await CADCompoundCaseRunner(case: Self.secondActivatedCase)
+            .run(actions: members)
+
+        try result.validate()
+        #expect(result.outcome == .invalidSubmission)
+        #expect(result.routeEvidence.didPublish == false)
+        #expect(result.routeEvidence.commandCount == 0)
+        #expect(
+            result.routeEvidence.finalPublicationSequence
+                == result.routeEvidence.initialPublicationSequence
+        )
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 0)
         #expect(result.routeEvidence.cleanupCompleted)
         #expect(result.routeEvidence.remainingRegistrationCount == 0)
     }
@@ -205,36 +331,41 @@ struct CADCompoundCaseTests {
     @MainActor
     @Test(.timeLimit(.minutes(2)))
     func timeoutStaleAndCancellationRetainNoPublicationAndCleanup() async throws {
-        let timeout = try await CADCompoundCaseRunner(
-            case: Self.activatedCase,
-            timeoutWallNanoseconds: 1
-        ).runReference()
-        try timeout.validate()
-        #expect(timeout.outcome == .timeout)
-        #expect(timeout.routeEvidence.didPublish == false)
-        #expect(timeout.routeEvidence.cleanupCompleted)
-        #expect(timeout.routeEvidence.remainingRegistrationCount == 0)
+        for activatedCase in CADActivatedCompoundCase.allCases {
+            let timeout = try await CADCompoundCaseRunner(
+                case: activatedCase,
+                timeoutWallNanoseconds: 1
+            ).runReference()
+            try timeout.validate()
+            #expect(timeout.caseID == activatedCase.caseID)
+            #expect(timeout.outcome == .timeout)
+            #expect(timeout.routeEvidence.didPublish == false)
+            #expect(timeout.routeEvidence.cleanupCompleted)
+            #expect(timeout.routeEvidence.remainingRegistrationCount == 0)
 
-        let stale = try await CADCompoundCaseRunner(case: Self.activatedCase).runStaleReference()
-        try stale.validate()
-        #expect(stale.outcome == .executionFailure)
-        #expect(stale.routeEvidence.didPublish == false)
-        #expect(stale.telemetry.actionCount == 2)
-        #expect(stale.telemetry.commandCount == 4)
-        #expect(stale.routeEvidence.cleanupCompleted)
-        #expect(stale.routeEvidence.remainingRegistrationCount == 0)
+            let stale = try await CADCompoundCaseRunner(case: activatedCase).runStaleReference()
+            try stale.validate()
+            #expect(stale.caseID == activatedCase.caseID)
+            #expect(stale.outcome == .executionFailure)
+            #expect(stale.routeEvidence.didPublish == false)
+            #expect(stale.telemetry.actionCount == 2)
+            #expect(stale.telemetry.commandCount == 4)
+            #expect(stale.routeEvidence.cleanupCompleted)
+            #expect(stale.routeEvidence.remainingRegistrationCount == 0)
 
-        let task = Task { @MainActor in
-            await Task.yield()
-            return try await CADCompoundCaseRunner(case: Self.activatedCase).runReference()
+            let task = Task { @MainActor in
+                await Task.yield()
+                return try await CADCompoundCaseRunner(case: activatedCase).runReference()
+            }
+            task.cancel()
+            let cancellation = try await task.value
+            try cancellation.validate()
+            #expect(cancellation.caseID == activatedCase.caseID)
+            #expect(cancellation.outcome == .cancellation)
+            #expect(cancellation.routeEvidence.didPublish == false)
+            #expect(cancellation.routeEvidence.cleanupCompleted)
+            #expect(cancellation.routeEvidence.remainingRegistrationCount == 0)
         }
-        task.cancel()
-        let cancellation = try await task.value
-        try cancellation.validate()
-        #expect(cancellation.outcome == .cancellation)
-        #expect(cancellation.routeEvidence.didPublish == false)
-        #expect(cancellation.routeEvidence.cleanupCompleted)
-        #expect(cancellation.routeEvidence.remainingRegistrationCount == 0)
     }
 
     @MainActor

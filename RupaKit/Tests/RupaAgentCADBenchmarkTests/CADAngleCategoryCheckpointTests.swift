@@ -72,15 +72,15 @@ struct CADAngleCategoryCheckpointTests {
         let executor = DefaultCADActivatedCaseExecutor()
         let expectedAngles = CADActivatedAngleCase.allCases.map(\.caseID)
 
-        #expect(executor.activatedCaseIDs.count == 89)
+        #expect(executor.activatedCaseIDs.count == 90)
         #expect(Array(executor.activatedCaseIDs.prefix(52).suffix(16)) == expectedAngles)
         #expect(executor.activatedCaseIDs.prefix(64).suffix(12).map(\.rawValue) == ["BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012"])
 
         do {
-            _ = try executor.context(for: "CMP-002")
-            Issue.record("CMP-002 must remain inactive until its vertical gate.")
+            _ = try executor.context(for: "CMP-003")
+            Issue.record("CMP-003 must remain inactive until its vertical gate.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("CMP-002"))
+            #expect(error == .inactiveCase("CMP-003"))
         }
     }
 }

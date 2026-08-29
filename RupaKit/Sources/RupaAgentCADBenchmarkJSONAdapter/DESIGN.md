@@ -9,10 +9,10 @@ between an external Agent process and the activated-case executor owned by
 [benchmark CLI](../RupaAgentCADBenchmarkCLI/DESIGN.md) supplies process arguments
 and standard streams; this target owns the JSON meaning used by that process.
 
-The adapter is limited to the 89 reviewed cases `LIN-001`...`LIN-012`,
+The adapter is limited to the 90 reviewed cases `LIN-001`...`LIN-012`,
 `REC-001`...`REC-012`, `CIR-001`...`CIR-012`, `ANG-001`...`ANG-016`,
 `BOX-001`...`BOX-012`, `CYL-001`...`CYL-008`, `CON-001`...`CON-008`, and
-`TRN-001`...`TRN-008`, and `CMP-001`. It does not activate a catalog case and does not make the
+`TRN-001`...`TRN-008`, `CMP-001`, and `CMP-002`. It does not activate a catalog case and does not make the
 remaining target specifications executable.
 
 ## Responsibilities and Boundaries
@@ -125,7 +125,7 @@ evaluation and candidate construction remain module-internal test/composition
 seams, so a caller cannot construct a large in-memory response and bypass the
 JSON input authority.
 
-The activated eighty-nine cases accept one action decision. `unsupported` and
+The activated ninety cases accept one action decision. `unsupported` and
 `finish` remain valid protocol values but are not converted to successful
 actions; the T12-XA-A executor contract projects either as typed
 `invalidSubmission` without publication. Multi-round continuation is not added
@@ -1043,10 +1043,9 @@ publication without retry, and a zero rotation
 axis is rejected before publication. No source snapshot, oracle expectation,
 or private lifecycle evidence crosses this adapter boundary.
 
-### CMP-001 current external authority contract
+### CMP-001 frozen external checkpoint
 
-The current adapter authority appends `CMP-001` to the frozen transform
-checkpoint as the 89th case; `CMP-002` remains typed inactive. The public
+The frozen 89-case checkpoint appends `CMP-001` to the transform checkpoint. The public
 challenge declares ordered output roles `base`, `post` and requires a box
 100 mm x 50 mm x 20 mm at `(0, 0, 0)` mm followed by a cylinder with radius
 10 mm and depth 80 mm at `(50, 25, 20)` mm along `(0, 0, 1)`. Candidate-response
@@ -1062,6 +1061,24 @@ capability, tolerance, fingerprint, and byte-bound contracts remain unchanged.
 Appending the actual bounded `CMP-001` request bytes to the unchanged
 88-request aggregate freezes the 89-request aggregate as
 `858477370524c450594b67700087b9f38ba13dd9883cd322ba821142cb1c1678`.
+
+### CMP-002 current external authority contract
+
+The current adapter authority appends `CMP-002` as the 90th case; `CMP-003`
+remains typed inactive. Its public challenge declares ordered roles `left`,
+`right` and two 25 mm boxes at x = -40 mm and x = 15 mm. The exact v8 compound
+action traverses the bounded JSON boundary and one atomic production batch.
+Swapping the two public origins publishes once and produces
+`invalidSubmission` without retry; a zero member dimension is rejected before
+publication. No private expectation, topology, telemetry, or lifecycle value
+crosses the adapter.
+
+The request, candidate-response v8, evaluation, error, manifest, catalog,
+expectation, capability, tolerance, fingerprint, and byte-bound contracts do
+not change. The 89-request aggregate remains
+`858477370524c450594b67700087b9f38ba13dd9883cd322ba821142cb1c1678`;
+appending the actual bounded `CMP-002` request freezes the 90-request aggregate
+as `bec563a757811e492c5ce3bf89514cfe3526ead2f69041ca2f15eabd2c035855`.
 
 ## Runtime Flows
 
@@ -1109,12 +1126,12 @@ classification and are projected only to stable non-private codes.
 
 | Invariant | Behavioral evidence |
 |---|---|
-| Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON includes BOX-001...012 `solid/box`, CYL-001...008 `solid/cylinder`, CON-001...008 `sketch/constraint`, TRN-001...008 `transform`, and CMP-001 ordered role-bearing `compound`; candidate-response v8 carries the explicit discriminators, v1 through v7 and unknown current-schema discriminators are rejected, and every direct and nested case ID is the same scalar string. |
+| Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON includes BOX-001...012 `solid/box`, CYL-001...008 `solid/cylinder`, CON-001...008 `sketch/constraint`, TRN-001...008 `transform`, and CMP-001...002 ordered role-bearing `compound`; candidate-response v8 carries the explicit discriminators, v1 through v7 and unknown current-schema discriminators are rejected, and every direct and nested case ID is the same scalar string. |
 | Exact public-context binding | The request fingerprint equals the live executor context; changed schema, case, context byte, capability, budget, or fingerprint is rejected before publication. |
-| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, CIR-001...012, ANG-001...016, BOX-001...012, CYL-001...008, CON-001...008, TRN-001...008, and CMP-001; CMP-002 remains typed inactive. The frozen 80-request prefix remains `91f68ea42c6e131263b499995637e9f9b7dbce64fcf441bdcdf385c9f341efb0`; TRN-001 preserves 81-request aggregate `e4c0ad812c421428ed59c7dd2671922e9e1f667af3f574d0ea87a461e53aab82`, TRN-002 produces 82-request aggregate `9ca519a087729b5aa46e549ef3ec6f903158a8aff159dce2bcce09182f0b46ef`, TRN-003 produces 83-request aggregate `02a7bfa19eed2aa8cdef578058a97b48b5e88822840cbd23343590a8281b579a`, TRN-004 produces 84-request aggregate `c4d86468d4992df1030e0ed45c98b823f33caa9bf904ea7a6252950c95f017d0`, TRN-005 produces 85-request aggregate `c5c61320be710e1fe290b86e25ad9afb83b2d687c608c13aa3b4c6e2ee100779`, TRN-006 produces 86-request aggregate `f7061d03903393f8384f3c23eed29c4eb4ef8529e27f03fca5e268e698b01f90`, TRN-007 produces 87-request aggregate `d1c0aaf385f5f67658a5052f26f3b38cf4970ce5377a9f282e8022f3dcd482ec`, TRN-008 produces 88-request aggregate `8a8c89deee4c596749cd6411823ab475bfd13ef7da7ccbff1c66b0425ee53795`, and CMP-001 produces 89-request aggregate `858477370524c450594b67700087b9f38ba13dd9883cd322ba821142cb1c1678`. |
+| Current activation boundary | The executor-derived ordered set is exactly LIN-001...012, REC-001...012, CIR-001...012, ANG-001...016, BOX-001...012, CYL-001...008, CON-001...008, TRN-001...008, and CMP-001...002; CMP-003 remains typed inactive. The frozen 80-request prefix remains `91f68ea42c6e131263b499995637e9f9b7dbce64fcf441bdcdf385c9f341efb0`; TRN-001 preserves 81-request aggregate `e4c0ad812c421428ed59c7dd2671922e9e1f667af3f574d0ea87a461e53aab82`, TRN-002 produces 82-request aggregate `9ca519a087729b5aa46e549ef3ec6f903158a8aff159dce2bcce09182f0b46ef`, TRN-003 produces 83-request aggregate `02a7bfa19eed2aa8cdef578058a97b48b5e88822840cbd23343590a8281b579a`, TRN-004 produces 84-request aggregate `c4d86468d4992df1030e0ed45c98b823f33caa9bf904ea7a6252950c95f017d0`, TRN-005 produces 85-request aggregate `c5c61320be710e1fe290b86e25ad9afb83b2d687c608c13aa3b4c6e2ee100779`, TRN-006 produces 86-request aggregate `f7061d03903393f8384f3c23eed29c4eb4ef8529e27f03fca5e268e698b01f90`, TRN-007 produces 87-request aggregate `d1c0aaf385f5f67658a5052f26f3b38cf4970ce5377a9f282e8022f3dcd482ec`, TRN-008 produces 88-request aggregate `8a8c89deee4c596749cd6411823ab475bfd13ef7da7ccbff1c66b0425ee53795`, CMP-001 produces 89-request aggregate `858477370524c450594b67700087b9f38ba13dd9883cd322ba821142cb1c1678`, and CMP-002 produces 90-request aggregate `bec563a757811e492c5ce3bf89514cfe3526ead2f69041ca2f15eabd2c035855`. |
 | Bounded I/O | Exact-limit input succeeds, `limit + 1` fails before decode and leaves executor evaluation count zero, chunked stdin and file paths behave identically, no public typed-response execution bypass exists, encoded output cannot exceed the same bound, and the guaranteed infrastructure document is byte-equal to normal encoding, bounded, and decodable. |
 | Candidate/oracle separation | Static dependency and source scans prove the adapter imports only public benchmark contracts; encoded fixtures contain no expectation/oracle/source snapshot fields or values. |
-| Same production route | JSON candidates for activated line, rectangle, circle, angle, box, cylinder, constraint, TRN-001...008 transform, and CMP-001 compound cases realize through the public executor; wrong geometry publishes once then the category's exact oracle rejects without retry, while invalid transform and compound inputs fail before publication. |
+| Same production route | JSON candidates for activated line, rectangle, circle, angle, box, cylinder, constraint, TRN-001...008 transform, and CMP-001...002 compound cases realize through the public executor; wrong geometry publishes once then the category's exact oracle rejects without retry, while invalid transform and compound inputs fail before publication. |
 | Non-action honesty | Valid `unsupported` and `finish` responses reach the benchmark candidate boundary, produce typed prepublication `invalidSubmission`, zero publication, and no fallback reference action. |
 
 Changes to public candidate Codable shapes, public context fields, capability

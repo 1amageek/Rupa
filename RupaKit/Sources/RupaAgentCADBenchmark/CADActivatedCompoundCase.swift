@@ -3,6 +3,7 @@ import Foundation
 /// Compound cases that have completed their individual activation gate.
 enum CADActivatedCompoundCase: String, CaseIterable, Equatable, Hashable, Sendable {
     case compound001 = "CMP-001"
+    case compound002 = "CMP-002"
 
     var caseID: CADBenchmarkCaseID {
         CADBenchmarkCaseID(rawValue: rawValue)

@@ -6,11 +6,11 @@ import Testing
 struct CADActivatedCaseExecutorTests {
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func executorActivatesOnlyReviewedCasesThroughCmp001() throws {
+    func executorActivatesOnlyReviewedCasesThroughCmp002() throws {
         let executor = DefaultCADActivatedCaseExecutor()
         let expected = (1...12).map { String(format: "LIN-%03d", $0) }
             + (1...12).map { String(format: "REC-%03d", $0) }
-            + ["CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012", "CYL-001", "CYL-002", "CYL-003", "CYL-004", "CYL-005", "CYL-006", "CYL-007", "CYL-008", "CON-001", "CON-002", "CON-003", "CON-004", "CON-005", "CON-006", "CON-007", "CON-008", "TRN-001", "TRN-002", "TRN-003", "TRN-004", "TRN-005", "TRN-006", "TRN-007", "TRN-008", "CMP-001"]
+            + ["CIR-001", "CIR-002", "CIR-003", "CIR-004", "CIR-005", "CIR-006", "CIR-007", "CIR-008", "CIR-009", "CIR-010", "CIR-011", "CIR-012", "ANG-001", "ANG-002", "ANG-003", "ANG-004", "ANG-005", "ANG-006", "ANG-007", "ANG-008", "ANG-009", "ANG-010", "ANG-011", "ANG-012", "ANG-013", "ANG-014", "ANG-015", "ANG-016", "BOX-001", "BOX-002", "BOX-003", "BOX-004", "BOX-005", "BOX-006", "BOX-007", "BOX-008", "BOX-009", "BOX-010", "BOX-011", "BOX-012", "CYL-001", "CYL-002", "CYL-003", "CYL-004", "CYL-005", "CYL-006", "CYL-007", "CYL-008", "CON-001", "CON-002", "CON-003", "CON-004", "CON-005", "CON-006", "CON-007", "CON-008", "TRN-001", "TRN-002", "TRN-003", "TRN-004", "TRN-005", "TRN-006", "TRN-007", "TRN-008", "CMP-001", "CMP-002"]
         #expect(executor.activatedCaseIDs.map(\.rawValue) == expected)
     }
 
@@ -580,10 +580,10 @@ struct CADActivatedCaseExecutorTests {
     func nextCompoundCaseIsRejectedBeforeCategoryDispatch() async throws {
         let executor = DefaultCADActivatedCaseExecutor()
         do {
-            _ = try executor.context(for: "CMP-002")
+            _ = try executor.context(for: "CMP-003")
             Issue.record("Inactive case must be rejected.")
         } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .inactiveCase("CMP-002"))
+            #expect(error == .inactiveCase("CMP-003"))
         }
     }
 
@@ -617,18 +617,47 @@ struct CADActivatedCaseExecutorTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(2)))
-    func compound001CandidateFailureIsTyped() async throws {
+    func compoundCandidateFailureIsTypedForEveryActivatedCase() async throws {
         let executor = DefaultCADActivatedCaseExecutor()
 
-        do {
-            _ = try await executor.evaluate(
-                caseID: "CMP-001",
-                candidate: ThrowingCandidate()
-            )
-            Issue.record("Compound candidate failure must be thrown.")
-        } catch let error as CADActivatedCaseExecutorError {
-            #expect(error == .candidateFailure("CMP-001"))
+        for activatedCase in CADActivatedCompoundCase.allCases {
+            do {
+                _ = try await executor.evaluate(
+                    caseID: activatedCase.caseID,
+                    candidate: ThrowingCandidate()
+                )
+                Issue.record("Compound candidate failure must be thrown.")
+            } catch let error as CADActivatedCaseExecutorError {
+                #expect(error == .candidateFailure(activatedCase.caseID))
+            }
         }
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(2)))
+    func compound002UsesThePublicExecutorRoute() async throws {
+        let executor = DefaultCADActivatedCaseExecutor()
+        let context = try executor.context(for: "CMP-002")
+        #expect(context.challenge.category == .compound)
+        #expect(context.challenge.requiredCapability.id == "cad.assembly.compound")
+        #expect(
+            context.capabilities.status(for: context.challenge.requiredCapability)?.available
+                == true
+        )
+        #expect(
+            CADCompoundGeometryMapping.requiredOperationNames(for: context.challenge)
+                == ["createExtrudedRectangle"]
+        )
+
+        let result = try await executor.evaluate(
+            caseID: "CMP-002",
+            candidate: CADCompoundReferenceCandidate()
+        )
+
+        #expect(result.id == "CMP-002")
+        #expect(result.category == .compound)
+        #expect(result.outcome == .realized)
+        try result.validate()
     }
 
     @MainActor

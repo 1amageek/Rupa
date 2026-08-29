@@ -55,7 +55,7 @@ rupa-agent-cad-benchmark request <CASE-ID>
 rupa-agent-cad-benchmark evaluate --response <PATH|->
 ```
 
-`request` validates that the ID is in the activated 89-case set and emits
+`request` validates that the ID is in the activated 90-case set and emits
 exactly one request-envelope JSON object to standard output. `evaluate` reads
 exactly one candidate-response envelope from the selected file, or from
 standard input when `-` is selected, then emits exactly one evaluation- or
@@ -130,8 +130,8 @@ Process-level tests build and invoke the actual executable and prove:
   inch/XZ case, REC-010 metre/XY case, REC-011 millimetre/YZ case, and REC-012
   millimetre/XY case, the complete CIR-001...012 category, ANG-001...016, and
   BOX-001...012, `CYL-001...008`, `CON-001...008`, `TRN-001...008`, and
-  `CMP-001`, and rejects inactive `CMP-002`;
-- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, CON-001...008, TRN-001...008 transform, and CMP-001 compound responses traverse the adapter, production
+  `CMP-001...002`, and rejects inactive `CMP-003`;
+- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, CON-001...008, TRN-001...008 transform, and CMP-001...002 compound responses traverse the adapter, production
   controller, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
@@ -806,10 +806,10 @@ appending the actual TRN-007 request freezes the 87-request aggregate as
 appending the actual TRN-008 request freezes the 88-request aggregate as
 `8a8c89deee4c596749cd6411823ab475bfd13ef7da7ccbff1c66b0425ee53795`.
 
-### CMP-001 current process boundary
+### CMP-001 frozen process checkpoint
 
-The current executable authority appends `CMP-001` as the 89th case and leaves
-`CMP-002` inactive. `request CMP-001` emits one bounded private-free compound
+The frozen 89-case process checkpoint appends `CMP-001`. `request CMP-001`
+emits one bounded private-free compound
 context whose ordered roles are `base`, `post`. Candidate-response v8 carries
 one benchmark-owned compound action with the exact 100 mm x 50 mm x 20 mm base
 and radius 10 mm, depth 80 mm post. Exact file and standard-input responses
@@ -817,11 +817,27 @@ execute one atomic production batch and exit `0` with `realized`.
 
 A base moved to z = 1 mm exits `2` as postpublication `invalidSubmission`
 without retry. A zero post radius exits `2` as prepublication
-`invalidSubmission`. A v7 response or `request CMP-002` exits `64`, and every
+`invalidSubmission`. A v7 response exits `64`, and every
 path emits one bounded private-free JSON object. The request bytes for the
 frozen 88-case transform checkpoint remain unchanged; appending the actual
 `CMP-001` request freezes the 89-request aggregate as
 `858477370524c450594b67700087b9f38ba13dd9883cd322ba821142cb1c1678`.
+
+### CMP-002 current process boundary
+
+The current executable authority appends `CMP-002` as the 90th case and leaves
+`CMP-003` inactive. `request CMP-002` emits one bounded private-free context
+with ordered roles `left`, `right` and two 25 mm boxes at x = -40 mm and
+x = 15 mm. Exact candidate-response v8 documents supplied by file and standard
+input execute one atomic production batch and exit `0` with `realized`.
+
+Swapping the origins exits `2` as postpublication `invalidSubmission` without
+retry. A zero member dimension exits `2` as prepublication
+`invalidSubmission`; `request CMP-003` exits `64`. Schema v8, command surface,
+byte bound, and exit mapping remain unchanged. The known 89-request aggregate
+remains `858477370524c450594b67700087b9f38ba13dd9883cd322ba821142cb1c1678`;
+appending the actual `CMP-002` request freezes the 90-request aggregate as
+`bec563a757811e492c5ce3bf89514cfe3526ead2f69041ca2f15eabd2c035855`.
 
 The explicit `evaluate --response <PATH|->` contract has no separate expected
 case argument, so a case-mismatch process fixture cannot be constructed without

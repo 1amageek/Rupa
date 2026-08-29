@@ -95,7 +95,7 @@ struct CADBoxCategoryCheckpointTests {
         let executor = DefaultCADActivatedCaseExecutor()
         let expectedBoxes = CADActivatedBoxCase.allCases.map(\.caseID)
 
-        #expect(executor.activatedCaseIDs.count == 89)
+        #expect(executor.activatedCaseIDs.count == 90)
         #expect(Array(executor.activatedCaseIDs.prefix(64).suffix(expectedBoxes.count)) == expectedBoxes)
         #expect(executor.activatedCaseIDs.prefix(65).last == "CYL-001")
         #expect(executor.activatedCaseIDs.prefix(66).last == "CYL-002")
@@ -106,6 +106,7 @@ struct CADBoxCategoryCheckpointTests {
         #expect(executor.activatedCaseIDs.prefix(71).last == "CYL-007")
         #expect(executor.activatedCaseIDs.prefix(72).last == "CYL-008")
         #expect(executor.activatedCaseIDs.prefix(88).last == "TRN-008")
-        #expect(executor.activatedCaseIDs.last == "CMP-001")
+        #expect(executor.activatedCaseIDs.prefix(89).last == "CMP-001")
+        #expect(executor.activatedCaseIDs.last == "CMP-002")
     }
 }

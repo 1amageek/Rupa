@@ -9,6 +9,40 @@ import SwiftCAD
 struct CADCompoundCategoryCheckpointTests {
     @MainActor
     @Test(.timeLimit(.minutes(2)))
+    func activatedCompoundPrefixReplaysThroughTheProductionRoute() async throws {
+        #expect(CADActivatedCompoundCase.allCases.map(\.rawValue) == ["CMP-001", "CMP-002"])
+
+        for activatedCase in CADActivatedCompoundCase.allCases {
+            let result = try await CADCompoundCaseRunner(case: activatedCase).runReference()
+
+            try result.validate()
+            #expect(result.outcome == .realized)
+            #expect(result.routeEvidence.didPublish)
+            #expect(result.routeEvidence.memberCount == 2)
+            #expect(result.routeEvidence.commandCount == 2)
+            #expect(result.routeEvidence.evaluationPassCount == 1)
+            #expect(result.routeEvidence.historyEntryCount == 1)
+            #expect(result.routeEvidence.finalDocumentGeneration.value
+                == result.routeEvidence.initialDocumentGeneration.value + 2)
+            #expect(result.routeEvidence.finalTransactionRevision.value
+                == result.routeEvidence.initialTransactionRevision.value + 1)
+            #expect(result.routeEvidence.finalPublicationSequence
+                == result.routeEvidence.initialPublicationSequence + 1)
+            #expect(result.telemetry.actionCount == 1)
+            #expect(result.telemetry.commandCount == 2)
+            #expect(result.telemetry.readCount == 2)
+            #expect(result.telemetry.featureCount == 4)
+            #expect(result.telemetry.bodyCount == 2)
+            #expect(result.telemetry.faceCount == 12)
+            #expect(result.telemetry.edgeCount == 24)
+            #expect(result.telemetry.vertexCount == 16)
+            #expect(result.routeEvidence.cleanupCompleted)
+            #expect(result.routeEvidence.remainingRegistrationCount == 0)
+        }
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(2)))
     func missingExtraReorderedAndSubstituteMembersFailBeforePublication() async throws {
         let activatedCase: CADActivatedCompoundCase = .compound001
         let reference = try referenceMembers(for: activatedCase)
