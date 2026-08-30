@@ -340,7 +340,92 @@ func projectPackageRejectsDuplicatesAndConfiguredLimits() throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
-func projectPackageFailedAtomicReplacementPreservesDestinationAndCleansTemporaryFile() throws {
+func projectPackageSaveUsesInjectedStagingAndCleansItAfterPublication() throws {
+    try withTemporaryDirectory { directory in
+        let destinationURL = directory.appendingPathComponent("staged.rupa")
+        let stagingDirectoryURL = directory.appendingPathComponent(
+            "replacement-directory",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: stagingDirectoryURL,
+            withIntermediateDirectories: false
+        )
+        let staging = ProjectPackageStaging(
+            packageURL: stagingDirectoryURL.appendingPathComponent("project.rupa"),
+            directoryURL: stagingDirectoryURL
+        )
+        let document = try fixtureMeshOnlyDocument(seed: "staged")
+        let store = ProjectPackageStore(
+            limits: .standard,
+            stagingFactory: { requestedDestinationURL in
+                #expect(requestedDestinationURL == destinationURL)
+                return staging
+            },
+            cleanupStaging: { requestedStaging in
+                #expect(requestedStaging.packageURL == staging.packageURL)
+                #expect(requestedStaging.directoryURL == staging.directoryURL)
+                try FileManager.default.removeItem(at: stagingDirectoryURL)
+            },
+            replaceFile: { stagingURL, requestedDestinationURL in
+                #expect(stagingURL == staging.packageURL)
+                #expect(requestedDestinationURL == destinationURL)
+                try ProjectPackageAtomicFileReplacer.replace(
+                    temporaryURL: stagingURL,
+                    destinationURL: requestedDestinationURL
+                )
+            }
+        )
+
+        let saved = try store.save(document, to: destinationURL)
+
+        #expect(saved.document.productSource == document.productSource)
+        #expect(saved.warnings.isEmpty)
+        #expect(FileManager.default.fileExists(atPath: destinationURL.path))
+        #expect(!FileManager.default.fileExists(atPath: stagingDirectoryURL.path))
+        #expect(try ProjectPackageStore().load(from: destinationURL).productSource
+            == document.productSource)
+    }
+}
+
+#if canImport(Darwin)
+@Test(.timeLimit(.minutes(1)))
+func projectPackageDarwinSaveDoesNotStageBesideDestination() throws {
+    try withTemporaryDirectory { directory in
+        let destinationURL = directory.appendingPathComponent("not-adjacent.rupa")
+        let store = ProjectPackageStore(
+            limits: .standard,
+            replaceFile: { stagingURL, requestedDestinationURL in
+                #expect(requestedDestinationURL == destinationURL)
+                #expect(
+                    stagingURL.deletingLastPathComponent().standardizedFileURL
+                        != destinationURL.deletingLastPathComponent().standardizedFileURL
+                )
+                try ProjectPackageAtomicFileReplacer.replace(
+                    temporaryURL: stagingURL,
+                    destinationURL: requestedDestinationURL
+                )
+            }
+        )
+
+        _ = try store.save(
+            fixtureMeshOnlyDocument(seed: "not-adjacent"),
+            to: destinationURL
+        )
+
+        let adjacentTemporaryPrefix = ".\(destinationURL.lastPathComponent)."
+        let adjacentTemporaryNames = try FileManager.default.contentsOfDirectory(
+            atPath: directory.path
+        ).filter {
+            $0.hasPrefix(adjacentTemporaryPrefix) && $0.hasSuffix(".tmp")
+        }
+        #expect(adjacentTemporaryNames.isEmpty)
+    }
+}
+#endif
+
+@Test(.timeLimit(.minutes(1)))
+func projectPackageFailedAtomicReplacementPreservesDestinationAndCleansStaging() throws {
     try withTemporaryDirectory { directory in
         let destinationURL = directory.appendingPathComponent("atomic.rupa")
         let original = try fixtureMeshOnlyDocument(seed: "original")
@@ -355,9 +440,27 @@ func projectPackageFailedAtomicReplacementPreservesDestinationAndCleansTemporary
         )
         let replaced = try store.save(replacedDocument, to: destinationURL)
         #expect(replaced.document.productSource == replacementProduct)
+        let retainedBytes = try Data(contentsOf: destinationURL)
+
+        let stagingDirectoryURL = directory.appendingPathComponent(
+            "failed-replacement-directory",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: stagingDirectoryURL,
+            withIntermediateDirectories: false
+        )
+        let staging = ProjectPackageStaging(
+            packageURL: stagingDirectoryURL.appendingPathComponent("project.rupa"),
+            directoryURL: stagingDirectoryURL
+        )
 
         let failingStore = ProjectPackageStore(
             limits: .standard,
+            stagingFactory: { _ in staging },
+            cleanupStaging: { _ in
+                try FileManager.default.removeItem(at: stagingDirectoryURL)
+            },
             replaceFile: { _, _ in
                 throw ProjectPackageError(
                     code: .atomicSaveFailure,
@@ -371,11 +474,52 @@ func projectPackageFailedAtomicReplacementPreservesDestinationAndCleansTemporary
 
         let retained = try store.load(from: destinationURL)
         #expect(retained.productSource == replacementProduct)
-        let temporaryPrefix = ".\(destinationURL.lastPathComponent)."
-        let remainingNames = try FileManager.default.contentsOfDirectory(
-            atPath: directory.path
-        ).filter { $0.hasPrefix(temporaryPrefix) && $0.hasSuffix(".tmp") }
-        #expect(remainingNames.isEmpty)
+        #expect(try Data(contentsOf: destinationURL) == retainedBytes)
+        #expect(!FileManager.default.fileExists(atPath: stagingDirectoryURL.path))
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectPackagePostpublicationCleanupFailureReturnsTypedWarning() throws {
+    try withTemporaryDirectory { directory in
+        let destinationURL = directory.appendingPathComponent("warning.rupa")
+        let stagingDirectoryURL = directory.appendingPathComponent(
+            "warning-replacement-directory",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: stagingDirectoryURL,
+            withIntermediateDirectories: false
+        )
+        let staging = ProjectPackageStaging(
+            packageURL: stagingDirectoryURL.appendingPathComponent("project.rupa"),
+            directoryURL: stagingDirectoryURL
+        )
+        let document = try fixtureMeshOnlyDocument(seed: "cleanup-warning")
+        let store = ProjectPackageStore(
+            limits: .standard,
+            stagingFactory: { _ in staging },
+            cleanupStaging: { _ in
+                throw ProjectPackageError(
+                    code: .ioFailure,
+                    message: "Intentional postpublication cleanup failure."
+                )
+            },
+            replaceFile: { stagingURL, requestedDestinationURL in
+                try ProjectPackageAtomicFileReplacer.replace(
+                    temporaryURL: stagingURL,
+                    destinationURL: requestedDestinationURL
+                )
+            }
+        )
+
+        let saved = try store.save(document, to: destinationURL)
+
+        #expect(saved.warnings.map(\.code) == [.stagingCleanupFailed])
+        #expect(saved.document.productSource == document.productSource)
+        #expect(try ProjectPackageStore().load(from: destinationURL).productSource
+            == document.productSource)
+        #expect(FileManager.default.fileExists(atPath: stagingDirectoryURL.path))
     }
 }
 

@@ -513,8 +513,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             "document.save"
         case .export:
             "document.export"
-        case .committedMutation:
-            nil
+        case .committedMutation(let outcome):
+            outcome.requestMethod
         case .failure:
             nil
         }

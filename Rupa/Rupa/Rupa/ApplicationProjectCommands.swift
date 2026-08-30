@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ApplicationProjectCommands: Commands {
     let coordinator: ApplicationProjectCoordinator
@@ -67,6 +68,7 @@ struct ApplicationProjectCommands: Commands {
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [ApplicationProductConfiguration.projectContentType]
         panel.title = "Open Project"
         return panel.runModal() == .OK ? panel.url : nil
     }
@@ -74,6 +76,8 @@ struct ApplicationProjectCommands: Commands {
     private func saveProjectURL() -> URL? {
         let panel = NSSavePanel()
         panel.canCreateDirectories = true
+        panel.allowedContentTypes = [ApplicationProductConfiguration.projectContentType]
+        panel.isExtensionHidden = false
         panel.nameFieldStringValue = coordinator.currentFileURL?.lastPathComponent
             ?? "Untitled.rupa"
         panel.title = "Save Project"

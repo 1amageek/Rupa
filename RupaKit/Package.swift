@@ -196,7 +196,8 @@ let package = Package(
                 "RupaCoreTypes",
                 "RupaGeometry",
                 "RupaProjectModel",
-            ]
+            ],
+            exclude: ["DESIGN.md"]
         ),
         .target(
             name: "RupaEvaluation",
@@ -249,7 +250,8 @@ let package = Package(
                 "RupaViewportScene",
                 .product(name: "MacComponent", package: "mac-component"),
                 .product(name: "SwiftCAD", package: "swift-CAD"),
-            ]
+            ],
+            exclude: ["DESIGN.md"]
         ),
         .target(
             name: "RupaAgentUI",
@@ -259,7 +261,8 @@ let package = Package(
                 "RupaAgentTransport",
                 "RupaCore",
                 "RupaDomainFoundation",
-            ]
+            ],
+            exclude: ["DESIGN.md"]
         ),
         .target(
             name: "RupaRendering",

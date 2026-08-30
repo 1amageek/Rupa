@@ -2,8 +2,9 @@
 
 ## Purpose and Scope
 
-This module owns the T10 Codable Agent request and response contract for
-Authored Mesh inspection/editing and CAD Make Editable. It is a child of the
+This module owns the Codable Agent request and response contract, including
+Authored Mesh inspection/editing, CAD Make Editable, and authoritative receipts
+for mutations that committed before result projection failed. It is a child of the
 [package design](../../DESIGN.md) and is used by RupaAgentRuntime,
 RupaAgentTransport, RupaAgent, and CLI clients that already speak AgentProtocol.
 It has no child design.
@@ -29,7 +30,8 @@ rasterize previews.
 | [RupaKit package design](../../DESIGN.md) | depends on through `RupaProjectModel` | Authored Mesh provenance | Supplies the persisted authority provenance projected by Make Editable results. | Provenance is evidence, not permission to mutate project state. |
 | [AgentRuntime](../RupaAgentRuntime/DESIGN.md) | used by | decoded typed requests and projected results | Binds messages to registered project authority. | Runtime errors remain typed, never a success fallback. |
 | [RupaProjectAccess](../RupaProjectAccess/DESIGN.md) | used by | typed request/response and session-coordinate values | Carries intent without transport or project authority. | Access-session save is a lifecycle port, not the Agent `document.save` route. |
-| [system design](../../../DESIGN.md) | system parent | file-lifecycle and authority invariants | Defines the acceptance workflow. | Agent wire save remains unsupported. |
+| [system design](../../../DESIGN.md) | system parent | file-lifecycle and authority invariants | Defines the acceptance workflow. | The App router, not Runtime, owns explicit live save. |
+| [Agent host](../RupaAgentUI/DESIGN.md) | used by | injected request handler and save committed receipt | Routes explicit App save while preserving Runtime's fail-closed lifecycle boundary. | A committed save receipt must never be projected as a retryable failure. |
 
 ## Architecture
 
@@ -64,13 +66,22 @@ flowchart LR
    generation. It never contains evaluated Mesh bytes or a forged command.
 6. Wire decoding has no compatibility fallback that drops handles, limits,
    plan steps, identities, or expected coordinates.
-7. `document.save` remains representable for compatibility but the project
-   route continues to return typed unsupported; T10 adds no load/save method.
+7. `document.save` is representable and remains typed unsupported when sent
+   directly to `ProjectAgentCommandController`. The application-composed
+   router may handle it only through the typed coordinator lifecycle port and
+   current URL; create/open/close remain unsupported on the Agent route.
 8. `AgentStatus` contains service availability and session count only. Socket
    endpoint placement is private transport composition.
 9. `AgentRequest.projectSessionID` is the single public extraction contract
    used by runtime and project-access session guards; session-neutral requests
    return `nil`.
+10. `AgentCommittedMutationOutcome.Mutation` includes `save`. A save receipt
+    uses `Stage.viewProjection`, exact project/generation/transaction/
+    publication/workspace coordinates from the committed
+    `ProjectWorkspacePersistencePublicationError.state`, and the existing
+    `RetryDisposition.mustNotRetry`. It means package replacement and
+    clean-state publication already happened; clients must refresh and must not
+    send the save again.
 
 ## Runtime Flows
 
@@ -102,7 +113,8 @@ state and introduces no target-specific synchronization branch.
 ## Verification and Change Impact
 
 Codec and fixture tests must round-trip each success response, reject malformed
-and over-limit input, preserve exact identities/receipts, and prove the save
-route remains unsupported at runtime. Any payload change requires rechecking
-AgentRuntime mapping, transport fixtures, capability descriptors, package
-dependencies, and the system workflow.
+and over-limit input, preserve exact identities/receipts, prove direct Runtime
+save remains unsupported, and round-trip a `Mutation.save` committed receipt
+with must-not-retry semantics. Any payload change requires rechecking
+AgentRuntime mapping, the application router, transport fixtures, capability
+descriptors, package dependencies, and the system workflow.

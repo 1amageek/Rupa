@@ -1,12 +1,15 @@
 import Foundation
 import Observation
+import RupaAgentProtocol
 import RupaCore
+import RupaCoreTypes
 import RupaKit
+import RupaProject
 import RupaUI
 
 @MainActor
 @Observable
-final class ApplicationProjectCoordinator {
+final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
     enum Lifecycle: Equatable {
         case preparing
         case ready
@@ -31,13 +34,15 @@ final class ApplicationProjectCoordinator {
     @ObservationIgnored
     private let operationSequencer: ProjectWorkspaceOperationSequencer
     @ObservationIgnored
+    private let securityScopedAccessOpener: any SecurityScopedProjectAccessOpening
+    @ObservationIgnored
     private let launchArguments: [String]
     @ObservationIgnored
     private var pendingInitialURL: URL?
     @ObservationIgnored
     private var registeredSessionID: UUID?
     @ObservationIgnored
-    private var fileAccess: SecurityScopedProjectURL?
+    private var fileAccess: (any SecurityScopedProjectAccess)?
     @ObservationIgnored
     private var activeTask: Task<Void, Never>?
     @ObservationIgnored
@@ -49,12 +54,15 @@ final class ApplicationProjectCoordinator {
         agentRegistrar: any ApplicationAgentSessionRegistering,
         operationSequencer: ProjectWorkspaceOperationSequencer =
             ProjectWorkspaceOperationSequencer(),
+        securityScopedAccessOpener: any SecurityScopedProjectAccessOpening =
+            DefaultSecurityScopedProjectAccessOpener(),
         initialURL: URL? = nil,
         launchArguments: [String] = ProcessInfo.processInfo.arguments
     ) {
         self.workspace = workspace
         self.agentRegistrar = agentRegistrar
         self.operationSequencer = operationSequencer
+        self.securityScopedAccessOpener = securityScopedAccessOpener
         self.launchArguments = launchArguments
         self.pendingInitialURL = initialURL?.standardizedFileURL
         self.lifecycle = .preparing
@@ -68,15 +76,22 @@ final class ApplicationProjectCoordinator {
         launchFailure: Error,
         agentRegistrar: any ApplicationAgentSessionRegistering,
         operationSequencer: ProjectWorkspaceOperationSequencer =
-            ProjectWorkspaceOperationSequencer()
+            ProjectWorkspaceOperationSequencer(),
+        securityScopedAccessOpener: any SecurityScopedProjectAccessOpening =
+            DefaultSecurityScopedProjectAccessOpener()
     ) {
+        let failureKind: ApplicationProjectFailure.Kind =
+            launchFailure is ApplicationAuthorityLeaseError
+                ? .applicationAuthority
+                : .launch
         let failure = ApplicationProjectFailure(
-            kind: .launch,
+            kind: failureKind,
             message: "The project workspace could not be created: \(launchFailure.localizedDescription)"
         )
         self.workspace = nil
         self.agentRegistrar = agentRegistrar
         self.operationSequencer = operationSequencer
+        self.securityScopedAccessOpener = securityScopedAccessOpener
         self.launchArguments = []
         self.pendingInitialURL = nil
         self.lifecycle = .unavailable(failure)
@@ -122,6 +137,10 @@ final class ApplicationProjectCoordinator {
         operation != nil || scheduledOperation != nil
     }
 
+    var hasRegisteredAgentSession: Bool {
+        lifecycle == .ready && registeredSessionID != nil
+    }
+
     var canCancelOperation: Bool {
         guard let operation = operation ?? scheduledOperation else {
             return false
@@ -137,14 +156,25 @@ final class ApplicationProjectCoordinator {
         }
         launchStarted = true
         await Task.yield()
-        var openedURL = pendingInitialURL
-        var retainedAccess = openedURL.map(SecurityScopedProjectURL.init)
+        var openedURL: URL?
+        var retainedAccess: (any SecurityScopedProjectAccess)?
         do {
-            if let openedURL {
-                _ = try await workspace.load(
-                    from: openedURL,
-                    operationGuard: Self.cancellationGuard
-                )
+            if let requestedURL = pendingInitialURL {
+                let validatedURL = try Self.validatedProjectURL(requestedURL)
+                let candidateAccess = securityScopedAccessOpener.open(validatedURL)
+                do {
+                    _ = try await workspace.load(
+                        from: validatedURL,
+                        operationGuard: Self.cancellationGuard
+                    )
+                } catch {
+                    throw Self.initialFileActivationFailure(
+                        for: validatedURL,
+                        error: error
+                    )
+                }
+                openedURL = validatedURL
+                retainedAccess = candidateAccess
             } else {
                 _ = try await workspace.evaluate()
                 _ = try await WorkspaceLaunchProjectFixture.applyIfRequested(
@@ -162,14 +192,48 @@ final class ApplicationProjectCoordinator {
                 guard let requestedURL = pendingInitialURL else {
                     break
                 }
-                let requestedAccess = SecurityScopedProjectURL(requestedURL)
-                _ = try await workspace.load(
-                    from: requestedURL,
-                    operationGuard: Self.cancellationGuard
-                )
-                try await updateAgentPath(requestedURL)
-                openedURL = requestedURL
-                retainedAccess = requestedAccess
+                let validatedURL: URL
+                do {
+                    validatedURL = try Self.validatedProjectURL(requestedURL)
+                    guard workspace.view?.isDirty != true else {
+                        throw Self.unsavedReplacementFailure(for: validatedURL)
+                    }
+                    let candidateAccess = securityScopedAccessOpener.open(validatedURL)
+                    do {
+                        _ = try await workspace.load(
+                            from: validatedURL,
+                            operationGuard: Self.cancellationGuard
+                        )
+                    } catch let error as ProjectWorkspacePersistencePublicationError {
+                        let didRecover = await handleCommittedPersistenceFailure(
+                            error,
+                            path: validatedURL,
+                            fileAccessAfterRecovery: candidateAccess
+                        )
+                        if didRecover {
+                            openedURL = validatedURL
+                            retainedAccess = candidateAccess
+                            lifecycle = .ready
+                        }
+                        return
+                    }
+                    openedURL = validatedURL
+                    retainedAccess = candidateAccess
+                    fileAccess = candidateAccess
+                    lifecycle = .ready
+                    await updateAgentPathAfterCommit(validatedURL)
+                    if failure != nil {
+                        return
+                    }
+                } catch {
+                    fileAccess = retainedAccess
+                    lifecycle = .ready
+                    failure = Self.fileActivationFailure(
+                        for: requestedURL,
+                        error: error
+                    )
+                    return
+                }
             }
             fileAccess = retainedAccess
             lifecycle = .ready
@@ -179,10 +243,14 @@ final class ApplicationProjectCoordinator {
                 await agentRegistrar.unregister(id: registeredSessionID)
                 self.registeredSessionID = nil
             }
-            let launchFailure = ApplicationProjectFailure(
-                kind: .launch,
-                message: "The project could not be opened: \(error.localizedDescription)"
-            )
+            let launchFailure = if let failure = error as? ApplicationProjectFailure {
+                failure
+            } else {
+                ApplicationProjectFailure(
+                    kind: .launch,
+                    message: "The project could not be opened: \(error.localizedDescription)"
+                )
+            }
             lifecycle = .unavailable(launchFailure)
             failure = launchFailure
         }
@@ -263,8 +331,11 @@ final class ApplicationProjectCoordinator {
             fileAccess = nil
             await updateAgentPathAfterCommit(nil)
         } catch let error as ProjectWorkspacePersistencePublicationError {
-            fileAccess = nil
-            await handleCommittedPersistenceFailure(error, path: nil)
+            _ = await handleCommittedPersistenceFailure(
+                error,
+                path: nil,
+                fileAccessAfterRecovery: nil
+            )
         } catch {
             report(kind: .newProject, error: error)
         }
@@ -277,19 +348,22 @@ final class ApplicationProjectCoordinator {
     }
 
     private func performLoad(from url: URL) async {
+        let normalizedURL: URL
+        do {
+            normalizedURL = try Self.validatedProjectURL(url)
+        } catch {
+            failure = Self.fileActivationFailure(for: url, error: error)
+            return
+        }
         guard !isDirty else {
-            failure = ApplicationProjectFailure(
-                kind: .unsavedChanges,
-                message: "Save the current project before opening another project."
-            )
+            failure = Self.unsavedReplacementFailure(for: normalizedURL)
             return
         }
         guard begin(.load), let workspace else {
             return
         }
         defer { endOperation() }
-        let normalizedURL = url.standardizedFileURL
-        let candidateAccess = SecurityScopedProjectURL(normalizedURL)
+        let candidateAccess = securityScopedAccessOpener.open(normalizedURL)
         do {
             _ = try await workspace.load(
                 from: normalizedURL,
@@ -298,16 +372,34 @@ final class ApplicationProjectCoordinator {
             fileAccess = candidateAccess
             await updateAgentPathAfterCommit(normalizedURL)
         } catch let error as ProjectWorkspacePersistencePublicationError {
-            fileAccess = candidateAccess
-            await handleCommittedPersistenceFailure(error, path: normalizedURL)
+            _ = await handleCommittedPersistenceFailure(
+                error,
+                path: normalizedURL,
+                fileAccessAfterRecovery: candidateAccess
+            )
         } catch {
-            report(kind: .load, error: error)
+            failure = Self.fileActivationFailure(
+                for: normalizedURL,
+                error: error
+            )
         }
     }
 
     func save(to url: URL) async {
         await sequence(.save) {
             await self.performSave(to: url)
+        }
+    }
+
+    func save(
+        sessionID: UUID,
+        expectedGeneration: DocumentGeneration?
+    ) async throws -> ApplicationAgentSaveOutcome {
+        try await operationSequencer.run {
+            try await self.performAgentSave(
+                sessionID: sessionID,
+                expectedGeneration: expectedGeneration
+            )
         }
     }
 
@@ -320,7 +412,7 @@ final class ApplicationProjectCoordinator {
         let reusesCurrentAccess = fileAccess?.url == normalizedURL
         let candidateAccess = reusesCurrentAccess
             ? fileAccess
-            : SecurityScopedProjectURL(normalizedURL)
+            : securityScopedAccessOpener.open(normalizedURL)
         do {
             _ = try await workspace.save(
                 to: normalizedURL,
@@ -329,11 +421,140 @@ final class ApplicationProjectCoordinator {
             fileAccess = candidateAccess
             await updateAgentPathAfterCommit(normalizedURL)
         } catch let error as ProjectWorkspacePersistencePublicationError {
-            fileAccess = candidateAccess
-            await handleCommittedPersistenceFailure(error, path: normalizedURL)
+            _ = await handleCommittedPersistenceFailure(
+                error,
+                path: normalizedURL,
+                fileAccessAfterRecovery: candidateAccess
+            )
         } catch {
             report(kind: .save, error: error)
         }
+    }
+
+    private func performAgentSave(
+        sessionID: UUID,
+        expectedGeneration: DocumentGeneration?
+    ) async throws -> ApplicationAgentSaveOutcome {
+        guard registeredSessionID == sessionID else {
+            throw EditorError(
+                code: .sessionNotFound,
+                message: "No registered application project session exists for \(sessionID.uuidString)."
+            )
+        }
+        guard let expectedGeneration else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Agent save requires an expected source generation."
+            )
+        }
+        guard lifecycle == .ready, let workspace else {
+            throw EditorError(
+                code: .agentUnavailable,
+                message: "The application project workspace is unavailable."
+            )
+        }
+        guard operation == nil, scheduledOperation == nil else {
+            throw EditorError(
+                code: .commandFailed,
+                message: "Another application project operation is already in progress."
+            )
+        }
+        guard let currentFileURL else {
+            throw EditorError(
+                code: .documentSaveFailed,
+                message: "Agent save requires an existing current .rupa project URL."
+            )
+        }
+        guard let currentView = workspace.view else {
+            throw EditorError(
+                code: .agentUnavailable,
+                message: "The application project has no published view."
+            )
+        }
+        guard expectedGeneration == currentView.documentGeneration else {
+            throw EditorError(
+                code: .documentGenerationMismatch,
+                message: "Agent save expected generation \(expectedGeneration.value), but the project is at generation \(currentView.documentGeneration.value)."
+            )
+        }
+
+        operation = .save
+        defer { endOperation() }
+        do {
+            let savedView = try await workspace.save(
+                to: currentFileURL,
+                operationGuard: Self.cancellationGuard
+            )
+            failure = nil
+            return .saved(
+                SaveResult(
+                    message: "Project saved.",
+                    path: currentFileURL.path,
+                    generation: savedView.documentGeneration,
+                    dirty: savedView.isDirty,
+                    diagnostics: savedView.evaluationSnapshot.diagnostics
+                )
+            )
+        } catch let error as ProjectWorkspacePersistencePublicationError {
+            return .committed(
+                await committedAgentSaveOutcome(
+                    error,
+                    requestMethod: "document.save"
+                )
+            )
+        } catch {
+            failure = ApplicationProjectFailure(
+                kind: .save,
+                message: error.localizedDescription
+            )
+            throw error
+        }
+    }
+
+    private func committedAgentSaveOutcome(
+        _ error: ProjectWorkspacePersistencePublicationError,
+        requestMethod: String
+    ) async -> AgentCommittedMutationOutcome {
+        var message = error.message
+        do {
+            guard let workspace else {
+                throw ApplicationProjectFailure(
+                    kind: .viewRecovery,
+                    message: "The committed project workspace is unavailable."
+                )
+            }
+            _ = try await workspace.recoverCommittedView(
+                error.state,
+                operationGuard: Self.cancellationGuard
+            )
+            failure = ApplicationProjectFailure(
+                kind: .save,
+                message: error.message,
+                didCommit: true
+            )
+        } catch {
+            message += " Automatic view recovery also failed: \(error.localizedDescription)"
+            let recoveryFailure = ApplicationProjectFailure(
+                kind: .viewRecovery,
+                message: message,
+                didCommit: true
+            )
+            lifecycle = .unavailable(recoveryFailure)
+            failure = recoveryFailure
+        }
+
+        let state = error.state
+        return AgentCommittedMutationOutcome(
+            stage: .viewProjection,
+            mutation: .save,
+            requestMethod: requestMethod,
+            projectID: state.document.projectID,
+            documentGeneration: state.documentGeneration,
+            transactionRevision: state.transactionRevision,
+            publicationSequence: state.publicationSequence,
+            workspaceRevision: state.workspaceState.revision,
+            message: message
+        )
     }
 
     func undo() async {
@@ -476,10 +697,12 @@ final class ApplicationProjectCoordinator {
         }
     }
 
+    @discardableResult
     private func handleCommittedPersistenceFailure(
         _ error: ProjectWorkspacePersistencePublicationError,
-        path: URL?
-    ) async {
+        path: URL?,
+        fileAccessAfterRecovery: (any SecurityScopedProjectAccess)?
+    ) async -> Bool {
         do {
             guard let workspace else {
                 throw ApplicationProjectFailure(
@@ -499,8 +722,9 @@ final class ApplicationProjectCoordinator {
             )
             lifecycle = .unavailable(recoveryFailure)
             failure = recoveryFailure
-            return
+            return false
         }
+        fileAccess = fileAccessAfterRecovery
         do {
             try await updateAgentPath(path)
             failure = ApplicationProjectFailure(
@@ -515,6 +739,7 @@ final class ApplicationProjectCoordinator {
                 didCommit: true
             )
         }
+        return true
     }
 
     private func handleCommittedHistoryFailure(
@@ -582,6 +807,53 @@ final class ApplicationProjectCoordinator {
         failure = ApplicationProjectFailure(
             kind: kind,
             message: error.localizedDescription
+        )
+    }
+
+    private static func validatedProjectURL(_ url: URL) throws -> URL {
+        let normalizedURL = url.standardizedFileURL
+        guard normalizedURL.isFileURL,
+              normalizedURL.pathExtension.lowercased() == "rupa" else {
+            throw ApplicationProjectFailure(
+                kind: .unsupportedProjectFormat,
+                message: "Rupa can open schema-v3 .rupa projects only. Requested file: \(normalizedURL.path)"
+            )
+        }
+        return normalizedURL
+    }
+
+    private static func unsavedReplacementFailure(
+        for requestedURL: URL
+    ) -> ApplicationProjectFailure {
+        ApplicationProjectFailure(
+            kind: .unsavedChanges,
+            message: "Save the current project before opening the requested file: \(requestedURL.standardizedFileURL.path)"
+        )
+    }
+
+    private static func fileActivationFailure(
+        for requestedURL: URL,
+        error: Error
+    ) -> ApplicationProjectFailure {
+        if let failure = error as? ApplicationProjectFailure {
+            return failure
+        }
+        return ApplicationProjectFailure(
+            kind: .load,
+            message: "The requested project could not be opened at \(requestedURL.standardizedFileURL.path): \(error.localizedDescription)"
+        )
+    }
+
+    private static func initialFileActivationFailure(
+        for requestedURL: URL,
+        error: Error
+    ) -> ApplicationProjectFailure {
+        if let failure = error as? ApplicationProjectFailure {
+            return failure
+        }
+        return ApplicationProjectFailure(
+            kind: .launch,
+            message: "The requested project could not be opened at \(requestedURL.standardizedFileURL.path): \(error.localizedDescription)"
         )
     }
 

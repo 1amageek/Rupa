@@ -2,7 +2,9 @@ import Foundation
 
 struct ApplicationProjectFailure: Error, Equatable, LocalizedError, Sendable {
     enum Kind: String, Equatable, Sendable {
+        case applicationAuthority
         case launch
+        case unsupportedProjectFormat
         case operationInProgress
         case unsavedChanges
         case newProject

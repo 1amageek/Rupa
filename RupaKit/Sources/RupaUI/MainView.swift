@@ -887,11 +887,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var documentTitle: String {
-        guard let name = snapshot.document.document.cadDocument.metadata.name,
-              !name.isEmpty else {
-            return "Untitled"
-        }
-        return name
+        ProjectTitlePresentation.title(projectName: snapshot.projectName)
     }
 
     private var surfaceAnalysisOverlaySummary: String {

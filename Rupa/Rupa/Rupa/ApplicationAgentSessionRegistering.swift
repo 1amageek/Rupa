@@ -1,5 +1,5 @@
 import Foundation
-import RupaAgentUI
+import RupaAgentRuntime
 import RupaKit
 
 @MainActor
@@ -15,4 +15,4 @@ protocol ApplicationAgentSessionRegistering: AnyObject {
     func unregister(id: UUID) async
 }
 
-extension AgentHost: ApplicationAgentSessionRegistering {}
+extension ProjectAgentCommandController: ApplicationAgentSessionRegistering {}

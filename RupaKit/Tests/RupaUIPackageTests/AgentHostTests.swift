@@ -1,5 +1,6 @@
 import Foundation
 import RupaAgentProtocol
+import RupaAgentRuntime
 import RupaAgentTransport
 import RupaAutomation
 import RupaCore
@@ -21,13 +22,14 @@ import Testing
             .appendingPathComponent("rupa.sock")
             .path
     )
-    let host = AgentHost(socketPath: socketPath)
+    let controller = ProjectAgentCommandController()
+    let host = AgentHost(handler: controller, socketPath: socketPath)
     let sessionID = UUID()
     let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
         document: .empty(named: "Host Open")
     )
     _ = try await workspace.evaluate()
-    try await host.register(workspace: workspace, id: sessionID)
+    try await controller.register(workspace: workspace, id: sessionID)
 
     await host.start()
     do {
@@ -162,10 +164,10 @@ import Testing
             AgentHostFixtureDomainLowering(capabilityID: capabilityID),
         ]
     )
-    let host = AgentHost(
-        socketPath: socketPath,
+    let controller = ProjectAgentCommandController(
         domainRegistry: domainRegistry
     )
+    let host = AgentHost(handler: controller, socketPath: socketPath)
 
     await host.start()
     do {

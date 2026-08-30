@@ -7,44 +7,69 @@
 
 import Foundation
 import SwiftUI
+import RupaAgentRuntime
 import RupaAgentUI
 import RupaKit
 import RupaUI
 
 @main
 struct ApplicationRoot: App {
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var agentHost: AgentHost
+    @State private var agentHost: AgentHost?
     @State private var projectCoordinator: ApplicationProjectCoordinator
 
     private let domainConfiguration: ApplicationDomainRegistryConfiguration
     private let projectOperationSequencer: ProjectWorkspaceOperationSequencer
+    private let applicationAuthorityLease: ApplicationAuthorityLease?
 
     init() {
         let domainConfiguration = ApplicationDomainRegistry.makeConfiguration()
         let projectOperationSequencer = ProjectWorkspaceOperationSequencer()
         self.domainConfiguration = domainConfiguration
         self.projectOperationSequencer = projectOperationSequencer
-        let agentHost = AgentHost(
-            exportService: domainConfiguration.exportService,
-            domainRegistry: domainConfiguration.registry
-        )
-        self._agentHost = State(initialValue: agentHost)
         do {
-            let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
-            self._projectCoordinator = State(
-                initialValue: ApplicationProjectCoordinator(
-                    workspace: workspace,
-                    agentRegistrar: agentHost,
-                    operationSequencer: projectOperationSequencer,
-                    initialURL: Self.initialProjectURL()
-                )
-            )
+            let applicationAuthorityLease = try ApplicationAuthorityLease
+                .acquireProductAuthority()
+            self.applicationAuthorityLease = applicationAuthorityLease
         } catch {
+            self.applicationAuthorityLease = nil
+            self._agentHost = State(initialValue: nil)
             self._projectCoordinator = State(
                 initialValue: ApplicationProjectCoordinator(
                     launchFailure: error,
-                    agentRegistrar: agentHost,
+                    agentRegistrar: ApplicationUnavailableAgentSessionRegistrar(),
+                    operationSequencer: projectOperationSequencer
+                )
+            )
+            return
+        }
+        do {
+            let agentController = ProjectAgentCommandController(
+                domainRegistry: domainConfiguration.registry,
+                exportExecutor: ProjectAgentExportExecutor(
+                    exportService: domainConfiguration.exportService
+                )
+            )
+            let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
+            let projectCoordinator = ApplicationProjectCoordinator(
+                workspace: workspace,
+                agentRegistrar: agentController,
+                operationSequencer: projectOperationSequencer,
+                initialURL: Self.initialProjectURL()
+            )
+            let requestRouter = ApplicationAgentRequestRouter(
+                projectHandler: agentController,
+                lifecycle: projectCoordinator
+            )
+            self._agentHost = State(
+                initialValue: AgentHost(handler: requestRouter)
+            )
+            self._projectCoordinator = State(initialValue: projectCoordinator)
+        } catch {
+            self._agentHost = State(initialValue: nil)
+            self._projectCoordinator = State(
+                initialValue: ApplicationProjectCoordinator(
+                    launchFailure: error,
+                    agentRegistrar: ApplicationUnavailableAgentSessionRegistrar(),
                     operationSequencer: projectOperationSequencer
                 )
             )
@@ -61,6 +86,11 @@ struct ApplicationRoot: App {
             }
             .task {
                 await projectCoordinator.launch()
+                guard projectCoordinator.hasRegisteredAgentSession,
+                      let agentHost else {
+                    return
+                }
+                await agentHost.start()
             }
             .onOpenURL { url in
                 projectCoordinator.receiveOpenURL(url)
@@ -89,20 +119,6 @@ struct ApplicationRoot: App {
         .windowResizability(.contentMinSize)
         .commands {
             ApplicationProjectCommands(coordinator: projectCoordinator)
-        }
-        .onChange(of: scenePhase) { _, phase in
-            Task {
-                switch phase {
-                case .active:
-                    await agentHost.start()
-                case .background:
-                    await agentHost.stop()
-                case .inactive:
-                    break
-                @unknown default:
-                    break
-                }
-            }
         }
     }
 

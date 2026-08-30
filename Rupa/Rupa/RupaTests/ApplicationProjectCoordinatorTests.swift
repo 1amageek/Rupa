@@ -1,4 +1,6 @@
 import Foundation
+import RupaAgentProtocol
+import RupaAgentRuntime
 import RupaCore
 import RupaCoreTypes
 @testable import RupaGeometry
@@ -110,6 +112,220 @@ func applicationInitialURLLoadsWithoutPublishingAnEmptyProjectFirst() async thro
         #expect(coordinator.snapshot?.publicationSequence == 1)
         #expect(coordinator.currentFileURL == packageURL.standardizedFileURL)
         #expect(registrar.registeredPath == packageURL.standardizedFileURL)
+    }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func applicationAgentRouterMutatesAndExplicitlySavesTheRegisteredWorkspace() async throws {
+    try await withApplicationProjectTemporaryDirectory { directory in
+        let sourceWorkspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
+            document: try applicationMeshOnlyDocument(named: "Agent API Source")
+        )
+        _ = try await sourceWorkspace.evaluate()
+        let packageURL = directory.appendingPathComponent("agent-api.rupa")
+        _ = try await sourceWorkspace.save(to: packageURL)
+        let bytesBeforeMutation = try Data(contentsOf: packageURL)
+
+        let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
+        let controller = ProjectAgentCommandController()
+        let coordinator = ApplicationProjectCoordinator(
+            workspace: workspace,
+            agentRegistrar: controller,
+            initialURL: packageURL,
+            launchArguments: []
+        )
+        let router = ApplicationAgentRequestRouter(
+            projectHandler: controller,
+            lifecycle: coordinator
+        )
+        await coordinator.launch()
+
+        guard case .sessions(let sessions) = await router.handle(.sessions),
+              let session = sessions.first else {
+            Issue.record("Expected the App-owned workspace session.")
+            return
+        }
+        #expect(sessions.count == 1)
+        #expect(coordinator.workspace === workspace)
+        #expect(session.path == packageURL.standardizedFileURL.path)
+
+        let staleGeneration = session.generation
+        let mutationResponse = await router.handle(
+            .execute(
+                sessionID: session.id,
+                command: .renameDocument(name: "Agent API Bicycle"),
+                expectedGeneration: session.generation
+            )
+        )
+        guard case .command(let mutation) = mutationResponse else {
+            Issue.record("Expected the semantic request to reach the registered workspace.")
+            return
+        }
+        #expect(mutation.didMutate)
+        #expect(workspace.view?.projectName == "Agent API Bicycle")
+        #expect(try Data(contentsOf: packageURL) == bytesBeforeMutation)
+
+        guard case .failure(let wrongSession) = await router.handle(
+            .save(
+                sessionID: UUID(),
+                expectedGeneration: mutation.generation
+            )
+        ) else {
+            Issue.record("Expected a wrong-session failure.")
+            return
+        }
+        #expect(wrongSession.code == .sessionNotFound)
+
+        guard case .failure(let missingGeneration) = await router.handle(
+            .save(sessionID: session.id, expectedGeneration: nil)
+        ) else {
+            Issue.record("Expected a missing-generation failure.")
+            return
+        }
+        #expect(missingGeneration.code == .commandInvalid)
+
+        guard case .failure(let staleGenerationFailure) = await router.handle(
+            .save(
+                sessionID: session.id,
+                expectedGeneration: staleGeneration
+            )
+        ) else {
+            Issue.record("Expected a stale-generation failure.")
+            return
+        }
+        #expect(staleGenerationFailure.code == .documentGenerationMismatch)
+        #expect(try Data(contentsOf: packageURL) == bytesBeforeMutation)
+
+        guard case .save(let saveResult) = await router.handle(
+            .save(
+                sessionID: session.id,
+                expectedGeneration: mutation.generation
+            )
+        ) else {
+            Issue.record("Expected explicit Agent save success.")
+            return
+        }
+        #expect(saveResult.path == packageURL.standardizedFileURL.path)
+        #expect(saveResult.generation == mutation.generation)
+        #expect(saveResult.dirty == false)
+        #expect(coordinator.currentFileURL == packageURL.standardizedFileURL)
+        #expect(workspace.view?.isDirty == false)
+        #expect(try Data(contentsOf: packageURL) != bytesBeforeMutation)
+
+        let reloadedWorkspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
+        let reloaded = try await reloadedWorkspace.load(from: packageURL)
+        #expect(reloaded.projectName == "Agent API Bicycle")
+
+        guard case .failure(let directSaveFailure) = await controller.handle(
+            .save(
+                sessionID: session.id,
+                expectedGeneration: mutation.generation
+            )
+        ) else {
+            Issue.record("Expected direct runtime save to remain unsupported.")
+            return
+        }
+        #expect(directSaveFailure.code == .commandUnsupported)
+    }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func applicationAgentRouterRejectsUntitledSaveWithoutOpeningUI() async throws {
+    let controller = ProjectAgentCommandController()
+    let coordinator = ApplicationProjectCoordinator(
+        workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
+        agentRegistrar: controller,
+        launchArguments: []
+    )
+    let router = ApplicationAgentRequestRouter(
+        projectHandler: controller,
+        lifecycle: coordinator
+    )
+    await coordinator.launch()
+    guard case .sessions(let sessions) = await router.handle(.sessions),
+          let session = sessions.first else {
+        Issue.record("Expected the App-owned untitled session.")
+        return
+    }
+
+    guard case .failure(let failure) = await router.handle(
+        .save(
+            sessionID: session.id,
+            expectedGeneration: session.generation
+        )
+    ) else {
+        Issue.record("Expected current-URL save to reject an untitled project.")
+        return
+    }
+
+    #expect(failure.code == .documentSaveFailed)
+    #expect(coordinator.currentFileURL == nil)
+    #expect(coordinator.isBusy == false)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func applicationAgentSaveReturnsCommittedNoRetryReceiptAfterViewFailure() async throws {
+    try await withApplicationProjectTemporaryDirectory { directory in
+        let sourceWorkspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
+            document: try applicationMeshOnlyDocument(named: "Committed Agent Save")
+        )
+        _ = try await sourceWorkspace.evaluate()
+        let packageURL = directory.appendingPathComponent("committed-agent-save.rupa")
+        _ = try await sourceWorkspace.save(to: packageURL)
+
+        let project = try applicationProjectController(
+            document: .empty(named: "Before Agent Load")
+        )
+        let workspace = ProjectWorkspace(
+            project: project,
+            viewBuilder: ApplicationNthFailingProjectViewSnapshotBuilder(
+                failingBuildNumber: 2
+            )
+        )
+        let controller = ProjectAgentCommandController()
+        let coordinator = ApplicationProjectCoordinator(
+            workspace: workspace,
+            agentRegistrar: controller,
+            initialURL: packageURL,
+            launchArguments: []
+        )
+        let router = ApplicationAgentRequestRouter(
+            projectHandler: controller,
+            lifecycle: coordinator
+        )
+        await coordinator.launch()
+        guard case .sessions(let sessions) = await router.handle(.sessions),
+              let session = sessions.first else {
+            Issue.record("Expected the committed-save App session.")
+            return
+        }
+
+        let response = await router.handle(
+            .save(
+                sessionID: session.id,
+                expectedGeneration: session.generation
+            )
+        )
+        guard case .committedMutation(let outcome) = response else {
+            Issue.record("Expected a committed save receipt.")
+            return
+        }
+
+        let recovered = try #require(coordinator.snapshot)
+        #expect(outcome.stage == .viewProjection)
+        #expect(outcome.mutation == .save)
+        #expect(outcome.requestMethod == "document.save")
+        #expect(outcome.retryDisposition == .mustNotRetry)
+        #expect(outcome.projectID == recovered.projectID)
+        #expect(outcome.documentGeneration == recovered.documentGeneration)
+        #expect(outcome.transactionRevision == recovered.transactionRevision)
+        #expect(outcome.publicationSequence == recovered.publicationSequence)
+        #expect(outcome.workspaceRevision == recovered.workspaceState.revision)
+        #expect(recovered.isDirty == false)
+        #expect(FileManager.default.fileExists(atPath: packageURL.path))
     }
 }
 
@@ -227,30 +443,191 @@ func applicationRouteRoundTripsCADMeshAndMixedProjects() async throws {
 @MainActor
 @Test(.timeLimit(.minutes(1)))
 func applicationRejectsOpenWhileDirtyWithoutChangingFileOwnership() async throws {
-    let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
+    try await withApplicationProjectTemporaryDirectory { directory in
+        let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
+            document: try applicationMeshOnlyDocument(named: "Retained Project")
+        )
+        let registrar = ApplicationAgentSessionRegistrarProbe()
+        let accessOpener = ApplicationSecurityScopedAccessOpenerProbe()
+        let coordinator = ApplicationProjectCoordinator(
+            workspace: workspace,
+            agentRegistrar: registrar,
+            securityScopedAccessOpener: accessOpener,
+            launchArguments: []
+        )
+        await coordinator.launch()
+        let originalURL = directory.appendingPathComponent("retained.rupa")
+        await coordinator.save(to: originalURL)
+        let clean = try #require(coordinator.snapshot)
+        let retained = try await workspace.commit(
+            ProjectSourceTransaction(
+                name: "appTest.dirty",
+                commands: [.renameDocument(name: "Dirty")],
+                expectedProjectID: clean.projectID,
+                expectedTransactionRevision: clean.transactionRevision,
+                expectedPublicationSequence: clean.publicationSequence
+            )
+        )
+        let requestedURL = directory.appendingPathComponent("requested.rupa")
+        let retainedAgentPaths = registrar.updatedPaths
+        let retainedRegistrationID = registrar.registeredID
+
+        await coordinator.load(from: requestedURL)
+
+        #expect(coordinator.failure?.kind == .unsavedChanges)
+        #expect(coordinator.failure?.message.contains(requestedURL.path) == true)
+        #expect(coordinator.currentFileURL == originalURL.standardizedFileURL)
+        #expect(accessOpener.openedProjectURLs == [originalURL.standardizedFileURL])
+        #expect(accessOpener.activeProjectURLs == [originalURL.standardizedFileURL])
+        #expect(registrar.updatedPaths == retainedAgentPaths)
+        #expect(registrar.registeredID == retainedRegistrationID)
+        try expectApplicationPublication(coordinator.snapshot, unchangedFrom: retained)
+    }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func applicationRejectsLegacyProjectFormatWithoutChangingPublishedAuthority() async throws {
+    try await withApplicationProjectTemporaryDirectory { directory in
+        let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
+            document: try applicationMeshOnlyDocument(named: "Current Project")
+        )
+        let registrar = ApplicationAgentSessionRegistrarProbe()
+        let accessOpener = ApplicationSecurityScopedAccessOpenerProbe()
+        let coordinator = ApplicationProjectCoordinator(
+            workspace: workspace,
+            agentRegistrar: registrar,
+            securityScopedAccessOpener: accessOpener,
+            launchArguments: []
+        )
+        await coordinator.launch()
+        let originalURL = directory.appendingPathComponent("current.rupa")
+        await coordinator.save(to: originalURL)
+        let retained = try #require(coordinator.snapshot)
+        let retainedAgentPaths = registrar.updatedPaths
+        let retainedRegistrationID = registrar.registeredID
+        let legacyURL = directory.appendingPathComponent("legacy.swcad")
+
+        await coordinator.load(from: legacyURL)
+
+        #expect(coordinator.failure?.kind == .unsupportedProjectFormat)
+        #expect(coordinator.failure?.message.contains(legacyURL.path) == true)
+        #expect(coordinator.currentFileURL == originalURL.standardizedFileURL)
+        #expect(accessOpener.openedProjectURLs == [originalURL.standardizedFileURL])
+        #expect(accessOpener.activeProjectURLs == [originalURL.standardizedFileURL])
+        #expect(registrar.updatedPaths == retainedAgentPaths)
+        #expect(registrar.registeredID == retainedRegistrationID)
+        try expectApplicationPublication(coordinator.snapshot, unchangedFrom: retained)
+    }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func applicationRejectsLegacyInitialURLBeforeRegistration() async throws {
+    let registrar = ApplicationAgentSessionRegistrarProbe()
+    let accessOpener = ApplicationSecurityScopedAccessOpenerProbe()
+    let legacyURL = URL(
+        fileURLWithPath: "/tmp/legacy-launch-\(UUID().uuidString).swcad"
+    )
     let coordinator = ApplicationProjectCoordinator(
-        workspace: workspace,
-        agentRegistrar: ApplicationAgentSessionRegistrarProbe(),
+        workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
+        agentRegistrar: registrar,
+        securityScopedAccessOpener: accessOpener,
+        initialURL: legacyURL,
         launchArguments: []
     )
+
     await coordinator.launch()
-    let initial = try #require(coordinator.snapshot)
-    _ = try await workspace.commit(
-        ProjectSourceTransaction(
-            name: "appTest.dirty",
-            commands: [.renameDocument(name: "Dirty")],
-            expectedProjectID: initial.projectID,
-            expectedTransactionRevision: initial.transactionRevision,
-            expectedPublicationSequence: initial.publicationSequence
-        )
-    )
-    let missingURL = URL(fileURLWithPath: "/tmp/missing-\(UUID().uuidString).rupa")
 
-    await coordinator.load(from: missingURL)
-
-    #expect(coordinator.failure?.kind == .unsavedChanges)
+    guard case .unavailable(let failure) = coordinator.lifecycle else {
+        Issue.record("Expected an unsupported initial project to remain unavailable.")
+        return
+    }
+    #expect(failure.kind == .unsupportedProjectFormat)
+    #expect(failure.message.contains(legacyURL.path))
+    #expect(coordinator.snapshot == nil)
     #expect(coordinator.currentFileURL == nil)
-    #expect(coordinator.snapshot?.projectName == "Dirty")
+    #expect(registrar.registerCallCount == 0)
+    #expect(accessOpener.openedProjectURLs.isEmpty)
+    #expect(accessOpener.activeProjectURLs.isEmpty)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func applicationLateUnsupportedURLPreservesThePublishedLaunchWorkspace() async throws {
+    let gate = ApplicationAgentRegistrationGate()
+    let registrar = ApplicationAgentSessionRegistrarProbe(registrationGate: gate)
+    let accessOpener = ApplicationSecurityScopedAccessOpenerProbe()
+    let coordinator = ApplicationProjectCoordinator(
+        workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(
+            document: try applicationMeshOnlyDocument(named: "Visible Launch Project")
+        ),
+        agentRegistrar: registrar,
+        securityScopedAccessOpener: accessOpener,
+        launchArguments: []
+    )
+    let launch = Task { @MainActor in
+        await coordinator.launch()
+    }
+    await gate.waitUntilRegistrationStarts()
+    let retained = try #require(coordinator.snapshot)
+    let legacyURL = URL(
+        fileURLWithPath: "/tmp/late-legacy-\(UUID().uuidString).swcad"
+    )
+
+    coordinator.receiveOpenURL(legacyURL)
+    await gate.releaseRegistration()
+    await launch.value
+
+    #expect(coordinator.lifecycle == .ready)
+    #expect(coordinator.failure?.kind == .unsupportedProjectFormat)
+    #expect(coordinator.failure?.message.contains(legacyURL.path) == true)
+    #expect(coordinator.currentFileURL == nil)
+    #expect(registrar.registerCallCount == 1)
+    #expect(registrar.unregisterCallCount == 0)
+    #expect(registrar.updatePathAttemptCount == 0)
+    #expect(accessOpener.openedProjectURLs.isEmpty)
+    #expect(accessOpener.activeProjectURLs.isEmpty)
+    try expectApplicationPublication(coordinator.snapshot, unchangedFrom: retained)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func applicationInvalidRupaPackagePreservesPublishedAuthority() async throws {
+    try await withApplicationProjectTemporaryDirectory { directory in
+        let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
+            document: try applicationMeshOnlyDocument(named: "Valid Current Project")
+        )
+        let registrar = ApplicationAgentSessionRegistrarProbe()
+        let accessOpener = ApplicationSecurityScopedAccessOpenerProbe()
+        let coordinator = ApplicationProjectCoordinator(
+            workspace: workspace,
+            agentRegistrar: registrar,
+            securityScopedAccessOpener: accessOpener,
+            launchArguments: []
+        )
+        await coordinator.launch()
+        let originalURL = directory.appendingPathComponent("valid-current.rupa")
+        await coordinator.save(to: originalURL)
+        let retained = try #require(coordinator.snapshot)
+        let retainedAgentPaths = registrar.updatedPaths
+        let invalidURL = directory.appendingPathComponent("invalid.rupa")
+        try Data("not a project package".utf8).write(to: invalidURL)
+
+        await coordinator.load(from: invalidURL)
+
+        #expect(coordinator.failure?.kind == .load)
+        #expect(coordinator.failure?.message.contains(invalidURL.path) == true)
+        #expect(coordinator.currentFileURL == originalURL.standardizedFileURL)
+        #expect(
+            accessOpener.openedProjectURLs
+                == [originalURL.standardizedFileURL, invalidURL.standardizedFileURL]
+        )
+        #expect(accessOpener.activeProjectURLs == [originalURL.standardizedFileURL])
+        #expect(registrar.updatedPaths == retainedAgentPaths)
+        #expect(registrar.updatePathAttemptCount == retainedAgentPaths.count)
+        try expectApplicationPublication(coordinator.snapshot, unchangedFrom: retained)
+    }
 }
 
 @MainActor
@@ -704,6 +1081,21 @@ func applicationHistorySharesSubmissionOrderWithWorkspaceUIOperations() async th
     #expect(coordinator.snapshot?.projectName == "First Ordered Edit")
 }
 
+private func expectApplicationPublication(
+    _ actual: ProjectViewSnapshot?,
+    unchangedFrom expected: ProjectViewSnapshot
+) throws {
+    let actual = try #require(actual)
+    #expect(actual.projectID == expected.projectID)
+    #expect(actual.documentGeneration == expected.documentGeneration)
+    #expect(actual.transactionRevision == expected.transactionRevision)
+    #expect(actual.publicationSequence == expected.publicationSequence)
+    #expect(actual.documentLifetimeID == expected.documentLifetimeID)
+    #expect(actual.projectName == expected.projectName)
+    #expect(actual.viewport == expected.viewport)
+    #expect(actual.isDirty == expected.isDirty)
+}
+
 @MainActor
 private final class ApplicationAgentSessionRegistrarProbe: ApplicationAgentSessionRegistering {
     private(set) var registeredWorkspace: ProjectWorkspace?
@@ -755,6 +1147,45 @@ private final class ApplicationAgentSessionRegistrarProbe: ApplicationAgentSessi
 
     func unregister(id _: UUID) async {
         unregisterCallCount += 1
+    }
+}
+
+@MainActor
+private final class ApplicationSecurityScopedAccessOpenerProbe:
+    SecurityScopedProjectAccessOpening
+{
+    private(set) var openedProjectURLs: [URL] = []
+    private var weakAccesses: [ApplicationWeakSecurityScopedProjectAccess] = []
+
+    var activeProjectURLs: [URL] {
+        weakAccesses.compactMap { $0.value?.url }
+    }
+
+    func open(_ url: URL) -> any SecurityScopedProjectAccess {
+        let access = ApplicationSecurityScopedProjectAccessProbe(url: url)
+        openedProjectURLs.append(access.url)
+        weakAccesses.append(ApplicationWeakSecurityScopedProjectAccess(access))
+        return access
+    }
+}
+
+@MainActor
+private final class ApplicationSecurityScopedProjectAccessProbe:
+    SecurityScopedProjectAccess
+{
+    let url: URL
+
+    init(url: URL) {
+        self.url = url.standardizedFileURL
+    }
+}
+
+@MainActor
+private final class ApplicationWeakSecurityScopedProjectAccess {
+    weak var value: ApplicationSecurityScopedProjectAccessProbe?
+
+    init(_ value: ApplicationSecurityScopedProjectAccessProbe) {
+        self.value = value
     }
 }
 

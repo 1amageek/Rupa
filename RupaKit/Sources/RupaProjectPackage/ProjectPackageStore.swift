@@ -13,6 +13,8 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
 
     public let limits: ProjectPackageResourceLimits
     private let replaceFile: @Sendable (URL, URL) throws -> Void
+    private let stagingFactory: @Sendable (URL) throws -> ProjectPackageStaging
+    private let cleanupStaging: @Sendable (ProjectPackageStaging) throws -> Void
 
     public init(limits: ProjectPackageResourceLimits = .standard) {
         self.limits = limits
@@ -22,6 +24,12 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
                 destinationURL: destinationURL
             )
         }
+        stagingFactory = { destinationURL in
+            try Self.makeStaging(for: destinationURL)
+        }
+        cleanupStaging = { staging in
+            try Self.cleanupStaging(staging)
+        }
     }
 
     init(
@@ -29,6 +37,24 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
         replaceFile: @escaping @Sendable (URL, URL) throws -> Void
     ) {
         self.limits = limits
+        self.replaceFile = replaceFile
+        stagingFactory = { destinationURL in
+            try Self.makeStaging(for: destinationURL)
+        }
+        cleanupStaging = { staging in
+            try Self.cleanupStaging(staging)
+        }
+    }
+
+    init(
+        limits: ProjectPackageResourceLimits,
+        stagingFactory: @escaping @Sendable (URL) throws -> ProjectPackageStaging,
+        cleanupStaging: @escaping @Sendable (ProjectPackageStaging) throws -> Void,
+        replaceFile: @escaping @Sendable (URL, URL) throws -> Void
+    ) {
+        self.limits = limits
+        self.stagingFactory = stagingFactory
+        self.cleanupStaging = cleanupStaging
         self.replaceFile = replaceFile
     }
 
@@ -53,25 +79,27 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
     ) throws -> ProjectPackageSaveResult {
         try limits.validate()
         let prepared = try prepare(document)
-        let temporaryURL = adjacentTemporaryURL(for: url)
+        let staging: ProjectPackageStaging
         do {
-            try Data().write(to: temporaryURL, options: [.withoutOverwriting])
+            staging = try stagingFactory(url)
         } catch {
             throw ProjectPackageError(
                 code: .ioFailure,
-                message: "Adjacent project package temporary file could not be created: \(error)."
+                message: "Project package staging location could not be created: \(error)."
             )
         }
 
         let output: ProjectPackageWriteOutput
+        let validated: ProjectPackageDocument
         do {
+            try createStagingFile(at: staging.packageURL)
             output = try write(
                 prepared.entries,
                 backing: document.backing,
                 telemetry: prepared.telemetry,
-                to: temporaryURL
+                to: staging.packageURL
             )
-            let validated = try load(from: temporaryURL)
+            validated = try load(from: staging.packageURL)
             guard validated.documentID == document.documentID,
                 validated.productSource == document.productSource,
                 validated.cadSource == document.cadSource,
@@ -80,29 +108,26 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
             else {
                 throw ProjectPackageError(
                     code: .integrityMismatch,
-                    message: "Temporary project package validation did not reproduce its sources."
+                    message: "Staged project package validation did not reproduce its sources."
                 )
             }
-            try replaceFile(temporaryURL, url)
+            try replaceFile(staging.packageURL, url)
         } catch {
-            let cleanupError = removeIfPresent(temporaryURL)
-            if let cleanupError {
-                throw ProjectPackageError(
-                    code: .atomicSaveFailure,
-                    message: "Project package save failed and temporary cleanup also failed: "
-                        + "\(error); \(cleanupError)."
+            throw prepublicationFailure(error, staging: staging)
+        }
+
+        var warnings: [ProjectPackageSaveWarning] = []
+        do {
+            try cleanupStaging(staging)
+        } catch {
+            warnings.append(
+                ProjectPackageSaveWarning(
+                    code: .stagingCleanupFailed,
+                    message: "Project package was published, but staging cleanup failed: \(error)."
                 )
-            }
-            if let packageError = error as? ProjectPackageError {
-                throw packageError
-            }
-            throw ProjectPackageError(
-                code: .atomicSaveFailure,
-                message: "Project package save failed: \(error)."
             )
         }
 
-        let savedDocument = try load(from: url)
         let report = ProjectPackageIOReport(
             archiveByteCount: output.archiveByteCount,
             encodedSourceBlobCount: prepared.encodedBlobCount,
@@ -111,14 +136,15 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
             reusedSourceBlobByteCount: prepared.reusedBlobByteCount,
             preservedAdjunctCount: prepared.preservedAdjunctCount,
             preservedAdjunctByteCount: prepared.preservedAdjunctByteCount,
-            maximumReadChunkByteCount: savedDocument.loadReport?.maximumReadChunkByteCount ?? 0,
+            maximumReadChunkByteCount: validated.loadReport?.maximumReadChunkByteCount ?? 0,
             maximumWriteChunkByteCount: output.maximumWriteChunkByteCount,
             geometryCopyTelemetry: output.telemetry
         )
         return ProjectPackageSaveResult(
-            document: savedDocument,
+            document: validated,
             documentContentIdentity: prepared.manifest.documentContentIdentity,
-            report: report
+            report: report,
+            warnings: warnings
         )
     }
 
@@ -637,22 +663,77 @@ public struct ProjectPackageStore: ProjectPackageReading, ProjectPackageWriting,
         }
     }
 
-    private func adjacentTemporaryURL(for destinationURL: URL) -> URL {
-        destinationURL.deletingLastPathComponent().appendingPathComponent(
-            ".\(destinationURL.lastPathComponent).\(UUID().uuidString).tmp"
+    private func prepublicationFailure(
+        _ error: Error,
+        staging: ProjectPackageStaging
+    ) -> ProjectPackageError {
+        do {
+            try cleanupStaging(staging)
+        } catch let cleanupError {
+            return ProjectPackageError(
+                code: .atomicSaveFailure,
+                message: "Project package save failed before publication and staging cleanup also failed: "
+                    + "\(error); \(cleanupError)."
+            )
+        }
+        if let packageError = error as? ProjectPackageError {
+            return packageError
+        }
+        return ProjectPackageError(
+            code: .atomicSaveFailure,
+            message: "Project package save failed before publication: \(error)."
         )
     }
 
-    private func removeIfPresent(_ url: URL) -> Error? {
-        let fileManager = FileManager.default
-        guard fileManager.fileExists(atPath: url.path) else {
-            return nil
-        }
+    private func createStagingFile(at url: URL) throws {
         do {
-            try fileManager.removeItem(at: url)
-            return nil
+            try Data().write(to: url, options: [.withoutOverwriting])
         } catch {
-            return error
+            throw ProjectPackageError(
+                code: .ioFailure,
+                message: "Project package staging file could not be created: \(error)."
+            )
+        }
+    }
+
+    private static func makeStaging(
+        for destinationURL: URL
+    ) throws -> ProjectPackageStaging {
+        #if canImport(Darwin)
+        let directoryURL = try FileManager.default.url(
+            for: .itemReplacementDirectory,
+            in: .userDomainMask,
+            appropriateFor: destinationURL,
+            create: true
+        )
+        let packageURL = directoryURL.appendingPathComponent(
+            ".rupa-staging-\(UUID().uuidString).rupa",
+            isDirectory: false
+        )
+        return ProjectPackageStaging(
+            packageURL: packageURL,
+            directoryURL: directoryURL
+        )
+        #else
+        let packageURL = destinationURL.deletingLastPathComponent().appendingPathComponent(
+            ".\(destinationURL.lastPathComponent).\(UUID().uuidString).tmp",
+            isDirectory: false
+        )
+        return ProjectPackageStaging(packageURL: packageURL)
+        #endif
+    }
+
+    private static func cleanupStaging(
+        _ staging: ProjectPackageStaging
+    ) throws {
+        let fileManager = FileManager.default
+        if fileManager.fileExists(atPath: staging.packageURL.path) {
+            try fileManager.removeItem(at: staging.packageURL)
+        }
+        if let directoryURL = staging.directoryURL,
+            fileManager.fileExists(atPath: directoryURL.path)
+        {
+            try fileManager.removeItem(at: directoryURL)
         }
     }
 

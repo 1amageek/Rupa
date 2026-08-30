@@ -15,6 +15,7 @@ public struct AgentCommittedMutationOutcome: Codable, Equatable, Sendable {
         case undo
         case redo
         case evaluation
+        case save
     }
 
     public enum RetryDisposition: String, Codable, Equatable, Sendable {

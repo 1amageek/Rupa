@@ -6,6 +6,25 @@ import RupaAgentTestFixtures
 import SwiftCAD
 @testable import RupaAgent
 
+@Test func agentMessageCodecRoundTripsCommittedSaveReceipt() throws {
+    let codec = AgentMessageCodec()
+    let response = AgentResponse.committedMutation(
+        AgentCommittedMutationOutcome(
+            stage: .viewProjection,
+            mutation: .save,
+            requestMethod: "document.save",
+            projectID: "project.committed-save",
+            documentGeneration: DocumentGeneration(7),
+            transactionRevision: DocumentTransactionRevision(11),
+            publicationSequence: 13,
+            workspaceRevision: WorkspaceRevision(17),
+            message: "Save committed before view projection failed."
+        )
+    )
+
+    #expect(try codec.decodeResponse(from: codec.encode(response)) == response)
+}
+
 @Test func agentMessageCodecRoundTripsCommandRequestAndResponse() async throws {
     let codec = AgentMessageCodec()
     let sessionID = UUID()
