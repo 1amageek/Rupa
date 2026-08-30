@@ -8,7 +8,7 @@ import SwiftCAD
 @testable import RupaAgent
 
 @Test func agentListsRegisteredSessions() async throws {
-    let server = AgentCommandController(socketPath: "/tmp/rupa.sock")
+    let server = AgentCommandController()
     let sessionID = UUID()
     server.register(
         session: EditorSession(document: .empty(named: "Open Document")),

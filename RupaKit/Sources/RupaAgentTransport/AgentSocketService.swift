@@ -3,19 +3,15 @@ import RupaAgentProtocol
 import RupaCoreTypes
 
 public actor AgentSocketService {
-    private let handler: any AgentSocketServing
+    private let handler: any AgentRequestHandling
     private let codec: AgentMessageCodec
 
     public init(
-        handler: any AgentSocketServing,
+        handler: any AgentRequestHandling,
         codec: AgentMessageCodec = AgentMessageCodec()
     ) {
         self.handler = handler
         self.codec = codec
-    }
-
-    public func setSocketPath(_ path: String?) async {
-        await handler.setSocketPath(path)
     }
 
     public func responseData(for requestData: Data) async throws -> Data {

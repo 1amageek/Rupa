@@ -16,7 +16,8 @@ handles, limits, cursors, element records, catalogs, and RupaGeometry plans and
 receipts instead of defining a second geometry vocabulary.
 
 It does not resolve sessions, read a workspace, choose a current view, mutate
-CAD/Mesh, save/load packages, perform socket I/O, or rasterize previews.
+CAD/Mesh, save/load packages, perform socket I/O, publish an endpoint path, or
+rasterize previews.
 
 ## Related Designs
 
@@ -25,9 +26,10 @@ CAD/Mesh, save/load packages, perform socket I/O, or rasterize previews.
 | [package design](../../DESIGN.md) | parent | dependency direction and T10 scope | Places this adapter above RupaKit values and below runtime/transport. | No reverse dependency from RupaKit is allowed. |
 | [RupaKit use cases](../RupaKit/DESIGN.md) | depends on | Codable Mesh value contracts | Supplies one canonical Mesh vocabulary. | `ProjectViewSnapshot` is process-local and never encoded. |
 | [RupaGeometry](../RupaGeometry/DESIGN.md) | depends on | `MeshEditPlan`, `MeshEditReceipt`, and `GeometryCopyTelemetry` values | Supplies the bounded operation and copy-accounting vocabulary carried by Agent messages. | Protocol payloads reuse these values and do not execute plans. |
-| [RupaProjectModel](../RupaProjectModel/DESIGN.md) | depends on | Authored Mesh provenance | Supplies the persisted authority provenance projected by Make Editable results. | Provenance is evidence, not permission to mutate project state. |
+| [RupaKit package design](../../DESIGN.md) | depends on through `RupaProjectModel` | Authored Mesh provenance | Supplies the persisted authority provenance projected by Make Editable results. | Provenance is evidence, not permission to mutate project state. |
 | [AgentRuntime](../RupaAgentRuntime/DESIGN.md) | used by | decoded typed requests and projected results | Binds messages to registered project authority. | Runtime errors remain typed, never a success fallback. |
-| [system design](../../../DESIGN.md) | system parent | file-lifecycle and authority invariants | Defines the acceptance workflow. | Agent save remains unsupported. |
+| [RupaProjectAccess](../RupaProjectAccess/DESIGN.md) | used by | typed request/response and session-coordinate values | Carries intent without transport or project authority. | Access-session save is a lifecycle port, not the Agent `document.save` route. |
+| [system design](../../../DESIGN.md) | system parent | file-lifecycle and authority invariants | Defines the acceptance workflow. | Agent wire save remains unsupported. |
 
 ## Architecture
 
@@ -64,6 +66,11 @@ flowchart LR
    plan steps, identities, or expected coordinates.
 7. `document.save` remains representable for compatibility but the project
    route continues to return typed unsupported; T10 adds no load/save method.
+8. `AgentStatus` contains service availability and session count only. Socket
+   endpoint placement is private transport composition.
+9. `AgentRequest.projectSessionID` is the single public extraction contract
+   used by runtime and project-access session guards; session-neutral requests
+   return `nil`.
 
 ## Runtime Flows
 

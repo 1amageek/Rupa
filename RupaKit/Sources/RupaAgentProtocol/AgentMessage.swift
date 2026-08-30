@@ -402,16 +402,13 @@ public extension AgentRequest {
 
 public struct AgentStatus: Codable, Equatable, Sendable {
     public var running: Bool
-    public var socketPath: String?
     public var sessionCount: Int
 
     public init(
         running: Bool,
-        socketPath: String?,
         sessionCount: Int
     ) {
         self.running = running
-        self.socketPath = socketPath
         self.sessionCount = sessionCount
     }
 }

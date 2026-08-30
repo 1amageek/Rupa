@@ -2,10 +2,10 @@
 
 ## Purpose and Scope
 
-This is the system design master for the Rupa system. It indexes four separate
-scopes: T10 Agent-to-project geometry integration, T11 professional bicycle
-reference design, T12 Agent CAD basic-geometry benchmarking, and the
-professional V8 engineering-reference artifact. T10 connects
+This is the system design master for the Rupa system. It indexes the shared
+RUPA-ACCESS authority boundary, T10 Agent-to-project geometry integration, T11
+professional bicycle reference design, T12 Agent CAD basic-geometry
+benchmarking, and the professional V8 engineering-reference artifact. T10 connects
 the already implemented Agent CAD route and T09 Authored Mesh use cases without
 adding a second project authority or a modeling-specific transport. T11 defines
 a bounded L2 engineering-reference design and evidence contract; it does not
@@ -17,7 +17,8 @@ general transport/LLM integration.
 
 This document has no parent. Its direct children are the
 [RupaKit package design](RupaKit/DESIGN.md), which indexes the changed module
-designs; the [professional bicycle reference design](Artifacts/professional-bicycle/DESIGN.md),
+designs; the [Rupa application design](Rupa/DESIGN.md), which owns product
+composition and application lifecycle; the [professional bicycle reference design](Artifacts/professional-bicycle/DESIGN.md),
 which defines the T11 engineering-reference acceptance boundary without adding
 production code; and the [professional V8 design](Artifacts/professional-v8-engine/DESIGN.md),
 which owns the engine requirement, analysis, CAD, and claim boundary. The T12
@@ -32,7 +33,10 @@ consumes it as a route and immutable source/B-Rep observation dependency.
 
 The system owns the cross-module rule that one registered `ProjectWorkspace`
 serves CAD automation, Make Editable, Authored Mesh reads and edits, history,
-presentation evaluation, and application-owned persistence.
+presentation evaluation, and application-owned persistence. UI, CLI, and
+future adapters submit typed intent through the project-access boundary; the
+workspace and its `ProjectController` remain the only Product/CAD/Mesh
+mutation, evaluation, and save authority.
 
 It does not add an MCP server, general-purpose CLI command, bicycle-specific
 command, new Mesh kernel operation, renderer, Agent file-lifecycle authority,
@@ -52,6 +56,7 @@ the final immutable source/B-Rep snapshot.
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [RupaKit package](RupaKit/DESIGN.md) | child | T10/T12 dependency and verification composition | Indexes Project, RupaKit, AgentProtocol, AgentRuntime, benchmark, JSON-adapter, and dedicated-CLI ownership. | Details remain in the owning module. |
+| [Rupa application](Rupa/DESIGN.md) | child | product composition and UI lifecycle | Composes the App-owned workspace/controller and internal live transport. | Scene lifecycle never becomes project authority. |
 | [CAD/Mesh responsibility](Rupa/CAD_MESH_RESPONSIBILITY_CONTRACT.md) | depends on | CAD modeling and Authored Mesh presentation authority | Defines retained representation meaning. | A derived evaluation snapshot is never persisted source. |
 | [State/project contract](Rupa/STATE_AND_PROJECT_CONTRACT.md) | depends on | exact coordinates, staging, history, rollback, save ownership | Defines the sole project publication lifecycle. | Agent mutations never bypass `ProjectController`. |
 | [Current task progress](RupaKit/PROGRESS.md) | coordinates with | work order and evidence ownership | Tracks the cumulative T10/T11/T12 and professional-V8 design, implementation, and integration proof. | A design checkbox is not behavior evidence. |
@@ -62,6 +67,17 @@ the final immutable source/B-Rep snapshot.
 
 ```mermaid
 flowchart LR
+    subgraph Access["RUPA-ACCESS authority boundary"]
+        UIAccess["UI"] --> WorkspaceAuthority["ProjectWorkspace"]
+        CLIAccess["CLI"] --> AccessAPI
+        MCPAccess["Future MCP"] -.-> AccessAPI
+        AccessAPI --> LiveAdapter["Live adapter"]
+        AccessAPI --> ClosedAdapter["Closed .rupa adapter"]
+        LiveAdapter --> WorkspaceRegistry["ProjectWorkspaceRegistry"]
+        ClosedAdapter --> WorkspaceRegistry
+        WorkspaceRegistry --> WorkspaceAuthority
+        WorkspaceAuthority --> ControllerAuthority["ProjectController"]
+    end
     subgraph T10["T10 runtime integration"]
         Agent["Typed Agent request"] --> Runtime["RupaAgentRuntime"]
         Runtime --> Workspace["Shared ProjectWorkspace"]
@@ -118,12 +134,18 @@ flowchart LR
 5. Stale coordinates, cancellation, invalid limits/plans, and prepublication
    failures are typed and publish nothing. A postpublication projection failure
    returns the exact committed coordinate and must-not-retry disposition.
-6. Agent requests do not save or load `.rupa` files. Application code retains
-   that authority through `ProjectWorkspace`/`ProjectController`; the existing
-   Agent save request remains unsupported.
-7. Authored Mesh presentation evaluation shares immutable source buffers. A
+6. Agent wire requests do not save or load `.rupa` files. Application code and
+   `RupaProjectAccess` retain that authority through
+   `ProjectWorkspace`/`ProjectController`; the existing Agent save request
+   remains unsupported as a wire operation.
+7. Project-access adapters submit intent and exact session coordinates only.
+   They never edit package entries, instantiate a shadow `EditorSession`, or
+   publish a second project state. Live access releases only its access
+   resources on `finish`; closed access owns a temporary workspace and saves
+   only through an explicit successful save operation.
+8. Authored Mesh presentation evaluation shares immutable source buffers. A
    necessary Mesh edit copy is attributed at the T09 execution boundary.
-8. T12 benchmark cases use fresh `ProjectController`/`ProjectWorkspace`
+9. T12 benchmark cases use fresh `ProjectController`/`ProjectWorkspace`
    authorities and route every candidate mutation/read through the registered
    `ProjectAgentCommandController`. Candidate/reference code may construct
    only immutable public payload values required by `AgentRequest` or
@@ -132,28 +154,28 @@ flowchart LR
    it may not mutate `EditorSession`, `DesignDocument`, or
    `CADDocumentStore`, evaluate the CAD kernel, construct B-Rep, or bypass the
    route with direct swift-CAD or Mesh operations.
-9. T12 candidate-visible challenge values and typed prior results are separate
+10. T12 candidate-visible challenge values and typed prior results are separate
    from oracle-private expected source/B-Rep geometry. The T12 oracle uses
    immutable source and exact B-Rep observations, never renderer Mesh output or
    candidate assertions.
-10. T12 has exactly 100 stable case IDs and fixed category denominators. Each
+11. T12 has exactly 100 stable case IDs and fixed category denominators. Each
     case is binary for realization; expected unsupported capability decisions,
     infrastructure validity, and natural-language reasoning claims are reported
     separately.
-11. T12 keeps a versioned capability-availability baseline/digest separate from
+12. T12 keeps a versioned capability-availability baseline/digest separate from
     the evidence-derived execution-regression baseline/digest. The latter is
     established only by a complete valid production run and is never implicitly
     updated; exact
     environment/catalog/capability drift is explicit, and infrastructure or
     oracle failure never becomes a canonical case failure.
-12. The 100 IDs retain individual production-route, authority/rollback, exact
+13. The 100 IDs retain individual production-route, authority/rollback, exact
     oracle, tolerance/plane, timeout/resource, candidate-separation, review, and
     commit evidence; catalog presence alone is not an implementation claim.
-13. Case activation and category gates used concurrency one. The completed
+14. Case activation and category gates used concurrency one. The completed
     post-100 integration adds measured bounded scheduling, immutable baselines,
     fixed-denominator scoring, and a canonical report without replacing the
     individual evidence.
-14. The external-Agent JSON adapter accepts the complete 100 gate-reviewed IDs.
+15. The external-Agent JSON adapter accepts the complete 100 gate-reviewed IDs.
     It fingerprints only the
     candidate-visible context, passes the decoded decision through the same
     benchmark executor/controller/oracle path at concurrency 1, and cannot

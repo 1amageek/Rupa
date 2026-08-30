@@ -49,6 +49,10 @@ let package = Package(
             targets: ["RupaProject"]
         ),
         .library(
+            name: "RupaProjectAccess",
+            targets: ["RupaProjectAccess"]
+        ),
+        .library(
             name: "RupaUI",
             targets: ["RupaUI"]
         ),
@@ -226,6 +230,14 @@ let package = Package(
             exclude: ["DESIGN.md"]
         ),
         .target(
+            name: "RupaProjectAccess",
+            dependencies: [
+                "RupaAgentProtocol",
+                "RupaCoreTypes",
+            ],
+            exclude: ["DESIGN.md"]
+        ),
+        .target(
             name: "RupaUI",
             dependencies: [
                 "RupaKit",
@@ -345,7 +357,8 @@ let package = Package(
             dependencies: [
                 "RupaCoreTypes",
                 "RupaAgentProtocol",
-            ]
+            ],
+            exclude: ["DESIGN.md"]
         ),
         .target(
             name: "RupaAgentCADBenchmark",
@@ -385,7 +398,8 @@ let package = Package(
                 "RupaAgentTransport",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "SwiftCAD", package: "swift-CAD"),
-            ]
+            ],
+            exclude: ["DESIGN.md"]
         ),
         .executableTarget(
             name: "RupaCLI",
@@ -490,6 +504,14 @@ let package = Package(
                 "RupaProject",
                 "RupaProjectPackage",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
+            ]
+        ),
+        .testTarget(
+            name: "RupaProjectAccessTests",
+            dependencies: [
+                "RupaProjectAccess",
+                "RupaAgentProtocol",
+                "RupaCoreTypes",
             ]
         ),
         .testTarget(

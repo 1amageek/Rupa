@@ -3,7 +3,7 @@ import RupaAgentProtocol
 import RupaCore
 
 @MainActor
-public final class MainActorAgentBridge: AgentSocketServing {
+public final class MainActorAgentBridge: AgentRequestHandling {
     private let controller: AgentCommandController
 
     public init(controller: AgentCommandController = AgentCommandController()) {
@@ -21,10 +21,6 @@ public final class MainActorAgentBridge: AgentSocketServing {
 
     public func unregister(id: UUID) {
         controller.unregister(id: id)
-    }
-
-    public func setSocketPath(_ path: String?) {
-        controller.socketPath = path
     }
 
     public func handle(_ request: AgentRequest) -> AgentResponse {

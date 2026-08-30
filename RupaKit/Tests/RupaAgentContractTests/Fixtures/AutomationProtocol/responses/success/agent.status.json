@@ -4,8 +4,6 @@
   "method": "agent.status",
   "result": {
     "running": true,
-    "socketPath": "/tmp/rupa.sock",
     "sessionCount": 2
   }
 }
-

@@ -21,7 +21,7 @@ public actor AgentSocketListener {
     private var stoppingTasks: [Task<Void, Never>] = []
 
     public init(
-        handler: any AgentSocketServing,
+        handler: any AgentRequestHandling,
         socketPath: AgentSocketPath = AgentSocketPath()
     ) {
         self.socketPath = socketPath
@@ -80,7 +80,6 @@ public actor AgentSocketListener {
             }
 
             listenDescriptor = descriptor
-            await service.setSocketPath(socketPath.value)
             acceptTask = Task.detached {
                 await Self.runAcceptLoop(
                     descriptor: descriptor,
@@ -106,7 +105,6 @@ public actor AgentSocketListener {
                 || acceptTask != nil
                 || !activeConnections.isEmpty else {
             removeSocketFile()
-            await service.setSocketPath(nil)
             return
         }
 
@@ -130,7 +128,6 @@ public actor AgentSocketListener {
             Darwin.shutdown(connection.descriptor, SHUT_RDWR)
         }
         removeSocketFile()
-        await service.setSocketPath(nil)
         await task?.value
         for connection in connections {
             await connection.task.value

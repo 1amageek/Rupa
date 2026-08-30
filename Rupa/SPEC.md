@@ -284,6 +284,7 @@ flowchart TD
 | `RupaAgentProtocol` | Library | `RupaAgentProtocol` |
 | `RupaAgentRuntime` | Library | `RupaAgentRuntime` |
 | `RupaAgentTransport` | Library | `RupaAgentTransport` |
+| `RupaProjectAccess` | Library | `RupaProjectAccess` |
 | `RupaAgent` | Library | `RupaAgent` |
 | `RupaCLIKit` | Library | `RupaCLIKit` |
 | `rupa` | Executable | `RupaCLI` |
@@ -1326,9 +1327,9 @@ Initial implementation uses a local Unix domain socket.
 |---|---|
 | Transport | Unix domain socket |
 | Message format | JSON-RPC style request and response envelopes |
-| Runtime directory | Shared app-group container, with a per-process temporary fallback |
+| Runtime directory | Product-composed App Group endpoint; the endpoint is transport-private and the current temporary fallback remains transitional until ACCESS-C |
 | Canonical socket path | `~/Library/Group Containers/WWCKBW8CKN.team.stamp.rupa/rupa-agent/rupa.sock` — the app-group container is the one location the sandboxed app and unsandboxed CLI/agent clients resolve identically. |
-| Fallback socket path | `$TMPDIR/rupa-agent/rupa.sock`, used only when the app-group container is unavailable. |
+| Transitional fallback socket path | `$TMPDIR/rupa-agent/rupa.sock`, retained only by the current implementation until ACCESS-C removes silent fallback. |
 
 The package-level socket listener supports start, stop, stale socket replacement,
 malformed request recovery, and client/server round trips. App-hosted startup
@@ -1394,7 +1395,7 @@ registered application-owned `ProjectWorkspace`; source authority remains in
 | Method | Purpose |
 |---|---|
 | `agent.capabilities` | Return structured Agent capability descriptors. |
-| `agent.status` | Return server status, socket path, and session count. |
+| `agent.status` | Return semantic service availability and session count; endpoint placement remains transport-private. |
 | `agent.cadInteractionQualityAssessment` | Return the static CAD interaction quality assessment without requiring a session. |
 | `sessions.list` | Return open document session summaries. |
 | `document.create` | Create an Agent-owned document session, optionally at a new non-overwriting file path. |
@@ -1683,7 +1684,7 @@ Initial implementation is accepted when these behavior contracts pass.
 | Dry run | Command validates and evaluates without saving or incrementing persisted file state. |
 | Product metadata persistence | Scene/component/material/validation/export/template metadata round-trips through `.rupa` and participates in undo/redo. |
 | Sessions JSON | `rupa sessions --json` returns stable session summaries with ID, path, dirty state, generation, and display name. |
-| Agent status | `rupa agent status --json` reports running state, socket path, and session count. |
+| Agent status | `rupa agent status --json` reports semantic running state and session count; it does not expose socket placement. |
 | Stable reference failure | Unresolvable references fail with `reference.unresolved` and actionable diagnostics. |
 | CLI dependency boundary | `RupaCLI` builds without importing `RupaUI` or the app target. |
 

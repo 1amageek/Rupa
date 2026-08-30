@@ -16,7 +16,8 @@ checks, construction of in-process RupaKit requests with the complete immutable
 mutation recovery/no-retry reporting.
 
 It does not create an EditorSession, execute Mesh algorithms, prepare arbitrary
-Make Editable payloads, persist files, own socket I/O, or define CAD commands.
+Make Editable payloads, persist files, own socket I/O or endpoint state, or
+define CAD commands.
 
 ## Related Designs
 
@@ -24,6 +25,8 @@ Make Editable payloads, persist files, own socket I/O, or define CAD commands.
 |---|---|---|---|---|
 | [package design](../../DESIGN.md) | parent | module composition | Places runtime above protocol and shared workspace. | Do not add a parallel controller. |
 | [AgentProtocol](../RupaAgentProtocol/DESIGN.md) | depends on | typed requests/results | Supplies wire-safe values. | A DTO is never project authority. |
+| [RupaProjectAccess](../RupaProjectAccess/DESIGN.md) | used by later composition | session-bound semantic handler | Uses this runtime without acquiring source authority. | Runtime never opens targets or saves packages. |
+| [AgentTransport](../RupaAgentTransport/DESIGN.md) | used by | `AgentRequestHandling` | Delivers decoded intent through a transport-neutral port. | No socket path or lifecycle callback enters runtime. |
 | [RupaKit](../RupaKit/DESIGN.md) | depends on | exact-snapshot Make Editable and Mesh use cases | Performs bounded reads and atomic mutations. | Always pass the captured complete view and lease guard. |
 | [RupaProject](../RupaProject/DESIGN.md) | transitively depends on | project publication/no-retry contract | Owns source and evaluation publication. | Runtime must not replay after committed failure. |
 | [system design](../../../DESIGN.md) | system parent | end-to-end workflow and save boundary | Defines integration evidence. | Save/load are invoked only by application-owned test composition. |
@@ -58,6 +61,9 @@ flowchart LR
    Mesh representation.
 6. File create/open/close/save remain outside this route. Runtime cannot infer a
    destination or call `ProjectWorkspace.save`.
+7. `ProjectAgentCommandController` conforms only to `AgentRequestHandling`.
+   Service status means the reached handler is available and contains no
+   transport endpoint state.
 
 ## Runtime Flows
 

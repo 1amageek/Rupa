@@ -94,12 +94,10 @@ public struct CLIResponse: Codable, Equatable, Sendable {
 
 public struct CLIAgentStatusResponse: Codable, Equatable, Sendable {
     public var running: Bool
-    public var socketPath: String?
     public var sessionCount: Int
 
     public init(status: AgentStatus) {
         self.running = status.running
-        self.socketPath = status.socketPath
         self.sessionCount = status.sessionCount
     }
 }

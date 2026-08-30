@@ -8,7 +8,6 @@ import RupaDomainFoundation
 
 public final class AgentCommandController: AgentClientProtocol {
     public var name: String
-    public var socketPath: String?
     private let registry: WorkspaceRegistry
     private let runner: AutomationRunner
     private let exportService: DocumentExportService
@@ -17,7 +16,6 @@ public final class AgentCommandController: AgentClientProtocol {
 
     public init(
         name: String = "Rupa Agent",
-        socketPath: String? = nil,
         registry: WorkspaceRegistry = WorkspaceRegistry(),
         runner: AutomationRunner = AutomationRunner(),
         exportService: DocumentExportService = DocumentExportService(),
@@ -25,7 +23,6 @@ public final class AgentCommandController: AgentClientProtocol {
         domainRegistry: DomainRegistry = DomainRegistry()
     ) {
         self.name = name
-        self.socketPath = socketPath
         self.registry = registry
         self.runner = runner
         self.exportService = exportService
@@ -84,7 +81,6 @@ public final class AgentCommandController: AgentClientProtocol {
                     return .status(
                         AgentStatus(
                             running: true,
-                            socketPath: socketPath,
                             sessionCount: registry.summaries().count
                         )
                     )

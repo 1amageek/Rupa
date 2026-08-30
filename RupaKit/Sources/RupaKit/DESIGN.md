@@ -7,8 +7,9 @@ ready Authored Mesh reads/edits and CAD Make Editable. It is a child of the [Rup
 design](../../DESIGN.md) and the [system design](../../../DESIGN.md).
 
 Its direct users are the existing `RupaUI` and Agent runtime/UI. T10 connects
-AgentProtocol/Runtime to these use cases; CLI and MCP adapters remain outside
-this scope.
+AgentProtocol/Runtime to these use cases. `RupaProjectAccess` and its adapters
+may reach them only through a registered `ProjectWorkspace`; CLI and MCP never
+gain direct source or package authority.
 
 The module depends on `RupaCore`, `RupaCoreTypes`, `RupaGeometry`,
 `RupaProject`, `RupaProjectModel`, `RupaEvaluation`, `RupaAutomation`, and
@@ -95,6 +96,7 @@ the Authored Mesh source catalog.
 | [package design](../../DESIGN.md) | parent package | Package boundaries and no transport change | Places RupaKit above Project. | Do not move source authority into this module. |
 | [system design](../../../DESIGN.md) | system parent | Inspect/preview/commit flow | Defines exact source and view behavior. | A returned view must be the exact operation result. |
 | [RupaProject design](../RupaProject/DESIGN.md) | depends on | Project staging and publication | Provides the actor-backed authority port. | Use existing `ProjectOperating`; no second controller. |
+| [RupaProjectAccess](../RupaProjectAccess/DESIGN.md) | used by | transport-neutral target/session intent | Composes live or closed access above a workspace. | Access adapters cannot call Core or edit package entries directly. |
 | [RupaCore design](../RupaCore/DESIGN.md) | used through Project | Source ID/content identity and shared asset rules | Defines what a Mesh handle targets. | Scene/representation context is navigation only. |
 | [RupaGeometry design](../RupaGeometry/DESIGN.md) | used through Core | Plan/executor/budget/receipt | Defines request semantics without transport knowledge. | Do not expose internal mutable buffers. |
 | [State and project contract](../../../Rupa/STATE_AND_PROJECT_CONTRACT.md) | depends on | Workspace and project snapshot lifecycle | Defines stale/cancel/no-retry behavior. | No post-commit replay after any publication-success projection or validation failure. |

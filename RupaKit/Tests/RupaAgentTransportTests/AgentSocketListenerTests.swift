@@ -68,7 +68,6 @@ struct AgentSocketListenerTests {
             }
             #expect(await listener.isRunning)
             #expect(status.running)
-            #expect(status.socketPath == socketURL.path)
             #expect(status.sessionCount == 1)
         }
     }
@@ -245,7 +244,7 @@ struct AgentSocketListenerTests {
                 #expect(Bool(false))
                 return
             }
-            #expect(status.socketPath == socketURL.path)
+            #expect(status.running)
         }
     }
 

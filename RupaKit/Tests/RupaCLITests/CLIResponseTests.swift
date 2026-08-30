@@ -7813,13 +7813,12 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 }
 
 @Test func cliServiceReportsAgentStatus() async throws {
-    let server = AgentCommandController(socketPath: "/tmp/rupa.sock")
+    let server = AgentCommandController()
     _ = server.register(session: EditorSession(document: .empty(named: "Open")))
 
     let response = try CLIService().agentStatus(client: server)
 
     #expect(response.running)
-    #expect(response.socketPath == "/tmp/rupa.sock")
     #expect(response.sessionCount == 1)
 }
 

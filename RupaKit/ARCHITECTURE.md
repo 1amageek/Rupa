@@ -14,8 +14,10 @@ this file remains the package graph index and current-route summary.
 Package schema v3 and the `ProjectController` source boundary are implemented.
 Application composition selects the verified single `ProjectWorkspace`, shared
 `ProjectWorkspaceOperationSequencer`, and `ProjectController` route for viewport,
-commands, file/history lifecycle, and Agent access. No legacy production route or
-schema-v2 compatibility layer remains.
+commands, file/history lifecycle, and live Agent access. The CLI closed-file
+mutation path still uses the legacy `DocumentFileService`/`EditorSession` route;
+ACCESS-B/D replace it with `RupaProjectAccess` and a temporary
+`ProjectWorkspace`/`ProjectController`. No schema-v2 compatibility layer remains.
 
 ```mermaid
 flowchart LR
@@ -95,6 +97,8 @@ flowchart LR
     AgentRuntime --> ProjectModel
     AgentTransport[RupaAgentTransport] --> CoreTypes
     AgentTransport --> AgentProtocol
+    ProjectAccess[RupaProjectAccess] --> AgentProtocol
+    ProjectAccess --> CoreTypes
     AgentUI[RupaAgentUI] --> Kit
     AgentUI --> Core
     AgentUI --> Domain
@@ -128,15 +132,16 @@ flowchart LR
 | `RupaCore` | Product document state, retained representation sets, Authored Mesh assets, CAD runtime/source state, semantic validation, source commands, and domain services | Evaluation projection persistence, UI state, transport protocol, CLI parsing |
 | `RupaCore/Surface` | Surface analysis, PolySpline editing, UVN frame and source summaries | Viewport drawing or Agent request routing |
 | `RupaAutomation` | Stable command vocabulary and command execution bridge | Agent protocol envelopes or view-specific state |
-| `RupaAgentProtocol` | Agent-facing request/response schema, envelopes, codec, request-handler and socket-service ports, capabilities, and protocol summaries | Workspace registry, socket IO, CAD mutation logic |
+| `RupaAgentProtocol` | Agent-facing request/response schema, envelopes, codec, transport-neutral request-handler port, session-coordinate projection, capabilities, and protocol summaries | Workspace registry, endpoint state, socket IO, CAD mutation logic |
 | `RupaAgentRuntime` | Main-actor registry of shared `ProjectWorkspace` instances, immutable project snapshot reads, capability/domain dispatch, and Agent request routing through the project-operation boundary | Independent editor sessions, package/source authority, Unix socket IO, SwiftUI workspace layout |
-| `RupaAgentTransport` | Bounded framed Unix socket IO, listener/client connection ownership, deadlines, and socket path/address utilities | Agent command semantics or CAD mutation logic |
+| `RupaAgentTransport` | Bounded framed Unix socket IO, listener/client connection ownership, deadlines, injected endpoint and peer-authorization contracts, and transitional socket path/address utilities | Agent command semantics, semantic endpoint status, or CAD mutation logic |
+| `RupaProjectAccess` | Transport-neutral live/closed target, session, explicit-save, finish, monotonic-open, and typed access-failure contracts | Workspace/controller construction, package bytes, socket IO, App lifecycle, or CLI parsing |
 | `RupaAgent` | Compatibility facade that re-exports protocol, runtime, and transport | New implementation ownership |
 | `RupaViewportScene` | Viewport scene data model, scene construction, projection basis, hit policy, identity pick index, and viewport transform utilities | SwiftUI view layout, Metal drawing backend |
 | `RupaRendering` | SwiftUI viewport, drawing backend, interaction geometry, and rendering affordance services | Persistent document mutation |
 | `RupaUI` | SwiftUI workspace state, command panels, inspectors, and project-view presentation | Agent registration, socket/runtime implementation, or Core CAD algorithms |
 | `RupaAgentUI` | Concrete Agent socket-host composition and registration of application-owned `ProjectWorkspace` instances | A second editor/source authority, workspace editing UI, or Agent protocol schema |
-| `RupaCLIKit` | Argument parsing and terminal response formatting | Core editing behavior |
+| `RupaCLIKit` | Argument parsing and terminal response formatting; ACCESS-D migration consumer of `RupaProjectAccess` | Product/CAD/Mesh authority or package-entry editing; its current legacy file route is transitional and not an accepted authority boundary |
 
 ## Dependency Rules
 
@@ -154,6 +159,7 @@ flowchart LR
 | `DesignDocumentProjectBridge` creates a derived evaluation projection and its explicit occurrence-to-scene-node navigation index only. `RupaProject.ProjectEvaluatorPreparing` requires `ProjectController` to prepare an evaluator from the exact immutable `DesignDocument` being evaluated; `DefaultDesignDocumentProjectEvaluatorFactory` implements that port while owning provider registration and the shared CAD evaluation-cache lifetime. | Evaluation projection must not become a second persisted CAD source, occurrence IDs must not be parsed to recover editor identity, and a controller must not retain an evaluator bound to an older CAD document while cache lifetime outlives one snapshot build. |
 | `ProjectController` publishes one `ProjectStateSnapshot` containing the matching document lifetime, document generation, transaction revision, publication sequence, presentation evaluation, optional CAD interaction context, selection, workspace state, package, and history flags. `ProjectWorkspace` converts it away from the main actor into a package-free `ProjectViewSnapshot`, returns the exact view produced for each operation, and replaces its observable view only when that candidate is newer. | UI cannot combine geometry, CAD interaction, selection, or history from different publications; a late exact result remains available to its caller without regressing newer observable state; loading or replacing a document renews presentation lifetime even when the persisted project ID is unchanged; package bytes and source mutation authority do not enter observable UI state. |
 | `RupaAgentProtocol` must not depend on `RupaAgentRuntime` or `RupaAgentTransport`. | Tooling can encode/decode requests without loading workspace registries or socket code. |
+| `RupaProjectAccess` depends only on `RupaAgentProtocol` and `RupaCoreTypes`. | Target/session intent remains independent from transport, App, workspace, controller, and package implementations. |
 | `RupaAgentTransport` depends only on `RupaAgentProtocol` and `RupaCoreTypes`; runtime handlers implement the protocol-owned request port. | Socket ownership remains independent from workspace registries and command execution. |
 | Agent transport messages use an unsigned 64-bit network-order length prefix, a 16 MiB payload limit, and total monotonic IO deadlines; the listener tracks bounded concurrent connections and shuts them down before awaiting handler ownership during stop. | Message boundaries do not depend on peer EOF, malformed or stalled peers cannot allocate unbounded memory, and listener shutdown converges for half-open connections. |
 | `RupaAgentRuntime` registers the same `ProjectWorkspace` observed by UI and routes reads, source mutations, interaction mutations, history, evaluation, capability, and domain requests through it. File create/open/close/save are typed unsupported because file URLs, security-scoped access, windows, and user-facing lifecycle belong to `ApplicationRoot`; export accepts only CAD-only authority. | Agent execution cannot create a shadow `EditorSession`, take ownership of application file/window lifecycle, silently bypass package/evaluation publication, or infer an export source from Mesh or mixed representations. |

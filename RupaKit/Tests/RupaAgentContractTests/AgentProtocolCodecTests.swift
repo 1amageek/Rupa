@@ -506,7 +506,6 @@ func agentMessageCodecPreservesCommittedMutationReceiptAsWireError() throws {
     let response = AgentResponse.status(
         AgentStatus(
             running: true,
-            socketPath: "/tmp/rupa.sock",
             sessionCount: 2
         )
     )
@@ -526,7 +525,7 @@ func agentMessageCodecPreservesCommittedMutationReceiptAsWireError() throws {
     #expect(json["error"] == nil)
     #expect(result["status"] == nil)
     #expect(result["running"] as? Bool == true)
-    #expect(result["socketPath"] as? String == "/tmp/rupa.sock")
+    #expect(result["socketPath"] == nil)
     #expect(result["sessionCount"] as? Int == 2)
 }
 
@@ -637,7 +636,6 @@ func agentMessageCodecPreservesCommittedMutationReceiptAsWireError() throws {
         AgentResponse.status(
             AgentStatus(
                 running: true,
-                socketPath: "/tmp/rupa.sock",
                 sessionCount: 1
             )
         ),
@@ -1121,7 +1119,6 @@ func agentMessageCodecPreservesCommittedMutationReceiptAsWireError() throws {
               "method": "agent.status",
               "result": {
                 "running": true,
-                "socketPath": "/tmp/rupa.sock",
                 "sessionCount": 2
               }
             }
@@ -1153,7 +1150,7 @@ func agentMessageCodecPreservesCommittedMutationReceiptAsWireError() throws {
         expectedMethod: "parameter.setExpression"
     )
 
-    #expect(statusResponse == .status(AgentStatus(running: true, socketPath: "/tmp/rupa.sock", sessionCount: 2)))
+    #expect(statusResponse == .status(AgentStatus(running: true, sessionCount: 2)))
     guard case .command(let result) = parameterResponse else {
         #expect(Bool(false))
         return
@@ -1224,7 +1221,6 @@ func agentMessageCodecPreservesCommittedMutationReceiptAsWireError() throws {
         AgentResponse.status(
             AgentStatus(
                 running: true,
-                socketPath: "/tmp/rupa.sock",
                 sessionCount: 2
             )
         ),
@@ -1249,7 +1245,6 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
         AgentResponse.status(
             AgentStatus(
                 running: true,
-                socketPath: "/tmp/rupa.sock",
                 sessionCount: 1
             )
         ),

@@ -10,9 +10,8 @@ import RupaProject
 
 /// Routes Agent requests through the same project authority observed by the UI.
 @MainActor
-public final class ProjectAgentCommandController: AgentSocketServing {
+public final class ProjectAgentCommandController: AgentRequestHandling {
     public var name: String
-    public private(set) var socketPath: String?
 
     private let registry: ProjectWorkspaceRegistry
     private let domainRegistry: DomainRegistry
@@ -22,7 +21,6 @@ public final class ProjectAgentCommandController: AgentSocketServing {
 
     public init(
         name: String = "Rupa Agent",
-        socketPath: String? = nil,
         registry: ProjectWorkspaceRegistry = ProjectWorkspaceRegistry(),
         domainRegistry: DomainRegistry = DomainRegistry(),
         snapshotReadExecutor: ProjectAgentSnapshotReadExecutor =
@@ -31,7 +29,6 @@ public final class ProjectAgentCommandController: AgentSocketServing {
         errorMapper: ProjectAgentErrorMapper = ProjectAgentErrorMapper()
     ) {
         self.name = name
-        self.socketPath = socketPath
         self.registry = registry
         self.domainRegistry = domainRegistry
         self.snapshotReadExecutor = snapshotReadExecutor
@@ -62,10 +59,6 @@ public final class ProjectAgentCommandController: AgentSocketServing {
 
     public func updatePath(id: UUID, path: URL?) async throws {
         try await registry.updatePath(id: id, path: path)
-    }
-
-    public func setSocketPath(_ path: String?) async {
-        socketPath = path
     }
 
     public func handle(_ request: AgentRequest) async -> AgentResponse {
@@ -168,8 +161,7 @@ public final class ProjectAgentCommandController: AgentSocketServing {
         case .status:
             return .status(
                 AgentStatus(
-                    running: socketPath != nil,
-                    socketPath: socketPath,
+                    running: true,
                     sessionCount: try await registry.reconciledCount()
                 )
             )
@@ -1037,73 +1029,6 @@ public final class ProjectAgentCommandController: AgentSocketServing {
     }
 }
 
-private extension AgentRequest {
-    var projectSessionID: UUID? {
-        switch self {
-        case .capabilities,
-             .capabilityRegistry,
-             .status,
-             .sessions,
-             .createDocument,
-             .openDocument,
-             .cadInteractionQualityAssessment:
-            nil
-        case .closeDocument(let id, _, _),
-             .resetDocument(let id, _, _),
-             .execute(let id, _, _, _),
-             .invokeCapability(let id, _, _),
-             .setParameterExpression(let id, _, _, _, _, _),
-             .setObjectDimensionExpression(let id, _, _, _, _, _),
-             .setSketchEntityDimensionExpression(let id, _, _, _, _, _),
-             .setSelectionDimensionTargetExpression(let id, _, _, _, _),
-             .setSurfaceFrameDisplay(let id, _, _, _),
-             .movePolySplineSurfaceVertex(let id, _, _, _, _, _),
-             .selectionMeasurement(let id, _, _),
-             .resolveSnap(let id, _, _, _),
-             .polySplineMeshAnalysis(let id, _, _, _),
-             .sketchDimensionSummary(let id, _, _),
-             .selectionDimensionEvaluation(let id, _, _),
-             .sweepEvaluationPlan(let id, _, _, _, _, _, _),
-             .booleanEvaluationPlan(let id, _, _, _, _, _),
-             .objectDimensionSummary(let id, _, _),
-             .surfaceAnalysis(let id, _, _),
-             .surfaceFrames(let id, _, _),
-             .surfaceBoundaryContinuityCompatibility(let id, _, _, _),
-             .selectTargets(let id, _, _),
-             .selectReferences(let id, _, _),
-             .export(let id, _, _, _, _):
-            id
-        case .meshCatalog(let request):
-            request.sessionID
-        case .meshPage(let request):
-            request.sessionID
-        case .meshNeighborhood(let request):
-            request.sessionID
-        case .meshEdit(let request):
-            request.sessionID
-        case .makeEditable(let request):
-            request.sessionID
-        case .undo(let id, _),
-             .redo(let id, _),
-             .executeBatch(let id, _),
-             .executeDomain(let id, _),
-             .parameters(let id, _),
-             .evaluate(let id, _),
-             .measure(let id, _),
-             .constructionPlaneSummary(let id, _),
-             .designDisplaySnapshot(let id, _),
-             .patternArraySummary(let id, _),
-             .meshSummary(let id, _),
-             .sketchEntitySummary(let id, _),
-             .curveAnalysis(let id, _),
-             .topologySummary(let id, _),
-             .surfaceSourceSummary(let id, _),
-             .surfaceContinuitySummary(let id, _),
-             .save(let id, _):
-            id
-        }
-    }
-}
 
 private extension SketchEntityDimensionKind {
     var quantityKind: QuantityKind {

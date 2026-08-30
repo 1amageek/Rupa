@@ -15,6 +15,7 @@ Parent: [system design](../DESIGN.md). Direct children used by T10/T12 are:
 - [RupaProject](Sources/RupaProject/DESIGN.md)
 - [RupaKit integration target](Sources/RupaKit/DESIGN.md)
 - [RupaAgentProtocol](Sources/RupaAgentProtocol/DESIGN.md)
+- [RupaProjectAccess](Sources/RupaProjectAccess/DESIGN.md)
 - [RupaAgentRuntime](Sources/RupaAgentRuntime/DESIGN.md)
 - [RupaAgentCADBenchmark](Sources/RupaAgentCADBenchmark/DESIGN.md)
 - [RupaAgentCADBenchmarkJSONAdapter](Sources/RupaAgentCADBenchmarkJSONAdapter/DESIGN.md)
@@ -41,6 +42,8 @@ The package design owns:
 - the dependency direction between provider-independent Mesh editing, source
   authority, project orchestration, and application integration;
 - the rule that every T09/T10 layer uses the existing `ProjectController` authority;
+- the project-access contract through which UI, CLI, and future adapters submit
+  typed intent without acquiring source or package authority;
 - package-wide API and verification boundaries for T10 and T12.
 
 It does not own Mesh topology algorithms, CAD semantics, source asset mutation,
@@ -77,6 +80,7 @@ flowchart LR
     Kit --> Benchmark
     Benchmark --> JSONAdapter["RupaAgentCADBenchmarkJSONAdapter\nversioned bounded JSON"]
     JSONAdapter --> BenchmarkCLI["RupaAgentCADBenchmarkCLI\ndedicated executable"]
+    AgentProtocol --> Access["RupaProjectAccess\ntransport-neutral intent"]
 ```
 
 ## Related Designs
@@ -135,6 +139,8 @@ records are owned by the four child designs:
 | `RupaGeometry` does not depend upward on Core, Project, UI, or transport. | [RupaGeometry design](Sources/RupaGeometry/DESIGN.md) |
 | `RupaCore` is the source-authority boundary; `RupaProject` is the publication boundary. | [RupaCore design](Sources/RupaCore/DESIGN.md), [RupaProject design](Sources/RupaProject/DESIGN.md) |
 | `RupaKit` is the application use-case boundary over existing Project authority. | [RupaKit integration design](Sources/RupaKit/DESIGN.md) |
+| `RupaProjectAccess` is the transport-neutral access contract; it owns no workspace, package, or command state. | [RupaProjectAccess design](Sources/RupaProjectAccess/DESIGN.md) |
+| `RupaAgentTransport` carries protocol values over an injected local transport and never defines project semantics. | [RupaAgentTransport design](Sources/RupaAgentTransport/DESIGN.md) |
 | Existing CAD/Mesh and state contracts remain authoritative for their domains. | [CAD/Mesh responsibility](../Rupa/CAD_MESH_RESPONSIBILITY_CONTRACT.md), [state/project contract](../Rupa/STATE_AND_PROJECT_CONTRACT.md) |
 | `RupaAgentCADBenchmark` is a bounded verification composition above the production Agent route: all 100 targets retain individual reviewed evidence, while aggregate execution composes fresh isolated `ProjectAgentCommandController` runs into measured scheduling, immutable baselines, and one canonical report. | [RupaAgentCADBenchmark design](Sources/RupaAgentCADBenchmark/DESIGN.md) |
 | The external benchmark path is one-way: `RupaAgentCADBenchmark` -> JSON adapter -> dedicated CLI. It accepts only activated cases, fingerprints candidate-visible context, and never makes transport or candidate data authoritative. | [JSON adapter](Sources/RupaAgentCADBenchmarkJSONAdapter/DESIGN.md), [benchmark CLI](Sources/RupaAgentCADBenchmarkCLI/DESIGN.md) |
@@ -161,13 +167,16 @@ and [benchmark CLI](Sources/RupaAgentCADBenchmarkCLI/DESIGN.md#runtime-flows).
 
 ## State, Ownership, and Lifecycle
 
-The package owns no shared mutable T10/T12 state. State and lifetime are
+The package owns no shared mutable T10/T12 or access-session state. State and lifetime are
 delegated to the child owners: Mesh buffers to `RupaGeometry`, source assets to
 `RupaCore`, project publication to `RupaProject`, observable workspace view to
 `RupaKit`, request routing to `RupaAgentRuntime`, and benchmark catalog,
 capability-availability/execution-regression baseline evidence, case/oracle,
 and report values to `RupaAgentCADBenchmark`. External request/response buffers
 and fingerprints are invocation-local values owned by the JSON adapter and CLI.
+`RupaProjectAccess` owns only immutable target, result, error, endpoint, and
+peer-authorization contracts; concrete live and closed session lifetimes are
+composed by later ACCESS work.
 
 ## Failure, Concurrency, and Constraints
 
