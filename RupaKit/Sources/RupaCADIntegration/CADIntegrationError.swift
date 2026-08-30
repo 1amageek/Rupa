@@ -3,8 +3,6 @@ import Foundation
 public struct CADIntegrationError: Error, Equatable, LocalizedError, Sendable {
     public enum Code: String, Equatable, Sendable {
         case unsupportedReference
-        @available(*, deprecated, message: "Use sourceUnavailable.")
-        case documentMismatch
         case sourceUnavailable
         case duplicateSource
         case bodyUnavailable

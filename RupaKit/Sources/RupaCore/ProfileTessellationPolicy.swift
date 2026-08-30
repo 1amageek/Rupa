@@ -1,7 +1,8 @@
 import Foundation
+import RupaCoreTypes
 
 enum ProfileTessellationPolicy {
-    static let arcSegmentsPropertyID = ObjectPropertyID(rawValue: "profile.arc.segments")
+    static let arcSegmentsPropertyID = PropertyID(rawValue: "profile.arc.segments")
     static let minimumArcSegmentCount = 3
     static let maximumArcSegmentCount = 64
 

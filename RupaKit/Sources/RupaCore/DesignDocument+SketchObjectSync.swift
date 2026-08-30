@@ -50,13 +50,13 @@ extension DesignDocument {
                     return
                 }
                 Self.setLengthProperty(
-                    ObjectPropertyID(rawValue: "length"),
+                    PropertyID(rawValue: "length"),
                     to: metrics.length,
                     object: &object,
                     definition: definition
                 )
                 Self.setAngleProperty(
-                    ObjectPropertyID(rawValue: "angle"),
+                    PropertyID(rawValue: "angle"),
                     to: metrics.angleDegrees,
                     object: &object,
                     definition: definition
@@ -69,7 +69,7 @@ extension DesignDocument {
                     return
                 }
                 Self.setLengthProperty(
-                    ObjectPropertyID(rawValue: "radius"),
+                    PropertyID(rawValue: "radius"),
                     to: radius,
                     object: &object,
                     definition: definition
@@ -85,19 +85,19 @@ extension DesignDocument {
                     return
                 }
                 Self.setLengthProperty(
-                    ObjectPropertyID(rawValue: "radius"),
+                    PropertyID(rawValue: "radius"),
                     to: radius,
                     object: &object,
                     definition: definition
                 )
                 Self.setAngleProperty(
-                    ObjectPropertyID(rawValue: "start.angle"),
+                    PropertyID(rawValue: "start.angle"),
                     to: startAngle * 180.0 / .pi,
                     object: &object,
                     definition: definition
                 )
                 Self.setAngleProperty(
-                    ObjectPropertyID(rawValue: "end.angle"),
+                    PropertyID(rawValue: "end.angle"),
                     to: (startAngle + span) * 180.0 / .pi,
                     object: &object,
                     definition: definition
@@ -109,7 +109,7 @@ extension DesignDocument {
                     return
                 }
                 Self.setIntegerProperty(
-                    ObjectPropertyID(rawValue: "control.point.count"),
+                    PropertyID(rawValue: "control.point.count"),
                     to: spline.controlPoints.count,
                     object: &object,
                     definition: definition
@@ -136,8 +136,8 @@ extension DesignDocument {
 
         let definition = try objectRegistry.requireDefinition(for: typeID)
         var nextProperties = objectRegistry.defaultProperties(for: typeID)
-        if let strokeWidth = object.properties[ObjectPropertyID(rawValue: "stroke.width")] {
-            nextProperties[ObjectPropertyID(rawValue: "stroke.width")] = strokeWidth
+        if let strokeWidth = object.properties[PropertyID(rawValue: "stroke.width")] {
+            nextProperties[PropertyID(rawValue: "stroke.width")] = strokeWidth
         }
         nextProperties = definition.resolvedProperties(nextProperties)
         try nextProperties.validate(

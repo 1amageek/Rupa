@@ -1973,7 +1973,7 @@ public struct ViewportSceneBuilder {
     }
 
     private func lengthProperty(
-        _ id: ObjectPropertyID,
+        _ id: PropertyID,
         properties: ObjectPropertySet
     ) -> Double? {
         guard case .length(let meters) = properties[id] else {
@@ -1983,7 +1983,7 @@ public struct ViewportSceneBuilder {
     }
 
     private func integerProperty(
-        _ id: ObjectPropertyID,
+        _ id: PropertyID,
         properties: ObjectPropertySet
     ) -> Int? {
         guard case .integer(let value) = properties[id] else {
@@ -1993,7 +1993,7 @@ public struct ViewportSceneBuilder {
     }
 
     private func angleProperty(
-        _ id: ObjectPropertyID,
+        _ id: PropertyID,
         properties: ObjectPropertySet
     ) -> Double? {
         guard case .angle(let value) = properties[id] else {
@@ -2003,7 +2003,7 @@ public struct ViewportSceneBuilder {
     }
 
     private func booleanProperty(
-        _ id: ObjectPropertyID,
+        _ id: PropertyID,
         properties: ObjectPropertySet
     ) -> Bool? {
         guard case .boolean(let value) = properties[id] else {

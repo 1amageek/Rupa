@@ -213,7 +213,7 @@ private func edgeMovePoint(
 }
 
 private func edgeMoveObjectLengthProperty(
-    _ propertyID: ObjectPropertyID,
+    _ propertyID: PropertyID,
     sceneNodeID: SceneNodeID,
     in document: DesignDocument
 ) throws -> Double {

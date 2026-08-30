@@ -1,13 +1,14 @@
 import Foundation
+import RupaCoreTypes
 
 public struct ObjectPropertySet: Codable, Hashable, Sendable {
-    public var values: [ObjectPropertyID: ObjectPropertyValue]
+    public var values: [PropertyID: ObjectPropertyValue]
 
-    public init(values: [ObjectPropertyID: ObjectPropertyValue] = [:]) {
+    public init(values: [PropertyID: ObjectPropertyValue] = [:]) {
         self.values = values
     }
 
-    public subscript(id: ObjectPropertyID) -> ObjectPropertyValue? {
+    public subscript(id: PropertyID) -> ObjectPropertyValue? {
         get {
             values[id]
         }
@@ -16,7 +17,7 @@ public struct ObjectPropertySet: Codable, Hashable, Sendable {
         }
     }
 
-    public func value(for id: ObjectPropertyID, default defaultValue: ObjectPropertyValue) -> ObjectPropertyValue {
+    public func value(for id: PropertyID, default defaultValue: ObjectPropertyValue) -> ObjectPropertyValue {
         values[id] ?? defaultValue
     }
 
@@ -87,7 +88,7 @@ public struct ObjectPropertySet: Codable, Hashable, Sendable {
     private static func validateRange(
         _ value: ObjectPropertyValue,
         range: ObjectPropertyDefinition.NumericRange,
-        id: ObjectPropertyID
+        id: PropertyID
     ) throws {
         let numericValue: Double?
         switch value {

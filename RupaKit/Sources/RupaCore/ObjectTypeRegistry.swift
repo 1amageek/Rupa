@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 
 public struct ObjectTypeRegistry: Sendable {
     public let definitions: [ObjectTypeID: ObjectTypeDefinition]
@@ -65,7 +66,7 @@ public struct ObjectTypeRegistry: Sendable {
 
     public func validatePropertyMutation(
         typeID: ObjectTypeID?,
-        propertyID: ObjectPropertyID,
+        propertyID: PropertyID,
         value: ObjectPropertyValue?,
         materialLibrary: MaterialLibrary
     ) throws -> ObjectTypeDefinition {

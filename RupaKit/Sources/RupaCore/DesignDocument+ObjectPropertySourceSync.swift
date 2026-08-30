@@ -5,7 +5,7 @@ import RupaCoreTypes
 extension DesignDocument {
     public mutating func setSceneNodeObjectProperty(
         id: SceneNodeID,
-        propertyID: ObjectPropertyID,
+        propertyID: PropertyID,
         value: ObjectPropertyValue?,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws {
@@ -460,7 +460,7 @@ extension DesignDocument {
     }
 
     static func setLengthProperty(
-        _ id: ObjectPropertyID,
+        _ id: PropertyID,
         to meters: Double,
         object: inout ObjectDescriptor,
         definition: ObjectTypeDefinition
@@ -473,7 +473,7 @@ extension DesignDocument {
     }
 
     static func setAngleProperty(
-        _ id: ObjectPropertyID,
+        _ id: PropertyID,
         to degrees: Double,
         object: inout ObjectDescriptor,
         definition: ObjectTypeDefinition
@@ -486,7 +486,7 @@ extension DesignDocument {
     }
 
     static func setIntegerProperty(
-        _ id: ObjectPropertyID,
+        _ id: PropertyID,
         to value: Int,
         object: inout ObjectDescriptor,
         definition: ObjectTypeDefinition

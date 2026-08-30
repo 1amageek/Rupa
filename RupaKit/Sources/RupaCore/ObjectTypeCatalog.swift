@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 
 public enum ObjectTypeCatalog {
     public static let builtInDefinitions: [ObjectTypeDefinition] = [
@@ -388,7 +389,7 @@ private extension ObjectPropertyDefinition {
     static let maximumAuthoringLengthMeters = RulerConfiguration.visibleSpanMetersRange.upperBound * 10.0
 
     static func length(
-        id: ObjectPropertyID,
+        id: PropertyID,
         title: String,
         binding: RenderBinding?,
         defaultValue: Double,
@@ -411,7 +412,7 @@ private extension ObjectPropertyDefinition {
     }
 
     static func integer(
-        id: ObjectPropertyID,
+        id: PropertyID,
         title: String,
         binding: RenderBinding?,
         defaultValue: Int
@@ -429,7 +430,7 @@ private extension ObjectPropertyDefinition {
     }
 
     static func angle(
-        id: ObjectPropertyID,
+        id: PropertyID,
         title: String,
         binding: RenderBinding?,
         defaultValue: Double
@@ -447,7 +448,7 @@ private extension ObjectPropertyDefinition {
     }
 
     static func boolean(
-        id: ObjectPropertyID,
+        id: PropertyID,
         title: String,
         binding: RenderBinding?,
         defaultValue: Bool
@@ -464,7 +465,7 @@ private extension ObjectPropertyDefinition {
     }
 
     static func text(
-        id: ObjectPropertyID,
+        id: PropertyID,
         title: String,
         defaultValue: String
     ) -> ObjectPropertyDefinition {

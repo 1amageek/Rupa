@@ -1480,7 +1480,7 @@ public final class EditorSession {
 
     public func setSceneNodeObjectProperty(
         _ id: SceneNodeID,
-        propertyID: ObjectPropertyID,
+        propertyID: PropertyID,
         value: ObjectPropertyValue?
     ) {
         perform(

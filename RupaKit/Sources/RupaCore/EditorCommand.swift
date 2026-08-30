@@ -48,7 +48,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
         materialID: MaterialID?,
         process: TopologyMaterialBinding.Process?
     )
-    case setSceneNodeObjectProperty(id: SceneNodeID, propertyID: ObjectPropertyID, value: ObjectPropertyValue?)
+    case setSceneNodeObjectProperty(id: SceneNodeID, propertyID: PropertyID, value: ObjectPropertyValue?)
     case setComponentInstanceVisibility(id: ComponentInstanceID, isVisible: Bool)
     case setComponentInstanceLock(id: ComponentInstanceID, isLocked: Bool)
     case setComponentInstanceTransform(id: ComponentInstanceID, localTransform: Transform3D)

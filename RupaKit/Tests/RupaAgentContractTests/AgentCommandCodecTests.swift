@@ -1306,8 +1306,8 @@ import SwiftCAD
             diagnostics: [
                 PolySplineMeshAnalysisResult.Diagnostic(
                     severity: .error,
-                    code: .unsupportedRoundedCorners,
-                    message: "Rounded corners are not supported."
+                    code: .unsupportedPatchNetwork,
+                    message: "The patch network is not supported."
                 ),
             ]
         )

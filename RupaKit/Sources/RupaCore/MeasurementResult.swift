@@ -339,23 +339,6 @@ public extension MeasurementResult {
             self.measuredBounds = bounds
         }
 
-        @available(*, deprecated, message: "Use measured values so each value and its provenance are supplied together.")
-        public init(
-            featureID: String,
-            featureName: String?,
-            kind: Kind,
-            areaSquareMeters: Double,
-            bounds: Bounds
-        ) {
-            self.init(
-                featureID: featureID,
-                featureName: featureName,
-                kind: kind,
-                area: Measured(value: areaSquareMeters, method: .legacyUnspecified),
-                bounds: Measured(value: bounds, method: .legacyUnspecified)
-            )
-        }
-
         private enum CodingKeys: String, CodingKey {
             case featureID
             case featureName
@@ -480,32 +463,6 @@ public extension MeasurementResult {
             self.volume = volume
             self.surfaceArea = surfaceArea
             self.measuredBounds = bounds
-        }
-
-        @available(*, deprecated, message: "Use measured values so each value and its provenance are supplied together.")
-        public init(
-            featureID: String,
-            featureName: String?,
-            sourceFeatureID: String,
-            sourceFeatureName: String?,
-            linearDimensions: [LinearDimension],
-            volumeCubicMeters: Double,
-            volumeMethod: MeasurementMethod = .legacyUnspecified,
-            surfaceAreaSquareMeters: Double? = nil,
-            surfaceAreaMethod: MeasurementMethod? = nil,
-            bounds: Bounds,
-            boundsMethod: MeasurementMethod = .legacyUnspecified
-        ) {
-            self.featureID = featureID
-            self.featureName = featureName
-            self.sourceFeatureID = sourceFeatureID
-            self.sourceFeatureName = sourceFeatureName
-            self.linearDimensions = linearDimensions
-            self.volume = Measured(value: volumeCubicMeters, method: volumeMethod)
-            self.surfaceArea = surfaceAreaSquareMeters.map {
-                Measured(value: $0, method: surfaceAreaMethod ?? .legacyUnspecified)
-            }
-            self.measuredBounds = Measured(value: bounds, method: boundsMethod)
         }
 
         private enum CodingKeys: String, CodingKey {
@@ -682,27 +639,6 @@ public extension MeasurementResult {
             self.linearDimensions = linearDimensions
             self.surfaceArea = surfaceArea
             self.measuredBounds = bounds
-        }
-
-        @available(*, deprecated, message: "Use measured values so each value and its provenance are supplied together.")
-        public init(
-            featureID: String,
-            featureName: String?,
-            sourceFeatureID: String,
-            sourceFeatureName: String?,
-            linearDimensions: [LinearDimension],
-            surfaceAreaSquareMeters: Double,
-            bounds: Bounds
-        ) {
-            self.init(
-                featureID: featureID,
-                featureName: featureName,
-                sourceFeatureID: sourceFeatureID,
-                sourceFeatureName: sourceFeatureName,
-                linearDimensions: linearDimensions,
-                surfaceArea: Measured(value: surfaceAreaSquareMeters, method: .legacyUnspecified),
-                bounds: Measured(value: bounds, method: .legacyUnspecified)
-            )
         }
 
         private enum CodingKeys: String, CodingKey {

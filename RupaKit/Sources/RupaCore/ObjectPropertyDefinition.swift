@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 
 public struct ObjectPropertyDefinition: Codable, Hashable, Identifiable, Sendable {
     public enum WorkspaceScaleDefault: String, Codable, Hashable, Sendable {
@@ -91,7 +92,7 @@ public struct ObjectPropertyDefinition: Codable, Hashable, Identifiable, Sendabl
         }
     }
 
-    public var id: ObjectPropertyID
+    public var id: PropertyID
     public var title: String
     public var group: String
     public var valueKind: ObjectPropertyValue.ValueKind
@@ -103,7 +104,7 @@ public struct ObjectPropertyDefinition: Codable, Hashable, Identifiable, Sendabl
     public var isEditable: Bool
 
     public init(
-        id: ObjectPropertyID,
+        id: PropertyID,
         title: String,
         group: String,
         valueKind: ObjectPropertyValue.ValueKind,

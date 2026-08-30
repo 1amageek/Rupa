@@ -1,10 +1,11 @@
 import Foundation
+import RupaCoreTypes
 
 public struct ObjectTypeDefinition: Codable, Hashable, Identifiable, Sendable {
     public enum GeneratedRepresentationRule: Codable, Hashable, Sendable {
         case fixed(ObjectRepresentationKind)
         case lengthPropertyThreshold(
-            propertyID: ObjectPropertyID,
+            propertyID: PropertyID,
             threshold: Double,
             defaultRepresentation: ObjectRepresentationKind,
             activeRepresentation: ObjectRepresentationKind
@@ -52,14 +53,14 @@ public struct ObjectTypeDefinition: Codable, Hashable, Identifiable, Sendable {
     }
 
     public var defaultProperties: ObjectPropertySet {
-        var values: [ObjectPropertyID: ObjectPropertyValue] = [:]
+        var values: [PropertyID: ObjectPropertyValue] = [:]
         for property in properties where values[property.id] == nil {
             values[property.id] = property.defaultValue
         }
         return ObjectPropertySet(values: values)
     }
 
-    public func property(for id: ObjectPropertyID) -> ObjectPropertyDefinition? {
+    public func property(for id: PropertyID) -> ObjectPropertyDefinition? {
         properties.first { $0.id == id }
     }
 

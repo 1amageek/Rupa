@@ -6070,7 +6070,7 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
         _ = try session.execute(
             .setSceneNodeObjectProperty(
                 id: outputBodySceneNodeID,
-                propertyID: ObjectPropertyID(rawValue: "generated.output.override"),
+                propertyID: PropertyID(rawValue: "generated.output.override"),
                 value: .boolean(true)
             )
         )

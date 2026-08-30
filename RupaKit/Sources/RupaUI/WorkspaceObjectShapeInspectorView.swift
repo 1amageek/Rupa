@@ -268,7 +268,7 @@ struct WorkspaceObjectShapeInspectorView: View {
               let definition = shapes.first?.definition else {
             return []
         }
-        var existingPropertyIDs: Set<ObjectPropertyID> = []
+        var existingPropertyIDs: Set<PropertyID> = []
         if shapes.allSatisfy({ $0.typeID == .cube || $0.typeID == .cylinder }) {
             existingPropertyIDs.formUnion(["size.x", "size.y", "size.z"])
         }

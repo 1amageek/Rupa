@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 import SwiftCAD
 
 public enum ObjectPropertyValue: Codable, Hashable, Sendable {
@@ -39,7 +40,7 @@ public enum ObjectPropertyValue: Codable, Hashable, Sendable {
         }
     }
 
-    public func validate(id: ObjectPropertyID) throws {
+    public func validate(id: PropertyID) throws {
         switch self {
         case .length(let value), .number(let value), .angle(let value):
             guard value.isFinite else {
