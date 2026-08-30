@@ -1,0 +1,57 @@
+{
+  "artifact": {
+    "path": "agent-v8-engine.swcad",
+    "byteCount": 609583,
+    "sha256": "025bd87bd0d116f1d93b3b50a09b20971c21f786040888e1b092f552779ccb16"
+  },
+  "batchExecution": {
+    "commandCount": 62,
+    "sourceMutationCount": 61,
+    "generation": 61,
+    "saved": true,
+    "diagnostics": [],
+    "metrics": {
+      "evaluationPassCount": 1,
+      "historyEntryCount": 1,
+      "invalidatedFeatureCount": 122,
+      "rebuiltFeatureCount": 122,
+      "totalFeatureCount": 122,
+      "tessellatedBodyCount": 61,
+      "topologyMutationCount": 3172,
+      "replayFallbackCount": 0
+    }
+  },
+  "independentReloadValidation": {
+    "exitCode": 0,
+    "message": "Validation finished.",
+    "diagnostics": []
+  },
+  "viewerMeshEvaluation": {
+    "exitCode": 0,
+    "bodyCount": 61,
+    "vertexCount": 1433418,
+    "triangleCount": 1432800,
+    "indexedElementCount": 4298400,
+    "boundsMeters": {
+      "minX": -0.22800000000000356,
+      "maxX": 0.2290000000000254,
+      "minY": -0.17368054037766686,
+      "maxY": 0.2156675682621408,
+      "minZ": -0.092,
+      "maxZ": 0.2156675682621408
+    },
+    "diagnostics": [
+      {
+        "severity": "info",
+        "message": "Mesh summary completed with 61 generated body meshes."
+      }
+    ]
+  },
+  "kinematicValidation": {
+    "measuredBankAngleDegrees": 90.0,
+    "maximumConnectingRodLengthResidualMillimeters": 0.0,
+    "throw1ToThrow4Degrees": 180.0,
+    "throw2ToThrow3Degrees": 180.0,
+    "orthogonalThrowPlaneSeparationDegrees": 90.0
+  }
+}

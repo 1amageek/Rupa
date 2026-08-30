@@ -1,0 +1,3387 @@
+{
+  "commands": [
+    {
+      "createExtrudedCircle": {
+        "name": "Crankpin 1",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.141,
+                "y": 0.0215,
+                "z": 0.037239092363
+              },
+              "normal": {
+                "x": 1.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.011,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.07,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Crank Web 1.1",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.172,
+                "y": 0.01075,
+                "z": 0.018619546181
+              },
+              "normal": {
+                "x": 0.0,
+                "y": 0.5,
+                "z": 0.866025403784
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.014,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.043,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Counterweight 1.1",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.172,
+                "y": -0.00774,
+                "z": -0.013406073251
+              },
+              "normal": {
+                "x": 0.0,
+                "y": -0.5,
+                "z": -0.866025403784
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.02,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.03096,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Crank Web 1.2",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.11,
+                "y": 0.01075,
+                "z": 0.018619546181
+              },
+              "normal": {
+                "x": 0.0,
+                "y": 0.5,
+                "z": 0.866025403784
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.014,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.043,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Counterweight 1.2",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.11,
+                "y": -0.00774,
+                "z": -0.013406073251
+              },
+              "normal": {
+                "x": 0.0,
+                "y": -0.5,
+                "z": -0.866025403784
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.02,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.03096,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Piston L1",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.15,
+                "y": -0.109788287133,
+                "z": 0.109788287133
+              },
+              "normal": {
+                "x": 0.0,
+                "y": -0.707106781187,
+                "z": 0.707106781187
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.0405,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.028,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Wrist Pin L1",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.15,
+                "y": -0.109788287133,
+                "z": 0.109788287133
+              },
+              "normal": {
+                "x": 1.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.006,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.052,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Connecting Rod L1",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.15,
+                "y": -0.044144143566,
+                "z": 0.073513689748
+              },
+              "normal": {
+                "x": 0.0,
+                "y": -0.875255247551,
+                "z": 0.483661298466
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.0075,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.15,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Piston R1",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.132,
+                "y": 0.135143220803,
+                "z": 0.135143220803
+              },
+              "normal": {
+                "x": 0.0,
+                "y": 0.707106781187,
+                "z": 0.707106781187
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.0405,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.028,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Wrist Pin R1",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.132,
+                "y": 0.135143220803,
+                "z": 0.135143220803
+              },
+              "normal": {
+                "x": 1.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.006,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.052,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Connecting Rod R1",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.132,
+                "y": 0.078321610401,
+                "z": 0.086191156583
+              },
+              "normal": {
+                "x": 0.0,
+                "y": 0.757621472018,
+                "z": 0.6526941896
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.0075,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.15,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Crankpin 2",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.047,
+                "y": 0.037239092363,
+                "z": -0.0215
+              },
+              "normal": {
+                "x": 1.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.011,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.07,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Crank Web 2.1",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.078,
+                "y": 0.018619546181,
+                "z": -0.01075
+              },
+              "normal": {
+                "x": 0.0,
+                "y": 0.866025403784,
+                "z": -0.5
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.014,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.043,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Counterweight 2.1",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.078,
+                "y": -0.013406073251,
+                "z": 0.00774
+              },
+              "normal": {
+                "x": 0.0,
+                "y": -0.866025403784,
+                "z": 0.5
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.02,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.03096,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Crank Web 2.2",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.016,
+                "y": 0.018619546181,
+                "z": -0.01075
+              },
+              "normal": {
+                "x": 0.0,
+                "y": 0.866025403784,
+                "z": -0.5
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.014,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.043,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Counterweight 2.2",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.016,
+                "y": -0.013406073251,
+                "z": 0.00774
+              },
+              "normal": {
+                "x": 0.0,
+                "y": -0.866025403784,
+                "z": 0.5
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.02,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.03096,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Piston L2",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.056,
+                "y": -0.07640412844,
+                "z": 0.07640412844
+              },
+              "normal": {
+                "x": 0.0,
+                "y": -0.707106781187,
+                "z": 0.707106781187
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.0405,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.028,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Wrist Pin L2",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.056,
+                "y": -0.07640412844,
+                "z": 0.07640412844
+              },
+              "normal": {
+                "x": 1.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.006,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.052,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Connecting Rod L2",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.056,
+                "y": -0.019582518039,
+                "z": 0.02745206422
+              },
+              "normal": {
+                "x": 0.0,
+                "y": -0.757621472018,
+                "z": 0.6526941896
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.0075,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.15,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Piston R2",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.038,
+                "y": 0.109788287133,
+                "z": 0.109788287133
+              },
+              "normal": {
+                "x": 0.0,
+                "y": 0.707106781187,
+                "z": 0.707106781187
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.0405,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.028,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Wrist Pin R2",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.038,
+                "y": 0.109788287133,
+                "z": 0.109788287133
+              },
+              "normal": {
+                "x": 1.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.006,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.052,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Connecting Rod R2",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.038,
+                "y": 0.073513689748,
+                "z": 0.044144143566
+              },
+              "normal": {
+                "x": 0.0,
+                "y": 0.483661298466,
+                "z": 0.875255247551
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.0075,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.15,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Crankpin 3",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.047,
+                "y": -0.037239092363,
+                "z": 0.0215
+              },
+              "normal": {
+                "x": 1.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.011,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.07,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Crank Web 3.1",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.016,
+                "y": -0.018619546181,
+                "z": 0.01075
+              },
+              "normal": {
+                "x": 0.0,
+                "y": -0.866025403784,
+                "z": 0.5
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.014,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.043,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Counterweight 3.1",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.016,
+                "y": 0.013406073251,
+                "z": -0.00774
+              },
+              "normal": {
+                "x": 0.0,
+                "y": 0.866025403784,
+                "z": -0.5
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.02,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.03096,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Crank Web 3.2",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.078,
+                "y": -0.018619546181,
+                "z": 0.01075
+              },
+              "normal": {
+                "x": 0.0,
+                "y": -0.866025403784,
+                "z": 0.5
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.014,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.043,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Counterweight 3.2",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.078,
+                "y": 0.013406073251,
+                "z": -0.00774
+              },
+              "normal": {
+                "x": 0.0,
+                "y": 0.866025403784,
+                "z": -0.5
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.02,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.03096,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Piston L3",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.038,
+                "y": -0.135143220803,
+                "z": 0.135143220803
+              },
+              "normal": {
+                "x": 0.0,
+                "y": -0.707106781187,
+                "z": 0.707106781187
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.0405,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.028,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Wrist Pin L3",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.038,
+                "y": -0.135143220803,
+                "z": 0.135143220803
+              },
+              "normal": {
+                "x": 1.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.006,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.052,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Connecting Rod L3",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.038,
+                "y": -0.086191156583,
+                "z": 0.078321610401
+              },
+              "normal": {
+                "x": 0.0,
+                "y": -0.6526941896,
+                "z": 0.757621472018
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.0075,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.15,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Piston R3",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.056,
+                "y": 0.09404919477,
+                "z": 0.09404919477
+              },
+              "normal": {
+                "x": 0.0,
+                "y": 0.707106781187,
+                "z": 0.707106781187
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.0405,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.028,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Wrist Pin R3",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.056,
+                "y": 0.09404919477,
+                "z": 0.09404919477
+              },
+              "normal": {
+                "x": 1.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.006,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.052,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Connecting Rod R3",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.056,
+                "y": 0.028405051204,
+                "z": 0.057774597385
+              },
+              "normal": {
+                "x": 0.0,
+                "y": 0.875255247551,
+                "z": 0.483661298466
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.0075,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.15,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Crankpin 4",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.141,
+                "y": -0.0215,
+                "z": -0.037239092363
+              },
+              "normal": {
+                "x": 1.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.011,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.07,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Crank Web 4.1",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.11,
+                "y": -0.01075,
+                "z": -0.018619546181
+              },
+              "normal": {
+                "x": 0.0,
+                "y": -0.5,
+                "z": -0.866025403784
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.014,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.043,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Counterweight 4.1",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.11,
+                "y": 0.00774,
+                "z": 0.013406073251
+              },
+              "normal": {
+                "x": 0.0,
+                "y": 0.5,
+                "z": 0.866025403784
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.02,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.03096,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Crank Web 4.2",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.172,
+                "y": -0.01075,
+                "z": -0.018619546181
+              },
+              "normal": {
+                "x": 0.0,
+                "y": -0.5,
+                "z": -0.866025403784
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.014,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.043,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Counterweight 4.2",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.172,
+                "y": 0.00774,
+                "z": 0.013406073251
+              },
+              "normal": {
+                "x": 0.0,
+                "y": 0.5,
+                "z": 0.866025403784
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.02,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.03096,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Piston L4",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.132,
+                "y": -0.09404919477,
+                "z": 0.09404919477
+              },
+              "normal": {
+                "x": 0.0,
+                "y": -0.707106781187,
+                "z": 0.707106781187
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.0405,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.028,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Wrist Pin L4",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.132,
+                "y": -0.09404919477,
+                "z": 0.09404919477
+              },
+              "normal": {
+                "x": 1.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.006,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.052,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Connecting Rod L4",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.132,
+                "y": -0.057774597385,
+                "z": 0.028405051204
+              },
+              "normal": {
+                "x": 0.0,
+                "y": -0.483661298466,
+                "z": 0.875255247551
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.0075,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.15,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Piston R4",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.15,
+                "y": 0.07640412844,
+                "z": 0.07640412844
+              },
+              "normal": {
+                "x": 0.0,
+                "y": 0.707106781187,
+                "z": 0.707106781187
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.0405,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.028,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Wrist Pin R4",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.15,
+                "y": 0.07640412844,
+                "z": 0.07640412844
+              },
+              "normal": {
+                "x": 1.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.006,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.052,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Connecting Rod R4",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.15,
+                "y": 0.02745206422,
+                "z": 0.019582518039
+              },
+              "normal": {
+                "x": 0.0,
+                "y": 0.6526941896,
+                "z": 0.757621472018
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.0075,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.15,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Main Journal 1",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.188,
+                "y": 0.0,
+                "z": 0.0
+              },
+              "normal": {
+                "x": 1.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.022,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.022,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Main Journal 2",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.094,
+                "y": 0.0,
+                "z": 0.0
+              },
+              "normal": {
+                "x": 1.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.022,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.022,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Main Journal 3",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+              },
+              "normal": {
+                "x": 1.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.022,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.022,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Main Journal 4",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.094,
+                "y": 0.0,
+                "z": 0.0
+              },
+              "normal": {
+                "x": 1.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.022,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.022,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Main Journal 5",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.188,
+                "y": 0.0,
+                "z": 0.0
+              },
+              "normal": {
+                "x": 1.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.022,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.022,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Front Crankshaft Nose",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.2065,
+                "y": 0.0,
+                "z": 0.0
+              },
+              "normal": {
+                "x": 1.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.015,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.015,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Flywheel Flange",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.205,
+                "y": 0.0,
+                "z": 0.0
+              },
+              "normal": {
+                "x": 1.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.018,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.012,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Timing Wheel",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.221,
+                "y": 0.0,
+                "z": 0.0
+              },
+              "normal": {
+                "x": 1.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.055,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.014,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Flywheel",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.22,
+                "y": 0.0,
+                "z": 0.0
+              },
+              "normal": {
+                "x": 1.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.092,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.018,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Cutaway Bank Support L1",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.19,
+                "y": -0.109601551084,
+                "z": 0.109601551084
+              },
+              "normal": {
+                "x": 0.0,
+                "y": -0.707106781187,
+                "z": 0.707106781187
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.008,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.13,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Cutaway Bank Support L2",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.19,
+                "y": -0.109601551084,
+                "z": 0.109601551084
+              },
+              "normal": {
+                "x": 0.0,
+                "y": -0.707106781187,
+                "z": 0.707106781187
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.008,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.13,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Cutaway Bank Support R1",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": -0.19,
+                "y": 0.109601551084,
+                "z": 0.109601551084
+              },
+              "normal": {
+                "x": 0.0,
+                "y": 0.707106781187,
+                "z": 0.707106781187
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.008,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.13,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedCircle": {
+        "name": "Cutaway Bank Support R2",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.19,
+                "y": 0.109601551084,
+                "z": 0.109601551084
+              },
+              "normal": {
+                "x": 0.0,
+                "y": 0.707106781187,
+                "z": 0.707106781187
+              }
+            }
+          }
+        },
+        "center": {
+          "x": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          },
+          "y": {
+            "kind": "constant",
+            "quantity": {
+              "value": 0.0,
+              "kind": "length"
+            }
+          }
+        },
+        "radius": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.008,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.13,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedRectangle": {
+        "name": "Cylinder Deck R",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.0,
+                "y": 0.161220346111,
+                "z": 0.161220346111
+              },
+              "normal": {
+                "x": 0.0,
+                "y": 0.707106781187,
+                "z": 0.707106781187
+              }
+            }
+          }
+        },
+        "width": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.41,
+            "kind": "length"
+          }
+        },
+        "height": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.094,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.016,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedRectangle": {
+        "name": "Valve Cover R",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.0,
+                "y": 0.181019335984,
+                "z": 0.181019335984
+              },
+              "normal": {
+                "x": 0.0,
+                "y": 0.707106781187,
+                "z": 0.707106781187
+              }
+            }
+          }
+        },
+        "width": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.388,
+            "kind": "length"
+          }
+        },
+        "height": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.074,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.024,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedRectangle": {
+        "name": "Crankcase Rail Left",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.0,
+                "y": -0.073,
+                "z": -0.056
+              },
+              "normal": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 1.0
+              }
+            }
+          }
+        },
+        "width": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.41,
+            "kind": "length"
+          }
+        },
+        "height": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.024,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.03,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "createExtrudedRectangle": {
+        "name": "Crankcase Rail Right",
+        "plane": {
+          "kind": "sketchPlane",
+          "sketchPlane": {
+            "kind": "plane",
+            "plane": {
+              "origin": {
+                "x": 0.0,
+                "y": 0.073,
+                "z": -0.056
+              },
+              "normal": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 1.0
+              }
+            }
+          }
+        },
+        "width": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.41,
+            "kind": "length"
+          }
+        },
+        "height": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.024,
+            "kind": "length"
+          }
+        },
+        "depth": {
+          "kind": "constant",
+          "quantity": {
+            "value": 0.03,
+            "kind": "length"
+          }
+        },
+        "direction": {
+          "kind": "symmetric"
+        }
+      }
+    },
+    {
+      "validateDocument": {}
+    }
+  ]
+}

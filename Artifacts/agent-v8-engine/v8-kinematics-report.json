@@ -1,0 +1,197 @@
+{
+  "method": "Exact vector slider-crank closure on each bank axis",
+  "equation": "s = dot(a,q) + sqrt(L^2 - |q - dot(a,q)a|^2)",
+  "measuredBankAngleDegrees": 90.0,
+  "maximumConnectingRodLengthResidualMillimeters": 0.0,
+  "crossPlaneChecks": {
+    "throw1ToThrow4Degrees": 180.0,
+    "throw2ToThrow3Degrees": 180.0,
+    "orthogonalThrowPlaneSeparationDegrees": 90.0
+  },
+  "cylinders": [
+    {
+      "bank": "L",
+      "cylinder": 1,
+      "throw": 1,
+      "phaseDegrees": 30.0,
+      "bankAxis": {
+        "x": 0.0,
+        "y": -0.707106781187,
+        "z": 0.707106781187
+      },
+      "crankpinCenterMillimeters": {
+        "x": -150.0,
+        "y": 21.5,
+        "z": 37.239092362731
+      },
+      "pistonPinCenterMillimeters": {
+        "x": -150.0,
+        "y": -109.788287132677,
+        "z": 109.788287132677
+      },
+      "connectingRodLengthMillimeters": 150.0,
+      "connectingRodLengthResidualMillimeters": 0.0
+    },
+    {
+      "bank": "R",
+      "cylinder": 1,
+      "throw": 1,
+      "phaseDegrees": 30.0,
+      "bankAxis": {
+        "x": 0.0,
+        "y": 0.707106781187,
+        "z": 0.707106781187
+      },
+      "crankpinCenterMillimeters": {
+        "x": -132.0,
+        "y": 21.5,
+        "z": 37.239092362731
+      },
+      "pistonPinCenterMillimeters": {
+        "x": -132.0,
+        "y": 135.143220802697,
+        "z": 135.143220802697
+      },
+      "connectingRodLengthMillimeters": 150.0,
+      "connectingRodLengthResidualMillimeters": 0.0
+    },
+    {
+      "bank": "L",
+      "cylinder": 2,
+      "throw": 2,
+      "phaseDegrees": 120.0,
+      "bankAxis": {
+        "x": 0.0,
+        "y": -0.707106781187,
+        "z": 0.707106781187
+      },
+      "crankpinCenterMillimeters": {
+        "x": -56.0,
+        "y": 37.239092362731,
+        "z": -21.5
+      },
+      "pistonPinCenterMillimeters": {
+        "x": -56.0,
+        "y": -76.404128439966,
+        "z": 76.404128439966
+      },
+      "connectingRodLengthMillimeters": 150.0,
+      "connectingRodLengthResidualMillimeters": 0.0
+    },
+    {
+      "bank": "R",
+      "cylinder": 2,
+      "throw": 2,
+      "phaseDegrees": 120.0,
+      "bankAxis": {
+        "x": 0.0,
+        "y": 0.707106781187,
+        "z": 0.707106781187
+      },
+      "crankpinCenterMillimeters": {
+        "x": -38.0,
+        "y": 37.239092362731,
+        "z": -21.5
+      },
+      "pistonPinCenterMillimeters": {
+        "x": -38.0,
+        "y": 109.788287132677,
+        "z": 109.788287132677
+      },
+      "connectingRodLengthMillimeters": 150.0,
+      "connectingRodLengthResidualMillimeters": 0.0
+    },
+    {
+      "bank": "L",
+      "cylinder": 3,
+      "throw": 3,
+      "phaseDegrees": 300.0,
+      "bankAxis": {
+        "x": 0.0,
+        "y": -0.707106781187,
+        "z": 0.707106781187
+      },
+      "crankpinCenterMillimeters": {
+        "x": 38.0,
+        "y": -37.239092362731,
+        "z": 21.5
+      },
+      "pistonPinCenterMillimeters": {
+        "x": 38.0,
+        "y": -135.143220802697,
+        "z": 135.143220802697
+      },
+      "connectingRodLengthMillimeters": 150.0,
+      "connectingRodLengthResidualMillimeters": 0.0
+    },
+    {
+      "bank": "R",
+      "cylinder": 3,
+      "throw": 3,
+      "phaseDegrees": 300.0,
+      "bankAxis": {
+        "x": 0.0,
+        "y": 0.707106781187,
+        "z": 0.707106781187
+      },
+      "crankpinCenterMillimeters": {
+        "x": 56.0,
+        "y": -37.239092362731,
+        "z": 21.5
+      },
+      "pistonPinCenterMillimeters": {
+        "x": 56.0,
+        "y": 94.049194769947,
+        "z": 94.049194769947
+      },
+      "connectingRodLengthMillimeters": 150.0,
+      "connectingRodLengthResidualMillimeters": 0.0
+    },
+    {
+      "bank": "L",
+      "cylinder": 4,
+      "throw": 4,
+      "phaseDegrees": 210.0,
+      "bankAxis": {
+        "x": 0.0,
+        "y": -0.707106781187,
+        "z": 0.707106781187
+      },
+      "crankpinCenterMillimeters": {
+        "x": 132.0,
+        "y": -21.5,
+        "z": -37.239092362731
+      },
+      "pistonPinCenterMillimeters": {
+        "x": 132.0,
+        "y": -94.049194769947,
+        "z": 94.049194769947
+      },
+      "connectingRodLengthMillimeters": 150.0,
+      "connectingRodLengthResidualMillimeters": 0.0
+    },
+    {
+      "bank": "R",
+      "cylinder": 4,
+      "throw": 4,
+      "phaseDegrees": 210.0,
+      "bankAxis": {
+        "x": 0.0,
+        "y": 0.707106781187,
+        "z": 0.707106781187
+      },
+      "crankpinCenterMillimeters": {
+        "x": 150.0,
+        "y": -21.5,
+        "z": -37.239092362731
+      },
+      "pistonPinCenterMillimeters": {
+        "x": 150.0,
+        "y": 76.404128439966,
+        "z": 76.404128439966
+      },
+      "connectingRodLengthMillimeters": 150.0,
+      "connectingRodLengthResidualMillimeters": 0.0
+    }
+  ]
+}

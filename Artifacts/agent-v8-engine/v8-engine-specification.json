@@ -1,0 +1,1124 @@
+{
+  "artifact": "Rupa Agent V8 Cross-Plane Cutaway",
+  "engineArchitecture": "90-degree cross-plane V8",
+  "unit": "millimeter",
+  "bore": 86.0,
+  "stroke": 86.0,
+  "displacementCubicCentimeters": 3996.457713743419,
+  "connectingRodLength": 150.0,
+  "cylinderPitch": 94.0,
+  "bankAngleDegrees": 90.0,
+  "staticCrankAngleDegrees": 30.0,
+  "crossPlaneThrowPhasesDegrees": [
+    30.0,
+    120.0,
+    300.0,
+    210.0
+  ],
+  "throwStations": [
+    -141.0,
+    -47.0,
+    47.0,
+    141.0
+  ],
+  "mainJournalStations": [
+    -188.0,
+    -94.0,
+    0.0,
+    94.0,
+    188.0
+  ],
+  "bankAxialOffset": 9.0,
+  "componentCount": 61,
+  "components": [
+    {
+      "kind": "cylinder",
+      "name": "Crankpin 1",
+      "category": "crankpin",
+      "centerMillimeters": {
+        "x": -141.0,
+        "y": 21.5,
+        "z": 37.239092362731
+      },
+      "axis": {
+        "x": 1.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "radiusMillimeters": 11.0,
+      "lengthMillimeters": 70.0,
+      "metadata": {
+        "throw": 1,
+        "phaseDegrees": 30.0
+      }
+    },
+    {
+      "kind": "cylinder",
+      "name": "Crank Web 1.1",
+      "category": "crank_web",
+      "centerMillimeters": {
+        "x": -172.0,
+        "y": 10.75,
+        "z": 18.619546181365
+      },
+      "axis": {
+        "x": 0.0,
+        "y": 0.5,
+        "z": 0.866025403784
+      },
+      "radiusMillimeters": 14.0,
+      "lengthMillimeters": 43.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Counterweight 1.1",
+      "category": "counterweight",
+      "centerMillimeters": {
+        "x": -172.0,
+        "y": -7.74,
+        "z": -13.406073250583
+      },
+      "axis": {
+        "x": 0.0,
+        "y": -0.5,
+        "z": -0.866025403784
+      },
+      "radiusMillimeters": 20.0,
+      "lengthMillimeters": 30.959999999999997
+    },
+    {
+      "kind": "cylinder",
+      "name": "Crank Web 1.2",
+      "category": "crank_web",
+      "centerMillimeters": {
+        "x": -110.0,
+        "y": 10.75,
+        "z": 18.619546181365
+      },
+      "axis": {
+        "x": 0.0,
+        "y": 0.5,
+        "z": 0.866025403784
+      },
+      "radiusMillimeters": 14.0,
+      "lengthMillimeters": 43.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Counterweight 1.2",
+      "category": "counterweight",
+      "centerMillimeters": {
+        "x": -110.0,
+        "y": -7.74,
+        "z": -13.406073250583
+      },
+      "axis": {
+        "x": 0.0,
+        "y": -0.5,
+        "z": -0.866025403784
+      },
+      "radiusMillimeters": 20.0,
+      "lengthMillimeters": 30.959999999999997
+    },
+    {
+      "kind": "cylinder",
+      "name": "Piston L1",
+      "category": "piston",
+      "centerMillimeters": {
+        "x": -150.0,
+        "y": -109.788287132677,
+        "z": 109.788287132677
+      },
+      "axis": {
+        "x": 0.0,
+        "y": -0.707106781187,
+        "z": 0.707106781187
+      },
+      "radiusMillimeters": 40.5,
+      "lengthMillimeters": 28.0,
+      "metadata": {
+        "bank": "L",
+        "cylinder": 1
+      }
+    },
+    {
+      "kind": "cylinder",
+      "name": "Wrist Pin L1",
+      "category": "wrist_pin",
+      "centerMillimeters": {
+        "x": -150.0,
+        "y": -109.788287132677,
+        "z": 109.788287132677
+      },
+      "axis": {
+        "x": 1.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "radiusMillimeters": 6.0,
+      "lengthMillimeters": 52.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Connecting Rod L1",
+      "category": "connecting_rod",
+      "centerMillimeters": {
+        "x": -150.0,
+        "y": -44.144143566339,
+        "z": 73.513689747704
+      },
+      "axis": {
+        "x": 0.0,
+        "y": -0.875255247551,
+        "z": 0.483661298466
+      },
+      "radiusMillimeters": 7.5,
+      "lengthMillimeters": 150.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Piston R1",
+      "category": "piston",
+      "centerMillimeters": {
+        "x": -132.0,
+        "y": 135.143220802697,
+        "z": 135.143220802697
+      },
+      "axis": {
+        "x": 0.0,
+        "y": 0.707106781187,
+        "z": 0.707106781187
+      },
+      "radiusMillimeters": 40.5,
+      "lengthMillimeters": 28.0,
+      "metadata": {
+        "bank": "R",
+        "cylinder": 1
+      }
+    },
+    {
+      "kind": "cylinder",
+      "name": "Wrist Pin R1",
+      "category": "wrist_pin",
+      "centerMillimeters": {
+        "x": -132.0,
+        "y": 135.143220802697,
+        "z": 135.143220802697
+      },
+      "axis": {
+        "x": 1.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "radiusMillimeters": 6.0,
+      "lengthMillimeters": 52.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Connecting Rod R1",
+      "category": "connecting_rod",
+      "centerMillimeters": {
+        "x": -132.0,
+        "y": 78.321610401349,
+        "z": 86.191156582714
+      },
+      "axis": {
+        "x": 0.0,
+        "y": 0.757621472018,
+        "z": 0.6526941896
+      },
+      "radiusMillimeters": 7.5,
+      "lengthMillimeters": 149.99999999999997
+    },
+    {
+      "kind": "cylinder",
+      "name": "Crankpin 2",
+      "category": "crankpin",
+      "centerMillimeters": {
+        "x": -47.0,
+        "y": 37.239092362731,
+        "z": -21.5
+      },
+      "axis": {
+        "x": 1.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "radiusMillimeters": 11.0,
+      "lengthMillimeters": 70.0,
+      "metadata": {
+        "throw": 2,
+        "phaseDegrees": 120.0
+      }
+    },
+    {
+      "kind": "cylinder",
+      "name": "Crank Web 2.1",
+      "category": "crank_web",
+      "centerMillimeters": {
+        "x": -78.0,
+        "y": 18.619546181365,
+        "z": -10.75
+      },
+      "axis": {
+        "x": 0.0,
+        "y": 0.866025403784,
+        "z": -0.5
+      },
+      "radiusMillimeters": 14.0,
+      "lengthMillimeters": 43.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Counterweight 2.1",
+      "category": "counterweight",
+      "centerMillimeters": {
+        "x": -78.0,
+        "y": -13.406073250583,
+        "z": 7.74
+      },
+      "axis": {
+        "x": 0.0,
+        "y": -0.866025403784,
+        "z": 0.5
+      },
+      "radiusMillimeters": 20.0,
+      "lengthMillimeters": 30.959999999999997
+    },
+    {
+      "kind": "cylinder",
+      "name": "Crank Web 2.2",
+      "category": "crank_web",
+      "centerMillimeters": {
+        "x": -16.0,
+        "y": 18.619546181365,
+        "z": -10.75
+      },
+      "axis": {
+        "x": 0.0,
+        "y": 0.866025403784,
+        "z": -0.5
+      },
+      "radiusMillimeters": 14.0,
+      "lengthMillimeters": 43.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Counterweight 2.2",
+      "category": "counterweight",
+      "centerMillimeters": {
+        "x": -16.0,
+        "y": -13.406073250583,
+        "z": 7.74
+      },
+      "axis": {
+        "x": 0.0,
+        "y": -0.866025403784,
+        "z": 0.5
+      },
+      "radiusMillimeters": 20.0,
+      "lengthMillimeters": 30.959999999999997
+    },
+    {
+      "kind": "cylinder",
+      "name": "Piston L2",
+      "category": "piston",
+      "centerMillimeters": {
+        "x": -56.0,
+        "y": -76.404128439966,
+        "z": 76.404128439966
+      },
+      "axis": {
+        "x": 0.0,
+        "y": -0.707106781187,
+        "z": 0.707106781187
+      },
+      "radiusMillimeters": 40.5,
+      "lengthMillimeters": 28.0,
+      "metadata": {
+        "bank": "L",
+        "cylinder": 2
+      }
+    },
+    {
+      "kind": "cylinder",
+      "name": "Wrist Pin L2",
+      "category": "wrist_pin",
+      "centerMillimeters": {
+        "x": -56.0,
+        "y": -76.404128439966,
+        "z": 76.404128439966
+      },
+      "axis": {
+        "x": 1.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "radiusMillimeters": 6.0,
+      "lengthMillimeters": 52.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Connecting Rod L2",
+      "category": "connecting_rod",
+      "centerMillimeters": {
+        "x": -56.0,
+        "y": -19.582518038618,
+        "z": 27.452064219983
+      },
+      "axis": {
+        "x": 0.0,
+        "y": -0.757621472018,
+        "z": 0.6526941896
+      },
+      "radiusMillimeters": 7.5,
+      "lengthMillimeters": 149.99999999999997
+    },
+    {
+      "kind": "cylinder",
+      "name": "Piston R2",
+      "category": "piston",
+      "centerMillimeters": {
+        "x": -38.0,
+        "y": 109.788287132677,
+        "z": 109.788287132677
+      },
+      "axis": {
+        "x": 0.0,
+        "y": 0.707106781187,
+        "z": 0.707106781187
+      },
+      "radiusMillimeters": 40.5,
+      "lengthMillimeters": 28.0,
+      "metadata": {
+        "bank": "R",
+        "cylinder": 2
+      }
+    },
+    {
+      "kind": "cylinder",
+      "name": "Wrist Pin R2",
+      "category": "wrist_pin",
+      "centerMillimeters": {
+        "x": -38.0,
+        "y": 109.788287132677,
+        "z": 109.788287132677
+      },
+      "axis": {
+        "x": 1.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "radiusMillimeters": 6.0,
+      "lengthMillimeters": 52.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Connecting Rod R2",
+      "category": "connecting_rod",
+      "centerMillimeters": {
+        "x": -38.0,
+        "y": 73.513689747704,
+        "z": 44.144143566339
+      },
+      "axis": {
+        "x": 0.0,
+        "y": 0.483661298466,
+        "z": 0.875255247551
+      },
+      "radiusMillimeters": 7.5,
+      "lengthMillimeters": 150.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Crankpin 3",
+      "category": "crankpin",
+      "centerMillimeters": {
+        "x": 47.0,
+        "y": -37.239092362731,
+        "z": 21.5
+      },
+      "axis": {
+        "x": 1.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "radiusMillimeters": 11.0,
+      "lengthMillimeters": 70.0,
+      "metadata": {
+        "throw": 3,
+        "phaseDegrees": 300.0
+      }
+    },
+    {
+      "kind": "cylinder",
+      "name": "Crank Web 3.1",
+      "category": "crank_web",
+      "centerMillimeters": {
+        "x": 16.0,
+        "y": -18.619546181365,
+        "z": 10.75
+      },
+      "axis": {
+        "x": 0.0,
+        "y": -0.866025403784,
+        "z": 0.5
+      },
+      "radiusMillimeters": 14.0,
+      "lengthMillimeters": 43.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Counterweight 3.1",
+      "category": "counterweight",
+      "centerMillimeters": {
+        "x": 16.0,
+        "y": 13.406073250583,
+        "z": -7.74
+      },
+      "axis": {
+        "x": 0.0,
+        "y": 0.866025403784,
+        "z": -0.5
+      },
+      "radiusMillimeters": 20.0,
+      "lengthMillimeters": 30.959999999999997
+    },
+    {
+      "kind": "cylinder",
+      "name": "Crank Web 3.2",
+      "category": "crank_web",
+      "centerMillimeters": {
+        "x": 78.0,
+        "y": -18.619546181365,
+        "z": 10.75
+      },
+      "axis": {
+        "x": 0.0,
+        "y": -0.866025403784,
+        "z": 0.5
+      },
+      "radiusMillimeters": 14.0,
+      "lengthMillimeters": 43.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Counterweight 3.2",
+      "category": "counterweight",
+      "centerMillimeters": {
+        "x": 78.0,
+        "y": 13.406073250583,
+        "z": -7.74
+      },
+      "axis": {
+        "x": 0.0,
+        "y": 0.866025403784,
+        "z": -0.5
+      },
+      "radiusMillimeters": 20.0,
+      "lengthMillimeters": 30.959999999999997
+    },
+    {
+      "kind": "cylinder",
+      "name": "Piston L3",
+      "category": "piston",
+      "centerMillimeters": {
+        "x": 38.0,
+        "y": -135.143220802697,
+        "z": 135.143220802697
+      },
+      "axis": {
+        "x": 0.0,
+        "y": -0.707106781187,
+        "z": 0.707106781187
+      },
+      "radiusMillimeters": 40.5,
+      "lengthMillimeters": 28.0,
+      "metadata": {
+        "bank": "L",
+        "cylinder": 3
+      }
+    },
+    {
+      "kind": "cylinder",
+      "name": "Wrist Pin L3",
+      "category": "wrist_pin",
+      "centerMillimeters": {
+        "x": 38.0,
+        "y": -135.143220802697,
+        "z": 135.143220802697
+      },
+      "axis": {
+        "x": 1.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "radiusMillimeters": 6.0,
+      "lengthMillimeters": 52.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Connecting Rod L3",
+      "category": "connecting_rod",
+      "centerMillimeters": {
+        "x": 38.0,
+        "y": -86.191156582714,
+        "z": 78.321610401349
+      },
+      "axis": {
+        "x": 0.0,
+        "y": -0.6526941896,
+        "z": 0.757621472018
+      },
+      "radiusMillimeters": 7.5,
+      "lengthMillimeters": 150.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Piston R3",
+      "category": "piston",
+      "centerMillimeters": {
+        "x": 56.0,
+        "y": 94.049194769947,
+        "z": 94.049194769947
+      },
+      "axis": {
+        "x": 0.0,
+        "y": 0.707106781187,
+        "z": 0.707106781187
+      },
+      "radiusMillimeters": 40.5,
+      "lengthMillimeters": 28.0,
+      "metadata": {
+        "bank": "R",
+        "cylinder": 3
+      }
+    },
+    {
+      "kind": "cylinder",
+      "name": "Wrist Pin R3",
+      "category": "wrist_pin",
+      "centerMillimeters": {
+        "x": 56.0,
+        "y": 94.049194769947,
+        "z": 94.049194769947
+      },
+      "axis": {
+        "x": 1.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "radiusMillimeters": 6.0,
+      "lengthMillimeters": 52.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Connecting Rod R3",
+      "category": "connecting_rod",
+      "centerMillimeters": {
+        "x": 56.0,
+        "y": 28.405051203608,
+        "z": 57.774597384973
+      },
+      "axis": {
+        "x": 0.0,
+        "y": 0.875255247551,
+        "z": 0.483661298466
+      },
+      "radiusMillimeters": 7.5,
+      "lengthMillimeters": 150.00000000000003
+    },
+    {
+      "kind": "cylinder",
+      "name": "Crankpin 4",
+      "category": "crankpin",
+      "centerMillimeters": {
+        "x": 141.0,
+        "y": -21.5,
+        "z": -37.239092362731
+      },
+      "axis": {
+        "x": 1.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "radiusMillimeters": 11.0,
+      "lengthMillimeters": 70.0,
+      "metadata": {
+        "throw": 4,
+        "phaseDegrees": 210.0
+      }
+    },
+    {
+      "kind": "cylinder",
+      "name": "Crank Web 4.1",
+      "category": "crank_web",
+      "centerMillimeters": {
+        "x": 110.0,
+        "y": -10.75,
+        "z": -18.619546181365
+      },
+      "axis": {
+        "x": 0.0,
+        "y": -0.5,
+        "z": -0.866025403784
+      },
+      "radiusMillimeters": 14.0,
+      "lengthMillimeters": 43.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Counterweight 4.1",
+      "category": "counterweight",
+      "centerMillimeters": {
+        "x": 110.0,
+        "y": 7.74,
+        "z": 13.406073250583
+      },
+      "axis": {
+        "x": 0.0,
+        "y": 0.5,
+        "z": 0.866025403784
+      },
+      "radiusMillimeters": 20.0,
+      "lengthMillimeters": 30.959999999999997
+    },
+    {
+      "kind": "cylinder",
+      "name": "Crank Web 4.2",
+      "category": "crank_web",
+      "centerMillimeters": {
+        "x": 172.0,
+        "y": -10.75,
+        "z": -18.619546181365
+      },
+      "axis": {
+        "x": 0.0,
+        "y": -0.5,
+        "z": -0.866025403784
+      },
+      "radiusMillimeters": 14.0,
+      "lengthMillimeters": 43.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Counterweight 4.2",
+      "category": "counterweight",
+      "centerMillimeters": {
+        "x": 172.0,
+        "y": 7.74,
+        "z": 13.406073250583
+      },
+      "axis": {
+        "x": 0.0,
+        "y": 0.5,
+        "z": 0.866025403784
+      },
+      "radiusMillimeters": 20.0,
+      "lengthMillimeters": 30.959999999999997
+    },
+    {
+      "kind": "cylinder",
+      "name": "Piston L4",
+      "category": "piston",
+      "centerMillimeters": {
+        "x": 132.0,
+        "y": -94.049194769947,
+        "z": 94.049194769947
+      },
+      "axis": {
+        "x": 0.0,
+        "y": -0.707106781187,
+        "z": 0.707106781187
+      },
+      "radiusMillimeters": 40.5,
+      "lengthMillimeters": 28.0,
+      "metadata": {
+        "bank": "L",
+        "cylinder": 4
+      }
+    },
+    {
+      "kind": "cylinder",
+      "name": "Wrist Pin L4",
+      "category": "wrist_pin",
+      "centerMillimeters": {
+        "x": 132.0,
+        "y": -94.049194769947,
+        "z": 94.049194769947
+      },
+      "axis": {
+        "x": 1.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "radiusMillimeters": 6.0,
+      "lengthMillimeters": 52.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Connecting Rod L4",
+      "category": "connecting_rod",
+      "centerMillimeters": {
+        "x": 132.0,
+        "y": -57.774597384973,
+        "z": 28.405051203608
+      },
+      "axis": {
+        "x": 0.0,
+        "y": -0.483661298466,
+        "z": 0.875255247551
+      },
+      "radiusMillimeters": 7.5,
+      "lengthMillimeters": 150.00000000000003
+    },
+    {
+      "kind": "cylinder",
+      "name": "Piston R4",
+      "category": "piston",
+      "centerMillimeters": {
+        "x": 150.0,
+        "y": 76.404128439966,
+        "z": 76.404128439966
+      },
+      "axis": {
+        "x": 0.0,
+        "y": 0.707106781187,
+        "z": 0.707106781187
+      },
+      "radiusMillimeters": 40.5,
+      "lengthMillimeters": 28.0,
+      "metadata": {
+        "bank": "R",
+        "cylinder": 4
+      }
+    },
+    {
+      "kind": "cylinder",
+      "name": "Wrist Pin R4",
+      "category": "wrist_pin",
+      "centerMillimeters": {
+        "x": 150.0,
+        "y": 76.404128439966,
+        "z": 76.404128439966
+      },
+      "axis": {
+        "x": 1.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "radiusMillimeters": 6.0,
+      "lengthMillimeters": 52.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Connecting Rod R4",
+      "category": "connecting_rod",
+      "centerMillimeters": {
+        "x": 150.0,
+        "y": 27.452064219983,
+        "z": 19.582518038618
+      },
+      "axis": {
+        "x": 0.0,
+        "y": 0.6526941896,
+        "z": 0.757621472018
+      },
+      "radiusMillimeters": 7.5,
+      "lengthMillimeters": 150.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Main Journal 1",
+      "category": "main_journal",
+      "centerMillimeters": {
+        "x": -188.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "axis": {
+        "x": 1.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "radiusMillimeters": 22.0,
+      "lengthMillimeters": 22.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Main Journal 2",
+      "category": "main_journal",
+      "centerMillimeters": {
+        "x": -94.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "axis": {
+        "x": 1.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "radiusMillimeters": 22.0,
+      "lengthMillimeters": 22.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Main Journal 3",
+      "category": "main_journal",
+      "centerMillimeters": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "axis": {
+        "x": 1.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "radiusMillimeters": 22.0,
+      "lengthMillimeters": 22.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Main Journal 4",
+      "category": "main_journal",
+      "centerMillimeters": {
+        "x": 94.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "axis": {
+        "x": 1.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "radiusMillimeters": 22.0,
+      "lengthMillimeters": 22.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Main Journal 5",
+      "category": "main_journal",
+      "centerMillimeters": {
+        "x": 188.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "axis": {
+        "x": 1.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "radiusMillimeters": 22.0,
+      "lengthMillimeters": 22.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Front Crankshaft Nose",
+      "category": "main_journal",
+      "centerMillimeters": {
+        "x": -206.5,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "axis": {
+        "x": 1.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "radiusMillimeters": 15.0,
+      "lengthMillimeters": 15.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Flywheel Flange",
+      "category": "main_journal",
+      "centerMillimeters": {
+        "x": 205.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "axis": {
+        "x": 1.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "radiusMillimeters": 18.0,
+      "lengthMillimeters": 12.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Timing Wheel",
+      "category": "timing_wheel",
+      "centerMillimeters": {
+        "x": -221.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "axis": {
+        "x": 1.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "radiusMillimeters": 55.0,
+      "lengthMillimeters": 14.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Flywheel",
+      "category": "flywheel",
+      "centerMillimeters": {
+        "x": 220.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "axis": {
+        "x": 1.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "radiusMillimeters": 92.0,
+      "lengthMillimeters": 18.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Cutaway Bank Support L1",
+      "category": "cylinder_bank_rail",
+      "centerMillimeters": {
+        "x": -190.0,
+        "y": -109.601551083915,
+        "z": 109.601551083915
+      },
+      "axis": {
+        "x": 0.0,
+        "y": -0.707106781187,
+        "z": 0.707106781187
+      },
+      "radiusMillimeters": 8.0,
+      "lengthMillimeters": 130.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Cutaway Bank Support L2",
+      "category": "cylinder_bank_rail",
+      "centerMillimeters": {
+        "x": 190.0,
+        "y": -109.601551083915,
+        "z": 109.601551083915
+      },
+      "axis": {
+        "x": 0.0,
+        "y": -0.707106781187,
+        "z": 0.707106781187
+      },
+      "radiusMillimeters": 8.0,
+      "lengthMillimeters": 130.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Cutaway Bank Support R1",
+      "category": "cylinder_bank_rail",
+      "centerMillimeters": {
+        "x": -190.0,
+        "y": 109.601551083915,
+        "z": 109.601551083915
+      },
+      "axis": {
+        "x": 0.0,
+        "y": 0.707106781187,
+        "z": 0.707106781187
+      },
+      "radiusMillimeters": 8.0,
+      "lengthMillimeters": 130.0
+    },
+    {
+      "kind": "cylinder",
+      "name": "Cutaway Bank Support R2",
+      "category": "cylinder_bank_rail",
+      "centerMillimeters": {
+        "x": 190.0,
+        "y": 109.601551083915,
+        "z": 109.601551083915
+      },
+      "axis": {
+        "x": 0.0,
+        "y": 0.707106781187,
+        "z": 0.707106781187
+      },
+      "radiusMillimeters": 8.0,
+      "lengthMillimeters": 130.0
+    },
+    {
+      "kind": "box",
+      "name": "Cylinder Deck R",
+      "category": "cylinder_deck",
+      "centerMillimeters": {
+        "x": 0.0,
+        "y": 161.220346110533,
+        "z": 161.220346110533
+      },
+      "normal": {
+        "x": 0.0,
+        "y": 0.707106781187,
+        "z": 0.707106781187
+      },
+      "widthMillimeters": 410.0,
+      "heightMillimeters": 94.0,
+      "depthMillimeters": 16.0
+    },
+    {
+      "kind": "box",
+      "name": "Valve Cover R",
+      "category": "valve_cover",
+      "centerMillimeters": {
+        "x": 0.0,
+        "y": 181.019335983756,
+        "z": 181.019335983756
+      },
+      "normal": {
+        "x": 0.0,
+        "y": 0.707106781187,
+        "z": 0.707106781187
+      },
+      "widthMillimeters": 388.0,
+      "heightMillimeters": 74.0,
+      "depthMillimeters": 24.0
+    },
+    {
+      "kind": "box",
+      "name": "Crankcase Rail Left",
+      "category": "crankcase_rail",
+      "centerMillimeters": {
+        "x": 0.0,
+        "y": -73.0,
+        "z": -56.0
+      },
+      "normal": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 1.0
+      },
+      "widthMillimeters": 410.0,
+      "heightMillimeters": 24.0,
+      "depthMillimeters": 30.0
+    },
+    {
+      "kind": "box",
+      "name": "Crankcase Rail Right",
+      "category": "crankcase_rail",
+      "centerMillimeters": {
+        "x": 0.0,
+        "y": 73.0,
+        "z": -56.0
+      },
+      "normal": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 1.0
+      },
+      "widthMillimeters": 410.0,
+      "heightMillimeters": 24.0,
+      "depthMillimeters": 30.0
+    }
+  ]
+}
