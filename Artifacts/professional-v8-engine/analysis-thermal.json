@@ -1,0 +1,80 @@
+{
+  "claimLevel": "P2-engineering-reference",
+  "derivedGeometry": {
+    "displacementCubicCentimeters": 3996.457714,
+    "displacementLiters": 3.996457714
+  },
+  "fullPowerAirAndFuel": {
+    "airMassKilogramsPerSecond": 0.387450062,
+    "bsfcGramsPerKilowattHour": 247.96804,
+    "chargeTargetCelsius": 50.0,
+    "compressorMapAssessment": "requires-digitized-vendor-map",
+    "compressorOutletCelsius": 123.997961,
+    "compressorPressureRatio": 1.899434,
+    "exhaustMassKilogramsPerSecond": 0.418446067,
+    "fuelEnergyKilowatts": 1323.529412,
+    "fuelMassKilogramsPerHour": 111.585618,
+    "manifoldAbsolutePressureKilopascals": 174.7618,
+    "perCompressorCorrectedMassFlowPoundsPerMinute": 27.529023
+  },
+  "fullPowerHeatBalance": {
+    "ambientAndUnmodeledKilowatts": 86.029412,
+    "brakeKilowatts": 450.0,
+    "chargeCoolingAllocatedKilowatts": 33.088235,
+    "chargeCoolingCalculatedKilowatts": 28.813867,
+    "chargeCoolingReserveKilowatts": 4.274368,
+    "closureErrorWatts": 0.0,
+    "exhaustBeforeTurbineKilowatts": 416.911765,
+    "fuelInputKilowatts": 1323.529412,
+    "highTemperatureCoolantKilowatts": 291.176471,
+    "oilKilowatts": 46.323529
+  },
+  "installedCircuitRequirements": {
+    "highTemperatureCircuit": {
+      "continuousEngineHeatKilowatts": 291.176471,
+      "installedRejectionKilowatts": 320.294118,
+      "minimumCoolantMassFlowKilogramsPerSecond": 5.619195,
+      "minimumCoolantVolumeFlowLitersPerMinute": 321.09686,
+      "minimumRadiatorUAKilowattsPerKelvin": 5.124706
+    },
+    "lowTemperatureCircuit": {
+      "installedRejectionKilowatts": 38.051471,
+      "sourceLoad": "maximum-of-allocated-and-calculated-charge-cooling"
+    },
+    "oilCircuit": {
+      "continuousOilHeatKilowatts": 46.323529,
+      "installedRejectionKilowatts": 53.272059,
+      "minimumOilMassFlowKilogramsPerSecond": 1.268382,
+      "minimumOilVolumeFlowLitersPerMinute": 89.532872
+    }
+  },
+  "openReleaseGates": [
+    "digitized compressor maps with surge, choke, speed, and efficiency margins",
+    "1D gas-exchange model with turbine A/R and backpressure",
+    "combustion and knock model with cylinder pressure traces",
+    "vehicle radiator, duct, fan, pump, and altitude validation",
+    "dyno heat-balance and SAE J1349 measurement"
+  ],
+  "performance": {
+    "curvePointCount": 11,
+    "maximumBMEPBar": 24.0,
+    "peakBMEPBar": 23.582829,
+    "peakTorqueNewtonMeters": 750.0,
+    "targetPointTorqueNewtonMeters": 661.105148,
+    "targetPowerKilowatts": 450.0,
+    "targetPowerRPM": 6500
+  },
+  "provenance": {
+    "calculationSourceSHA256": "aa1e8a594c8369fc410be7a3b962a4c82654026fa18ecb10784102abed9071ed",
+    "requirementsSHA256": "9c273026777fcad7d7670060fb6d3d5a5bc19b96afd488042cf160998abf4664"
+  },
+  "schemaVersion": "professional-v8.thermal-analysis.v1",
+  "status": "p2-thermal-screening-passed-with-open-compressor-map-selection",
+  "turboThermalEnvelope": {
+    "continuousLimitCelsius": 950.0,
+    "estimatedTurbineInletCelsius": 906.376812,
+    "estimatedTurbineOutletCelsius": 834.830113,
+    "temperatureMethod": "steady-sensible-enthalpy-screening-only",
+    "transientLimitCelsius": 1000.0
+  }
+}

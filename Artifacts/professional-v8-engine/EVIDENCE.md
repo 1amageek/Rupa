@@ -29,9 +29,13 @@ are feasibility benchmarks only; no OEM geometry is copied.
 | CHOICE-BOOST-001 | One outside-V G25-550-class turbo per bank | Keeps each compressor near a 2.0 L/300 hp duty and reduces valley heat | Exact map/A/R and manifold require P3 gas-exchange work |
 | CHOICE-CR-001 | 9.5:1 compression ratio | Pump-fuel boost/response compromise | Knock/combustion CFD and dyno calibration required |
 | CHOICE-PMAX-001 | 18 MPa nominal, 20 MPa design cylinder pressure | P2 structural load envelope | Pressure trace and abnormal-combustion cases required |
-| CHOICE-THERMAL-001 | 34% brake, 34% exhaust, 22% HT coolant, 3.4% oil, 2.6% charge cooling, 4% ambient/unmodeled | Conservative full-power first-law allocation consistent with cited exhaust order of magnitude | Must be replaced by measured dyno heat balance |
+| CHOICE-THERMAL-001 | 34% brake, 31.5% pre-turbine exhaust, 22% HT coolant, 3.5% oil, 2.5% charge cooling, 6.5% ambient/unmodeled | The earlier provisional 34% exhaust split failed the 950 °C continuous turbine-inlet screening limit; the revised split closes the first law and gives a 906 °C steady sensible-enthalpy screen consistent with the cited exhaust order of magnitude | Still a P2 allocation that must be replaced by measured dyno heat balance |
 | CHOICE-LUBE-001 | Six-stage dry sump and eight piston jets | Sustained track lateral/longitudinal acceleration and piston cooling | Pump, tank, deaeration, and scavenge sizing require rig validation |
 | CHOICE-CAD-001 | Explicit flow envelopes instead of fake finished passages | Current CAD must remain honest about P2 detail | Hollow/boolean capability gaps remain visible |
+| CHOICE-CURVE-001 | Eleven full-load points from 1,000 to 7,000 rpm with 22–35% assumed brake efficiency | Makes the requested 450 kW/750 N·m envelope recomputable instead of implying a flat scalar rating | Requires 1D gas exchange, combustion analysis, and dyno calibration |
+| CHOICE-FUEL-MODEL-001 | 42.7 MJ/kg lower heating value and 12.5:1 full-load air/fuel mass ratio | P2 fuel and air-flow sizing assumptions for 98 RON gasoline | Certified regional fuel properties, injector characterization, emissions, and knock calibration remain open |
+| CHOICE-AIR-MODEL-001 | 95% volumetric efficiency, 75% compressor efficiency, 3 kPa inlet loss, 12 kPa charge-path loss, and 50 °C manifold target | Produces explicit compressor coordinates and charge-cooler load at the hot-ambient design point | Requires digitized maps, measured pressure losses, 1D gas exchange, and vehicle charge-circuit validation |
+| CHOICE-FLUID-MODEL-001 | HT coolant 3.8 kJ/kg·K and 1,050 kg/m³ over 15 K; oil 2.1 kJ/kg·K and 850 kg/m³ over 20 K; 10–15% flow/capacity margins | First-order pump, cooler, and radiator interface sizing | Fluid supplier curves, pump maps, pressure drop, boiling/cavitation, and vehicle airflow remain P3/P4 gates |
 
 ## Unresolved Production Decisions
 

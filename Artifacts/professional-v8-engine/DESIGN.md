@@ -114,8 +114,8 @@ the rendered shape.
 | Air path | filters, compressors, charge coolers, throttles, plenums | Flow-direction and connection datums | Mass flow, pressure ratio, compressor outlet temperature |
 | Exhaust | manifolds, turbines, wastegates, catalysts | Thermal-clearance envelopes | Exhaust heat, turbine temperature, backpressure target |
 | High-temperature cooling | block/head jackets, pump, thermostat, radiator interfaces | Named inlet/outlet and jacket envelopes | Heat rejection, flow, pressure and temperature limits |
-| Low-temperature cooling | charge coolers, pump, front heat exchanger interfaces | Independent circuit identity | Charge-air temperature and 35 kW rejection target |
-| Lubrication | six-stage dry sump, galleries, piston jets, cooler interfaces | Scavenge/pressure circuit identities | 45 kW oil rejection and starvation envelope |
+| Low-temperature cooling | charge coolers, pump, front heat exchanger interfaces | Independent circuit identity | 33.1 kW continuous load and 38.1 kW installed rejection target |
+| Lubrication | six-stage dry sump, galleries, piston jets, cooler interfaces | Scavenge/pressure circuit identities | 46.3 kW continuous load, 53.3 kW installed rejection, and starvation envelope |
 | Fuel/ignition | DI+PFI rails, injectors, pumps, coils, plugs | Per-cylinder identities | Peak fuel flow, injection mass, pressure and knock gates |
 
 ## Contracts and Invariants
@@ -145,8 +145,9 @@ position are derived and cannot be hand-edited independently.
 3. Full-power fuel flow derives from brake thermal efficiency and fuel LHV;
    air flow derives from the full-load air/fuel ratio.
 4. Compressor pressure ratio includes inlet and charge-path losses; each turbo
-   receives one half of the engine mass flow and must remain inside its map with
-   surge, choke, speed, and efficiency margin.
+   receives one half of the engine mass flow. P2 computes the operating points
+   but does not select a turbo. A selected production turbo must remain inside
+   its digitized map with surge, choke, speed, and efficiency margin.
 5. Fuel energy equals brake output plus exhaust, high-temperature coolant, oil,
    charge-cooling, and unmodeled/ambient terms within numerical tolerance.
 6. The high-temperature circuit is sized from heat load, coolant heat capacity,
@@ -155,6 +156,35 @@ position are derived and cannot be hand-edited independently.
 7. Continuous turbine inlet temperature is limited to 950 °C and transient
    temperature to 1,000 °C. The selected turbine material rating must exceed
    the transient target with explicit margin.
+
+### Calculated P2 thermal screening result
+
+The deterministic authority is [requirements.json](requirements.json); the
+equations are implemented in
+[calculate_thermodynamics.py](calculate_thermodynamics.py), and the generated
+evidence is [analysis-thermal.json](analysis-thermal.json). Values below are
+rounded views of that evidence, not independent editable requirements.
+
+| Quantity | P2 result | Gate |
+|---|---:|---|
+| Displacement | 3.996 L | Derived from 86 mm × 86 mm × 8 |
+| Peak BMEP | 23.58 bar | Passes 24 bar screening ceiling |
+| Full-power fuel flow | 111.59 kg/h | 450 kW, 34% BTE, 42.7 MJ/kg LHV |
+| Full-power air flow | 0.387 kg/s | 12.5:1 full-load mass ratio |
+| Full-power manifold pressure | 174.8 kPa absolute | Includes 12 kPa charge-path loss upstream |
+| Compressor point per turbo | PR 1.899, 27.53 lb/min corrected | Exact map selection remains open |
+| Estimated turbine inlet | 906 °C | Passes 950 °C P2 steady sensible-enthalpy screen |
+| HT coolant load / installed capacity | 291.2 / 320.3 kW | 10% installed margin |
+| HT coolant minimum flow | 321.1 L/min | Includes 10% flow margin and 15 K rise |
+| Oil load / installed capacity | 46.3 / 53.3 kW | 15% installed margin |
+| Oil minimum cooler flow | 89.5 L/min | Includes 15% flow margin and 20 K drop |
+| LT installed capacity | 38.1 kW | 15% above allocated charge-cooling load |
+
+The temperature result is a first-order steady sensible-enthalpy screen. It
+does not replace combustion, gas-exchange, turbine, catalyst, or underhood
+thermal simulation. The compressor coordinates are evidence that the required
+map points are known; they are not evidence that the provisional G25-550-class
+reference has passed a digitized map review.
 
 ### Mechanical invariants
 

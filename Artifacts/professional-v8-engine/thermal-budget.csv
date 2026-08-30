@@ -1,0 +1,14 @@
+path,kilowatts
+fuelInputKilowatts,1323.529412
+brakeKilowatts,450.0
+exhaustBeforeTurbineKilowatts,416.911765
+highTemperatureCoolantKilowatts,291.176471
+oilKilowatts,46.323529
+chargeCoolingAllocatedKilowatts,33.088235
+chargeCoolingCalculatedKilowatts,28.813867
+ambientAndUnmodeledKilowatts,86.029412
+installed.highTemperatureCircuit.continuousEngineHeatKilowatts,291.176471
+installed.highTemperatureCircuit.installedRejectionKilowatts,320.294118
+installed.oilCircuit.continuousOilHeatKilowatts,46.323529
+installed.oilCircuit.installedRejectionKilowatts,53.272059
+installed.lowTemperatureCircuit.installedRejectionKilowatts,38.051471

@@ -1,0 +1,93 @@
+{
+  "schemaVersion": "professional-v8.requirements.v1",
+  "application": {
+    "duty": "premium-road-and-20-minute-track-session",
+    "fuel": "98-RON-E0-E10-gasoline",
+    "hotAmbientKelvin": 313.15,
+    "roadLifeTargetKilometers": 200000
+  },
+  "engine": {
+    "cylinders": 8,
+    "boreMeters": 0.086,
+    "strokeMeters": 0.086,
+    "compressionRatio": 9.5,
+    "redlineRPM": 7000,
+    "overspeedRPM": 7350
+  },
+  "performance": {
+    "targetPowerWatts": 450000,
+    "targetPowerRPM": 6500,
+    "targetPeakTorqueNewtonMeters": 750,
+    "maximumBMEPBar": 24,
+    "curve": [
+      {"rpm": 1000, "torqueNewtonMeters": 180, "brakeThermalEfficiency": 0.22},
+      {"rpm": 1500, "torqueNewtonMeters": 400, "brakeThermalEfficiency": 0.27},
+      {"rpm": 2000, "torqueNewtonMeters": 600, "brakeThermalEfficiency": 0.30},
+      {"rpm": 2500, "torqueNewtonMeters": 700, "brakeThermalEfficiency": 0.32},
+      {"rpm": 3000, "torqueNewtonMeters": 750, "brakeThermalEfficiency": 0.34},
+      {"rpm": 4000, "torqueNewtonMeters": 750, "brakeThermalEfficiency": 0.35},
+      {"rpm": 5000, "torqueNewtonMeters": 750, "brakeThermalEfficiency": 0.35},
+      {"rpm": 5500, "torqueNewtonMeters": 750, "brakeThermalEfficiency": 0.345},
+      {"rpm": 6000, "torqueNewtonMeters": 710, "brakeThermalEfficiency": 0.34},
+      {"rpm": 6500, "torqueNewtonMeters": 661.105148227873, "brakeThermalEfficiency": 0.34},
+      {"rpm": 7000, "torqueNewtonMeters": 580, "brakeThermalEfficiency": 0.33}
+    ]
+  },
+  "combustion": {
+    "fuelLowerHeatingValueJoulesPerKilogram": 42700000,
+    "fullLoadAirFuelMassRatio": 12.5
+  },
+  "airSystem": {
+    "gasConstantJoulesPerKilogramKelvin": 287.05,
+    "specificHeatRatio": 1.4,
+    "airSpecificHeatJoulesPerKilogramKelvin": 1005,
+    "exhaustSpecificHeatJoulesPerKilogramKelvin": 1150,
+    "volumetricEfficiency": 0.95,
+    "ambientPressurePascals": 101325,
+    "intakePressureLossPascals": 3000,
+    "chargePathPressureLossPascals": 12000,
+    "chargeManifoldTargetKelvin": 323.15,
+    "compressorIsentropicEfficiency": 0.75,
+    "turboMechanicalEfficiency": 0.95,
+    "compressors": 2,
+    "referenceTemperatureKelvin": 288.15,
+    "referencePressurePascals": 101325,
+    "continuousTurbineInletLimitKelvin": 1223.15,
+    "transientTurbineInletLimitKelvin": 1273.15
+  },
+  "thermal": {
+    "energyFractions": {
+      "brake": 0.34,
+      "exhaustBeforeTurbine": 0.315,
+      "highTemperatureCoolant": 0.22,
+      "oil": 0.035,
+      "chargeCooling": 0.025,
+      "ambientAndUnmodeled": 0.065
+    },
+    "highTemperatureCircuit": {
+      "coolantSpecificHeatJoulesPerKilogramKelvin": 3800,
+      "coolantDensityKilogramsPerCubicMeter": 1050,
+      "engineTemperatureRiseKelvin": 15,
+      "engineInletKelvin": 368.15,
+      "engineOutletKelvin": 383.15,
+      "installedCapacityMargin": 1.10,
+      "flowMargin": 1.10
+    },
+    "oilCircuit": {
+      "oilSpecificHeatJoulesPerKilogramKelvin": 2100,
+      "oilDensityKilogramsPerCubicMeter": 850,
+      "coolerTemperatureDropKelvin": 20,
+      "installedCapacityMargin": 1.15,
+      "flowMargin": 1.15
+    },
+    "lowTemperatureCircuit": {
+      "installedCapacityMargin": 1.15
+    }
+  },
+  "tolerances": {
+    "energyClosureRelative": 1e-09,
+    "targetPowerWatts": 1,
+    "chargeCoolingReserveWatts": 0,
+    "continuousTurbineTemperatureKelvin": 0
+  }
+}
