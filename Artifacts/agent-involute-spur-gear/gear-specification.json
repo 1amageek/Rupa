@@ -1,0 +1,30 @@
+{
+  "addendumCoefficient": 1.0,
+  "approximateMaterialAreaSquareMillimeters": 1725.0553428743754,
+  "approximateVolumeCubicMillimeters": 20700.664114492505,
+  "baseDiameter": 45.105245797723605,
+  "boreDiameter": 8.0,
+  "circularPitch": 6.283185307179586,
+  "dedendumCoefficient": 1.25,
+  "faceWidth": 12.0,
+  "innerLoopCount": 1,
+  "involuteCubicSegmentsPerFlank": 3,
+  "limitations": [
+    "The root transition is radial rather than a generated cutter trochoid.",
+    "Backlash, profile shift, crowning, helix, material, and tolerance class are not specified.",
+    "The model is a validated CAD demonstration artifact, not a certified manufacturing drawing."
+  ],
+  "maximumSampledInvoluteDeviationMillimeters": 0.0001655640402975797,
+  "model": "external involute spur gear",
+  "module": 2.0,
+  "nominalToothThicknessAtPitch": 3.141592653589793,
+  "outerBoundaryEntityCount": 144,
+  "outsideDiameter": 52.0,
+  "pitchDiameter": 48.0,
+  "pressureAngleDegrees": 20.0,
+  "rootDiameter": 43.0,
+  "schema": "rupa.agent.spur-gear.v1",
+  "sketchEntityCount": 145,
+  "toothCount": 24,
+  "units": "millimeter"
+}

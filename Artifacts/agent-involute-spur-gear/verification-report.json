@@ -1,0 +1,48 @@
+{
+  "schema": "rupa.agent.spur-gear.verification.v1",
+  "artifact": "agent-involute-spur-gear.swcad",
+  "artifactSHA256": "01ea6ac8a9751343aadad6eacfaa5403f91700bf4ce850c202b52fe92368e88f",
+  "source": {
+    "sketchFeatureID": "3FD1BD5F-74D8-4EBF-8227-4EA02DC61397",
+    "sketchCount": 1,
+    "entityCount": 145,
+    "regionCount": 1,
+    "innerLoopCount": 1
+  },
+  "solid": {
+    "extrudeFeatureID": "83AFAFE3-9A44-4FAA-A5D6-3B416D2C5B10",
+    "bodyCount": 1,
+    "generatedFaceCount": 246,
+    "boundsMillimeters": {
+      "min": [-26.0, -26.0, -6.0],
+      "max": [26.0, 26.0, 6.0]
+    }
+  },
+  "viewerMesh": {
+    "bodyCount": 1,
+    "vertexCount": 32434,
+    "normalCount": 32434,
+    "triangleCount": 38998,
+    "indexedElementCount": 116994
+  },
+  "checks": {
+    "automationCommandDecoded": true,
+    "sourceMutationSaved": true,
+    "profileExtrudeSaved": true,
+    "documentValidationPassed": true,
+    "validationDiagnosticCount": 0,
+    "sourceSummaryPassed": true,
+    "topologyEvaluationPassed": true,
+    "viewerMeshEvaluationPassed": true
+  },
+  "preview": {
+    "artifact": "gear-isometric-preview.png",
+    "source": "The same parametric outline used to construct the Rupa CAD sketch.",
+    "isRupaViewportCapture": false
+  },
+  "exchangeExport": {
+    "status": "notProduced",
+    "reason": "Parallel STEP and STL exports exceeded the five-minute resource bound and were cancelled before publishing partial files.",
+    "nativeCADAndViewerMeshUnaffected": true
+  }
+}
