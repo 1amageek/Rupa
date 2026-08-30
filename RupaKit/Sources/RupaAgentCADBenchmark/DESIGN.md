@@ -5,7 +5,8 @@
 `RupaAgentCADBenchmark` is the benchmark and verification boundary for
 measuring whether an Agent can realize basic CAD geometry through Rupa's
 production project route. It is a child of the [RupaKit package design](../../DESIGN.md)
-and is reached from the system through that package. It has no child design.
+and is reached from the system through that package. Its aggregate execution
+child is [CAD Benchmark Aggregate Execution](Aggregate/DESIGN.md).
 
 The module defines a fixed, versioned envelope of exactly 100 CAD-basic
 challenges, the separation between candidate-visible instructions and
@@ -142,6 +143,7 @@ source entities and exact B-Rep properties through the immutable final view.
 | [RupaProject design](../RupaProject/DESIGN.md) | depends on | actor-backed staging/publication and no-retry semantics | Owns source transactions and publication coordinates. | A benchmark retry is never allowed after a published mutation. |
 | [RupaCore design](../RupaCore/DESIGN.md) | depends on | source identity, sketch summaries, topology snapshots, and measurements | Supplies the immutable source/B-Rep observations used by the oracle. | Tessellated Mesh and renderer output are not geometry authority. |
 | [Benchmark JSON adapter](../RupaAgentCADBenchmarkJSONAdapter/DESIGN.md) | used by | activated context/executor, explicit decision codecs, sanitized result | Binds a versioned external JSON decision to the same candidate protocol and production/oracle route. | JSON, fingerprints, byte limits, process I/O, and error envelopes remain outside this module. |
+| [CAD Benchmark Aggregate Execution](Aggregate/DESIGN.md) | child | manifest-ordered complete-run composition and deterministic regression evidence | Composes the reviewed single-case paths after all 100 case gates. | It cannot change category truth, activation order, or single-case wire contracts. |
 
 ## Architecture
 

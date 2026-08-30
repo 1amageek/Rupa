@@ -358,7 +358,7 @@ let package = Package(
                 "RupaCoreTypes",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
             ],
-            exclude: ["DESIGN.md"]
+            exclude: ["DESIGN.md", "Aggregate/DESIGN.md"]
         ),
         .target(
             name: "RupaAgentCADBenchmarkJSONAdapter",
