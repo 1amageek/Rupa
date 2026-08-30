@@ -222,6 +222,9 @@ struct CADCaseLifecycleHarness {
                     workspace: workspace,
                     id: sessionID
                 )
+                if let ledger = CADBenchmarkRegistrationObservation.ledger {
+                    await ledger.registered(registeredID)
+                }
                 if postRegistrationDelayNanoseconds > 0 {
                     let delay = Int64(min(
                         postRegistrationDelayNanoseconds,
@@ -778,6 +781,9 @@ struct CADCaseLifecycleHarness {
         let cleanupStart = now()
         if let sessionIDToUnregister {
             await controller.unregister(id: sessionIDToUnregister)
+            if let ledger = CADBenchmarkRegistrationObservation.ledger {
+                await ledger.unregistered(sessionIDToUnregister)
+            }
         }
         let remainingRegistrationCount = await sessionCount(controller)
         return record.withCleanup(
