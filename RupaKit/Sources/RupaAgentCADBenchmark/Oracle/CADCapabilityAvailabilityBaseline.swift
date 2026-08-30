@@ -9,16 +9,65 @@ struct CADCapabilityAvailabilityBaseline: Codable, Equatable, Sendable {
     let statuses: [Status]
     let digest: String
 
+    init(contexts: [CADCandidateContext]) throws {
+        guard contexts.count == 100 else {
+            throw CADBenchmarkBaselineError.invalidContextCount(
+                expected: 100,
+                actual: contexts.count
+            )
+        }
+        let manifest = try CADBenchmarkCatalog().manifest
+        guard contexts.map(\.challenge.id).sorted() == manifest.orderedCaseIDs else {
+            throw CADBenchmarkBaselineError.invalidContextIdentity
+        }
+        for context in contexts {
+            try context.validate()
+            guard context.capabilities.status(
+                for: context.challenge.requiredCapability
+            ) != nil else {
+                throw CADBenchmarkBaselineError.missingCapabilityStatus(
+                    caseID: context.challenge.id.rawValue
+                )
+            }
+        }
+        try self.init(snapshots: contexts.map(\.capabilities))
+        guard statuses.count == CADBenchmarkCategory.allCases.count else {
+            throw CADBenchmarkBaselineError.invalidContextIdentity
+        }
+    }
+
     init(snapshot: CADCapabilitySnapshot) throws {
-        try snapshot.validate()
+        try self.init(snapshots: [snapshot])
+    }
+
+    private init(snapshots: [CADCapabilitySnapshot]) throws {
+        guard let first = snapshots.first else {
+            throw CADBenchmarkBaselineError.invalidContextCount(expected: 1, actual: 0)
+        }
+        for snapshot in snapshots {
+            try snapshot.validate()
+            guard snapshot.version == first.version else {
+                throw CADBenchmarkBaselineError.capabilitySnapshotVersionDrift(
+                    expected: first.version,
+                    actual: snapshot.version
+                )
+            }
+        }
+        var merged: [String: Status] = [:]
+        for status in snapshots.flatMap(\.statuses).map(Status.init) {
+            let identity = "\(status.id)@\(status.version)"
+            if let existing = merged[identity], existing != status {
+                throw CADBenchmarkBaselineError.capabilityStatusDrift(identity: identity)
+            }
+            merged[identity] = status
+        }
         self.schemaVersion = Self.schemaVersion
-        self.version = snapshot.version
-        self.statuses = snapshot.statuses
-            .map(Status.init)
-            .sorted(by: Status.isOrderedBefore)
+        self.version = first.version
+        self.statuses = merged.values.sorted(by: Status.isOrderedBefore)
         self.digest = try Self.computeDigest(
             Payload(schemaVersion: schemaVersion, version: version, statuses: statuses)
         )
+        try validate()
     }
 
     func validate() throws {

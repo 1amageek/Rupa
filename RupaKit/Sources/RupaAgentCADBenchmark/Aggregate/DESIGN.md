@@ -7,15 +7,16 @@ into one complete benchmark run. It is a child of the
 [RupaAgentCADBenchmark module design](../DESIGN.md) and has no child design.
 T12-I.1 owns serial replay and deterministic per-case regression evidence.
 T12-I.2 owns bounded scheduling, cancellation drain, noisy concurrency
-measurement, and the measured execution policy. Later T12-I work adds
-baselines and canonical reporting without changing the single-case JSON or CLI
-contract.
+measurement, and the measured execution policy. T12-I.3 owns capability and
+execution baselines plus canonical aggregate reporting without changing the
+single-case JSON or CLI contract.
 
 ## Responsibilities and Boundaries
 
 The component owns manifest-ordered scheduling, complete-run validation,
-timing-free regression records, run-level measurement, and typed aggregate
-failure. It does not own CAD semantics, geometry truth, project mutation,
+timing-free regression records, run-level measurement, immutable baseline
+comparison, canonical report encoding, and typed aggregate failure. It does
+not own CAD semantics, geometry truth, project mutation,
 single-case activation order, candidate transport, JSON/CLI schema, or baseline
 updates. Category runners and their exact oracles remain the only owners of
 geometry correctness.
@@ -39,6 +40,9 @@ catalog manifest lexical IDs
                     -> production controller and exact oracle
             -> timing-free regression record
             -> separate noisy measurement
+        -> merge 100 observed capability snapshots
+        -> establish or compare immutable execution baseline
+        -> canonical fixed-denominator report
 ```
 
 ## Contracts and Invariants
@@ -54,6 +58,21 @@ catalog manifest lexical IDs
   fabricated zero.
 - A missing, duplicate, invalid, cancelled, or failed execution aborts the
   attempt and cannot produce a report or baseline.
+- Capability availability is merged from all 100 execution contexts. Snapshot
+  versions must match and duplicate capability identities must have identical
+  status; version or status conflict is typed drift.
+- An execution baseline contains exactly 100 lexical regression records and an
+  environment fingerprint over the aggregate contract, fixed Swift toolchain,
+  Agent route and evaluator contracts, and manifest, expectation, and
+  capability digests. OS and hardware observations are noisy metadata only.
+- Baseline establishment accepts no existing baseline. Comparison never
+  rewrites the supplied baseline; every mismatch is typed run-level drift.
+- Canonical results are projected from regression records with no duration,
+  generated identity, or diagnostic. A report is emitted only for a complete
+  valid run and uses fixed denominators: 100 total, 95 supported and realized,
+  five expected unsupported, and 100 correct capability decisions.
+- Canonical JSON uses sorted keys without escaped slashes. Serial and bounded
+  execution of the same evidence must therefore produce identical bytes.
 - Current reference execution produces 95 realized cases and five honest
   expected-unsupported sphere cases.
 - The scheduler admits only one or two cases and restores completion results to
@@ -86,7 +105,9 @@ validate catalog and activation set
       -> validate cleanup and normalize deterministic evidence
       -> place completion at its manifest index
   -> require exactly 100 ordered results
-  -> publish immutable complete attempt
+  -> merge observed capability availability
+  -> establish or compare immutable baseline
+  -> publish immutable complete attempt and canonical report
 
 cancel or first fatal failure
   -> cancel all admitted children
@@ -114,6 +135,10 @@ drain evidence from either a cancelled run or a run that completed at the
 deadline boundary. Registration count comes from the lifecycle registration
 owner rather than an assumed value. A cancellation guard after the final drain
 prevents late publication.
+Baseline bytes have a fixed power-of-two size ceiling selected from the
+committed reference fixture. Oversize, decode, identity, digest, environment,
+catalog, capability, and record mismatches are typed failures and never trigger
+implicit migration or update.
 
 ## Verification and Change Impact
 
@@ -126,3 +151,8 @@ the parent design to be rechecked. `CADBenchmarkConcurrencyTests` proves
 bounded admission, lexical deterministic equality, observed in-flight and
 MainActor-entry concurrency, fatal/cancellation drain, the six-run selection
 rule, and the checked-in deadline.
+`CADBenchmarkBaselineReportTests` proves 100-context capability merge,
+conflicting drift, establish/compare immutability, fixed score denominators,
+serial/parallel byte identity, deterministic fixture round-trip, bounded
+encoding, and rejection of partial, oracle-invalid, infrastructure-invalid,
+tampered, or mismatched evidence.

@@ -692,6 +692,9 @@ let package = Package(
             name: "RupaAgentCADBenchmarkTests",
             dependencies: [
                 "RupaAgentCADBenchmark",
+            ],
+            resources: [
+                .process("Fixtures"),
             ]
         ),
         .testTarget(
