@@ -1,0 +1,119 @@
+{
+  "artifact": {
+    "byteCount": 2120615,
+    "path": "professional-v8.swcad",
+    "sha256": "70b7571ad28920c34d592ea4c711152ea4dc6b6b3ece0f1f77025971e4c10128"
+  },
+  "atomicBatch": {
+    "diagnostics": [],
+    "generation": 202,
+    "metrics": {
+      "commandCount": 203,
+      "evaluationPassCount": 1,
+      "historyEntryCount": 1,
+      "modelingEvaluation": {
+        "invalidatedFeatureCount": 404,
+        "maximumScopedBodyReadCount": 0,
+        "rebuiltFeatureCount": 404,
+        "replayFallbackCount": 0,
+        "reusedFeatureCount": 0,
+        "reusedMeshCount": 0,
+        "scopedBodyReadCount": 0,
+        "tessellatedBodyCount": 202,
+        "topologyMutationCount": 10504,
+        "totalFeatureCount": 404
+      },
+      "richResultCount": 0
+    },
+    "saved": true
+  },
+  "claimLevel": "P2-engineering-reference",
+  "creation": {
+    "bodyMutationCount": 202,
+    "commandCount": 203,
+    "createdInIsolatedStagingDirectory": true
+  },
+  "independentReload": {
+    "diagnostics": [
+      {
+        "code": "workspaceScaleRecommendation",
+        "message": "Workspace scale recommendation: model span 846 mm exceeds the current comfortable range 10 mm to 800 mm. Use Product Design with 10 m visible span and 100 mm to 8 m comfortable model span.",
+        "severity": "info"
+      }
+    ],
+    "validationMessage": "Validation finished."
+  },
+  "inputs": {
+    "batchSHA256": "66203f520c6c2601f6a7313000439fa96c91cfdc72e4afeac7545be6a18ad83d",
+    "cliSHA256": "24652525f5db04306643e4058dd98a7dc8f4ab76ee77191ae2f0b396401c5d51",
+    "manifestSHA256": "f4bb736ae9579cc48e888e21baa80e5d9c28a78ebb39f665832d7092836b68af"
+  },
+  "schemaVersion": "professional-v8.cad-verification.v1",
+  "semanticCoverage": {
+    "coveredSemanticPartCount": 168,
+    "semanticPartCount": 168,
+    "sourceBodyCount": 202,
+    "unsupportedManufacturingDetails": [
+      "hollow coolant jackets and galleries",
+      "combustion chambers and gas-exchange ports",
+      "bearing oil films, clearances, and surface finishes",
+      "cast and forged wall sections, fillets, fasteners, and tolerances",
+      "seals, rings, valve seats, springs, timing drive, and accessory drive"
+    ]
+  },
+  "sourceAndSolidMeasurement": {
+    "boreDiameterMillimeters": 86.0,
+    "boundsMeters": {
+      "maxX": 0.264,
+      "maxY": 0.423,
+      "maxZ": 0.374,
+      "minX": -0.4,
+      "minY": -0.423,
+      "minZ": -0.154
+    },
+    "counts": {
+      "profiles": 202,
+      "sheets": 0,
+      "sketchPrimitives": 259,
+      "sketches": 202,
+      "solids": 202,
+      "sourceFeatures": 404
+    },
+    "mainJournalDiameterMillimeters": 65.0
+  },
+  "status": "public-agent-cli-cad-route-passed",
+  "topology": {
+    "counts": {
+      "bodyCount": 202,
+      "edgeCount": 2424,
+      "faceCount": 1212,
+      "vertexCount": 1616
+    },
+    "diagnostics": [
+      {
+        "message": "Topology summary completed with 5454 generated persistent references.",
+        "severity": "info"
+      }
+    ]
+  },
+  "viewerMesh": {
+    "bodyCount": 202,
+    "boundsMeters": {
+      "maxX": 0.264,
+      "maxY": 0.423,
+      "maxZ": 0.37400000000000005,
+      "minX": -0.4,
+      "minY": -0.423,
+      "minZ": -0.154
+    },
+    "diagnostics": [
+      {
+        "message": "Mesh summary completed with 202 generated body meshes.",
+        "severity": "info"
+      }
+    ],
+    "indexedElementCount": 13800348,
+    "triangleCount": 4600116,
+    "vertexCount": 4602174
+  }
+}

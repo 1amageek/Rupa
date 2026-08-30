@@ -1,0 +1,5152 @@
+{
+  "authority": "native-rupa-cad-source-after-successful-public-cli-publication",
+  "bodyCount": 202,
+  "categoryCounts": {
+    "air": 8,
+    "coolant-ht": 11,
+    "coolant-lt": 4,
+    "cranktrain": 51,
+    "exhaust": 6,
+    "fuel": 38,
+    "interface": 17,
+    "oil": 15,
+    "structure": 16,
+    "valvetrain": 36
+  },
+  "claimLevel": "P2-engineering-reference",
+  "components": [
+    {
+      "bodyName": "structure.block__central-crankcase",
+      "calculationDependencies": [
+        "GEO-BORE-001",
+        "GEO-PITCH-001",
+        "GEO-DECK-001"
+      ],
+      "category": "structure",
+      "centerMillimeters": [
+        0,
+        0,
+        20
+      ],
+      "depthMillimeters": 150,
+      "heightMillimeters": 160,
+      "normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "partID": "structure.block",
+      "previewVisible": true,
+      "primitive": "box",
+      "role": "central-crankcase",
+      "semanticRepresentation": "p2-structural-envelope",
+      "widthMillimeters": 410
+    },
+    {
+      "bodyName": "structure.block__deck-rail-L",
+      "calculationDependencies": [
+        "GEO-BORE-001",
+        "GEO-PITCH-001",
+        "GEO-DECK-001"
+      ],
+      "category": "structure",
+      "centerMillimeters": [
+        0.0,
+        -126.57211383239199,
+        126.57211383239202
+      ],
+      "depthMillimeters": 90,
+      "heightMillimeters": 116,
+      "normal": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "partID": "structure.block",
+      "previewVisible": false,
+      "primitive": "box",
+      "role": "deck-rail-L",
+      "semanticRepresentation": "p2-structural-envelope",
+      "widthMillimeters": 410
+    },
+    {
+      "bodyName": "structure.block__deck-rail-R",
+      "calculationDependencies": [
+        "GEO-BORE-001",
+        "GEO-PITCH-001",
+        "GEO-DECK-001"
+      ],
+      "category": "structure",
+      "centerMillimeters": [
+        0.0,
+        126.57211383239199,
+        126.57211383239202
+      ],
+      "depthMillimeters": 90,
+      "heightMillimeters": 116,
+      "normal": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "partID": "structure.block",
+      "previewVisible": true,
+      "primitive": "box",
+      "role": "deck-rail-R",
+      "semanticRepresentation": "p2-structural-envelope",
+      "widthMillimeters": 410
+    },
+    {
+      "bodyName": "structure.bedplate__five-main-bedplate",
+      "calculationDependencies": [
+        "GEO-MAIN-001",
+        "LOAD-MAIN-INTERFACE"
+      ],
+      "category": "structure",
+      "centerMillimeters": [
+        0,
+        0,
+        -72
+      ],
+      "depthMillimeters": 42,
+      "heightMillimeters": 185,
+      "normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "partID": "structure.bedplate",
+      "previewVisible": true,
+      "primitive": "box",
+      "role": "five-main-bedplate",
+      "semanticRepresentation": "p2-structural-envelope",
+      "widthMillimeters": 420
+    },
+    {
+      "bodyName": "structure.lower-crankcase__dry-sump-lower-envelope",
+      "calculationDependencies": [
+        "THERM-OIL-FLOW",
+        "ARCH-DRY-SUMP"
+      ],
+      "category": "oil",
+      "centerMillimeters": [
+        0,
+        0,
+        -125
+      ],
+      "depthMillimeters": 58,
+      "heightMillimeters": 170,
+      "normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "partID": "structure.lower-crankcase",
+      "previewVisible": true,
+      "primitive": "box",
+      "role": "dry-sump-lower-envelope",
+      "semanticRepresentation": "p2-fluid-envelope",
+      "widthMillimeters": 420
+    },
+    {
+      "bodyName": "head.L__head-structural-envelope",
+      "calculationDependencies": [
+        "LOAD-HEAD-CLAMP",
+        "ARCH-VALVE"
+      ],
+      "category": "structure",
+      "centerMillimeters": [
+        0.0,
+        -190.9188309203678,
+        190.91883092036784
+      ],
+      "depthMillimeters": 92,
+      "heightMillimeters": 132,
+      "normal": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "partID": "head.L",
+      "previewVisible": false,
+      "primitive": "box",
+      "role": "head-structural-envelope",
+      "semanticRepresentation": "p2-structural-envelope",
+      "widthMillimeters": 410
+    },
+    {
+      "bodyName": "cover.cam.L__cam-cover-service-envelope",
+      "calculationDependencies": [
+        "ARCH-CAM"
+      ],
+      "category": "structure",
+      "centerMillimeters": [
+        0.0,
+        -229.80970388562793,
+        229.80970388562795
+      ],
+      "depthMillimeters": 34,
+      "heightMillimeters": 112,
+      "normal": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "partID": "cover.cam.L",
+      "previewVisible": false,
+      "primitive": "box",
+      "role": "cam-cover-service-envelope",
+      "semanticRepresentation": "p2-service-envelope",
+      "widthMillimeters": 398
+    },
+    {
+      "bodyName": "head.R__head-structural-envelope",
+      "calculationDependencies": [
+        "LOAD-HEAD-CLAMP",
+        "ARCH-VALVE"
+      ],
+      "category": "structure",
+      "centerMillimeters": [
+        0.0,
+        190.9188309203678,
+        190.91883092036784
+      ],
+      "depthMillimeters": 92,
+      "heightMillimeters": 132,
+      "normal": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "partID": "head.R",
+      "previewVisible": true,
+      "primitive": "box",
+      "role": "head-structural-envelope",
+      "semanticRepresentation": "p2-structural-envelope",
+      "widthMillimeters": 410
+    },
+    {
+      "bodyName": "cover.cam.R__cam-cover-service-envelope",
+      "calculationDependencies": [
+        "ARCH-CAM"
+      ],
+      "category": "structure",
+      "centerMillimeters": [
+        0.0,
+        229.80970388562793,
+        229.80970388562795
+      ],
+      "depthMillimeters": 34,
+      "heightMillimeters": 112,
+      "normal": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "partID": "cover.cam.R",
+      "previewVisible": true,
+      "primitive": "box",
+      "role": "cam-cover-service-envelope",
+      "semanticRepresentation": "p2-service-envelope",
+      "widthMillimeters": 398
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "crankshaft__main-journal-1",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -192.0,
+        0,
+        0
+      ],
+      "lengthMillimeters": 25.0,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 32.5,
+      "role": "main-journal-1",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "bearing.main.1__bearing-interface",
+      "calculationDependencies": [
+        "GEO-MAIN-001",
+        "OPEN-BEARING-001"
+      ],
+      "category": "interface",
+      "centerMillimeters": [
+        -192.0,
+        0,
+        0
+      ],
+      "lengthMillimeters": 27.0,
+      "partID": "bearing.main.1",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 34.5,
+      "role": "bearing-interface",
+      "semanticRepresentation": "p2-interface-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "crankshaft__main-journal-2",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -96.0,
+        0,
+        0
+      ],
+      "lengthMillimeters": 25.0,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 32.5,
+      "role": "main-journal-2",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "bearing.main.2__bearing-interface",
+      "calculationDependencies": [
+        "GEO-MAIN-001",
+        "OPEN-BEARING-001"
+      ],
+      "category": "interface",
+      "centerMillimeters": [
+        -96.0,
+        0,
+        0
+      ],
+      "lengthMillimeters": 27.0,
+      "partID": "bearing.main.2",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 34.5,
+      "role": "bearing-interface",
+      "semanticRepresentation": "p2-interface-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "crankshaft__main-journal-3",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        0.0,
+        0,
+        0
+      ],
+      "lengthMillimeters": 25.0,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 32.5,
+      "role": "main-journal-3",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "bearing.main.3__bearing-interface",
+      "calculationDependencies": [
+        "GEO-MAIN-001",
+        "OPEN-BEARING-001"
+      ],
+      "category": "interface",
+      "centerMillimeters": [
+        0.0,
+        0,
+        0
+      ],
+      "lengthMillimeters": 27.0,
+      "partID": "bearing.main.3",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 34.5,
+      "role": "bearing-interface",
+      "semanticRepresentation": "p2-interface-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "crankshaft__main-journal-4",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        96.0,
+        0,
+        0
+      ],
+      "lengthMillimeters": 25.0,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 32.5,
+      "role": "main-journal-4",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "bearing.main.4__bearing-interface",
+      "calculationDependencies": [
+        "GEO-MAIN-001",
+        "OPEN-BEARING-001"
+      ],
+      "category": "interface",
+      "centerMillimeters": [
+        96.0,
+        0,
+        0
+      ],
+      "lengthMillimeters": 27.0,
+      "partID": "bearing.main.4",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 34.5,
+      "role": "bearing-interface",
+      "semanticRepresentation": "p2-interface-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "crankshaft__main-journal-5",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        192.0,
+        0,
+        0
+      ],
+      "lengthMillimeters": 25.0,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 32.5,
+      "role": "main-journal-5",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "bearing.main.5__bearing-interface",
+      "calculationDependencies": [
+        "GEO-MAIN-001",
+        "OPEN-BEARING-001"
+      ],
+      "category": "interface",
+      "centerMillimeters": [
+        192.0,
+        0,
+        0
+      ],
+      "lengthMillimeters": 27.0,
+      "partID": "bearing.main.5",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 34.5,
+      "role": "bearing-interface",
+      "semanticRepresentation": "p2-interface-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "crankshaft__crankpin-1",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -144.0,
+        21.499999999999996,
+        37.239092362730865
+      ],
+      "lengthMillimeters": 44.0,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 27.0,
+      "role": "crankpin-1",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.4999999999999999,
+        0.8660254037844387
+      ],
+      "bodyName": "crankshaft__web-1-front",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -173.0,
+        10.749999999999998,
+        18.619546181365433
+      ],
+      "lengthMillimeters": 43.0,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 24,
+      "role": "web-1-front",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        -0.0,
+        -0.4999999999999999,
+        -0.8660254037844387
+      ],
+      "bodyName": "crankshaft__counterweight-1-front",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -173.0,
+        -12.999999999999996,
+        -22.516660498395407
+      ],
+      "lengthMillimeters": 52,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 34,
+      "role": "counterweight-1-front",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.4999999999999999,
+        0.8660254037844387
+      ],
+      "bodyName": "crankshaft__web-1-rear",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -115.0,
+        10.749999999999998,
+        18.619546181365433
+      ],
+      "lengthMillimeters": 43.0,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 24,
+      "role": "web-1-rear",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        -0.0,
+        -0.4999999999999999,
+        -0.8660254037844387
+      ],
+      "bodyName": "crankshaft__counterweight-1-rear",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -115.0,
+        -12.999999999999996,
+        -22.516660498395407
+      ],
+      "lengthMillimeters": 52,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 34,
+      "role": "counterweight-1-rear",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "crankshaft__crankpin-2",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -48.0,
+        37.239092362730865,
+        -21.499999999999993
+      ],
+      "lengthMillimeters": 44.0,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 27.0,
+      "role": "crankpin-2",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.8660254037844387,
+        -0.49999999999999983
+      ],
+      "bodyName": "crankshaft__web-2-front",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -77.0,
+        18.619546181365433,
+        -10.749999999999996
+      ],
+      "lengthMillimeters": 43.0,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 24,
+      "role": "web-2-front",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        -0.0,
+        -0.8660254037844387,
+        0.49999999999999983
+      ],
+      "bodyName": "crankshaft__counterweight-2-front",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -77.0,
+        -22.516660498395407,
+        12.999999999999996
+      ],
+      "lengthMillimeters": 52,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 34,
+      "role": "counterweight-2-front",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.8660254037844387,
+        -0.49999999999999983
+      ],
+      "bodyName": "crankshaft__web-2-rear",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -19.0,
+        18.619546181365433,
+        -10.749999999999996
+      ],
+      "lengthMillimeters": 43.0,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 24,
+      "role": "web-2-rear",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        -0.0,
+        -0.8660254037844387,
+        0.49999999999999983
+      ],
+      "bodyName": "crankshaft__counterweight-2-rear",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -19.0,
+        -22.516660498395407,
+        12.999999999999996
+      ],
+      "lengthMillimeters": 52,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 34,
+      "role": "counterweight-2-rear",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "crankshaft__crankpin-3",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        48.0,
+        -37.23909236273086,
+        21.500000000000004
+      ],
+      "lengthMillimeters": 44.0,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 27.0,
+      "role": "crankpin-3",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.8660254037844386,
+        0.5000000000000001
+      ],
+      "bodyName": "crankshaft__web-3-front",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        19.0,
+        -18.61954618136543,
+        10.750000000000002
+      ],
+      "lengthMillimeters": 43.0,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 24,
+      "role": "web-3-front",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        -0.0,
+        0.8660254037844386,
+        -0.5000000000000001
+      ],
+      "bodyName": "crankshaft__counterweight-3-front",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        19.0,
+        22.516660498395403,
+        -13.000000000000004
+      ],
+      "lengthMillimeters": 52,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 34,
+      "role": "counterweight-3-front",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.8660254037844386,
+        0.5000000000000001
+      ],
+      "bodyName": "crankshaft__web-3-rear",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        77.0,
+        -18.61954618136543,
+        10.750000000000002
+      ],
+      "lengthMillimeters": 43.0,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 24,
+      "role": "web-3-rear",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        -0.0,
+        0.8660254037844386,
+        -0.5000000000000001
+      ],
+      "bodyName": "crankshaft__counterweight-3-rear",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        77.0,
+        22.516660498395403,
+        -13.000000000000004
+      ],
+      "lengthMillimeters": 52,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 34,
+      "role": "counterweight-3-rear",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "crankshaft__crankpin-4",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        144.0,
+        -21.500000000000004,
+        -37.23909236273086
+      ],
+      "lengthMillimeters": 44.0,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 27.0,
+      "role": "crankpin-4",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.5000000000000001,
+        -0.8660254037844386
+      ],
+      "bodyName": "crankshaft__web-4-front",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        115.0,
+        -10.750000000000002,
+        -18.61954618136543
+      ],
+      "lengthMillimeters": 43.0,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 24,
+      "role": "web-4-front",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        -0.0,
+        0.5000000000000001,
+        0.8660254037844386
+      ],
+      "bodyName": "crankshaft__counterweight-4-front",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        115.0,
+        13.000000000000004,
+        22.516660498395403
+      ],
+      "lengthMillimeters": 52,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 34,
+      "role": "counterweight-4-front",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.5000000000000001,
+        -0.8660254037844386
+      ],
+      "bodyName": "crankshaft__web-4-rear",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        173.0,
+        -10.750000000000002,
+        -18.61954618136543
+      ],
+      "lengthMillimeters": 43.0,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 24,
+      "role": "web-4-rear",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        -0.0,
+        0.5000000000000001,
+        0.8660254037844386
+      ],
+      "bodyName": "crankshaft__counterweight-4-rear",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        173.0,
+        13.000000000000004,
+        22.516660498395403
+      ],
+      "lengthMillimeters": 52,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 34,
+      "role": "counterweight-4-rear",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "crankshaft__front-nose",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -230,
+        0,
+        0
+      ],
+      "lengthMillimeters": 52,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 18,
+      "role": "front-nose",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "crankshaft__flywheel-flange",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        226,
+        0,
+        0
+      ],
+      "lengthMillimeters": 28,
+      "partID": "crankshaft",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 38,
+      "role": "flywheel-flange",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "flywheel-interface__flywheel-envelope",
+      "calculationDependencies": [
+        "DATUM-FLYWHEEL"
+      ],
+      "category": "interface",
+      "centerMillimeters": [
+        252,
+        0,
+        0
+      ],
+      "lengthMillimeters": 24,
+      "partID": "flywheel-interface",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 105,
+      "role": "flywheel-envelope",
+      "semanticRepresentation": "p2-interface-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "torsional-damper__damper-envelope",
+      "calculationDependencies": [
+        "OPEN-TORSION"
+      ],
+      "category": "interface",
+      "centerMillimeters": [
+        -262,
+        0,
+        0
+      ],
+      "lengthMillimeters": 30,
+      "partID": "torsional-damper",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 82,
+      "role": "damper-envelope",
+      "semanticRepresentation": "p2-interface-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L1.liner__bore-volume-envelope",
+      "calculationDependencies": [
+        "GEO-BORE-001",
+        "LOAD-CYLINDER-PRESSURE"
+      ],
+      "category": "structure",
+      "centerMillimeters": [
+        -154.25,
+        -112.42997820866104,
+        112.42997820866107
+      ],
+      "lengthMillimeters": 130,
+      "partID": "cylinder.L1.liner",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 43.0,
+      "role": "bore-volume-envelope",
+      "semanticRepresentation": "p2-bore-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "coolant.ht-jacket.L__cylinder-1-coolant-volume-envelope",
+      "calculationDependencies": [
+        "THERM-HT-REJECTION",
+        "THERM-HT-FLOW"
+      ],
+      "category": "coolant-ht",
+      "centerMillimeters": [
+        -154.25,
+        -112.42997820866104,
+        112.42997820866107
+      ],
+      "lengthMillimeters": 142,
+      "partID": "coolant.ht-jacket.L",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 50.0,
+      "role": "cylinder-1-coolant-volume-envelope",
+      "semanticRepresentation": "p2-fluid-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L1.piston__piston-envelope",
+      "calculationDependencies": [
+        "LOAD-GAS",
+        "LOAD-INERTIA",
+        "THERM-OIL-JET"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -154.25,
+        -109.78828713267741,
+        109.78828713267744
+      ],
+      "lengthMillimeters": 31.0,
+      "partID": "cylinder.L1.piston",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 41.0,
+      "role": "piston-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "cylinder.L1.wrist-pin__pin-envelope",
+      "calculationDependencies": [
+        "LOAD-WRIST-PIN"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -154.25,
+        -109.78828713267741,
+        109.78828713267744
+      ],
+      "lengthMillimeters": 44.0,
+      "partID": "cylinder.L1.wrist-pin",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 11.0,
+      "role": "pin-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.8752552475511828,
+        0.4836612984663106
+      ],
+      "bodyName": "cylinder.L1.connecting-rod__weak-axis-envelope",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "LOAD-ROD-BUCKLING"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -154.25,
+        -44.144143566338705,
+        73.51368974770415
+      ],
+      "lengthMillimeters": 149.99999999999997,
+      "partID": "cylinder.L1.connecting-rod",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 8,
+      "role": "weak-axis-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "cylinder.L1.big-end-bearing__projected-bearing-envelope",
+      "calculationDependencies": [
+        "LOAD-CRANKPIN-BEARING",
+        "OPEN-BEARING-001"
+      ],
+      "category": "interface",
+      "centerMillimeters": [
+        -154.25,
+        21.499999999999996,
+        37.239092362730865
+      ],
+      "lengthMillimeters": 20.5,
+      "partID": "cylinder.L1.big-end-bearing",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 29.0,
+      "role": "projected-bearing-envelope",
+      "semanticRepresentation": "p2-interface-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L1.oil-jet__piston-cooling-nozzle-envelope",
+      "calculationDependencies": [
+        "THERM-OIL-FLOW",
+        "THERM-OIL-JET"
+      ],
+      "category": "oil",
+      "centerMillimeters": [
+        -154.25,
+        -49.497474683058314,
+        74.95331880577405
+      ],
+      "lengthMillimeters": 32,
+      "partID": "cylinder.L1.oil-jet",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 2.5,
+      "role": "piston-cooling-nozzle-envelope",
+      "semanticRepresentation": "p2-fluid-interface"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L1.intake-valve.1__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        -169.25,
+        -178.19090885900997,
+        197.9898987322333
+      ],
+      "lengthMillimeters": 56.5,
+      "partID": "cylinder.L1.intake-valve.1",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 17.0,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L1.intake-valve.2__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        -139.25,
+        -178.19090885900997,
+        197.9898987322333
+      ],
+      "lengthMillimeters": 56.5,
+      "partID": "cylinder.L1.intake-valve.2",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 17.0,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L1.exhaust-valve.1__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        -169.25,
+        -197.98989873223329,
+        178.19090885901
+      ],
+      "lengthMillimeters": 55.5,
+      "partID": "cylinder.L1.exhaust-valve.1",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 14.5,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L1.exhaust-valve.2__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        -139.25,
+        -197.98989873223329,
+        178.19090885901
+      ],
+      "lengthMillimeters": 55.5,
+      "partID": "cylinder.L1.exhaust-valve.2",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 14.5,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L1.spark-plug__spark-plug-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        -154.25,
+        -199.4041122946064,
+        199.40411229460642
+      ],
+      "lengthMillimeters": 62,
+      "partID": "cylinder.L1.spark-plug",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 7,
+      "role": "spark-plug-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L1.di-injector__direct-injector-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-COMBUSTION-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        -146.25,
+        -183.84776310850236,
+        209.30360723121808
+      ],
+      "lengthMillimeters": 72,
+      "partID": "cylinder.L1.di-injector",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 6,
+      "role": "direct-injector-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L1.pfi-injector__port-injector-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-EMISSIONS-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        -154.25,
+        -189.50461735799473,
+        243.24473272817235
+      ],
+      "lengthMillimeters": 62,
+      "partID": "cylinder.L1.pfi-injector",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 6,
+      "role": "port-injector-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L1.ignition-coil__coil-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        -154.25,
+        -231.22391744800103,
+        231.22391744800106
+      ],
+      "lengthMillimeters": 86,
+      "partID": "cylinder.L1.ignition-coil",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 13,
+      "role": "coil-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L2.liner__bore-volume-envelope",
+      "calculationDependencies": [
+        "GEO-BORE-001",
+        "LOAD-CYLINDER-PRESSURE"
+      ],
+      "category": "structure",
+      "centerMillimeters": [
+        -58.25,
+        -112.42997820866104,
+        112.42997820866107
+      ],
+      "lengthMillimeters": 130,
+      "partID": "cylinder.L2.liner",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 43.0,
+      "role": "bore-volume-envelope",
+      "semanticRepresentation": "p2-bore-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "coolant.ht-jacket.L__cylinder-2-coolant-volume-envelope",
+      "calculationDependencies": [
+        "THERM-HT-REJECTION",
+        "THERM-HT-FLOW"
+      ],
+      "category": "coolant-ht",
+      "centerMillimeters": [
+        -58.25,
+        -112.42997820866104,
+        112.42997820866107
+      ],
+      "lengthMillimeters": 142,
+      "partID": "coolant.ht-jacket.L",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 50.0,
+      "role": "cylinder-2-coolant-volume-envelope",
+      "semanticRepresentation": "p2-fluid-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L2.piston__piston-envelope",
+      "calculationDependencies": [
+        "LOAD-GAS",
+        "LOAD-INERTIA",
+        "THERM-OIL-JET"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -58.25,
+        -76.4041284399663,
+        76.40412843996631
+      ],
+      "lengthMillimeters": 31.0,
+      "partID": "cylinder.L2.piston",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 41.0,
+      "role": "piston-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "cylinder.L2.wrist-pin__pin-envelope",
+      "calculationDependencies": [
+        "LOAD-WRIST-PIN"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -58.25,
+        -76.4041284399663,
+        76.40412843996631
+      ],
+      "lengthMillimeters": 44.0,
+      "partID": "cylinder.L2.wrist-pin",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 11.0,
+      "role": "pin-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7576214720179811,
+        0.6526941895997754
+      ],
+      "bodyName": "cylinder.L2.connecting-rod__weak-axis-envelope",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "LOAD-ROD-BUCKLING"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -58.25,
+        -19.582518038617717,
+        27.45206421998316
+      ],
+      "lengthMillimeters": 150.0,
+      "partID": "cylinder.L2.connecting-rod",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 8,
+      "role": "weak-axis-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "cylinder.L2.big-end-bearing__projected-bearing-envelope",
+      "calculationDependencies": [
+        "LOAD-CRANKPIN-BEARING",
+        "OPEN-BEARING-001"
+      ],
+      "category": "interface",
+      "centerMillimeters": [
+        -58.25,
+        37.239092362730865,
+        -21.499999999999993
+      ],
+      "lengthMillimeters": 20.5,
+      "partID": "cylinder.L2.big-end-bearing",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 29.0,
+      "role": "projected-bearing-envelope",
+      "semanticRepresentation": "p2-interface-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L2.oil-jet__piston-cooling-nozzle-envelope",
+      "calculationDependencies": [
+        "THERM-OIL-FLOW",
+        "THERM-OIL-JET"
+      ],
+      "category": "oil",
+      "centerMillimeters": [
+        -58.25,
+        -49.497474683058314,
+        74.95331880577405
+      ],
+      "lengthMillimeters": 32,
+      "partID": "cylinder.L2.oil-jet",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 2.5,
+      "role": "piston-cooling-nozzle-envelope",
+      "semanticRepresentation": "p2-fluid-interface"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L2.intake-valve.1__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        -73.25,
+        -178.19090885900997,
+        197.9898987322333
+      ],
+      "lengthMillimeters": 56.5,
+      "partID": "cylinder.L2.intake-valve.1",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 17.0,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L2.intake-valve.2__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        -43.25,
+        -178.19090885900997,
+        197.9898987322333
+      ],
+      "lengthMillimeters": 56.5,
+      "partID": "cylinder.L2.intake-valve.2",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 17.0,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L2.exhaust-valve.1__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        -73.25,
+        -197.98989873223329,
+        178.19090885901
+      ],
+      "lengthMillimeters": 55.5,
+      "partID": "cylinder.L2.exhaust-valve.1",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 14.5,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L2.exhaust-valve.2__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        -43.25,
+        -197.98989873223329,
+        178.19090885901
+      ],
+      "lengthMillimeters": 55.5,
+      "partID": "cylinder.L2.exhaust-valve.2",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 14.5,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L2.spark-plug__spark-plug-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        -58.25,
+        -199.4041122946064,
+        199.40411229460642
+      ],
+      "lengthMillimeters": 62,
+      "partID": "cylinder.L2.spark-plug",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 7,
+      "role": "spark-plug-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L2.di-injector__direct-injector-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-COMBUSTION-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        -50.25,
+        -183.84776310850236,
+        209.30360723121808
+      ],
+      "lengthMillimeters": 72,
+      "partID": "cylinder.L2.di-injector",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 6,
+      "role": "direct-injector-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L2.pfi-injector__port-injector-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-EMISSIONS-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        -58.25,
+        -189.50461735799473,
+        243.24473272817235
+      ],
+      "lengthMillimeters": 62,
+      "partID": "cylinder.L2.pfi-injector",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 6,
+      "role": "port-injector-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L2.ignition-coil__coil-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        -58.25,
+        -231.22391744800103,
+        231.22391744800106
+      ],
+      "lengthMillimeters": 86,
+      "partID": "cylinder.L2.ignition-coil",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 13,
+      "role": "coil-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L3.liner__bore-volume-envelope",
+      "calculationDependencies": [
+        "GEO-BORE-001",
+        "LOAD-CYLINDER-PRESSURE"
+      ],
+      "category": "structure",
+      "centerMillimeters": [
+        37.75,
+        -112.42997820866104,
+        112.42997820866107
+      ],
+      "lengthMillimeters": 130,
+      "partID": "cylinder.L3.liner",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 43.0,
+      "role": "bore-volume-envelope",
+      "semanticRepresentation": "p2-bore-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "coolant.ht-jacket.L__cylinder-3-coolant-volume-envelope",
+      "calculationDependencies": [
+        "THERM-HT-REJECTION",
+        "THERM-HT-FLOW"
+      ],
+      "category": "coolant-ht",
+      "centerMillimeters": [
+        37.75,
+        -112.42997820866104,
+        112.42997820866107
+      ],
+      "lengthMillimeters": 142,
+      "partID": "coolant.ht-jacket.L",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 50.0,
+      "role": "cylinder-3-coolant-volume-envelope",
+      "semanticRepresentation": "p2-fluid-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L3.piston__piston-envelope",
+      "calculationDependencies": [
+        "LOAD-GAS",
+        "LOAD-INERTIA",
+        "THERM-OIL-JET"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        37.75,
+        -135.14322080269713,
+        135.14322080269716
+      ],
+      "lengthMillimeters": 31.0,
+      "partID": "cylinder.L3.piston",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 41.0,
+      "role": "piston-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "cylinder.L3.wrist-pin__pin-envelope",
+      "calculationDependencies": [
+        "LOAD-WRIST-PIN"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        37.75,
+        -135.14322080269713,
+        135.14322080269716
+      ],
+      "lengthMillimeters": 44.0,
+      "partID": "cylinder.L3.wrist-pin",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 11.0,
+      "role": "pin-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.6526941895997753,
+        0.7576214720179812
+      ],
+      "bodyName": "cylinder.L3.connecting-rod__weak-axis-envelope",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "LOAD-ROD-BUCKLING"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        37.75,
+        -86.191156582714,
+        78.32161040134858
+      ],
+      "lengthMillimeters": 149.99999999999997,
+      "partID": "cylinder.L3.connecting-rod",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 8,
+      "role": "weak-axis-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "cylinder.L3.big-end-bearing__projected-bearing-envelope",
+      "calculationDependencies": [
+        "LOAD-CRANKPIN-BEARING",
+        "OPEN-BEARING-001"
+      ],
+      "category": "interface",
+      "centerMillimeters": [
+        37.75,
+        -37.23909236273086,
+        21.500000000000004
+      ],
+      "lengthMillimeters": 20.5,
+      "partID": "cylinder.L3.big-end-bearing",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 29.0,
+      "role": "projected-bearing-envelope",
+      "semanticRepresentation": "p2-interface-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L3.oil-jet__piston-cooling-nozzle-envelope",
+      "calculationDependencies": [
+        "THERM-OIL-FLOW",
+        "THERM-OIL-JET"
+      ],
+      "category": "oil",
+      "centerMillimeters": [
+        37.75,
+        -49.497474683058314,
+        74.95331880577405
+      ],
+      "lengthMillimeters": 32,
+      "partID": "cylinder.L3.oil-jet",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 2.5,
+      "role": "piston-cooling-nozzle-envelope",
+      "semanticRepresentation": "p2-fluid-interface"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L3.intake-valve.1__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        22.75,
+        -178.19090885900997,
+        197.9898987322333
+      ],
+      "lengthMillimeters": 56.5,
+      "partID": "cylinder.L3.intake-valve.1",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 17.0,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L3.intake-valve.2__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        52.75,
+        -178.19090885900997,
+        197.9898987322333
+      ],
+      "lengthMillimeters": 56.5,
+      "partID": "cylinder.L3.intake-valve.2",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 17.0,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L3.exhaust-valve.1__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        22.75,
+        -197.98989873223329,
+        178.19090885901
+      ],
+      "lengthMillimeters": 55.5,
+      "partID": "cylinder.L3.exhaust-valve.1",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 14.5,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L3.exhaust-valve.2__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        52.75,
+        -197.98989873223329,
+        178.19090885901
+      ],
+      "lengthMillimeters": 55.5,
+      "partID": "cylinder.L3.exhaust-valve.2",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 14.5,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L3.spark-plug__spark-plug-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        37.75,
+        -199.4041122946064,
+        199.40411229460642
+      ],
+      "lengthMillimeters": 62,
+      "partID": "cylinder.L3.spark-plug",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 7,
+      "role": "spark-plug-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L3.di-injector__direct-injector-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-COMBUSTION-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        45.75,
+        -183.84776310850236,
+        209.30360723121808
+      ],
+      "lengthMillimeters": 72,
+      "partID": "cylinder.L3.di-injector",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 6,
+      "role": "direct-injector-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L3.pfi-injector__port-injector-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-EMISSIONS-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        37.75,
+        -189.50461735799473,
+        243.24473272817235
+      ],
+      "lengthMillimeters": 62,
+      "partID": "cylinder.L3.pfi-injector",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 6,
+      "role": "port-injector-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L3.ignition-coil__coil-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        37.75,
+        -231.22391744800103,
+        231.22391744800106
+      ],
+      "lengthMillimeters": 86,
+      "partID": "cylinder.L3.ignition-coil",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 13,
+      "role": "coil-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L4.liner__bore-volume-envelope",
+      "calculationDependencies": [
+        "GEO-BORE-001",
+        "LOAD-CYLINDER-PRESSURE"
+      ],
+      "category": "structure",
+      "centerMillimeters": [
+        133.75,
+        -112.42997820866104,
+        112.42997820866107
+      ],
+      "lengthMillimeters": 130,
+      "partID": "cylinder.L4.liner",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 43.0,
+      "role": "bore-volume-envelope",
+      "semanticRepresentation": "p2-bore-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "coolant.ht-jacket.L__cylinder-4-coolant-volume-envelope",
+      "calculationDependencies": [
+        "THERM-HT-REJECTION",
+        "THERM-HT-FLOW"
+      ],
+      "category": "coolant-ht",
+      "centerMillimeters": [
+        133.75,
+        -112.42997820866104,
+        112.42997820866107
+      ],
+      "lengthMillimeters": 142,
+      "partID": "coolant.ht-jacket.L",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 50.0,
+      "role": "cylinder-4-coolant-volume-envelope",
+      "semanticRepresentation": "p2-fluid-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L4.piston__piston-envelope",
+      "calculationDependencies": [
+        "LOAD-GAS",
+        "LOAD-INERTIA",
+        "THERM-OIL-JET"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        133.75,
+        -94.04919476994657,
+        94.04919476994658
+      ],
+      "lengthMillimeters": 31.0,
+      "partID": "cylinder.L4.piston",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 41.0,
+      "role": "piston-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "cylinder.L4.wrist-pin__pin-envelope",
+      "calculationDependencies": [
+        "LOAD-WRIST-PIN"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        133.75,
+        -94.04919476994657,
+        94.04919476994658
+      ],
+      "lengthMillimeters": 44.0,
+      "partID": "cylinder.L4.wrist-pin",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 11.0,
+      "role": "pin-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.48366129846631045,
+        0.8752552475511831
+      ],
+      "bodyName": "cylinder.L4.connecting-rod__weak-axis-envelope",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "LOAD-ROD-BUCKLING"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        133.75,
+        -57.77459738497328,
+        28.40505120360786
+      ],
+      "lengthMillimeters": 150.0,
+      "partID": "cylinder.L4.connecting-rod",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 8,
+      "role": "weak-axis-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "cylinder.L4.big-end-bearing__projected-bearing-envelope",
+      "calculationDependencies": [
+        "LOAD-CRANKPIN-BEARING",
+        "OPEN-BEARING-001"
+      ],
+      "category": "interface",
+      "centerMillimeters": [
+        133.75,
+        -21.500000000000004,
+        -37.23909236273086
+      ],
+      "lengthMillimeters": 20.5,
+      "partID": "cylinder.L4.big-end-bearing",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 29.0,
+      "role": "projected-bearing-envelope",
+      "semanticRepresentation": "p2-interface-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L4.oil-jet__piston-cooling-nozzle-envelope",
+      "calculationDependencies": [
+        "THERM-OIL-FLOW",
+        "THERM-OIL-JET"
+      ],
+      "category": "oil",
+      "centerMillimeters": [
+        133.75,
+        -49.497474683058314,
+        74.95331880577405
+      ],
+      "lengthMillimeters": 32,
+      "partID": "cylinder.L4.oil-jet",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 2.5,
+      "role": "piston-cooling-nozzle-envelope",
+      "semanticRepresentation": "p2-fluid-interface"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L4.intake-valve.1__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        118.75,
+        -178.19090885900997,
+        197.9898987322333
+      ],
+      "lengthMillimeters": 56.5,
+      "partID": "cylinder.L4.intake-valve.1",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 17.0,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L4.intake-valve.2__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        148.75,
+        -178.19090885900997,
+        197.9898987322333
+      ],
+      "lengthMillimeters": 56.5,
+      "partID": "cylinder.L4.intake-valve.2",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 17.0,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L4.exhaust-valve.1__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        118.75,
+        -197.98989873223329,
+        178.19090885901
+      ],
+      "lengthMillimeters": 55.5,
+      "partID": "cylinder.L4.exhaust-valve.1",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 14.5,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L4.exhaust-valve.2__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        148.75,
+        -197.98989873223329,
+        178.19090885901
+      ],
+      "lengthMillimeters": 55.5,
+      "partID": "cylinder.L4.exhaust-valve.2",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 14.5,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L4.spark-plug__spark-plug-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        133.75,
+        -199.4041122946064,
+        199.40411229460642
+      ],
+      "lengthMillimeters": 62,
+      "partID": "cylinder.L4.spark-plug",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 7,
+      "role": "spark-plug-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L4.di-injector__direct-injector-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-COMBUSTION-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        141.75,
+        -183.84776310850236,
+        209.30360723121808
+      ],
+      "lengthMillimeters": 72,
+      "partID": "cylinder.L4.di-injector",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 6,
+      "role": "direct-injector-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L4.pfi-injector__port-injector-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-EMISSIONS-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        133.75,
+        -189.50461735799473,
+        243.24473272817235
+      ],
+      "lengthMillimeters": 62,
+      "partID": "cylinder.L4.pfi-injector",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 6,
+      "role": "port-injector-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.L4.ignition-coil__coil-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        133.75,
+        -231.22391744800103,
+        231.22391744800106
+      ],
+      "lengthMillimeters": 86,
+      "partID": "cylinder.L4.ignition-coil",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 13,
+      "role": "coil-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "camshaft.L.intake__camshaft-envelope",
+      "calculationDependencies": [
+        "ARCH-CAM",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        0,
+        -197.28279195104676,
+        236.88077169749343
+      ],
+      "lengthMillimeters": 408,
+      "partID": "camshaft.L.intake",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 18,
+      "role": "camshaft-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "camshaft.L.exhaust__camshaft-envelope",
+      "calculationDependencies": [
+        "ARCH-CAM",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        0,
+        -236.8807716974934,
+        197.2827919510468
+      ],
+      "lengthMillimeters": 408,
+      "partID": "camshaft.L.exhaust",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 18,
+      "role": "camshaft-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R1.liner__bore-volume-envelope",
+      "calculationDependencies": [
+        "GEO-BORE-001",
+        "LOAD-CYLINDER-PRESSURE"
+      ],
+      "category": "structure",
+      "centerMillimeters": [
+        -133.75,
+        112.42997820866104,
+        112.42997820866107
+      ],
+      "lengthMillimeters": 130,
+      "partID": "cylinder.R1.liner",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 43.0,
+      "role": "bore-volume-envelope",
+      "semanticRepresentation": "p2-bore-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "coolant.ht-jacket.R__cylinder-1-coolant-volume-envelope",
+      "calculationDependencies": [
+        "THERM-HT-REJECTION",
+        "THERM-HT-FLOW"
+      ],
+      "category": "coolant-ht",
+      "centerMillimeters": [
+        -133.75,
+        112.42997820866104,
+        112.42997820866107
+      ],
+      "lengthMillimeters": 142,
+      "partID": "coolant.ht-jacket.R",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 50.0,
+      "role": "cylinder-1-coolant-volume-envelope",
+      "semanticRepresentation": "p2-fluid-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R1.piston__piston-envelope",
+      "calculationDependencies": [
+        "LOAD-GAS",
+        "LOAD-INERTIA",
+        "THERM-OIL-JET"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -133.75,
+        135.14322080269713,
+        135.14322080269716
+      ],
+      "lengthMillimeters": 31.0,
+      "partID": "cylinder.R1.piston",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 41.0,
+      "role": "piston-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "cylinder.R1.wrist-pin__pin-envelope",
+      "calculationDependencies": [
+        "LOAD-WRIST-PIN"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -133.75,
+        135.14322080269713,
+        135.14322080269716
+      ],
+      "lengthMillimeters": 44.0,
+      "partID": "cylinder.R1.wrist-pin",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 11.0,
+      "role": "pin-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.757621472017981,
+        0.6526941895997753
+      ],
+      "bodyName": "cylinder.R1.connecting-rod__weak-axis-envelope",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "LOAD-ROD-BUCKLING"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -133.75,
+        78.32161040134856,
+        86.19115658271402
+      ],
+      "lengthMillimeters": 149.99999999999997,
+      "partID": "cylinder.R1.connecting-rod",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 8,
+      "role": "weak-axis-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "cylinder.R1.big-end-bearing__projected-bearing-envelope",
+      "calculationDependencies": [
+        "LOAD-CRANKPIN-BEARING",
+        "OPEN-BEARING-001"
+      ],
+      "category": "interface",
+      "centerMillimeters": [
+        -133.75,
+        21.499999999999996,
+        37.239092362730865
+      ],
+      "lengthMillimeters": 20.5,
+      "partID": "cylinder.R1.big-end-bearing",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 29.0,
+      "role": "projected-bearing-envelope",
+      "semanticRepresentation": "p2-interface-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R1.oil-jet__piston-cooling-nozzle-envelope",
+      "calculationDependencies": [
+        "THERM-OIL-FLOW",
+        "THERM-OIL-JET"
+      ],
+      "category": "oil",
+      "centerMillimeters": [
+        -133.75,
+        74.95331880577403,
+        49.49747468305833
+      ],
+      "lengthMillimeters": 32,
+      "partID": "cylinder.R1.oil-jet",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 2.5,
+      "role": "piston-cooling-nozzle-envelope",
+      "semanticRepresentation": "p2-fluid-interface"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R1.intake-valve.1__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        -148.75,
+        197.98989873223329,
+        178.19090885901
+      ],
+      "lengthMillimeters": 56.5,
+      "partID": "cylinder.R1.intake-valve.1",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 17.0,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R1.intake-valve.2__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        -118.75,
+        197.98989873223329,
+        178.19090885901
+      ],
+      "lengthMillimeters": 56.5,
+      "partID": "cylinder.R1.intake-valve.2",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 17.0,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R1.exhaust-valve.1__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        -148.75,
+        178.19090885900997,
+        197.9898987322333
+      ],
+      "lengthMillimeters": 55.5,
+      "partID": "cylinder.R1.exhaust-valve.1",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 14.5,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R1.exhaust-valve.2__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        -118.75,
+        178.19090885900997,
+        197.9898987322333
+      ],
+      "lengthMillimeters": 55.5,
+      "partID": "cylinder.R1.exhaust-valve.2",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 14.5,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R1.spark-plug__spark-plug-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        -133.75,
+        199.4041122946064,
+        199.40411229460642
+      ],
+      "lengthMillimeters": 62,
+      "partID": "cylinder.R1.spark-plug",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 7,
+      "role": "spark-plug-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R1.di-injector__direct-injector-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-COMBUSTION-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        -125.75,
+        209.30360723121805,
+        183.8477631085024
+      ],
+      "lengthMillimeters": 72,
+      "partID": "cylinder.R1.di-injector",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 6,
+      "role": "direct-injector-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R1.pfi-injector__port-injector-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-EMISSIONS-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        -133.75,
+        243.24473272817232,
+        189.50461735799476
+      ],
+      "lengthMillimeters": 62,
+      "partID": "cylinder.R1.pfi-injector",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 6,
+      "role": "port-injector-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R1.ignition-coil__coil-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        -133.75,
+        231.22391744800103,
+        231.22391744800106
+      ],
+      "lengthMillimeters": 86,
+      "partID": "cylinder.R1.ignition-coil",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 13,
+      "role": "coil-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R2.liner__bore-volume-envelope",
+      "calculationDependencies": [
+        "GEO-BORE-001",
+        "LOAD-CYLINDER-PRESSURE"
+      ],
+      "category": "structure",
+      "centerMillimeters": [
+        -37.75,
+        112.42997820866104,
+        112.42997820866107
+      ],
+      "lengthMillimeters": 130,
+      "partID": "cylinder.R2.liner",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 43.0,
+      "role": "bore-volume-envelope",
+      "semanticRepresentation": "p2-bore-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "coolant.ht-jacket.R__cylinder-2-coolant-volume-envelope",
+      "calculationDependencies": [
+        "THERM-HT-REJECTION",
+        "THERM-HT-FLOW"
+      ],
+      "category": "coolant-ht",
+      "centerMillimeters": [
+        -37.75,
+        112.42997820866104,
+        112.42997820866107
+      ],
+      "lengthMillimeters": 142,
+      "partID": "coolant.ht-jacket.R",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 50.0,
+      "role": "cylinder-2-coolant-volume-envelope",
+      "semanticRepresentation": "p2-fluid-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R2.piston__piston-envelope",
+      "calculationDependencies": [
+        "LOAD-GAS",
+        "LOAD-INERTIA",
+        "THERM-OIL-JET"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -37.75,
+        109.78828713267741,
+        109.78828713267744
+      ],
+      "lengthMillimeters": 31.0,
+      "partID": "cylinder.R2.piston",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 41.0,
+      "role": "piston-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "cylinder.R2.wrist-pin__pin-envelope",
+      "calculationDependencies": [
+        "LOAD-WRIST-PIN"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -37.75,
+        109.78828713267741,
+        109.78828713267744
+      ],
+      "lengthMillimeters": 44.0,
+      "partID": "cylinder.R2.wrist-pin",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 11.0,
+      "role": "pin-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.48366129846631045,
+        0.875255247551183
+      ],
+      "bodyName": "cylinder.R2.connecting-rod__weak-axis-envelope",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "LOAD-ROD-BUCKLING"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        -37.75,
+        73.51368974770413,
+        44.14414356633873
+      ],
+      "lengthMillimeters": 149.99999999999997,
+      "partID": "cylinder.R2.connecting-rod",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 8,
+      "role": "weak-axis-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "cylinder.R2.big-end-bearing__projected-bearing-envelope",
+      "calculationDependencies": [
+        "LOAD-CRANKPIN-BEARING",
+        "OPEN-BEARING-001"
+      ],
+      "category": "interface",
+      "centerMillimeters": [
+        -37.75,
+        37.239092362730865,
+        -21.499999999999993
+      ],
+      "lengthMillimeters": 20.5,
+      "partID": "cylinder.R2.big-end-bearing",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 29.0,
+      "role": "projected-bearing-envelope",
+      "semanticRepresentation": "p2-interface-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R2.oil-jet__piston-cooling-nozzle-envelope",
+      "calculationDependencies": [
+        "THERM-OIL-FLOW",
+        "THERM-OIL-JET"
+      ],
+      "category": "oil",
+      "centerMillimeters": [
+        -37.75,
+        74.95331880577403,
+        49.49747468305833
+      ],
+      "lengthMillimeters": 32,
+      "partID": "cylinder.R2.oil-jet",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 2.5,
+      "role": "piston-cooling-nozzle-envelope",
+      "semanticRepresentation": "p2-fluid-interface"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R2.intake-valve.1__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        -52.75,
+        197.98989873223329,
+        178.19090885901
+      ],
+      "lengthMillimeters": 56.5,
+      "partID": "cylinder.R2.intake-valve.1",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 17.0,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R2.intake-valve.2__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        -22.75,
+        197.98989873223329,
+        178.19090885901
+      ],
+      "lengthMillimeters": 56.5,
+      "partID": "cylinder.R2.intake-valve.2",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 17.0,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R2.exhaust-valve.1__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        -52.75,
+        178.19090885900997,
+        197.9898987322333
+      ],
+      "lengthMillimeters": 55.5,
+      "partID": "cylinder.R2.exhaust-valve.1",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 14.5,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R2.exhaust-valve.2__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        -22.75,
+        178.19090885900997,
+        197.9898987322333
+      ],
+      "lengthMillimeters": 55.5,
+      "partID": "cylinder.R2.exhaust-valve.2",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 14.5,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R2.spark-plug__spark-plug-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        -37.75,
+        199.4041122946064,
+        199.40411229460642
+      ],
+      "lengthMillimeters": 62,
+      "partID": "cylinder.R2.spark-plug",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 7,
+      "role": "spark-plug-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R2.di-injector__direct-injector-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-COMBUSTION-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        -29.75,
+        209.30360723121805,
+        183.8477631085024
+      ],
+      "lengthMillimeters": 72,
+      "partID": "cylinder.R2.di-injector",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 6,
+      "role": "direct-injector-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R2.pfi-injector__port-injector-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-EMISSIONS-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        -37.75,
+        243.24473272817232,
+        189.50461735799476
+      ],
+      "lengthMillimeters": 62,
+      "partID": "cylinder.R2.pfi-injector",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 6,
+      "role": "port-injector-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R2.ignition-coil__coil-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        -37.75,
+        231.22391744800103,
+        231.22391744800106
+      ],
+      "lengthMillimeters": 86,
+      "partID": "cylinder.R2.ignition-coil",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 13,
+      "role": "coil-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R3.liner__bore-volume-envelope",
+      "calculationDependencies": [
+        "GEO-BORE-001",
+        "LOAD-CYLINDER-PRESSURE"
+      ],
+      "category": "structure",
+      "centerMillimeters": [
+        58.25,
+        112.42997820866104,
+        112.42997820866107
+      ],
+      "lengthMillimeters": 130,
+      "partID": "cylinder.R3.liner",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 43.0,
+      "role": "bore-volume-envelope",
+      "semanticRepresentation": "p2-bore-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "coolant.ht-jacket.R__cylinder-3-coolant-volume-envelope",
+      "calculationDependencies": [
+        "THERM-HT-REJECTION",
+        "THERM-HT-FLOW"
+      ],
+      "category": "coolant-ht",
+      "centerMillimeters": [
+        58.25,
+        112.42997820866104,
+        112.42997820866107
+      ],
+      "lengthMillimeters": 142,
+      "partID": "coolant.ht-jacket.R",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 50.0,
+      "role": "cylinder-3-coolant-volume-envelope",
+      "semanticRepresentation": "p2-fluid-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R3.piston__piston-envelope",
+      "calculationDependencies": [
+        "LOAD-GAS",
+        "LOAD-INERTIA",
+        "THERM-OIL-JET"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        58.25,
+        94.04919476994657,
+        94.04919476994658
+      ],
+      "lengthMillimeters": 31.0,
+      "partID": "cylinder.R3.piston",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 41.0,
+      "role": "piston-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "cylinder.R3.wrist-pin__pin-envelope",
+      "calculationDependencies": [
+        "LOAD-WRIST-PIN"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        58.25,
+        94.04919476994657,
+        94.04919476994658
+      ],
+      "lengthMillimeters": 44.0,
+      "partID": "cylinder.R3.wrist-pin",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 11.0,
+      "role": "pin-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.8752552475511829,
+        0.48366129846631056
+      ],
+      "bodyName": "cylinder.R3.connecting-rod__weak-axis-envelope",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "LOAD-ROD-BUCKLING"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        58.25,
+        28.405051203607854,
+        57.77459738497329
+      ],
+      "lengthMillimeters": 150.0,
+      "partID": "cylinder.R3.connecting-rod",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 8,
+      "role": "weak-axis-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "cylinder.R3.big-end-bearing__projected-bearing-envelope",
+      "calculationDependencies": [
+        "LOAD-CRANKPIN-BEARING",
+        "OPEN-BEARING-001"
+      ],
+      "category": "interface",
+      "centerMillimeters": [
+        58.25,
+        -37.23909236273086,
+        21.500000000000004
+      ],
+      "lengthMillimeters": 20.5,
+      "partID": "cylinder.R3.big-end-bearing",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 29.0,
+      "role": "projected-bearing-envelope",
+      "semanticRepresentation": "p2-interface-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R3.oil-jet__piston-cooling-nozzle-envelope",
+      "calculationDependencies": [
+        "THERM-OIL-FLOW",
+        "THERM-OIL-JET"
+      ],
+      "category": "oil",
+      "centerMillimeters": [
+        58.25,
+        74.95331880577403,
+        49.49747468305833
+      ],
+      "lengthMillimeters": 32,
+      "partID": "cylinder.R3.oil-jet",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 2.5,
+      "role": "piston-cooling-nozzle-envelope",
+      "semanticRepresentation": "p2-fluid-interface"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R3.intake-valve.1__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        43.25,
+        197.98989873223329,
+        178.19090885901
+      ],
+      "lengthMillimeters": 56.5,
+      "partID": "cylinder.R3.intake-valve.1",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 17.0,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R3.intake-valve.2__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        73.25,
+        197.98989873223329,
+        178.19090885901
+      ],
+      "lengthMillimeters": 56.5,
+      "partID": "cylinder.R3.intake-valve.2",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 17.0,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R3.exhaust-valve.1__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        43.25,
+        178.19090885900997,
+        197.9898987322333
+      ],
+      "lengthMillimeters": 55.5,
+      "partID": "cylinder.R3.exhaust-valve.1",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 14.5,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R3.exhaust-valve.2__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        73.25,
+        178.19090885900997,
+        197.9898987322333
+      ],
+      "lengthMillimeters": 55.5,
+      "partID": "cylinder.R3.exhaust-valve.2",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 14.5,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R3.spark-plug__spark-plug-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        58.25,
+        199.4041122946064,
+        199.40411229460642
+      ],
+      "lengthMillimeters": 62,
+      "partID": "cylinder.R3.spark-plug",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 7,
+      "role": "spark-plug-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R3.di-injector__direct-injector-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-COMBUSTION-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        66.25,
+        209.30360723121805,
+        183.8477631085024
+      ],
+      "lengthMillimeters": 72,
+      "partID": "cylinder.R3.di-injector",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 6,
+      "role": "direct-injector-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R3.pfi-injector__port-injector-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-EMISSIONS-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        58.25,
+        243.24473272817232,
+        189.50461735799476
+      ],
+      "lengthMillimeters": 62,
+      "partID": "cylinder.R3.pfi-injector",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 6,
+      "role": "port-injector-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R3.ignition-coil__coil-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        58.25,
+        231.22391744800103,
+        231.22391744800106
+      ],
+      "lengthMillimeters": 86,
+      "partID": "cylinder.R3.ignition-coil",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 13,
+      "role": "coil-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R4.liner__bore-volume-envelope",
+      "calculationDependencies": [
+        "GEO-BORE-001",
+        "LOAD-CYLINDER-PRESSURE"
+      ],
+      "category": "structure",
+      "centerMillimeters": [
+        154.25,
+        112.42997820866104,
+        112.42997820866107
+      ],
+      "lengthMillimeters": 130,
+      "partID": "cylinder.R4.liner",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 43.0,
+      "role": "bore-volume-envelope",
+      "semanticRepresentation": "p2-bore-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "coolant.ht-jacket.R__cylinder-4-coolant-volume-envelope",
+      "calculationDependencies": [
+        "THERM-HT-REJECTION",
+        "THERM-HT-FLOW"
+      ],
+      "category": "coolant-ht",
+      "centerMillimeters": [
+        154.25,
+        112.42997820866104,
+        112.42997820866107
+      ],
+      "lengthMillimeters": 142,
+      "partID": "coolant.ht-jacket.R",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 50.0,
+      "role": "cylinder-4-coolant-volume-envelope",
+      "semanticRepresentation": "p2-fluid-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R4.piston__piston-envelope",
+      "calculationDependencies": [
+        "LOAD-GAS",
+        "LOAD-INERTIA",
+        "THERM-OIL-JET"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        154.25,
+        76.40412843996629,
+        76.4041284399663
+      ],
+      "lengthMillimeters": 31.0,
+      "partID": "cylinder.R4.piston",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 41.0,
+      "role": "piston-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "cylinder.R4.wrist-pin__pin-envelope",
+      "calculationDependencies": [
+        "LOAD-WRIST-PIN"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        154.25,
+        76.40412843996629,
+        76.4041284399663
+      ],
+      "lengthMillimeters": 44.0,
+      "partID": "cylinder.R4.wrist-pin",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 11.0,
+      "role": "pin-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.6526941895997753,
+        0.7576214720179812
+      ],
+      "bodyName": "cylinder.R4.connecting-rod__weak-axis-envelope",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "LOAD-ROD-BUCKLING"
+      ],
+      "category": "cranktrain",
+      "centerMillimeters": [
+        154.25,
+        27.452064219983143,
+        19.58251803861772
+      ],
+      "lengthMillimeters": 149.99999999999997,
+      "partID": "cylinder.R4.connecting-rod",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 8,
+      "role": "weak-axis-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "cylinder.R4.big-end-bearing__projected-bearing-envelope",
+      "calculationDependencies": [
+        "LOAD-CRANKPIN-BEARING",
+        "OPEN-BEARING-001"
+      ],
+      "category": "interface",
+      "centerMillimeters": [
+        154.25,
+        -21.500000000000004,
+        -37.23909236273086
+      ],
+      "lengthMillimeters": 20.5,
+      "partID": "cylinder.R4.big-end-bearing",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 29.0,
+      "role": "projected-bearing-envelope",
+      "semanticRepresentation": "p2-interface-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R4.oil-jet__piston-cooling-nozzle-envelope",
+      "calculationDependencies": [
+        "THERM-OIL-FLOW",
+        "THERM-OIL-JET"
+      ],
+      "category": "oil",
+      "centerMillimeters": [
+        154.25,
+        74.95331880577403,
+        49.49747468305833
+      ],
+      "lengthMillimeters": 32,
+      "partID": "cylinder.R4.oil-jet",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 2.5,
+      "role": "piston-cooling-nozzle-envelope",
+      "semanticRepresentation": "p2-fluid-interface"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R4.intake-valve.1__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        139.25,
+        197.98989873223329,
+        178.19090885901
+      ],
+      "lengthMillimeters": 56.5,
+      "partID": "cylinder.R4.intake-valve.1",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 17.0,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R4.intake-valve.2__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        169.25,
+        197.98989873223329,
+        178.19090885901
+      ],
+      "lengthMillimeters": 56.5,
+      "partID": "cylinder.R4.intake-valve.2",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 17.0,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R4.exhaust-valve.1__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        139.25,
+        178.19090885900997,
+        197.9898987322333
+      ],
+      "lengthMillimeters": 55.5,
+      "partID": "cylinder.R4.exhaust-valve.1",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 14.5,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R4.exhaust-valve.2__valve-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        169.25,
+        178.19090885900997,
+        197.9898987322333
+      ],
+      "lengthMillimeters": 55.5,
+      "partID": "cylinder.R4.exhaust-valve.2",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 14.5,
+      "role": "valve-motion-envelope",
+      "semanticRepresentation": "p2-motion-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R4.spark-plug__spark-plug-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        154.25,
+        199.4041122946064,
+        199.40411229460642
+      ],
+      "lengthMillimeters": 62,
+      "partID": "cylinder.R4.spark-plug",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 7,
+      "role": "spark-plug-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R4.di-injector__direct-injector-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-COMBUSTION-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        162.25,
+        209.30360723121805,
+        183.8477631085024
+      ],
+      "lengthMillimeters": 72,
+      "partID": "cylinder.R4.di-injector",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 6,
+      "role": "direct-injector-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R4.pfi-injector__port-injector-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-EMISSIONS-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        154.25,
+        243.24473272817232,
+        189.50461735799476
+      ],
+      "lengthMillimeters": 62,
+      "partID": "cylinder.R4.pfi-injector",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 6,
+      "role": "port-injector-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "bodyName": "cylinder.R4.ignition-coil__coil-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        154.25,
+        231.22391744800103,
+        231.22391744800106
+      ],
+      "lengthMillimeters": 86,
+      "partID": "cylinder.R4.ignition-coil",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 13,
+      "role": "coil-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "camshaft.R.intake__camshaft-envelope",
+      "calculationDependencies": [
+        "ARCH-CAM",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        0,
+        236.8807716974934,
+        197.2827919510468
+      ],
+      "lengthMillimeters": 408,
+      "partID": "camshaft.R.intake",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 18,
+      "role": "camshaft-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "camshaft.R.exhaust__camshaft-envelope",
+      "calculationDependencies": [
+        "ARCH-CAM",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "category": "valvetrain",
+      "centerMillimeters": [
+        0,
+        197.28279195104676,
+        236.88077169749343
+      ],
+      "lengthMillimeters": 408,
+      "partID": "camshaft.R.exhaust",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 18,
+      "role": "camshaft-envelope",
+      "semanticRepresentation": "p2-rotating-envelope"
+    },
+    {
+      "bodyName": "intake-plenum.L__plenum-flow-envelope",
+      "calculationDependencies": [
+        "THERM-MANIFOLD-PRESSURE",
+        "OPEN-GAS-EXCHANGE"
+      ],
+      "category": "air",
+      "centerMillimeters": [
+        0,
+        -130,
+        335
+      ],
+      "depthMillimeters": 78,
+      "heightMillimeters": 84,
+      "normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "partID": "intake-plenum.L",
+      "previewVisible": false,
+      "primitive": "box",
+      "role": "plenum-flow-envelope",
+      "semanticRepresentation": "p2-flow-envelope",
+      "widthMillimeters": 360
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "throttle.L__throttle-interface-envelope",
+      "calculationDependencies": [
+        "THERM-AIR-FLOW"
+      ],
+      "category": "air",
+      "centerMillimeters": [
+        -208,
+        -130,
+        335
+      ],
+      "lengthMillimeters": 54,
+      "partID": "throttle.L",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 36,
+      "role": "throttle-interface-envelope",
+      "semanticRepresentation": "p2-interface-envelope"
+    },
+    {
+      "bodyName": "air.filter.L__filter-service-envelope",
+      "calculationDependencies": [
+        "THERM-AIR-FLOW"
+      ],
+      "category": "air",
+      "centerMillimeters": [
+        -315,
+        -365,
+        160
+      ],
+      "depthMillimeters": 82,
+      "heightMillimeters": 95,
+      "normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "partID": "air.filter.L",
+      "previewVisible": true,
+      "primitive": "box",
+      "role": "filter-service-envelope",
+      "semanticRepresentation": "p2-service-envelope",
+      "widthMillimeters": 108
+    },
+    {
+      "bodyName": "charge-cooler.L__charge-cooler-flow-envelope",
+      "calculationDependencies": [
+        "THERM-LT-REJECTION"
+      ],
+      "category": "coolant-lt",
+      "centerMillimeters": [
+        -285,
+        -235,
+        155
+      ],
+      "depthMillimeters": 94,
+      "heightMillimeters": 92,
+      "normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "partID": "charge-cooler.L",
+      "previewVisible": true,
+      "primitive": "box",
+      "role": "charge-cooler-flow-envelope",
+      "semanticRepresentation": "p2-flow-envelope",
+      "widthMillimeters": 125
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "turbo.L.compressor__compressor-housing-envelope",
+      "calculationDependencies": [
+        "THERM-COMPRESSOR-MAP"
+      ],
+      "category": "air",
+      "centerMillimeters": [
+        -42,
+        -365,
+        72
+      ],
+      "lengthMillimeters": 62,
+      "partID": "turbo.L.compressor",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 55,
+      "role": "compressor-housing-envelope",
+      "semanticRepresentation": "p2-flow-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "turbo.L.core__bearing-core-service-envelope",
+      "calculationDependencies": [
+        "THERM-TURBO-POWER",
+        "THERM-HT-FLOW"
+      ],
+      "category": "interface",
+      "centerMillimeters": [
+        18,
+        -365,
+        72
+      ],
+      "lengthMillimeters": 70,
+      "partID": "turbo.L.core",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 26,
+      "role": "bearing-core-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "turbo.L.turbine__turbine-thermal-envelope",
+      "calculationDependencies": [
+        "THERM-TURBINE-INLET",
+        "OPEN-GAS-EXCHANGE"
+      ],
+      "category": "exhaust",
+      "centerMillimeters": [
+        78,
+        -365,
+        72
+      ],
+      "lengthMillimeters": 60,
+      "partID": "turbo.L.turbine",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 50,
+      "role": "turbine-thermal-envelope",
+      "semanticRepresentation": "p2-thermal-envelope"
+    },
+    {
+      "axis": [
+        0.28148531004686966,
+        -0.7387730238402135,
+        -0.6123564643847611
+      ],
+      "bodyName": "exhaust-manifold.L__runner-collector-thermal-envelope",
+      "calculationDependencies": [
+        "THERM-TURBINE-INLET",
+        "OPEN-GAS-EXCHANGE"
+      ],
+      "category": "exhaust",
+      "centerMillimeters": [
+        17.5,
+        -284.0703281636579,
+        120.0703281636579
+      ],
+      "lengthMillimeters": 124.34041404921703,
+      "partID": "exhaust-manifold.L",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 28,
+      "role": "runner-collector-thermal-envelope",
+      "semanticRepresentation": "p2-thermal-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "catalyst-interface.L__aftertreatment-interface-envelope",
+      "calculationDependencies": [
+        "OPEN-EMISSIONS-001"
+      ],
+      "category": "exhaust",
+      "centerMillimeters": [
+        155,
+        -365,
+        72
+      ],
+      "lengthMillimeters": 80,
+      "partID": "catalyst-interface.L",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 58,
+      "role": "aftertreatment-interface-envelope",
+      "semanticRepresentation": "p2-interface-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "fuel.di-rail.L__di-rail-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        0,
+        -184.5548698896889,
+        234.05234457274724
+      ],
+      "lengthMillimeters": 390,
+      "partID": "fuel.di-rail.L",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 10,
+      "role": "di-rail-envelope",
+      "semanticRepresentation": "p2-interface-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "fuel.pfi-rail.L__pfi-rail-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        0,
+        -188.0904037956216,
+        261.6295090390226
+      ],
+      "lengthMillimeters": 390,
+      "partID": "fuel.pfi-rail.L",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 9,
+      "role": "pfi-rail-envelope",
+      "semanticRepresentation": "p2-interface-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "fuel.high-pressure-pump.L__high-pressure-pump-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        -215,
+        -128,
+        300
+      ],
+      "lengthMillimeters": 58,
+      "partID": "fuel.high-pressure-pump.L",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 30,
+      "role": "high-pressure-pump-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "oil.scavenge-gallery.L__scavenge-flow-envelope",
+      "calculationDependencies": [
+        "ARCH-DRY-SUMP"
+      ],
+      "category": "oil",
+      "centerMillimeters": [
+        0,
+        -62,
+        -112
+      ],
+      "lengthMillimeters": 385,
+      "partID": "oil.scavenge-gallery.L",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 8,
+      "role": "scavenge-flow-envelope",
+      "semanticRepresentation": "p2-fluid-envelope"
+    },
+    {
+      "bodyName": "intake-plenum.R__plenum-flow-envelope",
+      "calculationDependencies": [
+        "THERM-MANIFOLD-PRESSURE",
+        "OPEN-GAS-EXCHANGE"
+      ],
+      "category": "air",
+      "centerMillimeters": [
+        0,
+        130,
+        335
+      ],
+      "depthMillimeters": 78,
+      "heightMillimeters": 84,
+      "normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "partID": "intake-plenum.R",
+      "previewVisible": true,
+      "primitive": "box",
+      "role": "plenum-flow-envelope",
+      "semanticRepresentation": "p2-flow-envelope",
+      "widthMillimeters": 360
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "throttle.R__throttle-interface-envelope",
+      "calculationDependencies": [
+        "THERM-AIR-FLOW"
+      ],
+      "category": "air",
+      "centerMillimeters": [
+        -208,
+        130,
+        335
+      ],
+      "lengthMillimeters": 54,
+      "partID": "throttle.R",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 36,
+      "role": "throttle-interface-envelope",
+      "semanticRepresentation": "p2-interface-envelope"
+    },
+    {
+      "bodyName": "air.filter.R__filter-service-envelope",
+      "calculationDependencies": [
+        "THERM-AIR-FLOW"
+      ],
+      "category": "air",
+      "centerMillimeters": [
+        -315,
+        365,
+        160
+      ],
+      "depthMillimeters": 82,
+      "heightMillimeters": 95,
+      "normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "partID": "air.filter.R",
+      "previewVisible": true,
+      "primitive": "box",
+      "role": "filter-service-envelope",
+      "semanticRepresentation": "p2-service-envelope",
+      "widthMillimeters": 108
+    },
+    {
+      "bodyName": "charge-cooler.R__charge-cooler-flow-envelope",
+      "calculationDependencies": [
+        "THERM-LT-REJECTION"
+      ],
+      "category": "coolant-lt",
+      "centerMillimeters": [
+        -285,
+        235,
+        155
+      ],
+      "depthMillimeters": 94,
+      "heightMillimeters": 92,
+      "normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "partID": "charge-cooler.R",
+      "previewVisible": true,
+      "primitive": "box",
+      "role": "charge-cooler-flow-envelope",
+      "semanticRepresentation": "p2-flow-envelope",
+      "widthMillimeters": 125
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "turbo.R.compressor__compressor-housing-envelope",
+      "calculationDependencies": [
+        "THERM-COMPRESSOR-MAP"
+      ],
+      "category": "air",
+      "centerMillimeters": [
+        -42,
+        365,
+        72
+      ],
+      "lengthMillimeters": 62,
+      "partID": "turbo.R.compressor",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 55,
+      "role": "compressor-housing-envelope",
+      "semanticRepresentation": "p2-flow-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "turbo.R.core__bearing-core-service-envelope",
+      "calculationDependencies": [
+        "THERM-TURBO-POWER",
+        "THERM-HT-FLOW"
+      ],
+      "category": "interface",
+      "centerMillimeters": [
+        18,
+        365,
+        72
+      ],
+      "lengthMillimeters": 70,
+      "partID": "turbo.R.core",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 26,
+      "role": "bearing-core-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "turbo.R.turbine__turbine-thermal-envelope",
+      "calculationDependencies": [
+        "THERM-TURBINE-INLET",
+        "OPEN-GAS-EXCHANGE"
+      ],
+      "category": "exhaust",
+      "centerMillimeters": [
+        78,
+        365,
+        72
+      ],
+      "lengthMillimeters": 60,
+      "partID": "turbo.R.turbine",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 50,
+      "role": "turbine-thermal-envelope",
+      "semanticRepresentation": "p2-thermal-envelope"
+    },
+    {
+      "axis": [
+        0.28148531004686966,
+        0.7387730238402135,
+        -0.6123564643847611
+      ],
+      "bodyName": "exhaust-manifold.R__runner-collector-thermal-envelope",
+      "calculationDependencies": [
+        "THERM-TURBINE-INLET",
+        "OPEN-GAS-EXCHANGE"
+      ],
+      "category": "exhaust",
+      "centerMillimeters": [
+        17.5,
+        284.0703281636579,
+        120.0703281636579
+      ],
+      "lengthMillimeters": 124.34041404921703,
+      "partID": "exhaust-manifold.R",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 28,
+      "role": "runner-collector-thermal-envelope",
+      "semanticRepresentation": "p2-thermal-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "catalyst-interface.R__aftertreatment-interface-envelope",
+      "calculationDependencies": [
+        "OPEN-EMISSIONS-001"
+      ],
+      "category": "exhaust",
+      "centerMillimeters": [
+        155,
+        365,
+        72
+      ],
+      "lengthMillimeters": 80,
+      "partID": "catalyst-interface.R",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 58,
+      "role": "aftertreatment-interface-envelope",
+      "semanticRepresentation": "p2-interface-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "fuel.di-rail.R__di-rail-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        0,
+        234.05234457274722,
+        184.55486988968892
+      ],
+      "lengthMillimeters": 390,
+      "partID": "fuel.di-rail.R",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 10,
+      "role": "di-rail-envelope",
+      "semanticRepresentation": "p2-interface-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "fuel.pfi-rail.R__pfi-rail-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        0,
+        261.62950903902254,
+        188.09040379562168
+      ],
+      "lengthMillimeters": 390,
+      "partID": "fuel.pfi-rail.R",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 9,
+      "role": "pfi-rail-envelope",
+      "semanticRepresentation": "p2-interface-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "fuel.high-pressure-pump.R__high-pressure-pump-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS"
+      ],
+      "category": "fuel",
+      "centerMillimeters": [
+        -215,
+        128,
+        300
+      ],
+      "lengthMillimeters": 58,
+      "partID": "fuel.high-pressure-pump.R",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 30,
+      "role": "high-pressure-pump-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "oil.scavenge-gallery.R__scavenge-flow-envelope",
+      "calculationDependencies": [
+        "ARCH-DRY-SUMP"
+      ],
+      "category": "oil",
+      "centerMillimeters": [
+        0,
+        62,
+        -112
+      ],
+      "lengthMillimeters": 385,
+      "partID": "oil.scavenge-gallery.R",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 8,
+      "role": "scavenge-flow-envelope",
+      "semanticRepresentation": "p2-fluid-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "coolant.ht-pump__ht-pump-service-envelope",
+      "calculationDependencies": [
+        "THERM-HT-FLOW"
+      ],
+      "category": "coolant-ht",
+      "centerMillimeters": [
+        -260,
+        0,
+        10
+      ],
+      "lengthMillimeters": 62,
+      "partID": "coolant.ht-pump",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 52,
+      "role": "ht-pump-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "coolant.ht-thermostat__thermostat-service-envelope",
+      "calculationDependencies": [
+        "THERM-HT-TEMPERATURE"
+      ],
+      "category": "coolant-ht",
+      "centerMillimeters": [
+        -215,
+        0,
+        285
+      ],
+      "lengthMillimeters": 54,
+      "partID": "coolant.ht-thermostat",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 34,
+      "role": "thermostat-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "bodyName": "coolant.ht-radiator-interface__vehicle-radiator-interface-envelope",
+      "calculationDependencies": [
+        "THERM-HT-REJECTION",
+        "THERM-HT-UA"
+      ],
+      "category": "coolant-ht",
+      "centerMillimeters": [
+        -360,
+        0,
+        20
+      ],
+      "depthMillimeters": 95,
+      "heightMillimeters": 190,
+      "normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "partID": "coolant.ht-radiator-interface",
+      "previewVisible": true,
+      "primitive": "box",
+      "role": "vehicle-radiator-interface-envelope",
+      "semanticRepresentation": "p2-interface-envelope",
+      "widthMillimeters": 22
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "coolant.lt-pump__lt-pump-service-envelope",
+      "calculationDependencies": [
+        "THERM-LT-REJECTION"
+      ],
+      "category": "coolant-lt",
+      "centerMillimeters": [
+        -350,
+        0,
+        145
+      ],
+      "lengthMillimeters": 48,
+      "partID": "coolant.lt-pump",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 36,
+      "role": "lt-pump-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "bodyName": "coolant.lt-front-interface__lt-front-heat-exchanger-interface-envelope",
+      "calculationDependencies": [
+        "THERM-LT-REJECTION"
+      ],
+      "category": "coolant-lt",
+      "centerMillimeters": [
+        -390,
+        0,
+        155
+      ],
+      "depthMillimeters": 130,
+      "heightMillimeters": 430,
+      "normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "partID": "coolant.lt-front-interface",
+      "previewVisible": true,
+      "primitive": "box",
+      "role": "lt-front-heat-exchanger-interface-envelope",
+      "semanticRepresentation": "p2-interface-envelope",
+      "widthMillimeters": 20
+    },
+    {
+      "bodyName": "oil.dry-sump-pump__six-stage-pump-service-envelope",
+      "calculationDependencies": [
+        "THERM-OIL-FLOW",
+        "ARCH-DRY-SUMP"
+      ],
+      "category": "oil",
+      "centerMillimeters": [
+        -225,
+        -105,
+        -92
+      ],
+      "depthMillimeters": 62,
+      "heightMillimeters": 52,
+      "normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "partID": "oil.dry-sump-pump",
+      "previewVisible": true,
+      "primitive": "box",
+      "role": "six-stage-pump-service-envelope",
+      "semanticRepresentation": "p2-service-envelope",
+      "widthMillimeters": 95
+    },
+    {
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "bodyName": "oil.tank__deaeration-tank-service-envelope",
+      "calculationDependencies": [
+        "ARCH-DRY-SUMP"
+      ],
+      "category": "oil",
+      "centerMillimeters": [
+        185,
+        -265,
+        -15
+      ],
+      "lengthMillimeters": 210,
+      "partID": "oil.tank",
+      "previewVisible": true,
+      "primitive": "cylinder",
+      "radiusMillimeters": 72,
+      "role": "deaeration-tank-service-envelope",
+      "semanticRepresentation": "p2-service-envelope"
+    },
+    {
+      "bodyName": "oil.cooler-interface__oil-cooler-interface-envelope",
+      "calculationDependencies": [
+        "THERM-OIL-REJECTION",
+        "THERM-OIL-FLOW"
+      ],
+      "category": "oil",
+      "centerMillimeters": [
+        -330,
+        -145,
+        -35
+      ],
+      "depthMillimeters": 105,
+      "heightMillimeters": 28,
+      "normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "partID": "oil.cooler-interface",
+      "previewVisible": true,
+      "primitive": "box",
+      "role": "oil-cooler-interface-envelope",
+      "semanticRepresentation": "p2-interface-envelope",
+      "widthMillimeters": 90
+    },
+    {
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "bodyName": "oil.pressure-gallery__main-pressure-flow-envelope",
+      "calculationDependencies": [
+        "THERM-OIL-FLOW",
+        "OPEN-BEARING-001"
+      ],
+      "category": "oil",
+      "centerMillimeters": [
+        0,
+        -48,
+        -62
+      ],
+      "lengthMillimeters": 395,
+      "partID": "oil.pressure-gallery",
+      "previewVisible": false,
+      "primitive": "cylinder",
+      "radiusMillimeters": 7,
+      "role": "main-pressure-flow-envelope",
+      "semanticRepresentation": "p2-fluid-envelope"
+    }
+  ],
+  "coveredSemanticPartCount": 168,
+  "geometryChecks": {
+    "bankAngleDegrees": 90,
+    "boreMillimeters": 86.0,
+    "cylinderPitchMillimeters": 96.0,
+    "deckHeightMillimeters": 224.0,
+    "maximumConnectingRodResidualMillimeters": 0.0,
+    "staticCrankAngleDegrees": 30,
+    "strokeMillimeters": 86.0
+  },
+  "primitiveContract": [
+    "symmetric-extruded-circle",
+    "symmetric-extruded-rectangle"
+  ],
+  "provenance": {
+    "generatorSHA256": "74c1f273395908b1b6d82bd50726ef937e751bd2fe7904b0ed40d18f36c31c46",
+    "mechanicalAnalysisSHA256": "ae4c3e29cf7b67b62e5f5783380dc6084f2a5d0838c67fcb678466d6bae96834",
+    "requirementsSHA256": "e09b40a31cf3ca8c12d817b91d832e97004dfb88a38167e616557e206c204add",
+    "semanticArchitectureSHA256": "c12fd0b0bee1543488004c5467d3201d79fcd74bd6007332b091f1727d91c8d9",
+    "thermalAnalysisSHA256": "fd4d94ecb8d195e4e001503d14b5f8bc0b13206bb55aa2a1fe3d6834fd2d68f1"
+  },
+  "representationCounts": {
+    "p2-bore-envelope": 8,
+    "p2-flow-envelope": 6,
+    "p2-fluid-envelope": 12,
+    "p2-fluid-interface": 8,
+    "p2-interface-envelope": 26,
+    "p2-motion-envelope": 32,
+    "p2-rotating-envelope": 55,
+    "p2-service-envelope": 45,
+    "p2-structural-envelope": 6,
+    "p2-thermal-envelope": 4
+  },
+  "schemaVersion": "professional-v8.cad-source-manifest.v1",
+  "semanticPartCount": 168,
+  "unsupportedManufacturingDetails": [
+    "hollow coolant jackets and galleries",
+    "combustion chambers and gas-exchange ports",
+    "bearing oil films, clearances, and surface finishes",
+    "cast and forged wall sections, fillets, fasteners, and tolerances",
+    "seals, rings, valve seats, springs, timing drive, and accessory drive"
+  ]
+}

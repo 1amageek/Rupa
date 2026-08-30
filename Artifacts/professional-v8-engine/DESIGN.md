@@ -267,6 +267,62 @@ representation or report as missing.
    source identities required by the complete assembly inventory.
 6. CAD is source authority. The preview and evaluated Mesh are evidence only.
 
+### P2 CAD representation contract
+
+V8-C uses only the public Agent CLI's supported symmetric extruded-circle and
+extruded-rectangle commands. A retained CAD body is accepted only when
+`cad-source-manifest.json` maps its unique body name to one of the 168 semantic
+part IDs and declares the same P2 representation class and calculation
+dependencies as `semantic-architecture.json`.
+
+```mermaid
+flowchart LR
+    Architecture["168 semantic parts\n19 datums"]
+    Generator["Requirements-bound\nCAD generator"]
+    Manifest["Body-to-part manifest"]
+    Batch["One public CLI\natomic batch"]
+    CAD["Native .swcad\nsource authority"]
+    Reload["Independent reload\nmeasure + topology"]
+    Mesh["Derived viewer Mesh"]
+
+    Architecture --> Generator --> Manifest
+    Generator --> Batch --> CAD --> Reload --> Mesh
+    Manifest --> Reload
+```
+
+Solid primitives may represent structural, rotating, motion, service, bore, or
+fluid *envelopes* according to the semantic contract. They do not become
+hollow coolant jackets, galleries, ports, combustion chambers, bearing oil
+films, cast wall sections, or finished forgings. The complete source retains
+both banks. Hiding the left exterior in the generated preview is a presentation
+cutaway only and cannot remove source bodies or semantic coverage.
+
+### Executed P2 CAD result
+
+The exact public request is
+[create-professional-v8-batch.json](create-professional-v8-batch.json), the
+body-to-part authority is
+[cad-source-manifest.json](cad-source-manifest.json), and the native editable
+artifact is [professional-v8.swcad](professional-v8.swcad). The independent
+runtime evidence is [verification-cad.json](verification-cad.json).
+
+| Gate | Executed result |
+|---|---:|
+| Public Agent batch | 203 commands, one history entry, one evaluation pass |
+| Semantic coverage | 168 / 168 parts |
+| Native CAD source | 202 solids, 202 profiles, 404 source features |
+| Reloaded analytic dimensions | 86 mm bore, 65 mm main journal |
+| B-Rep topology | 202 bodies, 1,212 faces, 2,424 edges, 1,616 vertices |
+| Derived viewer Mesh | 202 bodies, 4,600,116 triangles |
+| Evaluated package bounds | 664 × 846 × 528 mm |
+
+The CLI emitted one informational workspace-scale recommendation because the
+846 mm system envelope exceeds the default comfortable 800 mm range. This is
+caused by the outside-V turbos and vehicle heat-exchanger interfaces; it is not
+a geometry or transaction failure. The deterministic preview is rendered from
+the same manifest primitives, is not a Rupa viewport capture, and never owns
+geometry authority.
+
 ### Hard rejection conditions
 
 - output or torque is stated without a complete speed/torque relation;

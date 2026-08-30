@@ -123,6 +123,13 @@
     "drySumpStages": 6,
     "pistonOilJets": 8
   },
+  "cad": {
+    "staticCrankAngleDegrees": 30,
+    "previewCutawayBank": "L",
+    "previewCylinderSegments": 20,
+    "minimumSemanticParts": 168,
+    "maximumBodyCount": 256
+  },
   "tolerances": {
     "energyClosureRelative": 1e-09,
     "targetPowerWatts": 1,
