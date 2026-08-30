@@ -156,3 +156,8 @@ conflicting drift, establish/compare immutability, fixed score denominators,
 serial/parallel byte identity, deterministic fixture round-trip, bounded
 encoding, and rejection of partial, oracle-invalid, infrastructure-invalid,
 tampered, or mismatched evidence.
+`CADBenchmarkIntegratedExecutionTests` runs in isolation because whole-run
+wall time is its correctness boundary. It applies the checked-in concurrency and
+whole-run deadline policy through all 100 production controller/oracle paths,
+requires lifecycle and registration drain, and compares both established and
+compared canonical report bytes with the committed reference fixture.

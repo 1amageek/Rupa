@@ -18,14 +18,12 @@ expectation and live project value internally. It is a testable composition modu
 modeling command, a renderer, a Mesh editor, a CLI, an MCP server, or an LLM
 integration.
 
-T12-0 fixes the responsibility and evidence contract. Subsequent work proceeds
-vertically by case instead of implementing catalog, oracle, runner, and report
-layers for all categories in advance. The existing 100 IDs are target
-specifications. A case becomes verified only after its candidate contract,
-production route, exact oracle, failure behavior, telemetry, focused tests,
-designer gate review, and commit are all complete. `LIN-001` is the first case;
-no later case or general all-category engine may be used to claim its evidence.
-This document remains the authority for those cumulative contracts.
+T12-0 fixed the responsibility and evidence contract, and implementation then
+proceeded vertically through all 100 cases. Every case and category gate now
+has production-route, exact-oracle, failure, telemetry, focused-test, designer-
+review, and commit evidence. Aggregate execution is a separate child component
+that composes those completed paths without replacing their evidence. This
+document remains the authority for the cumulative contracts.
 
 ## Responsibilities and Boundaries
 
@@ -143,7 +141,7 @@ source entities and exact B-Rep properties through the immutable final view.
 | [RupaProject design](../RupaProject/DESIGN.md) | depends on | actor-backed staging/publication and no-retry semantics | Owns source transactions and publication coordinates. | A benchmark retry is never allowed after a published mutation. |
 | [RupaCore design](../RupaCore/DESIGN.md) | depends on | source identity, sketch summaries, topology snapshots, and measurements | Supplies the immutable source/B-Rep observations used by the oracle. | Tessellated Mesh and renderer output are not geometry authority. |
 | [Benchmark JSON adapter](../RupaAgentCADBenchmarkJSONAdapter/DESIGN.md) | used by | activated context/executor, explicit decision codecs, sanitized result | Binds a versioned external JSON decision to the same candidate protocol and production/oracle route. | JSON, fingerprints, byte limits, process I/O, and error envelopes remain outside this module. |
-| [CAD Benchmark Aggregate Execution](Aggregate/DESIGN.md) | child | manifest-ordered complete-run composition and deterministic regression evidence | Composes the reviewed single-case paths after all 100 case gates. | It cannot change category truth, activation order, or single-case wire contracts. |
+| [CAD Benchmark Aggregate Execution](Aggregate/DESIGN.md) | child | manifest-ordered complete-run composition, measured policy, immutable baselines, and canonical reporting | Composes the reviewed single-case paths after all 100 case gates. | It cannot change category truth, activation order, or single-case wire contracts. |
 
 ## Architecture
 
@@ -2634,15 +2632,15 @@ contract/design is updated before retrying the same case. After the last case
 of a category, a cumulative category gate reviews the shared contract against
 all committed cases before the next category begins.
 
-### Current activation boundary after CMP-001 through CMP-007
+### Historical activation checkpoint after CMP-001 through CMP-007
 
 TRN-001 through TRN-008 have crossed their individual vertical gates. The
 transform executor prefix contains exactly 88 IDs: LIN-001...012,
 REC-001...012, CIR-001...012, ANG-001...016, BOX-001...012, CYL-001...008,
-CON-001...008, and TRN-001...008. Compound activation is a separate boundary;
-the benchmark-internal authority now advances to exactly 95 through the
+CON-001...008, and TRN-001...008. Compound activation was a separate boundary;
+the benchmark-internal authority advanced to exactly 95 through the
 CMP-001...CMP-007 contracts above. The separately owned external adapter and
-CLI contracts advance to the same reviewed 95-ID transport boundary in this
+CLI contracts advanced to the same reviewed 95-ID transport boundary in that
 snapshot; their sibling designs own the transport details and aggregate digest.
 
 The transform action is a single bounded value containing translation, the
@@ -2701,9 +2699,12 @@ appending the actual bounded TRN-007 request bytes freezes the 87-request
 aggregate as `d1c0aaf385f5f67658a5052f26f3b38cf4970ce5377a9f282e8022f3dcd482ec`, and
 appending the actual bounded TRN-008 request bytes freezes the 88-request
 aggregate as `8a8c89deee4c596749cd6411823ab475bfd13ef7da7ccbff1c66b0425ee53795`.
-The transform checkpoint used candidate-response schema v7; the current
-compound boundary uses schema v8 and rejects v1...v7 before decision decoding.
-The current 95-request aggregate is owned by the sibling adapter/CLI designs.
+The transform checkpoint used candidate-response schema v7; the compound
+checkpoint used schema v8 and rejected v1...v7 before decision decoding. Its
+95-request aggregate is owned by the sibling adapter/CLI designs. The current
+schema remains v8, authority is all 100 reviewed IDs, and the current aggregate
+request digest is
+`e7dac9bbeeec1b6f5198d9a89c4a8254eabba74df39389576fc2fdc4956b2767`.
 Request/live context identity, candidate privacy, bounded I/O, and the JSON/CLI
 process routes remain the adapter and executable's respective responsibilities.
 
@@ -2873,11 +2874,11 @@ Cases share no workspace, controller, registration lease, package, output file,
 mutable static fixture, or generated identifier. Activation and all individual
 case/category gates run at concurrency 1. No parallel scheduler or parallel
 performance claim is introduced while any target specification remains
-unverified. Only after all 100 case and category gates pass may the integration
-work compare the reviewed serial run with explicit bounded concurrency. That
-later run records requested and observed concurrency, preserves result
-equivalence, and reports MainActor/project-actor serialization rather than
-describing scheduler intent as parallel CAD execution.
+unverified. After all 100 case and category gates passed, integration compared
+the reviewed serial run with bounded concurrency one and two, recorded requested
+and observed concurrency, preserved result equivalence, and measured MainActor
+serialization. Non-repeatable concurrency-two speedup selected the checked-in
+conservative concurrency-one policy with a 38-second deadline.
 
 ### 9. Resource bounds and measurement rule
 
@@ -2911,7 +2912,9 @@ registration, or inability to terminate work is infrastructure failure.
 The deterministic reference-plan candidate is a control subject. Its result
 proves only the activated case's candidate contract, production Agent route,
 project transaction, exact source/B-Rep oracle, binary outcome, and telemetry.
-Aggregate report arithmetic is not claimed until the post-100 integration.
+The completed post-100 integration owns the fixed 100-case aggregate score,
+immutable baselines, and canonical report fixture; these remain control-path
+evidence rather than reasoning evidence.
 The reference candidate does not measure language understanding, planning
 quality, or LLM reasoning.
 

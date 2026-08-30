@@ -131,19 +131,19 @@ flowchart LR
     separately.
 11. T12 keeps a versioned capability-availability baseline/digest separate from
     the evidence-derived execution-regression baseline/digest. The latter is
-    established or updated only by a complete valid production run; exact
+    established only by a complete valid production run and is never implicitly
+    updated; exact
     environment/catalog/capability drift is explicit, and infrastructure or
     oracle failure never becomes a canonical case failure.
-12. The 100 IDs are target specifications, not implementation claims. T12
-    activates one case at a time beginning with `LIN-001`; the next case is
-    blocked until production-route reachability, authority/rollback, exact
-    oracle observability, tolerance/plane semantics, timeout/resource telemetry,
-    and candidate information separation are reviewed and committed.
-13. Case activation and category gates use concurrency 1. Parallel measurement,
-    aggregate scoring/reporting, and execution-baseline establishment begin only
-    after all 100 vertical gates pass.
-14. The external-Agent JSON adapter accepts only the twenty gate-reviewed IDs
-    `LIN-001`...`LIN-012` and `REC-001`...`REC-008`. It fingerprints only the
+12. The 100 IDs retain individual production-route, authority/rollback, exact
+    oracle, tolerance/plane, timeout/resource, candidate-separation, review, and
+    commit evidence; catalog presence alone is not an implementation claim.
+13. Case activation and category gates used concurrency one. The completed
+    post-100 integration adds measured bounded scheduling, immutable baselines,
+    fixed-denominator scoring, and a canonical report without replacing the
+    individual evidence.
+14. The external-Agent JSON adapter accepts the complete 100 gate-reviewed IDs.
+    It fingerprints only the
     candidate-visible context, passes the decoded decision through the same
     benchmark executor/controller/oracle path at concurrency 1, and cannot
     expose private expectations, activate later cases, retry a publication, or
@@ -194,7 +194,7 @@ sequenceDiagram
     A-->>B: candidate step result
     B->>O: final immutable view + typed output bindings
     O-->>B: binary checks + typed outcome + measured evidence
-    Note over C,O: next case remains blocked until designer gate review and commit
+    Note over C,O: all 100 case paths retain their individual reviewed evidence
 ```
 
 The separately authorized external process composes above `Candidate`: the
@@ -242,7 +242,7 @@ reference candidate.
 | Make Editable authority | Project/RupaKit tests for exact snapshot, CAD/modeling retention, presentation switch, provenance, zero-copy handoff, stale/cancel rollback, and one history entry. |
 | Agent routing | Runtime tests proving each request reaches the registered workspace use case and preserves typed stale/cancel/no-retry failures. |
 | T10 capability fixture | Agent CAD route, representation transition, application-owned save/load, renderer triangle traversal, and deterministic presentation output are exercised through the existing path. The fixture is not evidence of T11 L2 dimensional coherence, semantic bicycle parts, interfaces, manufacturing readiness, structural safety, or certification. |
-| T12 benchmark contract | `RupaAgentCADBenchmark` keeps exactly 100 stable target specifications but proves implementation one case at a time. Every case requires an actual registered-controller route, exact source/B-Rep oracle, failure evidence, planning/route/oracle/total-wall telemetry with action/command/read/entity counts, designer gate review, and commit; categories receive cumulative gates. Parallel measurement, fixed-denominator aggregate scoring/reporting, and execution baseline follow only after all 100 gates. A reference-plan result is control-path evidence, not LLM reasoning evidence. |
+| T12 benchmark contract | `RupaAgentCADBenchmark` preserves all 100 individual production-route/oracle gates and composes them through serial replay, measured bounded scheduling, immutable capability/execution baselines, fixed-denominator scoring, and a canonical report. A reference-plan result is control-path evidence, not LLM reasoning evidence. |
 | T12 external candidate adapter | Golden JSON, bounded decode, fingerprint mismatch, inactive-case, process exit, privacy scan, and actual line/rectangle process tests prove that an external response reaches the same activated executor and exact oracle without exposing private expectations. |
 | Portability | Focused Native runtime tests and compile/link evidence only for portable targets supported by their dependency graph; unavailable target entry failures are reported, not treated as success. |
 
