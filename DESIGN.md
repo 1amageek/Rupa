@@ -2,9 +2,10 @@
 
 ## Purpose and Scope
 
-This is the system design master for the Rupa system. It indexes three separate
+This is the system design master for the Rupa system. It indexes four separate
 scopes: T10 Agent-to-project geometry integration, T11 professional bicycle
-reference design, and T12 Agent CAD basic-geometry benchmarking. T10 connects
+reference design, T12 Agent CAD basic-geometry benchmarking, and the
+professional V8 engineering-reference artifact. T10 connects
 the already implemented Agent CAD route and T09 Authored Mesh use cases without
 adding a second project authority or a modeling-specific transport. T11 defines
 a bounded L2 engineering-reference design and evidence contract; it does not
@@ -16,9 +17,11 @@ general transport/LLM integration.
 
 This document has no parent. Its direct children are the
 [RupaKit package design](RupaKit/DESIGN.md), which indexes the changed module
-designs, and the [professional bicycle reference design](Artifacts/professional-bicycle/DESIGN.md),
+designs; the [professional bicycle reference design](Artifacts/professional-bicycle/DESIGN.md),
 which defines the T11 engineering-reference acceptance boundary without adding
-production code. The T12 exactly-100-case benchmark design is reached through
+production code; and the [professional V8 design](Artifacts/professional-v8-engine/DESIGN.md),
+which owns the engine requirement, analysis, CAD, and claim boundary. The T12
+exactly-100-case benchmark design is reached through
 the RupaKit package design rather than being a direct system child. The T09
 Geometry/Core/Project/Mesh contracts remain the verified lower foundation. T10
 changes only their application and Agent composition boundary; T11 consumes
@@ -51,8 +54,9 @@ the final immutable source/B-Rep snapshot.
 | [RupaKit package](RupaKit/DESIGN.md) | child | T10/T12 dependency and verification composition | Indexes Project, RupaKit, AgentProtocol, AgentRuntime, benchmark, JSON-adapter, and dedicated-CLI ownership. | Details remain in the owning module. |
 | [CAD/Mesh responsibility](Rupa/CAD_MESH_RESPONSIBILITY_CONTRACT.md) | depends on | CAD modeling and Authored Mesh presentation authority | Defines retained representation meaning. | A derived evaluation snapshot is never persisted source. |
 | [State/project contract](Rupa/STATE_AND_PROJECT_CONTRACT.md) | depends on | exact coordinates, staging, history, rollback, save ownership | Defines the sole project publication lifecycle. | Agent mutations never bypass `ProjectController`. |
-| [Current task progress](RupaKit/PROGRESS.md) | coordinates with | work order and evidence ownership | Tracks the cumulative T10/T11/T12 design, implementation, and integration proof. | A design checkbox is not behavior evidence. |
+| [Current task progress](RupaKit/PROGRESS.md) | coordinates with | work order and evidence ownership | Tracks the cumulative T10/T11/T12 and professional-V8 design, implementation, and integration proof. | A design checkbox is not behavior evidence. |
 | [Professional bicycle reference](Artifacts/professional-bicycle/DESIGN.md) | child | T11 L2 fidelity, provenance, CAD authority, and rejection contract | Defines the bounded engineering-reference outcome for a later Agent-generated bicycle assembly. | It is a design/acceptance contract; it does not claim manufacturing, safety, certification, or production implementation. |
+| [Professional V8 reference](Artifacts/professional-v8-engine/DESIGN.md) | child | Engine requirement, thermodynamic/mechanical analysis, semantic CAD, and release-claim boundary | Defines one 4.0 L twin-turbo road/track engineering reference and the evidence required before its CAD can be accepted. | Calculation and CAD evidence do not replace FEA, CFD, combustion development, dyno durability, emissions, or production validation. |
 
 ## Architecture
 
@@ -85,8 +89,15 @@ flowchart LR
         Oracle --> Gate["Telemetry + designer gate + commit"]
         Gate --> Active
     end
+    subgraph V8["Professional V8 reference branch"]
+        V8Req["450 kW / 750 N·m\nroad-track requirements"] --> V8Thermal["Power and thermal model"]
+        V8Thermal --> V8Mechanical["Cranktrain and subsystem design"]
+        V8Mechanical --> V8CAD["Semantic CAD reference"]
+        V8CAD --> V8Evidence["Reload, Mesh, calculation, and claim gates"]
+    end
     Runtime -. "observed by T11-R" .-> Sources
     Runtime -. "route observed by T12-0" .-> AgentRoute
+    AgentRoute -. "used for semantic V8 CAD" .-> V8CAD
 ```
 
 ## Contracts and Invariants
@@ -244,6 +255,7 @@ reference candidate.
 | T10 capability fixture | Agent CAD route, representation transition, application-owned save/load, renderer triangle traversal, and deterministic presentation output are exercised through the existing path. The fixture is not evidence of T11 L2 dimensional coherence, semantic bicycle parts, interfaces, manufacturing readiness, structural safety, or certification. |
 | T12 benchmark contract | `RupaAgentCADBenchmark` preserves all 100 individual production-route/oracle gates and composes them through serial replay, measured bounded scheduling, immutable capability/execution baselines, fixed-denominator scoring, and a canonical report. A reference-plan result is control-path evidence, not LLM reasoning evidence. |
 | T12 external candidate adapter | Golden JSON, bounded decode, fingerprint mismatch, inactive-case, process exit, privacy scan, and actual line/rectangle process tests prove that an external response reaches the same activated executor and exact oracle without exposing private expectations. |
+| Professional V8 reference | Recomputed power/thermal/mechanical invariants, cited provenance, semantic CAD inventory, save/load validation, viewer evaluation, and explicit unresolved production gates prove only the bounded engineering-reference claim. |
 | Portability | Focused Native runtime tests and compile/link evidence only for portable targets supported by their dependency graph; unavailable target entry failures are reported, not treated as success. |
 
 Changes to Agent wire values, project authority, representation selection, file
