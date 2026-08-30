@@ -1718,6 +1718,155 @@ func cliExecutableInspectsSketchTopologyAndCurvesAsJSON() async throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliExecutableInspectsExactLiveSceneGraphAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(
+        session.document.productMetadata.sceneNodes.values.first { node in
+            node.reference?.kind == .body && node.reference?.featureID == bodyFeatureID
+        }?.id
+    )
+    let transform = Transform3D(matrix: try Matrix4x4(values: [
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        0.75, -0.25, 0.05, 1,
+    ]))
+    _ = try session.execute(
+        .setSceneNodeTransform(id: bodySceneNodeID, localTransform: transform)
+    )
+    _ = try session.execute(
+        .setSceneNodeVisibility(id: bodySceneNodeID, isVisible: false)
+    )
+    let generation = session.generation
+    let expectedRootSceneNodeIDs = session.document.productMetadata.rootSceneNodeIDs
+    let server = AgentCommandController()
+    server.register(session: session, id: sessionID)
+    let listener = AgentSocketListener(
+        handler: AgentCommandHandler(controller: server),
+        socketPath: AgentSocketPath(socketURL.path)
+    )
+
+    try await listener.start()
+    do {
+        let result = try await runCLI([
+            "inspect",
+            "scene-graph",
+            "--mode",
+            "live",
+            "--session-id",
+            sessionID.uuidString,
+            "--expected-generation",
+            "\(generation.value)",
+            "--agent-socket",
+            socketURL.path,
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(
+            SceneGraphSnapshotResult.self,
+            from: result.standardOutputData
+        )
+        let bodyNode = try #require(response.nodes.first { $0.id == bodySceneNodeID })
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.generation == generation)
+        #expect(response.dirty)
+        #expect(response.rootSceneNodeIDs == expectedRootSceneNodeIDs)
+        #expect(bodyNode.reference?.featureID == bodyFeatureID)
+        #expect(bodyNode.localTransform == transform)
+        #expect(!bodyNode.isVisible)
+
+        let staleResult = try await runCLI([
+            "inspect",
+            "scene-graph",
+            "--mode",
+            "live",
+            "--session-id",
+            sessionID.uuidString,
+            "--expected-generation",
+            "\(generation.value + 1)",
+            "--agent-socket",
+            socketURL.path,
+            "--json",
+        ])
+        #expect(staleResult.terminationStatus == CLIExitCode.data.rawValue)
+
+        let unchangedResult = try await runCLI([
+            "inspect",
+            "scene-graph",
+            "--mode",
+            "live",
+            "--session-id",
+            sessionID.uuidString,
+            "--expected-generation",
+            "\(generation.value)",
+            "--agent-socket",
+            socketURL.path,
+            "--json",
+        ])
+        let unchanged = try JSONDecoder().decode(
+            SceneGraphSnapshotResult.self,
+            from: unchangedResult.standardOutputData
+        )
+        #expect(unchangedResult.terminationStatus == CLIExitCode.success.rawValue)
+        #expect(unchanged.generation == generation)
+        #expect(unchanged.nodes.first { $0.id == bodySceneNodeID }?.localTransform == transform)
+        await listener.stop()
+    } catch {
+        await listener.stop()
+        throw error
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func cliSceneGraphServicePreservesTypedFailureAndRejectsMismatchedResponse() throws {
+    let sessionID = UUID()
+    let stale = EditorError(
+        code: .documentGenerationMismatch,
+        message: "stale scene graph"
+    )
+    let staleClient = SceneGraphResponseAgentClient(response: .failure(stale))
+
+    do {
+        _ = try CLIService().sceneGraphSnapshotLiveSession(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(4),
+            client: staleClient
+        )
+        Issue.record("Expected the typed stale-generation failure.")
+    } catch let error as EditorError {
+        #expect(error.code == .documentGenerationMismatch)
+    }
+
+    let mismatchedClient = SceneGraphResponseAgentClient(response: .parameters(
+        ParameterListResult(
+            message: "mismatched response",
+            generation: DocumentGeneration(4),
+            dirty: false,
+            parameters: [],
+            diagnostics: []
+        )
+    ))
+    do {
+        _ = try CLIService().sceneGraphSnapshotLiveSession(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(4),
+            client: mismatchedClient
+        )
+        Issue.record("Expected an incompatible Agent response failure.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandFailed)
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliExecutableInspectsConstructionPlanesAndSnapAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {
@@ -10517,6 +10666,22 @@ private struct CLIDomainRenameLowering: DomainCommandLowering {
                 ]
             )
         )
+    }
+}
+
+private final class SceneGraphResponseAgentClient: AgentClientProtocol {
+    let response: AgentResponse
+
+    init(response: AgentResponse) {
+        self.response = response
+    }
+
+    func send(_ request: AgentRequest) throws -> AgentResponse {
+        response
+    }
+
+    func send(_ request: AgentRequest) async throws -> AgentResponse {
+        response
     }
 }
 

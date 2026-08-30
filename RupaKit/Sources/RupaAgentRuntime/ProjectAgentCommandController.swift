@@ -183,6 +183,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
              .selectionMeasurement,
              .resolveSnap,
              .constructionPlaneSummary,
+             .sceneGraphSnapshot,
              .designDisplaySnapshot,
              .patternArraySummary,
              .meshSummary,

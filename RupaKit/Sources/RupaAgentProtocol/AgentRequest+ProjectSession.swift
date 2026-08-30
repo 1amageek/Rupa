@@ -54,6 +54,7 @@ public extension AgentRequest {
              .evaluate(let id, _),
              .measure(let id, _),
              .constructionPlaneSummary(let id, _),
+             .sceneGraphSnapshot(let id, _),
              .designDisplaySnapshot(let id, _),
              .patternArraySummary(let id, _),
              .meshSummary(let id, _),

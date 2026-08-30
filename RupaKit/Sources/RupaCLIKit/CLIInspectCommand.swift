@@ -6,6 +6,7 @@ public struct InspectCommand: ParsableCommand {
         abstract: "Inspect source and generated CAD references for automation workflows.",
         subcommands: [
             InspectConstructionPlanesCommand.self,
+            InspectSceneGraphCommand.self,
             InspectSketchesCommand.self,
             InspectTopologyCommand.self,
             InspectCurvesCommand.self,

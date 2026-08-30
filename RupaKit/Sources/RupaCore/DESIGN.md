@@ -26,7 +26,10 @@ Parent: [RupaKit package design](../../DESIGN.md). Children: none for T09.
   replaying operation/output rules;
 - replacing only the matching asset after full success and preserving all
   Product/CAD/selection/provenance values;
-- semantic document validation and Core command results.
+- semantic document validation and Core command results;
+- immutable, deterministic Product scene-graph projections that expose
+  identity, hierarchy, source linkage, visibility, lock state, and transforms
+  without evaluating or copying CAD/Mesh geometry.
 
 It does not own Mesh algorithms, plan execution internals, project package I/O,
 project revision publication, view projection, or Agent/CLI/MCP transport.
@@ -120,6 +123,9 @@ unique copy to satisfy a single scene selection.
    staging and verification.
 9. Core does not make a derived evaluation snapshot an Authored Mesh source;
    explicit Make Editable remains a separate command.
+10. A scene-graph result reports Product scene nodes in deterministic ID order
+    and preserves root ordering. It does not evaluate CAD/Mesh geometry, mutate
+    source, or treat CAD-local body bounds as placed geometry.
 
 ### Executor substitution boundary
 

@@ -202,6 +202,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             try container.encode(value, forKey: .result)
         case .constructionPlaneSummary(let value):
             try container.encode(value, forKey: .result)
+        case .sceneGraphSnapshot(let value):
+            try container.encode(value, forKey: .result)
         case .designDisplaySnapshot(let value):
             try container.encode(value, forKey: .result)
         case .patternArraySummary(let value):
@@ -329,6 +331,10 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
         case "document.constructionPlaneSummary":
             return .constructionPlaneSummary(
                 try container.decode(ConstructionPlaneSummaryResult.self, forKey: .result)
+            )
+        case "document.sceneGraphSnapshot":
+            return .sceneGraphSnapshot(
+                try container.decode(SceneGraphSnapshotResult.self, forKey: .result)
             )
         case "document.designDisplaySnapshot":
             return .designDisplaySnapshot(
@@ -461,6 +467,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             "snap.resolve"
         case .constructionPlaneSummary:
             "document.constructionPlaneSummary"
+        case .sceneGraphSnapshot:
+            "document.sceneGraphSnapshot"
         case .designDisplaySnapshot:
             "document.designDisplaySnapshot"
         case .patternArraySummary:
@@ -543,6 +551,7 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
              ("selection.measure", .selectionMeasurement),
              ("snap.resolve", .snapResolution),
              ("document.constructionPlaneSummary", .constructionPlaneSummary),
+             ("document.sceneGraphSnapshot", .sceneGraphSnapshot),
              ("document.designDisplaySnapshot", .designDisplaySnapshot),
              ("document.patternArraySummary", .patternArraySummary),
              ("document.meshSummary", .meshSummary),

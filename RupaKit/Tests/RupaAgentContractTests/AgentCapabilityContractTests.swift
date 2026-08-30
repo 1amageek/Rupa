@@ -48,6 +48,7 @@ import SwiftCAD
     #expect(capabilities.contains("createSectionPlane"))
     #expect(capabilities.contains("describeConstructionPlanes"))
     #expect(capabilities.contains("constructionPlaneSummary"))
+    #expect(capabilities.contains("sceneGraphSnapshot"))
     #expect(capabilities.contains("designDisplaySnapshot"))
     #expect(capabilities.contains("describeSavedViews"))
     #expect(capabilities.contains("createSavedView"))

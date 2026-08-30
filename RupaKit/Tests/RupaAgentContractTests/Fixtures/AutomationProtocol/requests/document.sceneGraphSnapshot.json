@@ -1,0 +1,11 @@
+{
+  "jsonrpc": "2.0",
+  "id": "document.sceneGraphSnapshot-1",
+  "method": "document.sceneGraphSnapshot",
+  "params": {
+    "sessionID": "00000000-0000-0000-0000-000000000001",
+    "expectedGeneration": {
+      "value": 2
+    }
+  }
+}

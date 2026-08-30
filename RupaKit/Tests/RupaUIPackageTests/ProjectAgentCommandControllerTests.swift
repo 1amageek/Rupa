@@ -70,6 +70,65 @@ func projectAgentAndUIShareOneWorkspaceAuthority() async throws {
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
+func projectAgentSceneGraphReadUsesPublishedWorkspaceAndRejectsStaleGeneration() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(
+        session.document.productMetadata.sceneNodes.values.first { node in
+            node.reference?.kind == .body && node.reference?.featureID == bodyFeatureID
+        }?.id
+    )
+    let transform = Transform3D(matrix: try Matrix4x4(values: [
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        -0.7, 0.4, 0.02, 1,
+    ]))
+    _ = try session.execute(
+        .setSceneNodeTransform(id: bodySceneNodeID, localTransform: transform)
+    )
+    _ = try session.execute(
+        .setSceneNodeVisibility(id: bodySceneNodeID, isVisible: false)
+    )
+    let (_, workspace) = try await makeProjectWorkspace(document: session.document)
+    let controller = ProjectAgentCommandController()
+    let sessionID = try await controller.register(workspace: workspace)
+    let published = try #require(workspace.view)
+
+    let response = await controller.handle(
+        .sceneGraphSnapshot(
+            sessionID: sessionID,
+            expectedGeneration: published.documentGeneration
+        )
+    )
+    guard case .sceneGraphSnapshot(let snapshot) = response else {
+        Issue.record("Expected the production Agent controller to return a scene graph.")
+        return
+    }
+    let bodyNode = try #require(snapshot.nodes.first { $0.id == bodySceneNodeID })
+    #expect(snapshot.generation == published.documentGeneration)
+    #expect(bodyNode.reference?.featureID == bodyFeatureID)
+    #expect(bodyNode.localTransform == transform)
+    #expect(!bodyNode.isVisible)
+
+    let stale = await controller.handle(
+        .sceneGraphSnapshot(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(published.documentGeneration.value + 1)
+        )
+    )
+    guard case .failure(let error) = stale else {
+        Issue.record("Expected a typed stale-generation failure.")
+        return
+    }
+    #expect(error.code == .documentGenerationMismatch)
+    #expect(workspace.view?.documentGeneration == published.documentGeneration)
+    #expect(workspace.view?.publicationSequence == published.publicationSequence)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
 func staleAgentMutationLosesToUICommitWithoutPartialPublication() async throws {
     let (project, workspace) = try await makeProjectWorkspace(
         document: .empty(named: "Initial")

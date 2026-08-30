@@ -121,6 +121,10 @@ public enum AgentRequest: Codable, Equatable, Sendable {
         sessionID: UUID,
         expectedGeneration: DocumentGeneration?
     )
+    case sceneGraphSnapshot(
+        sessionID: UUID,
+        expectedGeneration: DocumentGeneration?
+    )
     case designDisplaySnapshot(
         sessionID: UUID,
         expectedGeneration: DocumentGeneration?
@@ -252,6 +256,7 @@ public enum AgentResponse: Codable, Equatable, Sendable {
     case selectionMeasurement(SelectionMeasurementResult)
     case snapResolution(SnapResolutionResult)
     case constructionPlaneSummary(ConstructionPlaneSummaryResult)
+    case sceneGraphSnapshot(SceneGraphSnapshotResult)
     case designDisplaySnapshot(DesignDisplaySnapshotResult)
     case patternArraySummary(PatternArraySummaryResult)
     case meshSummary(MeshSummaryResult)
@@ -339,6 +344,8 @@ public extension AgentRequest {
             "snap.resolve"
         case .constructionPlaneSummary:
             "document.constructionPlaneSummary"
+        case .sceneGraphSnapshot:
+            "document.sceneGraphSnapshot"
         case .designDisplaySnapshot:
             "document.designDisplaySnapshot"
         case .patternArraySummary:

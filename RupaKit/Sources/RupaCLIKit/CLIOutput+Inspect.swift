@@ -1,4 +1,17 @@
+import RupaCore
+
 public extension CLIOutput {
+    static func write(
+        response: SceneGraphSnapshotResult,
+        asJSON: Bool
+    ) throws {
+        try write(
+            response,
+            fallback: "Scene graph snapshot: \(response.nodes.count) nodes.",
+            asJSON: asJSON
+        )
+    }
+
     static func write(
         response: CLIConstructionPlaneSummaryResponse,
         asJSON: Bool

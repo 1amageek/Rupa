@@ -71,6 +71,15 @@ public struct ProjectAgentSnapshotReadExecutor: Sendable {
                     activePlaneID: snapshot.workspaceState.activeConstructionPlaneID
                 )
             )
+        case .sceneGraphSnapshot(_, let expectedGeneration):
+            try requireGeneration(expectedGeneration, in: snapshot)
+            return .sceneGraphSnapshot(
+                SceneGraphSnapshotService().result(
+                    document: snapshot.document.document,
+                    generation: snapshot.documentGeneration,
+                    dirty: snapshot.isDirty
+                )
+            )
         case .designDisplaySnapshot(_, let expectedGeneration):
             try requireGeneration(expectedGeneration, in: snapshot)
             return .designDisplaySnapshot(

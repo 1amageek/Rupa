@@ -688,6 +688,16 @@ public enum AgentCapabilityCatalog {
             failureMode: "Rejects stale generations before reading."
         ),
         capability(
+            "sceneGraphSnapshot",
+            category: .read,
+            summary: "Return deterministic Product scene-node identity, hierarchy, source linkage, visibility, lock state, and local transforms without evaluating CAD or Mesh geometry.",
+            access: .agentRequest,
+            stateEffect: .readOnly,
+            discovery: [.sceneGraphSnapshot],
+            targets: [.document, .sceneNode, .componentInstance, .body],
+            failureMode: "Rejects stale generations before reading and returns no evaluated geometry buffers."
+        ),
+        capability(
             "designDisplaySnapshot",
             category: .read,
             summary: "Return workspace scale, viewport grid scale, interaction scale defaults, ordered UI-visible sketch primitives, profile regions, component definitions, component instances, pattern arrays, saved views, extrude and straight-prism sweep display bodies, evaluated body meshes, and generated topology for Agent viewport planning.",

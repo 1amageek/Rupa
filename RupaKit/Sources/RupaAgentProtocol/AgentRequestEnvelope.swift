@@ -235,6 +235,7 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
              let .redo(sessionID, expectedGeneration),
              let .measure(sessionID, expectedGeneration),
              let .constructionPlaneSummary(sessionID, expectedGeneration),
+             let .sceneGraphSnapshot(sessionID, expectedGeneration),
              let .designDisplaySnapshot(sessionID, expectedGeneration),
              let .patternArraySummary(sessionID, expectedGeneration),
              let .meshSummary(sessionID, expectedGeneration),
@@ -608,6 +609,12 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
         case "document.constructionPlaneSummary":
             let payload = try decodeParams(SessionGenerationParams.self, from: container, method: method)
             return .constructionPlaneSummary(
+                sessionID: payload.sessionID,
+                expectedGeneration: payload.expectedGeneration
+            )
+        case "document.sceneGraphSnapshot":
+            let payload = try decodeParams(SessionGenerationParams.self, from: container, method: method)
+            return .sceneGraphSnapshot(
                 sessionID: payload.sessionID,
                 expectedGeneration: payload.expectedGeneration
             )

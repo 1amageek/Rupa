@@ -22,6 +22,7 @@ import SwiftCAD
     #expect(descriptors.contains { $0.name == "moveBodyEdge" && $0.targets == [.edge] })
     #expect(descriptors.contains { $0.name == "moveBodyVertex" && $0.targets == [.vertex] })
     #expect(descriptors.contains { $0.name == "cadInteractionQualityAssessment" && !$0.requiresSession })
+    #expect(descriptors.contains { $0.name == "sceneGraphSnapshot" && $0.discovery == [.sceneGraphSnapshot] })
     #expect(descriptors.contains { $0.name == "designDisplaySnapshot" && $0.discovery.contains(.designDisplaySnapshot) })
     #expect(descriptors.contains { $0.name == "patternArraySummary" && $0.discovery.contains(.patternArraySummary) })
 }
@@ -1286,6 +1287,10 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
         sessionID: sessionID,
         expectedGeneration: DocumentGeneration(2)
     )
+    let sceneGraphRequest = AgentRequest.sceneGraphSnapshot(
+        sessionID: sessionID,
+        expectedGeneration: DocumentGeneration(2)
+    )
     let displaySnapshotRequest = AgentRequest.designDisplaySnapshot(
         sessionID: sessionID,
         expectedGeneration: DocumentGeneration(2)
@@ -1336,6 +1341,14 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
         ConstructionPlaneSummaryResult(
             activePlaneID: nil,
             planes: []
+        )
+    )
+    let sceneGraphResponse = AgentResponse.sceneGraphSnapshot(
+        SceneGraphSnapshotResult(
+            generation: DocumentGeneration(2),
+            dirty: false,
+            rootSceneNodeIDs: [],
+            nodes: []
         )
     )
     let displaySnapshotResponse = AgentResponse.designDisplaySnapshot(
@@ -1425,6 +1438,7 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
     #expect(try codec.decodeResponse(from: try codec.encode(capabilitiesResponse)) == capabilitiesResponse)
     #expect(try codec.decodeRequest(from: try codec.encode(listRequest)) == listRequest)
     #expect(try codec.decodeRequest(from: try codec.encode(constructionPlaneRequest)) == constructionPlaneRequest)
+    #expect(try codec.decodeRequest(from: try codec.encode(sceneGraphRequest)) == sceneGraphRequest)
     #expect(try codec.decodeRequest(from: try codec.encode(displaySnapshotRequest)) == displaySnapshotRequest)
     #expect(try codec.decodeRequest(from: try codec.encode(patternArraySummaryRequest)) == patternArraySummaryRequest)
     #expect(try codec.decodeRequest(from: try codec.encode(objectDimensionRequest)) == objectDimensionRequest)
@@ -1433,6 +1447,7 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
     #expect(try codec.decodeRequest(from: try codec.encode(expressionRequest)) == expressionRequest)
     #expect(try codec.decodeResponse(from: try codec.encode(listResponse)) == listResponse)
     #expect(try codec.decodeResponse(from: try codec.encode(constructionPlaneResponse)) == constructionPlaneResponse)
+    #expect(try codec.decodeResponse(from: try codec.encode(sceneGraphResponse)) == sceneGraphResponse)
     #expect(try codec.decodeResponse(from: try codec.encode(displaySnapshotResponse)) == displaySnapshotResponse)
     #expect(try codec.decodeResponse(from: try codec.encode(patternArraySummaryResponse)) == patternArraySummaryResponse)
     #expect(try codec.decodeResponse(from: try codec.encode(objectDimensionResponse)) == objectDimensionResponse)

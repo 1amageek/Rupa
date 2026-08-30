@@ -14,6 +14,13 @@ The module owns CLI arguments, user-facing JSON/text output, and translation of
 CLI intent to an injected access API. It does not own Product/CAD/Mesh mutation,
 project evaluation, package entry editing, App lifecycle, or socket placement.
 
+Immutable live inspection includes the Product scene graph returned by the
+bounded `document.sceneGraphSnapshot` Agent request. The `inspect scene-graph`
+adapter exposes root ordering, node identity, source linkage, visibility, lock
+state, child IDs, and local transforms from the registered workspace. It does
+not request evaluated CAD/Mesh buffers, reconstruct placement from CAD-local
+bounds, or introduce a second read or mutation authority.
+
 The current direct file route remains a known transitional implementation until
 ACCESS-D and is not an alternative authority accepted by this design.
 
@@ -42,6 +49,9 @@ flowchart LR
 3. ACCESS-D removes `.auto`, force-file bypass, production endpoint override,
    and the direct `DocumentFileService`/`EditorSession` mutation route.
 4. A live dispatch with uncertain outcome is never replayed through file mode.
+5. `inspect scene-graph` is a live Agent read. It carries the exact session and
+   expected generation, returns a geometry-free immutable snapshot, and fails
+   instead of falling back to direct file decoding.
 
 ## Runtime Flows
 
@@ -64,4 +74,6 @@ permitted after dispatch.
 
 ACCESS-A tests status projection without endpoint leakage. ACCESS-D owns full
 executable syntax, retained-command parity, explicit-mode, and legacy-route
-absence tests.
+absence tests. The scene-graph adapter is verified by exact request routing,
+scene-node transform/visibility JSON projection, stale-generation rejection,
+and an actual bounded CLI-to-Agent process test.

@@ -656,6 +656,25 @@ public final class AgentCommandController: AgentClientProtocol {
                     )
                 }
                 return try run()
+            case .sceneGraphSnapshot:
+                func run() throws -> AgentResponse {
+                    guard case let .sceneGraphSnapshot(sessionID, expectedGeneration) = request else {
+                        throw EditorError(
+                            code: .commandInvalid,
+                            message: "Agent request dispatch expected a different request payload."
+                        )
+                    }
+                    let session = try registry.session(id: sessionID)
+                    try session.store.requireGeneration(expectedGeneration)
+                    return .sceneGraphSnapshot(
+                        SceneGraphSnapshotService().result(
+                            document: session.document,
+                            generation: session.generation,
+                            dirty: session.isDirty
+                        )
+                    )
+                }
+                return try run()
             case .designDisplaySnapshot:
                 func run() throws -> AgentResponse {
                     guard case let .designDisplaySnapshot(sessionID, expectedGeneration) = request else {

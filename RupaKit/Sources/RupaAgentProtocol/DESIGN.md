@@ -82,6 +82,11 @@ flowchart LR
     `RetryDisposition.mustNotRetry`. It means package replacement and
     clean-state publication already happened; clients must refresh and must not
     send the save again.
+11. `document.sceneGraphSnapshot` projects only the immutable Product scene
+    graph in deterministic node order, including root IDs, source linkage,
+    visibility, lock state, child IDs, and local transforms. It does not carry
+    evaluated CAD/Mesh buffers. `document.designDisplaySnapshot` remains the
+    display/evaluated-geometry contract and is not enlarged for navigation.
 
 ## Runtime Flows
 
@@ -115,6 +120,8 @@ state and introduces no target-specific synchronization branch.
 Codec and fixture tests must round-trip each success response, reject malformed
 and over-limit input, preserve exact identities/receipts, prove direct Runtime
 save remains unsupported, and round-trip a `Mutation.save` committed receipt
-with must-not-retry semantics. Any payload change requires rechecking
+with must-not-retry semantics. Scene-graph request/response fixtures must
+preserve exact current node values on round trip and reject stale generations.
+Any payload change requires rechecking
 AgentRuntime mapping, the application router, transport fixtures, capability
 descriptors, package dependencies, and the system workflow.
