@@ -1,0 +1,1950 @@
+{
+  "claimLevel": "P2-engineering-reference",
+  "coordinateSystem": {
+    "units": "meters",
+    "x": "crank-axis-positive-toward-flywheel",
+    "y": "vehicle-lateral-positive-right-bank",
+    "z": "engine-up"
+  },
+  "datums": [
+    {
+      "datumID": "datum.crank-axis",
+      "direction": [
+        1,
+        0,
+        0
+      ],
+      "kind": "axis",
+      "originMeters": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "datumID": "datum.flywheel-face",
+      "kind": "plane",
+      "normal": [
+        1,
+        0,
+        0
+      ],
+      "originMeters": [
+        0.23,
+        0,
+        0
+      ]
+    },
+    {
+      "datumID": "datum.damper-face",
+      "kind": "plane",
+      "normal": [
+        -1,
+        0,
+        0
+      ],
+      "originMeters": [
+        -0.23,
+        0,
+        0
+      ]
+    },
+    {
+      "datumID": "datum.deck.L",
+      "kind": "plane",
+      "normal": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "originMeters": [
+        0,
+        -0.15839191898578664,
+        0.15839191898578667
+      ]
+    },
+    {
+      "datumID": "datum.cylinder-axis.L1",
+      "direction": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "kind": "axis",
+      "originMeters": [
+        -0.14400000000000002,
+        0,
+        0
+      ]
+    },
+    {
+      "datumID": "datum.cylinder-axis.L2",
+      "direction": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "kind": "axis",
+      "originMeters": [
+        -0.048,
+        0,
+        0
+      ]
+    },
+    {
+      "datumID": "datum.cylinder-axis.L3",
+      "direction": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "kind": "axis",
+      "originMeters": [
+        0.048,
+        0,
+        0
+      ]
+    },
+    {
+      "datumID": "datum.cylinder-axis.L4",
+      "direction": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865476
+      ],
+      "kind": "axis",
+      "originMeters": [
+        0.14400000000000002,
+        0,
+        0
+      ]
+    },
+    {
+      "datumID": "datum.deck.R",
+      "kind": "plane",
+      "normal": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "originMeters": [
+        0,
+        0.15839191898578664,
+        0.15839191898578667
+      ]
+    },
+    {
+      "datumID": "datum.cylinder-axis.R1",
+      "direction": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "kind": "axis",
+      "originMeters": [
+        -0.14400000000000002,
+        0,
+        0
+      ]
+    },
+    {
+      "datumID": "datum.cylinder-axis.R2",
+      "direction": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "kind": "axis",
+      "originMeters": [
+        -0.048,
+        0,
+        0
+      ]
+    },
+    {
+      "datumID": "datum.cylinder-axis.R3",
+      "direction": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "kind": "axis",
+      "originMeters": [
+        0.048,
+        0,
+        0
+      ]
+    },
+    {
+      "datumID": "datum.cylinder-axis.R4",
+      "direction": [
+        0.0,
+        0.7071067811865475,
+        0.7071067811865476
+      ],
+      "kind": "axis",
+      "originMeters": [
+        0.14400000000000002,
+        0,
+        0
+      ]
+    },
+    {
+      "datumID": "datum.turbo-axis.L",
+      "direction": [
+        1,
+        0,
+        0
+      ],
+      "kind": "axis",
+      "originMeters": [
+        0,
+        -0.36,
+        0.07
+      ]
+    },
+    {
+      "datumID": "datum.turbo-axis.R",
+      "direction": [
+        1,
+        0,
+        0
+      ],
+      "kind": "axis",
+      "originMeters": [
+        0,
+        0.36,
+        0.07
+      ]
+    },
+    {
+      "datumID": "datum.ht-coolant-out",
+      "direction": [
+        -1,
+        0,
+        0
+      ],
+      "kind": "interface",
+      "originMeters": [
+        -0.18,
+        0,
+        0.32
+      ]
+    },
+    {
+      "datumID": "datum.ht-coolant-in",
+      "direction": [
+        1,
+        0,
+        0
+      ],
+      "kind": "interface",
+      "originMeters": [
+        0.18,
+        0,
+        -0.08
+      ]
+    },
+    {
+      "datumID": "datum.oil-pressure-out",
+      "direction": [
+        -1,
+        0,
+        0
+      ],
+      "kind": "interface",
+      "originMeters": [
+        -0.18,
+        -0.08,
+        -0.14
+      ]
+    },
+    {
+      "datumID": "datum.oil-scavenge-in",
+      "direction": [
+        1,
+        0,
+        0
+      ],
+      "kind": "interface",
+      "originMeters": [
+        0.18,
+        0.08,
+        -0.14
+      ]
+    }
+  ],
+  "fluidInterfaces": [
+    {
+      "designFlowLitersPerMinute": 321.09686,
+      "interfaceID": "interface.ht-coolant",
+      "source": "analysis-thermal.json"
+    },
+    {
+      "designHeatKilowatts": 38.051471,
+      "interfaceID": "interface.lt-coolant",
+      "source": "analysis-thermal.json"
+    },
+    {
+      "designFlowLitersPerMinute": 89.532872,
+      "interfaceID": "interface.oil-cooler",
+      "source": "analysis-thermal.json"
+    }
+  ],
+  "parts": [
+    {
+      "cadRepresentation": "p2-structural-envelope",
+      "calculationDependencies": [
+        "GEO-BORE-001",
+        "GEO-PITCH-001",
+        "GEO-DECK-001"
+      ],
+      "materialIntent": "closed-deck-aluminum",
+      "partID": "structure.block",
+      "subsystem": "short-block"
+    },
+    {
+      "cadRepresentation": "p2-structural-envelope",
+      "calculationDependencies": [
+        "GEO-MAIN-001",
+        "LOAD-MAIN-INTERFACE"
+      ],
+      "materialIntent": "aluminum-bedplate",
+      "partID": "structure.bedplate",
+      "subsystem": "short-block"
+    },
+    {
+      "cadRepresentation": "p2-fluid-envelope",
+      "calculationDependencies": [
+        "THERM-OIL-FLOW",
+        "ARCH-DRY-SUMP"
+      ],
+      "materialIntent": "cast-aluminum",
+      "partID": "structure.lower-crankcase",
+      "subsystem": "lubrication"
+    },
+    {
+      "cadRepresentation": "p2-structural-envelope",
+      "calculationDependencies": [
+        "LOAD-HEAD-CLAMP",
+        "ARCH-VALVE"
+      ],
+      "materialIntent": "aluminum-head",
+      "partID": "head.L",
+      "subsystem": "heads"
+    },
+    {
+      "cadRepresentation": "p2-structural-envelope",
+      "calculationDependencies": [
+        "LOAD-HEAD-CLAMP",
+        "ARCH-VALVE"
+      ],
+      "materialIntent": "aluminum-head",
+      "partID": "head.R",
+      "subsystem": "heads"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "ARCH-CAM"
+      ],
+      "materialIntent": "cast-magnesium-or-aluminum",
+      "partID": "cover.cam.L",
+      "subsystem": "heads"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "ARCH-CAM"
+      ],
+      "materialIntent": "cast-magnesium-or-aluminum",
+      "partID": "cover.cam.R",
+      "subsystem": "heads"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "GEO-MAIN-001",
+        "GEO-CRANKPIN-001"
+      ],
+      "materialIntent": "forged-steel",
+      "partID": "crankshaft",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "DATUM-FLYWHEEL"
+      ],
+      "materialIntent": "forged-steel",
+      "partID": "flywheel-interface",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "OPEN-TORSION"
+      ],
+      "materialIntent": "steel-elastomer-system",
+      "partID": "torsional-damper",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "GEO-MAIN-001",
+        "OPEN-BEARING-001"
+      ],
+      "materialIntent": "supplier-bearing-system",
+      "partID": "bearing.main.1",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "GEO-MAIN-001",
+        "OPEN-BEARING-001"
+      ],
+      "materialIntent": "supplier-bearing-system",
+      "partID": "bearing.main.2",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "GEO-MAIN-001",
+        "OPEN-BEARING-001"
+      ],
+      "materialIntent": "supplier-bearing-system",
+      "partID": "bearing.main.3",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "GEO-MAIN-001",
+        "OPEN-BEARING-001"
+      ],
+      "materialIntent": "supplier-bearing-system",
+      "partID": "bearing.main.4",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "GEO-MAIN-001",
+        "OPEN-BEARING-001"
+      ],
+      "materialIntent": "supplier-bearing-system",
+      "partID": "bearing.main.5",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "ARCH-CAM",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "forged-or-billet-steel",
+      "partID": "camshaft.L.intake",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "ARCH-CAM",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "forged-or-billet-steel",
+      "partID": "camshaft.L.exhaust",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "ARCH-CAM",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "forged-or-billet-steel",
+      "partID": "camshaft.R.intake",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "ARCH-CAM",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "forged-or-billet-steel",
+      "partID": "camshaft.R.exhaust",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-bore-envelope",
+      "calculationDependencies": [
+        "GEO-BORE-001",
+        "LOAD-CYLINDER-PRESSURE"
+      ],
+      "materialIntent": "plasma-coated-aluminum-bore",
+      "partID": "cylinder.L1.liner",
+      "subsystem": "short-block"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-GAS",
+        "LOAD-INERTIA",
+        "THERM-OIL-JET"
+      ],
+      "materialIntent": "forged-aluminum",
+      "partID": "cylinder.L1.piston",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-WRIST-PIN"
+      ],
+      "materialIntent": "hardened-steel",
+      "partID": "cylinder.L1.wrist-pin",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "LOAD-ROD-BUCKLING"
+      ],
+      "materialIntent": "forged-steel",
+      "partID": "cylinder.L1.connecting-rod",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "LOAD-CRANKPIN-BEARING",
+        "OPEN-BEARING-001"
+      ],
+      "materialIntent": "supplier-bearing-system",
+      "partID": "cylinder.L1.big-end-bearing",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.L1.spark-plug",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-COMBUSTION-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.L1.di-injector",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-EMISSIONS-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.L1.pfi-injector",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.L1.ignition-coil",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-fluid-interface",
+      "calculationDependencies": [
+        "THERM-OIL-FLOW",
+        "THERM-OIL-JET"
+      ],
+      "materialIntent": "steel-or-brass-nozzle",
+      "partID": "cylinder.L1.oil-jet",
+      "subsystem": "lubrication"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "temperature-rated-valve-alloy",
+      "partID": "cylinder.L1.intake-valve.1",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "high-temperature-valve-alloy",
+      "partID": "cylinder.L1.exhaust-valve.1",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "temperature-rated-valve-alloy",
+      "partID": "cylinder.L1.intake-valve.2",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "high-temperature-valve-alloy",
+      "partID": "cylinder.L1.exhaust-valve.2",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-bore-envelope",
+      "calculationDependencies": [
+        "GEO-BORE-001",
+        "LOAD-CYLINDER-PRESSURE"
+      ],
+      "materialIntent": "plasma-coated-aluminum-bore",
+      "partID": "cylinder.L2.liner",
+      "subsystem": "short-block"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-GAS",
+        "LOAD-INERTIA",
+        "THERM-OIL-JET"
+      ],
+      "materialIntent": "forged-aluminum",
+      "partID": "cylinder.L2.piston",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-WRIST-PIN"
+      ],
+      "materialIntent": "hardened-steel",
+      "partID": "cylinder.L2.wrist-pin",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "LOAD-ROD-BUCKLING"
+      ],
+      "materialIntent": "forged-steel",
+      "partID": "cylinder.L2.connecting-rod",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "LOAD-CRANKPIN-BEARING",
+        "OPEN-BEARING-001"
+      ],
+      "materialIntent": "supplier-bearing-system",
+      "partID": "cylinder.L2.big-end-bearing",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.L2.spark-plug",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-COMBUSTION-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.L2.di-injector",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-EMISSIONS-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.L2.pfi-injector",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.L2.ignition-coil",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-fluid-interface",
+      "calculationDependencies": [
+        "THERM-OIL-FLOW",
+        "THERM-OIL-JET"
+      ],
+      "materialIntent": "steel-or-brass-nozzle",
+      "partID": "cylinder.L2.oil-jet",
+      "subsystem": "lubrication"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "temperature-rated-valve-alloy",
+      "partID": "cylinder.L2.intake-valve.1",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "high-temperature-valve-alloy",
+      "partID": "cylinder.L2.exhaust-valve.1",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "temperature-rated-valve-alloy",
+      "partID": "cylinder.L2.intake-valve.2",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "high-temperature-valve-alloy",
+      "partID": "cylinder.L2.exhaust-valve.2",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-bore-envelope",
+      "calculationDependencies": [
+        "GEO-BORE-001",
+        "LOAD-CYLINDER-PRESSURE"
+      ],
+      "materialIntent": "plasma-coated-aluminum-bore",
+      "partID": "cylinder.L3.liner",
+      "subsystem": "short-block"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-GAS",
+        "LOAD-INERTIA",
+        "THERM-OIL-JET"
+      ],
+      "materialIntent": "forged-aluminum",
+      "partID": "cylinder.L3.piston",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-WRIST-PIN"
+      ],
+      "materialIntent": "hardened-steel",
+      "partID": "cylinder.L3.wrist-pin",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "LOAD-ROD-BUCKLING"
+      ],
+      "materialIntent": "forged-steel",
+      "partID": "cylinder.L3.connecting-rod",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "LOAD-CRANKPIN-BEARING",
+        "OPEN-BEARING-001"
+      ],
+      "materialIntent": "supplier-bearing-system",
+      "partID": "cylinder.L3.big-end-bearing",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.L3.spark-plug",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-COMBUSTION-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.L3.di-injector",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-EMISSIONS-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.L3.pfi-injector",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.L3.ignition-coil",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-fluid-interface",
+      "calculationDependencies": [
+        "THERM-OIL-FLOW",
+        "THERM-OIL-JET"
+      ],
+      "materialIntent": "steel-or-brass-nozzle",
+      "partID": "cylinder.L3.oil-jet",
+      "subsystem": "lubrication"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "temperature-rated-valve-alloy",
+      "partID": "cylinder.L3.intake-valve.1",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "high-temperature-valve-alloy",
+      "partID": "cylinder.L3.exhaust-valve.1",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "temperature-rated-valve-alloy",
+      "partID": "cylinder.L3.intake-valve.2",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "high-temperature-valve-alloy",
+      "partID": "cylinder.L3.exhaust-valve.2",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-bore-envelope",
+      "calculationDependencies": [
+        "GEO-BORE-001",
+        "LOAD-CYLINDER-PRESSURE"
+      ],
+      "materialIntent": "plasma-coated-aluminum-bore",
+      "partID": "cylinder.L4.liner",
+      "subsystem": "short-block"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-GAS",
+        "LOAD-INERTIA",
+        "THERM-OIL-JET"
+      ],
+      "materialIntent": "forged-aluminum",
+      "partID": "cylinder.L4.piston",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-WRIST-PIN"
+      ],
+      "materialIntent": "hardened-steel",
+      "partID": "cylinder.L4.wrist-pin",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "LOAD-ROD-BUCKLING"
+      ],
+      "materialIntent": "forged-steel",
+      "partID": "cylinder.L4.connecting-rod",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "LOAD-CRANKPIN-BEARING",
+        "OPEN-BEARING-001"
+      ],
+      "materialIntent": "supplier-bearing-system",
+      "partID": "cylinder.L4.big-end-bearing",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.L4.spark-plug",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-COMBUSTION-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.L4.di-injector",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-EMISSIONS-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.L4.pfi-injector",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.L4.ignition-coil",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-fluid-interface",
+      "calculationDependencies": [
+        "THERM-OIL-FLOW",
+        "THERM-OIL-JET"
+      ],
+      "materialIntent": "steel-or-brass-nozzle",
+      "partID": "cylinder.L4.oil-jet",
+      "subsystem": "lubrication"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "temperature-rated-valve-alloy",
+      "partID": "cylinder.L4.intake-valve.1",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "high-temperature-valve-alloy",
+      "partID": "cylinder.L4.exhaust-valve.1",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "temperature-rated-valve-alloy",
+      "partID": "cylinder.L4.intake-valve.2",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "high-temperature-valve-alloy",
+      "partID": "cylinder.L4.exhaust-valve.2",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-bore-envelope",
+      "calculationDependencies": [
+        "GEO-BORE-001",
+        "LOAD-CYLINDER-PRESSURE"
+      ],
+      "materialIntent": "plasma-coated-aluminum-bore",
+      "partID": "cylinder.R1.liner",
+      "subsystem": "short-block"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-GAS",
+        "LOAD-INERTIA",
+        "THERM-OIL-JET"
+      ],
+      "materialIntent": "forged-aluminum",
+      "partID": "cylinder.R1.piston",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-WRIST-PIN"
+      ],
+      "materialIntent": "hardened-steel",
+      "partID": "cylinder.R1.wrist-pin",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "LOAD-ROD-BUCKLING"
+      ],
+      "materialIntent": "forged-steel",
+      "partID": "cylinder.R1.connecting-rod",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "LOAD-CRANKPIN-BEARING",
+        "OPEN-BEARING-001"
+      ],
+      "materialIntent": "supplier-bearing-system",
+      "partID": "cylinder.R1.big-end-bearing",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.R1.spark-plug",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-COMBUSTION-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.R1.di-injector",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-EMISSIONS-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.R1.pfi-injector",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.R1.ignition-coil",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-fluid-interface",
+      "calculationDependencies": [
+        "THERM-OIL-FLOW",
+        "THERM-OIL-JET"
+      ],
+      "materialIntent": "steel-or-brass-nozzle",
+      "partID": "cylinder.R1.oil-jet",
+      "subsystem": "lubrication"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "temperature-rated-valve-alloy",
+      "partID": "cylinder.R1.intake-valve.1",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "high-temperature-valve-alloy",
+      "partID": "cylinder.R1.exhaust-valve.1",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "temperature-rated-valve-alloy",
+      "partID": "cylinder.R1.intake-valve.2",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "high-temperature-valve-alloy",
+      "partID": "cylinder.R1.exhaust-valve.2",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-bore-envelope",
+      "calculationDependencies": [
+        "GEO-BORE-001",
+        "LOAD-CYLINDER-PRESSURE"
+      ],
+      "materialIntent": "plasma-coated-aluminum-bore",
+      "partID": "cylinder.R2.liner",
+      "subsystem": "short-block"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-GAS",
+        "LOAD-INERTIA",
+        "THERM-OIL-JET"
+      ],
+      "materialIntent": "forged-aluminum",
+      "partID": "cylinder.R2.piston",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-WRIST-PIN"
+      ],
+      "materialIntent": "hardened-steel",
+      "partID": "cylinder.R2.wrist-pin",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "LOAD-ROD-BUCKLING"
+      ],
+      "materialIntent": "forged-steel",
+      "partID": "cylinder.R2.connecting-rod",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "LOAD-CRANKPIN-BEARING",
+        "OPEN-BEARING-001"
+      ],
+      "materialIntent": "supplier-bearing-system",
+      "partID": "cylinder.R2.big-end-bearing",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.R2.spark-plug",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-COMBUSTION-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.R2.di-injector",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-EMISSIONS-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.R2.pfi-injector",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.R2.ignition-coil",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-fluid-interface",
+      "calculationDependencies": [
+        "THERM-OIL-FLOW",
+        "THERM-OIL-JET"
+      ],
+      "materialIntent": "steel-or-brass-nozzle",
+      "partID": "cylinder.R2.oil-jet",
+      "subsystem": "lubrication"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "temperature-rated-valve-alloy",
+      "partID": "cylinder.R2.intake-valve.1",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "high-temperature-valve-alloy",
+      "partID": "cylinder.R2.exhaust-valve.1",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "temperature-rated-valve-alloy",
+      "partID": "cylinder.R2.intake-valve.2",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "high-temperature-valve-alloy",
+      "partID": "cylinder.R2.exhaust-valve.2",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-bore-envelope",
+      "calculationDependencies": [
+        "GEO-BORE-001",
+        "LOAD-CYLINDER-PRESSURE"
+      ],
+      "materialIntent": "plasma-coated-aluminum-bore",
+      "partID": "cylinder.R3.liner",
+      "subsystem": "short-block"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-GAS",
+        "LOAD-INERTIA",
+        "THERM-OIL-JET"
+      ],
+      "materialIntent": "forged-aluminum",
+      "partID": "cylinder.R3.piston",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-WRIST-PIN"
+      ],
+      "materialIntent": "hardened-steel",
+      "partID": "cylinder.R3.wrist-pin",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "LOAD-ROD-BUCKLING"
+      ],
+      "materialIntent": "forged-steel",
+      "partID": "cylinder.R3.connecting-rod",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "LOAD-CRANKPIN-BEARING",
+        "OPEN-BEARING-001"
+      ],
+      "materialIntent": "supplier-bearing-system",
+      "partID": "cylinder.R3.big-end-bearing",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.R3.spark-plug",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-COMBUSTION-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.R3.di-injector",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-EMISSIONS-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.R3.pfi-injector",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.R3.ignition-coil",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-fluid-interface",
+      "calculationDependencies": [
+        "THERM-OIL-FLOW",
+        "THERM-OIL-JET"
+      ],
+      "materialIntent": "steel-or-brass-nozzle",
+      "partID": "cylinder.R3.oil-jet",
+      "subsystem": "lubrication"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "temperature-rated-valve-alloy",
+      "partID": "cylinder.R3.intake-valve.1",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "high-temperature-valve-alloy",
+      "partID": "cylinder.R3.exhaust-valve.1",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "temperature-rated-valve-alloy",
+      "partID": "cylinder.R3.intake-valve.2",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "high-temperature-valve-alloy",
+      "partID": "cylinder.R3.exhaust-valve.2",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-bore-envelope",
+      "calculationDependencies": [
+        "GEO-BORE-001",
+        "LOAD-CYLINDER-PRESSURE"
+      ],
+      "materialIntent": "plasma-coated-aluminum-bore",
+      "partID": "cylinder.R4.liner",
+      "subsystem": "short-block"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-GAS",
+        "LOAD-INERTIA",
+        "THERM-OIL-JET"
+      ],
+      "materialIntent": "forged-aluminum",
+      "partID": "cylinder.R4.piston",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-WRIST-PIN"
+      ],
+      "materialIntent": "hardened-steel",
+      "partID": "cylinder.R4.wrist-pin",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-rotating-envelope",
+      "calculationDependencies": [
+        "LOAD-ROD-COMPRESSION",
+        "LOAD-ROD-TENSION",
+        "LOAD-ROD-BUCKLING"
+      ],
+      "materialIntent": "forged-steel",
+      "partID": "cylinder.R4.connecting-rod",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "LOAD-CRANKPIN-BEARING",
+        "OPEN-BEARING-001"
+      ],
+      "materialIntent": "supplier-bearing-system",
+      "partID": "cylinder.R4.big-end-bearing",
+      "subsystem": "cranktrain"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.R4.spark-plug",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-COMBUSTION-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.R4.di-injector",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS",
+        "OPEN-EMISSIONS-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.R4.pfi-injector",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "OPEN-COMBUSTION-001"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "cylinder.R4.ignition-coil",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-fluid-interface",
+      "calculationDependencies": [
+        "THERM-OIL-FLOW",
+        "THERM-OIL-JET"
+      ],
+      "materialIntent": "steel-or-brass-nozzle",
+      "partID": "cylinder.R4.oil-jet",
+      "subsystem": "lubrication"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "temperature-rated-valve-alloy",
+      "partID": "cylinder.R4.intake-valve.1",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "high-temperature-valve-alloy",
+      "partID": "cylinder.R4.exhaust-valve.1",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-INTAKE-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "temperature-rated-valve-alloy",
+      "partID": "cylinder.R4.intake-valve.2",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-motion-envelope",
+      "calculationDependencies": [
+        "ARCH-EXHAUST-CURTAIN",
+        "OPEN-VALVETRAIN-DYNAMICS"
+      ],
+      "materialIntent": "high-temperature-valve-alloy",
+      "partID": "cylinder.R4.exhaust-valve.2",
+      "subsystem": "valvetrain"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "THERM-AIR-FLOW"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "air.filter.L",
+      "subsystem": "air-path"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "THERM-AIR-FLOW"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "air.filter.R",
+      "subsystem": "air-path"
+    },
+    {
+      "cadRepresentation": "p2-flow-envelope",
+      "calculationDependencies": [
+        "THERM-COMPRESSOR-MAP"
+      ],
+      "materialIntent": "aluminum-compressor-housing",
+      "partID": "turbo.L.compressor",
+      "subsystem": "air-path"
+    },
+    {
+      "cadRepresentation": "p2-flow-envelope",
+      "calculationDependencies": [
+        "THERM-COMPRESSOR-MAP"
+      ],
+      "materialIntent": "aluminum-compressor-housing",
+      "partID": "turbo.R.compressor",
+      "subsystem": "air-path"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "THERM-TURBO-POWER",
+        "THERM-HT-FLOW"
+      ],
+      "materialIntent": "water-cooled-bearing-system",
+      "partID": "turbo.L.core",
+      "subsystem": "air-path"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "THERM-TURBO-POWER",
+        "THERM-HT-FLOW"
+      ],
+      "materialIntent": "water-cooled-bearing-system",
+      "partID": "turbo.R.core",
+      "subsystem": "air-path"
+    },
+    {
+      "cadRepresentation": "p2-thermal-envelope",
+      "calculationDependencies": [
+        "THERM-TURBINE-INLET",
+        "OPEN-GAS-EXCHANGE"
+      ],
+      "materialIntent": "1050C-rated-turbine-housing",
+      "partID": "turbo.L.turbine",
+      "subsystem": "exhaust"
+    },
+    {
+      "cadRepresentation": "p2-thermal-envelope",
+      "calculationDependencies": [
+        "THERM-TURBINE-INLET",
+        "OPEN-GAS-EXCHANGE"
+      ],
+      "materialIntent": "1050C-rated-turbine-housing",
+      "partID": "turbo.R.turbine",
+      "subsystem": "exhaust"
+    },
+    {
+      "cadRepresentation": "p2-flow-envelope",
+      "calculationDependencies": [
+        "THERM-LT-REJECTION"
+      ],
+      "materialIntent": "aluminum-heat-exchanger",
+      "partID": "charge-cooler.L",
+      "subsystem": "low-temperature-cooling"
+    },
+    {
+      "cadRepresentation": "p2-flow-envelope",
+      "calculationDependencies": [
+        "THERM-LT-REJECTION"
+      ],
+      "materialIntent": "aluminum-heat-exchanger",
+      "partID": "charge-cooler.R",
+      "subsystem": "low-temperature-cooling"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "THERM-AIR-FLOW"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "throttle.L",
+      "subsystem": "air-path"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "THERM-AIR-FLOW"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "throttle.R",
+      "subsystem": "air-path"
+    },
+    {
+      "cadRepresentation": "p2-flow-envelope",
+      "calculationDependencies": [
+        "THERM-MANIFOLD-PRESSURE",
+        "OPEN-GAS-EXCHANGE"
+      ],
+      "materialIntent": "cast-aluminum-or-composite",
+      "partID": "intake-plenum.L",
+      "subsystem": "air-path"
+    },
+    {
+      "cadRepresentation": "p2-flow-envelope",
+      "calculationDependencies": [
+        "THERM-MANIFOLD-PRESSURE",
+        "OPEN-GAS-EXCHANGE"
+      ],
+      "materialIntent": "cast-aluminum-or-composite",
+      "partID": "intake-plenum.R",
+      "subsystem": "air-path"
+    },
+    {
+      "cadRepresentation": "p2-thermal-envelope",
+      "calculationDependencies": [
+        "THERM-TURBINE-INLET",
+        "OPEN-GAS-EXCHANGE"
+      ],
+      "materialIntent": "high-temperature-cast-alloy",
+      "partID": "exhaust-manifold.L",
+      "subsystem": "exhaust"
+    },
+    {
+      "cadRepresentation": "p2-thermal-envelope",
+      "calculationDependencies": [
+        "THERM-TURBINE-INLET",
+        "OPEN-GAS-EXCHANGE"
+      ],
+      "materialIntent": "high-temperature-cast-alloy",
+      "partID": "exhaust-manifold.R",
+      "subsystem": "exhaust"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "OPEN-EMISSIONS-001"
+      ],
+      "materialIntent": "supplier-aftertreatment",
+      "partID": "catalyst-interface.L",
+      "subsystem": "exhaust"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "OPEN-EMISSIONS-001"
+      ],
+      "materialIntent": "supplier-aftertreatment",
+      "partID": "catalyst-interface.R",
+      "subsystem": "exhaust"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS"
+      ],
+      "materialIntent": "high-pressure-steel",
+      "partID": "fuel.di-rail.L",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS"
+      ],
+      "materialIntent": "high-pressure-steel",
+      "partID": "fuel.di-rail.R",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS"
+      ],
+      "materialIntent": "aluminum-or-polymer",
+      "partID": "fuel.pfi-rail.L",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS"
+      ],
+      "materialIntent": "aluminum-or-polymer",
+      "partID": "fuel.pfi-rail.R",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "fuel.high-pressure-pump.L",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "LOAD-INJECTION-MASS"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "fuel.high-pressure-pump.R",
+      "subsystem": "fuel-and-ignition"
+    },
+    {
+      "cadRepresentation": "p2-fluid-envelope",
+      "calculationDependencies": [
+        "THERM-HT-REJECTION",
+        "THERM-HT-FLOW"
+      ],
+      "materialIntent": "water-glycol-volume",
+      "partID": "coolant.ht-jacket.L",
+      "subsystem": "high-temperature-cooling"
+    },
+    {
+      "cadRepresentation": "p2-fluid-envelope",
+      "calculationDependencies": [
+        "THERM-HT-REJECTION",
+        "THERM-HT-FLOW"
+      ],
+      "materialIntent": "water-glycol-volume",
+      "partID": "coolant.ht-jacket.R",
+      "subsystem": "high-temperature-cooling"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "THERM-HT-FLOW"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "coolant.ht-pump",
+      "subsystem": "high-temperature-cooling"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "THERM-HT-TEMPERATURE"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "coolant.ht-thermostat",
+      "subsystem": "high-temperature-cooling"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "THERM-LT-REJECTION"
+      ],
+      "materialIntent": "supplier-component",
+      "partID": "coolant.lt-pump",
+      "subsystem": "low-temperature-cooling"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "THERM-LT-REJECTION"
+      ],
+      "materialIntent": "vehicle-interface",
+      "partID": "coolant.lt-front-interface",
+      "subsystem": "low-temperature-cooling"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "THERM-HT-REJECTION",
+        "THERM-HT-UA"
+      ],
+      "materialIntent": "vehicle-interface",
+      "partID": "coolant.ht-radiator-interface",
+      "subsystem": "high-temperature-cooling"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "THERM-OIL-FLOW",
+        "ARCH-DRY-SUMP"
+      ],
+      "materialIntent": "six-stage-supplier-system",
+      "partID": "oil.dry-sump-pump",
+      "subsystem": "lubrication"
+    },
+    {
+      "cadRepresentation": "p2-service-envelope",
+      "calculationDependencies": [
+        "ARCH-DRY-SUMP"
+      ],
+      "materialIntent": "aluminum-tank",
+      "partID": "oil.tank",
+      "subsystem": "lubrication"
+    },
+    {
+      "cadRepresentation": "p2-interface-envelope",
+      "calculationDependencies": [
+        "THERM-OIL-REJECTION",
+        "THERM-OIL-FLOW"
+      ],
+      "materialIntent": "vehicle-interface",
+      "partID": "oil.cooler-interface",
+      "subsystem": "lubrication"
+    },
+    {
+      "cadRepresentation": "p2-fluid-envelope",
+      "calculationDependencies": [
+        "THERM-OIL-FLOW",
+        "OPEN-BEARING-001"
+      ],
+      "materialIntent": "oil-volume",
+      "partID": "oil.pressure-gallery",
+      "subsystem": "lubrication"
+    },
+    {
+      "cadRepresentation": "p2-fluid-envelope",
+      "calculationDependencies": [
+        "ARCH-DRY-SUMP"
+      ],
+      "materialIntent": "oil-aerated-volume",
+      "partID": "oil.scavenge-gallery.L",
+      "subsystem": "lubrication"
+    },
+    {
+      "cadRepresentation": "p2-fluid-envelope",
+      "calculationDependencies": [
+        "ARCH-DRY-SUMP"
+      ],
+      "materialIntent": "oil-aerated-volume",
+      "partID": "oil.scavenge-gallery.R",
+      "subsystem": "lubrication"
+    }
+  ],
+  "provenance": {
+    "calculationSourceSHA256": "280c72af6fa34f1b4d7086a0d69e735b974cf0a403f44f7ad8a5ecc1b0857560",
+    "requirementsSHA256": "fbaffe210e395850e4fc354e57dbc5d1d03a1ee4a20897f8e24da401339bcf4b",
+    "thermalAnalysisSHA256": "666fdb3ac40eee432e84973190f9398811f3fbc24bd1f48ad9c3c0247766d862"
+  },
+  "schemaVersion": "professional-v8.semantic-architecture.v1"
+}

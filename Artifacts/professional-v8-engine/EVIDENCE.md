@@ -36,6 +36,9 @@ are feasibility benchmarks only; no OEM geometry is copied.
 | CHOICE-FUEL-MODEL-001 | 42.7 MJ/kg lower heating value and 12.5:1 full-load air/fuel mass ratio | P2 fuel and air-flow sizing assumptions for 98 RON gasoline | Certified regional fuel properties, injector characterization, emissions, and knock calibration remain open |
 | CHOICE-AIR-MODEL-001 | 95% volumetric efficiency, 75% compressor efficiency, 3 kPa inlet loss, 12 kPa charge-path loss, and 50 °C manifold target | Produces explicit compressor coordinates and charge-cooler load at the hot-ambient design point | Requires digitized maps, measured pressure losses, 1D gas exchange, and vehicle charge-circuit validation |
 | CHOICE-FLUID-MODEL-001 | HT coolant 3.8 kJ/kg·K and 1,050 kg/m³ over 15 K; oil 2.1 kJ/kg·K and 850 kg/m³ over 20 K; 10–15% flow/capacity margins | First-order pump, cooler, and radiator interface sizing | Fluid supplier curves, pump maps, pressure drop, boiling/cavitation, and vehicle airflow remain P3/P4 gates |
+| CHOICE-ROTATING-001 | 0.55 kg reciprocating mass, 22 mm wrist pin, 54 mm crankpin, 65 mm mains, and 3.0×10⁻⁹ m⁴ rod weak-axis screen | Makes 7,000/7,350 rpm inertia, projected bearing pressure, surface speed, and Euler load explicit for P2 packaging | Mass optimization, counterweights, torsion, oil-film analysis, temperature-dependent allowables, fatigue, and FEA remain open |
+| CHOICE-CLAMP-001 | Ten 65 kN head fasteners per bank | Provides an aggregate clamp inventory against one-cylinder design gas force | Fastener grade, joint stiffness, thermal relaxation, local bore distortion, and gasket sealing remain open |
+| CHOICE-VALVE-001 | Two 34 mm intake and two 29 mm exhaust valves per cylinder at 11.5/10.5 mm lift | Provides a DOHC four-valve package and first-order curtain areas | Port flow, seat geometry, spring dynamics, cam profiles, piston clearance, and combustion remain open |
 
 ## Unresolved Production Decisions
 

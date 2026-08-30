@@ -1,0 +1,104 @@
+{
+  "architectureInventory": {
+    "counterweights": 8,
+    "crankpinAnglesDegrees": [
+      0,
+      90,
+      270,
+      180
+    ],
+    "crankpins": 4,
+    "datumCount": 19,
+    "drySumpStages": 6,
+    "firingOrder": [
+      "L1",
+      "R1",
+      "L4",
+      "R4",
+      "R2",
+      "L3",
+      "R3",
+      "L2"
+    ],
+    "mainBearings": 5,
+    "pistonOilJets": 8,
+    "semanticPartCount": 168
+  },
+  "claimLevel": "P2-engineering-reference",
+  "geometry": {
+    "bankAngleDegrees": 90.0,
+    "bankBoreEnvelopeLengthMillimeters": 374.0,
+    "boreBridgeMillimeters": 10.0,
+    "crankRadiusMillimeters": 43.0,
+    "deckClosureMillimeters": 224.0,
+    "deckClosureResidualMicrometers": 0.0,
+    "rodToStrokeRatio": 1.744186
+  },
+  "kinematics": {
+    "crankpinSurfaceSpeedAtRedlineMetersPerSecond": 19.792034,
+    "mainJournalSurfaceSpeedAtRedlineMetersPerSecond": 23.823744,
+    "meanPistonSpeedAtOverspeedMetersPerSecond": 21.07,
+    "meanPistonSpeedAtRedlineMetersPerSecond": 20.066667,
+    "peakTDCAccelerationAtOverspeedMetersPerSecondSquared": 32776.790078,
+    "peakTDCAccelerationAtRedlineG": 3031.566826,
+    "peakTDCAccelerationAtRedlineMetersPerSecondSquared": 29729.51481
+  },
+  "loadScreens": {
+    "bankClampToOneCylinderDesignGasRatio": 5.594955,
+    "bankHeadClampKilonewtons": 650.0,
+    "crankpinProjectedPressureMegapascals": 119.717551,
+    "designGasForceKilonewtons": 116.176096,
+    "grossRodCompressionEnvelopeKilonewtons": 132.527329,
+    "minimumRodEulerRatio": 1.5,
+    "nominalGasForceKilonewtons": 104.558487,
+    "overspeedRodTensionEnvelopeKilonewtons": 27.040852,
+    "redlineInertiaForceKilonewtons": 16.351233,
+    "rodEulerLoadKilonewtons": 269.769187,
+    "rodEulerToGrossCompressionRatio": 2.035574,
+    "wristPinProjectedPressureMegapascals": 136.908398
+  },
+  "openReleaseGates": [
+    "combustion pressure traces and abnormal combustion cases",
+    "temperature-dependent material allowables and forging/casting processes",
+    "rod, piston, pin, crankshaft, block, head, and fastener nonlinear FEA",
+    "crankshaft torsional and bending dynamics with damper optimization",
+    "hydrodynamic main, rod, pin, and cam bearing analysis",
+    "valvetrain dynamics, spring surge, contact stress, and piston-to-valve clearance",
+    "head-gasket sealing, bore distortion, thermal growth, and joint relaxation",
+    "lubrication rig, aeration, windage, scavenge, and starvation validation",
+    "physical fatigue, overspeed, thermal-cycle, and durability testing"
+  ],
+  "provenance": {
+    "calculationSourceSHA256": "280c72af6fa34f1b4d7086a0d69e735b974cf0a403f44f7ad8a5ecc1b0857560",
+    "requirementsSHA256": "fbaffe210e395850e4fc354e57dbc5d1d03a1ee4a20897f8e24da401339bcf4b",
+    "thermalAnalysisSHA256": "666fdb3ac40eee432e84973190f9398811f3fbc24bd1f48ad9c3c0247766d862"
+  },
+  "schemaVersion": "professional-v8.mechanical-analysis.v1",
+  "status": "p2-mechanical-screening-passed-release-analysis-open",
+  "thermalInterfaces": {
+    "highTemperatureCircuit": {
+      "continuousEngineHeatKilowatts": 291.176471,
+      "installedRejectionKilowatts": 320.294118,
+      "minimumCoolantMassFlowKilogramsPerSecond": 5.619195,
+      "minimumCoolantVolumeFlowLitersPerMinute": 321.09686,
+      "minimumRadiatorUAKilowattsPerKelvin": 5.124706
+    },
+    "lowTemperatureCircuit": {
+      "installedRejectionKilowatts": 38.051471,
+      "sourceLoad": "maximum-of-allocated-and-calculated-charge-cooling"
+    },
+    "oilCircuit": {
+      "continuousOilHeatKilowatts": 46.323529,
+      "installedRejectionKilowatts": 53.272059,
+      "minimumOilMassFlowKilogramsPerSecond": 1.268382,
+      "minimumOilVolumeFlowLitersPerMinute": 89.532872
+    }
+  },
+  "valvetrainAndFuel": {
+    "exhaustCurtainAreaPerCylinderSquareMillimeters": 1913.229926,
+    "fullPowerFuelMassPerCylinderCycleMilligrams": 71.529242,
+    "intakeCurtainAreaPerCylinderSquareMillimeters": 2456.725455,
+    "minimumCombinedInjectionCapacityMilligramsPerCycle": 100.140939,
+    "totalValveCount": 32
+  }
+}

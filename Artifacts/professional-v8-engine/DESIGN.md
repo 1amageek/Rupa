@@ -207,6 +207,51 @@ reference has passed a digitized map review.
    high- and low-temperature coolant circuits, and turbo water cooling are
    required architecture, not optional presentation detail.
 
+### Mechanical P2 input contract
+
+The `mechanical` section of [requirements.json](requirements.json) owns the
+provisional dimensions and screening assumptions below. The mechanical
+calculator consumes the exact thermal-report hash so stale heat, flow, or fuel
+loads cannot be combined with a newer structure.
+
+| Group | P2 inputs | Meaning |
+|---|---|---|
+| Cranktrain | 150 mm rod, 31 mm compression height, 22 mm wrist pin, 54 mm crankpin, 65 mm mains | Package and first-order load geometry |
+| Pressure | 18 MPa nominal peak, 20 MPa design | Nominal and structural screening cases are distinct |
+| Inertia | 0.55 kg reciprocating mass per cylinder | Explicit piston/pin/ring/small-end P2 assumption |
+| Rod screen | 3.0×10⁻⁹ m⁴ weak-axis second moment, 205 GPa modulus, 150 mm effective length | Euler screen only; not a released I-beam section |
+| Head clamp | 10 fasteners per bank at 65 kN preload | Aggregate clamp inventory; local gasket sealing remains FEA/test work |
+| Valvetrain | 2×34 mm intake and 2×29 mm exhaust valves per cylinder | Curtain-area and packaging envelope, not a port-flow claim |
+| Lubrication | six-stage dry sump and eight piston jets | Required part and interface inventory tied to V8-T oil load |
+
+V8-M must reject deck-height inconsistency, a non-closing thermal dependency,
+invalid speed ordering, a gross rod-load/Euler ratio below 1.5, and duplicate or
+missing semantic part identities. Passing these screens is not fatigue,
+hydrodynamic-bearing, gasket, valvetrain-dynamics, torsional, or durability
+approval.
+
+### Calculated P2 mechanical screening result
+
+The generated [analysis-mechanical.json](analysis-mechanical.json) is bound to
+the exact requirements and thermal-report hashes. The associated
+[semantic-architecture.json](semantic-architecture.json) defines 168 stable
+part identities and 19 datums that V8-C must either model as the declared P2
+representation or report as missing.
+
+| Quantity | P2 result | Interpretation |
+|---|---:|---|
+| Rod/stroke ratio | 1.744 | Package geometry, not friction or durability proof |
+| Mean piston speed at 7,000 rpm | 20.07 m/s | Passes the 21 m/s P2 screen |
+| TDC acceleration at 7,000 rpm | 29,730 m/s² / 3,032 g | Drives explicit reciprocating inertia |
+| Design gas force per piston | 116.2 kN | 20 MPa over the 86 mm bore |
+| Gross rod compression envelope | 132.5 kN | Unsigned gas plus redline inertia; intentionally conservative |
+| Overspeed rod tension envelope | 27.0 kN | 7,350 rpm TDC inertia with 1.5 factor |
+| Euler weak-axis load / ratio | 269.8 kN / 2.04 | Ideal-column rejection screen only |
+| Wrist-pin projected pressure | 136.9 MPa | Geometry screen; not bushing or oil-film approval |
+| Crankpin projected pressure | 119.7 MPa | Per-rod geometry screen; not bearing approval |
+| Aggregate head clamp per bank | 650 kN | Inventory ratio 5.59 to one cylinder gas load; not sealing proof |
+| Fuel per cylinder cycle / minimum combined capacity | 71.5 / 100.1 mg | DI+PFI capacity interface at 450 kW |
+
 ### CAD acceptance invariants
 
 1. Every retained body has a stable semantic part ID, subsystem, material

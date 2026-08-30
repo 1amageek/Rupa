@@ -66,7 +66,7 @@
   },
   "provenance": {
     "calculationSourceSHA256": "aa1e8a594c8369fc410be7a3b962a4c82654026fa18ecb10784102abed9071ed",
-    "requirementsSHA256": "9c273026777fcad7d7670060fb6d3d5a5bc19b96afd488042cf160998abf4664"
+    "requirementsSHA256": "fbaffe210e395850e4fc354e57dbc5d1d03a1ee4a20897f8e24da401339bcf4b"
   },
   "schemaVersion": "professional-v8.thermal-analysis.v1",
   "status": "p2-thermal-screening-passed-with-open-compressor-map-selection",

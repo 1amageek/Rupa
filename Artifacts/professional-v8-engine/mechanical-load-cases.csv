@@ -1,0 +1,10 @@
+loadCaseID,quantity,value,unit,claim
+nominal-cylinder-pressure,piston-gas-force,104558.486696775,N,nominal-screen
+design-cylinder-pressure,piston-gas-force,116176.096329751,N,design-screen
+redline-tdc-inertia,reciprocating-inertia-force,16351.233145326,N,kinematic-screen
+gross-rod-compression,unsigned-gas-plus-redline-inertia-envelope,132527.329475077,N,conservative-screen-not-pressure-trace
+overspeed-rod-tension,factored-tdc-overlap-inertia,27040.851814084,N,kinematic-screen
+rod-euler,weak-axis-euler-load,269769.186963109,N,ideal-column-screen-only
+wrist-pin-projected,gross-projected-bearing-pressure,136.908398218,MPa,geometry-screen-not-oil-film
+crankpin-projected,gross-projected-bearing-pressure-per-rod,119.717551468,MPa,geometry-screen-not-oil-film
+head-bank-preload,aggregate-fastener-preload,650000.0,N,inventory-not-sealing-proof
