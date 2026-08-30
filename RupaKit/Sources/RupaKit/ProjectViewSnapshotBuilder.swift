@@ -46,23 +46,19 @@ public struct ProjectViewSnapshotBuilder: ProjectViewSnapshotBuilding, Sendable 
             )
         }
 
-        let viewport: UniversalViewportScene
+        let evaluatedViewport: UniversalViewportScene
         do {
-            viewport = try viewportBuilder.build(
+            evaluatedViewport = try viewportBuilder.build(
                 from: state.evaluation,
                 project: state.evaluationSource
             )
         } catch let error as UniversalViewportSceneError {
             throw projectViewError(for: error)
         }
-        let document = try ProjectReadDocument(
-            document: state.document,
-            objectRegistry: state.objectRegistry
-        )
         let sceneNodeIDByOccurrenceID = bridge.sceneNodeNavigationIndex(
             for: state.document
         )
-        for item in viewport.items {
+        for item in evaluatedViewport.items {
             guard let sourceOccurrence = state.evaluationSource.occurrences[item.id],
                   sourceOccurrence.definitionID == item.definitionID,
                   let definition = state.evaluationSource.objectDefinitions[item.definitionID],
@@ -81,6 +77,23 @@ public struct ProjectViewSnapshotBuilder: ProjectViewSnapshotBuilding, Sendable 
                 )
             }
         }
+        let effectivelyVisibleSceneNodeIDs = state.document.productMetadata
+            .effectivelyVisibleSceneNodeIDs()
+        let viewport = UniversalViewportScene(
+            snapshotID: evaluatedViewport.snapshotID,
+            projectID: evaluatedViewport.projectID,
+            items: evaluatedViewport.items.filter { item in
+                guard let sceneNodeID = sceneNodeIDByOccurrenceID[item.id] else {
+                    return false
+                }
+                return effectivelyVisibleSceneNodeIDs.contains(sceneNodeID)
+            },
+            copyTelemetry: evaluatedViewport.copyTelemetry
+        )
+        let document = try ProjectReadDocument(
+            document: state.document,
+            objectRegistry: state.objectRegistry
+        )
 
         return ProjectViewSnapshot(
             documentLifetimeID: state.documentLifetimeID,

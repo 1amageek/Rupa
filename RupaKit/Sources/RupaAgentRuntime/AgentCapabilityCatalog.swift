@@ -698,6 +698,16 @@ public enum AgentCapabilityCatalog {
             failureMode: "Rejects stale generations before reading and returns no evaluated geometry buffers."
         ),
         capability(
+            "viewportSnapshot",
+            category: .read,
+            summary: "Return the exact visible items, navigation identities, selected source authority, world placement, bounds, checked Mesh counts, and copy telemetry from the published application viewport without serializing geometry buffers.",
+            access: .agentRequest,
+            stateEffect: .readOnly,
+            discovery: [.viewportSnapshot],
+            targets: [.document, .sceneNode, .componentInstance, .body],
+            failureMode: "Rejects stale generations, missing navigation, malformed Mesh counts or ranges, and count overflow before returning a geometry-buffer-free result."
+        ),
+        capability(
             "designDisplaySnapshot",
             category: .read,
             summary: "Return workspace scale, viewport grid scale, interaction scale defaults, ordered UI-visible sketch primitives, profile regions, component definitions, component instances, pattern arrays, saved views, extrude and straight-prism sweep display bodies, evaluated body meshes, and generated topology for Agent viewport planning.",

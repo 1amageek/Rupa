@@ -7,6 +7,7 @@ public struct InspectCommand: ParsableCommand {
         subcommands: [
             InspectConstructionPlanesCommand.self,
             InspectSceneGraphCommand.self,
+            InspectViewportCommand.self,
             InspectSketchesCommand.self,
             InspectTopologyCommand.self,
             InspectCurvesCommand.self,

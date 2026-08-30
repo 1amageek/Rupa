@@ -288,6 +288,90 @@ public extension MeshSource {
         )
     }
 
+    /// Counts only triangles accepted by the presentation triangulation path.
+    ///
+    /// Each face result is transient and is released before the next face is
+    /// visited. The immutable source buffers are borrowed and never replaced.
+    func triangulatedTriangleCount(
+        tolerance: Double = 1e-9,
+        limits: MeshTriangulationLimits = .standard,
+        checkCancellation: @escaping @Sendable () throws -> Void = {
+            try Task.checkCancellation()
+        }
+    ) throws -> UInt64 {
+        var telemetry = MeshTriangulationTelemetry()
+        return try triangulatedTriangleCount(
+            tolerance: tolerance,
+            limits: limits,
+            telemetry: &telemetry,
+            checkCancellation: checkCancellation
+        )
+    }
+
+    /// Counts renderable triangles while reporting the shared triangulation work.
+    func triangulatedTriangleCount(
+        tolerance: Double = 1e-9,
+        limits: MeshTriangulationLimits = .standard,
+        telemetry: inout MeshTriangulationTelemetry,
+        checkCancellation: @escaping @Sendable () throws -> Void = {
+            try Task.checkCancellation()
+        }
+    ) throws -> UInt64 {
+        try checkCancellation()
+        try validateTriangulationInputs(
+            tolerance: tolerance,
+            limits: limits,
+            index: nil
+        )
+        guard vertexIDs.count == vertexPositions.count else {
+            throw MeshTriangulationError(
+                code: .invalidReference,
+                message: "Mesh vertex IDs and positions have different counts."
+            )
+        }
+        guard faceIDs.count == faceCornerRanges.count else {
+            throw MeshTriangulationError(
+                code: .invalidFaceRange,
+                message: "Mesh face IDs and corner ranges have different counts."
+            )
+        }
+        guard cornerIDs.count == cornerVertexIDs.count else {
+            throw MeshTriangulationError(
+                code: .invalidReference,
+                message: "Mesh corner IDs and vertex references have different counts."
+            )
+        }
+        let index = try makeTriangulationIndex()
+        try checkCancellation()
+        var triangleCount: UInt64 = 0
+        for faceIndex in faceCornerRanges.indices {
+            try checkCancellation()
+            let faceTriangles = try triangulate(
+                faceIndex: faceIndex,
+                using: index,
+                tolerance: tolerance,
+                limits: limits,
+                telemetry: &telemetry
+            )
+            guard let faceTriangleCount = UInt64(exactly: faceTriangles.count) else {
+                throw MeshTriangulationError(
+                    code: .sizeOverflow,
+                    message: "Mesh face triangle count exceeds the supported range."
+                )
+            }
+            let addition = triangleCount.addingReportingOverflow(faceTriangleCount)
+            guard !addition.overflow else {
+                throw MeshTriangulationError(
+                    code: .sizeOverflow,
+                    message: "Mesh triangle count exceeds the supported range."
+                )
+            }
+            triangleCount = addition.partialValue
+        }
+        try checkCancellation()
+        return triangleCount
+    }
+
     private func validateTriangulationInputs(
         tolerance: Double,
         limits: MeshTriangulationLimits,

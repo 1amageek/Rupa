@@ -675,6 +675,11 @@ public final class AgentCommandController: AgentClientProtocol {
                     )
                 }
                 return try run()
+            case .viewportSnapshot:
+                throw EditorError(
+                    code: .commandUnsupported,
+                    message: "The EditorSession test fixture does not own a published ProjectViewSnapshot."
+                )
             case .designDisplaySnapshot:
                 func run() throws -> AgentResponse {
                     guard case let .designDisplaySnapshot(sessionID, expectedGeneration) = request else {

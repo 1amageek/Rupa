@@ -30,7 +30,9 @@ through the package's native target graph.
   outputs that produced the result;
 - copy telemetry and zero-copy evidence for unchanged storage.
 - source-order Mesh triangulation indexes, convex linear-fan triangulation, and
-  budgeted non-convex triangulation.
+  budgeted non-convex triangulation;
+- a checked renderable-triangle count that shares the same triangulation path
+  without retaining the emitted triangle topology.
 
 It does not own Product Objects, representation selection, Authored Mesh
 provenance, CAD evaluation, project revisions, package paths, UI selection, or
@@ -105,6 +107,7 @@ flowchart TD
     Source --> Triangulation["Source-order triangulation index"]
     Triangulation --> Convex["Convex linear fan"]
     Triangulation --> Concave["Budgeted ear clipping"]
+    Triangulation --> Count["Checked renderable-triangle count"]
     Execute --> Receipt["Checked step outputs + telemetry"]
     Receipt --> Commit["Validated execution construction"]
 ```
@@ -140,6 +143,15 @@ report zero global ID scans after its one source-bound index is built and zero
 GeometryBuffer position materialization or copy events. Temporary per-face
 arrays used by ear clipping are bounded scratch state and are counted
 separately; they are not replacement source buffers.
+
+`MeshSource.triangulatedTriangleCount` builds the source-bound index once,
+triangulates every face through `triangulate(faceIndex:using:)` with the same
+tolerance and limits as presentation rendering, adds each transient face
+result count with checked arithmetic, and then discards that face result. It
+returns no topology and never estimates renderability from corner count alone.
+The count checks cooperative cancellation before index construction and at
+every face boundary so a cancelled caller does not finish an otherwise bounded
+full-source traversal.
 
 ## Contracts and Invariants
 
@@ -220,6 +232,11 @@ separately; they are not replacement source buffers.
 6. Triangulation never invokes `GeometryBuffer.firstIndex(of:)` on the
    presentation path after index construction. The plan retains the immutable
    source and its source-bound index for later render passes.
+7. Renderable-triangle counting uses the same face triangulation contract and
+   returns no count if any face is non-planar, degenerate, out of bounds, or over
+   budget. Count conversion and accumulation are overflow checked, and source
+   position materialization remains zero. Cancellation is observed between
+   faces and never returns a partial count.
 
 ### Validated execution construction
 
@@ -373,6 +390,7 @@ The module proof is T09-A:
 | Atomicity | Mid-plan failure leaves no committed result. |
 | Execution semantics | Exact step roles/order and aliases from direct buffer results, persistent allocation/non-reuse, valid create-then-delete plans, and absence of a second topology replay. |
 | Performance | Unchanged chunk identity, one-buffer telemetry, hard-boundary limits, measured copy ceilings, source-order triangulation counters, convex linear-fan work, and typed non-convex budget failure. |
+| Renderable triangle count | Exact multi-face count, non-planar and degenerate rejection, budget failure, checked overflow, zero global identifier scans after index construction, and zero source-position materialization. |
 
 Changes to source buffer layout, ID allocation, attribute handling, or executor
 limits require rechecking the package and system designs and the RupaCore

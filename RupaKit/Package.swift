@@ -346,6 +346,7 @@ let package = Package(
                 "RupaKit",
                 "RupaCoreTypes",
                 "RupaCore",
+                "RupaGeometry",
                 "RupaProjectModel",
                 "RupaAutomation",
                 "RupaDomainFoundation",

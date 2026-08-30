@@ -73,6 +73,93 @@ func projectWorkspacePublishesOneCoherentCADViewAndHistoryState() async throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
+func projectWorkspaceVisibilityFiltersTheViewportWithoutDroppingEvaluationSource() async throws {
+    let controller = try projectViewController(
+        document: .empty(named: "Visibility View")
+    )
+    let workspace = await ProjectWorkspace(project: controller)
+    let initial = try await workspace.evaluate()
+    let created = try await workspace.commit(
+        ProjectSourceTransaction(
+            name: "visibility.create-cad",
+            commands: [
+                .createExtrudedRectangle(
+                    name: "Visibility Body",
+                    plane: .xy,
+                    width: .length(1, .meter),
+                    height: .length(1, .meter),
+                    depth: .length(1, .meter),
+                    direction: .normal
+                ),
+            ],
+            expectedProjectID: await controller.currentDocument().projectID,
+            expectedTransactionRevision: initial.transactionRevision,
+            expectedPublicationSequence: initial.publicationSequence
+        )
+    )
+    let createdItem = try #require(created.viewport.items.first)
+    let sceneNodeID = try #require(created.sceneNodeID(for: createdItem.id))
+    let createdState = try await controller.currentState()
+    let createdOccurrence = try #require(
+        createdState.evaluation.occurrences[createdItem.id]
+    )
+    let createdSourceOccurrence = try #require(
+        createdState.evaluationSource.occurrences[createdItem.id]
+    )
+
+    let hidden = try await workspace.commit(
+        ProjectSourceTransaction(
+            name: "visibility.hide-cad",
+            commands: [
+                .setSceneNodeVisibility(id: sceneNodeID, isVisible: false),
+            ],
+            expectedProjectID: created.projectID,
+            expectedTransactionRevision: created.transactionRevision,
+            expectedPublicationSequence: created.publicationSequence
+        )
+    )
+    let hiddenState = try await controller.currentState()
+
+    #expect(hidden.viewport.items.isEmpty)
+    #expect(hidden.viewport.worldBounds == nil)
+    #expect(hidden.viewport.snapshotID == hiddenState.evaluation.id)
+    #expect(hidden.viewport.projectID == hidden.projectID)
+    #expect(hidden.viewport.copyTelemetry == hiddenState.evaluation.copyTelemetry)
+    let hiddenOccurrence = try #require(
+        hiddenState.evaluation.occurrences[createdItem.id]
+    )
+    #expect(hiddenOccurrence.definitionID == createdOccurrence.definitionID)
+    #expect(hiddenOccurrence.representationID == createdOccurrence.representationID)
+    #expect(hiddenOccurrence.reference == createdOccurrence.reference)
+    #expect(hiddenOccurrence.mesh.identity == createdOccurrence.mesh.identity)
+    #expect(hiddenOccurrence.worldTransform == createdOccurrence.worldTransform)
+    #expect(hiddenOccurrence.worldBounds == createdOccurrence.worldBounds)
+    #expect(hiddenOccurrence.copyTelemetry == createdOccurrence.copyTelemetry)
+    #expect(
+        hiddenState.evaluationSource.occurrences[createdItem.id]
+            == createdSourceOccurrence
+    )
+    #expect(hidden.sceneNodeID(for: createdItem.id) == sceneNodeID)
+    #expect(hidden.document.document.productMetadata.sceneNodes[sceneNodeID]?.isVisible == false)
+
+    let shown = try await workspace.commit(
+        ProjectSourceTransaction(
+            name: "visibility.show-cad",
+            commands: [
+                .setSceneNodeVisibility(id: sceneNodeID, isVisible: true),
+            ],
+            expectedProjectID: hidden.projectID,
+            expectedTransactionRevision: hidden.transactionRevision,
+            expectedPublicationSequence: hidden.publicationSequence
+        )
+    )
+
+    #expect(shown.viewport.items.count == 1)
+    #expect(shown.viewport.worldBounds != nil)
+    #expect(shown.sceneNodeID(for: createdItem.id) == sceneNodeID)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func projectWorkspaceReturnsTheExactSourceViewWithoutRegressingNewerPublication() async throws {
     let controller = try projectViewController(
         document: .empty(named: "Initial")

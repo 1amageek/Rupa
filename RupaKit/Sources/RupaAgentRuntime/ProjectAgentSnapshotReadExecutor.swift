@@ -2,6 +2,7 @@ import RupaAgentProtocol
 import RupaCore
 import RupaCoreTypes
 import RupaKit
+import RupaProject
 
 /// Executes pure Agent reads from one immutable published project view.
 public struct ProjectAgentSnapshotReadExecutor: Sendable {
@@ -9,8 +10,12 @@ public struct ProjectAgentSnapshotReadExecutor: Sendable {
 
     public func execute(
         _ request: AgentRequest,
-        from snapshot: ProjectViewSnapshot
+        from snapshot: ProjectViewSnapshot,
+        operationGuard: @escaping ProjectOperationGuard = {
+            try Task.checkCancellation()
+        }
     ) throws -> AgentResponse {
+        try operationGuard()
         switch request {
         case .parameters(_, let expectedGeneration):
             try requireGeneration(expectedGeneration, in: snapshot)
@@ -78,6 +83,15 @@ public struct ProjectAgentSnapshotReadExecutor: Sendable {
                     document: snapshot.document.document,
                     generation: snapshot.documentGeneration,
                     dirty: snapshot.isDirty
+                )
+            )
+        case .viewportSnapshot(let sessionID, let expectedGeneration):
+            try requireGeneration(expectedGeneration, in: snapshot)
+            return .viewportSnapshot(
+                try ProjectAgentGeometryProjection.viewportSnapshot(
+                    sessionID: sessionID,
+                    view: snapshot,
+                    operationGuard: operationGuard
                 )
             )
         case .designDisplaySnapshot(_, let expectedGeneration):

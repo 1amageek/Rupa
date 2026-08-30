@@ -1,6 +1,18 @@
+import RupaAgentProtocol
 import RupaCore
 
 public extension CLIOutput {
+    static func write(
+        response: AgentProjectViewportSnapshot,
+        asJSON: Bool
+    ) throws {
+        try write(
+            response,
+            fallback: "Viewport snapshot: \(response.items.count) visible items.",
+            asJSON: asJSON
+        )
+    }
+
     static func write(
         response: SceneGraphSnapshotResult,
         asJSON: Bool

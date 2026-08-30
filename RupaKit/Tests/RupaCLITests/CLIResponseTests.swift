@@ -1867,6 +1867,93 @@ func cliSceneGraphServicePreservesTypedFailureAndRejectsMismatchedResponse() thr
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliViewportServiceSendsTheExactLiveReadAndPreservesTypedFailures() throws {
+    let sessionID = try #require(
+        UUID(uuidString: "00000000-0000-0000-0000-000000000201")
+    )
+    let generation = DocumentGeneration(12)
+    let projectID: ProjectID = "project.cli.viewport"
+    let snapshot = AgentProjectViewportSnapshot(
+        coordinates: AgentProjectViewCoordinates(
+            sessionID: sessionID,
+            projectID: projectID,
+            documentGeneration: generation,
+            transactionRevision: DocumentTransactionRevision(13),
+            publicationSequence: 14,
+            workspaceRevision: WorkspaceRevision(15),
+            isDirty: true,
+            canUndo: true,
+            canRedo: false,
+            diagnostics: []
+        ),
+        evaluationSnapshotID: EvaluationSnapshotID(
+            projectID: projectID,
+            purpose: .presentation,
+            sourceRevision: DocumentTransactionRevision(13)
+        ),
+        items: [],
+        worldBounds: nil,
+        triangleCount: 0,
+        copyTelemetry: .init()
+    )
+    let client = ViewportResponseAgentClient(
+        sessionID: sessionID,
+        expectedGeneration: generation,
+        response: .viewportSnapshot(snapshot)
+    )
+
+    let result = try CLIService().viewportSnapshotLiveSession(
+        sessionID: sessionID,
+        expectedGeneration: generation,
+        client: client
+    )
+
+    #expect(result == snapshot)
+
+    let stale = EditorError(
+        code: .documentGenerationMismatch,
+        message: "stale viewport"
+    )
+    do {
+        _ = try CLIService().viewportSnapshotLiveSession(
+            sessionID: sessionID,
+            expectedGeneration: generation,
+            client: ViewportResponseAgentClient(
+                sessionID: sessionID,
+                expectedGeneration: generation,
+                response: .failure(stale)
+            )
+        )
+        Issue.record("Expected the typed viewport failure.")
+    } catch let error as EditorError {
+        #expect(error.code == .documentGenerationMismatch)
+    }
+
+    do {
+        _ = try CLIService().viewportSnapshotLiveSession(
+            sessionID: sessionID,
+            expectedGeneration: generation,
+            client: ViewportResponseAgentClient(
+                sessionID: sessionID,
+                expectedGeneration: generation,
+                response: .parameters(
+                    ParameterListResult(
+                        message: "mismatched response",
+                        generation: generation,
+                        dirty: false,
+                        parameters: [],
+                        diagnostics: []
+                    )
+                )
+            )
+        )
+        Issue.record("Expected an incompatible viewport response failure.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandFailed)
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliExecutableInspectsConstructionPlanesAndSnapAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {
@@ -10682,6 +10769,42 @@ private final class SceneGraphResponseAgentClient: AgentClientProtocol {
 
     func send(_ request: AgentRequest) async throws -> AgentResponse {
         response
+    }
+}
+
+private final class ViewportResponseAgentClient: AgentClientProtocol {
+    let sessionID: UUID
+    let expectedGeneration: DocumentGeneration
+    let response: AgentResponse
+
+    init(
+        sessionID: UUID,
+        expectedGeneration: DocumentGeneration,
+        response: AgentResponse
+    ) {
+        self.sessionID = sessionID
+        self.expectedGeneration = expectedGeneration
+        self.response = response
+    }
+
+    func send(_ request: AgentRequest) throws -> AgentResponse {
+        try validatedResponse(for: request)
+    }
+
+    func send(_ request: AgentRequest) async throws -> AgentResponse {
+        try validatedResponse(for: request)
+    }
+
+    private func validatedResponse(for request: AgentRequest) throws -> AgentResponse {
+        guard case let .viewportSnapshot(requestSessionID, requestGeneration) = request,
+              requestSessionID == sessionID,
+              requestGeneration == expectedGeneration else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Unexpected viewport snapshot Agent request."
+            )
+        }
+        return response
     }
 }
 

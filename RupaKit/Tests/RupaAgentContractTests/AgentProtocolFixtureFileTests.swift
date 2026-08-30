@@ -130,6 +130,7 @@ struct AgentProtocolFixtureFileTests {
         "snap.resolve",
         "document.constructionPlaneSummary",
         "document.sceneGraphSnapshot",
+        "project.viewportSnapshot",
         "document.designDisplaySnapshot",
         "document.patternArraySummary",
         "document.meshSummary",

@@ -184,6 +184,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
              .resolveSnap,
              .constructionPlaneSummary,
              .sceneGraphSnapshot,
+             .viewportSnapshot,
              .designDisplaySnapshot,
              .patternArraySummary,
              .meshSummary,
@@ -812,12 +813,26 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
         let workspace = lease.workspace
         let snapshot = try currentView(workspace)
         let executor = snapshotReadExecutor
-        let response = try await Task.detached(priority: nil) {
-            try executor.execute(request, from: snapshot)
-        }.value
+        let operationGuard = lease.operationGuard
+        let projectionTask = Task.detached(priority: nil) {
+            try executor.execute(
+                request,
+                from: snapshot,
+                operationGuard: {
+                    try Task.checkCancellation()
+                    try operationGuard()
+                }
+            )
+        }
+        let response = try await withTaskCancellationHandler {
+            try await projectionTask.value
+        } onCancel: {
+            projectionTask.cancel()
+        }
+        try Task.checkCancellation()
         return try await workspace.withValidatedAuthority(
             from: snapshot,
-            operationGuard: lease.operationGuard
+            operationGuard: operationGuard
         ) {
             response
         }

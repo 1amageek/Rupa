@@ -12,7 +12,9 @@ It has no child design.
 ## Responsibilities and Boundaries
 
 The module owns method names, Codable payloads, response projections, capability
-descriptors, and malformed-message rejection. It reuses Codable RupaKit Mesh
+descriptors, and malformed-message rejection. It also owns the geometry-buffer-free
+projection of the exact immutable project viewport consumed by the application.
+It reuses Codable RupaKit Mesh
 handles, limits, cursors, element records, catalogs, and RupaGeometry plans and
 receipts instead of defining a second geometry vocabulary.
 
@@ -25,7 +27,7 @@ rasterize previews.
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [package design](../../DESIGN.md) | parent | dependency direction and T10 scope | Places this adapter above RupaKit values and below runtime/transport. | No reverse dependency from RupaKit is allowed. |
-| [RupaKit use cases](../RupaKit/DESIGN.md) | depends on | Codable Mesh value contracts | Supplies one canonical Mesh vocabulary. | `ProjectViewSnapshot` is process-local and never encoded. |
+| [RupaKit use cases](../RupaKit/DESIGN.md) | depends on | Codable Mesh values and immutable `ProjectViewSnapshot` | Supplies one canonical Mesh vocabulary and the exact application viewport snapshot. | `ProjectViewSnapshot` and `MeshSource` buffers are process-local and never encoded. |
 | [RupaGeometry](../RupaGeometry/DESIGN.md) | depends on | `MeshEditPlan`, `MeshEditReceipt`, and `GeometryCopyTelemetry` values | Supplies the bounded operation and copy-accounting vocabulary carried by Agent messages. | Protocol payloads reuse these values and do not execute plans. |
 | [RupaKit package design](../../DESIGN.md) | depends on through `RupaProjectModel` | Authored Mesh provenance | Supplies the persisted authority provenance projected by Make Editable results. | Provenance is evidence, not permission to mutate project state. |
 | [AgentRuntime](../RupaAgentRuntime/DESIGN.md) | used by | decoded typed requests and projected results | Binds messages to registered project authority. | Runtime errors remain typed, never a success fallback. |
@@ -45,6 +47,8 @@ flowchart LR
     DTO --> Runtime["RupaAgentRuntime"]
     Runtime --> Result["Protocol-owned result projection"]
     Result --> Envelope
+    ProjectView["ProjectViewSnapshot.viewport"] --> Summary["Geometry-free visible-item summary"]
+    Summary --> Result
 ```
 
 ## Contracts and Invariants
@@ -87,6 +91,14 @@ flowchart LR
     visibility, lock state, child IDs, and local transforms. It does not carry
     evaluated CAD/Mesh buffers. `document.designDisplaySnapshot` remains the
     display/evaluated-geometry contract and is not enlarged for navigation.
+12. `project.viewportSnapshot` projects the exact published
+    `ProjectViewSnapshot.viewport` in deterministic occurrence-ID order. Each
+    visible item carries its explicit scene-node navigation target, selected
+    representation authority, world transform and bounds, and checked element
+    and renderable triangle counts. The result carries exact project-view coordinates,
+    evaluation snapshot identity, aggregate world bounds, overflow-checked
+    aggregate triangle count, and existing copy telemetry, but never encodes
+    `MeshSource` or any geometry buffer.
 
 ## Runtime Flows
 
@@ -125,3 +137,6 @@ preserve exact current node values on round trip and reject stale generations.
 Any payload change requires rechecking
 AgentRuntime mapping, the application router, transport fixtures, capability
 descriptors, package dependencies, and the system workflow.
+Viewport-snapshot codec tests must preserve exact coordinates, source-reference
+discriminators, transforms, bounds, counts, telemetry, and deterministic item
+order without adding a serialized geometry-buffer field.

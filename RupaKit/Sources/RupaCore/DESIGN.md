@@ -30,6 +30,8 @@ Parent: [RupaKit package design](../../DESIGN.md). Children: none for T09.
 - immutable, deterministic Product scene-graph projections that expose
   identity, hierarchy, source linkage, visibility, lock state, and transforms
   without evaluating or copying CAD/Mesh geometry.
+- effective scene-node visibility resolved from the Product root hierarchy;
+  a hidden ancestor suppresses every descendant without deleting its source.
 
 It does not own Mesh algorithms, plan execution internals, project package I/O,
 project revision publication, view projection, or Agent/CLI/MCP transport.
@@ -126,6 +128,10 @@ unique copy to satisfy a single scene selection.
 10. A scene-graph result reports Product scene nodes in deterministic ID order
     and preserves root ordering. It does not evaluate CAD/Mesh geometry, mutate
     source, or treat CAD-local body bounds as placed geometry.
+11. Effective visibility is derived only from Product root reachability and each
+    node's `isVisible` value. Hidden nodes and descendants remain retained source
+    and navigation identities; presentation consumers omit them without deleting
+    CAD features, representations, or Authored Mesh assets.
 
 ### Executor substitution boundary
 
@@ -199,6 +205,7 @@ T09-B owns the following behavioral proof:
 | Independence | CAD/Product/selection/provenance bytes remain unchanged after Mesh edit. |
 | History | One command-history entry plus undo/redo behavior. |
 | Error handling | Typed failures do not publish a partial document. |
+| Product visibility | Root, hidden-parent, visible-sibling, and hidden-descendant cases prove one effective-visibility result without source deletion. |
 
 Changes to target identity, asset replacement, provenance, or Core command
 decoding require rechecking `RupaProject` staging and the system source-authority

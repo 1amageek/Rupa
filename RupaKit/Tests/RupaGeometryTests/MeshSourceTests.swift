@@ -1,5 +1,6 @@
 import Foundation
 import RupaCoreTypes
+import Synchronization
 import Testing
 @testable import RupaGeometry
 
@@ -541,6 +542,127 @@ func meshSourceTriangulationReportsFaceRangeArithmeticOverflow() throws {
     #expect(telemetry.cornerVisits == 0)
 }
 
+@Test(.timeLimit(.minutes(1)))
+func meshSourceRenderableTriangleCountUsesOneIndexAndDoesNotMaterializeSourcePositions() throws {
+    var builder = MeshSourceBuilder(identity: "fixture.triangulation-count")
+    let first = try builder.addVertex(GeometryPoint3D(x: 0, y: 0, z: 0))
+    let second = try builder.addVertex(GeometryPoint3D(x: 1, y: 0, z: 0))
+    let third = try builder.addVertex(GeometryPoint3D(x: 1, y: 1, z: 0))
+    let fourth = try builder.addVertex(GeometryPoint3D(x: 0, y: 1, z: 0))
+    let fifth = try builder.addVertex(GeometryPoint3D(x: 2, y: 0, z: 0))
+    let sixth = try builder.addVertex(GeometryPoint3D(x: 2, y: 1, z: 0))
+    _ = try builder.addFace(vertexIDs: [first, second, third, fourth])
+    _ = try builder.addFace(vertexIDs: [second, fifth, sixth, third])
+    let source = try builder.build()
+    var telemetry = MeshTriangulationTelemetry()
+
+    let triangleCount = try source.triangulatedTriangleCount(
+        telemetry: &telemetry
+    )
+
+    #expect(triangleCount == 4)
+    #expect(telemetry.faceVisits == 2)
+    #expect(telemetry.cornerVisits == 8)
+    #expect(telemetry.indexedVertexLookups == 8)
+    #expect(telemetry.positionReads == 8)
+    #expect(telemetry.globalIdentifierScans == 0)
+    #expect(telemetry.sourcePositionMaterializations == 0)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func meshSourceRenderableTriangleCountRejectsNonPlanarAndDegenerateFaces() throws {
+    let nonPlanar = try makeTriangulationSource(
+        identity: "fixture.triangulation-count-nonplanar",
+        points: [
+            GeometryPoint3D(x: 0, y: 0, z: 0),
+            GeometryPoint3D(x: 1, y: 0, z: 0),
+            GeometryPoint3D(x: 1, y: 1, z: 0.25),
+            GeometryPoint3D(x: 0, y: 1, z: 0),
+        ]
+    )
+    let degenerate = try makeTriangulationSource(
+        identity: "fixture.triangulation-count-degenerate",
+        points: [
+            GeometryPoint3D(x: 0, y: 0, z: 0),
+            GeometryPoint3D(x: 1, y: 0, z: 0),
+            GeometryPoint3D(x: 2, y: 0, z: 0),
+            GeometryPoint3D(x: 3, y: 0, z: 0),
+        ]
+    )
+
+    do {
+        _ = try nonPlanar.triangulatedTriangleCount()
+        Issue.record("Expected non-planar renderability to fail.")
+    } catch let error as MeshTriangulationError {
+        #expect(error.code == .nonPlanar)
+    }
+    do {
+        _ = try degenerate.triangulatedTriangleCount()
+        Issue.record("Expected degenerate renderability to fail.")
+    } catch let error as MeshTriangulationError {
+        #expect(error.code == .degenerate)
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func meshSourceRenderableTriangleCountPreservesTheTriangulationBudgetFailure() throws {
+    let source = try makeTriangulationSource(
+        identity: "fixture.triangulation-count-budget",
+        points: [
+            GeometryPoint3D(x: 0, y: 0, z: 0),
+            GeometryPoint3D(x: 3, y: 0, z: 0),
+            GeometryPoint3D(x: 3, y: 3, z: 0),
+            GeometryPoint3D(x: 1, y: 1, z: 0),
+            GeometryPoint3D(x: 0, y: 3, z: 0),
+        ]
+    )
+
+    do {
+        _ = try source.triangulatedTriangleCount(
+            limits: MeshTriangulationLimits(
+                maxFaceCornerCount: 16_384,
+                maxNonConvexWorkUnits: 0
+            )
+        )
+        Issue.record("Expected the renderable triangle count to preserve budget failure.")
+    } catch let error as MeshTriangulationError {
+        #expect(error.code == .budgetExceeded)
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func meshSourceRenderableTriangleCountObservesCancellationBetweenFaces() throws {
+    var builder = MeshSourceBuilder(identity: "fixture.triangulation-count-cancel")
+    let first = try builder.addVertex(GeometryPoint3D(x: 0, y: 0, z: 0))
+    let second = try builder.addVertex(GeometryPoint3D(x: 1, y: 0, z: 0))
+    let third = try builder.addVertex(GeometryPoint3D(x: 1, y: 1, z: 0))
+    let fourth = try builder.addVertex(GeometryPoint3D(x: 0, y: 1, z: 0))
+    _ = try builder.addFace(vertexIDs: [first, second, third])
+    _ = try builder.addFace(vertexIDs: [first, third, fourth])
+    let source = try builder.build()
+    let checkpointCount = Mutex(0)
+    var telemetry = MeshTriangulationTelemetry()
+
+    do {
+        _ = try source.triangulatedTriangleCount(
+            telemetry: &telemetry,
+            checkCancellation: {
+                let shouldCancel = checkpointCount.withLock { count in
+                    count += 1
+                    return count == 4
+                }
+                if shouldCancel {
+                    throw CancellationError()
+                }
+            }
+        )
+        Issue.record("Expected triangle counting to observe cancellation.")
+    } catch is CancellationError {
+        #expect(checkpointCount.withLock { $0 } == 4)
+        #expect(telemetry.faceVisits == 1)
+    }
+}
+
 private func makeTriangulationSquare(identity: GeometrySourceID) throws -> MeshSource {
     var builder = MeshSourceBuilder(identity: identity)
     let first = try builder.addVertex(GeometryPoint3D(x: 0, y: 0, z: 0))
@@ -548,6 +670,16 @@ private func makeTriangulationSquare(identity: GeometrySourceID) throws -> MeshS
     let third = try builder.addVertex(GeometryPoint3D(x: 1, y: 1, z: 0))
     let fourth = try builder.addVertex(GeometryPoint3D(x: 0, y: 1, z: 0))
     _ = try builder.addFace(vertexIDs: [first, second, third, fourth])
+    return try builder.build()
+}
+
+private func makeTriangulationSource(
+    identity: GeometrySourceID,
+    points: [GeometryPoint3D]
+) throws -> MeshSource {
+    var builder = MeshSourceBuilder(identity: identity)
+    let vertices = try points.map { try builder.addVertex($0) }
+    _ = try builder.addFace(vertexIDs: vertices)
     return try builder.build()
 }
 

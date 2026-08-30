@@ -21,6 +21,12 @@ state, child IDs, and local transforms from the registered workspace. It does
 not request evaluated CAD/Mesh buffers, reconstruct placement from CAD-local
 bounds, or introduce a second read or mutation authority.
 
+`inspect viewport` exposes the exact immutable visible-item projection returned
+by `project.viewportSnapshot`, including project coordinates, navigation IDs,
+selected representation authority, world transforms and bounds, checked Mesh
+counts, aggregate bounds and triangle count, and copy telemetry. It is a
+live-only read and never receives geometry buffers.
+
 The current direct file route remains a known transitional implementation until
 ACCESS-D and is not an alternative authority accepted by this design.
 
@@ -52,6 +58,9 @@ flowchart LR
 5. `inspect scene-graph` is a live Agent read. It carries the exact session and
    expected generation, returns a geometry-free immutable snapshot, and fails
    instead of falling back to direct file decoding.
+6. `inspect viewport` is a live Agent read with the same explicit session and
+   generation fence. It prints the protocol-owned geometry-free viewport result
+   and has no file fallback, mutation, save, or UI interaction path.
 
 ## Runtime Flows
 
@@ -77,3 +86,6 @@ executable syntax, retained-command parity, explicit-mode, and legacy-route
 absence tests. The scene-graph adapter is verified by exact request routing,
 scene-node transform/visibility JSON projection, stale-generation rejection,
 and an actual bounded CLI-to-Agent process test.
+The viewport adapter is verified by exact live request routing, response
+projection, stale-generation preservation, and executable JSON decoding with no
+serialized Mesh buffer fields.

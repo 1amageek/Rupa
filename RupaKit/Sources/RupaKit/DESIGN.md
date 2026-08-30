@@ -33,6 +33,8 @@ Parent: [RupaKit package design](../../DESIGN.md). Children: none.
   `ProjectSourceTransaction`;
 - full `ProjectViewSnapshot` validation before and after reads, plus
   revalidation, cancellation propagation, and exact-view return behavior.
+- Project-view composition that keeps every retained/evaluated occurrence but
+  emits viewport items only for effectively visible Product scene nodes.
 - an exact-snapshot Make Editable use case that asks `ProjectOperating` to
   prepare the current CAD modeling evaluation, commits it through one existing
   source transaction, and returns the exact view plus new Mesh handle.
@@ -190,6 +192,10 @@ authority before returning data.
     one `derivedFromCAD` Authored Mesh asset/representation, optionally switches
     presentation, returns a handle bound to the exact committed view, and
     preserves the existing postcommit no-retry contract.
+16. Product visibility affects only the published project viewport. The source
+    projection and presentation evaluation retain hidden occurrences, while the
+    `ProjectViewSnapshot` filters items using Core's hierarchy-aware effective
+    visibility and preserves the complete occurrence-to-scene navigation index.
 
 ## Runtime Flows
 
@@ -258,6 +264,7 @@ T09-C owns the following behavioral proof:
 | Invariant | Required evidence |
 |---|---|
 | Handle authority | Catalog/reference accuracy including selected and unselected retained representations, selected-purpose ordering, stale handle, source/content mismatch, and separate full-snapshot validation. |
+| Project visibility | A ProjectController source transaction hides and restores one body through Product visibility; evaluation retains the occurrence while the project viewport and world bounds exclude it. |
 | Bounded reads | Raw source-ID catalog order, numeric raw element-ID tie breaking including multi-digit IDs, source-buffer pagination, cursor mismatch, neighborhood graph/order, response-wide cumulative depth/scan/output/reference-unit limits, exact three-unit catalog references, and pre-materialization rejection. Multi-source catalog, late-corner page, and large neighborhood fixtures must exercise the declared scan ceiling. |
 | Record integrity | Vertex/edge/face/corner field completeness, empty bounds as `nil`, and no partial record at a limit boundary. |
 | Cancellation | Full project/generation/transaction/publication/workspace pre/post-read checks and cancellation rejection. Post-read stale proof must mutate a real authority coordinate between the two validations and demonstrate rejection by the Project authority, rather than synthesizing the stale error in a test hook. |

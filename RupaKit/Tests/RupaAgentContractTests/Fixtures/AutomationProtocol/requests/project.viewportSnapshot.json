@@ -1,0 +1,11 @@
+{
+  "jsonrpc": "2.0",
+  "id": "project.viewportSnapshot-1",
+  "method": "project.viewportSnapshot",
+  "params": {
+    "sessionID": "00000000-0000-0000-0000-000000000001",
+    "expectedGeneration": {
+      "value": 2
+    }
+  }
+}
