@@ -402,6 +402,13 @@ CAD dependency. Changes to CAD do not silently update requirements or analysis.
 | V8-C CAD | Semantic part inventory, exact public Agent requests, one atomic publication, post-load measurements, topology/viewer evaluation, and no hidden fixture authority. |
 | V8-V integration | Exact hashes, deterministic generated reports, cross-document dependency audit, failure/claim review, commit synchronization, and branch publication. |
 
+The cumulative [integration-report.json](integration-report.json) binds the
+requirements, thermal analysis, mechanical analysis, semantic architecture,
+CAD manifest, public batch, native CAD, and executed verification by exact
+hash. Nineteen unresolved production-release gates remain visible. Therefore
+the P2 professional engineering reference passes while production release is
+explicitly rejected.
+
 A change to power, torque, speed, fuel, ambient, life, duty, bore, stroke, rod,
 boost, compression ratio, heat split, material, or subsystem architecture
 requires rerunning V8-T and V8-M and rechecking dependent CAD. A change to Rupa

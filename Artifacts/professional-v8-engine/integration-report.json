@@ -1,0 +1,70 @@
+{
+  "cadEvidence": {
+    "artifactSHA256": "70b7571ad28920c34d592ea4c711152ea4dc6b6b3ece0f1f77025971e4c10128",
+    "meshTriangles": 4600116,
+    "semanticParts": 168,
+    "sourceBodies": 202,
+    "sourceFeatures": 404,
+    "topologyFaces": 1212
+  },
+  "claimLevel": "P2-engineering-reference",
+  "mechanicalEvidence": {
+    "designGasForceKilonewtons": 116.176096,
+    "grossRodCompressionKilonewtons": 132.527329,
+    "meanPistonSpeedMetersPerSecond": 20.066667,
+    "rodEulerRatio": 2.035574
+  },
+  "openProductionReleaseGates": [
+    "1D gas-exchange model with turbine A/R and backpressure",
+    "bearing oil films, clearances, and surface finishes",
+    "cast and forged wall sections, fillets, fasteners, and tolerances",
+    "combustion and knock model with cylinder pressure traces",
+    "combustion chambers and gas-exchange ports",
+    "combustion pressure traces and abnormal combustion cases",
+    "crankshaft torsional and bending dynamics with damper optimization",
+    "digitized compressor maps with surge, choke, speed, and efficiency margins",
+    "dyno heat-balance and SAE J1349 measurement",
+    "head-gasket sealing, bore distortion, thermal growth, and joint relaxation",
+    "hollow coolant jackets and galleries",
+    "hydrodynamic main, rod, pin, and cam bearing analysis",
+    "lubrication rig, aeration, windage, scavenge, and starvation validation",
+    "physical fatigue, overspeed, thermal-cycle, and durability testing",
+    "rod, piston, pin, crankshaft, block, head, and fastener nonlinear FEA",
+    "seals, rings, valve seats, springs, timing drive, and accessory drive",
+    "temperature-dependent material allowables and forging/casting processes",
+    "valvetrain dynamics, spring surge, contact stress, and piston-to-valve clearance",
+    "vehicle radiator, duct, fan, pump, and altitude validation"
+  ],
+  "product": {
+    "architecture": "90-degree-cross-plane-parallel-twin-turbo-V8",
+    "displacementLiters": 3.996457714,
+    "peakTorqueNewtonMeters": 750.0,
+    "redlineRPM": 7000,
+    "targetPowerKilowatts": 450.0
+  },
+  "provenance": {
+    "cadBatchSHA256": "66203f520c6c2601f6a7313000439fa96c91cfdc72e4afeac7545be6a18ad83d",
+    "cadManifestSHA256": "f4bb736ae9579cc48e888e21baa80e5d9c28a78ebb39f665832d7092836b68af",
+    "cadVerificationSHA256": "64e5a071629f8b31c987fca29c2212a8796b98d9403946b6f9a9c638cab872c6",
+    "mechanicalAnalysisSHA256": "ae4c3e29cf7b67b62e5f5783380dc6084f2a5d0838c67fcb678466d6bae96834",
+    "requirementsSHA256": "e09b40a31cf3ca8c12d817b91d832e97004dfb88a38167e616557e206c204add",
+    "semanticArchitectureSHA256": "c12fd0b0bee1543488004c5467d3201d79fcd74bd6007332b091f1727d91c8d9",
+    "thermalAnalysisSHA256": "fd4d94ecb8d195e4e001503d14b5f8bc0b13206bb55aa2a1fe3d6834fd2d68f1"
+  },
+  "schemaVersion": "professional-v8.integration-verification.v1",
+  "status": "p2-professional-engineering-reference-verified-production-release-rejected",
+  "thermalEvidence": {
+    "estimatedTurbineInletCelsius": 906.376812,
+    "fuelMassKilogramsPerHour": 111.585618,
+    "heatClosureErrorWatts": 0.0,
+    "highTemperatureCoolantKilowatts": 291.176471,
+    "oilKilowatts": 46.323529,
+    "peakBMEPBar": 23.582829
+  },
+  "verifiedSprintCommits": {
+    "V8-0": "473821b8",
+    "V8-C": "a0bf0466",
+    "V8-M": "9bc5e82",
+    "V8-T": "e33ba27"
+  }
+}
