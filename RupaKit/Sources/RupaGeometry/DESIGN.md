@@ -2,8 +2,9 @@
 
 ## Purpose and Scope
 
-This module owns provider-independent immutable Mesh data and the bounded,
-declarative edit-plan executor introduced by T09. It is a child of the
+This module owns provider-independent immutable Mesh data, the bounded,
+declarative edit-plan executor introduced by T09, and the source-order
+triangulation primitive consumed by presentation rendering. It is a child of the
 [RupaKit package design](../../DESIGN.md), with the
 [system design](../../../DESIGN.md) as its root parent.
 
@@ -28,10 +29,17 @@ through the package's native target graph.
 - constructing a validated execution from the same buffer operations and step
   outputs that produced the result;
 - copy telemetry and zero-copy evidence for unchanged storage.
+- source-order Mesh triangulation indexes, convex linear-fan triangulation, and
+  budgeted non-convex triangulation.
 
 It does not own Product Objects, representation selection, Authored Mesh
 provenance, CAD evaluation, project revisions, package paths, UI selection, or
 Agent/CLI/MCP transport.
+
+Presentation triangulation is a read-only operation. It borrows the immutable
+`MeshSource` buffers, builds one bounded vertex-ID-to-source-index map per
+source, and uses source-order face/corner indices for all subsequent reads. It
+does not materialize a replacement `GeometryBuffer` or mutate source storage.
 
 The operation/output vocabulary is local to this module:
 
@@ -94,6 +102,9 @@ flowchart TD
     Limits --> Execute["Ordered execution in one buffer"]
     Execute --> Translate["Deduplicated vertex translation"]
     Execute --> Extrude["Connected orientable manifold extrusion"]
+    Source --> Triangulation["Source-order triangulation index"]
+    Triangulation --> Convex["Convex linear fan"]
+    Triangulation --> Concave["Budgeted ear clipping"]
     Execute --> Receipt["Checked step outputs + telemetry"]
     Receipt --> Commit["Validated execution construction"]
 ```
@@ -102,6 +113,33 @@ Primitive edits are the lower-level escape hatch for Core and tests. Semantic
 operations are the preferred Agent-facing meaning, but this module itself does
 not expose Agent transport. A plan is declarative: no loops, callbacks,
 conditionals, arbitrary code, or forward output references.
+
+### Presentation triangulation
+
+`MeshSourceTriangulationIndex` is an immutable source-bound index. It stores
+the source identity, vertex count, exact immutable vertex-ID buffer storage
+identity, and one bounded dictionary from each `MeshVertexID` to its
+source-order position index. The index is validated at the consumer boundary
+so a stale index cannot read a different source layout while a value copy that
+shares the same immutable storage remains valid.
+
+`MeshSource.triangulate(faceIndex:using:)` reads the face range and corner
+vertex IDs by direct source-order indices. A convex planar face, classified by
+scale-aware turn signs rather than an absolute coordinate-area threshold, emits
+`(v0, vi, vi+1)` in input order, preserving the source winding in linear work.
+Non-convex or collinear faces use deterministic ear clipping and charge every
+candidate and point-in-triangle inspection against a caller-lowerable hard
+work budget. Budget exhaustion is a typed failure; it never returns a partial
+triangle list. The existing face-ID API resolves the face once and delegates to
+this path, so it cannot perform a global ID scan for every corner.
+
+The triangulation API may report immutable counters for face visits, corner
+visits, indexed vertex lookups, position reads, bounded scratch position values,
+non-convex work, and global ID scans. The optimized presentation path must
+report zero global ID scans after its one source-bound index is built and zero
+GeometryBuffer position materialization or copy events. Temporary per-face
+arrays used by ear clipping are bounded scratch state and are counted
+separately; they are not replacement source buffers.
 
 ## Contracts and Invariants
 
@@ -164,6 +202,24 @@ conditionals, arbitrary code, or forward output references.
    mutation or allocation. No UV, normal, or other attribute is silently lost.
 10. No-op plans, including a zero-offset translation, preserve source identity
     and produce an explicit no-op receipt.
+
+### Triangulation invariants
+
+1. The source-bound index is built once per presentation item and has at most
+   one entry per source vertex. It never owns or copies a GeometryBuffer.
+2. Face ranges, corner IDs, corner vertex IDs, and positions are read in source
+   order with checked index arithmetic. Missing, stale, or out-of-range
+   references fail before a result is returned.
+3. Triangles preserve the input loop winding. Convex planar faces use a linear
+   fan; materially non-convex or collinear faces use deterministic ear clipping.
+4. Ear clipping charges candidate and containment work before each charged
+   operation. The effective limit cannot exceed the module hard ceiling.
+5. A triangulation failure returns no partial triangle result. Existing missing
+   face, non-planar, degenerate, and failed error semantics remain stable;
+   budget exhaustion and stale index use are additional typed failures.
+6. Triangulation never invokes `GeometryBuffer.firstIndex(of:)` on the
+   presentation path after index construction. The plan retains the immutable
+   source and its source-bound index for later render passes.
 
 ### Validated execution construction
 
@@ -239,6 +295,21 @@ changing the other ceilings requires this design and the boundary tests.
 Every zero-copy claim requires source/result buffer identity plus copy telemetry
 or a named benchmark.
 
+Triangulation uses a separate hard budget because a face can contain many
+corners without changing the Mesh edit limits:
+
+| Limit | Standard default | Hard ceiling |
+|---|---:|---:|
+| Face corners | 16,384 | 16,384 |
+| Non-convex work units | 1,000,000 | 1,000,000 |
+
+The standard and hard limits are explicit and callers may only lower them. The
+standard limits accept the measured approximately 6,000-segment convex
+cylinder through the scale-aware linear fan. A non-convex face that would
+exceed the work budget fails with `MeshTriangulationError.Code.budgetExceeded`;
+the budget is never relaxed based on elapsed time or a successful partial
+result.
+
 ## Runtime Flows
 
 ```mermaid
@@ -301,7 +372,7 @@ The module proof is T09-A:
 | Attribute contract | Attribute-preserving translation and typed topology-remap failure tests. |
 | Atomicity | Mid-plan failure leaves no committed result. |
 | Execution semantics | Exact step roles/order and aliases from direct buffer results, persistent allocation/non-reuse, valid create-then-delete plans, and absence of a second topology replay. |
-| Performance | Unchanged chunk identity, one-buffer telemetry, hard-boundary limits, and measured copy ceilings. |
+| Performance | Unchanged chunk identity, one-buffer telemetry, hard-boundary limits, measured copy ceilings, source-order triangulation counters, convex linear-fan work, and typed non-convex budget failure. |
 
 Changes to source buffer layout, ID allocation, attribute handling, or executor
 limits require rechecking the package and system designs and the RupaCore

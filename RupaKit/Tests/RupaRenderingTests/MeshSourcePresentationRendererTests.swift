@@ -286,6 +286,44 @@ func meshSourcePresentationRendererMapsGeometryTriangulationFailures() throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
+func meshSourcePresentationRendererMapsFaceRangeArithmeticOverflow() throws {
+    let (scene, source) = try presentationScene(
+        references: [.authoredMesh(GeometrySourceID(rawValue: "mesh.presentation"))],
+        transforms: [.identity]
+    )
+    let malformedSource = try sourceWithFaceCornerRange(
+        source: source,
+        range: MeshIndexRange(start: Int.max, count: 3)
+    )
+    let item = scene.items[0]
+    let malformedItem = UniversalViewportSceneItem(
+        id: item.id,
+        definitionID: item.definitionID,
+        displayName: item.displayName,
+        representationID: item.representationID,
+        reference: item.sourceReference,
+        mesh: malformedSource,
+        worldTransform: item.worldTransform,
+        worldBounds: item.worldBounds
+    )
+    let malformedScene = UniversalViewportScene(
+        snapshotID: scene.snapshotID,
+        projectID: scene.projectID,
+        items: [malformedItem],
+        copyTelemetry: scene.copyTelemetry
+    )
+    var error: MeshSourcePresentationRenderError?
+
+    do {
+        _ = try MeshSourcePresentationRenderPlan(scene: malformedScene)
+    } catch let caught as MeshSourcePresentationRenderError {
+        error = caught
+    }
+
+    #expect(error?.code == .sizeOverflow)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func meshSourcePresentationRendererReportsTransformFailureDuringConsumption() throws {
     let sourceReference = GeometrySourceReference.authoredMesh(
         GeometrySourceID(rawValue: "mesh.presentation")
@@ -327,6 +365,122 @@ func meshSourcePresentationRendererReportsTransformFailureDuringConsumption() th
         error = caught
     }
     #expect(error?.code == .transformFailure)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func meshSourcePresentationRenderPlanUsesBoundedSourceOrderForHighSegmentCylinder() throws {
+    let segmentCount = 6_284
+    let source = try presentationHighSegmentCylinderSource(segmentCount: segmentCount)
+    let sourceReference = GeometrySourceReference.authoredMesh(source.identity)
+    let scene = try presentationScene(
+        source: source,
+        references: [sourceReference],
+        transforms: [.identity]
+    ).scene
+    let initialChunkIdentities = sourceChunkIdentitySummary(source)
+    let start = Date()
+    let renderer = MeshSourcePresentationRenderer()
+    let plan = try renderer.makePlan(for: scene)
+    let elapsed = Date().timeIntervalSince(start)
+
+    #expect(elapsed < 2.0)
+    #expect(plan.itemCount == 1)
+    #expect(plan.triangleCount == 4 * segmentCount - 4)
+    #expect(plan.telemetry.faceVisits == segmentCount + 2)
+    #expect(plan.telemetry.cornerVisits == 6 * segmentCount)
+    #expect(plan.telemetry.indexedVertexLookups == 6 * segmentCount)
+    #expect(plan.telemetry.positionReads == 6 * segmentCount)
+    #expect(plan.telemetry.scratchPositionValues == 6 * segmentCount)
+    #expect(plan.telemetry.nonConvexWorkUnits == 0)
+    #expect(plan.telemetry.globalIdentifierScans == 0)
+    #expect(plan.telemetry.sourcePositionMaterializations == 0)
+    #expect(sourceChunkIdentitySummary(scene.items[0].mesh) == initialChunkIdentities)
+    #expect(scene.items[0].copyTelemetry == GeometryCopyTelemetry())
+
+    var emittedCount = 0
+    try renderer.render(plan: plan) { triangle in
+        emittedCount += 1
+        #expect(triangle.sourceReference == sourceReference)
+    }
+    #expect(emittedCount == 4 * segmentCount - 4)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func meshSourcePresentationRenderPlanReportsConcaveBudgetFailureWithoutPartialPlan() throws {
+    let source = try presentationConcaveSource()
+    let sourceReference = GeometrySourceReference.authoredMesh(source.identity)
+    let scene = try presentationScene(
+        source: source,
+        references: [sourceReference],
+        transforms: [.identity]
+    ).scene
+
+    var error: MeshSourcePresentationRenderError?
+    do {
+        _ = try MeshSourcePresentationRenderPlan(
+            scene: scene,
+            limits: MeshTriangulationLimits(
+                maxFaceCornerCount: 16_384,
+                maxNonConvexWorkUnits: 0
+            )
+        )
+    } catch let caught as MeshSourcePresentationRenderError {
+        error = caught
+    }
+
+    #expect(error?.code == .budgetExceeded)
+}
+
+private func presentationHighSegmentCylinderSource(segmentCount: Int) throws -> MeshSource {
+    let radius = 0.035
+    let length = 0.45
+    let centerX = 10.0
+    let centerY = -7.0
+    var builder = MeshSourceBuilder(identity: "mesh.presentation-high-segment-cylinder")
+    try builder.reserveCapacity(
+        vertexCount: 2 * segmentCount,
+        faceCount: segmentCount + 2,
+        cornerCount: 6 * segmentCount
+    )
+    var bottomVertices: [MeshVertexID] = []
+    bottomVertices.reserveCapacity(segmentCount)
+    var topVertices: [MeshVertexID] = []
+    topVertices.reserveCapacity(segmentCount)
+    for index in 0..<segmentCount {
+        let angle = 2.0 * Double.pi * Double(index) / Double(segmentCount)
+        let x = centerX + radius * cos(angle)
+        let y = centerY + radius * sin(angle)
+        bottomVertices.append(
+            try builder.addVertex(
+                GeometryPoint3D(
+                    x: x,
+                    y: y,
+                    z: 0
+                )
+            )
+        )
+        topVertices.append(
+            try builder.addVertex(
+                GeometryPoint3D(
+                    x: x,
+                    y: y,
+                    z: length
+                )
+            )
+        )
+    }
+    _ = try builder.addFace(vertexIDs: bottomVertices.reversed())
+    _ = try builder.addFace(vertexIDs: topVertices)
+    for index in 0..<segmentCount {
+        let nextIndex = (index + 1) % segmentCount
+        _ = try builder.addFace(vertexIDs: [
+            bottomVertices[index],
+            bottomVertices[nextIndex],
+            topVertices[nextIndex],
+            topVertices[index],
+        ])
+    }
+    return try builder.build()
 }
 
 private func presentationScene(
@@ -500,6 +654,25 @@ private func sourceWithMissingCornerVertex(source: MeshSource) throws -> MeshSou
         ["rawValue": 2],
         ["rawValue": 99],
     ]
+    let malformedData = try JSONSerialization.data(withJSONObject: object)
+    return try JSONDecoder().decode(MeshSource.self, from: malformedData)
+}
+
+private func sourceWithFaceCornerRange(
+    source: MeshSource,
+    range: MeshIndexRange
+) throws -> MeshSource {
+    let encoded = try JSONEncoder().encode(source)
+    guard var object = try JSONSerialization.jsonObject(with: encoded) as? [String: Any],
+          var ranges = object["faceCornerRanges"] as? [[String: Any]],
+          !ranges.isEmpty else {
+        throw MeshSourcePresentationRenderError(
+            code: .invalidFaceRange,
+            message: "Presentation test source did not encode a face range."
+        )
+    }
+    ranges[0] = ["start": range.start, "count": range.count]
+    object["faceCornerRanges"] = ranges
     let malformedData = try JSONSerialization.data(withJSONObject: object)
     return try JSONDecoder().decode(MeshSource.self, from: malformedData)
 }

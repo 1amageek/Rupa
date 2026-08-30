@@ -258,7 +258,8 @@ let package = Package(
                 "RupaProjectModel",
                 "RupaViewportScene",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
-            ]
+            ],
+            exclude: ["DESIGN.md"]
         ),
         .target(
             name: "RupaViewportScene",

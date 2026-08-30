@@ -99,6 +99,11 @@ public struct GeometryBuffer<Element: Codable & Sendable>: Codable, Sendable,
         storage.count
     }
 
+    /// Identifies the immutable backing storage without materializing elements.
+    package var storageIdentityToken: GeometryBufferStorageIdentity {
+        storage.identity
+    }
+
     public subscript(position: Int) -> Element {
         storage[position]
     }

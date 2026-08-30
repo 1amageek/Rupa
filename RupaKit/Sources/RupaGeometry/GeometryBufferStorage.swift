@@ -1,9 +1,12 @@
 import Foundation
 
+package final class GeometryBufferStorageIdentity: Sendable {}
+
 struct GeometryBufferStorage<Element: Codable & Sendable>: Sendable {
     let directory: GeometryBufferChunkDirectory<Element>
     let count: Int
     let chunkCapacity: Int
+    let identity: GeometryBufferStorageIdentity
 
     init<C: Collection>(
         _ elements: C,
@@ -51,14 +54,16 @@ struct GeometryBufferStorage<Element: Codable & Sendable>: Sendable {
                 chunkCapacity: chunkCapacity
             ),
             count: count,
-            chunkCapacity: chunkCapacity
+            chunkCapacity: chunkCapacity,
+            identity: GeometryBufferStorageIdentity()
         )
     }
 
     init(
         directory: GeometryBufferChunkDirectory<Element>,
         count: Int,
-        chunkCapacity: Int
+        chunkCapacity: Int,
+        identity: GeometryBufferStorageIdentity = GeometryBufferStorageIdentity()
     ) {
         precondition(count >= 0)
         precondition(chunkCapacity > 0)
@@ -66,6 +71,7 @@ struct GeometryBufferStorage<Element: Codable & Sendable>: Sendable {
         self.directory = directory
         self.count = count
         self.chunkCapacity = chunkCapacity
+        self.identity = identity
     }
 
     subscript(position: Int) -> Element {

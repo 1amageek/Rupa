@@ -10,6 +10,7 @@ project authority.
 Parent: [system design](../DESIGN.md). Direct children used by T10/T12 are:
 
 - [RupaGeometry](Sources/RupaGeometry/DESIGN.md)
+- [RupaRendering](Sources/RupaRendering/DESIGN.md)
 - [RupaCore](Sources/RupaCore/DESIGN.md)
 - [RupaProject](Sources/RupaProject/DESIGN.md)
 - [RupaKit integration target](Sources/RupaKit/DESIGN.md)
@@ -87,6 +88,7 @@ flowchart LR
 | [State and project contract](../Rupa/STATE_AND_PROJECT_CONTRACT.md) | depends on | Project actor, revision, history, cancellation, and publication | Defines the lifecycle used by `RupaProject`. | Do not introduce a parallel session or publication sequence. |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | coordinates with | Existing package graph and application route | Records existing targets and shared workspace composition. | Task-specific contracts remain in this hierarchy. |
 | [RupaGeometry design](Sources/RupaGeometry/DESIGN.md) | child | Plan/executor/buffer contract | Owns Mesh operation and performance semantics. | Package consumers use its public contracts only. |
+| [RupaRendering design](Sources/RupaRendering/DESIGN.md) | child | Snapshot-owned presentation plan and viewport scheduling contract | Owns MeshSource presentation traversal and render invalidation policy. | It consumes immutable snapshots and never becomes a geometry or project authority. |
 | [RupaCore design](Sources/RupaCore/DESIGN.md) | child | Source identity and asset mutation contract | Owns Product/Authored Mesh source authority. | Scene references are navigation context, not authority. |
 | [RupaProject design](Sources/RupaProject/DESIGN.md) | child | Staging/publication contract | Owns project transaction integration. | Geometry algorithms remain below this boundary. |
 | [RupaKit integration design](Sources/RupaKit/DESIGN.md) | child | Transport-neutral read/edit and Make Editable use cases | Owns application-facing exact-snapshot adaptation. | The T10 runtime remains unchanged; the benchmark CLI is a separate upper sibling. |

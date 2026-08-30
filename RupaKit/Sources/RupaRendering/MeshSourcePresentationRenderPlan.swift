@@ -15,6 +15,7 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
     public let projectID: ProjectID
     public let itemCount: Int
     public let triangleCount: Int
+    public let telemetry: MeshSourcePresentationRenderTelemetry
     private let entries: [Entry]
 
     private struct Entry: Sendable {
@@ -24,11 +25,16 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
         let sourceReference: GeometrySourceReference
         let mesh: MeshSource
         let worldTransform: GeometryTransform3D
-        let vertexIndexByID: [MeshVertexID: Int]
+        let triangulationIndex: MeshSourceTriangulationIndex
         let triangles: [MeshTriangle]
         let triangleCount: Int
+        let triangulationTelemetry: MeshTriangulationTelemetry
 
-        init(item: UniversalViewportSceneItem) throws {
+        init(
+            item: UniversalViewportSceneItem,
+            tolerance: Double,
+            limits: MeshTriangulationLimits
+        ) throws {
             do {
                 try item.validate()
             } catch let error as UniversalViewportSceneError {
@@ -63,51 +69,25 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
                 )
             }
 
-            var vertexIndexByID: [MeshVertexID: Int] = [:]
-            vertexIndexByID.reserveCapacity(mesh.vertexIDs.count)
-            for index in mesh.vertexIDs.indices {
-                let vertexID = mesh.vertexIDs[index]
-                guard vertexIndexByID.updateValue(index, forKey: vertexID) == nil else {
-                    throw MeshSourcePresentationRenderError(
-                        code: .invalidVertexReference,
-                        message: "Presentation MeshSource contains duplicate vertex IDs."
-                    )
-                }
+            let triangulationIndex: MeshSourceTriangulationIndex
+            do {
+                triangulationIndex = try mesh.makeTriangulationIndex()
+            } catch let error as MeshTriangulationError {
+                throw MeshSourcePresentationRenderPlan.triangulationError(error)
             }
 
             var triangles: [MeshTriangle] = []
+            var triangulationTelemetry = MeshTriangulationTelemetry()
             for faceIndex in mesh.faceCornerRanges.indices {
-                let range = mesh.faceCornerRanges[faceIndex]
-                do {
-                    try range.validate(upperBound: mesh.cornerVertexIDs.count)
-                } catch let error as MeshSourceError {
-                    throw MeshSourcePresentationRenderError(
-                        code: .invalidFaceRange,
-                        message: error.message
-                    )
-                }
-                guard range.count >= 3 else {
-                    throw MeshSourcePresentationRenderError(
-                        code: .degenerateFace,
-                        message: "Presentation MeshSource faces require at least three corners."
-                    )
-                }
-                var cornerIndex = range.start
-                while cornerIndex < range.end {
-                    let vertexID = mesh.cornerVertexIDs[cornerIndex]
-                    guard vertexIndexByID[vertexID] != nil else {
-                        throw MeshSourcePresentationRenderError(
-                            code: .invalidVertexReference,
-                            message: "Presentation MeshSource corner references a missing vertex."
-                        )
-                    }
-                    cornerIndex += 1
-                }
-
-                let faceID = mesh.faceIDs[faceIndex]
                 let faceTriangles: [MeshTriangle]
                 do {
-                    faceTriangles = try mesh.triangulate(faceID: faceID)
+                    faceTriangles = try mesh.triangulate(
+                        faceIndex: faceIndex,
+                        using: triangulationIndex,
+                        tolerance: tolerance,
+                        limits: limits,
+                        telemetry: &triangulationTelemetry
+                    )
                 } catch let error as MeshTriangulationError {
                     throw MeshSourcePresentationRenderPlan.triangulationError(error)
                 } catch {
@@ -132,9 +112,10 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
             self.sourceReference = item.sourceReference
             self.mesh = mesh
             self.worldTransform = item.worldTransform
-            self.vertexIndexByID = vertexIndexByID
+            self.triangulationIndex = triangulationIndex
             self.triangles = triangles
             self.triangleCount = triangles.count
+            self.triangulationTelemetry = triangulationTelemetry
         }
 
         func forEachTriangle(
@@ -171,7 +152,7 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
         }
 
         private func positionIndex(for vertexID: MeshVertexID) throws -> Int {
-            guard let index = vertexIndexByID[vertexID],
+            guard let index = triangulationIndex.positionIndex(for: vertexID),
                   index >= mesh.vertexPositions.startIndex,
                   index < mesh.vertexPositions.endIndex else {
                 throw MeshSourcePresentationRenderError(
@@ -199,12 +180,21 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
         }
     }
 
-    public init(scene: UniversalViewportScene) throws {
+    public init(
+        scene: UniversalViewportScene,
+        tolerance: Double = 1e-9,
+        limits: MeshTriangulationLimits = .standard
+    ) throws {
         var entries: [Entry] = []
         entries.reserveCapacity(scene.items.count)
         var triangleCount = 0
+        var telemetry = MeshSourcePresentationRenderTelemetry()
         for item in scene.items {
-            let entry = try Entry(item: item)
+            let entry = try Entry(
+                item: item,
+                tolerance: tolerance,
+                limits: limits
+            )
             let addition = triangleCount.addingReportingOverflow(entry.triangleCount)
             guard !addition.overflow else {
                 throw MeshSourcePresentationRenderError(
@@ -213,12 +203,17 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
                 )
             }
             triangleCount = addition.partialValue
+            let telemetryAddition = try telemetry.adding(
+                MeshSourcePresentationRenderTelemetry(entry.triangulationTelemetry)
+            )
+            telemetry = telemetryAddition
             entries.append(entry)
         }
         self.snapshotID = scene.snapshotID
         self.projectID = scene.projectID
         self.itemCount = entries.count
         self.triangleCount = triangleCount
+        self.telemetry = telemetry
         self.entries = entries
     }
 
@@ -255,12 +250,24 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
         switch error.code {
         case .missingFace:
             code = .missingFace
+        case .invalidFaceRange:
+            code = .invalidFaceRange
+        case .degenerateFace:
+            code = .degenerateFace
         case .nonPlanar:
             code = .nonPlanar
         case .degenerate:
             code = .degenerate
         case .failed:
             code = .failed
+        case .invalidReference:
+            code = .invalidVertexReference
+        case .invalidLimits:
+            code = .failed
+        case .budgetExceeded:
+            code = .budgetExceeded
+        case .sizeOverflow:
+            code = .sizeOverflow
         }
         return MeshSourcePresentationRenderError(code: code, message: error.message)
     }

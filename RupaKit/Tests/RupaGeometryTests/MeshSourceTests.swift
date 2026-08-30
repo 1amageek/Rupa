@@ -281,3 +281,291 @@ func meshEditBufferPreservesFaceIdentityAcrossTopologyEdits() throws {
     #expect(!removed.source.faceIDs.contains(originalFaceID))
     #expect(removed.source.faceIDs.contains(addedFaceID))
 }
+
+@Test(.timeLimit(.minutes(1)))
+func meshSourceTriangulationUsesSourceOrderForConvexFaces() throws {
+    var builder = MeshSourceBuilder(identity: "fixture.triangulation-fan")
+    let first = try builder.addVertex(GeometryPoint3D(x: 0, y: 0, z: 0))
+    let second = try builder.addVertex(GeometryPoint3D(x: 2, y: 0, z: 0))
+    let third = try builder.addVertex(GeometryPoint3D(x: 2, y: 2, z: 0))
+    let fourth = try builder.addVertex(GeometryPoint3D(x: 0, y: 2, z: 0))
+    let faceID = try builder.addFace(vertexIDs: [first, second, third, fourth])
+    let source = try builder.build()
+    let index = try source.makeTriangulationIndex()
+    var telemetry = MeshTriangulationTelemetry()
+
+    let triangles = try source.triangulate(
+        faceIndex: 0,
+        using: index,
+        telemetry: &telemetry
+    )
+
+    #expect(triangles == [
+        MeshTriangle(faceID: faceID, vertexIDs: (first, second, third)),
+        MeshTriangle(faceID: faceID, vertexIDs: (first, third, fourth)),
+    ])
+    #expect(telemetry.faceVisits == 1)
+    #expect(telemetry.cornerVisits == 4)
+    #expect(telemetry.indexedVertexLookups == 4)
+    #expect(telemetry.positionReads == 4)
+    #expect(telemetry.globalIdentifierScans == 0)
+    #expect(telemetry.nonConvexWorkUnits == 0)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func meshSourceTriangulationUsesScaleAwareConvexFanForHighSegmentCylinderCap() throws {
+    let segmentCount = 6_284
+    let radius = 0.035
+    var builder = MeshSourceBuilder(identity: "fixture.triangulation-cylinder")
+    try builder.reserveCapacity(
+        vertexCount: segmentCount,
+        faceCount: 1,
+        cornerCount: segmentCount
+    )
+    var vertices: [MeshVertexID] = []
+    vertices.reserveCapacity(segmentCount)
+    for index in 0..<segmentCount {
+        let angle = 2.0 * Double.pi * Double(index) / Double(segmentCount)
+        vertices.append(
+            try builder.addVertex(
+                GeometryPoint3D(
+                    x: radius * cos(angle),
+                    y: radius * sin(angle),
+                    z: 0
+                )
+            )
+        )
+    }
+    _ = try builder.addFace(vertexIDs: vertices)
+    let source = try builder.build()
+    let index = try source.makeTriangulationIndex()
+    var telemetry = MeshTriangulationTelemetry()
+
+    let triangles = try source.triangulate(
+        faceIndex: 0,
+        using: index,
+        tolerance: 1e-9,
+        limits: .standard,
+        telemetry: &telemetry
+    )
+
+    #expect(triangles.count == segmentCount - 2)
+    #expect(telemetry.faceVisits == 1)
+    #expect(telemetry.cornerVisits == segmentCount)
+    #expect(telemetry.indexedVertexLookups == segmentCount)
+    #expect(telemetry.positionReads == segmentCount)
+    #expect(telemetry.nonConvexWorkUnits == 0)
+    #expect(telemetry.globalIdentifierScans == 0)
+    #expect(telemetry.sourcePositionMaterializations == 0)
+    #expect(telemetry.scratchPositionValues == segmentCount)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func meshSourceTriangulationAcceptsAnIndexForAValueCopiedSource() throws {
+    let source = try makeTriangulationSquare(identity: "fixture.triangulation-shared")
+    let copiedSource = source
+    let index = try source.makeTriangulationIndex()
+    var telemetry = MeshTriangulationTelemetry()
+
+    let triangles = try copiedSource.triangulate(
+        faceIndex: 0,
+        using: index,
+        telemetry: &telemetry
+    )
+
+    #expect(triangles.count == 2)
+    #expect(telemetry.globalIdentifierScans == 0)
+    #expect(telemetry.cornerVisits == 4)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func meshSourceTriangulationRoutesShallowConcavityToBudgetedEarClipping() throws {
+    var builder = MeshSourceBuilder(identity: "fixture.triangulation-shallow-concavity")
+    let points = [
+        GeometryPoint3D(x: 0, y: 0, z: 0),
+        GeometryPoint3D(x: 2, y: 0, z: 0),
+        GeometryPoint3D(x: 2, y: 2, z: 0),
+        GeometryPoint3D(x: 1, y: 1.99999999975, z: 0),
+        GeometryPoint3D(x: 0, y: 2, z: 0),
+    ]
+    let vertices = try points.map { try builder.addVertex($0) }
+    _ = try builder.addFace(vertexIDs: vertices)
+    let source = try builder.build()
+    let index = try source.makeTriangulationIndex()
+    var telemetry = MeshTriangulationTelemetry()
+
+    let triangles = try source.triangulate(
+        faceIndex: 0,
+        using: index,
+        tolerance: 1e-9,
+        limits: .standard,
+        telemetry: &telemetry
+    )
+
+    #expect(triangles.count == 3)
+    #expect(telemetry.nonConvexWorkUnits > 0)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func meshSourceTriangulationRoutesCollinearVerticesToEarClipping() throws {
+    var builder = MeshSourceBuilder(identity: "fixture.triangulation-collinear")
+    let points = [
+        GeometryPoint3D(x: 0, y: 0, z: 0),
+        GeometryPoint3D(x: 1, y: 0, z: 0),
+        GeometryPoint3D(x: 2, y: 0, z: 0),
+        GeometryPoint3D(x: 2, y: 1, z: 0),
+        GeometryPoint3D(x: 0, y: 1, z: 0),
+    ]
+    let vertices = try points.map { try builder.addVertex($0) }
+    _ = try builder.addFace(vertexIDs: vertices)
+    let source = try builder.build()
+    let index = try source.makeTriangulationIndex()
+    var telemetry = MeshTriangulationTelemetry()
+
+    let triangles = try source.triangulate(
+        faceIndex: 0,
+        using: index,
+        tolerance: 1e-9,
+        limits: .standard,
+        telemetry: &telemetry
+    )
+
+    #expect(triangles.count == 3)
+    #expect(telemetry.nonConvexWorkUnits > 0)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func meshSourceTriangulationChargesConcaveWorkAndRejectsBudgetExhaustion() throws {
+    var builder = MeshSourceBuilder(identity: "fixture.triangulation-budget")
+    let points = [
+        GeometryPoint3D(x: 0, y: 0, z: 0),
+        GeometryPoint3D(x: 3, y: 0, z: 0),
+        GeometryPoint3D(x: 3, y: 3, z: 0),
+        GeometryPoint3D(x: 1, y: 1, z: 0),
+        GeometryPoint3D(x: 0, y: 3, z: 0),
+    ]
+    let vertices = try points.map { try builder.addVertex($0) }
+    _ = try builder.addFace(vertexIDs: vertices)
+    let source = try builder.build()
+    let index = try source.makeTriangulationIndex()
+    var telemetry = MeshTriangulationTelemetry()
+    var error: MeshTriangulationError?
+
+    do {
+        _ = try source.triangulate(
+            faceIndex: 0,
+            using: index,
+            tolerance: 1e-9,
+            limits: MeshTriangulationLimits(
+                maxFaceCornerCount: 16_384,
+                maxNonConvexWorkUnits: 0
+            ),
+            telemetry: &telemetry
+        )
+    } catch let caught as MeshTriangulationError {
+        error = caught
+    }
+
+    #expect(error?.code == .budgetExceeded)
+    #expect(telemetry.nonConvexWorkUnits == 0)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func meshSourceTriangulationRejectsAnIndexFromDifferentStorage() throws {
+    let first = try makeTriangulationSquare(identity: "fixture.triangulation-stale")
+    let second = try makeTriangulationSquare(identity: "fixture.triangulation-stale")
+    let index = try first.makeTriangulationIndex()
+    var telemetry = MeshTriangulationTelemetry()
+    var error: MeshTriangulationError?
+
+    do {
+        _ = try second.triangulate(
+            faceIndex: 0,
+            using: index,
+            telemetry: &telemetry
+        )
+    } catch let caught as MeshTriangulationError {
+        error = caught
+    }
+
+    #expect(error?.code == .invalidReference)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func meshSourceTriangulationRejectsLimitsAboveHardMaximum() throws {
+    let source = try makeTriangulationSquare(identity: "fixture.triangulation-limits")
+    let index = try source.makeTriangulationIndex()
+    var telemetry = MeshTriangulationTelemetry()
+    var error: MeshTriangulationError?
+
+    do {
+        _ = try source.triangulate(
+            faceIndex: 0,
+            using: index,
+            limits: MeshTriangulationLimits(
+                maxFaceCornerCount: MeshTriangulationLimits.hardMaximum.maxFaceCornerCount + 1,
+                maxNonConvexWorkUnits: MeshTriangulationLimits.hardMaximum.maxNonConvexWorkUnits
+            ),
+            telemetry: &telemetry
+        )
+    } catch let caught as MeshTriangulationError {
+        error = caught
+    }
+
+    #expect(error?.code == .invalidLimits)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func meshSourceTriangulationReportsFaceRangeArithmeticOverflow() throws {
+    let source = try makeTriangulationSquare(identity: "fixture.triangulation-overflow")
+    let malformedSource = try sourceByDecoding(
+        source,
+        firstFaceCornerRange: MeshIndexRange(start: Int.max, count: 3)
+    )
+    let index = try malformedSource.makeTriangulationIndex()
+    var telemetry = MeshTriangulationTelemetry()
+    var error: MeshTriangulationError?
+
+    do {
+        _ = try malformedSource.triangulate(
+            faceIndex: 0,
+            using: index,
+            telemetry: &telemetry
+        )
+    } catch let caught as MeshTriangulationError {
+        error = caught
+    }
+
+    #expect(error?.code == .sizeOverflow)
+    #expect(telemetry.faceVisits == 1)
+    #expect(telemetry.cornerVisits == 0)
+}
+
+private func makeTriangulationSquare(identity: GeometrySourceID) throws -> MeshSource {
+    var builder = MeshSourceBuilder(identity: identity)
+    let first = try builder.addVertex(GeometryPoint3D(x: 0, y: 0, z: 0))
+    let second = try builder.addVertex(GeometryPoint3D(x: 1, y: 0, z: 0))
+    let third = try builder.addVertex(GeometryPoint3D(x: 1, y: 1, z: 0))
+    let fourth = try builder.addVertex(GeometryPoint3D(x: 0, y: 1, z: 0))
+    _ = try builder.addFace(vertexIDs: [first, second, third, fourth])
+    return try builder.build()
+}
+
+private func sourceByDecoding(
+    _ source: MeshSource,
+    firstFaceCornerRange range: MeshIndexRange
+) throws -> MeshSource {
+    let encoded = try JSONEncoder().encode(source)
+    guard var object = try JSONSerialization.jsonObject(with: encoded) as? [String: Any],
+          var ranges = object["faceCornerRanges"] as? [[String: Any]],
+          !ranges.isEmpty else {
+        throw MeshTriangulationError(
+            code: .failed,
+            message: "Triangulation test source did not encode a face range."
+        )
+    }
+    ranges[0] = ["start": range.start, "count": range.count]
+    object["faceCornerRanges"] = ranges
+    let malformedData = try JSONSerialization.data(withJSONObject: object)
+    return try JSONDecoder().decode(MeshSource.self, from: malformedData)
+}

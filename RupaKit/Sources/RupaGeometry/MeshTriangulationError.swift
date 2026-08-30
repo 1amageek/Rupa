@@ -3,9 +3,15 @@ import Foundation
 public struct MeshTriangulationError: Error, Equatable, LocalizedError, Sendable {
     public enum Code: String, Equatable, Sendable {
         case missingFace
+        case invalidFaceRange
+        case degenerateFace
         case nonPlanar
         case degenerate
         case failed
+        case invalidReference
+        case invalidLimits
+        case budgetExceeded
+        case sizeOverflow
     }
 
     public var code: Code

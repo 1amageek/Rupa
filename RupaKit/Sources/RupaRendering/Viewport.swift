@@ -489,7 +489,10 @@ public struct Viewport: View {
 
     public var body: some View {
         GeometryReader { proxy in
-            TimelineView(.animation) { timeline in
+            let timelinePolicy = ViewportTimelineSchedulePolicy(
+                projectionTransition: projectionTransition
+            )
+            TimelineView(.animation(minimumInterval: nil, paused: timelinePolicy.isPaused)) { timeline in
                 let basis = projectionBasis(at: timeline.date)
                 let fittingChromeLayout = makeFittingChromeLayout(size: proxy.size)
                 let sceneKey = sceneSnapshotKey(usesDragPreviewDocument: true)
