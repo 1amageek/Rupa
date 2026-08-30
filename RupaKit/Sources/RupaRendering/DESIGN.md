@@ -36,7 +36,7 @@ to a legacy source or custom renderer.
 |---|---|---|---|---|
 | [package design](../../DESIGN.md) | parent | Package dependency direction | Places rendering above immutable Geometry and scene snapshots. | Do not create a second source authority. |
 | [RupaGeometry design](../RupaGeometry/DESIGN.md) | depends on | Source-bound index, convex fan, non-convex budget, and zero-copy contract | Supplies all Mesh triangulation. | Do not reimplement ID lookup or polygon topology here. |
-| `RupaViewportScene` implementation | depends on | Validated immutable scene items and snapshot identity | Supplies source references, MeshSource values, and world transforms. | A scene item is navigation/presentation input, not source authority. |
+| [RupaViewportScene design](../RupaViewportScene/DESIGN.md) | depends on | Validated immutable scene items and snapshot identity | Supplies source references, MeshSource values, world transforms, and bounded surface overlays. | Overlay reference lookup is identity-only and must not request face-area or edge-length metrics. |
 | `Viewport.swift` | component owner | State-driven invalidation and active transition lifecycle | Controls SwiftUI scheduling around this module. | Static scenes must not subscribe to a continuous animation clock. |
 | [RupaGeometry tests](../../Tests/RupaGeometryTests) | verification owner | Geometry triangulation behavior | Proves the lower-level algorithm. | Rendering tests must still prove the actual presentation path. |
 | [RupaRendering tests](../../Tests/RupaRenderingTests) | verification owner | Plan traversal, telemetry, and failure mapping | Proves render-plan behavior and cache use. | Type existence is not runtime evidence. |

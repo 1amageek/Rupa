@@ -11,6 +11,7 @@ Parent: [system design](../DESIGN.md). Direct children used by T10/T12 are:
 
 - [RupaGeometry](Sources/RupaGeometry/DESIGN.md)
 - [RupaRendering](Sources/RupaRendering/DESIGN.md)
+- [RupaViewportScene](Sources/RupaViewportScene/DESIGN.md)
 - [RupaCore](Sources/RupaCore/DESIGN.md)
 - [RupaProjectPackage](Sources/RupaProjectPackage/DESIGN.md)
 - [RupaProject](Sources/RupaProject/DESIGN.md)
@@ -101,6 +102,7 @@ flowchart LR
 | [ARCHITECTURE.md](ARCHITECTURE.md) | coordinates with | Existing package graph and application route | Records existing targets and shared workspace composition. | Task-specific contracts remain in this hierarchy. |
 | [RupaGeometry design](Sources/RupaGeometry/DESIGN.md) | child | Plan/executor/buffer contract | Owns Mesh operation and performance semantics. | Package consumers use its public contracts only. |
 | [RupaRendering design](Sources/RupaRendering/DESIGN.md) | child | Snapshot-owned presentation plan and viewport scheduling contract | Owns MeshSource presentation traversal and render invalidation policy. | It consumes immutable snapshots and never becomes a geometry or project authority. |
+| [RupaViewportScene design](Sources/RupaViewportScene/DESIGN.md) | child | Immutable scene projection and metric-free B-spline overlay reference contract | Builds viewport scene values from validated source/evaluation snapshots. | B-spline reference lookup must not become an implicit topology-metric path. |
 | [RupaCore design](Sources/RupaCore/DESIGN.md) | child | Source identity and asset mutation contract | Owns Product/Authored Mesh source authority. | Scene references are navigation context, not authority. |
 | [RupaProjectPackage design](Sources/RupaProjectPackage/DESIGN.md) | child | Schema-v3 source/archive and atomic replacement contract | Owns bounded package I/O, source-byte integrity, reuse, and destination replacement staging. | It never owns project publication, current URL, or Agent save routing. |
 | [RupaProject design](Sources/RupaProject/DESIGN.md) | child | Staging/publication contract | Owns project transaction integration. | Geometry algorithms remain below this boundary. |

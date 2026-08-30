@@ -285,7 +285,8 @@ let package = Package(
                 "RupaGeometry",
                 "RupaProjectModel",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
-            ]
+            ],
+            exclude: ["DESIGN.md"]
         ),
         .target(
             name: "RupaPreview",

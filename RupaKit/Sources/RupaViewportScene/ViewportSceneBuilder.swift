@@ -43,11 +43,18 @@ public struct ViewportSceneBuilder {
         let surfaceTrimControlPointDisplaysByFeatureID = surfaceTrimControlPointDisplaysByFeatureID(
             in: document
         )
+        let patchFaceReferences = bSplineSurfacePatchFaceReferences(
+            in: document,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: documentGeneration
+        )
         let surfaceKnotDisplaysByFeatureID = surfaceKnotDisplaysByFeatureID(
-            in: document
+            in: document,
+            patchFaceReferences: patchFaceReferences
         )
         let surfaceSpanDisplaysByFeatureID = surfaceSpanDisplaysByFeatureID(
-            in: document
+            in: document,
+            patchFaceReferences: patchFaceReferences
         )
         let surfaceTrimKnotDisplaysByFeatureID = surfaceTrimKnotDisplaysByFeatureID(
             in: document
@@ -1140,10 +1147,10 @@ public struct ViewportSceneBuilder {
     }
 
     private func surfaceKnotDisplaysByFeatureID(
-        in document: DesignDocument
+        in document: DesignDocument,
+        patchFaceReferences: [FeatureID: SurfaceReference]
     ) -> [FeatureID: [ViewportSurfaceKnotDisplay]] {
         let tolerance = document.modelingSettings.tolerance
-        let patchFaceReferences = bSplineSurfacePatchFaceReferences(in: document)
         var displaysByFeatureID: [FeatureID: [ViewportSurfaceKnotDisplay]] = [:]
         for featureID in document.cadDocument.designGraph.order {
             guard let feature = document.cadDocument.designGraph.nodes[featureID],
@@ -1187,10 +1194,10 @@ public struct ViewportSceneBuilder {
     }
 
     private func surfaceSpanDisplaysByFeatureID(
-        in document: DesignDocument
+        in document: DesignDocument,
+        patchFaceReferences: [FeatureID: SurfaceReference]
     ) -> [FeatureID: [ViewportSurfaceSpanDisplay]] {
         let tolerance = document.modelingSettings.tolerance
-        let patchFaceReferences = bSplineSurfacePatchFaceReferences(in: document)
         var displaysByFeatureID: [FeatureID: [ViewportSurfaceSpanDisplay]] = [:]
         for featureID in document.cadDocument.designGraph.order {
             guard let feature = document.cadDocument.designGraph.nodes[featureID],
@@ -1318,14 +1325,36 @@ public struct ViewportSceneBuilder {
     /// feature from one topology snapshot. Surfaces whose evaluation fails
     /// are absent from the result, matching the overlay skip-on-error policy.
     private func bSplineSurfacePatchFaceReferences(
-        in document: DesignDocument
+        in document: DesignDocument,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) -> [FeatureID: SurfaceReference] {
+        let bSplineFeatureIDs = Set(
+            document.cadDocument.designGraph.order.compactMap { featureID -> FeatureID? in
+                guard let feature = document.cadDocument.designGraph.nodes[featureID],
+                      case .bSplineSurface = feature.operation else {
+                    return nil
+                }
+                return featureID
+            }
+        )
+        guard bSplineFeatureIDs.isEmpty == false else {
+            return [:]
+        }
+
         do {
-            let topology = try TopologySnapshotService().snapshot(document: document)
+            let topology = try TopologySnapshotService().snapshot(
+                document: document,
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration,
+                metricPolicy: .omit
+            )
             var references: [FeatureID: SurfaceReference] = [:]
             for entry in topology.entries {
                 guard entry.kind == .face,
                       let subshapeID = GeneratedSubshapeIdentity.subshapeID(from: entry.subshapeID),
+                      bSplineFeatureIDs.contains(subshapeID.featureID),
                       GeneratedSubshapeRoles.isBSplineSurfacePatchFace(subshapeID),
                       let stableReference = entry.stableReference else {
                     continue
