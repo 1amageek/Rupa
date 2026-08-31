@@ -179,8 +179,11 @@ to the internal one-node output references used by `CompiledSemanticProgram`.
    external-job, and Mesh-edit effects cannot be mixed into a CAD source
    program.
 7. The compiler validates the complete graph before any staged source command
-   executes, then calls the registered lowerer exactly once per semantic node.
-   It does not materialize a raw public feature graph.
+   executes. It then asks each registered lowerer once for its pure,
+   argument-dependent generated-source work estimate and rejects the aggregate
+   limit before calling any lowerer. The estimate must be at least the
+   descriptor's declared minimum, and the emitted prepared step must report the
+   same exact value. It does not materialize a raw public feature graph.
 8. Clients own intent, argument values, existing references, and request-local
    symbols. Rupa owns persistent ID allocation, dependency order, presentation
    structure/defaults, semantic validation, and lowering.
@@ -269,7 +272,10 @@ relaxed to make a failing program pass.
 
 Failures are typed as unknown operation/version, invalid schema/value/unit,
 duplicate or missing symbol/output, reference-kind mismatch, cycle, ineligible
-route/effect, semantic limit excess, cancellation, or lowering failure. Exact
+route/effect, semantic limit excess, cancellation, or lowering failure. A
+registered lowerer that conforms to `SemanticOperationLoweringFailure` retains
+its stable domain error code and message in the compiler error; untyped lowerer
+errors use the Foundation-owned `semantic.loweringFailed` code. Exact
 project-coordinate freshness and publication failure belong to RupaKit/Project.
 No failure is converted to an empty program, raw graph fallback, partial
 program, or retry through another access mode.

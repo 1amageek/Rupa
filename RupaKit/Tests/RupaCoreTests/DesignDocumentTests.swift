@@ -141,7 +141,7 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     #expect(ObjectTypeCatalog.definition(for: .cylinder) != nil)
     #expect(ObjectTypeCatalog.definition(for: .polySpline) != nil)
     #expect(ObjectTypeCatalog.definition(for: .path) == nil)
-    #expect(ObjectTypeCatalog.definition(for: .sphere) == nil)
+    #expect(ObjectTypeCatalog.definition(for: .sphere) != nil)
     #expect(ObjectTypeCatalog.definition(for: .torus) == nil)
 }
 

@@ -19,6 +19,7 @@ Parent: [system design](../DESIGN.md). Direct children used by T10/T12 are:
 - [RupaProject](Sources/RupaProject/DESIGN.md)
 - [RupaAutomation](Sources/RupaAutomation/DESIGN.md)
 - [RupaDomainFoundation](Sources/RupaDomainFoundation/DESIGN.md)
+- [RupaCADDomain](Sources/RupaCADDomain/DESIGN.md)
 - [RupaKit integration target](Sources/RupaKit/DESIGN.md)
 - [RupaAgentProtocol](Sources/RupaAgentProtocol/DESIGN.md)
 - [RupaProjectAccess](Sources/RupaProjectAccess/DESIGN.md)
@@ -62,8 +63,8 @@ The package design owns:
 - package-wide API and verification boundaries for T10 and T12.
 - the CADAPI-D dependency rule that one registered semantic CAD operation
   vocabulary serves both direct invocation and declarative program execution;
-- the planned `RupaCADDomain` boundary described in this package design until
-  a real SwiftPM target and its own module-root design are created.
+- the dependency boundary through which the child `RupaCADDomain` supplies the
+  concrete semantic CAD vocabulary to the generic compiler.
 
 It does not own Mesh topology algorithms, concrete CAD operation semantics, source asset mutation,
 archive encoding, HTTP framing, MCP, general CLI behavior, LLM reasoning, or a bicycle-specific or
@@ -73,32 +74,9 @@ score values are owned by its child design; they do not become another project
 authority. The dedicated benchmark JSON adapter and executable own only their
 versioned exchange and process boundaries.
 
-The planned `RupaCADDomain` target will own the concrete semantic CAD
-descriptors and lowerers. It is not implemented and no `Sources/RupaCADDomain`
-directory or SwiftPM target exists yet. When implementation begins, its
-contract moves to `Sources/RupaCADDomain/DESIGN.md`; this package document then
-retains only the child link and dependency rule.
-
-### Planned RupaCADDomain boundary
-
-The planned module registers universal CAD operations only after the underlying
-source behavior and typed result are real. Each operation is independently
-discoverable and usable as a direct invocation, and the same operation may be a
-program node without an adapter-specific variant.
-
-| Operation family | Semantic intent | Typed outputs and compactness rule |
-|---|---|---|
-| Parameters and datums | Declare or update bounded design values, planes, axes, and frames. | Parameter/datum references; values and units remain typed. |
-| Sketch and constraints | Create/edit primitives, profiles, dimensions, and geometric relations. | Sketch, entity, profile, and constraint references; no raw feature node. |
-| Feature creation | Analytic primitives including sphere, extrude, revolve, sweep, loft, and other registered source features. | Feature and source-body-role references allocated by Rupa; analytic sphere remains exact CAD rather than a polygonal or Mesh substitute. |
-| Feature modification | Boolean, edge treatment, shell/offset, and registered direct source edits. | Modified Feature/Body references with explicit target kinds. |
-| Placement and reuse | Transform source, define a component, and place instances. | Scene, Component, and Instance references; reuse does not duplicate defining source. |
-| Finite patterns | Linear, radial, curve, or other registered native pattern operations. | One Pattern reference and bounded occurrence telemetry; occurrence count does not expand program nodes. |
-
-Registration is capability-based: an unavailable operation family is absent or
-typed unsupported, never simulated with a raw graph or placeholder success.
-Complex geometry therefore comes from composition of real operations and native
-reuse, while simple geometry remains one direct operation.
+Concrete version-1 operation IDs, argument/output schemas, lowerers,
+availability, compactness, and exact-sphere requirements are owned only by the
+[RupaCADDomain design](Sources/RupaCADDomain/DESIGN.md).
 
 ```mermaid
 flowchart LR
@@ -122,7 +100,10 @@ flowchart LR
     Core --> Automation
     Core --> DomainFoundation
     Capabilities[RupaCapabilities] --> DomainFoundation
-    DomainFoundation -.-> PlannedCAD["RupaCADDomain\nplanned concrete vocabulary"]
+    DomainFoundation --> CADDomain["RupaCADDomain\nconcrete semantic CAD vocabulary"]
+    Automation --> CADDomain
+    Core --> CADDomain
+    Capabilities --> CADDomain
     AgentProtocol --> AgentRuntime[RupaAgentRuntime]
     Kit --> AgentRuntime
     AgentUI[RupaAgentUI\napplication host] --> AgentRuntime
@@ -155,6 +136,7 @@ flowchart LR
 | [RupaProject design](Sources/RupaProject/DESIGN.md) | child | Staging/publication contract | Owns project transaction integration. | Geometry algorithms remain below this boundary. |
 | [RupaAutomation design](Sources/RupaAutomation/DESIGN.md) | child | Binding-aware prepared source-plan execution and internal graph transaction | Executes a fully validated plan inside caller-owned staging. | Raw feature graphs remain internal and are not an Agent vocabulary. |
 | [RupaDomainFoundation design](Sources/RupaDomainFoundation/DESIGN.md) | child | Generic semantic operation, program graph, validation, and compilation contracts | Defines one operation/value/reference model shared by both public invocation forms. | It owns no concrete CAD vocabulary or project publication. |
+| [RupaCADDomain design](Sources/RupaCADDomain/DESIGN.md) | child | Concrete versioned CAD descriptors, outputs, lowerers, and estimates | Registers the universal operations used by both public forms and all 100 benchmark realizations. | It depends downward only and never owns IDs, project coordinates, publication, transport, or benchmark semantics. |
 | [RupaKit integration design](Sources/RupaKit/DESIGN.md) | child | Transport-neutral read/edit, Make Editable, and visibility-filtered exact project-view contracts | Owns application-facing exact-snapshot adaptation while retaining complete source/evaluation/navigation authority. | Presentation filtering must not create an alternate source or project authority; the benchmark CLI remains a separate upper sibling. |
 | [RupaUI design](Sources/RupaUI/DESIGN.md) | child | snapshot-owned project title and direct workspace UI route | Presents immutable workspace state without becoming project authority. | Visible project identity comes from `ProjectViewSnapshot`. |
 | [RupaAgentUI design](Sources/RupaAgentUI/DESIGN.md) | child | process-lifetime host and injected handler contract | Owns Agent listener lifecycle and registration bridge for the App-owned workspace. | The App composes one controller/router; host never creates a shadow workspace or saves a package. |
@@ -176,7 +158,9 @@ flowchart TD
     C --> P["RupaProject\ntransaction staging"]
     C --> A["RupaAutomation\nprepared source execution"]
     A --> D["RupaDomainFoundation\ngeneric operation + program compiler"]
-    D -.-> Planned["RupaCADDomain\nplanned descriptors + lowerers"]
+    D --> CAD["RupaCADDomain\nconcrete descriptors + lowerers"]
+    A --> CAD
+    C --> CAD
     P --> K["RupaKit\nworkspace use cases"]
     P --> E["evaluation + package\nexisting boundaries"]
     K --> R["RupaAgentRuntime\nregistered route"]
@@ -207,7 +191,7 @@ records are owned by the four child designs:
 | `RupaKit` is the application use-case boundary over existing Project authority. | [RupaKit integration design](Sources/RupaKit/DESIGN.md) |
 | `RupaDomainFoundation` owns the generic semantic operation schema and bounded DAG compiler used by both invocation forms; it does not own CAD vocabulary or publication. | [RupaDomainFoundation design](Sources/RupaDomainFoundation/DESIGN.md) |
 | `RupaAutomation` owns the binding-aware internal source-plan execution substrate; `FeatureGraphTransaction` and `appendFeatureGraph` are internal lowering details, not public Agent operations. | [RupaAutomation design](Sources/RupaAutomation/DESIGN.md) |
-| The planned `RupaCADDomain` owns concrete CAD operation descriptors, typed output declarations, and lowerers. Until its target exists, this package design is the temporary design authority for that boundary and does not claim implementation. | This document. |
+| `RupaCADDomain` owns concrete versioned CAD operation descriptors, typed output declarations, lowerers, and conservative operation/result estimates without owning source IDs or publication. | [RupaCADDomain design](Sources/RupaCADDomain/DESIGN.md) |
 | `RupaProjectAccess` is the transport-neutral access contract; it owns no workspace, package, or command state. | [RupaProjectAccess design](Sources/RupaProjectAccess/DESIGN.md) |
 | `RupaProjectAccessPlatform` owns the Team Keychain discovery record and its generation-guarded reader/writer contract without owning project state. | [RupaProjectAccessPlatform design](Sources/RupaProjectAccessPlatform/DESIGN.md) |
 | `RupaProjectAccessComposition` owns the concrete live-project session adapter by composing discovery, authenticated HTTP, `RupaAgentRuntime`, and the public `RupaKit` workspace APIs. | [RupaProjectAccessComposition design](Sources/RupaProjectAccessComposition/DESIGN.md) |
@@ -320,12 +304,15 @@ The external adapter remains serial at one case per process and enforces its
 versioned byte ceiling before decode; it cannot introduce pre-100 parallelism.
 CADAPI-D compilation rejects unknown operation/version, invalid type or unit,
 duplicate or missing symbol, cyclic dependency, non-source route/effect, and an
-owner-defined resource-limit excess before source mutation. Limits cover wire
-bytes, decoded value/nesting, nodes, edges, parameters, output references,
-expression depth/work, lowered commands, and expanded source/evaluation work.
-Their concrete defaults are selected and measured by the later implementation,
-not guessed in this design. Stale coordinates, cancellation, lowering, source,
-evaluation, result-projection, and dispatch-uncertain outcomes remain typed.
+owner-defined semantic resource-limit excess before source mutation.
+AgentProtocol owns encoded DTO byte limits and Transport owns HTTP frame/body
+limits. Foundation owns decoded value/nesting, node, edge, parameter, output,
+expression, lowered-command, and expanded-source preflight limits; Automation
+and RupaKit measure actual staged work. Their concrete defaults are selected
+and measured by the later implementation, not guessed in this design. RupaKit
+and Project own stale-coordinate, evaluation, and publication outcomes;
+cancellation, lowering, source, result-projection, and dispatch-uncertain
+outcomes remain typed at their respective owners.
 Prepublication failure publishes nothing; postpublication failure reports the
 exact committed coordinates and `mustNotRetry`.
 
@@ -343,7 +330,7 @@ contracts rather than duplicating their behavioral cases:
 | Application use case | `RupaKit` target | T09-C tests for bounded read/preview/commit. |
 | Full package | Integration | T09-IV build/test and actual save/load path. |
 | Agent wire and dispatch | `RupaAgentProtocol` / `RupaAgentRuntime` | T10-B codec, malformed-input, registered-workspace, stale/cancel, and no-retry tests. |
-| CAD semantic program | `RupaDomainFoundation` / planned `RupaCADDomain` | Later implementation must prove direct/program schema equivalence, typed local bindings, graph ordering and cycle rejection, native finite patterns, source-only route validation, and owner-defined preflight limits. |
+| CAD semantic program | `RupaDomainFoundation` / `RupaCADDomain` | Later implementation must prove direct/program compile equivalence, typed local bindings, graph ordering and cycle rejection, native finite patterns, source-only route validation, decoded-semantic/result preflight limits, the exact twelve-operation registry, and 100-case expressibility without claiming publication. |
 | CAD prepared execution | `RupaAutomation` / `RupaKit` | Later implementation must prove one program produces at most one source transaction, evaluation, undo entry, and publication; all prepublication failures roll back and postpublication failures are no-retry. |
 | Public cutover | `RupaAgentProtocol` / `RupaAgentRuntime` / `RupaCLIKit` | Later codec, catalog, runtime, and actual-CLI tests must prove one primitive is one direct call, a repeated assembly stays compact relative to distinct intent, both forms use the same compiler, and raw graph/Automation mutation payloads are absent or rejected. |
 | Application Agent host | `RupaAgentUI` / Rupa App | ACCESS-O focused same-workspace registration, router delegation, explicit save port, process-lifetime host, and typed failure preservation. |

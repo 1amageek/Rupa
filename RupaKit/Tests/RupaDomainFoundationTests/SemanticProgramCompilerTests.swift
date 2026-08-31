@@ -1306,14 +1306,133 @@ func semanticCompilerReportsLoweringFailureWithoutRawAutomationFallback() throws
         )
         Issue.record("Lowering failure unexpectedly compiled.")
     } catch let error as SemanticCompilationError {
-        guard case .loweringFailed(let node, let failedOperationID, _) = error else {
+        guard case .loweringFailed(
+            let node,
+            let failedOperationID,
+            let code,
+            let message
+        ) = error else {
             Issue.record("Unexpected compiler error: \(error)")
             return
         }
         #expect(node == ProgramNodeSymbol("node"))
         #expect(failedOperationID == operationID)
+        #expect(code == "semantic.loweringFailed")
+        #expect(message == "failed")
     }
     #expect(counter.value == 1)
+}
+
+@Test
+func semanticCompilerPreservesTypedLoweringFailureCodeAndMessage() throws {
+    let operationID: DomainCapabilityID = "fixture.typed-lowering-failure"
+    let version = SemanticOperationVersion(major: 1, minor: 0, patch: 0)
+    let compiler = DefaultSemanticProgramCompiler(
+        registry: try fixtureRegistry(
+            descriptor: fixtureDescriptor(operationID: operationID, version: version),
+            lowerer: TypedThrowingLowerer(
+                operationID: operationID,
+                operationVersion: version
+            )
+        )
+    )
+
+    do {
+        _ = try compiler.compile(
+            SemanticProgram(schemaVersion: .current, nodes: [
+                SemanticProgramNode(
+                    symbol: ProgramNodeSymbol("node"),
+                    invocation: fixtureInvocation(operationID: operationID, version: version)
+                )
+            ]),
+            context: SemanticCompilationContext(),
+            limits: fixtureLimits()
+        )
+        Issue.record("Typed lowering failure unexpectedly compiled.")
+    } catch let error as SemanticCompilationError {
+        guard case .loweringFailed(
+            let node,
+            let failedOperationID,
+            let code,
+            let message
+        ) = error else {
+            Issue.record("Unexpected compiler error: \(error)")
+            return
+        }
+        #expect(node == ProgramNodeSymbol("node"))
+        #expect(failedOperationID == operationID)
+        #expect(code == "cad.invalidArgument")
+        #expect(message == "Fixture argument is invalid.")
+    }
+}
+
+@Test
+func semanticCompilerRejectsAggregateDynamicWorkBeforeAnyLowering() throws {
+    let version = SemanticOperationVersion(major: 1, minor: 0, patch: 0)
+    let firstID: DomainCapabilityID = "fixture.dynamic-work.first"
+    let secondID: DomainCapabilityID = "fixture.dynamic-work.second"
+    let firstEstimationCount = InvocationCounter()
+    let firstLoweringCount = InvocationCounter()
+    let secondEstimationCount = InvocationCounter()
+    let secondLoweringCount = InvocationCounter()
+    let registry = try SemanticOperationRegistry(registrations: [
+        SemanticOperationRegistration(
+            descriptor: fixtureDescriptor(operationID: firstID, version: version),
+            lowerer: DynamicWorkLowerer(
+                operationID: firstID,
+                operationVersion: version,
+                generatedSourceWork: 2,
+                estimationCount: firstEstimationCount,
+                loweringCount: firstLoweringCount
+            )
+        ),
+        SemanticOperationRegistration(
+            descriptor: fixtureDescriptor(operationID: secondID, version: version),
+            lowerer: DynamicWorkLowerer(
+                operationID: secondID,
+                operationVersion: version,
+                generatedSourceWork: 100,
+                estimationCount: secondEstimationCount,
+                loweringCount: secondLoweringCount
+            )
+        )
+    ])
+    let compiler = DefaultSemanticProgramCompiler(registry: registry)
+    let program = SemanticProgram(schemaVersion: .current, nodes: [
+        SemanticProgramNode(
+            symbol: ProgramNodeSymbol("first"),
+            invocation: fixtureInvocation(operationID: firstID, version: version)
+        ),
+        SemanticProgramNode(
+            symbol: ProgramNodeSymbol("second"),
+            invocation: fixtureInvocation(operationID: secondID, version: version)
+        )
+    ])
+
+    do {
+        _ = try compiler.compile(
+            program,
+            context: SemanticCompilationContext(),
+            limits: fixtureLimits(
+                maximumNodeCount: 2,
+                maximumCommandCount: 2,
+                maximumExpandedSourceWork: 50
+            )
+        )
+        Issue.record("Over-limit dynamic work unexpectedly compiled.")
+    } catch let error as SemanticCompilationError {
+        #expect(
+            error == .limitExceeded(
+                metric: .expandedSourceWork,
+                actual: 102,
+                maximum: 50
+            )
+        )
+    }
+    #expect(firstEstimationCount.value == 1)
+    #expect(secondEstimationCount.value == 1)
+    #expect(firstLoweringCount.value == 0)
+    #expect(secondLoweringCount.value == 0)
 }
 
 @Test
@@ -1903,12 +2022,52 @@ private enum FixtureLoweringError: Error {
     case failed
 }
 
+private struct TypedThrowingLowerer: SemanticOperationLowerer {
+    let operationID: DomainCapabilityID
+    let operationVersion: SemanticOperationVersion
+    let resultEstimate: SemanticOperationResultEstimate = .zero
+
+    func lower(_: SemanticLoweringRequest) throws -> SemanticLoweredOperation {
+        throw TypedFixtureLoweringError()
+    }
+}
+
+private struct TypedFixtureLoweringError: SemanticOperationLoweringFailure {
+    let semanticErrorCode: DomainCapabilityErrorCode = "cad.invalidArgument"
+    let semanticErrorMessage = "Fixture argument is invalid."
+}
+
+private struct DynamicWorkLowerer: SemanticOperationLowerer {
+    let operationID: DomainCapabilityID
+    let operationVersion: SemanticOperationVersion
+    let resultEstimate: SemanticOperationResultEstimate = .zero
+    let generatedSourceWork: UInt64
+    let estimationCount: InvocationCounter
+    let loweringCount: InvocationCounter
+
+    func estimateGeneratedSourceWork(
+        for _: SemanticLoweringRequest
+    ) throws -> UInt64 {
+        estimationCount.increment()
+        return generatedSourceWork
+    }
+
+    func lower(_ request: SemanticLoweringRequest) throws -> SemanticLoweredOperation {
+        loweringCount.increment()
+        return fixtureLoweredOperation(
+            request,
+            estimatedGeneratedSourceWork: generatedSourceWork
+        )
+    }
+}
+
 private struct AlwaysCancelled: SemanticCompilationCancellation {
     let isCancelled = true
 }
 
 private func fixtureLoweredOperation(
-    _ request: SemanticLoweringRequest
+    _ request: SemanticLoweringRequest,
+    estimatedGeneratedSourceWork: UInt64? = nil
 ) -> SemanticLoweredOperation {
     let builder = PreparedAutomationCommandBuilder(name: "fixture") { _ in
         try ContextResolvedEditorCommand(
@@ -1919,7 +2078,8 @@ private func fixtureLoweredOperation(
         step: PreparedAutomationStep(
             inputs: request.preparedInputs,
             outputs: request.preparedOutputs,
-            estimatedGeneratedSourceWork: request.descriptor.estimatedExpandedSourceWork,
+            estimatedGeneratedSourceWork: estimatedGeneratedSourceWork
+                ?? request.descriptor.estimatedExpandedSourceWork,
             commandBuilder: builder
         )
     )

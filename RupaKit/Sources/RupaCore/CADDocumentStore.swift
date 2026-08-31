@@ -921,6 +921,26 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .createSemanticSketch:
+            func run() throws {
+                guard case .createSemanticSketch(let name, let plan, let geometryRole) = command else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "Command dispatch expected createSemanticSketch."
+                    )
+                }
+                var updatedDocument = document
+                primaryFeatureID = try updatedDocument.createSemanticSketch(
+                    name: name,
+                    plan: plan,
+                    geometryRole: geometryRole,
+                    objectRegistry: objectRegistry
+                )
+                document = updatedDocument
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
+            try run()
         case .createLineSketch:
             func run() throws {
                 guard case .createLineSketch(let name, let plane, let start, let end) = command else {
@@ -2627,6 +2647,26 @@ public final class CADDocumentStore {
                     radius: radius,
                     depth: depth,
                     direction: direction,
+                    objectRegistry: objectRegistry
+                )
+                document = updatedDocument
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
+            try run()
+        case .createAnalyticSphere:
+            func run() throws {
+                guard case .createAnalyticSphere(let name, let center, let radius) = command else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "Command dispatch expected createAnalyticSphere."
+                    )
+                }
+                var updatedDocument = document
+                primaryFeatureID = try updatedDocument.createAnalyticSphere(
+                    name: name,
+                    center: center,
+                    radius: radius,
                     objectRegistry: objectRegistry
                 )
                 document = updatedDocument

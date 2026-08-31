@@ -5,6 +5,10 @@ public struct SemanticOperationDescriptor: Sendable, Equatable, Hashable {
     public let outputs: [SemanticOperationOutputDescriptor]
     public let route: SemanticOperationRoute
     public let effect: SemanticOperationEffect
+    /// The minimum generated-source work for any accepted invocation.
+    ///
+    /// Lowerers with argument-dependent work report the exact value during the
+    /// compiler's complete pre-lowering estimation pass.
     public let estimatedExpandedSourceWork: UInt64
     public let resultEstimate: SemanticOperationResultEstimate
 

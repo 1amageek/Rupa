@@ -64,6 +64,7 @@ public typealias MaterialID = SwiftCAD.MaterialID
 public typealias Matrix4x4 = SwiftCAD.Matrix4x4
 public typealias Mesh = SwiftCAD.Mesh
 public typealias ParameterTable = SwiftCAD.ParameterTable
+public typealias Plane3D = SwiftCAD.Plane3D
 public typealias Point2D = SwiftCAD.Point2D
 public typealias Point3D = SwiftCAD.Point3D
 public typealias PolySplineMeshAnalysisResult = SwiftCAD.PolySplineMeshAnalysisResult

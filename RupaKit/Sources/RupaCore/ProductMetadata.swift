@@ -557,6 +557,44 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 materialLibrary: materialLibrary
             )
         }
+        if object.typeID == .sphere {
+            try validateSphereSourceConsistency(
+                object,
+                against: cadDocument
+            )
+        }
+    }
+
+    private func validateSphereSourceConsistency(
+        _ object: ObjectDescriptor,
+        against cadDocument: CADDocument
+    ) throws {
+        guard let featureID = object.sourceFeatureID,
+              let feature = cadDocument.designGraph.nodes[featureID],
+              case .primitive(let primitive) = feature.operation,
+              case .sphere(let sphere) = primitive.definition else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Sphere objects must reference an analytic sphere primitive source."
+            )
+        }
+        guard case .length(let productRadius)? = object.properties["radius"] else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Sphere objects must retain their source radius as Product metadata."
+            )
+        }
+        let sourceRadius: Quantity
+        do {
+            sourceRadius = try cadDocument.parameters.resolvedValue(for: sphere.radius)
+        } catch {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Sphere source radius must resolve before Product validation."
+            )
+        }
+        guard sourceRadius == .length(productRadius, unit: .meter) else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Sphere Product radius must match its authoritative CAD source radius."
+            )
+        }
     }
 
     private func validateGeometryRepresentations(

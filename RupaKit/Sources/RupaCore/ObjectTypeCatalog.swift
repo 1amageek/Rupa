@@ -89,6 +89,15 @@ public enum ObjectTypeCatalog {
             properties: cylinderProperties
         ),
         definition(
+            id: .sphere,
+            title: "Sphere",
+            systemImage: "sphere",
+            representation: .threeDimensional,
+            category: .body,
+            geometryRole: .solid,
+            properties: sphereProperties
+        ),
+        definition(
             id: .polySpline,
             title: "PolySpline",
             systemImage: "point.3.connected.trianglepath.dotted",
@@ -366,6 +375,18 @@ public enum ObjectTypeCatalog {
         .length(id: "hollow", title: "Hollow", binding: .hollow, defaultValue: 0.0),
         .length(id: "corner.radius", title: "Corner", binding: .cornerRadius, defaultValue: 0.0),
         .integer(id: "corner.sides", title: "Corner Sides", binding: .cornerSideSegments, defaultValue: 8),
+    ]
+
+    private static let sphereProperties: [ObjectPropertyDefinition] = [
+        ObjectPropertyDefinition(
+            id: "radius",
+            title: "Radius",
+            group: "Shape",
+            valueKind: .length,
+            defaultValue: .length(0.5),
+            inspectorControl: .readOnly,
+            isEditable: false
+        ),
     ]
 
     private static let polySplineProperties: [ObjectPropertyDefinition] = [

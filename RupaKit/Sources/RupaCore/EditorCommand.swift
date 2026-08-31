@@ -69,6 +69,11 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case setConstructionPlane(id: ConstructionPlaneSourceID, plane: SketchPlane)
     case appendFeatureGraph(FeatureGraphTransaction)
     case createSketch(name: String, sketch: Sketch, geometryRole: ObjectDescriptor.GeometryRole)
+    case createSemanticSketch(
+        name: String,
+        plan: SketchCreationPlan,
+        geometryRole: ObjectDescriptor.GeometryRole
+    )
     case createLineSketch(name: String, plane: SketchPlane, start: SketchPoint, end: SketchPoint)
     case createCircleSketch(name: String, plane: SketchPlane, center: SketchPoint, radius: CADExpression)
     case createArcSketch(
@@ -406,6 +411,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
         depth: CADExpression,
         direction: ExtrudeDirection
     )
+    case createAnalyticSphere(name: String, center: Point3D, radius: Double)
     case validateDocument
 
     public var name: String {
@@ -482,6 +488,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "appendFeatureGraph"
         case .createSketch:
             "createSketch"
+        case .createSemanticSketch:
+            "createSemanticSketch"
         case .createLineSketch:
             "createLineSketch"
         case .createCircleSketch:
@@ -650,6 +658,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "createExtrudedRectangleFromCorners"
         case .createExtrudedCircle:
             "createExtrudedCircle"
+        case .createAnalyticSphere:
+            "createAnalyticSphere"
         case .validateDocument:
             "validateDocument"
         }
@@ -693,6 +703,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .setConstructionPlane,
              .appendFeatureGraph,
              .createSketch,
+             .createSemanticSketch,
              .createLineSketch,
              .createCircleSketch,
              .createArcSketch,
@@ -776,7 +787,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .slideSurfaceControlPoints,
              .createExtrudedRectangle,
              .createExtrudedRectangleFromCorners,
-             .createExtrudedCircle:
+             .createExtrudedCircle,
+             .createAnalyticSphere:
             true
         case .validateDocument:
             false

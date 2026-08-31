@@ -13,6 +13,7 @@ enum PreparedAutomationSourceCommandValidation {
              .applySemanticExtensionMutations,
              .applyNamespacedSemanticExtensionMutations,
              .appendFeatureGraph,
+             .createSketch,
              .validateDocument:
             return false
         case .upsertParameter,
@@ -40,7 +41,7 @@ enum PreparedAutomationSourceCommandValidation {
              .createViewAlignedConstructionPlane,
              .renameConstructionPlane,
              .setConstructionPlane,
-             .createSketch,
+             .createSemanticSketch,
              .createLineSketch,
              .createCircleSketch,
              .createArcSketch,
@@ -124,7 +125,8 @@ enum PreparedAutomationSourceCommandValidation {
              .slideSurfaceControlPoints,
              .createExtrudedRectangle,
              .createExtrudedRectangleFromCorners,
-             .createExtrudedCircle:
+             .createExtrudedCircle,
+             .createAnalyticSphere:
             return true
         }
     }

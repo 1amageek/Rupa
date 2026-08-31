@@ -83,6 +83,7 @@ the final immutable source/B-Rep snapshot.
 | [Professional bicycle reference](Artifacts/professional-bicycle/DESIGN.md) | child | T11 L2 fidelity, provenance, CAD authority, and rejection contract | Defines the bounded engineering-reference outcome for a later Agent-generated bicycle assembly. | It is a design/acceptance contract; it does not claim manufacturing, safety, certification, or production implementation. |
 | [Professional V8 reference](Artifacts/professional-v8-engine/DESIGN.md) | child | Engine requirement, thermodynamic/mechanical analysis, semantic CAD, and release-claim boundary | Defines one 4.0 L twin-turbo road/track engineering reference and the evidence required before its CAD can be accepted. | Calculation and CAD evidence do not replace FEA, CFD, combustion development, dyno durability, emissions, or production validation. |
 | [RupaDomainFoundation](RupaKit/Sources/RupaDomainFoundation/DESIGN.md) | descendant | generic operation/value/reference/program compiler contract | Defines the single semantic operation model shared by both forms. | It owns neither concrete CAD vocabulary nor project publication. |
+| [RupaCADDomain](RupaKit/Sources/RupaCADDomain/DESIGN.md) | descendant | concrete versioned CAD descriptor/lowerer contract | Supplies the twelve universal CAD operations used by both forms and all 100 exact benchmark realizations. | It owns neither caller IDs nor project/publication/transport authority. |
 | [RupaAutomation](RupaKit/Sources/RupaAutomation/DESIGN.md) | descendant | binding-aware prepared source execution | Keeps raw feature-graph transactions as an internal lowering substrate. | Its current externally reachable raw commands are an implementation gap. |
 
 ## Architecture
@@ -111,8 +112,9 @@ flowchart LR
         App["Application file lifecycle"] --> Project
     end
     subgraph CADAPI["CADAPI-D target contract"]
-        Direct["capability.invoke\none simple operation"] --> Semantic["one semantic CAD registry + compiler"]
+        Direct["capability.invoke\none simple operation"] --> Semantic["RupaDomainFoundation\none generic compiler"]
         Program["program.execute\nbounded declarative DAG"] --> Semantic
+        CADRegistry["RupaCADDomain\ntwelve universal operations"] --> Semantic
         Semantic --> Prepared["one prepared source plan"]
         Prepared --> WorkspaceAuthority
     end
@@ -338,16 +340,18 @@ failure invalidates the run without updating the execution-regression baseline.
 The external adapter executes one activated case per process, reads at most one
 65,536-byte response, and uses no network, background scheduler, or fallback
 reference candidate.
-The CAD semantic compiler applies an injected owner-defined policy before any
-mutation. It bounds wire bytes, decoded values/nesting, nodes, edges,
+Resource ownership follows the processing boundary. Transport bounds HTTP
+frames/bodies; AgentProtocol bounds encoded DTO bytes and strict codec shape;
+the CAD semantic compiler bounds decoded values/nesting, nodes, edges,
 parameters, output references, expression depth/work, lowered commands, and
-expanded source/body/occurrence/pattern/evaluation work. Concrete default values
-must be selected from measured implementation fixtures rather than guessed or
-relaxed to make a request pass. Unknown operation/version, invalid type/unit/
-reference, duplicate or missing symbol, cycle, ineligible route/effect, limit,
-stale coordinate, cancellation, lowering, source, evaluation, projection, and
-dispatch-uncertain failures remain typed and never select raw graph or file
-fallback.
+declared or expanded source work before mutation; Automation/RupaKit recheck
+actual staged work; RupaKit/Project validate exact coordinates and own
+evaluation/publication. Concrete defaults must be selected from measured
+implementation fixtures rather than guessed or relaxed to make a request pass.
+Unknown operation/version, invalid type/unit/reference, duplicate or missing
+symbol, cycle, ineligible route/effect, limit, stale coordinate, cancellation,
+lowering, source, evaluation, projection, and dispatch-uncertain failures remain
+typed at their respective owners and never select raw graph or file fallback.
 
 ## Verification and Change Impact
 

@@ -378,9 +378,7 @@ public struct DefaultSemanticProgramCompiler: SemanticProgramCompiling, Sendable
             limits: limits.resultLimits
         )
 
-        var requestedPreparedOutputs: [CompiledSemanticOutputRequest] = []
-        var preparedSteps: [PreparedAutomationStep] = []
-        var loweredCommandCount = 0
+        var loweringPlans: [LoweringPlan] = []
         var expandedSourceWork: UInt64 = 0
 
         for symbol in orderedSymbols {
@@ -420,33 +418,91 @@ public struct DefaultSemanticProgramCompiler: SemanticProgramCompiling, Sendable
                 preparedOutputs: preparedOutputs
             )
 
-            let lowered: SemanticLoweredOperation
+            let estimatedGeneratedSourceWork: UInt64
             do {
-                lowered = try resolved.registration.lowerer.lower(request)
+                estimatedGeneratedSourceWork = try resolved.registration.lowerer
+                    .estimateGeneratedSourceWork(for: request)
+            } catch let error as any SemanticOperationLoweringFailure {
+                throw SemanticCompilationError.loweringFailed(
+                    node: symbol,
+                    operationID: descriptor.operationID,
+                    code: error.semanticErrorCode,
+                    message: error.semanticErrorMessage
+                )
             } catch {
                 throw SemanticCompilationError.loweringFailed(
                     node: symbol,
                     operationID: descriptor.operationID,
+                    code: "semantic.loweringFailed",
+                    message: String(describing: error)
+                )
+            }
+            guard estimatedGeneratedSourceWork >= descriptor.estimatedExpandedSourceWork else {
+                throw SemanticCompilationError.lowererContractViolation(
+                    node: symbol,
+                    message: "Lowerer work estimate is below its descriptor minimum."
+                )
+            }
+            expandedSourceWork = try adding(
+                expandedSourceWork,
+                estimatedGeneratedSourceWork,
+                metric: .expandedSourceWork,
+                maximum: limits.maximumExpandedSourceWork
+            )
+            loweringPlans.append(
+                LoweringPlan(
+                    symbol: symbol,
+                    resolved: resolved,
+                    outputDescriptors: outputDescriptors,
+                    request: request,
+                    estimatedGeneratedSourceWork: estimatedGeneratedSourceWork
+                )
+            )
+        }
+
+        var requestedPreparedOutputs: [CompiledSemanticOutputRequest] = []
+        var preparedSteps: [PreparedAutomationStep] = []
+
+        for plan in loweringPlans {
+            try checkCancellation(cancellation)
+            let symbol = plan.symbol
+            let descriptor = plan.resolved.registration.descriptor
+
+            let lowered: SemanticLoweredOperation
+            do {
+                lowered = try plan.resolved.registration.lowerer.lower(plan.request)
+            } catch let error as any SemanticOperationLoweringFailure {
+                throw SemanticCompilationError.loweringFailed(
+                    node: symbol,
+                    operationID: descriptor.operationID,
+                    code: error.semanticErrorCode,
+                    message: error.semanticErrorMessage
+                )
+            } catch {
+                throw SemanticCompilationError.loweringFailed(
+                    node: symbol,
+                    operationID: descriptor.operationID,
+                    code: "semantic.loweringFailed",
                     message: String(describing: error)
                 )
             }
             let step = lowered.step
-            guard step.inputs == preparedInputs else {
+            guard step.inputs == plan.request.preparedInputs else {
                 throw SemanticCompilationError.lowererContractViolation(
                     node: symbol,
                     message: "Lowerer changed validated input slots."
                 )
             }
-            guard step.outputs == preparedOutputs else {
+            guard step.outputs == plan.request.preparedOutputs else {
                 throw SemanticCompilationError.lowererContractViolation(
                     node: symbol,
                     message: "Lowerer changed validated output slots."
                 )
             }
-            guard step.estimatedGeneratedSourceWork == descriptor.estimatedExpandedSourceWork else {
+            guard step.estimatedGeneratedSourceWork == plan.estimatedGeneratedSourceWork else {
                 throw SemanticCompilationError.lowererContractViolation(
                     node: symbol,
-                    message: "Lowerer work estimate does not match its descriptor."
+                    message: "Lowerer work estimate changed after preflight."
                 )
             }
             guard !step.commandBuilder.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -456,21 +512,9 @@ public struct DefaultSemanticProgramCompiler: SemanticProgramCompiling, Sendable
                 )
             }
 
-            loweredCommandCount = try adding(
-                loweredCommandCount,
-                1,
-                metric: .loweredCommandCount,
-                maximum: limits.maximumLoweredCommandCount
-            )
-            expandedSourceWork = try adding(
-                expandedSourceWork,
-                step.estimatedGeneratedSourceWork,
-                metric: .expandedSourceWork,
-                maximum: limits.maximumExpandedSourceWork
-            )
             preparedSteps.append(step)
 
-            for output in outputDescriptors {
+            for output in plan.outputDescriptors {
                 let outputReference = SemanticOutputReference(
                     node: symbol,
                     output: output.id,
@@ -487,7 +531,7 @@ public struct DefaultSemanticProgramCompiler: SemanticProgramCompiling, Sendable
             }
         }
 
-        loweredCommandCount = preparedSteps.count
+        let loweredCommandCount = preparedSteps.count
         try checkCount(
             loweredCommandCount,
             maximum: limits.maximumLoweredCommandCount,
@@ -547,6 +591,14 @@ private extension DefaultSemanticProgramCompiler {
         let node: SemanticProgramNode
         let registration: SemanticOperationRegistration
         let arguments: [SemanticArgumentID: SemanticResolvedArgument]
+    }
+
+    struct LoweringPlan {
+        let symbol: ProgramNodeSymbol
+        let resolved: ResolvedNode
+        let outputDescriptors: [SemanticOperationOutputDescriptor]
+        let request: SemanticLoweringRequest
+        let estimatedGeneratedSourceWork: UInt64
     }
 
     struct ExpressionAnalysis {

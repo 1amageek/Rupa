@@ -93,6 +93,10 @@ let package = Package(
             targets: ["RupaDomainFoundation"]
         ),
         .library(
+            name: "RupaCADDomain",
+            targets: ["RupaCADDomain"]
+        ),
+        .library(
             name: "RupaManufacturing",
             targets: ["RupaManufacturing"]
         ),
@@ -337,6 +341,16 @@ let package = Package(
                 "RupaCore",
                 "RupaCoreTypes",
                 "RupaAutomation",
+                "RupaCapabilities",
+            ],
+            exclude: ["DESIGN.md"]
+        ),
+        .target(
+            name: "RupaCADDomain",
+            dependencies: [
+                "RupaDomainFoundation",
+                "RupaAutomation",
+                "RupaCore",
                 "RupaCapabilities",
             ],
             exclude: ["DESIGN.md"]
@@ -590,6 +604,15 @@ let package = Package(
             ]
         ),
         .testTarget(
+            name: "RupaCADDomainTests",
+            dependencies: [
+                "RupaCADDomain",
+                "RupaDomainFoundation",
+                "RupaAutomation",
+                "RupaCore",
+            ]
+        ),
+        .testTarget(
             name: "RupaManufacturingTests",
             dependencies: [
                 "RupaManufacturing",
@@ -780,6 +803,11 @@ let package = Package(
             name: "RupaAgentCADBenchmarkTests",
             dependencies: [
                 "RupaAgentCADBenchmark",
+                "RupaCADDomain",
+                "RupaCore",
+                "RupaDomainFoundation",
+                "RupaKit",
+                .product(name: "SwiftCAD", package: "swift-CAD"),
             ],
             resources: [
                 .process("Fixtures"),

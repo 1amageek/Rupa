@@ -48,7 +48,12 @@ public enum SemanticCompilationError: Error, Equatable, Sendable {
     case limitExceeded(metric: SemanticProgramLimitMetric, actual: UInt64, maximum: UInt64)
     case arithmeticInvalid
     case cancelled
-    case loweringFailed(node: ProgramNodeSymbol, operationID: DomainCapabilityID, message: String)
+    case loweringFailed(
+        node: ProgramNodeSymbol,
+        operationID: DomainCapabilityID,
+        code: DomainCapabilityErrorCode,
+        message: String
+    )
     case lowererContractViolation(node: ProgramNodeSymbol, message: String)
     case preparedPlanInvalid(node: ProgramNodeSymbol?, message: String)
 }

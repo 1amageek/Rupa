@@ -1,9 +1,10 @@
-# RupaCore Authored Mesh Authority Design
+# RupaCore Source Authority Design
 
 ## Purpose and Scope
 
-This module owns the Product document's Authored Mesh source authority and the
-Core-side application of a bounded Mesh edit plan. It is a child of the
+This module owns Product/CAD/Authored-Mesh source mutation, persistent source
+identity allocation, and the Core-side application of a bounded Mesh edit
+plan. It is a child of the
 [RupaKit package design](../../DESIGN.md) and the
 [system design](../../../DESIGN.md).
 
@@ -11,12 +12,20 @@ Dependencies used by this boundary are `RupaCoreTypes`, `RupaGeometry`,
 `RupaProjectModel`, and Swift-CAD. Users include `RupaProject`, `RupaKit`, and
 existing application/domain adapters through the public Core contracts.
 
-Parent: [RupaKit package design](../../DESIGN.md). Children: none for T09.
+Parent: [RupaKit package design](../../DESIGN.md). Children: none.
 
 ## Responsibilities and Boundaries
 
 `RupaCore` owns:
 
+- server allocation of every persistent CAD, sketch-entity, Product, Scene,
+  Component, Instance, and Pattern identity created by a Core command;
+- high-level CAD commands that validate and atomically append exact source
+  features plus their Product presentation metadata;
+- materializing ID-free ordered sketch-construction values into a validated
+  `Sketch` without accepting caller-minted `SketchEntityID` values;
+- analytic-sphere source creation through swift-CAD's existing
+  `SpherePrimitive` evaluation path;
 - `DesignDocument` Product metadata and retained representation references;
 - retained Authored Mesh assets and their provenance;
 - source-authority target validation using only `sourceID` and expected content
@@ -33,8 +42,9 @@ Parent: [RupaKit package design](../../DESIGN.md). Children: none for T09.
 - effective scene-node visibility resolved from the Product root hierarchy;
   a hidden ancestor suppresses every descendant without deleting its source.
 
-It does not own Mesh algorithms, plan execution internals, project package I/O,
-project revision publication, view projection, or Agent/CLI/MCP transport.
+It does not own semantic CAD operation descriptors, Agent schemas, Mesh
+algorithms, plan execution internals, project package I/O, project revision
+publication, view projection, or Agent/CLI/MCP transport.
 `SceneNodeID` and `GeometryRepresentationID` remain navigation/reference values
 outside the Mesh source target; they are not required inverse references and do
 not establish Mesh source authority.
@@ -66,11 +76,25 @@ remain the integration point.
 | [package design](../../DESIGN.md) | parent package | Package authority direction | Places Core between Geometry and Project. | Do not publish from Core directly. |
 | [system design](../../../DESIGN.md) | system parent | Source identity, shared references, one-plan flow | Defines the cross-layer behavior. | Local document validation remains Core-owned. |
 | [RupaGeometry design](../RupaGeometry/DESIGN.md) | depends on | Plan/executor/receipt and buffer contract | Supplies immutable result and copy telemetry. | Core must not reimplement Geometry algorithms. |
+| [RupaCADDomain design](../RupaCADDomain/DESIGN.md) | used by | High-level source commands and server-owned identity results | CADDomain lowers universal semantic operations to Core commands. | CADDomain may not construct persistent IDs or raw source graphs. |
 | [CAD/Mesh responsibility](../../../Rupa/CAD_MESH_RESPONSIBILITY_CONTRACT.md) | depends on | Authored Mesh authority, CAD coexistence, provenance | Defines representation meaning and CAD/Mesh independence. | Do not alter CAD or selection when editing Mesh. |
 | [State and project contract](../../../Rupa/STATE_AND_PROJECT_CONTRACT.md) | coordinates with | Source history and transaction staging | Project owns publication and revision. | Core results are staged values until Project commits. |
 | [RupaCore tests](../../Tests/RupaCoreTests) | verification owner | Source-authority behavioral tests | Owns current/stale/shared-reference proof. | Type/shape tests alone are insufficient. |
 
 ## Architecture
+
+CAD creation and Authored Mesh editing share the same source-authority boundary
+but not the same mutation semantics:
+
+```mermaid
+flowchart LR
+    Semantic["validated CAD semantic step"] --> Command["high-level EditorCommand"]
+    Command --> Core["RupaCore validation + ID allocation"]
+    Core --> CAD["exact swift-CAD source feature"]
+    Core --> Product["Product object + Scene presentation"]
+    CAD --> Delta["complete generated source identity delta"]
+    Product --> Delta
+```
 
 ```mermaid
 flowchart TD
@@ -107,6 +131,54 @@ command group. The observation cannot enter, leave, or retain the group and
 does not expose the stack. It allows `RupaAutomation` to reject execution on an
 ordinary session before mutation; source rollback, deferred evaluation, and the
 single history entry remain owned by `withSourceCommandGroup`.
+
+### CAD creation contract
+
+1. `createAnalyticSphere(name:center:radius:)` is a high-level source command.
+   Core validates a non-empty name, finite center, and a radius greater than the
+   document tolerance, allocates the `FeatureID` and `SceneNodeID`, appends one
+   `PrimitiveFeature(.sphere)` with a `.body` output, and creates one solid
+   Product object with `ObjectTypeID.sphere` and a radius property. Center is
+   source placement, not a duplicated Product transform. The radius property is
+   read-only metadata until a dedicated source-edit command owns radius changes;
+   every Product validation requires the object to reference an analytic sphere
+   primitive and requires its radius to equal the resolved CAD source radius, so
+   editing Product metadata alone cannot diverge from the CAD source.
+2. Sphere creation is atomic across CAD and Product state. Validation,
+   append, Product synchronization, or evaluation failure leaves both values
+   unchanged. A successful command delta contains exactly one generated
+   Feature, one `.body` source-output identity, and one Scene node; it contains
+   no evaluated `BodyID`.
+3. The exact evaluator remains swift-CAD's existing
+   `SpherePrimitive -> PrimitiveFeatureEvaluator ->
+   PrimitiveBRepRequestBuilder.sphere` path. For a valid isolated sphere it
+   produces eight analytic spherical faces, twelve exact edges, six vertices,
+   and analytic volume; Core must not tessellate, approximate, or substitute an
+   Authored Mesh.
+4. `createSemanticSketch(name:plan:geometryRole:)` accepts a
+   `SketchCreationPlan` containing a plane, ordered ID-free
+   `SketchCreationEntity` values, and `SketchCreationConstraint` values that
+   refer to entities only by validated zero-based local indices. Core rejects
+   empty/duplicate/out-of-range/self-incompatible references before source
+   append, allocates one `SketchEntityID` per entity in input order, resolves
+   all constraint references, then delegates to the ordinary complete-Sketch
+   validation and append path.
+5. The initial ID-free entity contract covers line and analytic circle; the
+   relation contract covers coincident endpoint references, parallel,
+   perpendicular, horizontal, vertical, equal length, concentric, and equal
+   radius. Relation/entity-kind compatibility is validated in Core. These are
+   universal sketch values, not benchmark-case commands.
+6. A semantic sketch command reports the generated sketch Feature and Scene
+   identities through the ordinary complete delta. Internal
+   `SketchEntityID` values are neither request values nor CADAPI-A local
+   outputs. A later program step refers to the generated sketch Feature, not
+   to a fabricated entity identity.
+7. Adding either command requires updating every exhaustive `EditorCommand`
+   classification. Prepared Automation admits both as source commands and
+   continues to reject raw `appendFeatureGraph` and caller-built `Sketch` as
+   semantic Agent inputs.
+
+### Authored Mesh edit contract
 
 1. The Mesh edit target contains only `GeometrySourceID` and expected
    `ContentIdentity`. Scene-node and representation IDs are not part of source
@@ -168,6 +240,20 @@ production Geometry boundary.
 
 ```mermaid
 sequenceDiagram
+    participant A as Prepared Automation
+    participant S as Staged EditorSession
+    participant D as DesignDocument
+    participant K as swift-CAD evaluator
+    A->>S: high-level sphere or ID-free sketch command
+    S->>D: validate and allocate all persistent identities
+    D->>D: append exact CAD + Product presentation atomically
+    D->>K: evaluate exact source
+    K-->>S: exact evaluation or typed failure
+    S-->>A: complete generated source delta
+```
+
+```mermaid
+sequenceDiagram
     participant P as Project staging
     participant A as Core applier
     participant E as Mesh executor
@@ -188,6 +274,8 @@ The project layer decides whether and when the staged value is published.
 ## State, Ownership, and Lifecycle
 
 - `DesignDocument` owns the retained asset dictionary and Product references.
+- `DesignDocument` owns every persistent identity materialized from an ID-free
+  sketch plan and the Feature/Product state created for an analytic sphere.
 - `RupaGeometry` owns the temporary mutable buffer during plan execution.
 - `AuthoredMeshAsset` owns published Mesh source identity, payload, and
   provenance.
@@ -199,7 +287,8 @@ The project layer decides whether and when the staged value is published.
 
 ## Failure, Concurrency, and Constraints
 
-Core rejects source-domain mismatch, an asset dictionary key/source-ID mismatch,
+Core rejects invalid or degenerate CAD creation values, invalid ID-free sketch
+indices/relations, source-domain mismatch, an asset dictionary key/source-ID mismatch,
 missing asset, stale content identity, executor failure, and post-replacement
 document validation failure with typed errors. It never returns the original
 asset as a success fallback after a failed edit and it does not fail merely
@@ -224,6 +313,15 @@ T09-B owns the following behavioral proof:
 | Error handling | Typed failures do not publish a partial document. |
 | Product visibility | Root, hidden-parent, visible-sibling, and hidden-descendant cases prove one effective-visibility result without source deletion. |
 
-Changes to target identity, asset replacement, provenance, or Core command
-decoding require rechecking `RupaProject` staging and the system source-authority
-invariants.
+CADAPI-C must additionally prove:
+
+| Invariant | Required evidence |
+|---|---|
+| Exact sphere | Origin and translated valid spheres retain the requested center/radius, `ObjectTypeID.sphere`, one body role, and exact 8/12/6 analytic B-Rep; zero/negative/tolerance-sized radius and nonfinite center fail without source/Product/history change. |
+| Identity ownership | Repeating the same ID-free sketch plan creates distinct server-owned entity identities; no Core creation input contains `SketchEntityID`. |
+| Constraint materialization | All eight supported relations materialize correctly; missing/out-of-range indices, wrong entity kinds, invalid coincident endpoints, and duplicate/self references fail atomically. |
+| Command admission | Every exhaustive Core/Automation command classification handles the two new source commands, and raw graph/legacy caller-built Sketch does not become a semantic CAD operation. |
+
+Changes to CAD creation, target identity, asset replacement, provenance, or
+Core command decoding require rechecking `RupaAutomation`, `RupaCADDomain`,
+`RupaProject` staging, and the system source-authority invariants.
