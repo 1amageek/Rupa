@@ -53,6 +53,10 @@ let package = Package(
             targets: ["RupaProjectAccess"]
         ),
         .library(
+            name: "RupaProjectAccessComposition",
+            targets: ["RupaProjectAccessComposition"]
+        ),
+        .library(
             name: "RupaUI",
             targets: ["RupaUI"]
         ),
@@ -237,6 +241,23 @@ let package = Package(
                 "RupaCoreTypes",
             ],
             exclude: ["DESIGN.md"]
+        ),
+        .target(
+            name: "RupaProjectAccessComposition",
+            dependencies: [
+                "RupaProjectAccess",
+                "RupaAgentProtocol",
+                "RupaCoreTypes",
+                "RupaAgentRuntime",
+                "RupaKit",
+            ],
+            path: "Sources/RupaProjectAccessComposition",
+            exclude: ["DESIGN.md"]
+        ),
+        .executableTarget(
+            name: "ProjectAuthorityLeaseCrashProbe",
+            dependencies: ["RupaProjectAccessComposition"],
+            path: "Tests/ProjectAuthorityLeaseCrashProbe"
         ),
         .target(
             name: "RupaUI",
@@ -519,6 +540,24 @@ let package = Package(
                 "RupaProjectAccess",
                 "RupaAgentProtocol",
                 "RupaCoreTypes",
+            ]
+        ),
+        .testTarget(
+            name: "RupaProjectAccessCompositionTests",
+            dependencies: [
+                "RupaProjectAccessComposition",
+                "RupaProjectAccess",
+                "RupaAgentProtocol",
+                "RupaAgentRuntime",
+                "RupaAutomation",
+                "RupaCoreTypes",
+                "RupaCore",
+                "RupaEvaluation",
+                "RupaGeometry",
+                "RupaProject",
+                "RupaProjectModel",
+                "RupaProjectPackage",
+                "RupaKit",
             ]
         ),
         .testTarget(

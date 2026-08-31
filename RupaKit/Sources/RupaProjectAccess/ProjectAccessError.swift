@@ -1,4 +1,5 @@
 import Foundation
+import RupaAgentProtocol
 
 public enum ProjectAccessError: Error, Equatable, Sendable {
     case invalidTarget(URL)
@@ -10,6 +11,9 @@ public enum ProjectAccessError: Error, Equatable, Sendable {
     case outcomeUnknown(requestID: UUID?)
     case finished
     case authorityUnavailable
+    case fileAuthorityConflict(URL)
+    case fileAuthorityLost(URL)
+    case committedMutation(AgentCommittedMutationOutcome)
 }
 
 extension ProjectAccessError: LocalizedError {
@@ -41,6 +45,12 @@ extension ProjectAccessError: LocalizedError {
             "The project access session has already finished."
         case .authorityUnavailable:
             "The required ProjectWorkspace and ProjectController authority is unavailable."
+        case .fileAuthorityConflict(let url):
+            "Another project access session owns the file authority for \(url.path)."
+        case .fileAuthorityLost(let url):
+            "The file authority for \(url.path) changed while the access session was active."
+        case .committedMutation(let outcome):
+            outcome.message
         }
     }
 }

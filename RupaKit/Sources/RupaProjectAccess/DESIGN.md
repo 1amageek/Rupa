@@ -8,9 +8,11 @@ design](../../DESIGN.md) and is intentionally independent of `RupaCore`,
 `RupaProject`, `RupaKit`, socket I/O, application UI, and CLI parsing.
 
 The module fixes the access shape for live projects, existing live sessions,
-and closed schema-v3 `.rupa` projects. ACCESS-A defines values and ports only;
-concrete live composition, closed-file workspace creation, authority leases,
-and CLI cutover belong to later ACCESS work.
+and closed schema-v3 `.rupa` projects. It remains contract-only: concrete
+closed-file workspace creation and authority leases are owned by the sibling
+[`RupaProjectAccessComposition`](../RupaProjectAccessComposition/DESIGN.md)
+module, while live composition and CLI cutover belong to their application
+owners.
 
 CADAPI-D adds no project authority here. An access session transports either of
 the two semantic CAD mutation envelopes (`capability.invoke` or
@@ -47,6 +49,7 @@ permit direct package-entry editing or a shadow `EditorSession`.
 | [package design](../../DESIGN.md) | parent package | target dependency direction and CoreTypes value floor | Keeps this target below application and concrete transport composition. | Do not add a dependency on RupaCore or RupaProject. |
 | [RupaAgentProtocol](../RupaAgentProtocol/DESIGN.md) | depends on | typed Agent request/response values | Supplies the semantic request and response values carried by a session. | Protocol values are not workspace permission. |
 | [RupaAgentRuntime](../RupaAgentRuntime/DESIGN.md) | used by concrete access composition | semantic request dispatch and typed result projection | Resolves both CADAPI-D forms through the same workspace path. | Access must not compile, split, or retry a semantic program. |
+| [RupaProjectAccessComposition](../RupaProjectAccessComposition/DESIGN.md) | used by | concrete closed-session and file-authority composition | Implements this contract by loading through the public `ProjectWorkspace` API and delegating requests to `ProjectAgentCommandController`. | The composition target owns leases and resource lifetime; this contract does not import it. |
 | [RupaDomainFoundation](../RupaDomainFoundation/DESIGN.md) | transitively used by runtime | bounded semantic program contract | Gives `program.execute` its source-only DAG semantics. | ProjectAccess transports the DTO and does not depend on compiler internals. |
 | [RupaProject](../RupaProject/DESIGN.md) | used by later composition | controller and publication authority | Owns staging, evaluation, rollback, and package persistence. | ACCESS-A defines no adapter to its concrete implementation. |
 | [Agent transport](../RupaAgentTransport/DESIGN.md) | coordinates later | injected endpoint and peer authorization | Carries protocol values for live access. | Endpoint placement is transport composition, not semantic status. |
@@ -166,6 +169,9 @@ port may expose package entries or accept a direct `EditorSession`.
 | `outcomeUnknown` | Dispatch may have published, but its response was not observed. |
 | `finished` | The session was used after `finish`. |
 | `authorityUnavailable` | The required workspace/controller authority is absent. |
+| `fileAuthorityConflict(URL)` | Another closed-file session already owns the canonical path. |
+| `fileAuthorityLost(URL)` | The leased path's device/inode identity changed or the lease inode was replaced. |
+| `committedMutation(AgentCommittedMutationOutcome)` | Persistence committed an exact authority state, but its view projection could not be recovered; the receipt is terminal and must not be retried. |
 
 Errors are never converted to an empty response, a success result, or a file
 fallback. Underlying project errors remain typed at the concrete adapter
