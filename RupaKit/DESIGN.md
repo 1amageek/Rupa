@@ -24,6 +24,7 @@ Parent: [system design](../DESIGN.md). Direct children used by T10/T12 are:
 - [RupaProjectAccess](Sources/RupaProjectAccess/DESIGN.md)
 - [RupaProjectAccessPlatform](Sources/RupaProjectAccessPlatform/DESIGN.md)
 - [RupaProjectAccessComposition](Sources/RupaProjectAccessComposition/DESIGN.md)
+- [RupaCLIComposition](Sources/RupaCLIComposition/DESIGN.md)
 - [RupaUI](Sources/RupaUI/DESIGN.md)
 - [RupaAgentUI](Sources/RupaAgentUI/DESIGN.md)
 - [RupaAgentRuntime](Sources/RupaAgentRuntime/DESIGN.md)
@@ -133,6 +134,9 @@ flowchart LR
     Benchmark --> JSONAdapter["RupaAgentCADBenchmarkJSONAdapter\nversioned bounded JSON"]
     JSONAdapter --> BenchmarkCLI["RupaAgentCADBenchmarkCLI\ndedicated executable"]
     AgentProtocol --> Access["RupaProjectAccess\ntransport-neutral intent"]
+    CLIProduct["SwiftPM / Xcode rupa entries"] --> CLIComposition["RupaCLIComposition\nshared composition"]
+    CLIComposition --> CLIKit["RupaCLIKit\nparsing + projection"]
+    CLIComposition --> Access
 ```
 
 ## Related Designs
@@ -207,6 +211,7 @@ records are owned by the four child designs:
 | `RupaProjectAccess` is the transport-neutral access contract; it owns no workspace, package, or command state. | [RupaProjectAccess design](Sources/RupaProjectAccess/DESIGN.md) |
 | `RupaProjectAccessPlatform` owns product-local App Group/endpoint coordinates and Darwin file-authority leases without directly depending on workspace or CAD targets; its contract dependencies retain their existing transitive graph. | [RupaProjectAccessPlatform design](Sources/RupaProjectAccessPlatform/DESIGN.md) |
 | `RupaProjectAccessComposition` owns concrete closed-project and live-project sessions by composing `RupaProjectAccessPlatform`, `RupaAgentRuntime`, and the public `RupaKit` workspace APIs. | [RupaProjectAccessComposition design](Sources/RupaProjectAccessComposition/DESIGN.md) |
+| `RupaCLIComposition` is the sole executable composition for `rupa`; SwiftPM and Xcode entries are thin async launchers over it. | [RupaCLIComposition design](Sources/RupaCLIComposition/DESIGN.md) |
 | `RupaAgentTransport` carries protocol values over an injected local transport and never defines project semantics. | [RupaAgentTransport design](Sources/RupaAgentTransport/DESIGN.md) |
 | `RupaAgentUI` owns the process-lifetime Agent host and registration bridge; the App composes one controller/router over the same workspace. | [RupaAgentUI design](Sources/RupaAgentUI/DESIGN.md) |
 | Existing CAD/Mesh and state contracts remain authoritative for their domains. | [CAD/Mesh responsibility](../Rupa/CAD_MESH_RESPONSIBILITY_CONTRACT.md), [state/project contract](../Rupa/STATE_AND_PROJECT_CONTRACT.md) |

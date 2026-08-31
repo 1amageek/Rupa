@@ -2,9 +2,11 @@
 
 ## Purpose and Scope
 
-This design owns the macOS Rupa application composition built by
-`Rupa.xcworkspace`. It is a direct child of the [system design](../DESIGN.md).
-Its direct application component is [Rupa App](Rupa/Rupa/DESIGN.md).
+This design owns the macOS Rupa application and distributable CLI composition
+built by `Rupa.xcworkspace`. It is a direct child of the
+[system design](../DESIGN.md). Its direct product components are
+[Rupa App](Rupa/Rupa/DESIGN.md) and
+[Rupa CLI Product](Rupa/RupaCLI/DESIGN.md).
 
 ## Responsibilities and Boundaries
 
@@ -24,6 +26,11 @@ For CADAPI-D, both `capability.invoke` and `program.execute` are semantic
 requests delegated through that same controller/workspace path. The application
 does not interpret program nodes, allocate modeling IDs, expand patterns, or
 create a second transaction; explicit save remains a separate lifecycle intent.
+The distributable `rupa` command-line product is a separate non-sandboxed
+executable target signed by the same Team and App Group entitlement. Its
+SwiftPM and Xcode entries both call the single public `RupaCLIComposition` async
+entry; neither entry owns access, project, mutation, save, endpoint, or
+fallback policy.
 
 ## Related Designs
 
@@ -31,8 +38,10 @@ create a second transaction; explicit save remains a separate lifecycle intent.
 |---|---|---|---|---|
 | [system design](../DESIGN.md) | parent | single project authority | Defines the global access invariant. | Product composition cannot create a second authority. |
 | [Rupa App](Rupa/Rupa/DESIGN.md) | child | process authority, file activation, application lifecycle | Owns the executable process composition and the one App-owned workspace/controller. | Acquire application authority before composing the host or workspace. |
+| [Rupa CLI Product](Rupa/RupaCLI/DESIGN.md) | child | signed command-line distribution | Builds the non-sandboxed `rupa` tool with the same Team and App Group coordination entitlement. | It must remain a thin entry over the shared CLI composition. |
 | [RupaKit package](../RupaKit/DESIGN.md) | depends on | workspace/controller, access, runtime, transport contracts | Supplies all domain and integration modules. | Depend on public contracts only. |
 | [Agent host](../RupaKit/Sources/RupaAgentUI/DESIGN.md) | depends on | process-lifetime listener and injected request-handler contract | Provides the host while this application composes its controller, router, and workspace. | It must not become a second project or package authority. |
+| [RupaCLIComposition](../RupaKit/Sources/RupaCLIComposition/DESIGN.md) | used by | one public async executable composition | Supplies the same project-access composition to SwiftPM and Xcode `rupa` entries. | The CLI product is not a second project authority and is not sandboxed. |
 
 ## Architecture
 
@@ -50,6 +59,9 @@ flowchart LR
     AgentController --> Workspace
     Workspace --> Controller["ProjectController"]
     Controller --> Package["schema-v3 .rupa"]
+    CLIProduct["Signed rupa CLI"] --> CLIComposition["RupaCLIComposition"]
+    CLIComposition --> ProjectAccessAPI["RupaProjectAccess"]
+    ProjectAccessAPI --> Host
 ```
 
 ```mermaid
@@ -81,6 +93,10 @@ flowchart LR
 8. A successful CAD mutation changes in-memory project state only. Persistence
    occurs only after a separately requested save reaches the coordinator and
    the same `ProjectController`.
+9. The distributable CLI is signed by Team `WWCKBW8CKN`, carries the same
+   product App Group entitlement, and is not sandboxed. It invokes the same
+   `RupaCLIComposition` entry as the SwiftPM executable and owns no project
+   state, direct file mutation, or fallback route.
 
 ## Runtime Flows
 
@@ -155,6 +171,9 @@ destination-preserving package staging, and failure preservation. ACCESS-O.5
 owns the package replacement implementation and ACCESS-O.6 owns application
 source composition; ACCESS-O.7/IV own the final signed App/CLI and
 same-workspace viewport evidence.
+ACCESS-IV additionally builds the Xcode-owned CLI with project-default signing,
+inspects its Team/App Group/non-sandbox entitlements, and exercises that exact
+binary against the signed App before the access design is accepted.
 CADAPI-D integration later adds actual signed-App/CLI proof that both forms use
 the same workspace/controller, complex programs publish once, explicit save is
 separate, and the App exposes no raw graph route. This document does not claim

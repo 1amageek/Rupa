@@ -27,6 +27,7 @@ migration, semantic program compilation, or save-as policy expansion.
 | [Agent transport](../../../RupaKit/Sources/RupaAgentTransport/DESIGN.md) | depends on | injected endpoint and request handling | Carries live requests. | Endpoint is not semantic status. |
 | [Project access platform](../../../RupaKit/Sources/RupaProjectAccessPlatform/DESIGN.md) | depends on | product App Group/endpoint coordinates and project-file lease | Shares the exact coordination values with closed CLI access without importing high-level workspace composition. | It is not project authority and owns no App lifecycle. |
 | [Rupa UI](../../../RupaKit/Sources/RupaUI/DESIGN.md) | depends on | snapshot-owned visible project title | Displays the exact workspace publication. | CAD metadata and file names are not title authority. |
+| [Rupa CLI Product](../RupaCLI/DESIGN.md) | coordinates with | signed thin entry over the shared CLI composition | Attaches to this App's Agent host using the same Team/App Group coordination values. | The CLI is a sibling product and never owns this component's workspace. |
 
 ## Architecture
 

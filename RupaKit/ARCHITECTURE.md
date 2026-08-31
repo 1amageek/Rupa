@@ -16,7 +16,7 @@ Application composition selects the verified single `ProjectWorkspace`, shared
 `ProjectWorkspaceOperationSequencer`, and `ProjectController` route for viewport,
 commands, file/history lifecycle, and live Agent access. The CLI closed-file
 and live mutation paths use the same `RupaProjectAccess` contract. A single
-executable composition injects live and closed openers into `RupaCLIKit`; every
+`RupaCLIComposition` injects live and closed openers into `RupaCLIKit`; every
 command obtains one `ProjectAccessSession`, and only that session can send a
 mutation or perform an explicit save. CLIKit never opens package bytes or
 constructs an `EditorSession`. No schema-v2 compatibility layer remains.
@@ -120,9 +120,11 @@ flowchart LR
     CLI --> Automation
     CLI --> Domain
     CLI --> SwiftCAD
-    Executable[RupaCLI] --> CLI
-    Executable --> AccessComposition[RupaProjectAccessComposition]
-    Executable --> AccessPlatform[RupaProjectAccessPlatform]
+    SwiftPMEntry[RupaCLI] --> CLIComposition[RupaCLIComposition]
+    XcodeEntry[RupaCLIProduct] --> CLIComposition
+    CLIComposition --> CLI
+    CLIComposition --> AccessComposition[RupaProjectAccessComposition]
+    CLIComposition --> AccessPlatform[RupaProjectAccessPlatform]
 ```
 
 | Area | Owns | Must not own |
@@ -146,7 +148,8 @@ flowchart LR
 | `RupaUI` | SwiftUI workspace state, command panels, inspectors, and project-view presentation | Agent registration, socket/runtime implementation, or Core CAD algorithms |
 | `RupaAgentUI` | Concrete Agent socket-host composition and registration of application-owned `ProjectWorkspace` instances | A second editor/source authority, workspace editing UI, or Agent protocol schema |
 | `RupaCLIKit` | Async argument parsing and terminal response formatting through the injected `RupaProjectAccess` opener and observer | Product/CAD/Mesh authority, package-entry editing, transport endpoint selection, or direct session/controller construction |
-| `RupaCLI` | Production composition of the access opener/observer and platform endpoint/authority dependencies for `RupaCLIKit` | Command parsing, project authority, package-entry editing, or a second live/file route |
+| `RupaCLIComposition` | One executable composition of the access opener/observer and platform endpoint/authority dependencies for `RupaCLIKit` | Command parsing, project authority, package-entry editing, signing, or a second live/file route |
+| `RupaCLI` / Xcode `RupaCLIProduct` | Thin async entries over `RupaCLIComposition`; the Xcode target owns signed distribution as product name `rupa` | Access construction, command parsing, project state, or duplicated mutation/save behavior |
 
 ## Dependency Rules
 

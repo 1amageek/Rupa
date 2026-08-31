@@ -1,7 +1,7 @@
 import RupaCLIComposition
 
 @main
-struct CLI {
+struct RupaCLIProductEntry {
     static func main() async {
         await RupaCLIComposition.run()
     }

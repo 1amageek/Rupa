@@ -704,3 +704,120 @@
 	};
 	rootObject = 12459ACE2FD133B100034B5E /* Project object */;
 }
+		B10000000000000000000007 /* RupaCLIComposition in Frameworks */ = {isa = PBXBuildFile; productRef = B1000000000000000000000B /* RupaCLIComposition */; };
+		B10000000000000000000002 /* rupa */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = rupa; sourceTree = BUILT_PRODUCTS_DIR; };
+		B10000000000000000000004 /* Exceptions for "RupaCLI" folder in "RupaCLIProduct" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				DESIGN.md,
+				RupaCLIProduct.entitlements,
+			);
+			target = B10000000000000000000001 /* RupaCLIProduct */;
+		};
+		B10000000000000000000003 /* RupaCLI */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B10000000000000000000004 /* Exceptions for "RupaCLI" folder in "RupaCLIProduct" target */,
+			);
+			path = RupaCLI;
+			sourceTree = "<group>";
+		};
+		B10000000000000000000006 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000000000000000000007 /* RupaCLIComposition in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+				B10000000000000000000003 /* RupaCLI */,
+				B10000000000000000000002 /* rupa */,
+		B10000000000000000000001 /* RupaCLIProduct */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B1000000000000000000000A /* Build configuration list for PBXNativeTarget "RupaCLIProduct" */;
+			buildPhases = (
+				B10000000000000000000005 /* Sources */,
+				B10000000000000000000006 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				B10000000000000000000003 /* RupaCLI */,
+			);
+			name = RupaCLIProduct;
+			packageProductDependencies = (
+				B1000000000000000000000B /* RupaCLIComposition */,
+			);
+			productName = rupa;
+			productReference = B10000000000000000000002 /* rupa */;
+			productType = "com.apple.product-type.tool";
+		};
+					B10000000000000000000001 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+				B10000000000000000000001 /* RupaCLIProduct */,
+		B10000000000000000000005 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B10000000000000000000008 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = RupaCLI/RupaCLIProduct.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = WWCKBW8CKN;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = team.stamp.rupa.cli;
+				PRODUCT_NAME = rupa;
+				REGISTER_APP_GROUPS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		B10000000000000000000009 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = RupaCLI/RupaCLIProduct.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = WWCKBW8CKN;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = team.stamp.rupa.cli;
+				PRODUCT_NAME = rupa;
+				REGISTER_APP_GROUPS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		B1000000000000000000000A /* Build configuration list for PBXNativeTarget "RupaCLIProduct" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B10000000000000000000008 /* Debug */,
+				B10000000000000000000009 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B1000000000000000000000B /* RupaCLIComposition */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 04A0884D275749F9B7818D23 /* XCLocalSwiftPackageReference "../../RupaKit" */;
+			productName = RupaCLIComposition;
+		};

@@ -61,6 +61,10 @@ let package = Package(
             targets: ["RupaProjectAccessComposition"]
         ),
         .library(
+            name: "RupaCLIComposition",
+            targets: ["RupaCLIComposition"]
+        ),
+        .library(
             name: "RupaUI",
             targets: ["RupaUI"]
         ),
@@ -446,13 +450,20 @@ let package = Package(
             ],
             exclude: ["DESIGN.md"]
         ),
-        .executableTarget(
-            name: "RupaCLI",
+        .target(
+            name: "RupaCLIComposition",
             dependencies: [
                 "RupaCLIKit",
                 "RupaProjectAccessComposition",
                 "RupaProjectAccessPlatform",
-                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
+            path: "Sources/RupaCLIComposition",
+            exclude: ["DESIGN.md"]
+        ),
+        .executableTarget(
+            name: "RupaCLI",
+            dependencies: [
+                "RupaCLIComposition",
             ]
         ),
         .executableTarget(
