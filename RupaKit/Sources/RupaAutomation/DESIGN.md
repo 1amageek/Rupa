@@ -68,9 +68,13 @@ source-only; it is not a second semantic operation model.
 2. Each output slot has one declared Core identity kind. A later step may
    consume it only at a matching input kind. Missing, duplicate, or mismatched
    bindings fail before that step mutates staged source.
-3. Persistent Feature, Body, Scene, Component, Instance, and Pattern IDs are
-   allocated by Rupa while the isolated source transaction is staged. External
-   request-local symbols never become persistent IDs.
+3. In accordance with the
+   [package identity-phase contract](../../DESIGN.md#cad-identity-phases),
+   Feature, source body-output role, Scene, Component, Instance, and Pattern
+   values are bound only from Core's accepted staged-source result. A body role
+   is keyed by its generated Feature and source output port; evaluated
+   topology `BodyID` is unavailable here. External request-local symbols never
+   become persistent IDs.
 4. The executor applies the complete plan to the caller-owned staged session.
    It does not commit history, evaluate, publish, save, or open a project.
 5. A native finite pattern lowers to one Core pattern command and retains its
@@ -135,7 +139,7 @@ The later implementation must prove:
 
 | Invariant | Behavioral evidence |
 |---|---|
-| Binding correctness | Create-to-reference chains for Feature, Body, Scene, Component, Instance, and Pattern outputs plus missing/type-mismatch rejection. |
+| Binding correctness | Create-to-reference chains for Feature, source body-output role, Scene, Component, Instance, and Pattern outputs plus missing/type-mismatch rejection; evaluated `BodyID` is rejected as a staged binding. |
 | Atomic staging | A late command, binding, cancellation, or limit failure leaves the caller's source unchanged. |
 | Native repetition | Pattern count changes do not change prepared step count and execute one native pattern command. |
 | Internal graph boundary | Core graph success/rollback tests remain, while Agent catalog/codec/CLI tests reject raw graph payloads. |

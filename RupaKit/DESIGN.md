@@ -238,6 +238,27 @@ T10 adds the typed Agent adapter surface over the existing RupaKit use cases.
 T12 adds the benchmark consumer plus its bounded JSON/CLI adapter; neither is a
 second modeling vocabulary or the implementation proof for CADAPI-D.
 
+### CAD identity phases
+
+This package owns the cross-module identity-phase contract. Child modules use
+this table as an assumption/guarantee boundary and do not redefine it.
+
+| Phase | Owner and lifetime | Identities available | Rejected cross-phase use |
+|---|---|---|---|
+| Request and compilation | Caller symbols and immutable compiler values for one invocation | Existing typed source references and request-local symbols only | Caller-minted persistent IDs, evaluated topology IDs, or a local output used before its producer |
+| Staged source mutation | `RupaCore` inside the isolated source transaction | Generated `FeatureID`; source body-output role keyed by `FeatureID` and body/sheet port; generated `SceneNodeID`, `ComponentDefinitionID`, `ComponentInstanceID`, and `PatternArraySourceID` | Evaluated `BodyID`, fabricated result IDs, or an identity not present in the accepted staged source |
+| Publication and evaluation | `ProjectController` for the successfully committed publication | Exact committed coordinates and the exact immutable evaluation snapshot | Request-aware receipt projection, using an evaluated `BodyID` as an intra-program source binding, or returning publication identities after failed/preview execution |
+| Result projection | `RupaKit` for one successfully published request | Only when requested, an evaluated `BodyID` resolved from the exact published evaluation for a committed source body-output role | Resolving from a preview, a different publication, mutable source state, or an inferred identity |
+| Receipt | Protocol projection for one completed request | Requested typed source bindings plus optional postpublication evaluated-body binding and exact committed coordinates | Mutable session/document state, unrequested topology IDs, or inferred/fabricated IDs |
+
+`BodyID` is topology produced by evaluation and can change when source is
+reevaluated; it therefore cannot identify a body while a source program is
+still staging. Component Definition, Component Instance, Pattern Source, and
+Scene Node identities are distinct Product/source identity kinds and cannot be
+reconstructed from `createdFeatureIDs`. A dry run publishes no source and
+therefore returns neither persistent source identities nor evaluated topology
+identities.
+
 ## Runtime Flows
 
 The package composes the child module flows in the order shown by the system
@@ -272,8 +293,11 @@ contracts; the live App adapter owns the client session lifetime while transport
 endpoint and authentication details remain below the public API boundary.
 CADAPI-D program parameters, node symbols, typed local references, compiled
 plans, and result bindings are invocation-local immutable values. Persistent
-Feature, Body, Scene, Component, Instance, and Pattern identities are allocated
-inside the staged project authority and returned only in the committed receipt.
+Feature, Scene, Component, Instance, and Pattern identities plus source
+body-output roles are allocated inside staged project authority. They are
+returned only after commit; `ProjectController` publishes the exact immutable
+evaluation snapshot and `RupaKit` alone resolves a requested evaluated
+`BodyID` from that snapshot.
 
 ## Failure, Concurrency, and Constraints
 

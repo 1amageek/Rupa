@@ -224,7 +224,11 @@ flowchart LR
     workspace coordinates before staging and before publication. It does not
     silently refresh or recompile against a newer view.
 20. Successful result projection returns every requested typed symbol binding,
-    exact committed coordinates, diagnostics, and expansion telemetry. Any
+    exact committed coordinates, diagnostics, and expansion telemetry under
+    the [package identity-phase contract](../../DESIGN.md#cad-identity-phases).
+    A semantic body binding remains a source body-output role during staging;
+    only this layer's successful postpublication projection may resolve a
+    requested evaluated `BodyID` from the exact published evaluation. Any
     failure after publication retains the exact commit and `mustNotRetry`.
 21. CADAPI-D mutation and explicit save are separate application actions. This
     use case never saves implicitly or edits package bytes.

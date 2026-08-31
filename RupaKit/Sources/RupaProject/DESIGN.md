@@ -113,6 +113,13 @@ the isolated source staging path and returns an immutable result to Core/Project
    returns the existing bound Core source command. RupaKit commits that command
    with the exact captured project/revision/publication coordinates; callers
    cannot supply evaluated Mesh bytes.
+9. Project consumes staged source identities under the
+   [package identity-phase contract](../../DESIGN.md#cad-identity-phases) and
+   owns successful publication plus its exact immutable evaluation snapshot.
+   It does not interpret requested semantic outputs or project a body receipt;
+   that request-aware projection belongs to RupaKit. Preview, rollback,
+   evaluation failure, cancellation, or stale publication returns no committed
+   source or evaluation claim.
 
 ## Runtime Flows
 

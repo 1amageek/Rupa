@@ -91,6 +91,16 @@ unique copy to satisfy a single scene selection.
 
 ## Contracts and Invariants
 
+For CAD command results, Core guarantees the staged-source phase of the
+[package identity-phase contract](../../DESIGN.md#cad-identity-phases). One
+immutable result delta is derived from the accepted staged document and may
+contain generated Feature, source body-output role, Scene Node, Component
+Definition, Component Instance, and Pattern Source identities. It never
+contains evaluated topology `BodyID`; evaluation and publication are not Core
+command-result responsibilities. An identity absent from the accepted staged
+source, a duplicate or wrong-kind identity, and an identity reported by a
+failed, rolled-back, or no-op mutation are invalid.
+
 1. The Mesh edit target contains only `GeometrySourceID` and expected
    `ContentIdentity`. Scene-node and representation IDs are not part of source
    authority.

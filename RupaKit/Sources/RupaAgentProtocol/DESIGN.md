@@ -56,6 +56,12 @@ flowchart LR
    endpoint, port, HMAC key, and discovery records are not protocol fields.
 7. Mesh buffers and renderer resources are not encoded. Mesh read/edit
    receipts carry handles, bounds, counts, provenance, and telemetry only.
+8. CAD receipts preserve the
+   [package identity phases](../../DESIGN.md#cad-identity-phases): staged
+   source bindings are distinct typed values, while an evaluated `BodyID` may
+   appear only when requested after successful publication. Protocol decoding
+   and encoding never fabricate, infer, or promote one identity kind into
+   another, and dry-run receipts contain neither persistent nor evaluated IDs.
 
 ## Runtime Flows
 

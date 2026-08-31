@@ -218,8 +218,10 @@ flowchart LR
     become source authority.
 16. Agent callers own semantic intent, argument values, references to existing
     source, and request-local symbols only. Rupa allocates persistent Feature,
-    Body, Scene, Component, Instance, and Pattern identities and owns dependency
-    order, presentation structure/defaults, validation, and lowering.
+    Scene, Component, Instance, and Pattern identities and owns dependency
+    order, presentation structure/defaults, validation, and lowering. A staged
+    body result is a source body-output role keyed by its generated Feature;
+    evaluated topology `BodyID` exists only after successful publication.
 17. A CAD program is finite, source-only, and acyclic. It permits typed
     parameters, bounded pure expressions, reuse, transforms, booleans,
     sweeps/lofts, instances, and native finite patterns. It permits no arbitrary

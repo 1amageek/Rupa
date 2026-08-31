@@ -136,10 +136,14 @@ same `SemanticOperationInvocation` but may not contain `.local` arguments.
    symbols. Rupa owns persistent ID allocation, dependency order, presentation
    structure/defaults, semantic validation, and lowering.
 9. A successful committed result maps every requested `node.output` to a typed
-   server-generated reference and carries the exact project/generation/
-   transaction/publication/workspace coordinates plus expansion telemetry. A
-   dry run reports validation and estimates but never claims persistent output
-   references.
+   server-generated reference following the
+   [package identity phases](../../DESIGN.md#cad-identity-phases) and carries
+   the exact project/generation/transaction/publication/workspace coordinates
+   plus expansion telemetry. The semantic `.body` output kind compiles to a
+   staged source body-output role, not topology `BodyID`; an evaluated body
+   identity may be projected only after the corresponding successful
+   publication. A dry run reports validation and estimates but never claims
+   persistent source or evaluated topology references.
 10. Operation and program schema versions are explicit. Unknown operation,
     unsupported version, or incompatible result kind fails without a
     compatibility guess or fallback to raw Automation input.
