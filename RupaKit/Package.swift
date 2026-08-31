@@ -489,8 +489,10 @@ let package = Package(
         .testTarget(
             name: "RupaKitTests",
             dependencies: [
+                "RupaAutomation",
                 "RupaCADIntegration",
                 "RupaCore",
+                "RupaDomainFoundation",
                 "RupaEvaluation",
                 "RupaGeometry",
                 "RupaKit",
@@ -538,9 +540,12 @@ let package = Package(
         .testTarget(
             name: "RupaProjectTests",
             dependencies: [
+                "RupaAutomation",
                 "RupaCore",
                 "RupaEvaluation",
+                "RupaGeometry",
                 "RupaProject",
+                "RupaProjectModel",
                 "RupaProjectPackage",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
             ]

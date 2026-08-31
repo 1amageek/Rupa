@@ -11,6 +11,7 @@ public struct ProjectSourcePreviewResult: Sendable {
     public let commandResults: [CommandExecutionResult]
     public let geometrySourceCommandResults: [GeometrySourceCommandResult]
     public let automationExecution: AutomationBatchExecution?
+    public let preparedProgramExecution: PreparedAutomationExecutionReceipt?
     public let diagnostics: [EditorDiagnostic]
 
     public init(
@@ -21,6 +22,7 @@ public struct ProjectSourcePreviewResult: Sendable {
         commandResults: [CommandExecutionResult],
         geometrySourceCommandResults: [GeometrySourceCommandResult],
         automationExecution: AutomationBatchExecution? = nil,
+        preparedProgramExecution: PreparedAutomationExecutionReceipt? = nil,
         diagnostics: [EditorDiagnostic]
     ) {
         self.base = base
@@ -30,6 +32,7 @@ public struct ProjectSourcePreviewResult: Sendable {
         self.commandResults = commandResults
         self.geometrySourceCommandResults = geometrySourceCommandResults
         self.automationExecution = automationExecution
+        self.preparedProgramExecution = preparedProgramExecution
         self.diagnostics = diagnostics
     }
 }

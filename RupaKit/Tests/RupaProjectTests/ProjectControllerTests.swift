@@ -5,6 +5,7 @@ import Testing
 import RupaCore
 import RupaCoreTypes
 import RupaEvaluation
+import RupaAutomation
 @testable import RupaGeometry
 import RupaProjectModel
 @testable import RupaProjectPackage
@@ -1893,7 +1894,7 @@ func projectControllerFailedSaveRetainsPublishedMeshAuthority() async throws {
     }
 }
 
-private func makeController(
+func makeController(
     document: DesignDocument,
     evaluator: any ProjectEvaluating = ProjectEvaluationEngine(),
     evaluatorPreparer: (any ProjectEvaluatorPreparing)? = nil,
@@ -1902,7 +1903,9 @@ private func makeController(
     packageWriter: any ProjectPackageWriting = ProjectPackageStore(),
     packageValidator: any ProjectPackageValidating = ProjectPackageStore(),
     geometrySourceCommandApplier: any GeometrySourceCommandApplying =
-        DefaultGeometrySourceCommandApplier()
+        DefaultGeometrySourceCommandApplier(),
+    preparedProgramExecutor: any PreparedAutomationProgramExecuting =
+        DefaultPreparedAutomationProgramExecutor()
 ) throws -> ProjectController {
     try ProjectController(
         document: document,
@@ -1913,7 +1916,8 @@ private func makeController(
         cadSourceCodec: cadSourceCodec,
         packageWriter: packageWriter,
         packageValidator: packageValidator,
-        geometrySourceCommandApplier: geometrySourceCommandApplier
+        geometrySourceCommandApplier: geometrySourceCommandApplier,
+        preparedProgramExecutor: preparedProgramExecutor
     )
 }
 
@@ -1965,7 +1969,7 @@ private struct NameRequiringGeometrySourceCommandApplier: GeometrySourceCommandA
     }
 }
 
-private struct FixtureProjector: ProjectSourceProjecting {
+struct FixtureProjector: ProjectSourceProjecting {
     func project(_ document: DesignDocument) throws -> ProjectSourceModel {
         var parentByChild: [SceneNodeID: SceneNodeID] = [:]
         for parent in document.productMetadata.sceneNodes.values {
@@ -2150,7 +2154,7 @@ private struct NameRejectingProjectEvaluator: ProjectEvaluating {
     }
 }
 
-private final class BlockingEvaluationGate: Sendable {
+final class BlockingEvaluationGate: Sendable {
     private struct State {
         var didStartFirstEvaluation = false
         var canFinishFirstEvaluation = false
@@ -2182,7 +2186,7 @@ private final class BlockingEvaluationGate: Sendable {
     }
 }
 
-private struct BlockingProjectEvaluator: ProjectEvaluating {
+struct BlockingProjectEvaluator: ProjectEvaluating {
     let gate: BlockingEvaluationGate
 
     func evaluate(

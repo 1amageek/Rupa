@@ -20,6 +20,8 @@ public final class ProjectWorkspace: ProjectMakeEditable, ProjectMeshEditing, Pr
     private let domainResultProjector: any DomainCommandResultProjecting
     @ObservationIgnored
     private let automationBatchPlanner: any AutomationBatchPlanning
+    @ObservationIgnored
+    private let semanticResultProjector: any ProjectSemanticResultProjecting
 
     var projectAuthorityOwner: any ProjectOperating {
         project
@@ -30,12 +32,15 @@ public final class ProjectWorkspace: ProjectMakeEditable, ProjectMeshEditing, Pr
         viewBuilder: any ProjectViewSnapshotBuilding = ProjectViewSnapshotBuilder(),
         domainResultProjector: any DomainCommandResultProjecting =
             DefaultDomainCommandResultProjector(),
-        automationBatchPlanner: any AutomationBatchPlanning = DefaultAutomationBatchPlanner()
+        automationBatchPlanner: any AutomationBatchPlanning = DefaultAutomationBatchPlanner(),
+        semanticResultProjector: any ProjectSemanticResultProjecting =
+            DefaultProjectSemanticResultProjector()
     ) {
         self.project = project
         self.viewBuilder = viewBuilder
         self.domainResultProjector = domainResultProjector
         self.automationBatchPlanner = automationBatchPlanner
+        self.semanticResultProjector = semanticResultProjector
     }
 
     @discardableResult
@@ -243,6 +248,154 @@ public final class ProjectWorkspace: ProjectMakeEditable, ProjectMeshEditing, Pr
             batch,
             from: try currentInteractionCoordinates(),
             dryRun: dryRun
+        )
+    }
+
+    /// Executes one fully compiled semantic source program through the sole
+    /// project authority. Compilation and transport remain outside this type.
+    public func executeSemanticProgram(
+        _ request: ProjectSemanticProgramRequest,
+        operationGuard: @escaping ProjectOperationGuard = {}
+    ) async throws -> ProjectSemanticProgramResult {
+        let plan = try ProjectResultProjectionPlan(
+            compilation: request.compilation,
+            budget: request.resultBudget
+        )
+        let transaction = try ProjectSourceTransaction(
+            name: "semanticCADProgram",
+            preparedProgram: request.compilation.preparedProgram,
+            authority: request.authority,
+            resultLimit: plan.preparedProgramResultLimit
+        )
+
+        if request.dryRun {
+            let preview = try await project.previewSource(
+                transaction,
+                operationGuard: operationGuard
+            )
+            guard let receipt = preview.preparedProgramExecution else {
+                throw ProjectSemanticProgramError(
+                    code: .executionReceiptMissing,
+                    message: "Semantic preview completed without a prepared-program receipt."
+                )
+            }
+            return .preview(
+                ProjectSemanticProgramPreview(
+                    authority: request.authority,
+                    proposedDocumentGeneration: preview.proposedDocumentGeneration,
+                    proposedTransactionRevision: preview.proposedTransactionRevision,
+                    diagnostics: receipt.diagnostics.map(ProjectSemanticDiagnostic.init),
+                    telemetry: ProjectSemanticTelemetry(
+                        compilation: plan.compilationTelemetry,
+                        execution: receipt.telemetry
+                    )
+                )
+            )
+        }
+
+        let commit = try await project.commit(
+            transaction,
+            operationGuard: operationGuard
+        )
+        guard let receipt = commit.preparedProgramExecution else {
+            return .committedFailure(
+                plan.committedFailurePlan.result(
+                    code: .resultProjectionFailed,
+                    state: commit.state
+                )
+            )
+        }
+
+        let exactView: ProjectViewSnapshot
+        do {
+            try operationGuard()
+            try Task.checkCancellation()
+            exactView = try await buildExactViewAndPublishIfNewer(commit.state)
+        } catch is CancellationError {
+            return .committedFailure(
+                plan.committedFailurePlan.result(code: .cancelled, state: commit.state)
+            )
+        } catch {
+            return .committedFailure(
+                plan.committedFailurePlan.result(
+                    code: .viewProjectionFailed,
+                    state: commit.state
+                )
+            )
+        }
+
+        let outputs: [ProjectSemanticOutputBinding]
+        do {
+            try operationGuard()
+            try Task.checkCancellation()
+            outputs = try semanticResultProjector.project(
+                plan: plan,
+                receipt: receipt,
+                state: commit.state
+            )
+        } catch is CancellationError {
+            return .committedFailure(
+                plan.committedFailurePlan.result(code: .cancelled, state: commit.state)
+            )
+        } catch let error as ProjectSemanticProgramError
+            where error.code == .evaluatedBodyUnavailable {
+            return .committedFailure(
+                plan.committedFailurePlan.result(
+                    code: .evaluatedBodyUnavailable,
+                    state: commit.state
+                )
+            )
+        } catch {
+            return .committedFailure(
+                plan.committedFailurePlan.result(
+                    code: .resultProjectionFailed,
+                    state: commit.state
+                )
+            )
+        }
+
+        do {
+            let authority = commit.state.authorityCoordinate
+            _ = try await project.withValidatedCoordinates(
+                expectedProjectID: authority.projectID,
+                expectedDocumentGeneration: authority.documentGeneration,
+                expectedTransactionRevision: authority.transactionRevision,
+                expectedPublicationSequence: authority.publicationSequence,
+                expectedWorkspaceRevision: authority.workspaceRevision,
+                operationGuard: operationGuard
+            ) {
+                true
+            }
+            guard exactView.authorityCoordinate == authority else {
+                throw ProjectSemanticProgramError(
+                    code: .requestedOutputMismatch,
+                    message: "The published view does not match the committed project authority."
+                )
+            }
+        } catch is CancellationError {
+            return .committedFailure(
+                plan.committedFailurePlan.result(code: .cancelled, state: commit.state)
+            )
+        } catch {
+            return .committedFailure(
+                plan.committedFailurePlan.result(
+                    code: .authorityValidationFailed,
+                    state: commit.state
+                )
+            )
+        }
+
+        return .committed(
+            ProjectSemanticProgramCommit(
+                authority: commit.state.authorityCoordinate,
+                outputs: outputs,
+                diagnostics: receipt.diagnostics.map(ProjectSemanticDiagnostic.init),
+                telemetry: ProjectSemanticTelemetry(
+                    compilation: plan.compilationTelemetry,
+                    execution: receipt.telemetry
+                ),
+                view: exactView
+            )
         )
     }
 
@@ -507,11 +660,7 @@ public final class ProjectWorkspace: ProjectMakeEditable, ProjectMeshEditing, Pr
     ) async throws -> ProjectViewSnapshot {
         let coordinate: ProjectAuthorityCoordinate
         if let view {
-            coordinate = ProjectAuthorityCoordinate(
-                projectID: view.projectID,
-                transactionRevision: view.transactionRevision,
-                publicationSequence: view.publicationSequence
-            )
+            coordinate = view.authorityCoordinate
         } else {
             coordinate = await project.currentAuthorityCoordinate()
         }

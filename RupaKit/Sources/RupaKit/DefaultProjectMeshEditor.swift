@@ -134,11 +134,7 @@ public struct DefaultProjectMeshEditor: ProjectMeshEditing, Sendable {
                     )
                 }
                 let handle = ProjectMeshSourceHandle(
-                    projectAuthorityCoordinate: ProjectAuthorityCoordinate(
-                        projectID: view.projectID,
-                        transactionRevision: view.transactionRevision,
-                        publicationSequence: view.publicationSequence
-                    ),
+                    projectAuthorityCoordinate: view.authorityCoordinate,
                     sourceID: editResult.sourceID,
                     contentIdentity: editResult.sourceIdentity
                 )
@@ -193,15 +189,18 @@ public struct DefaultProjectMeshEditor: ProjectMeshEditing, Sendable {
 
 enum ProjectMeshEditSupport {
     static func validate(_ request: ProjectMeshEditRequest) throws {
-        let snapshotCoordinate = ProjectAuthorityCoordinate(
-            projectID: request.snapshot.projectID,
-            transactionRevision: request.snapshot.transactionRevision,
-            publicationSequence: request.snapshot.publicationSequence
-        )
+        let snapshotCoordinate = request.snapshot.authorityCoordinate
         guard request.handle.projectAuthorityCoordinate.projectID == snapshotCoordinate.projectID else {
             throw ProjectMeshEditError(
                 code: .projectMismatch,
                 message: "The Mesh edit handle and supplied project view belong to different projects."
+            )
+        }
+        guard request.handle.projectAuthorityCoordinate.documentGeneration
+                == snapshotCoordinate.documentGeneration else {
+            throw ProjectMeshEditError(
+                code: .documentGenerationMismatch,
+                message: "The Mesh source handle belongs to a different document generation."
             )
         }
         guard request.handle.projectAuthorityCoordinate.transactionRevision
@@ -216,6 +215,13 @@ enum ProjectMeshEditSupport {
             throw ProjectMeshEditError(
                 code: .publicationSequenceMismatch,
                 message: "The Mesh edit handle and supplied project view publication disagree."
+            )
+        }
+        guard request.handle.projectAuthorityCoordinate.workspaceRevision
+                == snapshotCoordinate.workspaceRevision else {
+            throw ProjectMeshEditError(
+                code: .workspaceRevisionMismatch,
+                message: "The Mesh source handle belongs to a different workspace revision."
             )
         }
         guard request.snapshot.document.document.authoredMeshAssets[request.handle.sourceID]
@@ -350,6 +356,10 @@ enum ProjectMeshEditSupport {
             .projectMismatch
         case .revisionConflict:
             .transactionRevisionMismatch
+        case .documentGenerationConflict:
+            .documentGenerationMismatch
+        case .workspaceRevisionConflict:
+            .workspaceRevisionMismatch
         case .publicationConflict:
             .publicationSequenceMismatch
         case .sourceInvalid,
@@ -358,6 +368,7 @@ enum ProjectMeshEditSupport {
         case .transactionInvalid:
             .invalidPlan
         case .historyUnavailable,
+             .resultLimitExceeded,
              .productSourceFailed,
              .cadSourceFailed,
              .projectionFailed,

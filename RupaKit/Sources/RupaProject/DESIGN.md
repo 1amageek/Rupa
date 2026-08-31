@@ -1,9 +1,10 @@
-# RupaProject Mesh Transaction Design
+# RupaProject Source Transaction Design
 
 ## Purpose and Scope
 
-This module owns project-level staging and publication for the T09 Authored Mesh
-plan path and the T10 Make Editable preparation port. It is a child of the [RupaKit package design](../../DESIGN.md) and
+This module owns project-level staging and publication for source commands,
+prepared semantic programs, Authored Mesh plans, and Make Editable preparation.
+It is a child of the [RupaKit package design](../../DESIGN.md) and
 the [system design](../../../DESIGN.md).
 
 The target depends on `RupaCore`, `RupaCoreTypes`, `RupaEvaluation`,
@@ -17,27 +18,30 @@ Parent: [RupaKit package design](../../DESIGN.md). Children: none.
 
 `RupaProject` owns:
 
-- `ProjectController` actor isolation and generic project authority
-  coordinates;
+- `ProjectController` actor isolation and the complete project authority
+  coordinate;
 - forwarding role-specific source commands through the existing
   `ProjectSourceTransaction` path;
 - staging of Core source, separated package sources, immutable projection, and
   purpose-aware evaluation before publication;
 - revision/publication/cancellation checks and atomic commit/load behavior;
-- returning exact `ProjectStateSnapshot` results for workspace projection.
+- executing one complete validated `PreparedAutomationProgram` inside one
+  isolated Core source-command group;
+- returning exact `ProjectStateSnapshot` and prepared-program receipts for
+  workspace projection;
 - exposing `ProjectController` Make Editable preparation through
   `ProjectOperating` so RupaKit can use the same project authority without
   downcasting to the concrete actor.
 
 It does not own Mesh plan semantics, topology algorithms, Authored Mesh asset
-identity, Mesh handles, Mesh read pagination, workspace/document-generation
-coordinates, Mesh request lowering, UI state, or Agent/CLI/MCP encoding. Mesh
+identity, Mesh handles, Mesh read pagination, semantic result projection,
+Mesh request lowering, UI state, or Agent/CLI/MCP encoding. Mesh
 specific validation belongs to `RupaKit` and `RupaCore`; this module only
 validates generic project transaction coordinates.
 
 ```mermaid
 flowchart LR
-    Request["Generic project source transaction"] --> Coordinate["Project ID / transaction revision / publication check"]
+    Request["Generic source transaction or prepared program"] --> Coordinate["Project / generation / transaction / publication / workspace check"]
     Coordinate --> SourceTx["One ProjectSourceTransaction"]
     SourceTx --> Core["Staged RupaCore source mutation"]
     Core --> Sources["Product/CAD/Mesh source encoding"]
@@ -86,11 +90,12 @@ the isolated source staging path and returns an immutable result to Core/Project
 
 ## Contracts and Invariants
 
-1. `ProjectSourceTransaction` carries generic `expectedProjectID`,
-   `expectedTransactionRevision`, and `expectedPublicationSequence` guards.
-   Mesh source IDs, content identities, handles, workspace revisions, and
-   document-generation checks are validated by the owning RupaKit/Core paths,
-   not by this module.
+1. `ProjectAuthorityCoordinate` contains project ID, document generation,
+   transaction revision, publication sequence, and workspace revision. A
+   prepared-program source transaction carries that value once and
+   `ProjectController` validates all five fields before staging, after
+   asynchronous prevalidation, and immediately before publication or preview
+   return. Existing non-semantic transactions retain their owning guards.
 2. Preview stages the full source/package/projection/evaluation path but never
    publishes source, package, evaluation, history, or view state.
 3. Commit revalidates the generic project coordinates and executes one source
@@ -120,6 +125,12 @@ the isolated source staging path and returns an immutable result to Core/Project
    that request-aware projection belongs to RupaKit. Preview, rollback,
    evaluation failure, cancellation, or stale publication returns no committed
    source or evaluation claim.
+10. A prepared semantic program is already validated and lowered before this
+    boundary. Project executes the entire program through the injected
+    `PreparedAutomationProgramExecuting` inside the same single
+    `withSourceCommandGroup` used by other source mutations, retains its exact
+    immutable receipt, and never recompiles, splits, or publishes individual
+    steps.
 
 ## Runtime Flows
 
@@ -132,11 +143,11 @@ sequenceDiagram
     participant E as Evaluation
     participant K as Package
 
-    W->>P: preview/commit lowered source transaction
-    P->>P: validate project/revision/publication coordinates
+    W->>P: preview/commit generic source transaction or prepared program
+    P->>P: validate all five authority coordinates
     P->>S: isolate source transaction
-    S->>C: apply one Mesh plan
-    C-->>S: staged document + receipt
+    S->>C: apply commands or execute one complete prepared program
+    C-->>S: staged document + exact execution receipt
     S->>K: encode separated sources
     S->>E: build projection and presentation evaluation
     alt preview
@@ -157,7 +168,9 @@ sequenceDiagram
 - An isolated EditorSession/source stage owns the candidate document only for
   the transaction lifetime.
 - `ProjectSourceTransaction` is an immutable generic request coordinate and
-  ordered source mutation description; it does not own a live session or Mesh
+  ordered source mutation description. A prepared-program transaction carries
+  one complete `ProjectAuthorityCoordinate` and one generic staged-result
+  ceiling; it does not own a live session, compiler, result projector, or Mesh
   handle.
 - `ProjectStateSnapshot` is an immutable result. `ProjectWorkspace` converts it
   to a package-free exact view and owns observable replacement.
@@ -170,8 +183,10 @@ sequenceDiagram
 handle resolution and request lowering happen before this module's generic
 transaction boundary. Package encoding, projection, and evaluation use
 immutable staged values and run outside critical actor sections where the
-existing implementation allows it. Publication rechecks revision and
-publication sequence after asynchronous boundaries.
+existing implementation allows it. Prepared-program staging rechecks project
+ID, document generation, transaction revision, publication sequence, and
+workspace revision after asynchronous prevalidation and immediately before
+preview return or publication.
 
 Typed failures include generic coordinate mismatch, package/integrity failure,
 evaluation failure, cancellation, and stale publication. Mesh-specific source,
@@ -204,7 +219,8 @@ T09-C and T09-IV own the project proof:
 
 | Invariant | Required evidence |
 |---|---|
-| Generic coordinates | Project ID, transaction revision, and publication mismatch rejection; Mesh handle/view checks belong to RupaKit. |
+| Generic coordinates | Prepared programs reject project ID, document generation, transaction revision, publication sequence, and workspace revision mismatches at entry, after asynchronous prevalidation, and before preview return/publication; Mesh handle/view checks belong to RupaKit. |
+| Prepared program | The complete program executes inside one source-command group, yields one exact immutable receipt, and a request-scoped diagnostic/telemetry ceiling failure publishes nothing. |
 | Preview | Preview leaves source, package, evaluation, history, and visible view unchanged. |
 | Atomic commit | Prepublication Core/package/projection/evaluation failures leave every published value unchanged. |
 | Save failure | A post-commit save failure leaves the committed edit and publication intact and preserves dirty state. |

@@ -88,8 +88,10 @@ public struct ProjectMeshCatalog: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case projectID
+        case documentGeneration
         case transactionRevision
         case publicationSequence
+        case workspaceRevision
         case sources
     }
 
@@ -98,6 +100,10 @@ public struct ProjectMeshCatalog: Codable, Equatable, Sendable {
         self.init(
             projectAuthorityCoordinate: ProjectAuthorityCoordinate(
                 projectID: try container.decode(ProjectID.self, forKey: .projectID),
+                documentGeneration: try container.decode(
+                    DocumentGeneration.self,
+                    forKey: .documentGeneration
+                ),
                 transactionRevision: try container.decode(
                     DocumentTransactionRevision.self,
                     forKey: .transactionRevision
@@ -105,6 +111,10 @@ public struct ProjectMeshCatalog: Codable, Equatable, Sendable {
                 publicationSequence: try container.decode(
                     UInt64.self,
                     forKey: .publicationSequence
+                ),
+                workspaceRevision: try container.decode(
+                    WorkspaceRevision.self,
+                    forKey: .workspaceRevision
                 )
             ),
             sources: try container.decode([ProjectMeshCatalogSource].self, forKey: .sources)
@@ -115,12 +125,20 @@ public struct ProjectMeshCatalog: Codable, Equatable, Sendable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(projectAuthorityCoordinate.projectID, forKey: .projectID)
         try container.encode(
+            projectAuthorityCoordinate.documentGeneration,
+            forKey: .documentGeneration
+        )
+        try container.encode(
             projectAuthorityCoordinate.transactionRevision,
             forKey: .transactionRevision
         )
         try container.encode(
             projectAuthorityCoordinate.publicationSequence,
             forKey: .publicationSequence
+        )
+        try container.encode(
+            projectAuthorityCoordinate.workspaceRevision,
+            forKey: .workspaceRevision
         )
         try container.encode(sources, forKey: .sources)
     }

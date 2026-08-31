@@ -22,6 +22,10 @@ public struct ProjectAgentErrorMapper: Sendable {
             switch error.code {
             case .revisionConflict:
                 code = .documentTransactionRevisionMismatch
+            case .documentGenerationConflict:
+                code = .documentGenerationMismatch
+            case .workspaceRevisionConflict:
+                code = .workspaceRevisionMismatch
             case .historyUnavailable:
                 code = .commandInvalid
             case .publicationConflict:
@@ -37,6 +41,7 @@ public struct ProjectAgentErrorMapper: Sendable {
             case .sourceInvalid,
                  .sourceMismatch,
                  .transactionInvalid,
+                 .resultLimitExceeded,
                  .productSourceFailed,
                  .cadSourceFailed,
                  .projectionFailed:

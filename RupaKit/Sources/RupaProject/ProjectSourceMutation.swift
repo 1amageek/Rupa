@@ -5,4 +5,5 @@ import RupaCore
 public enum ProjectSourceMutation: Sendable {
     case commands([ContextResolvedEditorCommand])
     case automation(PreparedAutomationBatch)
+    case preparedProgram(ProjectPreparedProgramMutation)
 }

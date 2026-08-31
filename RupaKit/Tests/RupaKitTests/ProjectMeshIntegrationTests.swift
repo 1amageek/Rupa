@@ -437,11 +437,7 @@ private func projectMeshIntegrationExtrudeTranslatePlan(faceID: MeshFaceID) thro
 }
 
 private func projectMeshIntegrationCoordinate(from view: ProjectViewSnapshot) -> ProjectAuthorityCoordinate {
-    ProjectAuthorityCoordinate(
-        projectID: view.projectID,
-        transactionRevision: view.transactionRevision,
-        publicationSequence: view.publicationSequence
-    )
+    view.authorityCoordinate
 }
 
 private func withProjectMeshIntegrationTemporaryDirectory<Result: Sendable>(

@@ -93,15 +93,18 @@ enum ProjectMeshReadSupport {
         handle: ProjectMeshSourceHandle,
         document: DesignDocument
     ) throws {
-        let expected = ProjectAuthorityCoordinate(
-            projectID: snapshot.projectID,
-            transactionRevision: snapshot.transactionRevision,
-            publicationSequence: snapshot.publicationSequence
-        )
+        let expected = snapshot.authorityCoordinate
         guard handle.projectAuthorityCoordinate.projectID == expected.projectID else {
             throw ProjectMeshReadError(
                 code: .projectMismatch,
                 message: "The Mesh source handle belongs to a different project."
+            )
+        }
+        guard handle.projectAuthorityCoordinate.documentGeneration
+                == expected.documentGeneration else {
+            throw ProjectMeshReadError(
+                code: .documentGenerationMismatch,
+                message: "The Mesh source handle belongs to a different document generation."
             )
         }
         guard handle.projectAuthorityCoordinate.transactionRevision
@@ -116,6 +119,13 @@ enum ProjectMeshReadSupport {
             throw ProjectMeshReadError(
                 code: .publicationSequenceMismatch,
                 message: "The Mesh source handle belongs to a different publication sequence."
+            )
+        }
+        guard handle.projectAuthorityCoordinate.workspaceRevision
+                == expected.workspaceRevision else {
+            throw ProjectMeshReadError(
+                code: .workspaceRevisionMismatch,
+                message: "The Mesh source handle belongs to a different workspace revision."
             )
         }
         guard document.projectID == snapshot.projectID else {
@@ -177,12 +187,17 @@ enum ProjectMeshReadSupport {
             .projectMismatch
         case .revisionConflict:
             .transactionRevisionMismatch
+        case .documentGenerationConflict:
+            .documentGenerationMismatch
+        case .workspaceRevisionConflict:
+            .workspaceRevisionMismatch
         case .publicationConflict:
             .publicationSequenceMismatch
         case .snapshotUnavailable,
              .sourceInvalid,
              .sourceMismatch,
              .transactionInvalid,
+             .resultLimitExceeded,
              .historyUnavailable,
              .productSourceFailed,
              .cadSourceFailed,

@@ -1112,11 +1112,7 @@ private func projectMeshUseCasePlan(vertexID: MeshVertexID, z: Double) throws ->
 }
 
 private func projectMeshCoordinate(from view: ProjectViewSnapshot) -> ProjectAuthorityCoordinate {
-    ProjectAuthorityCoordinate(
-        projectID: view.projectID,
-        transactionRevision: view.transactionRevision,
-        publicationSequence: view.publicationSequence
-    )
+    view.authorityCoordinate
 }
 
 private func projectMeshAlternateContentIdentity() throws -> ContentIdentity {

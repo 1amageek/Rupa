@@ -10,6 +10,7 @@ public struct ProjectSourceCommitResult: Sendable {
     public let commandResults: [CommandExecutionResult]
     public let geometrySourceCommandResults: [GeometrySourceCommandResult]
     public let automationExecution: AutomationBatchExecution?
+    public let preparedProgramExecution: PreparedAutomationExecutionReceipt?
 
     public var transactionRevision: DocumentTransactionRevision {
         state.transactionRevision
@@ -36,6 +37,7 @@ public struct ProjectSourceCommitResult: Sendable {
         EditorDiagnostic.stableMerged([
             commandResults.flatMap(\.diagnostics),
             automationExecution?.diagnostics ?? [],
+            preparedProgramExecution?.diagnostics ?? [],
             state.evaluationSnapshot.diagnostics,
         ])
     }
@@ -45,12 +47,14 @@ public struct ProjectSourceCommitResult: Sendable {
         state: ProjectStateSnapshot,
         commandResults: [CommandExecutionResult],
         geometrySourceCommandResults: [GeometrySourceCommandResult],
-        automationExecution: AutomationBatchExecution? = nil
+        automationExecution: AutomationBatchExecution? = nil,
+        preparedProgramExecution: PreparedAutomationExecutionReceipt? = nil
     ) {
         self.baseTransactionRevision = baseTransactionRevision
         self.state = state
         self.commandResults = commandResults
         self.geometrySourceCommandResults = geometrySourceCommandResults
         self.automationExecution = automationExecution
+        self.preparedProgramExecution = preparedProgramExecution
     }
 }

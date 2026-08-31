@@ -288,11 +288,7 @@ enum ProjectMakeEditableSupport {
                 message: "The committed Authored Mesh asset has invalid identity or provenance."
             )
         }
-        let expectedCoordinate = ProjectAuthorityCoordinate(
-            projectID: view.projectID,
-            transactionRevision: view.transactionRevision,
-            publicationSequence: view.publicationSequence
-        )
+        let expectedCoordinate = view.authorityCoordinate
         let expectedRevision: DocumentTransactionRevision
         do {
             expectedRevision = try request.snapshot.transactionRevision.advanced()
@@ -405,6 +401,10 @@ enum ProjectMakeEditableSupport {
             .projectMismatch
         case .revisionConflict:
             .transactionRevisionMismatch
+        case .documentGenerationConflict:
+            .documentGenerationMismatch
+        case .workspaceRevisionConflict:
+            .workspaceRevisionMismatch
         case .publicationConflict:
             .publicationSequenceMismatch
         case .sourceInvalid:
@@ -414,6 +414,7 @@ enum ProjectMakeEditableSupport {
         case .transactionInvalid:
             .invalidRequest
         case .historyUnavailable,
+             .resultLimitExceeded,
              .productSourceFailed,
              .cadSourceFailed,
              .projectionFailed,

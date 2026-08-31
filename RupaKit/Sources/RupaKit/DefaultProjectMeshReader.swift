@@ -20,11 +20,7 @@ public struct DefaultProjectMeshReader: ProjectMeshReading, Sendable {
             project: project,
             operationGuard: operationGuard
         )
-        let coordinate = ProjectAuthorityCoordinate(
-            projectID: snapshot.projectID,
-            transactionRevision: snapshot.transactionRevision,
-            publicationSequence: snapshot.publicationSequence
-        )
+        let coordinate = snapshot.authorityCoordinate
         let task = Task.detached(priority: nil) {
             try Task.checkCancellation()
             try limits.validate()
@@ -119,12 +115,7 @@ public struct DefaultProjectMeshReader: ProjectMeshReading, Sendable {
             handle: request.handle,
             document: state.document
         )
-        guard request.handle.projectAuthorityCoordinate
-                == ProjectAuthorityCoordinate(
-                    projectID: snapshot.projectID,
-                    transactionRevision: snapshot.transactionRevision,
-                    publicationSequence: snapshot.publicationSequence
-                ) else {
+        guard request.handle.projectAuthorityCoordinate == snapshot.authorityCoordinate else {
             throw ProjectMeshReadError(
                 code: .resultMismatch,
                 message: "The Mesh page handle coordinate does not match the supplied view."

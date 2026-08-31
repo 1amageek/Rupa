@@ -25,6 +25,16 @@ public struct ProjectViewSnapshot: Sendable {
     public let cadInteraction: DocumentEvaluationContext?
     public let sceneNodeIDByOccurrenceID: [SceneOccurrenceID: SceneNodeID]
 
+    public var authorityCoordinate: ProjectAuthorityCoordinate {
+        ProjectAuthorityCoordinate(
+            projectID: projectID,
+            documentGeneration: documentGeneration,
+            transactionRevision: transactionRevision,
+            publicationSequence: publicationSequence,
+            workspaceRevision: workspaceState.revision
+        )
+    }
+
     public func sceneNodeID(for occurrenceID: SceneOccurrenceID) -> SceneNodeID? {
         sceneNodeIDByOccurrenceID[occurrenceID]
     }

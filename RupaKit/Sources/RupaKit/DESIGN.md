@@ -230,7 +230,21 @@ flowchart LR
     only this layer's successful postpublication projection may resolve a
     requested evaluated `BodyID` from the exact published evaluation. Any
     failure after publication retains the exact commit and `mustNotRetry`.
-21. CADAPI-D mutation and explicit save are separate application actions. This
+21. Before a source transaction can publish, RupaKit builds one immutable
+    transport-neutral `ProjectResultProjectionPlan` from the compiler-retained
+    requested-output mapping and semantic result charge. It validates the exact
+    maximum counts and bounded value/string shapes for requested bindings,
+    diagnostics, execution telemetry, committed coordinates, and possible
+    evaluated-body lookup. Execution may fill fixed-shape values and counters,
+    but may not append a record or variable-length field absent from this plan.
+    A plan that cannot fit the caller-supplied result budget fails before
+    staging or publication.
+22. The same prepublication plan contains a fixed, small committed-failure
+    alternative with only a typed code, exact committed authority coordinate,
+    and `mustNotRetry`. Any postpublication body lookup, projection, validation,
+    or cancellation failure selects that alternative; it does not construct an
+    unbounded diagnostic or ask Protocol to retry encoding another value.
+23. CADAPI-D mutation and explicit save are separate application actions. This
     use case never saves implicitly or edits package bytes.
 
 ## Runtime Flows
@@ -301,11 +315,14 @@ The MainActor adapter never holds a Geometry mutable buffer. Heavy scans use
 immutable values outside the actor and revalidate the full snapshot before and
 after returning. Transport processes and external callbacks are outside this
 module's ownership.
-Semantic program byte/value/graph/expansion limits are validated before this
-boundary. RupaKit additionally enforces that actual staged command and expanded
-source work do not exceed the accepted plan. Stale, cancellation, Automation,
-Core, evaluation, and projection failures are typed; no node-level retry,
-raw-graph fallback, alternate access mode, or partial publication is allowed.
+Transport/AgentProtocol validate frame and encoded DTO byte limits, and
+Foundation validates decoded semantic value/graph/expression/lowering/
+expansion limits before this boundary. RupaKit additionally enforces that
+actual staged command and expanded source work do not exceed the accepted plan
+and owns exact workspace/document-coordinate freshness around Project calls.
+Stale, cancellation, Automation, Core, evaluation, and projection failures are
+typed; no node-level retry, raw-graph fallback, alternate access mode, or
+partial publication is allowed.
 
 ## Verification and Change Impact
 
@@ -321,6 +338,7 @@ T09-C owns the following behavioral proof:
 | Preview | No source/package/evaluation/history/view publication. |
 | Commit | Exact-view publication, one revision/undo, new handle, shared-source routing. |
 | Post-commit behavior | View projection and every post-publication result extraction, result/view/asset/handle validation, cancellation, and coordinate revalidation failure report the exact committed coordinates with no-retry semantics; no path can surface a retryable pre-commit error after publication. |
+| Response-safe publication | Requested outputs plus diagnostic/telemetry charges are converted to a bounded projection plan before staging; boundary-plus-one publishes nothing, and every injected postpublication projection failure selects the preplanned fixed committed envelope with exact coordinates and `mustNotRetry`. |
 | CADAPI-D atomic action | Equivalent direct/one-node and multi-node compiled plans use one workspace action; a late command/evaluation failure publishes no source, history, or view. |
 | CADAPI-D result | Typed Feature/Body/Scene/Component/Instance/Pattern bindings and exact committed coordinates survive result projection; postcommit projection failure is must-not-retry. |
 | CADAPI-D bounds | Actual staged command and expansion telemetry cannot exceed the compiler-accepted policy. |

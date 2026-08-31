@@ -636,8 +636,10 @@ func projectWorkspaceMakeEditableCommitsExactCADMeshPairing() async throws {
     #expect(result.view.canUndo)
     #expect(result.handle.projectAuthorityCoordinate == ProjectAuthorityCoordinate(
         projectID: result.view.projectID,
+        documentGeneration: result.view.documentGeneration,
         transactionRevision: result.view.transactionRevision,
-        publicationSequence: result.view.publicationSequence
+        publicationSequence: result.view.publicationSequence,
+        workspaceRevision: result.view.workspaceState.revision
     ))
     #expect(result.handle.sourceID == sourceID)
     #expect(result.handle.contentIdentity == asset.contentIdentity)

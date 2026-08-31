@@ -17,6 +17,7 @@ public actor ProjectController: ProjectOperating {
     private let objectRegistry: ObjectTypeRegistry
     private let commandContextResolver: any EditorCommandContextResolving
     private let automationExecutor: any AutomationStagedBatchExecuting
+    private let preparedProgramExecutor: any PreparedAutomationProgramExecuting
     private let evaluatorPreparer: any ProjectEvaluatorPreparing
     private let projector: any ProjectSourceProjecting
     private let productSourceCodec: any ProjectProductSourceCoding
@@ -41,7 +42,9 @@ public actor ProjectController: ProjectOperating {
         commandContextResolver: any EditorCommandContextResolving =
             DefaultEditorCommandContextResolver(),
         automationExecutor: any AutomationStagedBatchExecuting =
-            AutomationStagedBatchExecutor()
+            AutomationStagedBatchExecutor(),
+        preparedProgramExecutor: any PreparedAutomationProgramExecuting =
+            DefaultPreparedAutomationProgramExecutor()
     ) throws {
         let initial = try Self.makeInitialState(
             document: document,
@@ -64,6 +67,7 @@ public actor ProjectController: ProjectOperating {
         self.objectRegistry = objectRegistry
         self.commandContextResolver = commandContextResolver
         self.automationExecutor = automationExecutor
+        self.preparedProgramExecutor = preparedProgramExecutor
         self.evaluatorPreparer = evaluatorPreparer
         self.projector = projector
         self.productSourceCodec = productSourceCodec
@@ -89,7 +93,9 @@ public actor ProjectController: ProjectOperating {
         commandContextResolver: any EditorCommandContextResolving =
             DefaultEditorCommandContextResolver(),
         automationExecutor: any AutomationStagedBatchExecuting =
-            AutomationStagedBatchExecutor()
+            AutomationStagedBatchExecutor(),
+        preparedProgramExecutor: any PreparedAutomationProgramExecuting =
+            DefaultPreparedAutomationProgramExecutor()
     ) throws {
         do {
             try packageValidator.validateForSave(package)
@@ -119,6 +125,7 @@ public actor ProjectController: ProjectOperating {
         self.objectRegistry = objectRegistry
         self.commandContextResolver = commandContextResolver
         self.automationExecutor = automationExecutor
+        self.preparedProgramExecutor = preparedProgramExecutor
         self.evaluatorPreparer = evaluatorPreparer
         self.projector = projector
         self.productSourceCodec = productSourceCodec
@@ -148,8 +155,10 @@ public actor ProjectController: ProjectOperating {
     public func currentAuthorityCoordinate() -> ProjectAuthorityCoordinate {
         ProjectAuthorityCoordinate(
             projectID: session.document.projectID,
+            documentGeneration: session.generation,
             transactionRevision: session.transactionRevision,
-            publicationSequence: publicationSequence
+            publicationSequence: publicationSequence,
+            workspaceRevision: session.workspaceState.revision
         )
     }
 
@@ -413,9 +422,7 @@ public actor ProjectController: ProjectOperating {
         try Task.checkCancellation()
         try operationGuard()
         do {
-            try requireProjectID(transaction.expectedProjectID)
-            try requireTransactionRevision(transaction.expectedTransactionRevision)
-            try requirePublicationSequence(transaction.expectedPublicationSequence)
+            try requireTransactionCoordinates(transaction)
             try requireTransactionRevision(staged.source.baseTransactionRevision)
             try requirePublicationSequence(staged.basePublicationSequence)
             try session.store.requireGeneration(staged.source.baseGeneration)
@@ -438,7 +445,8 @@ public actor ProjectController: ProjectOperating {
                 staged.source.value.automationExecution,
                 state: committedState,
                 didCommit: staged.source.wouldMutate
-            )
+            ),
+            preparedProgramExecution: staged.source.value.preparedProgramExecution
         )
     }
 
@@ -451,9 +459,7 @@ public actor ProjectController: ProjectOperating {
         try Task.checkCancellation()
         try operationGuard()
         do {
-            try requireProjectID(transaction.expectedProjectID)
-            try requireTransactionRevision(transaction.expectedTransactionRevision)
-            try requirePublicationSequence(transaction.expectedPublicationSequence)
+            try requireTransactionCoordinates(transaction)
             try requireTransactionRevision(staged.source.baseTransactionRevision)
             try requirePublicationSequence(staged.basePublicationSequence)
             try session.store.requireGeneration(staged.source.baseGeneration)
@@ -477,9 +483,11 @@ public actor ProjectController: ProjectOperating {
             commandResults: staged.source.value.commandResults,
             geometrySourceCommandResults: staged.source.value.geometrySourceCommandResults,
             automationExecution: automationExecution,
+            preparedProgramExecution: staged.source.value.preparedProgramExecution,
             diagnostics: EditorDiagnostic.stableMerged([
                 staged.source.value.commandResults.flatMap(\.diagnostics),
                 automationExecution?.diagnostics ?? [],
+                staged.source.value.preparedProgramExecution?.diagnostics ?? [],
                 staged.source.stagedDocumentState.diagnostics,
             ])
         )
@@ -529,9 +537,7 @@ public actor ProjectController: ProjectOperating {
     private func prepareSourceMutation(
         _ transaction: ProjectSourceTransaction
     ) async throws -> PreparedProjectSourceMutation {
-        try requireProjectID(transaction.expectedProjectID)
-        try requireTransactionRevision(transaction.expectedTransactionRevision)
-        try requirePublicationSequence(transaction.expectedPublicationSequence)
+        try requireTransactionCoordinates(transaction)
         do {
             try commandContextResolver.requireFullyResolved(transaction.commands)
         } catch let error as EditorError {
@@ -541,9 +547,7 @@ public actor ProjectController: ProjectOperating {
         try Task.checkCancellation()
         try await validateMakeEditableEvaluationBindings(in: transaction)
         try Task.checkCancellation()
-        try requireProjectID(transaction.expectedProjectID)
-        try requireTransactionRevision(transaction.expectedTransactionRevision)
-        try requirePublicationSequence(transaction.expectedPublicationSequence)
+        try requireTransactionCoordinates(transaction)
 
         let prepared: PreparedEditorSourceTransaction<StagedCommandResults>
         do {
@@ -557,16 +561,26 @@ public actor ProjectController: ProjectOperating {
                     groupedSession in
                     let commandResults: [CommandExecutionResult]
                     let automationExecution: AutomationBatchExecution?
+                    let preparedProgramExecution: PreparedAutomationExecutionReceipt?
                     switch transaction.mutation {
                     case .commands(let commands):
                         commandResults = try commands.map { command in
                             try groupedSession.execute(command)
                         }
                         automationExecution = nil
+                        preparedProgramExecution = nil
                     case .automation(let automation):
                         commandResults = []
                         automationExecution = try automationExecutor.execute(
                             automation,
+                            in: groupedSession
+                        )
+                        preparedProgramExecution = nil
+                    case .preparedProgram(let mutation):
+                        commandResults = []
+                        automationExecution = nil
+                        preparedProgramExecution = try preparedProgramExecutor.execute(
+                            mutation.program,
                             in: groupedSession
                         )
                     }
@@ -580,7 +594,8 @@ public actor ProjectController: ProjectOperating {
                     return StagedCommandResults(
                         commandResults: commandResults,
                         geometrySourceCommandResults: geometrySourceCommandResults,
-                        automationExecution: automationExecution
+                        automationExecution: automationExecution,
+                        preparedProgramExecution: preparedProgramExecution
                     )
                 }
                 if let automationExecution = stagedResults.automationExecution {
@@ -600,6 +615,16 @@ public actor ProjectController: ProjectOperating {
                 code: .transactionInvalid,
                 message: "Project source staging failed: \(error)."
             )
+        }
+
+        if case .preparedProgram(let mutation) = transaction.mutation {
+            guard let receipt = prepared.value.preparedProgramExecution else {
+                throw ProjectControllerError(
+                    code: .transactionInvalid,
+                    message: "Prepared-program staging completed without an execution receipt."
+                )
+            }
+            try validatePreparedProgramResult(receipt, limit: mutation.resultLimit)
         }
 
         let stagedAuthority = try await sourceAuthoritySnapshot(
@@ -1130,6 +1155,123 @@ public actor ProjectController: ProjectOperating {
             try session.requireTransactionRevision(expectedTransactionRevision)
         } catch let error as EditorError {
             throw projectError(for: error)
+        }
+    }
+
+    private func requireTransactionCoordinates(
+        _ transaction: ProjectSourceTransaction
+    ) throws {
+        switch transaction.mutation {
+        case .preparedProgram(let mutation):
+            try requireAuthorityCoordinate(mutation.authority)
+        case .commands, .automation:
+            try requireProjectID(transaction.expectedProjectID)
+            try requireTransactionRevision(transaction.expectedTransactionRevision)
+            try requirePublicationSequence(transaction.expectedPublicationSequence)
+        }
+    }
+
+    private func requireAuthorityCoordinate(
+        _ coordinate: ProjectAuthorityCoordinate
+    ) throws {
+        try requireProjectID(coordinate.projectID)
+        try requireTransactionRevision(coordinate.transactionRevision)
+        try requirePublicationSequence(coordinate.publicationSequence)
+        do {
+            try session.store.requireGeneration(coordinate.documentGeneration)
+            try session.workspaceState.requireRevision(coordinate.workspaceRevision)
+        } catch let error as EditorError {
+            throw projectError(for: error)
+        }
+    }
+
+    private func validatePreparedProgramResult(
+        _ receipt: PreparedAutomationExecutionReceipt,
+        limit: ProjectPreparedProgramResultLimit
+    ) throws {
+        let diagnosticRecordCount = UInt64(receipt.diagnostics.count)
+        let (baseDiagnosticScalarCount, baseOverflow) = diagnosticRecordCount
+            .multipliedReportingOverflow(by: 2)
+        guard !baseOverflow else {
+            throw ProjectControllerError(
+                code: .resultLimitExceeded,
+                message: "Prepared-program diagnostic scalar measurement overflowed."
+            )
+        }
+        var diagnosticScalarCount = baseDiagnosticScalarCount
+        var diagnosticStringUTF8ByteCount: UInt64 = 0
+        for diagnostic in receipt.diagnostics {
+            if diagnostic.code != nil {
+                diagnosticScalarCount = try addingResultMetric(
+                    diagnosticScalarCount,
+                    1,
+                    name: "diagnostic scalar"
+                )
+            }
+            diagnosticStringUTF8ByteCount = try addingResultMetric(
+                diagnosticStringUTF8ByteCount,
+                UInt64(diagnostic.message.utf8.count),
+                name: "diagnostic UTF-8 byte"
+            )
+        }
+
+        try requireResultMetric(
+            diagnosticRecordCount,
+            maximum: limit.maximumDiagnosticRecordCount,
+            name: "diagnostic record"
+        )
+        try requireResultMetric(
+            diagnosticScalarCount,
+            maximum: limit.maximumDiagnosticScalarCount,
+            name: "diagnostic scalar"
+        )
+        try requireResultMetric(
+            diagnosticStringUTF8ByteCount,
+            maximum: limit.maximumDiagnosticStringUTF8ByteCount,
+            name: "diagnostic UTF-8 byte"
+        )
+        try requireResultMetric(
+            1,
+            maximum: limit.maximumTelemetryRecordCount,
+            name: "telemetry record"
+        )
+        try requireResultMetric(
+            6,
+            maximum: limit.maximumTelemetryScalarCount,
+            name: "telemetry scalar"
+        )
+        try requireResultMetric(
+            0,
+            maximum: limit.maximumTelemetryStringUTF8ByteCount,
+            name: "telemetry UTF-8 byte"
+        )
+    }
+
+    private func addingResultMetric(
+        _ lhs: UInt64,
+        _ rhs: UInt64,
+        name: String
+    ) throws -> UInt64 {
+        let (value, overflow) = lhs.addingReportingOverflow(rhs)
+        guard !overflow else {
+            throw ProjectControllerError(
+                code: .resultLimitExceeded,
+                message: "Prepared-program \(name) measurement overflowed."
+            )
+        }
+        return value
+    }
+
+    private func requireResultMetric(
+        _ actual: UInt64,
+        maximum: UInt64,
+        name: String
+    ) throws {
+        guard actual <= maximum else {
+            throw ProjectControllerError(
+                code: .resultLimitExceeded,
+                message: "Prepared-program \(name) count \(actual) exceeds the accepted maximum \(maximum)."
+            )
         }
     }
 
@@ -1671,10 +1813,16 @@ public actor ProjectController: ProjectOperating {
     }
 
     private func projectError(for error: EditorError) -> ProjectControllerError {
-        if error.code == .documentTransactionRevisionMismatch {
+        switch error.code {
+        case .documentTransactionRevisionMismatch:
             return ProjectControllerError(code: .revisionConflict, message: error.message)
+        case .documentGenerationMismatch:
+            return ProjectControllerError(code: .documentGenerationConflict, message: error.message)
+        case .workspaceRevisionMismatch:
+            return ProjectControllerError(code: .workspaceRevisionConflict, message: error.message)
+        default:
+            return ProjectControllerError(code: .transactionInvalid, message: error.message)
         }
-        return ProjectControllerError(code: .transactionInvalid, message: error.message)
     }
 
     private func advancedPublicationSequence() throws -> UInt64 {
@@ -1954,6 +2102,7 @@ private struct StagedCommandResults: Sendable {
     let commandResults: [CommandExecutionResult]
     let geometrySourceCommandResults: [GeometrySourceCommandResult]
     var automationExecution: AutomationBatchExecution?
+    let preparedProgramExecution: PreparedAutomationExecutionReceipt?
 
     var didMutateAuthoredMesh: Bool {
         geometrySourceCommandResults.contains { result in

@@ -4,13 +4,68 @@ import RupaCore
 import RupaCoreTypes
 
 public struct ProjectSourceTransaction: Sendable {
-    public let name: String
-    public let mutation: ProjectSourceMutation
+    private let storage: ProjectSourceTransactionStorage
+
+    public var name: String {
+        switch storage {
+        case .commands(let name, _, _, _),
+             .automation(let name, _, _, _),
+             .preparedProgram(let name, _):
+            name
+        }
+    }
+
+    public var mutation: ProjectSourceMutation {
+        switch storage {
+        case .commands(_, let commands, _, _):
+            .commands(commands)
+        case .automation(_, let automation, _, _):
+            .automation(automation)
+        case .preparedProgram(_, let mutation):
+            .preparedProgram(mutation)
+        }
+    }
+
     /// Geometry-source commands run in array order after all CAD editor commands.
-    public let geometrySourceCommands: [GeometrySourceCommand]
-    public let expectedProjectID: ProjectID
-    public let expectedTransactionRevision: DocumentTransactionRevision
-    public let expectedPublicationSequence: UInt64
+    public var geometrySourceCommands: [GeometrySourceCommand] {
+        switch storage {
+        case .commands(_, _, let commands, _),
+             .automation(_, _, let commands, _):
+            commands
+        case .preparedProgram:
+            []
+        }
+    }
+
+    public var expectedProjectID: ProjectID {
+        switch storage {
+        case .commands(_, _, _, let authority),
+             .automation(_, _, _, let authority):
+            authority.projectID
+        case .preparedProgram(_, let mutation):
+            mutation.authority.projectID
+        }
+    }
+
+    public var expectedTransactionRevision: DocumentTransactionRevision {
+        switch storage {
+        case .commands(_, _, _, let authority),
+             .automation(_, _, _, let authority):
+            authority.transactionRevision
+        case .preparedProgram(_, let mutation):
+            mutation.authority.transactionRevision
+        }
+    }
+
+    public var expectedPublicationSequence: UInt64 {
+        switch storage {
+        case .commands(_, _, _, let authority),
+             .automation(_, _, _, let authority):
+            authority.publicationSequence
+        case .preparedProgram(_, let mutation):
+            mutation.authority.publicationSequence
+        }
+    }
 
     public init(
         name: String,
@@ -44,12 +99,16 @@ public struct ProjectSourceTransaction: Sendable {
                 message: "Project source transactions require source-mutating commands."
             )
         }
-        self.name = name
-        self.mutation = .commands(resolvedCommands)
-        self.geometrySourceCommands = geometrySourceCommands
-        self.expectedProjectID = expectedProjectID
-        self.expectedTransactionRevision = expectedTransactionRevision
-        self.expectedPublicationSequence = expectedPublicationSequence
+        self.storage = .commands(
+            name: name,
+            commands: resolvedCommands,
+            geometrySourceCommands: geometrySourceCommands,
+            authority: ProjectLegacySourceAuthority(
+                projectID: expectedProjectID,
+                transactionRevision: expectedTransactionRevision,
+                publicationSequence: expectedPublicationSequence
+            )
+        )
     }
 
     public init(
@@ -73,12 +132,16 @@ public struct ProjectSourceTransaction: Sendable {
                 message: "Project source transactions require source-mutating commands."
             )
         }
-        self.name = name
-        self.mutation = .commands(resolvedCommands)
-        self.geometrySourceCommands = geometrySourceCommands
-        self.expectedProjectID = expectedProjectID
-        self.expectedTransactionRevision = expectedTransactionRevision
-        self.expectedPublicationSequence = expectedPublicationSequence
+        self.storage = .commands(
+            name: name,
+            commands: resolvedCommands,
+            geometrySourceCommands: geometrySourceCommands,
+            authority: ProjectLegacySourceAuthority(
+                projectID: expectedProjectID,
+                transactionRevision: expectedTransactionRevision,
+                publicationSequence: expectedPublicationSequence
+            )
+        )
     }
 
     public init(
@@ -101,12 +164,45 @@ public struct ProjectSourceTransaction: Sendable {
                 message: "Project source Automation transactions require a source-mutation batch."
             )
         }
-        self.name = name
-        self.mutation = .automation(automation)
-        self.geometrySourceCommands = geometrySourceCommands
-        self.expectedProjectID = expectedProjectID
-        self.expectedTransactionRevision = expectedTransactionRevision
-        self.expectedPublicationSequence = expectedPublicationSequence
+        self.storage = .automation(
+            name: name,
+            automation: automation,
+            geometrySourceCommands: geometrySourceCommands,
+            authority: ProjectLegacySourceAuthority(
+                projectID: expectedProjectID,
+                transactionRevision: expectedTransactionRevision,
+                publicationSequence: expectedPublicationSequence
+            )
+        )
+    }
+
+    public init(
+        name: String,
+        preparedProgram: PreparedAutomationProgram,
+        authority: ProjectAuthorityCoordinate,
+        resultLimit: ProjectPreparedProgramResultLimit
+    ) throws {
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw ProjectControllerError(
+                code: .transactionInvalid,
+                message: "Project source transaction names must not be empty."
+            )
+        }
+        guard !preparedProgram.steps.isEmpty else {
+            throw ProjectControllerError(
+                code: .transactionInvalid,
+                message: "Prepared source programs must contain at least one step."
+            )
+        }
+        self.storage = .preparedProgram(
+            name: name,
+            mutation:
+            ProjectPreparedProgramMutation(
+                program: preparedProgram,
+                authority: authority,
+                resultLimit: resultLimit
+            )
+        )
     }
 
     public var commands: [EditorCommand] {
@@ -115,4 +211,29 @@ public struct ProjectSourceTransaction: Sendable {
         }
         return commands.map(\.command)
     }
+}
+
+private struct ProjectLegacySourceAuthority: Sendable {
+    let projectID: ProjectID
+    let transactionRevision: DocumentTransactionRevision
+    let publicationSequence: UInt64
+}
+
+private enum ProjectSourceTransactionStorage: Sendable {
+    case commands(
+        name: String,
+        commands: [ContextResolvedEditorCommand],
+        geometrySourceCommands: [GeometrySourceCommand],
+        authority: ProjectLegacySourceAuthority
+    )
+    case automation(
+        name: String,
+        automation: PreparedAutomationBatch,
+        geometrySourceCommands: [GeometrySourceCommand],
+        authority: ProjectLegacySourceAuthority
+    )
+    case preparedProgram(
+        name: String,
+        mutation: ProjectPreparedProgramMutation
+    )
 }

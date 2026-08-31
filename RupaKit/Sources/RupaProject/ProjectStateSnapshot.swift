@@ -22,6 +22,16 @@ public struct ProjectStateSnapshot: Sendable {
     public let cadInteraction: DocumentEvaluationContext?
     public let evaluation: EvaluatedProjectSnapshot
 
+    public var authorityCoordinate: ProjectAuthorityCoordinate {
+        ProjectAuthorityCoordinate(
+            projectID: document.projectID,
+            documentGeneration: documentGeneration,
+            transactionRevision: transactionRevision,
+            publicationSequence: publicationSequence,
+            workspaceRevision: workspaceState.revision
+        )
+    }
+
     public init(
         documentLifetimeID: ProjectDocumentLifetimeID,
         document: DesignDocument,

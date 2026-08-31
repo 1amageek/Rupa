@@ -14,8 +14,10 @@ func agentGeometryRouteMessagesRoundTripThroughTheWireCodec() throws {
     let sessionID = UUID()
     let coordinate = ProjectAuthorityCoordinate(
         projectID: ProjectID(rawValue: "project.agent.route"),
+        documentGeneration: DocumentGeneration(4),
         transactionRevision: DocumentTransactionRevision(2),
-        publicationSequence: 3
+        publicationSequence: 3,
+        workspaceRevision: WorkspaceRevision(5)
     )
     let handle = try agentGeometryRouteHandle(coordinate: coordinate)
     let plan = try agentGeometryRoutePlan()
