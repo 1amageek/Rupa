@@ -4,16 +4,15 @@
 
 `RupaCLIKit` owns command-line parsing and result projection for the `rupa`
 executable. It is a child of the [RupaKit package design](../../DESIGN.md).
-ACCESS-A removes transport details from semantic status and establishes
-`RupaProjectAccess` as the future command boundary. ACCESS-D owns the complete
-production command cutover. CADAPI-D fixes a simple command syntax for
+`RupaProjectAccess` is the only production command boundary. ACCESS-D removes
+the former transport and direct-file mutation routes completely. CADAPI-D fixes a simple command syntax for
 `capability.invoke` and a structured input syntax for `program.execute`; both
 are projections of one registered CAD operation vocabulary, not separate CLI
 command systems.
 
 CADAPI-D is not yet implemented. Current raw `AutomationCommand`/
-`appendFeatureGraph` exposure and legacy access paths are implementation gaps
-that must be removed at cutover, not supported alternatives in this design.
+`appendFeatureGraph` exposure is a separate implementation gap, not an
+alternative project authority.
 
 ## Responsibilities and Boundaries
 
@@ -44,15 +43,14 @@ selected representation authority, world transforms and bounds, checked Mesh
 counts, aggregate bounds and triangle count, and copy telemetry. It is a
 live-only read and never receives geometry buffers.
 
-The current direct file route remains a known transitional implementation until
-ACCESS-D and is not an alternative authority accepted by this design.
+The module never opens package bytes or creates an `EditorSession` directly.
 
 ## Related Designs
 
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [package design](../../DESIGN.md) | parent | module boundary | Keeps parsing above project access. | Do not import project internals for mutation. |
-| [RupaProjectAccess](../RupaProjectAccess/DESIGN.md) | will depend on | open/send/save/finish | Becomes the single production access port in ACCESS-D. | Mode selection is explicit and never fallback. |
+| [RupaProjectAccess](../RupaProjectAccess/DESIGN.md) | depends on | observe/open/send/save/finish | Is the single production access port. | Mode selection is explicit and never fallback. |
 | [RupaAgentProtocol](../RupaAgentProtocol/DESIGN.md) | depends on | intent/result values | Supplies command payloads. | Semantic status contains no endpoint. |
 | [RupaAgentRuntime](../RupaAgentRuntime/DESIGN.md) | reached through access | one semantic dispatch path | Forwards either form to the single Foundation compiler, which alone normalizes direct invocation and compiles both forms through the same operation registry. | CLI and Runtime must not add a parallel recipe or lowering switch. |
 | [RupaDomainFoundation](../RupaDomainFoundation/DESIGN.md) | represented through protocol | bounded declarative program semantics | Defines local references, parameters, DAG ordering, and structural limits. | CLI parses syntax only; it does not validate semantic source authority. |
@@ -83,15 +81,14 @@ flowchart LR
 4. CLI owns only user syntax and request-local symbol spelling. Rupa allocates
    persistent IDs, chooses presentation/defaults, orders dependencies, validates
    and lowers operations, and returns typed output bindings in a receipt.
-5. Explicit save is a separate access-session action after mutation. Neither
-   invocation form implies save, and dry run, prepublication failure, uncertain
-   outcome, or committed no-retry outcome is never followed by an automatic
-   save or replay.
-6. ACCESS-D removes `.auto`, force-file bypass, production endpoint options,
-   direct `AgentClient`, and the direct `DocumentFileService`/`EditorSession`
-   mutation route. Until that cutover, the single central client factory
-   accepts only the product-composed required endpoint; it rejects every
-   explicit endpoint override and has no default-path or temporary fallback.
+5. Persistence is always an explicit `ProjectAccessSession.save` action. A
+   successful non-dry-run file mutation invokes it on the same session before
+   returning; a live mutation does not. Dry run, prepublication failure,
+   uncertain outcome, or committed no-retry outcome is never followed by save
+   or replay.
+6. Mode is exactly `live` (default) or explicit `file`. There is no automatic
+   fallback, endpoint option, force-file bypass, direct `AgentClient`, or
+   direct `DocumentFileService`/`EditorSession` route.
 7. A live dispatch with uncertain outcome is never replayed through file mode.
 8. `inspect scene-graph` is a live Agent read. It carries the exact session and
    expected generation, returns a geometry-free immutable snapshot, and fails
@@ -102,12 +99,15 @@ flowchart LR
 
 ## Runtime Flows
 
-ACCESS-D will parse exactly `live` or explicit `file`, open one access session
-under one deadline, send either one direct operation request or one composite
+The CLI parses exactly `live` or explicit `file`, opens one access session
+under one deadline, sends either one direct operation request or one composite
 program request, explicitly save only when requested, and finish the access
 resource. Both mutation forms are forwarded once; the CLI neither expands a
-program into multiple calls nor falls back between access modes. ACCESS-A
-changes only the status projection contract.
+program into multiple calls nor falls back between access modes. A successful
+non-dry-run file mutation explicitly invokes `ProjectAccessSession.save` before
+the temporary session is finished; live mutation remains memory-only until the
+separate save command. Status, sessions, and attach use the observation port
+and never launch the application.
 
 ## State, Ownership, and Lifecycle
 
@@ -127,9 +127,9 @@ and must-not-retry disposition.
 
 ## Verification and Change Impact
 
-ACCESS-A tests status projection without endpoint leakage. ACCESS-D owns full
-executable syntax, retained-command parity, explicit-mode, and legacy-route
-absence tests. The scene-graph adapter is verified by exact request routing,
+Tests cover status projection without endpoint leakage, full executable syntax,
+retained-command parity, explicit-mode routing, and legacy-route absence. The
+scene-graph adapter is verified by exact request routing,
 scene-node transform/visibility JSON projection, stale-generation rejection,
 and an actual bounded CLI-to-Agent process test.
 The viewport adapter is verified by exact live request routing, response

@@ -1,6 +1,6 @@
 import ArgumentParser
 
-public struct InspectSketchesCommand: ParsableCommand {
+public struct InspectSketchesCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "sketches",
         abstract: "Return source sketch entities, regions, point handles, and SelectionTarget IDs."
@@ -11,16 +11,21 @@ public struct InspectSketchesCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
+    public func run() async throws {
         let id = try options.resolvedSessionID()
 
-        try CLIExitCode.run {
-            let response = try CLIService().sketchEntitySummary(
+        try await CLIExitCode.run {
+            let envelope = try await CLIService().read(
                 target: options.target(sessionID: id),
                 mode: options.mode,
-                expectedGeneration: options.generation(),
-                client: try options.agentClient(sessionID: id)
-            )
+                expectedGeneration: options.generation()
+            ) { sessionID in
+                .sketchEntitySummary(
+                    sessionID: sessionID,
+                    expectedGeneration: options.generation()
+                )
+            }
+            let response = try CLIResponseProjector.sketches(envelope)
             try CLIOutput.write(response: response, asJSON: options.json)
         }
     }

@@ -436,13 +436,11 @@ let package = Package(
         .target(
             name: "RupaCLIKit",
             dependencies: [
+                "RupaProjectAccess",
                 "RupaCore",
                 "RupaAutomation",
                 "RupaDomainFoundation",
                 "RupaAgentProtocol",
-                "RupaAgentRuntime",
-                "RupaAgentTransport",
-                "RupaProjectAccessPlatform",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "SwiftCAD", package: "swift-CAD"),
             ],
@@ -452,6 +450,9 @@ let package = Package(
             name: "RupaCLI",
             dependencies: [
                 "RupaCLIKit",
+                "RupaProjectAccessComposition",
+                "RupaProjectAccessPlatform",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ]
         ),
         .executableTarget(
@@ -771,11 +772,13 @@ let package = Package(
             name: "RupaCLITests",
             dependencies: [
                 "RupaAgentProtocol",
-                "RupaAgentRuntime",
-                "RupaAgentTransport",
                 "RupaCLIKit",
+                "RupaProjectAccess",
+                "RupaCore",
+                "RupaCoreTypes",
+                "RupaAutomation",
                 "RupaDomainFoundation",
-                "RupaAgentIntegrationTestFixtures",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ]
         ),
         .testTarget(

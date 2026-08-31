@@ -2,7 +2,7 @@ import ArgumentParser
 import RupaAutomation
 import RupaCore
 
-public struct SketchCutCommand: ParsableCommand {
+public struct SketchCutCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "cut",
         abstract: "Cut a supported source sketch curve with another source curve."
@@ -28,8 +28,8 @@ public struct SketchCutCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .cutSketchCurve(
                 target: selection.decodedTarget(),

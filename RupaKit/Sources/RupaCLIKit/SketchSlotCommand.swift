@@ -2,7 +2,7 @@ import ArgumentParser
 import RupaAutomation
 import RupaCore
 
-public struct SketchSlotCommand: ParsableCommand {
+public struct SketchSlotCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "slot",
         abstract: "Create a slot profile from a supported open source sketch curve or chain."
@@ -22,9 +22,9 @@ public struct SketchSlotCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(document: document) { sessionID in
-            let lengthUnit = try CLIAutomationCommandRunner.lengthUnit(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try await CLIAutomationCommandRunner.lengthUnit(
                 unitName: unit,
                 document: document,
                 sessionID: sessionID

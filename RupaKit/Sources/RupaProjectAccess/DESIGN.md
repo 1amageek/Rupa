@@ -9,10 +9,10 @@ design](../../DESIGN.md) and is intentionally independent of `RupaCore`,
 
 The module fixes the access shape for live projects, existing live sessions,
 and closed schema-v3 `.rupa` projects. It remains contract-only: concrete
-closed-file workspace creation and authority leases are owned by the sibling
+live/closed workspace composition and authority leases are owned by the sibling
 [`RupaProjectAccessComposition`](../RupaProjectAccessComposition/DESIGN.md)
-module, while live composition and CLI cutover belong to their application
-owners.
+module. Product endpoint and lease-root wiring belongs to the CLI executable,
+not this contract target.
 
 CADAPI-D adds no project authority here. An access session transports either of
 the two semantic CAD mutation envelopes (`capability.invoke` or
@@ -27,7 +27,7 @@ Parent: [RupaKit package design](../../DESIGN.md). Children: none.
 This module owns:
 
 - the exact access target and immutable session identity;
-- the asynchronous open, request, explicit-save, and finish contracts;
+- the asynchronous open, observation, request, explicit-save, and finish contracts;
 - transport of the protocol-owned simple-operation and bounded-program
   requests without interpreting, compiling, splitting, or replaying them;
 - typed access outcomes and failures for coordinate, deadline, format, and
@@ -51,8 +51,8 @@ permit direct package-entry editing or a shadow `EditorSession`.
 | [RupaAgentRuntime](../RupaAgentRuntime/DESIGN.md) | used by concrete access composition | semantic request dispatch and typed result projection | Resolves both CADAPI-D forms through the same workspace path. | Access must not compile, split, or retry a semantic program. |
 | [RupaProjectAccessComposition](../RupaProjectAccessComposition/DESIGN.md) | used by | concrete closed-session and file-authority composition | Implements this contract by loading through the public `ProjectWorkspace` API and delegating requests to `ProjectAgentCommandController`. | The composition target owns leases and resource lifetime; this contract does not import it. |
 | [RupaDomainFoundation](../RupaDomainFoundation/DESIGN.md) | transitively used by runtime | bounded semantic program contract | Gives `program.execute` its source-only DAG semantics. | ProjectAccess transports the DTO and does not depend on compiler internals. |
-| [RupaProject](../RupaProject/DESIGN.md) | used by later composition | controller and publication authority | Owns staging, evaluation, rollback, and package persistence. | ACCESS-A defines no adapter to its concrete implementation. |
-| [Agent transport](../RupaAgentTransport/DESIGN.md) | coordinates later | injected endpoint and peer authorization | Carries protocol values for live access. | Endpoint placement is transport composition, not semantic status. |
+| [RupaProject](../RupaProject/DESIGN.md) | used by concrete composition | controller and publication authority | Owns staging, evaluation, rollback, and package persistence. | This contract exposes no adapter to its concrete implementation. |
+| [Agent transport](../RupaAgentTransport/DESIGN.md) | coordinates with | injected endpoint and peer authorization | Carries protocol values for live access. | Endpoint placement is transport composition, not semantic status. |
 
 ## Architecture
 
@@ -145,6 +145,25 @@ new relative timeout. A dispatch that may have published a mutation but whose
 response is lost returns `outcomeUnknown`; it is never retried through another
 target or file path.
 
+### Observation
+
+```swift
+@MainActor
+public protocol ProjectAccessObserving: Sendable {
+    func capabilities(deadline: ContinuousClock.Instant) async throws -> [AgentCapabilityDescriptor]
+    func status(deadline: ContinuousClock.Instant) async throws -> AgentStatus
+    func sessions(
+        deadline: ContinuousClock.Instant
+    ) async throws -> [WorkspaceSessionSummary]
+}
+```
+
+Observation is transport-neutral and never opens a project, launches an
+application, creates a temporary workspace, or acquires project-file
+authority. `capabilities`, `status`, and `sessions` observe only the currently
+reachable live host. Observation failure is returned to the caller and never
+triggers a closed-project fallback.
+
 ### Lifecycle and save ports
 
 The session protocol is the only mutation-facing port. A CADAPI-D request may
@@ -182,10 +201,13 @@ boundary.
 ```mermaid
 sequenceDiagram
     participant Caller
+    participant Observer as ProjectAccessObserving
     participant Opening as ProjectAccessOpening
     participant Session as ProjectAccessSession
     participant W as ProjectWorkspace
     participant P as ProjectController
+    Caller->>Observer: status/sessions(caller-owned deadline)
+    Observer-->>Caller: live-host state only
     Caller->>Opening: open(target, one monotonic deadline)
     Opening->>W: resolve or compose one workspace
     W->>P: load/evaluate under authority
@@ -237,6 +259,6 @@ are forwarded once without payload reinterpretation, explicit save is a
 separate call, prepublication failures do not save or fall back, and an
 uncertain or committed outcome is never replayed.
 
-Changes to target cases, session coordinates, save semantics, failure
-discriminators, or dependency imports require rechecking this design, the
-system master, and every concrete live/closed adapter design.
+Changes to target cases, observation semantics, session coordinates, save
+semantics, failure discriminators, or dependency imports require rechecking
+this design, the system master, and every concrete live/closed adapter design.

@@ -1,16 +1,15 @@
 import ArgumentParser
 import Foundation
-import RupaAgentRuntime
 import RupaCore
 
-public struct SurfaceSetTrimDomainCommand: ParsableCommand {
+public struct SurfaceSetTrimDomainCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "set-trim-domain",
         abstract: "Set a direct B-spline surface rectangular outer trim domain."
     )
 
-    @Argument(help: "Path to the .swcad document for file or auto mode.")
-    public var file: String?
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
 
     @Option(help: "SelectionReference JSON object for one direct B-spline surface reference.")
     public var reference: String?
@@ -30,34 +29,9 @@ public struct SurfaceSetTrimDomainCommand: ParsableCommand {
     @Option(parsing: .unconditional, help: "Upper V parameter bound.")
     public var vUpper: Double
 
-    @Option(help: "Edit mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Flag(help: "Validate the command without saving the changed file.")
-    public var dryRun: Bool = false
-
-    @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
-    public var forceFileEdit: Bool = false
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
-
-    @OptionGroup
-    public var writeDestination: CLIWriteDestinationOptions
-
     public init() {}
 
-    public func run() throws {
-        let id = try CLISelectionInputParser.optionalSessionID(sessionID)
+    public func run() async throws {
         let surfaceReference: SelectionReference = try CLISelectionInputParser.decodeSingleSelectionInput(
             inlinePayload: reference,
             filePath: referenceFile,
@@ -80,31 +54,15 @@ public struct SurfaceSetTrimDomainCommand: ParsableCommand {
             valueName: "Surface trim domain V upper bound"
         )
 
-        try CLIExitCode.run {
-            let writePolicy = try writeDestination.writePolicy(file: file, mode: mode, sessionID: id)
-            let agentClient = try CLIAgentClientFactory.makeAgentClient(
-                mode: mode,
-                sessionID: id,
-                socket: agentSocket
-            )
-            let response = try CLIService().setSurfaceTrimDomain(
-                target: CLIDocumentTarget(
-                    fileURL: file.map(URL.init(fileURLWithPath:)),
-                    sessionID: id
-                ),
-                reference: surfaceReference,
+        try await CLIAutomationCommandRunner.run(
+            document: document,
+            command: .setSurfaceTrimDomain(
+                target: surfaceReference,
                 uLowerBound: uLowerExpression,
                 uUpperBound: uUpperExpression,
                 vLowerBound: vLowerExpression,
-                vUpperBound: vUpperExpression,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                dryRun: dryRun,
-                writePolicy: writePolicy,
-                forceFileEdit: forceFileEdit,
-                client: agentClient
+                vUpperBound: vUpperExpression
             )
-            try CLIOutput.write(response: response, asJSON: json)
-        }
+        )
     }
 }

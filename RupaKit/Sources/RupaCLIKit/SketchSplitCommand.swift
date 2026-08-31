@@ -1,7 +1,7 @@
 import ArgumentParser
 import RupaAutomation
 
-public struct SketchSplitCommand: ParsableCommand {
+public struct SketchSplitCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "split",
         abstract: "Split a supported source sketch curve at a scalar fraction."
@@ -18,8 +18,8 @@ public struct SketchSplitCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .splitSketchCurve(
                 target: selection.decodedTarget(),

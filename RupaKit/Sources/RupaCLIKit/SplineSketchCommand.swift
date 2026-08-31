@@ -1,7 +1,7 @@
 import ArgumentParser
 import RupaCore
 
-public struct SplineSketchCommand: ParsableCommand {
+public struct SplineSketchCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "spline",
         abstract: "Create a cubic Bezier spline sketch."
@@ -30,29 +30,19 @@ public struct SplineSketchCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        let sessionID = try document.resolvedSessionID()
-
-        try CLIExitCode.run {
-            let lengthUnit = try CLILengthUnitResolver.resolve(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try await CLILengthUnitResolver.resolve(
                 unit: unit,
                 document: document,
                 sessionID: sessionID
             )
             let spline = try sketchSpline(unit: lengthUnit)
-            let response = try CLIService().createSplineSketch(
-                target: try document.target(sessionID: sessionID),
+            return .createSplineSketch(
                 name: name,
                 plane: try CLISketchPlaneReferenceParser.reference(plane: plane, constructionPlaneID: constructionPlaneID),
-                spline: spline,
-                mode: document.mode,
-                expectedGeneration: document.generation(),
-                dryRun: document.dryRun,
-                writePolicy: try document.writePolicy(sessionID: sessionID),
-                forceFileEdit: document.forceFileEdit,
-                client: try document.agentClient(sessionID: sessionID)
+                spline: spline
             )
-            try CLIOutput.write(response: response, asJSON: document.json)
         }
     }
 

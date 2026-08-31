@@ -2,13 +2,13 @@ import ArgumentParser
 import Foundation
 import RupaAutomation
 
-public struct BatchCommand: ParsableCommand {
+public struct BatchCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "batch",
         abstract: """
         Apply an AutomationBatch JSON file to a file or live document. Batch \
         execution is atomic: file mode saves only after every command succeeds, \
-        and live/auto mode dispatches one app-session transaction that rolls \
+        and live mode dispatches one app-session transaction that rolls \
         back document, selection, and undo history on failure.
         """
     )
@@ -21,20 +21,17 @@ public struct BatchCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
+    public func run() async throws {
         let sessionID = try document.resolvedSessionID()
-        try validateDryRunTarget(sessionID: sessionID)
         let batch = try decodedBatch()
 
-        try CLIExitCode.run {
-            let response = try CLIService().runBatch(
+        try await CLIExitCode.run {
+            let response = try await CLIService().runBatch(
                 target: try document.target(sessionID: sessionID),
                 batch: batch,
                 mode: document.mode,
                 dryRun: document.dryRun,
-                writePolicy: try document.writePolicy(sessionID: sessionID),
-                forceFileEdit: document.forceFileEdit,
-                client: try document.agentClient(sessionID: sessionID)
+                writePolicy: try document.writePolicy(sessionID: sessionID)
             )
             try CLIOutput.write(response: response, asJSON: document.json)
         }
@@ -59,13 +56,5 @@ public struct BatchCommand: ParsableCommand {
             expectedWorkspaceRevision: document.workspaceRevision()
                 ?? decoded.expectedWorkspaceRevision
         )
-    }
-
-    private func validateDryRunTarget(sessionID: UUID?) throws {
-        guard document.dryRun,
-              (document.mode == .live || sessionID != nil) else {
-            return
-        }
-        throw ValidationError("Dry-run is not supported for live document mutation.")
     }
 }

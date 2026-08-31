@@ -2,7 +2,7 @@ import ArgumentParser
 import Foundation
 import RupaCore
 
-public struct DimensionSetSelectionCommand: ParsableCommand {
+public struct DimensionSetSelectionCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "set-selection",
         abstract: "Set the target value of one persistent selection dimension by SelectionDimensionID."
@@ -28,34 +28,25 @@ public struct DimensionSetSelectionCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        let sessionID = try document.resolvedSessionID()
+    public func run() async throws {
         let id = try CLISelectionDimensionReferenceParser.dimensionID(
             dimensionID,
             valueName: "SelectionDimensionID"
         )
 
-        try CLIExitCode.run {
-            let targetExpression = try expression(sessionID: sessionID)
-            let response = try CLIService().setSelectionDimensionTarget(
-                target: try document.target(sessionID: sessionID),
+        try await CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let targetExpression = try await expression(sessionID: sessionID)
+            return .setSelectionDimensionTarget(
                 id: id,
-                targetValue: targetExpression,
-                mode: document.mode,
-                expectedGeneration: document.generation(),
-                dryRun: document.dryRun,
-                writePolicy: try document.writePolicy(sessionID: sessionID),
-                forceFileEdit: document.forceFileEdit,
-                client: try document.agentClient(sessionID: sessionID)
+                target: targetExpression
             )
-            try CLIOutput.write(response: response, asJSON: document.json)
         }
     }
 
-    private func expression(sessionID: UUID?) throws -> CADExpression {
+    private func expression(sessionID: UUID?) async throws -> CADExpression {
         switch kind {
         case .distance:
-            let resolvedLengthUnit = try CLILengthUnitResolver.resolve(
+            let resolvedLengthUnit = try await CLILengthUnitResolver.resolve(
                 unit: lengthUnit,
                 document: document,
                 sessionID: sessionID

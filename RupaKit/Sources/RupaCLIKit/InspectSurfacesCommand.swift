@@ -3,7 +3,7 @@ import RupaCore
 
 extension SurfaceAnalysisSampleDensity: ExpressibleByArgument {}
 
-public struct InspectSurfacesCommand: ParsableCommand {
+public struct InspectSurfacesCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "surfaces",
         abstract: "Return B-spline surface samples, curvature combs, and trim-boundary analysis."
@@ -17,17 +17,22 @@ public struct InspectSurfacesCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
+    public func run() async throws {
         let id = try options.resolvedSessionID()
 
-        try CLIExitCode.run {
-            let response = try CLIService().surfaceAnalysis(
+        try await CLIExitCode.run {
+            let envelope = try await CLIService().read(
                 target: options.target(sessionID: id),
-                options: SurfaceAnalysisOptions(sampleDensity: sampleDensity),
                 mode: options.mode,
-                expectedGeneration: options.generation(),
-                client: try options.agentClient(sessionID: id)
-            )
+                expectedGeneration: options.generation()
+            ) { sessionID in
+                .surfaceAnalysis(
+                    sessionID: sessionID,
+                    options: SurfaceAnalysisOptions(sampleDensity: sampleDensity),
+                    expectedGeneration: options.generation()
+                )
+            }
+            let response = try CLIResponseProjector.surfaces(envelope)
             try CLIOutput.write(response: response, asJSON: options.json)
         }
     }

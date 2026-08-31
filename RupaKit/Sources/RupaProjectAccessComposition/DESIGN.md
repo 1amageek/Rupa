@@ -7,9 +7,10 @@ transport-neutral [`RupaProjectAccess`](../RupaProjectAccess/DESIGN.md)
 contract. It is a child of the [RupaKit package design](../../DESIGN.md) and a
 sibling of `RupaProjectAccess`, `RupaAgentRuntime`, and `RupaKit`.
 
-This module owns the bounded lifetime of one closed `.rupa` access session and
-retains the platform-owned file authority lease that protects its input and explicit output paths. It
-also owns the live access adapter that attaches to an App-owned session through
+This module owns one exact target router plus the bounded lifetime of one
+closed `.rupa` access session and retains the platform-owned file authority
+lease that protects its input and explicit output paths. It also owns the live
+access adapter that attaches to an App-owned session through
 an injected endpoint, and launches the App only for a `liveProject` target. It
 does not own an App workspace, App lifecycle, CLI parser, semantic compiler,
 CAD operation vocabulary, package writer, or project authority. Loading and
@@ -41,8 +42,13 @@ This module owns:
   without a default-application, shell, or UI automation fallback;
 - canonical live-session resolution through the Agent `sessions` observation
   request;
+- live capability discovery through the Agent `capabilities` observation
+  request;
 - live request and explicit-save dispatch through one injected Agent endpoint,
   including terminal uncertain-outcome mapping.
+- exact target routing through `DefaultProjectAccess`: live targets use only
+  the live adapter, closed targets use only the closed adapter, and
+  observations use only the live observer.
 
 It does not own:
 
@@ -59,7 +65,7 @@ It does not own:
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [RupaKit package](../../DESIGN.md) | parent | dependency direction and one project authority | Indexes this composition as the concrete access adapter. | Do not move authority into this module. |
-| [RupaProjectAccess](../RupaProjectAccess/DESIGN.md) | depends on | target/session/open/save/finish contract | Defines the caller-facing access protocol and typed target failures. | This module implements the protocol; it does not change its DTOs. |
+| [RupaProjectAccess](../RupaProjectAccess/DESIGN.md) | depends on | target/observation/session/open/save/finish contract | Defines the caller-facing access protocol and typed target failures. | This module implements the protocol; it does not change its DTOs. |
 | [RupaAgentRuntime](../RupaAgentRuntime/DESIGN.md) | depends on | registered-workspace request handling | Supplies `ProjectAgentCommandController` and its existing request route. | Do not duplicate its command switch or bypass its registry. |
 | [RupaKit integration](../RupaKit/DESIGN.md) | depends on | public `DefaultProjectWorkspaceFactory` and `ProjectWorkspace` load/save | Composes a temporary workspace and delegates project lifecycle operations. | No direct `ProjectController` or package dependency is allowed here. |
 | [RupaProjectAccessPlatform](../RupaProjectAccessPlatform/DESIGN.md) | depends on | product endpoint coordinates and file-authority lease | Supplies shared App/CLI Darwin coordination without pulling workspace composition into the App. | This module must not duplicate product constants or lock mechanics. |
@@ -72,7 +78,11 @@ It does not own:
 
 ```mermaid
 flowchart LR
-    LiveTarget["liveProject(URL)"] --> LiveOpen["LiveProjectAccessOpening"]
+    Caller["CLI / future adapter"] --> Router["DefaultProjectAccess"]
+    Router --> LiveTarget["liveProject / liveSession"]
+    Router --> Target["closedProject(input, output)"]
+    Router --> Observation["capabilities / status / sessions"]
+    LiveTarget --> LiveOpen["LiveProjectAccessOpening"]
     LiveOpen --> Launcher["Injected App launcher"]
     Launcher --> Resolver["Live session resolver"]
     Resolver --> LiveClient["AgentClient\n(injected endpoint)"]
@@ -81,7 +91,7 @@ flowchart LR
     LiveSession["LiveProjectAccessSession"] --> LiveClient
     LiveSession --> LiveWorkspace
     Platform["RupaProjectAccessPlatform\nendpoint + file lease"] --> LiveClient
-    Target["closedProject(input, output)"] --> Open["ClosedProjectAccessOpening"]
+    Target --> Open["ClosedProjectAccessOpening"]
     Open --> Lease["File authority lease\ncanonical paths + open-description locks"]
     Lease --> Factory["ProjectWorkspaceMaking"]
     Factory -. production .-> DefaultFactory["DefaultProjectWorkspaceFactory"]
@@ -89,7 +99,8 @@ flowchart LR
     Workspace --> Controller["ProjectController\nowned by RupaProject"]
     Open --> Handler["ProjectAgentCommandController"]
     Handler --> Workspace
-    Caller["CLI / future adapter"] --> Session["ClosedProjectAccessSession"]
+    Observation --> LiveOpen
+    Caller --> Session["ProjectAccessSession"]
     Session --> Handler
     Session -->|explicit save only| Workspace
     Workspace --> Package["schema-v3 .rupa\natomic ProjectPackageStore"]
@@ -189,8 +200,9 @@ per-command socket path.
     dirty different project is a typed rejection; it is never replaced or
     handled through the closed-file adapter.
 14. `liveSession(UUID)` resolves only an already registered session and never
-    launches or restores the application. Status and sessions observation
-    requests use the same injected endpoint without opening an application.
+    launches or restores the application. Capabilities, status, and sessions
+    observation requests use the same injected endpoint without opening an
+    application.
 15. A live session forwards requests to the App's registered workspace and
     controller through the Agent router. It validates the session ID before
     dispatch, retains the caller's single monotonic deadline, and exposes
@@ -204,6 +216,13 @@ per-command socket path.
     already accepted access operations, and then detaches only the access
     adapter. It does not close, unload, or mutate the App-owned document or
     workspace.
+18. `DefaultProjectAccess` validates the explicit target before opener
+    selection and then performs one exhaustive dispatch. A live target is
+    never passed to the closed opener, a closed target is never passed to the
+    live opener, and a failure from the selected implementation is returned
+    without retry or fallback. `status` and `sessions` delegate only to the
+    injected live observer and therefore never launch the App or create a
+    closed workspace.
 
 ## Runtime Flows
 
@@ -346,7 +365,7 @@ prove:
   project URL, error domain, error code, and error message in a typed launch
   failure, and applies the same absolute deadline while the completion is
   pending;
-- `liveSession` and live status/sessions observation never launch the App;
+- `liveSession` and live capabilities/status/sessions observation never launch the App;
 - live requests and explicit save use one endpoint, one monotonic deadline,
   and one registered App workspace; session mismatch and finished-session
   guards fail before dispatch;
@@ -355,7 +374,7 @@ prove:
 - live `finish` waits for accepted access work, rejects later work, and leaves
   the App session registered and its document open.
 
-Changes to target/session semantics require rechecking
+Changes to target routing, observation, or session semantics require rechecking
 [`RupaProjectAccess`](../RupaProjectAccess/DESIGN.md), the runtime handler,
 `ProjectWorkspace` load/save contracts, the package design, and the system
 live/file access workflow.

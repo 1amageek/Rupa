@@ -1,7 +1,7 @@
 import ArgumentParser
 import RupaCore
 
-public struct RevolveModelCommand: ParsableCommand {
+public struct RevolveModelCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "revolve",
         abstract: "Revolve an existing closed sketch profile around an explicit 3D axis."
@@ -48,30 +48,20 @@ public struct RevolveModelCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        let sessionID = try document.resolvedSessionID()
-
-        try CLIExitCode.run {
-            let lengthUnit = try CLILengthUnitResolver.resolve(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try await CLILengthUnitResolver.resolve(
                 unitName: axisUnit,
                 document: document,
                 sessionID: sessionID
             )
             let input = try revolveInput(axisUnit: lengthUnit)
-            let response = try CLIService().createRevolve(
-                target: try document.target(sessionID: sessionID),
+            return .createRevolve(
                 name: name,
                 profile: input.profile,
                 axis: input.axis,
-                angle: input.angle,
-                mode: document.mode,
-                expectedGeneration: document.generation(),
-                dryRun: document.dryRun,
-                writePolicy: try document.writePolicy(sessionID: sessionID),
-                forceFileEdit: document.forceFileEdit,
-                client: try document.agentClient(sessionID: sessionID)
+                angle: input.angle
             )
-            try CLIOutput.write(response: response, asJSON: document.json)
         }
     }
 

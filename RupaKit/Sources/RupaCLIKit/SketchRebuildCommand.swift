@@ -3,7 +3,7 @@ import Foundation
 import RupaAutomation
 import RupaCore
 
-public struct SketchRebuildCommand: ParsableCommand {
+public struct SketchRebuildCommand: AsyncParsableCommand {
     public enum Method: String, ExpressibleByArgument, Sendable {
         case points
         case refit
@@ -47,16 +47,16 @@ public struct SketchRebuildCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(document: document) { sessionID in
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(document: document) { sessionID in
             return .rebuildSketchCurve(
                 target: try selection.decodedTarget(),
-                options: try rebuildOptions(sessionID: sessionID)
+                options: try await rebuildOptions(sessionID: sessionID)
             )
         }
     }
 
-    private func rebuildOptions(sessionID: UUID?) throws -> CurveRebuildOptions {
+    private func rebuildOptions(sessionID: UUID?) async throws -> CurveRebuildOptions {
         switch method {
         case .points:
             guard let controlPointCount else {
@@ -67,7 +67,7 @@ public struct SketchRebuildCommand: ParsableCommand {
             guard let tolerance else {
                 throw ValidationError("Refit rebuild requires --tolerance.")
             }
-            let lengthUnit = try CLIAutomationCommandRunner.lengthUnit(
+            let lengthUnit = try await CLIAutomationCommandRunner.lengthUnit(
                 unitName: unit,
                 document: document,
                 sessionID: sessionID

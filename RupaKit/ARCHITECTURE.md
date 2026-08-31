@@ -15,9 +15,11 @@ Package schema v3 and the `ProjectController` source boundary are implemented.
 Application composition selects the verified single `ProjectWorkspace`, shared
 `ProjectWorkspaceOperationSequencer`, and `ProjectController` route for viewport,
 commands, file/history lifecycle, and live Agent access. The CLI closed-file
-mutation path still uses the legacy `DocumentFileService`/`EditorSession` route;
-ACCESS-B/D replace it with `RupaProjectAccess` and a temporary
-`ProjectWorkspace`/`ProjectController`. No schema-v2 compatibility layer remains.
+and live mutation paths use the same `RupaProjectAccess` contract. A single
+executable composition injects live and closed openers into `RupaCLIKit`; every
+command obtains one `ProjectAccessSession`, and only that session can send a
+mutation or perform an explicit save. CLIKit never opens package bytes or
+constructs an `EditorSession`. No schema-v2 compatibility layer remains.
 
 ```mermaid
 flowchart LR
@@ -112,13 +114,15 @@ flowchart LR
     Manufacturing --> Automation
     Manufacturing --> Domain
     Manufacturing --> SwiftCAD
-    CLI[RupaCLIKit] --> Core
+    CLI[RupaCLIKit] --> ProjectAccess
+    CLI --> Core
     CLI --> AgentProtocol
-    CLI --> AgentRuntime
-    CLI --> AgentTransport
     CLI --> Automation
     CLI --> Domain
     CLI --> SwiftCAD
+    Executable[RupaCLI] --> CLI
+    Executable --> AccessComposition[RupaProjectAccessComposition]
+    Executable --> AccessPlatform[RupaProjectAccessPlatform]
 ```
 
 | Area | Owns | Must not own |
@@ -134,14 +138,15 @@ flowchart LR
 | `RupaAutomation` | Stable command vocabulary and command execution bridge | Agent protocol envelopes or view-specific state |
 | `RupaAgentProtocol` | Agent-facing request/response schema, envelopes, codec, transport-neutral request-handler port, session-coordinate projection, capabilities, and protocol summaries | Workspace registry, endpoint state, socket IO, CAD mutation logic |
 | `RupaAgentRuntime` | Main-actor registry of shared `ProjectWorkspace` instances, immutable project snapshot reads, capability/domain dispatch, and Agent request routing through the project-operation boundary | Independent editor sessions, package/source authority, Unix socket IO, SwiftUI workspace layout |
-| `RupaAgentTransport` | Bounded framed Unix socket IO, listener/client connection ownership, deadlines, injected endpoint and peer-authorization contracts, and transitional socket path/address utilities | Agent command semantics, semantic endpoint status, or CAD mutation logic |
+| `RupaAgentTransport` | Bounded framed Unix socket IO, listener/client connection ownership, deadlines, and injected endpoint and peer-authorization contracts | Product endpoint placement, Agent command semantics, semantic endpoint status, or CAD mutation logic |
 | `RupaProjectAccess` | Transport-neutral live/closed target, session, explicit-save, finish, monotonic-open, and typed access-failure contracts | Workspace/controller construction, package bytes, socket IO, App lifecycle, or CLI parsing |
 | `RupaAgent` | Compatibility facade that re-exports protocol, runtime, and transport | New implementation ownership |
 | `RupaViewportScene` | Viewport scene data model, scene construction, projection basis, hit policy, identity pick index, and viewport transform utilities | SwiftUI view layout, Metal drawing backend |
 | `RupaRendering` | SwiftUI viewport, drawing backend, interaction geometry, and rendering affordance services | Persistent document mutation |
 | `RupaUI` | SwiftUI workspace state, command panels, inspectors, and project-view presentation | Agent registration, socket/runtime implementation, or Core CAD algorithms |
 | `RupaAgentUI` | Concrete Agent socket-host composition and registration of application-owned `ProjectWorkspace` instances | A second editor/source authority, workspace editing UI, or Agent protocol schema |
-| `RupaCLIKit` | Argument parsing and terminal response formatting; ACCESS-D migration consumer of `RupaProjectAccess` | Product/CAD/Mesh authority or package-entry editing; its current legacy file route is transitional and not an accepted authority boundary |
+| `RupaCLIKit` | Async argument parsing and terminal response formatting through the injected `RupaProjectAccess` opener and observer | Product/CAD/Mesh authority, package-entry editing, transport endpoint selection, or direct session/controller construction |
+| `RupaCLI` | Production composition of the access opener/observer and platform endpoint/authority dependencies for `RupaCLIKit` | Command parsing, project authority, package-entry editing, or a second live/file route |
 
 ## Dependency Rules
 

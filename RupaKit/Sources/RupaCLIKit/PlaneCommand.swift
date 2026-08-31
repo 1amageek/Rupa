@@ -4,7 +4,7 @@ import RupaAutomation
 import RupaCore
 import SwiftCAD
 
-public struct PlaneCommand: ParsableCommand {
+public struct PlaneCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "plane",
         abstract: "Create and manage saved construction planes.",
@@ -22,7 +22,7 @@ public struct PlaneCommand: ParsableCommand {
     public init() {}
 }
 
-public struct PlaneCreateCommand: ParsableCommand {
+public struct PlaneCreateCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "create",
         abstract: "Create a saved construction plane from a standard sketch plane."
@@ -39,27 +39,18 @@ public struct PlaneCreateCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        let id = try document.resolvedSessionID()
-
-        try CLIExitCode.run {
-            let response = try CLIService().createConstructionPlane(
-                target: try document.target(sessionID: id),
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
+            document: document,
+            command: .createConstructionPlane(
                 name: name,
-                plane: plane.sketchPlane,
-                mode: document.mode,
-                expectedGeneration: document.generation(),
-                dryRun: document.dryRun,
-                writePolicy: try document.writePolicy(sessionID: id),
-                forceFileEdit: document.forceFileEdit,
-                client: try document.agentClient(sessionID: id)
+                plane: plane.sketchPlane
             )
-            try CLIOutput.write(response: response, asJSON: document.json)
-        }
+        )
     }
 }
 
-public struct PlaneCreateViewCommand: ParsableCommand {
+public struct PlaneCreateViewCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "create-view",
         abstract: "Create a saved construction plane from an origin and view normal."
@@ -94,8 +85,7 @@ public struct PlaneCreateViewCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        let id = try document.resolvedSessionID()
+    public func run() async throws {
         let origin = Point3D(
             x: unit.meters(from: originX),
             y: unit.meters(from: originY),
@@ -107,25 +97,18 @@ public struct PlaneCreateViewCommand: ParsableCommand {
             z: normalZ
         )
 
-        try CLIExitCode.run {
-            let response = try CLIService().createViewAlignedConstructionPlane(
-                target: try document.target(sessionID: id),
+        try await CLIAutomationCommandRunner.run(
+            document: document,
+            command: .createViewAlignedConstructionPlane(
                 name: name,
                 origin: origin,
-                viewNormal: viewNormal,
-                mode: document.mode,
-                expectedGeneration: document.generation(),
-                dryRun: document.dryRun,
-                writePolicy: try document.writePolicy(sessionID: id),
-                forceFileEdit: document.forceFileEdit,
-                client: try document.agentClient(sessionID: id)
+                viewNormal: viewNormal
             )
-            try CLIOutput.write(response: response, asJSON: document.json)
-        }
+        )
     }
 }
 
-public struct PlaneCreateTargetCommand: ParsableCommand {
+public struct PlaneCreateTargetCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "create-target",
         abstract: "Create a saved construction plane aligned to one selection target."
@@ -142,8 +125,8 @@ public struct PlaneCreateTargetCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .createConstructionPlaneFromTarget(
                 name: name,
@@ -153,7 +136,7 @@ public struct PlaneCreateTargetCommand: ParsableCommand {
     }
 }
 
-public struct PlaneCreateTargetsCommand: ParsableCommand {
+public struct PlaneCreateTargetsCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "create-targets",
         abstract: "Create a saved construction plane from multiple selection targets."
@@ -179,8 +162,8 @@ public struct PlaneCreateTargetsCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .createConstructionPlaneFromTargets(
                 name: name,
@@ -204,7 +187,7 @@ public struct PlaneCreateTargetsCommand: ParsableCommand {
     }
 }
 
-public struct PlaneSetActiveCommand: ParsableCommand {
+public struct PlaneSetActiveCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "set-active",
         abstract: "Set or clear the active saved construction plane."
@@ -221,30 +204,19 @@ public struct PlaneSetActiveCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
+    public func run() async throws {
         guard (id != nil) != clear else {
             throw ValidationError("Provide exactly one of --id or --clear.")
         }
-        let sessionID = try document.resolvedSessionID()
         let planeID = try CLIConstructionPlaneIDParser.optionalID(id)
-
-        try CLIExitCode.run {
-            let response = try CLIService().setActiveConstructionPlane(
-                target: try document.target(sessionID: sessionID),
-                id: planeID,
-                mode: document.mode,
-                expectedGeneration: document.generation(),
-                dryRun: document.dryRun,
-                writePolicy: try document.writePolicy(sessionID: sessionID),
-                forceFileEdit: document.forceFileEdit,
-                client: try document.agentClient(sessionID: sessionID)
-            )
-            try CLIOutput.write(response: response, asJSON: document.json)
-        }
+        try await CLIAutomationCommandRunner.run(
+            document: document,
+            command: .setActiveConstructionPlane(id: planeID)
+        )
     }
 }
 
-public struct PlaneRenameCommand: ParsableCommand {
+public struct PlaneRenameCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "rename",
         abstract: "Rename a saved construction plane."
@@ -261,24 +233,15 @@ public struct PlaneRenameCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        let sessionID = try document.resolvedSessionID()
+    public func run() async throws {
         let planeID = try CLIConstructionPlaneIDParser.id(id)
-
-        try CLIExitCode.run {
-            let response = try CLIService().renameConstructionPlane(
-                target: try document.target(sessionID: sessionID),
+        try await CLIAutomationCommandRunner.run(
+            document: document,
+            command: .renameConstructionPlane(
                 id: planeID,
-                name: name,
-                mode: document.mode,
-                expectedGeneration: document.generation(),
-                dryRun: document.dryRun,
-                writePolicy: try document.writePolicy(sessionID: sessionID),
-                forceFileEdit: document.forceFileEdit,
-                client: try document.agentClient(sessionID: sessionID)
+                name: name
             )
-            try CLIOutput.write(response: response, asJSON: document.json)
-        }
+        )
     }
 }
 

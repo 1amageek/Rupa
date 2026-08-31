@@ -2,7 +2,7 @@ import ArgumentParser
 import RupaAutomation
 import RupaCore
 
-public struct SketchOffsetCommand: ParsableCommand {
+public struct SketchOffsetCommand: AsyncParsableCommand {
     public enum VertexHandle: String, ExpressibleByArgument, Sendable {
         case lineStart
         case lineEnd
@@ -48,9 +48,9 @@ public struct SketchOffsetCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(document: document) { sessionID in
-            let lengthUnit = try CLIAutomationCommandRunner.lengthUnit(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try await CLIAutomationCommandRunner.lengthUnit(
                 unitName: unit,
                 document: document,
                 sessionID: sessionID

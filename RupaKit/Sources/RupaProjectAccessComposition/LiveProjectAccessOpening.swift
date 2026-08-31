@@ -5,7 +5,7 @@ import RupaProjectAccess
 
 /// Opens an existing App-owned session or launches the App for one project URL.
 @MainActor
-public final class LiveProjectAccessOpening: ProjectAccessOpening, LiveProjectAccessObserving {
+public final class LiveProjectAccessOpening: ProjectAccessOpening, ProjectAccessObserving {
     private let endpoint: UnixSocketEndpoint?
     private let launcher: any LiveProjectApplicationLaunching
     private let requestTimeout: Duration
@@ -110,6 +110,13 @@ public final class LiveProjectAccessOpening: ProjectAccessOpening, LiveProjectAc
     ) async throws -> AgentStatus {
         let resolver = try makeResolver()
         return try await resolver.status(deadline: deadline)
+    }
+
+    public func capabilities(
+        deadline: ContinuousClock.Instant
+    ) async throws -> [AgentCapabilityDescriptor] {
+        let resolver = try makeResolver()
+        return try await resolver.capabilities(deadline: deadline)
     }
 
     public func sessions(

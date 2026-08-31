@@ -93,7 +93,7 @@ incorrect development contract.
 Before a conformance manifest is released, that manifest must freeze and document
 the following independently:
 
-- `.swcad` package schema compatibility;
+- `.rupa` package schema compatibility;
 - public Agent and CLI protocol compatibility;
 - domain semantic namespace compatibility;
 - import and export format fidelity;

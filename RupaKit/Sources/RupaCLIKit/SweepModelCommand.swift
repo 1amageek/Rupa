@@ -1,7 +1,7 @@
 import ArgumentParser
 import RupaCore
 
-public struct SweepModelCommand: ParsableCommand {
+public struct SweepModelCommand: AsyncParsableCommand {
     public enum Alignment: String, ExpressibleByArgument, Sendable {
         case parallel
         case normal
@@ -148,28 +148,19 @@ public struct SweepModelCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        let sessionID = try document.resolvedSessionID()
+    public func run() async throws {
         let input = try sweepInput()
-
-        try CLIExitCode.run {
-            let response = try CLIService().createSweep(
-                target: try document.target(sessionID: sessionID),
+        try await CLIAutomationCommandRunner.run(
+            document: document,
+            command: .createSweep(
                 name: name,
                 sections: input.sections,
                 path: input.path,
                 guides: input.guides,
                 targets: input.targets,
-                options: input.options,
-                mode: document.mode,
-                expectedGeneration: document.generation(),
-                dryRun: document.dryRun,
-                writePolicy: try document.writePolicy(sessionID: sessionID),
-                forceFileEdit: document.forceFileEdit,
-                client: try document.agentClient(sessionID: sessionID)
+                options: input.options
             )
-            try CLIOutput.write(response: response, asJSON: document.json)
-        }
+        )
     }
 
     private func sweepInput() throws -> (

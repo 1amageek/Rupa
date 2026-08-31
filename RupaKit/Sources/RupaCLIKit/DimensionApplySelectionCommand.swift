@@ -1,7 +1,7 @@
 import ArgumentParser
 import RupaCore
 
-public struct DimensionApplySelectionCommand: ParsableCommand {
+public struct DimensionApplySelectionCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "apply-selection",
         abstract: "Apply one persistent selection dimension target to supported source length, point-distance including arc endpoints and spline control points, radius, angle, or generated opposing face-pair geometry by SelectionDimensionID."
@@ -15,25 +15,15 @@ public struct DimensionApplySelectionCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        let sessionID = try document.resolvedSessionID()
+    public func run() async throws {
         let id = try CLISelectionDimensionReferenceParser.dimensionID(
             dimensionID,
             valueName: "SelectionDimensionID"
         )
 
-        try CLIExitCode.run {
-            let response = try CLIService().applySelectionDimensionTarget(
-                target: try document.target(sessionID: sessionID),
-                id: id,
-                mode: document.mode,
-                expectedGeneration: document.generation(),
-                dryRun: document.dryRun,
-                writePolicy: try document.writePolicy(sessionID: sessionID),
-                forceFileEdit: document.forceFileEdit,
-                client: try document.agentClient(sessionID: sessionID)
-            )
-            try CLIOutput.write(response: response, asJSON: document.json)
-        }
+        try await CLIAutomationCommandRunner.run(
+            document: document,
+            command: .applySelectionDimensionTarget(id: id)
+        )
     }
 }

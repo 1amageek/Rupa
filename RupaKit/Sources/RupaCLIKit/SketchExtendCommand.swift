@@ -2,7 +2,7 @@ import ArgumentParser
 import RupaAutomation
 import RupaCore
 
-public struct SketchExtendCommand: ParsableCommand {
+public struct SketchExtendCommand: AsyncParsableCommand {
     public enum Shape: String, ExpressibleByArgument, Sendable {
         case natural
         case linear
@@ -48,9 +48,9 @@ public struct SketchExtendCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(document: document) { sessionID in
-            let lengthUnit = try CLIAutomationCommandRunner.lengthUnit(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try await CLIAutomationCommandRunner.lengthUnit(
                 unitName: unit,
                 document: document,
                 sessionID: sessionID

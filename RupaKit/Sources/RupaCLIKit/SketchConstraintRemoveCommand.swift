@@ -2,7 +2,7 @@ import ArgumentParser
 import RupaAutomation
 import RupaCore
 
-public struct SketchConstraintRemoveCommand: ParsableCommand {
+public struct SketchConstraintRemoveCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "constraint-remove",
         abstract: "Remove one existing SketchConstraint from a sketch feature."
@@ -19,14 +19,14 @@ public struct SketchConstraintRemoveCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
+    public func run() async throws {
         let parsedFeatureID = try CLIFeatureReferenceParser.featureID(
             featureID,
             valueName: "Sketch feature ID"
         )
         let parsedConstraint = try constraintInput.decodedConstraint()
 
-        try CLIAutomationCommandRunner.run(
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .removeSketchConstraint(
                 featureID: parsedFeatureID,

@@ -20,7 +20,7 @@ feature claims.
 | Transaction authority | `DOMAIN_TRANSACTION_CONTRACT.md` |
 | State/project authority | `STATE_AND_PROJECT_CONTRACT.md` |
 | Package authority | `DOCUMENT_PACKAGE_CONTRACT.md` |
-| Completion rule | A workflow is complete only when the same `.swcad` document can pass source, command, evaluation, selection, UI, Agent/CLI, export or handoff, diagnostics, performance, and test gates. |
+| Completion rule | A workflow is complete only when the same schema-v3 `.rupa` project can pass source, command, evaluation, selection, UI, Agent/CLI, export or handoff, diagnostics, performance, and test gates through the single `ProjectWorkspace` → `ProjectController` authority path. Legacy native project formats are rejected. |
 
 ## Why This Exists
 
@@ -80,7 +80,7 @@ flowchart TD
 | Layer | Owns | Must not own |
 |---|---|---|
 | Swift-CAD | Geometry source, B-rep, mesh, topology naming, exact evaluation, exchange primitives. | Rupa UI, Agent transport, concrete domains, product workflow policy. |
-| RupaCore | `.swcad` document, command stack, undo/redo, scene metadata, product metadata, generic validation and summaries. | Domain-specific semantic rules or solver-specific assumptions. |
+| RupaCore | `.rupa` Product/CAD/Mesh project source, command stack, undo/redo, scene metadata, product metadata, generic validation and summaries. | Domain-specific semantic rules or solver-specific assumptions. |
 | RupaDomainFoundation | Registry contracts, domain capability descriptors, payload decoding, lowering, validation, projection repair, simulation adapter protocols. | Concrete domain behavior or stored document truth. |
 | Concrete domains | Architecture, manufacturing, turbomachinery, character, and simulation semantics, validators, generators, and adapters. | Forked document types, bypassed command paths, or lower-layer imports. |
 | RupaProject | Session ordering, artifact/decision stores, export/job prepare-commit, shared application use cases. | Geometry/domain semantics or transport encoding. |
@@ -110,7 +110,7 @@ materials, exact inspection, and neutral CAD/drawing exchange.
 
 | Evidence | Required proof |
 |---|---|
-| Acceptance document | A `.swcad` fixture containing parameters, sketches, construction planes, solids, material, saved views, and neutral exchange presets. |
+| Acceptance document | A schema-v3 `.rupa` fixture containing parameters, sketches, construction planes, solids, material, saved views, and neutral exchange presets. |
 | Mutation proof | The fixture can be edited through UI, Agent live mode, and CLI file mode without source drift. |
 | Export proof | STEP and declared drawing outputs either succeed with fidelity reports or fail with typed unsupported diagnostics. |
 | Regression proof | Focused tests cover both successful and rejected feature cases. |
@@ -139,7 +139,7 @@ manufacturing process without treating unsupported analysis as success.
 
 | Evidence | Required proof |
 |---|---|
-| Acceptance document | Versioned `.swcad` enclosure fixture with mating parts, wall/clearance features, materials, build frame, process/machine settings, policy, and export presets. |
+| Acceptance document | Versioned schema-v3 `.rupa` enclosure fixture with mating parts, wall/clearance features, materials, build frame, process/machine settings, policy, and export presets. |
 | Policy proof | Passed, failed, inconclusive, unsupported, stale, insufficient-evidence, allowed, blocked, authorized override, and revoked-decision cases. |
 | Artifact proof | Regions resolve only against the exact analyzed mesh; prepared and published output fingerprints match. |
 | Adapter proof | UI, CLI, and Agent return the same findings, policy result, and publication identity. |
@@ -168,7 +168,7 @@ drawings, schedules, validation, and exchange.
 
 | Evidence | Required proof |
 |---|---|
-| Acceptance document | A `.swcad` fixture with site, one level, rooms, walls, openings, roof, dimensions, drawing views, schedules, and export presets. |
+| Acceptance document | A schema-v3 `.rupa` fixture with site, one level, rooms, walls, openings, roof, dimensions, drawing views, schedules, and export presets. |
 | Ownership proof | Direct edits on domain-owned wall/opening geometry route to architecture commands or fail with ownership diagnostics. |
 | Drawing proof | Plan/section/elevation style outputs are generated from saved views and semantic references, not screenshots. |
 | Exchange proof | IFC/DXF/PDF outputs include mapping reports and unsupported-feature diagnostics. |
@@ -197,7 +197,7 @@ manufacturing constraints, and simulation handoff.
 
 | Evidence | Required proof |
 |---|---|
-| Acceptance document | A `.swcad` fixture with airfoil sections, blade/duct geometry, surface continuity checks, boundary tags, and solver handoff settings. |
+| Acceptance document | A schema-v3 `.rupa` fixture with airfoil sections, blade/duct geometry, surface continuity checks, boundary tags, and solver handoff settings. |
 | Continuity proof | Curvature and continuity diagnostics are queryable by UI and Agent for the same references. |
 | Handoff proof | Solver input can be regenerated from the same dependency identity and invalidates when any declared source, configuration, or consumed artifact changes. |
 
@@ -224,7 +224,7 @@ retaining CAD-style source editability.
 
 | Evidence | Required proof |
 |---|---|
-| Acceptance document | A `.swcad` fixture with hierarchy, pivots, materials, mesh/surface geometry, validation settings, and export presets. |
+| Acceptance document | A schema-v3 `.rupa` fixture with hierarchy, pivots, materials, mesh/surface geometry, validation settings, and export presets. |
 | Exchange proof | DCC export reports include hierarchy/material/unit/UV/normal diagnostics and unsupported-feature notes. |
 | Agent proof | Agent can inspect and fix validation issues through structured operations or receive typed rejections. |
 
@@ -251,7 +251,7 @@ manual source edits and without bypassing product safety rules.
 
 | Evidence | Required proof |
 |---|---|
-| Acceptance document | A `.swcad` fixture with at least one source-owned variant family and export presets. |
+| Acceptance document | A schema-v3 `.rupa` fixture with at least one source-owned variant family and export presets. |
 | Safety proof | A failed variant batch publishes no source/workspace change and no project artifact; prior source, workspace, history, and artifacts remain unchanged. |
 | Readback proof | Agent and CLI can report the same variant diff and validation result. |
 

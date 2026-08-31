@@ -1,7 +1,7 @@
 import ArgumentParser
 import RupaAutomation
 
-public struct SketchInsertControlPointCommand: ParsableCommand {
+public struct SketchInsertControlPointCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "insert-control-point",
         abstract: "Insert a source spline control point at a scalar fraction."
@@ -18,8 +18,8 @@ public struct SketchInsertControlPointCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .insertSketchSplineControlPoint(
                 target: selection.decodedTarget(),

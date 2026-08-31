@@ -1,6 +1,7 @@
 import ArgumentParser
 import Foundation
 import RupaCore
+import RupaProjectAccess
 
 public enum CLIExitCode: Int32, Codable, Equatable, Sendable {
     case success = 0
@@ -16,6 +17,27 @@ public enum CLIExitCode: Int32, Codable, Equatable, Sendable {
         }
         if error is CLICommittedMutationError {
             return .data
+        }
+        if let error = error as? ProjectAccessError {
+            switch error {
+            case .invalidTarget,
+                 .unsupportedProjectFormat:
+                return .usage
+            case .sessionMismatch,
+                 .outcomeUnknown,
+                 .fileAuthorityConflict,
+                 .fileAuthorityLost,
+                 .committedMutation:
+                return .data
+            case .saveUnavailable:
+                return .inputOutput
+            case .sessionUnavailable,
+                 .deadlineExceeded,
+                 .authorityUnavailable:
+                return .unavailable
+            case .finished:
+                return .software
+            }
         }
 
         guard let error = error as? EditorError else {
@@ -53,9 +75,9 @@ public enum CLIExitCode: Int32, Codable, Equatable, Sendable {
         ExitCode(value(for: error).rawValue)
     }
 
-    public static func run(_ body: () throws -> Void) throws {
+    public static func run(_ body: () async throws -> Void) async throws {
         do {
-            try body()
+            try await CLIProjectAccessRunner.withCommandScope(body)
         } catch {
             writeError(error)
             throw exitCode(for: error)

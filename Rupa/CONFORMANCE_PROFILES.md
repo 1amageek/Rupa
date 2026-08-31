@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Rupa has one product vision and one `.swcad` document model, but it has several
+Rupa has one product vision and one `.rupa` document model, but it has several
 independently testable expert workflows. This file is a human catalog. A release
 claim exists only as a versioned machine-readable manifest governed by
 `CONFORMANCE_MANIFEST_CONTRACT.md`.

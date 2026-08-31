@@ -1,6 +1,6 @@
 import ArgumentParser
 
-public struct AutomationCommandGroup: ParsableCommand {
+public struct AutomationCommandGroup: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "command",
         abstract: "Apply typed AutomationCommand payloads.",

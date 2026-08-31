@@ -1,7 +1,7 @@
 import ArgumentParser
 import RupaAutomation
 
-public struct ApplyAutomationCommand: ParsableCommand {
+public struct ApplyAutomationCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "apply",
         abstract: "Apply one AutomationCommand JSON payload to a file or live document."
@@ -18,26 +18,16 @@ public struct ApplyAutomationCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        let sessionID = try document.resolvedSessionID()
+    public func run() async throws {
         let automationCommand: AutomationCommand = try CLISelectionInputParser.decodeSingleSelectionInput(
             inlinePayload: command,
             filePath: commandFile,
             valueName: "AutomationCommand"
         )
 
-        try CLIExitCode.run {
-            let response = try CLIService().applyAutomationCommand(
-                target: try document.target(sessionID: sessionID),
-                command: automationCommand,
-                mode: document.mode,
-                expectedGeneration: document.generation(),
-                dryRun: document.dryRun,
-                writePolicy: try document.writePolicy(sessionID: sessionID),
-                forceFileEdit: document.forceFileEdit,
-                client: try document.agentClient(sessionID: sessionID)
-            )
-            try CLIOutput.write(response: response, asJSON: document.json)
-        }
+        try await CLIAutomationCommandRunner.run(
+            document: document,
+            command: automationCommand
+        )
     }
 }

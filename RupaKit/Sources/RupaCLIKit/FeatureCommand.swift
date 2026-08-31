@@ -2,7 +2,7 @@ import ArgumentParser
 import RupaAutomation
 import RupaCore
 
-public struct FeatureCommand: ParsableCommand {
+public struct FeatureCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "feature",
         abstract: "Edit CAD feature history state.",
@@ -16,7 +16,7 @@ public struct FeatureCommand: ParsableCommand {
     public init() {}
 }
 
-public struct FeatureSuppressCommand: ParsableCommand {
+public struct FeatureSuppressCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "suppress",
         abstract: "Suppress an existing CAD feature."
@@ -30,8 +30,8 @@ public struct FeatureSuppressCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .setFeatureSuppression(
                 featureID: try CLIFeatureReferenceParser.featureID(feature, valueName: "Feature"),
@@ -41,7 +41,7 @@ public struct FeatureSuppressCommand: ParsableCommand {
     }
 }
 
-public struct FeatureUnsuppressCommand: ParsableCommand {
+public struct FeatureUnsuppressCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "unsuppress",
         abstract: "Unsuppress an existing CAD feature."
@@ -55,8 +55,8 @@ public struct FeatureUnsuppressCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .setFeatureSuppression(
                 featureID: try CLIFeatureReferenceParser.featureID(feature, valueName: "Feature"),

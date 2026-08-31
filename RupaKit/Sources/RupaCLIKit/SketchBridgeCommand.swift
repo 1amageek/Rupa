@@ -23,7 +23,7 @@ public enum CLIBridgeContinuityLevel: String, ExpressibleByArgument, Sendable {
     }
 }
 
-public struct SketchBridgeCommand: ParsableCommand {
+public struct SketchBridgeCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "bridge",
         abstract: "Create a bridge curve in an editable sketch feature."
@@ -61,8 +61,8 @@ public struct SketchBridgeCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .createBridgeCurve(
                 featureID: try CLIFeatureReferenceParser.featureID(
@@ -89,7 +89,7 @@ public struct SketchBridgeCommand: ParsableCommand {
     }
 }
 
-public struct SketchBridgeUpdateCommand: ParsableCommand {
+public struct SketchBridgeUpdateCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "bridge-update",
         abstract: "Update an existing bridge curve source."
@@ -124,7 +124,7 @@ public struct SketchBridgeUpdateCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
+    public func run() async throws {
         let first = try CLIBridgeEndpointInputParser.decodeOptionalEndpoint(
             inlinePayload: firstEndpoint,
             filePath: firstEndpointFile,
@@ -141,7 +141,7 @@ public struct SketchBridgeUpdateCommand: ParsableCommand {
             throw ValidationError("Bridge update requires at least one endpoint or continuity change.")
         }
 
-        try CLIAutomationCommandRunner.run(
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .setBridgeCurveParameters(
                 sourceID: try parsedSourceID(),

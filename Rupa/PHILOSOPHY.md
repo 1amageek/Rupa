@@ -175,7 +175,7 @@ flowchart TD
 |---|---|
 | Unsaved app changes | Route CLI mutations to the open app session. |
 | Undo and redo | Live CLI commands participate where the command declares undo support. |
-| File corruption | Direct file mutation is rejected while the document is open unless explicitly forced by a supported command path. |
+| File corruption | Closed-project access uses the authority lease and rejects conflicts; no direct-file override or implicit mode switch exists. |
 | Stale commands | Generation checks reject commands prepared against old document state. |
 | Diagnostics | The app and CLI receive the same structured result model. |
 

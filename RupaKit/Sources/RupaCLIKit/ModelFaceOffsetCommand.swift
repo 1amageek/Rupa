@@ -2,7 +2,7 @@ import ArgumentParser
 import RupaAutomation
 import RupaCore
 
-public struct ModelFaceOffsetCommand: ParsableCommand {
+public struct ModelFaceOffsetCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "face-offset",
         abstract: "Offset an editable body face from a SelectionTarget."
@@ -22,9 +22,9 @@ public struct ModelFaceOffsetCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(document: document) { sessionID in
-            let lengthUnit = try CLIAutomationCommandRunner.lengthUnit(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try await CLIAutomationCommandRunner.lengthUnit(
                 unitName: unit,
                 document: document,
                 sessionID: sessionID

@@ -1,7 +1,7 @@
 import ArgumentParser
 import RupaCore
 
-public struct InspectSurfaceFramesCommand: ParsableCommand {
+public struct InspectSurfaceFramesCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "surface-frames",
         abstract: "Return UVN local frames for generated B-spline surface face parameters and surface selection references."
@@ -21,7 +21,7 @@ public struct InspectSurfaceFramesCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
+    public func run() async throws {
         let id = try options.resolvedSessionID()
         let queries: [SurfaceFrameQuery] = try CLISelectionInputParser.decodeSelectionInput(
             inlinePayloads: queryPayloads,
@@ -31,14 +31,19 @@ public struct InspectSurfaceFramesCommand: ParsableCommand {
             arrayName: "SurfaceFrameQuery"
         )
 
-        try CLIExitCode.run {
-            let response = try CLIService().surfaceFrames(
+        try await CLIExitCode.run {
+            let envelope = try await CLIService().read(
                 target: options.target(sessionID: id),
-                queries: queries,
                 mode: options.mode,
-                expectedGeneration: options.generation(),
-                client: try options.agentClient(sessionID: id)
-            )
+                expectedGeneration: options.generation()
+            ) { sessionID in
+                .surfaceFrames(
+                    sessionID: sessionID,
+                    queries: queries,
+                    expectedGeneration: options.generation()
+                )
+            }
+            let response = try CLIResponseProjector.surfaceFrames(envelope)
             try CLIOutput.write(response: response, asJSON: options.json)
         }
     }

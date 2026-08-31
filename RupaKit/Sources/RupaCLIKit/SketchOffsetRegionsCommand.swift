@@ -2,7 +2,7 @@ import ArgumentParser
 import RupaAutomation
 import RupaCore
 
-public struct SketchOffsetRegionsCommand: ParsableCommand {
+public struct SketchOffsetRegionsCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "offset-regions",
         abstract: "Offset one or more supported source profile region targets."
@@ -28,9 +28,9 @@ public struct SketchOffsetRegionsCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(document: document) { sessionID in
-            let lengthUnit = try CLIAutomationCommandRunner.lengthUnit(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try await CLIAutomationCommandRunner.lengthUnit(
                 unitName: unit,
                 document: document,
                 sessionID: sessionID

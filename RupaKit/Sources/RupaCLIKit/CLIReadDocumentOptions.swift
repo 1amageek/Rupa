@@ -1,23 +1,19 @@
 import ArgumentParser
 import Foundation
-import RupaAgentTransport
 import RupaCore
 
 public struct CLIReadDocumentOptions: ParsableArguments {
-    @Argument(help: "Path to the .swcad document for file or auto mode.")
+    @Argument(help: "Path to the .rupa project.")
     public var file: String?
 
-    @Option(help: "Edit mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
+    @Option(help: "Access mode: live or file.")
+    public var mode: CLIEditMode = .live
 
     @Option(help: "Open document session UUID for live mode.")
     public var sessionID: String?
 
     @Option(help: "Expected document generation for live mode.")
     public var expectedGeneration: UInt64?
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
 
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
@@ -39,11 +35,4 @@ public struct CLIReadDocumentOptions: ParsableArguments {
         expectedGeneration.map(DocumentGeneration.init)
     }
 
-    public func agentClient(sessionID: UUID?) throws -> AgentClient? {
-        try CLIAgentClientFactory.makeAgentClient(
-            mode: mode,
-            sessionID: sessionID,
-            socket: agentSocket
-        )
-    }
 }

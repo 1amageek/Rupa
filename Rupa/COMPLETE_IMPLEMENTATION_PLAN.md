@@ -28,7 +28,7 @@ as a universal, agent-ready CAD system with specialized domain extensions.
 The long-term Rupa suite targets every workflow below. A named release is
 complete for the profiles it declares in `CONFORMANCE_PROFILES.md`; it does not
 need to pretend every future domain is part of the same release gate. Every
-declared profile still requires complete vertical evidence and uses one `.swcad`
+declared profile still requires complete vertical evidence and uses one schema-v3 `.rupa`
 document without command or document forks.
 
 ```mermaid
@@ -168,7 +168,7 @@ Goal: add domain semantics without compromising universal CAD.
 
 | Area | Required completion |
 |---|---|
-| Core storage | `SemanticExtensionEnvelope` and `ProjectionManifest` round-trip in `.swcad`, preserve unknown namespaces, and validate structurally. |
+| Core storage | `SemanticExtensionEnvelope` and `ProjectionManifest` round-trip in the schema-v3 `.rupa` project, preserve unknown namespaces, and validate structurally. |
 | Registry | Namespace, capability, validator, projection repair, and simulation adapter registries are immutable and injected. |
 | Ownership resolver | Domain-owned, universal-owned, classified, unknown, and stale projections are resolved before edits. |
 | Command lowering | Domain operations lower to universal command batches or explicit domain editor commands through `CommandStack`. |
@@ -276,8 +276,10 @@ called complete.
 
 The implementation backlog is organized by vertical proof, not by isolated
 source files. A milestone is complete only when the acceptance workflow can be
-performed by the UI and by Agent/CLI on the same `.swcad` document with the same
-diagnostics and ownership rules.
+performed by the UI and by Agent/CLI on the same schema-v3 `.rupa` project with
+the same diagnostics and ownership rules. All project changes use the
+`ProjectWorkspace` → `ProjectController` authority path; legacy native project
+formats are outside the production route and are rejected at access validation.
 
 ```mermaid
 flowchart TD
@@ -297,7 +299,7 @@ flowchart TD
 | M2 Interaction and selection | Canvas, Inspector, Browser, command palette, and viewport overlays expose object, face, edge, vertex, curve CV, surface CV, semantic, and analysis references through one selection contract. | Remove UI-local rule duplication, fix intrusive canvas affordances, stabilize hover/snap/gizmo behavior, keep overlay controls compact and non-blocking. | Rendering tests, package UI tests, app build, and final UI workflow tests only after logic is stable. |
 | M3 Agent and CLI parity | Agent and CLI can discover, preflight, execute, dry-run, and query every supported UI operation. | Scalar/choice domain forms and generic registered execution are implemented. Selection-reference/collection/file domain inputs, full live/file safety, rollback evidence, and readback summaries for planning remain. | Agent contract tests, runtime tests, CLI file/live tests, and golden JSON response tests. |
 | M4 Manufacturing and exchange | Manufacturing is a production gate, not a report-only helper. | Typed process catalog, initial angle-limited/surrounding-powder strategies, outcome/fidelity policy, and artifact-bound mesh regions are implemented. Persisted build-frame/process/machine/material settings, orientation-aware support regions, trapped-powder/escape-path analysis, format-specific face-material/process export mapping, shared region resolution, typed quantities, exact-geometry cases, policy override provenance, spatial acceleration, mesh repair diagnostics, USD/GLB mesh-exchange diagnostics, and measured performance budgets remain. STL/3MF/STEP preflight now enforces required material and face-process consistency in addition to current geometry checks. | Printability acceptance case exports only when validators pass or when explicit override policy records risk. |
-| M5 Specialized domains | Architecture, turbomachinery, and character workflows use semantic extensions and projection manifests without forking `.swcad`. | Architecture site/level/wall/opening/room/roof/drawing/export; turbomachinery airfoil/blade/duct/boundary tags; character skeleton/control cage/skin/UV/export readiness. | The single-story house, turbomachinery component, and character/game-asset contracts pass through UI and Agent with projection ownership and repair diagnostics. |
+| M5 Specialized domains | Architecture, turbomachinery, and character workflows use semantic extensions and projection manifests without forking the schema-v3 `.rupa` project. | Architecture site/level/wall/opening/room/roof/drawing/export; turbomachinery airfoil/blade/duct/boundary tags; character skeleton/control cage/skin/UV/export readiness. | The single-story house, turbomachinery component, and character/game-asset contracts pass through UI and Agent with projection ownership and repair diagnostics. |
 | M6 Simulation artifacts | Simulation handoff is reproducible and does not mutate CAD source implicitly. | Solver input manifests, boundary-condition mapping, input hashes, solver/result metadata, stale-result invalidation, result visualization. | CFD/FEA handoff artifact can be regenerated and compared from the same document generation. |
 | M7 Performance and release hardening | Completion is measured against large scenes, large coordinates, dense topology, and large payloads. | Zero-copy geometry paths, streaming exchange, incremental evaluation, cancellable work, benchmark fixtures, recovery tests. | Budgeted benchmark suite and reliability suite pass before release claims. |
 

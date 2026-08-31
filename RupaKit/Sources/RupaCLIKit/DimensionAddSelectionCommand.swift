@@ -2,7 +2,7 @@ import ArgumentParser
 import Foundation
 import RupaCore
 
-public struct DimensionAddSelectionCommand: ParsableCommand {
+public struct DimensionAddSelectionCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "add-selection",
         abstract: "Add a persistent distance or angle dimension between two SelectionTarget values."
@@ -40,26 +40,33 @@ public struct DimensionAddSelectionCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
+    public func run() async throws {
         let sessionID = try document.resolvedSessionID()
         let first = try decodedFirstTarget()
         let second = try decodedSecondTarget()
 
-        try CLIExitCode.run {
-            let targetExpression = try expression(sessionID: sessionID)
-            let response = try CLIService().addSelectionDimension(
+        try await CLIExitCode.run {
+            let targetExpression = try await expression(sessionID: sessionID)
+            let writePolicy = try document.writePolicy(sessionID: sessionID)
+            let execution = try await CLIService().executeAutomationMutationCommand(
+                .addSelectionDimension(
+                    name: name,
+                    kind: kind.selectionDimensionKind,
+                    first: first,
+                    second: second,
+                    target: targetExpression
+                ),
                 target: try document.target(sessionID: sessionID),
-                name: name,
-                kind: kind.selectionDimensionKind,
-                first: first,
-                second: second,
-                targetValue: targetExpression,
                 mode: document.mode,
                 expectedGeneration: document.generation(),
+                expectedWorkspaceRevision: document.workspaceRevision(),
                 dryRun: document.dryRun,
-                writePolicy: try document.writePolicy(sessionID: sessionID),
-                forceFileEdit: document.forceFileEdit,
-                client: try document.agentClient(sessionID: sessionID)
+                writePolicy: writePolicy
+            )
+            let response = CLISelectionDimensionAddResponse(
+                result: execution.result,
+                dirty: execution.dirty,
+                saved: execution.saved
             )
             try CLIOutput.write(response: response, asJSON: document.json)
         }
@@ -81,10 +88,10 @@ public struct DimensionAddSelectionCommand: ParsableCommand {
         )
     }
 
-    private func expression(sessionID: UUID?) throws -> CADExpression {
+    private func expression(sessionID: UUID?) async throws -> CADExpression {
         switch kind {
         case .distance:
-            let resolvedLengthUnit = try CLILengthUnitResolver.resolve(
+            let resolvedLengthUnit = try await CLILengthUnitResolver.resolve(
                 unit: lengthUnit,
                 document: document,
                 sessionID: sessionID

@@ -365,7 +365,7 @@ The `AgentProtocolFixtureFileTests` runner decodes each file directly from disk 
 |---|---|
 | `agent.unavailable` | The automation endpoint is not available. |
 | `agent.connectionFailed` | The client could not connect or response correlation failed. |
-| `document.openInApp` | The requested file cannot be edited through the selected path because it is open in the app. |
+| `document.openInApp` | The selected project authority is already held by the app; callers must use the live access session rather than a direct-file override. |
 | `document.generationMismatch` | `expectedGeneration` did not match the current document generation. |
 | `document.loadFailed` | A document could not be loaded. |
 | `document.saveFailed` | A document could not be saved. |

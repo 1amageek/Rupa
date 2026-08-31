@@ -2,7 +2,7 @@ import ArgumentParser
 import RupaAutomation
 import RupaCore
 
-public struct ModelEdgeFilletCommand: ParsableCommand {
+public struct ModelEdgeFilletCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "edge-fillet",
         abstract: "Fillet editable body edges from SelectionTarget values."
@@ -25,9 +25,9 @@ public struct ModelEdgeFilletCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(document: document) { sessionID in
-            let lengthUnit = try CLIAutomationCommandRunner.lengthUnit(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try await CLIAutomationCommandRunner.lengthUnit(
                 unitName: unit,
                 document: document,
                 sessionID: sessionID

@@ -1,6 +1,6 @@
 import ArgumentParser
 
-public struct InspectSurfaceContinuityCommand: ParsableCommand {
+public struct InspectSurfaceContinuityCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "surface-continuity",
         abstract: "Return generated B-spline surface adjacency and continuity diagnostics."
@@ -11,16 +11,21 @@ public struct InspectSurfaceContinuityCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
+    public func run() async throws {
         let id = try options.resolvedSessionID()
 
-        try CLIExitCode.run {
-            let response = try CLIService().surfaceContinuitySummary(
+        try await CLIExitCode.run {
+            let envelope = try await CLIService().read(
                 target: options.target(sessionID: id),
                 mode: options.mode,
-                expectedGeneration: options.generation(),
-                client: try options.agentClient(sessionID: id)
-            )
+                expectedGeneration: options.generation()
+            ) { sessionID in
+                .surfaceContinuitySummary(
+                    sessionID: sessionID,
+                    expectedGeneration: options.generation()
+                )
+            }
+            let response = try CLIResponseProjector.surfaceContinuity(envelope)
             try CLIOutput.write(response: response, asJSON: options.json)
         }
     }

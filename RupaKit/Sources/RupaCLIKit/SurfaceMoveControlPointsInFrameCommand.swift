@@ -1,16 +1,15 @@
 import ArgumentParser
 import Foundation
-import RupaAgentRuntime
 import RupaCore
 
-public struct SurfaceMoveControlPointsInFrameCommand: ParsableCommand {
+public struct SurfaceMoveControlPointsInFrameCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "move-control-points-in-frame",
         abstract: "Move source-owned surface control points along a resolved UVN surface frame."
     )
 
-    @Argument(help: "Path to the .swcad document for file or auto mode.")
-    public var file: String?
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
 
     @Option(
         name: .customLong("reference"),
@@ -42,72 +41,26 @@ public struct SurfaceMoveControlPointsInFrameCommand: ParsableCommand {
     @Option(help: "Length unit for frame distances. Defaults to the workspace display unit.")
     public var unit: String?
 
-    @Option(help: "Edit mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Flag(help: "Validate the command without saving the changed file.")
-    public var dryRun: Bool = false
-
-    @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
-    public var forceFileEdit: Bool = false
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
-
-    @OptionGroup
-    public var writeDestination: CLIWriteDestinationOptions
-
     public init() {}
 
-    public func run() throws {
-        let id = try CLISelectionInputParser.optionalSessionID(sessionID)
+    public func run() async throws {
         let references = try decodedReferences()
         let resolvedFrameQuery = try decodedFrameQuery()
 
-        try CLIExitCode.run {
-            let writePolicy = try writeDestination.writePolicy(file: file, mode: mode, sessionID: id)
-            let agentClient = try CLIAgentClientFactory.makeAgentClient(
-                mode: mode,
-                sessionID: id,
-                socket: agentSocket
-            )
-            let documentTarget = CLIDocumentTarget(
-                fileURL: file.map(URL.init(fileURLWithPath:)),
-                sessionID: id
-            )
-            let lengthUnit = try CLILengthUnitResolver.resolve(
+        try await CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try await CLILengthUnitResolver.resolve(
                 unitName: unit,
-                target: documentTarget,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: forceFileEdit || writePolicy.requiresFileMode,
-                client: agentClient
+                document: document,
+                sessionID: sessionID
             )
             let distances = distanceExpressions(unit: lengthUnit)
-            let response = try CLIService().moveSurfaceControlPointsInFrame(
-                target: documentTarget,
-                references: references,
+            return .moveSurfaceControlPointsInFrame(
+                targets: references,
                 frame: resolvedFrameQuery,
                 uDistance: distances.u,
                 vDistance: distances.v,
-                normalDistance: distances.normal,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                dryRun: dryRun,
-                writePolicy: writePolicy,
-                forceFileEdit: forceFileEdit,
-                client: agentClient
+                normalDistance: distances.normal
             )
-            try CLIOutput.write(response: response, asJSON: json)
         }
     }
 

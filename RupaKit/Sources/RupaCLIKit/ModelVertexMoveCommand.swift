@@ -2,7 +2,7 @@ import ArgumentParser
 import RupaAutomation
 import RupaCore
 
-public struct ModelVertexMoveCommand: ParsableCommand {
+public struct ModelVertexMoveCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "vertex-move",
         abstract: "Move an editable body vertex in the source profile plane."
@@ -25,9 +25,9 @@ public struct ModelVertexMoveCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(document: document) { sessionID in
-            let lengthUnit = try CLIAutomationCommandRunner.lengthUnit(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try await CLIAutomationCommandRunner.lengthUnit(
                 unitName: unit,
                 document: document,
                 sessionID: sessionID

@@ -1,7 +1,7 @@
 import ArgumentParser
 import RupaAutomation
 
-public struct SketchUnjoinCommand: ParsableCommand {
+public struct SketchUnjoinCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "unjoin",
         abstract: "Restore a supported joined source sketch curve."
@@ -15,8 +15,8 @@ public struct SketchUnjoinCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .unjoinSketchCurve(target: selection.decodedTarget())
         )

@@ -1,6 +1,6 @@
 import ArgumentParser
 
-public struct InspectConstructionPlanesCommand: ParsableCommand {
+public struct InspectConstructionPlanesCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "construction-planes",
         abstract: "Return saved construction planes and the active construction-plane state."
@@ -11,16 +11,21 @@ public struct InspectConstructionPlanesCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
+    public func run() async throws {
         let id = try options.resolvedSessionID()
 
-        try CLIExitCode.run {
-            let response = try CLIService().constructionPlaneSummary(
+        try await CLIExitCode.run {
+            let envelope = try await CLIService().read(
                 target: options.target(sessionID: id),
                 mode: options.mode,
-                expectedGeneration: options.generation(),
-                client: try options.agentClient(sessionID: id)
-            )
+                expectedGeneration: options.generation()
+            ) { sessionID in
+                .constructionPlaneSummary(
+                    sessionID: sessionID,
+                    expectedGeneration: options.generation()
+                )
+            }
+            let response = try CLIResponseProjector.constructionPlanes(envelope)
             try CLIOutput.write(response: response, asJSON: options.json)
         }
     }

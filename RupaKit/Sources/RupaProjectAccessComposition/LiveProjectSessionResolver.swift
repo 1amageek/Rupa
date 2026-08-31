@@ -7,7 +7,7 @@ import RupaProjectAccess
 /// Resolves an already registered App-owned workspace through the Agent
 /// observation route. It never starts or replaces an application.
 @MainActor
-public final class LiveProjectSessionResolver: LiveProjectAccessObserving {
+public final class LiveProjectSessionResolver: ProjectAccessObserving {
     private let endpoint: UnixSocketEndpoint?
     private let requestTimeout: Duration
     private let injectedTransport: (any LiveProjectAccessTransport)?
@@ -27,6 +27,19 @@ public final class LiveProjectSessionResolver: LiveProjectAccessObserving {
         self.endpoint = nil
         self.requestTimeout = .seconds(30)
         self.injectedTransport = transport
+    }
+
+    public func capabilities(
+        deadline: ContinuousClock.Instant
+    ) async throws -> [AgentCapabilityDescriptor] {
+        let response = try await sendObservation(.capabilities, deadline: deadline)
+        guard case .capabilities(let capabilities) = response else {
+            throw unexpectedObservationResponse(
+                expected: "capabilities",
+                actual: response
+            )
+        }
+        return capabilities
     }
 
     public func status(

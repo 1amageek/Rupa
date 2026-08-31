@@ -1,7 +1,7 @@
 import ArgumentParser
 import RupaCore
 
-public struct InspectSceneGraphCommand: ParsableCommand {
+public struct InspectSceneGraphCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "scene-graph",
         abstract: "Return immutable Product scene-node placement and visibility from a live Rupa session."
@@ -12,32 +12,27 @@ public struct InspectSceneGraphCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
+    public func run() async throws {
         guard options.mode == .live else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Scene-graph inspection requires explicit live mode."
             )
         }
-        guard let sessionID = try options.resolvedSessionID() else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Scene-graph inspection requires a live session ID."
-            )
-        }
-        guard let client = try options.agentClient(sessionID: sessionID) else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Scene-graph inspection requires a live Agent client."
-            )
-        }
+        let sessionID = try options.resolvedSessionID()
 
-        try CLIExitCode.run {
-            let response = try CLIService().sceneGraphSnapshotLiveSession(
-                sessionID: sessionID,
-                expectedGeneration: options.generation(),
-                client: client
-            )
+        try await CLIExitCode.run {
+            let envelope = try await CLIService().read(
+                target: options.target(sessionID: sessionID),
+                mode: .live,
+                expectedGeneration: options.generation()
+            ) { resolvedSessionID in
+                .sceneGraphSnapshot(
+                    sessionID: resolvedSessionID,
+                    expectedGeneration: options.generation()
+                )
+            }
+            let response = try CLIResponseProjector.sceneGraph(envelope)
             try CLIOutput.write(response: response, asJSON: options.json)
         }
     }

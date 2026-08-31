@@ -1,7 +1,7 @@
 import ArgumentParser
 import RupaCore
 
-public struct ArcSketchCommand: ParsableCommand {
+public struct ArcSketchCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "arc",
         abstract: "Create an arc sketch."
@@ -42,32 +42,22 @@ public struct ArcSketchCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        let sessionID = try document.resolvedSessionID()
-
-        try CLIExitCode.run {
-            let lengthUnit = try CLILengthUnitResolver.resolve(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try await CLILengthUnitResolver.resolve(
                 unit: unit,
                 document: document,
                 sessionID: sessionID
             )
             let input = try arcInput(unit: lengthUnit)
-            let response = try CLIService().createArcSketch(
-                target: try document.target(sessionID: sessionID),
+            return .createArcSketch(
                 name: name,
                 plane: try CLISketchPlaneReferenceParser.reference(plane: plane, constructionPlaneID: constructionPlaneID),
                 center: input.center,
                 radius: input.radius,
                 startAngle: input.startAngle,
-                endAngle: input.endAngle,
-                mode: document.mode,
-                expectedGeneration: document.generation(),
-                dryRun: document.dryRun,
-                writePolicy: try document.writePolicy(sessionID: sessionID),
-                forceFileEdit: document.forceFileEdit,
-                client: try document.agentClient(sessionID: sessionID)
+                endAngle: input.endAngle
             )
-            try CLIOutput.write(response: response, asJSON: document.json)
         }
     }
 

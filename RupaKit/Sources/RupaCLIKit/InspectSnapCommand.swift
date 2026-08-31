@@ -2,7 +2,7 @@ import ArgumentParser
 import RupaCore
 import SwiftCAD
 
-public struct InspectSnapCommand: ParsableCommand {
+public struct InspectSnapCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "snap",
         abstract: "Resolve grid, source, generated topology, measurement, and construction-plane snap candidates."
@@ -28,7 +28,7 @@ public struct InspectSnapCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
+    public func run() async throws {
         let id = try document.resolvedSessionID()
         let snapOptions = try decodedOptions()
         let point = Point2D(
@@ -36,15 +36,20 @@ public struct InspectSnapCommand: ParsableCommand {
             y: unit.meters(from: y)
         )
 
-        try CLIExitCode.run {
-            let response = try CLIService().resolveSnap(
+        try await CLIExitCode.run {
+            let envelope = try await CLIService().read(
                 target: document.target(sessionID: id),
-                point: point,
-                options: snapOptions,
                 mode: document.mode,
-                expectedGeneration: document.generation(),
-                client: try document.agentClient(sessionID: id)
-            )
+                expectedGeneration: document.generation()
+            ) { sessionID in
+                .resolveSnap(
+                    sessionID: sessionID,
+                    point: point,
+                    options: snapOptions,
+                    expectedGeneration: document.generation()
+                )
+            }
+            let response = try CLIResponseProjector.snap(envelope)
             try CLIOutput.write(response: response, asJSON: document.json)
         }
     }

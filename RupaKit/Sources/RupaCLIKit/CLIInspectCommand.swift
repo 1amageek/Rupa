@@ -1,6 +1,6 @@
 import ArgumentParser
 
-public struct InspectCommand: ParsableCommand {
+public struct InspectCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "inspect",
         abstract: "Inspect source and generated CAD references for automation workflows.",

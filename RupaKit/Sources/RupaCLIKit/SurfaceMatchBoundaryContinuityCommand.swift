@@ -1,16 +1,15 @@
 import ArgumentParser
 import Foundation
-import RupaAgentRuntime
 import RupaCore
 
-public struct SurfaceMatchBoundaryContinuityCommand: ParsableCommand {
+public struct SurfaceMatchBoundaryContinuityCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "match-boundary-continuity",
         abstract: "Match a direct B-spline surface trim boundary to another trim boundary."
     )
 
-    @Argument(help: "Path to the .swcad document for file or auto mode.")
-    public var file: String?
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
 
     @Option(help: "SelectionReference JSON object for the target surface trim.")
     public var target: String?
@@ -33,34 +32,9 @@ public struct SurfaceMatchBoundaryContinuityCommand: ParsableCommand {
     @Option(help: "Reference boundary order: automatic, forward, or reversed.")
     public var referenceDirection: SurfaceBoundaryReferenceDirection = .automatic
 
-    @Option(help: "Edit mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Flag(help: "Validate the command without saving the changed file.")
-    public var dryRun: Bool = false
-
-    @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
-    public var forceFileEdit: Bool = false
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
-
-    @OptionGroup
-    public var writeDestination: CLIWriteDestinationOptions
-
     public init() {}
 
-    public func run() throws {
-        let id = try CLISelectionInputParser.optionalSessionID(sessionID)
+    public func run() async throws {
         let targetReference: SelectionReference = try CLISelectionInputParser.decodeSingleSelectionInput(
             inlinePayload: target,
             filePath: targetFile,
@@ -72,31 +46,15 @@ public struct SurfaceMatchBoundaryContinuityCommand: ParsableCommand {
             valueName: "Reference SelectionReference"
         )
 
-        try CLIExitCode.run {
-            let writePolicy = try writeDestination.writePolicy(file: file, mode: mode, sessionID: id)
-            let agentClient = try CLIAgentClientFactory.makeAgentClient(
-                mode: mode,
-                sessionID: id,
-                socket: agentSocket
-            )
-            let response = try CLIService().matchSurfaceBoundaryContinuity(
-                target: CLIDocumentTarget(
-                    fileURL: file.map(URL.init(fileURLWithPath:)),
-                    sessionID: id
-                ),
-                targetReference: targetReference,
+        try await CLIAutomationCommandRunner.run(
+            document: document,
+            command: .matchSurfaceBoundaryContinuity(
+                target: targetReference,
                 reference: referenceReference,
                 level: level,
                 matchSide: matchSide,
-                referenceDirection: referenceDirection,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                dryRun: dryRun,
-                writePolicy: writePolicy,
-                forceFileEdit: forceFileEdit,
-                client: agentClient
+                referenceDirection: referenceDirection
             )
-            try CLIOutput.write(response: response, asJSON: json)
-        }
+        )
     }
 }

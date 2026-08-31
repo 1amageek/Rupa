@@ -2,7 +2,7 @@ import ArgumentParser
 import RupaAutomation
 import RupaCore
 
-public struct SketchJoinCommand: ParsableCommand {
+public struct SketchJoinCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "join",
         abstract: "Join two supported source sketch curves."
@@ -25,8 +25,8 @@ public struct SketchJoinCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .joinSketchCurves(
                 target: selection.decodedTarget(),

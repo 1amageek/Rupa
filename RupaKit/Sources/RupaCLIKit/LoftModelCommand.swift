@@ -1,7 +1,7 @@
 import ArgumentParser
 import RupaCore
 
-public struct LoftModelCommand: ParsableCommand {
+public struct LoftModelCommand: AsyncParsableCommand {
     public enum ResultKind: String, ExpressibleByArgument, Sendable {
         case solid
         case sheet
@@ -107,26 +107,17 @@ public struct LoftModelCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        let sessionID = try document.resolvedSessionID()
+    public func run() async throws {
         let input = try loftInput()
-
-        try CLIExitCode.run {
-            let response = try CLIService().createLoft(
-                target: try document.target(sessionID: sessionID),
+        try await CLIAutomationCommandRunner.run(
+            document: document,
+            command: .createLoft(
                 name: name,
                 sections: input.sections,
                 guides: input.guides,
-                options: input.options,
-                mode: document.mode,
-                expectedGeneration: document.generation(),
-                dryRun: document.dryRun,
-                writePolicy: try document.writePolicy(sessionID: sessionID),
-                forceFileEdit: document.forceFileEdit,
-                client: try document.agentClient(sessionID: sessionID)
+                options: input.options
             )
-            try CLIOutput.write(response: response, asJSON: document.json)
-        }
+        )
     }
 
     private func loftInput() throws -> (

@@ -1,13 +1,10 @@
 import ArgumentParser
 import Foundation
 import RupaAgentProtocol
-import RupaAgentRuntime
-import RupaAgentTransport
 import RupaAutomation
 import RupaCore
-import RupaProjectAccessPlatform
 
-public struct CLICommand: ParsableCommand {
+public struct CLICommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "rupa",
         abstract: "Run Rupa command line tools.",
@@ -16,7 +13,6 @@ public struct CLICommand: ParsableCommand {
             AttachDocument.self,
             BatchCommand.self,
             Capabilities.self,
-            NewDocumentCommand.self,
             AutomationCommandGroup.self,
             DimensionCommand.self,
             EvaluateDocument.self,
@@ -29,7 +25,6 @@ public struct CLICommand: ParsableCommand {
             ParameterCommand.self,
             PlaneCommand.self,
             RenameDocument.self,
-            RenameLiveDocument.self,
             SaveDocument.self,
             SelectionCommand.self,
             SketchCommand.self,
@@ -44,7 +39,7 @@ public struct CLICommand: ParsableCommand {
     public init() {}
 }
 
-public struct Capabilities: ParsableCommand {
+public struct Capabilities: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "capabilities",
         abstract: "Print supported command capabilities."
@@ -52,8 +47,11 @@ public struct Capabilities: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        print(CLIService().capabilities().joined(separator: "\n"))
+    public func run() async throws {
+        try await CLIExitCode.run {
+            let capabilities = try await CLIService().capabilities()
+            print(capabilities.joined(separator: "\n"))
+        }
     }
 }
 
@@ -139,7 +137,7 @@ public enum CLISurfaceSlideDirection: String, CaseIterable, ExpressibleByArgumen
 extension SketchEntityDimensionKind: ExpressibleByArgument {}
 extension ObjectDimensionKind: ExpressibleByArgument {}
 
-public struct AgentCommand: ParsableCommand {
+public struct AgentCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "agent",
         abstract: "Inspect or control the running Rupa agent.",
@@ -152,63 +150,50 @@ public struct AgentCommand: ParsableCommand {
     public init() {}
 }
 
-public struct AgentStatusCommand: ParsableCommand {
+public struct AgentStatusCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "status",
         abstract: "Print Rupa agent status."
     )
 
-    @Option(help: "Optional compatibility override for the Rupa agent endpoint.")
-    public var socket: String?
-
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
 
     public init() {}
 
-    public func run() throws {
-        try CLIExitCode.run {
-            let response = try CLIService().agentStatus(
-                client: try CLIAgentClientFactory.makeRequiredAgentClient(
-                    socket: socket
-                )
-            )
+    public func run() async throws {
+        try await CLIExitCode.run {
+            let response = try await CLIService().agentStatus()
             try CLIOutput.write(response: response, asJSON: json)
         }
     }
 }
 
-public struct AttachDocument: ParsableCommand {
+public struct AttachDocument: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "attach",
         abstract: "Resolve an open Rupa document session."
     )
 
-    @Argument(help: "Path to the open .swcad document.")
+    @Argument(help: "Path to the open .rupa project.")
     public var file: String?
 
     @Option(help: "Open document session UUID.")
     public var session: String?
-
-    @Option(help: "Optional compatibility override for the Rupa agent endpoint.")
-    public var socket: String?
 
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
 
     public init() {}
 
-    public func run() throws {
+    public func run() async throws {
         let id = try parsedSessionID(session)
 
-        try CLIExitCode.run {
-            let response = try CLIService().attach(
+        try await CLIExitCode.run {
+            let response = try await CLIService().attach(
                 target: CLIDocumentTarget(
                     fileURL: file.map(URL.init(fileURLWithPath:)),
                     sessionID: id
-                ),
-                client: try CLIAgentClientFactory.makeRequiredAgentClient(
-                    socket: socket
                 )
             )
             try CLIOutput.write(response: response, asJSON: json)
@@ -226,7 +211,7 @@ public struct AttachDocument: ParsableCommand {
     }
 }
 
-public struct ModelCommand: ParsableCommand {
+public struct ModelCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "model",
         abstract: "Create generic CAD model features.",
@@ -249,7 +234,7 @@ public struct ModelCommand: ParsableCommand {
     public init() {}
 }
 
-public struct SketchCommand: ParsableCommand {
+public struct SketchCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "sketch",
         abstract: "Create generic CAD sketch features.",
@@ -288,7 +273,7 @@ public struct SketchCommand: ParsableCommand {
     public init() {}
 }
 
-public struct SelectionCommand: ParsableCommand {
+public struct SelectionCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "selection",
         abstract: "Select live-session object, subobject, or Swift-CAD reference targets.",
@@ -302,7 +287,7 @@ public struct SelectionCommand: ParsableCommand {
     public init() {}
 }
 
-public struct SelectionReferencesCommand: ParsableCommand {
+public struct SelectionReferencesCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "references",
         abstract: "Replace live-session selection with Swift-CAD SelectionReference values."
@@ -326,29 +311,28 @@ public struct SelectionReferencesCommand: ParsableCommand {
     @Option(help: "Expected document generation.")
     public var expectedGeneration: UInt64?
 
-    @Option(help: "Optional compatibility override for the Rupa agent endpoint.")
-    public var socket: String?
-
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
 
     public init() {}
 
-    public func run() throws {
+    public func run() async throws {
         let id = try CLISelectionInputParser.sessionID(sessionID)
         let references = try decodedReferences()
 
-        try CLIExitCode.run {
-            let response = try CLIService().selectReferencesLiveSession(
-                sessionID: id,
-                references: references,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                client: try CLIAgentClientFactory.makeRequiredAgentClient(
-                    socket: socket
+        try await CLIExitCode.run {
+            let response = try await CLIService().send(
+                target: CLIDocumentTarget(sessionID: id),
+                mode: .live
+            ) { sessionID in
+                .selectReferences(
+                    sessionID: sessionID,
+                    references: references,
+                    expectedGeneration: expectedGeneration.map(DocumentGeneration.init)
                 )
-            )
+            }
             try CLIOutput.write(
-                response: response,
+                response: try CLIResponseProjector.selection(response),
                 asJSON: json
             )
         }
@@ -365,7 +349,7 @@ public struct SelectionReferencesCommand: ParsableCommand {
     }
 }
 
-public struct SelectionTargetsCommand: ParsableCommand {
+public struct SelectionTargetsCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "targets",
         abstract: "Replace live-session selection with rendered object or subobject SelectionTarget values."
@@ -389,29 +373,28 @@ public struct SelectionTargetsCommand: ParsableCommand {
     @Option(help: "Expected document generation.")
     public var expectedGeneration: UInt64?
 
-    @Option(help: "Optional compatibility override for the Rupa agent endpoint.")
-    public var socket: String?
-
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
 
     public init() {}
 
-    public func run() throws {
+    public func run() async throws {
         let id = try CLISelectionInputParser.sessionID(sessionID)
         let targets = try decodedTargets()
 
-        try CLIExitCode.run {
-            let response = try CLIService().selectTargetsLiveSession(
-                sessionID: id,
-                targets: targets,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                client: try CLIAgentClientFactory.makeRequiredAgentClient(
-                    socket: socket
+        try await CLIExitCode.run {
+            let response = try await CLIService().send(
+                target: CLIDocumentTarget(sessionID: id),
+                mode: .live
+            ) { sessionID in
+                .selectTargets(
+                    sessionID: sessionID,
+                    targets: targets,
+                    expectedGeneration: expectedGeneration.map(DocumentGeneration.init)
                 )
-            )
+            }
             try CLIOutput.write(
-                response: response,
+                response: try CLIResponseProjector.selection(response),
                 asJSON: json
             )
         }
@@ -553,7 +536,7 @@ enum CLISelectionInputParser {
     }
 }
 
-public struct DimensionCommand: ParsableCommand {
+public struct DimensionCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "dimension",
         abstract: "Discover and edit supported sketch and object dimensions.",
@@ -573,14 +556,14 @@ public struct DimensionCommand: ParsableCommand {
     public init() {}
 }
 
-public struct DimensionSketchSummaryCommand: ParsableCommand {
+public struct DimensionSketchSummaryCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "sketch-summary",
         abstract: "Return editable sketch dimension candidates for SelectionTarget values."
     )
 
-    @Argument(help: "Path to the .swcad document for file or auto mode.")
-    public var file: String?
+    @OptionGroup
+    public var document: CLIReadDocumentOptions
 
     @Option(
         name: .customLong("target"),
@@ -591,25 +574,10 @@ public struct DimensionSketchSummaryCommand: ParsableCommand {
     @Option(help: "JSON file containing one SelectionTarget object or an array.")
     public var targetsFile: String?
 
-    @Option(help: "Edit mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
-
     public init() {}
 
-    public func run() throws {
-        let id = try CLISelectionInputParser.optionalSessionID(sessionID)
+    public func run() async throws {
+        let id = try document.resolvedSessionID()
         let targets: [SelectionTarget] = try CLISelectionInputParser.decodeOptionalSelectionInput(
             inlinePayloads: targetPayloads,
             filePath: targetsFile,
@@ -617,38 +585,34 @@ public struct DimensionSketchSummaryCommand: ParsableCommand {
             arrayName: "SelectionTarget"
         )
 
-        try CLIExitCode.run {
-            let agentClient = try CLIAgentClientFactory.makeAgentClient(
-                mode: mode,
-                sessionID: id,
-                socket: agentSocket
-            )
-            let response = try CLIService().sketchDimensionSummary(
-                target: CLIDocumentTarget(
-                    fileURL: file.map(URL.init(fileURLWithPath:)),
-                    sessionID: id
-                ),
-                targets: targets,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                client: agentClient
-            )
+        try await CLIExitCode.run {
+            let envelope = try await CLIService().read(
+                target: document.target(sessionID: id),
+                mode: document.mode,
+                expectedGeneration: document.generation()
+            ) { sessionID in
+                .sketchDimensionSummary(
+                    sessionID: sessionID,
+                    targets: targets,
+                    expectedGeneration: document.generation()
+                )
+            }
             try CLIOutput.write(
-                response: response,
-                asJSON: json
+                response: try CLIResponseProjector.sketchDimensionSummary(envelope),
+                asJSON: document.json
             )
         }
     }
 }
 
-public struct DimensionObjectSummaryCommand: ParsableCommand {
+public struct DimensionObjectSummaryCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "object-summary",
         abstract: "Return editable object dimension candidates for SelectionTarget values."
     )
 
-    @Argument(help: "Path to the .swcad document for file or auto mode.")
-    public var file: String?
+    @OptionGroup
+    public var document: CLIReadDocumentOptions
 
     @Option(
         name: .customLong("target"),
@@ -659,25 +623,10 @@ public struct DimensionObjectSummaryCommand: ParsableCommand {
     @Option(help: "JSON file containing one SelectionTarget object or an array.")
     public var targetsFile: String?
 
-    @Option(help: "Edit mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
-
     public init() {}
 
-    public func run() throws {
-        let id = try CLISelectionInputParser.optionalSessionID(sessionID)
+    public func run() async throws {
+        let id = try document.resolvedSessionID()
         let targets: [SelectionTarget] = try CLISelectionInputParser.decodeOptionalSelectionInput(
             inlinePayloads: targetPayloads,
             filePath: targetsFile,
@@ -685,38 +634,34 @@ public struct DimensionObjectSummaryCommand: ParsableCommand {
             arrayName: "SelectionTarget"
         )
 
-        try CLIExitCode.run {
-            let agentClient = try CLIAgentClientFactory.makeAgentClient(
-                mode: mode,
-                sessionID: id,
-                socket: agentSocket
-            )
-            let response = try CLIService().objectDimensionSummary(
-                target: CLIDocumentTarget(
-                    fileURL: file.map(URL.init(fileURLWithPath:)),
-                    sessionID: id
-                ),
-                targets: targets,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                client: agentClient
-            )
+        try await CLIExitCode.run {
+            let envelope = try await CLIService().read(
+                target: document.target(sessionID: id),
+                mode: document.mode,
+                expectedGeneration: document.generation()
+            ) { sessionID in
+                .objectDimensionSummary(
+                    sessionID: sessionID,
+                    targets: targets,
+                    expectedGeneration: document.generation()
+                )
+            }
             try CLIOutput.write(
-                response: response,
-                asJSON: json
+                response: try CLIResponseProjector.objectDimensionSummary(envelope),
+                asJSON: document.json
             )
         }
     }
 }
 
-public struct DimensionSetSketchCommand: ParsableCommand {
+public struct DimensionSetSketchCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "set-sketch",
         abstract: "Set a supported sketch dimension on one SelectionTarget."
     )
 
-    @Argument(help: "Path to the .swcad document for file or auto mode.")
-    public var file: String?
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
 
     @Option(help: "SelectionTarget JSON object.")
     public var target: String?
@@ -733,87 +678,53 @@ public struct DimensionSetSketchCommand: ParsableCommand {
     @Option(help: "Unit for the value. Length dimensions default to the workspace display unit; angle dimensions default to degree.")
     public var unit: String?
 
-    @Option(help: "Edit mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Flag(help: "Validate the command without saving the changed file.")
-    public var dryRun: Bool = false
-
-    @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
-    public var forceFileEdit: Bool = false
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
-
-    @OptionGroup
-    public var writeDestination: CLIWriteDestinationOptions
-
     public init() {}
 
-    public func run() throws {
-        let id = try CLISelectionInputParser.optionalSessionID(sessionID)
+    public func run() async throws {
+        let id = try document.resolvedSessionID()
         let selectionTarget: SelectionTarget = try CLISelectionInputParser.decodeSingleSelectionInput(
             inlinePayload: target,
             filePath: targetFile,
             valueName: "SelectionTarget"
         )
 
-        try CLIExitCode.run {
-            let context = try CLILegacyMutationContextResolver.resolve(
-                file: file,
-                mode: mode,
-                sessionID: id,
-                agentSocket: agentSocket,
-                forceFileEdit: forceFileEdit,
-                writeDestination: writeDestination
-            )
-            let expression = try CLIDimensionExpressionParser.expression(
+        try await CLIExitCode.run {
+            let expression = try await CLIDimensionExpressionParser.expression(
                 value: value,
                 unitName: unit,
                 sketchKind: kind,
-                target: context.target,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: context.forceFileEdit,
-                client: context.agentClient
+                document: document,
+                sessionID: id
             )
-            let response = try CLIService().setSketchEntityDimension(
-                target: context.target,
-                selectionTarget: selectionTarget,
-                kind: kind,
-                value: expression,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                dryRun: dryRun,
-                writePolicy: context.writePolicy,
-                forceFileEdit: forceFileEdit,
-                client: context.agentClient
+            let response = try await CLIService().applyAutomationCommand(
+                target: try document.target(sessionID: id),
+                command: .setSketchEntityDimension(
+                    target: selectionTarget,
+                    kind: kind,
+                    value: expression
+                ),
+                mode: document.mode,
+                expectedGeneration: document.generation(),
+                expectedWorkspaceRevision: document.workspaceRevision(),
+                dryRun: document.dryRun,
+                writePolicy: try document.writePolicy(sessionID: id)
             )
             try CLIOutput.write(
                 response: response,
-                asJSON: json
+                asJSON: document.json
             )
         }
     }
 }
 
-public struct DimensionSetObjectCommand: ParsableCommand {
+public struct DimensionSetObjectCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "set-object",
         abstract: "Set a supported object dimension on one SelectionTarget."
     )
 
-    @Argument(help: "Path to the .swcad document for file or auto mode.")
-    public var file: String?
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
 
     @Option(help: "SelectionTarget JSON object.")
     public var target: String?
@@ -830,72 +741,38 @@ public struct DimensionSetObjectCommand: ParsableCommand {
     @Option(help: "Length unit for the value. Defaults to the workspace display unit.")
     public var unit: String?
 
-    @Option(help: "Edit mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Flag(help: "Validate the command without saving the changed file.")
-    public var dryRun: Bool = false
-
-    @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
-    public var forceFileEdit: Bool = false
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
-
-    @OptionGroup
-    public var writeDestination: CLIWriteDestinationOptions
-
     public init() {}
 
-    public func run() throws {
-        let id = try CLISelectionInputParser.optionalSessionID(sessionID)
+    public func run() async throws {
+        let id = try document.resolvedSessionID()
         let selectionTarget: SelectionTarget = try CLISelectionInputParser.decodeSingleSelectionInput(
             inlinePayload: target,
             filePath: targetFile,
             valueName: "SelectionTarget"
         )
-        try CLIExitCode.run {
-            let context = try CLILegacyMutationContextResolver.resolve(
-                file: file,
-                mode: mode,
-                sessionID: id,
-                agentSocket: agentSocket,
-                forceFileEdit: forceFileEdit,
-                writeDestination: writeDestination
-            )
-            let expression = try CLIDimensionExpressionParser.lengthExpression(
+        try await CLIExitCode.run {
+            let expression = try await CLIDimensionExpressionParser.lengthExpression(
                 value: value,
                 unitName: unit,
-                target: context.target,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: context.forceFileEdit,
-                client: context.agentClient
+                document: document,
+                sessionID: id
             )
-            let response = try CLIService().setObjectDimension(
-                target: context.target,
-                selectionTarget: selectionTarget,
-                kind: kind,
-                value: expression,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                dryRun: dryRun,
-                writePolicy: context.writePolicy,
-                forceFileEdit: forceFileEdit,
-                client: context.agentClient
+            let response = try await CLIService().applyAutomationCommand(
+                target: try document.target(sessionID: id),
+                command: .setObjectDimension(
+                    target: selectionTarget,
+                    kind: kind,
+                    value: expression
+                ),
+                mode: document.mode,
+                expectedGeneration: document.generation(),
+                expectedWorkspaceRevision: document.workspaceRevision(),
+                dryRun: document.dryRun,
+                writePolicy: try document.writePolicy(sessionID: id)
             )
             try CLIOutput.write(
                 response: response,
-                asJSON: json
+                asJSON: document.json
             )
         }
     }
@@ -906,12 +783,9 @@ private enum CLIDimensionExpressionParser {
         value: Double,
         unitName: String?,
         sketchKind: SketchEntityDimensionKind,
-        target: CLIDocumentTarget,
-        mode: CLIEditMode,
-        expectedGeneration: DocumentGeneration?,
-        forceFileEdit: Bool,
-        client: AgentClientProtocol?
-    ) throws -> CADExpression {
+        document: CLIWriteDocumentOptions,
+        sessionID: UUID?
+    ) async throws -> CADExpression {
         switch sketchKind {
         case .angle:
             let unit = unitName ?? AngleUnit.degree.rawValue
@@ -920,14 +794,11 @@ private enum CLIDimensionExpressionParser {
             }
             return .constant(.angle(value, unit: angleUnit))
         case .length, .radius, .diameter:
-            return try lengthExpression(
+            return try await lengthExpression(
                 value: value,
                 unitName: unitName,
-                target: target,
-                mode: mode,
-                expectedGeneration: expectedGeneration,
-                forceFileEdit: forceFileEdit,
-                client: client
+                document: document,
+                sessionID: sessionID
             )
         }
     }
@@ -935,25 +806,19 @@ private enum CLIDimensionExpressionParser {
     static func lengthExpression(
         value: Double,
         unitName: String?,
-        target: CLIDocumentTarget,
-        mode: CLIEditMode,
-        expectedGeneration: DocumentGeneration?,
-        forceFileEdit: Bool,
-        client: AgentClientProtocol?
-    ) throws -> CADExpression {
-        let lengthUnit = try CLILengthUnitResolver.resolve(
+        document: CLIWriteDocumentOptions,
+        sessionID: UUID?
+    ) async throws -> CADExpression {
+        let lengthUnit = try await CLILengthUnitResolver.resolve(
             unitName: unitName,
-            target: target,
-            mode: mode,
-            expectedGeneration: expectedGeneration,
-            forceFileEdit: forceFileEdit,
-            client: client
+            document: document,
+            sessionID: sessionID
         )
         return .constant(Quantity(value: lengthUnit.meters(from: value), kind: .length))
     }
 }
 
-public struct SurfaceCommand: ParsableCommand {
+public struct SurfaceCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "surface",
         abstract: "Inspect and edit source-owned surface control data.",
@@ -983,66 +848,47 @@ public struct SurfaceCommand: ParsableCommand {
     public init() {}
 }
 
-public struct SurfaceSourcesCommand: ParsableCommand {
+public struct SurfaceSourcesCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "sources",
         abstract: "Return source-owned surface references and editable control points."
     )
 
-    @Argument(help: "Path to the .swcad document for file or auto mode.")
-    public var file: String?
-
-    @Option(help: "Edit mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
+    @OptionGroup
+    public var document: CLIReadDocumentOptions
 
     public init() {}
 
-    public func run() throws {
-        let id = try CLISelectionInputParser.optionalSessionID(sessionID)
+    public func run() async throws {
+        let id = try document.resolvedSessionID()
 
-        try CLIExitCode.run {
-            let agentClient = try CLIAgentClientFactory.makeAgentClient(
-                mode: mode,
-                sessionID: id,
-                socket: agentSocket
-            )
-            let response = try CLIService().surfaceSourceSummary(
-                target: CLIDocumentTarget(
-                    fileURL: file.map(URL.init(fileURLWithPath:)),
-                    sessionID: id
-                ),
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                client: agentClient
-            )
+        try await CLIExitCode.run {
+            let envelope = try await CLIService().read(
+                target: document.target(sessionID: id),
+                mode: document.mode,
+                expectedGeneration: document.generation()
+            ) { sessionID in
+                .surfaceSourceSummary(
+                    sessionID: sessionID,
+                    expectedGeneration: document.generation()
+                )
+            }
             try CLIOutput.write(
-                response: response,
-                asJSON: json
+                response: try CLIResponseProjector.surfaceSourceSummary(envelope),
+                asJSON: document.json
             )
         }
     }
 }
 
-public struct SurfaceMoveControlPointCommand: ParsableCommand {
+public struct SurfaceMoveControlPointCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "move-control-point",
         abstract: "Move one source-owned surface control point from a SelectionReference."
     )
 
-    @Argument(help: "Path to the .swcad document for file or auto mode.")
-    public var file: String?
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
 
     @Option(help: "SelectionReference JSON object for one surface control point.")
     public var reference: String?
@@ -1062,74 +908,40 @@ public struct SurfaceMoveControlPointCommand: ParsableCommand {
     @Option(help: "Length unit for delta values. Defaults to the workspace display unit.")
     public var unit: String?
 
-    @Option(help: "Edit mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Flag(help: "Validate the command without saving the changed file.")
-    public var dryRun: Bool = false
-
-    @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
-    public var forceFileEdit: Bool = false
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
-
-    @OptionGroup
-    public var writeDestination: CLIWriteDestinationOptions
-
     public init() {}
 
-    public func run() throws {
-        let id = try CLISelectionInputParser.optionalSessionID(sessionID)
+    public func run() async throws {
+        let id = try document.resolvedSessionID()
         let surfaceReference: SelectionReference = try CLISelectionInputParser.decodeSingleSelectionInput(
             inlinePayload: reference,
             filePath: referenceFile,
             valueName: "SelectionReference"
         )
 
-        try CLIExitCode.run {
-            let context = try CLILegacyMutationContextResolver.resolve(
-                file: file,
-                mode: mode,
-                sessionID: id,
-                agentSocket: agentSocket,
-                forceFileEdit: forceFileEdit,
-                writeDestination: writeDestination
-            )
-            let lengthUnit = try CLILengthUnitResolver.resolve(
+        try await CLIExitCode.run {
+            let lengthUnit = try await CLILengthUnitResolver.resolve(
                 unitName: unit,
-                target: context.target,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: context.forceFileEdit,
-                client: context.agentClient
+                document: document,
+                sessionID: id
             )
             let deltas = deltaExpressions(unit: lengthUnit)
-            let response = try CLIService().moveSurfaceControlPoint(
-                target: context.target,
-                reference: surfaceReference,
-                deltaX: deltas.x,
-                deltaY: deltas.y,
-                deltaZ: deltas.z,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                dryRun: dryRun,
-                writePolicy: context.writePolicy,
-                forceFileEdit: forceFileEdit,
-                client: context.agentClient
+            let response = try await CLIService().applyAutomationCommand(
+                target: try document.target(sessionID: id),
+                command: .moveSurfaceControlPoint(
+                    target: surfaceReference,
+                    deltaX: deltas.x,
+                    deltaY: deltas.y,
+                    deltaZ: deltas.z
+                ),
+                mode: document.mode,
+                expectedGeneration: document.generation(),
+                expectedWorkspaceRevision: document.workspaceRevision(),
+                dryRun: document.dryRun,
+                writePolicy: try document.writePolicy(sessionID: id)
             )
             try CLIOutput.write(
                 response: response,
-                asJSON: json
+                asJSON: document.json
             )
         }
     }
@@ -1149,14 +961,14 @@ public struct SurfaceMoveControlPointCommand: ParsableCommand {
     }
 }
 
-public struct SurfaceSlideControlPointsCommand: ParsableCommand {
+public struct SurfaceSlideControlPointsCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "slide-control-points",
         abstract: "Slide source-owned surface control points along local U, V, or normal directions."
     )
 
-    @Argument(help: "Path to the .swcad document for file or auto mode.")
-    public var file: String?
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
 
     @Option(
         name: .customLong("reference"),
@@ -1176,34 +988,10 @@ public struct SurfaceSlideControlPointsCommand: ParsableCommand {
     @Option(help: "Length unit for slide distance. Defaults to the workspace display unit.")
     public var unit: String?
 
-    @Option(help: "Edit mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Flag(help: "Validate the command without saving the changed file.")
-    public var dryRun: Bool = false
-
-    @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
-    public var forceFileEdit: Bool = false
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
-
-    @OptionGroup
-    public var writeDestination: CLIWriteDestinationOptions
-
     public init() {}
 
-    public func run() throws {
-        let id = try CLISelectionInputParser.optionalSessionID(sessionID)
+    public func run() async throws {
+        let id = try document.resolvedSessionID()
         let references: [SelectionReference] = try CLISelectionInputParser.decodeSelectionInput(
             inlinePayloads: referencePayloads,
             filePath: referencesFile,
@@ -1212,39 +1000,29 @@ public struct SurfaceSlideControlPointsCommand: ParsableCommand {
             arrayName: "SelectionReference"
         )
 
-        try CLIExitCode.run {
-            let context = try CLILegacyMutationContextResolver.resolve(
-                file: file,
-                mode: mode,
-                sessionID: id,
-                agentSocket: agentSocket,
-                forceFileEdit: forceFileEdit,
-                writeDestination: writeDestination
-            )
-            let lengthUnit = try CLILengthUnitResolver.resolve(
+        try await CLIExitCode.run {
+            let lengthUnit = try await CLILengthUnitResolver.resolve(
                 unitName: unit,
-                target: context.target,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: context.forceFileEdit,
-                client: context.agentClient
+                document: document,
+                sessionID: id
             )
             let distanceExpression = lengthExpression(unit: lengthUnit)
-            let response = try CLIService().slideSurfaceControlPoints(
-                target: context.target,
-                references: references,
-                direction: direction.slideDirection,
-                distance: distanceExpression,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                dryRun: dryRun,
-                writePolicy: context.writePolicy,
-                forceFileEdit: forceFileEdit,
-                client: context.agentClient
+            let response = try await CLIService().applyAutomationCommand(
+                target: try document.target(sessionID: id),
+                command: .slideSurfaceControlPoints(
+                    targets: references,
+                    direction: direction.slideDirection,
+                    distance: distanceExpression
+                ),
+                mode: document.mode,
+                expectedGeneration: document.generation(),
+                expectedWorkspaceRevision: document.workspaceRevision(),
+                dryRun: document.dryRun,
+                writePolicy: try document.writePolicy(sessionID: id)
             )
             try CLIOutput.write(
                 response: response,
-                asJSON: json
+                asJSON: document.json
             )
         }
     }
@@ -1254,42 +1032,14 @@ public struct SurfaceSlideControlPointsCommand: ParsableCommand {
     }
 }
 
-enum CLIAgentClientFactory {
-    static func makeAgentClient(
-        mode: CLIEditMode,
-        sessionID: UUID?,
-        socket: String?
-    ) throws -> AgentClient? {
-        guard socket != nil || mode == .live || sessionID != nil else {
-            return nil
-        }
-        return try makeRequiredAgentClient(socket: socket)
-    }
-
-    static func makeRequiredAgentClient(
-        socket: String?,
-        endpointResolver: () throws -> UnixSocketEndpoint = {
-            try RupaAgentEndpointComposition.productEndpoint()
-        }
-    ) throws -> AgentClient {
-        guard socket == nil else {
-            throw ValidationError(
-                "Explicit Agent endpoint overrides are unsupported."
-            )
-        }
-        let endpoint = try endpointResolver()
-        return AgentClient(endpoint: endpoint)
-    }
-}
-
-public struct LineSketchCommand: ParsableCommand {
+public struct LineSketchCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "line",
         abstract: "Create a line sketch."
     )
 
-    @Argument(help: "Path to the .swcad document.")
-    public var file: String
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
 
     @Option(help: "Feature name.")
     public var name: String = "Line Sketch"
@@ -1315,84 +1065,23 @@ public struct LineSketchCommand: ParsableCommand {
     @Option(help: "Saved construction plane UUID. Cannot be combined with --plane.")
     public var constructionPlaneID: String?
 
-    @Option(help: "Edit mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Flag(help: "Validate the command without saving the changed file.")
-    public var dryRun: Bool = false
-
-    @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
-    public var forceFileEdit: Bool = false
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
-
-    @OptionGroup
-    public var writeDestination: CLIWriteDestinationOptions
-
     public init() {}
 
-    public func run() throws {
-        let id = try parsedSessionID(sessionID)
-
-        try CLIExitCode.run {
-            let writePolicy = try writeDestination.writePolicy(file: file, mode: mode, sessionID: id)
-            let url = URL(fileURLWithPath: file)
-            let target = CLIDocumentTarget(
-                fileURL: url,
-                sessionID: id
-            )
-            let agentClient = try makeAgentClient(
-                mode: mode,
-                sessionID: id,
-                socket: agentSocket
-            )
-            let lengthUnit = try CLILengthUnitResolver.resolve(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try await CLILengthUnitResolver.resolve(
                 unitName: unit,
-                target: target,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: forceFileEdit || writePolicy.requiresFileMode,
-                client: agentClient
+                document: document,
+                sessionID: sessionID
             )
             let points = pointExpressions(unit: lengthUnit)
-            let response = try CLIService().createLineSketch(
-                target: target,
+            return .createLineSketch(
                 name: name,
                 plane: try CLISketchPlaneReferenceParser.reference(plane: plane, constructionPlaneID: constructionPlaneID),
                 start: points.start,
-                end: points.end,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                dryRun: dryRun,
-                writePolicy: writePolicy,
-                forceFileEdit: forceFileEdit,
-                client: agentClient
-            )
-            try CLIOutput.write(
-                response: response,
-                asJSON: json
+                end: points.end
             )
         }
-    }
-
-    private func parsedSessionID(_ value: String?) throws -> UUID? {
-        guard let value else {
-            return nil
-        }
-        guard let id = UUID(uuidString: value) else {
-            throw ValidationError("Session ID must be a UUID.")
-        }
-        return id
     }
 
     private func pointExpressions(
@@ -1417,27 +1106,16 @@ public struct LineSketchCommand: ParsableCommand {
         .constant(Quantity(value: unit.meters(from: value), kind: .length))
     }
 
-    private func makeAgentClient(
-        mode: CLIEditMode,
-        sessionID: UUID?,
-        socket: String?
-    ) throws -> AgentClient? {
-        try CLIAgentClientFactory.makeAgentClient(
-            mode: mode,
-            sessionID: sessionID,
-            socket: socket
-        )
-    }
 }
 
-public struct CircleSketchCommand: ParsableCommand {
+public struct CircleSketchCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "circle",
         abstract: "Create a circle sketch."
     )
 
-    @Argument(help: "Path to the .swcad document.")
-    public var file: String
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
 
     @Option(help: "Feature name.")
     public var name: String = "Circle Sketch"
@@ -1460,84 +1138,23 @@ public struct CircleSketchCommand: ParsableCommand {
     @Option(help: "Saved construction plane UUID. Cannot be combined with --plane.")
     public var constructionPlaneID: String?
 
-    @Option(help: "Edit mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Flag(help: "Validate the command without saving the changed file.")
-    public var dryRun: Bool = false
-
-    @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
-    public var forceFileEdit: Bool = false
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
-
-    @OptionGroup
-    public var writeDestination: CLIWriteDestinationOptions
-
     public init() {}
 
-    public func run() throws {
-        let id = try parsedSessionID(sessionID)
-
-        try CLIExitCode.run {
-            let writePolicy = try writeDestination.writePolicy(file: file, mode: mode, sessionID: id)
-            let url = URL(fileURLWithPath: file)
-            let target = CLIDocumentTarget(
-                fileURL: url,
-                sessionID: id
-            )
-            let agentClient = try makeAgentClient(
-                mode: mode,
-                sessionID: id,
-                socket: agentSocket
-            )
-            let lengthUnit = try CLILengthUnitResolver.resolve(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try await CLILengthUnitResolver.resolve(
                 unitName: unit,
-                target: target,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: forceFileEdit || writePolicy.requiresFileMode,
-                client: agentClient
+                document: document,
+                sessionID: sessionID
             )
             let values = circleExpressions(unit: lengthUnit)
-            let response = try CLIService().createCircleSketch(
-                target: target,
+            return .createCircleSketch(
                 name: name,
                 plane: try CLISketchPlaneReferenceParser.reference(plane: plane, constructionPlaneID: constructionPlaneID),
                 center: values.center,
-                radius: values.radius,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                dryRun: dryRun,
-                writePolicy: writePolicy,
-                forceFileEdit: forceFileEdit,
-                client: agentClient
-            )
-            try CLIOutput.write(
-                response: response,
-                asJSON: json
+                radius: values.radius
             )
         }
-    }
-
-    private func parsedSessionID(_ value: String?) throws -> UUID? {
-        guard let value else {
-            return nil
-        }
-        guard let id = UUID(uuidString: value) else {
-            throw ValidationError("Session ID must be a UUID.")
-        }
-        return id
     }
 
     private func circleExpressions(
@@ -1559,27 +1176,16 @@ public struct CircleSketchCommand: ParsableCommand {
         .constant(Quantity(value: unit.meters(from: value), kind: .length))
     }
 
-    private func makeAgentClient(
-        mode: CLIEditMode,
-        sessionID: UUID?,
-        socket: String?
-    ) throws -> AgentClient? {
-        try CLIAgentClientFactory.makeAgentClient(
-            mode: mode,
-            sessionID: sessionID,
-            socket: socket
-        )
-    }
 }
 
-public struct RectangleSketchCommand: ParsableCommand {
+public struct RectangleSketchCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "rectangle",
         abstract: "Create a rectangle sketch."
     )
 
-    @Argument(help: "Path to the .swcad document.")
-    public var file: String
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
 
     @Option(help: "Feature name.")
     public var name: String = "Rectangle Sketch"
@@ -1599,84 +1205,23 @@ public struct RectangleSketchCommand: ParsableCommand {
     @Option(help: "Saved construction plane UUID. Cannot be combined with --plane.")
     public var constructionPlaneID: String?
 
-    @Option(help: "Edit mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Flag(help: "Validate the command without saving the changed file.")
-    public var dryRun: Bool = false
-
-    @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
-    public var forceFileEdit: Bool = false
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
-
-    @OptionGroup
-    public var writeDestination: CLIWriteDestinationOptions
-
     public init() {}
 
-    public func run() throws {
-        let id = try parsedSessionID(sessionID)
-
-        try CLIExitCode.run {
-            let writePolicy = try writeDestination.writePolicy(file: file, mode: mode, sessionID: id)
-            let url = URL(fileURLWithPath: file)
-            let target = CLIDocumentTarget(
-                fileURL: url,
-                sessionID: id
-            )
-            let agentClient = try makeAgentClient(
-                mode: mode,
-                sessionID: id,
-                socket: agentSocket
-            )
-            let lengthUnit = try CLILengthUnitResolver.resolve(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try await CLILengthUnitResolver.resolve(
                 unitName: unit,
-                target: target,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: forceFileEdit || writePolicy.requiresFileMode,
-                client: agentClient
+                document: document,
+                sessionID: sessionID
             )
             let dimensions = dimensionExpressions(unit: lengthUnit)
-            let response = try CLIService().createRectangleSketch(
-                target: target,
+            return .createRectangleSketch(
                 name: name,
                 plane: try CLISketchPlaneReferenceParser.reference(plane: plane, constructionPlaneID: constructionPlaneID),
                 width: dimensions.width,
-                height: dimensions.height,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                dryRun: dryRun,
-                writePolicy: writePolicy,
-                forceFileEdit: forceFileEdit,
-                client: agentClient
-            )
-            try CLIOutput.write(
-                response: response,
-                asJSON: json
+                height: dimensions.height
             )
         }
-    }
-
-    private func parsedSessionID(_ value: String?) throws -> UUID? {
-        guard let value else {
-            return nil
-        }
-        guard let id = UUID(uuidString: value) else {
-            throw ValidationError("Session ID must be a UUID.")
-        }
-        return id
     }
 
     private func dimensionExpressions(
@@ -1695,27 +1240,16 @@ public struct RectangleSketchCommand: ParsableCommand {
         .constant(Quantity(value: unit.meters(from: value), kind: .length))
     }
 
-    private func makeAgentClient(
-        mode: CLIEditMode,
-        sessionID: UUID?,
-        socket: String?
-    ) throws -> AgentClient? {
-        try CLIAgentClientFactory.makeAgentClient(
-            mode: mode,
-            sessionID: sessionID,
-            socket: socket
-        )
-    }
 }
 
-public struct BoxModelCommand: ParsableCommand {
+public struct BoxModelCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "box",
         abstract: "Create an extruded rectangle body."
     )
 
-    @Argument(help: "Path to the .swcad document.")
-    public var file: String
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
 
     @Option(help: "Feature name.")
     public var name: String = "Box"
@@ -1741,86 +1275,25 @@ public struct BoxModelCommand: ParsableCommand {
     @Option(help: "Extrude direction: normal or symmetric.")
     public var direction: CLIExtrudeDirection = .normal
 
-    @Option(help: "Edit mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Flag(help: "Validate the command without saving the changed file.")
-    public var dryRun: Bool = false
-
-    @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
-    public var forceFileEdit: Bool = false
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
-
-    @OptionGroup
-    public var writeDestination: CLIWriteDestinationOptions
-
     public init() {}
 
-    public func run() throws {
-        let id = try parsedSessionID(sessionID)
-
-        try CLIExitCode.run {
-            let writePolicy = try writeDestination.writePolicy(file: file, mode: mode, sessionID: id)
-            let url = URL(fileURLWithPath: file)
-            let target = CLIDocumentTarget(
-                fileURL: url,
-                sessionID: id
-            )
-            let agentClient = try makeAgentClient(
-                mode: mode,
-                sessionID: id,
-                socket: agentSocket
-            )
-            let lengthUnit = try CLILengthUnitResolver.resolve(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try await CLILengthUnitResolver.resolve(
                 unitName: unit,
-                target: target,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: forceFileEdit || writePolicy.requiresFileMode,
-                client: agentClient
+                document: document,
+                sessionID: sessionID
             )
             let dimensions = dimensionExpressions(unit: lengthUnit)
-            let response = try CLIService().createExtrudedRectangle(
-                target: target,
+            return .createExtrudedRectangle(
                 name: name,
                 plane: try CLISketchPlaneReferenceParser.reference(plane: plane, constructionPlaneID: constructionPlaneID),
                 width: dimensions.width,
                 height: dimensions.height,
                 depth: dimensions.depth,
-                direction: direction.extrudeDirection,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                dryRun: dryRun,
-                writePolicy: writePolicy,
-                forceFileEdit: forceFileEdit,
-                client: agentClient
-            )
-            try CLIOutput.write(
-                response: response,
-                asJSON: json
+                direction: direction.extrudeDirection
             )
         }
-    }
-
-    private func parsedSessionID(_ value: String?) throws -> UUID? {
-        guard let value else {
-            return nil
-        }
-        guard let id = UUID(uuidString: value) else {
-            throw ValidationError("Session ID must be a UUID.")
-        }
-        return id
     }
 
     private func dimensionExpressions(
@@ -1837,27 +1310,16 @@ public struct BoxModelCommand: ParsableCommand {
         )
     }
 
-    private func makeAgentClient(
-        mode: CLIEditMode,
-        sessionID: UUID?,
-        socket: String?
-    ) throws -> AgentClient? {
-        try CLIAgentClientFactory.makeAgentClient(
-            mode: mode,
-            sessionID: sessionID,
-            socket: socket
-        )
-    }
 }
 
-public struct BoxCornersModelCommand: ParsableCommand {
+public struct BoxCornersModelCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "box-corners",
         abstract: "Create an extruded rectangle body from two footprint corners."
     )
 
-    @Argument(help: "Path to the .swcad document.")
-    public var file: String
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
 
     @Option(help: "Feature name.")
     public var name: String = "Box"
@@ -1889,86 +1351,25 @@ public struct BoxCornersModelCommand: ParsableCommand {
     @Option(help: "Extrude direction: normal or symmetric.")
     public var direction: CLIExtrudeDirection = .normal
 
-    @Option(help: "Edit mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Flag(help: "Validate the command without saving the changed file.")
-    public var dryRun: Bool = false
-
-    @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
-    public var forceFileEdit: Bool = false
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
-
-    @OptionGroup
-    public var writeDestination: CLIWriteDestinationOptions
-
     public init() {}
 
-    public func run() throws {
-        let id = try parsedSessionID(sessionID)
-
-        try CLIExitCode.run {
-            let writePolicy = try writeDestination.writePolicy(file: file, mode: mode, sessionID: id)
-            let url = URL(fileURLWithPath: file)
-            let target = CLIDocumentTarget(
-                fileURL: url,
-                sessionID: id
-            )
-            let agentClient = try makeAgentClient(
-                mode: mode,
-                sessionID: id,
-                socket: agentSocket
-            )
-            let lengthUnit = try CLILengthUnitResolver.resolve(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try await CLILengthUnitResolver.resolve(
                 unitName: unit,
-                target: target,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: forceFileEdit || writePolicy.requiresFileMode,
-                client: agentClient
+                document: document,
+                sessionID: sessionID
             )
             let modelInputs = modelInputExpressions(unit: lengthUnit)
-            let response = try CLIService().createExtrudedRectangleFromCorners(
-                target: target,
+            return .createExtrudedRectangleFromCorners(
                 name: name,
                 plane: try CLISketchPlaneReferenceParser.reference(plane: plane, constructionPlaneID: constructionPlaneID),
                 firstCorner: modelInputs.firstCorner,
                 oppositeCorner: modelInputs.oppositeCorner,
                 depth: modelInputs.depth,
-                direction: direction.extrudeDirection,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                dryRun: dryRun,
-                writePolicy: writePolicy,
-                forceFileEdit: forceFileEdit,
-                client: agentClient
-            )
-            try CLIOutput.write(
-                response: response,
-                asJSON: json
+                direction: direction.extrudeDirection
             )
         }
-    }
-
-    private func parsedSessionID(_ value: String?) throws -> UUID? {
-        guard let value else {
-            return nil
-        }
-        guard let id = UUID(uuidString: value) else {
-            throw ValidationError("Session ID must be a UUID.")
-        }
-        return id
     }
 
     private func modelInputExpressions(
@@ -1995,27 +1396,16 @@ public struct BoxCornersModelCommand: ParsableCommand {
         .constant(Quantity(value: unit.meters(from: value), kind: .length))
     }
 
-    private func makeAgentClient(
-        mode: CLIEditMode,
-        sessionID: UUID?,
-        socket: String?
-    ) throws -> AgentClient? {
-        try CLIAgentClientFactory.makeAgentClient(
-            mode: mode,
-            sessionID: sessionID,
-            socket: socket
-        )
-    }
 }
 
-public struct CylinderModelCommand: ParsableCommand {
+public struct CylinderModelCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "cylinder",
         abstract: "Create an extruded circle body."
     )
 
-    @Argument(help: "Path to the .swcad document.")
-    public var file: String
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
 
     @Option(help: "Feature name.")
     public var name: String = "Cylinder"
@@ -2044,86 +1434,25 @@ public struct CylinderModelCommand: ParsableCommand {
     @Option(help: "Extrude direction: normal or symmetric.")
     public var direction: CLIExtrudeDirection = .normal
 
-    @Option(help: "Edit mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Flag(help: "Validate the command without saving the changed file.")
-    public var dryRun: Bool = false
-
-    @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
-    public var forceFileEdit: Bool = false
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
-
-    @OptionGroup
-    public var writeDestination: CLIWriteDestinationOptions
-
     public init() {}
 
-    public func run() throws {
-        let id = try parsedSessionID(sessionID)
-
-        try CLIExitCode.run {
-            let writePolicy = try writeDestination.writePolicy(file: file, mode: mode, sessionID: id)
-            let url = URL(fileURLWithPath: file)
-            let target = CLIDocumentTarget(
-                fileURL: url,
-                sessionID: id
-            )
-            let agentClient = try makeAgentClient(
-                mode: mode,
-                sessionID: id,
-                socket: agentSocket
-            )
-            let lengthUnit = try CLILengthUnitResolver.resolve(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try await CLILengthUnitResolver.resolve(
                 unitName: unit,
-                target: target,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: forceFileEdit || writePolicy.requiresFileMode,
-                client: agentClient
+                document: document,
+                sessionID: sessionID
             )
             let values = dimensionExpressions(unit: lengthUnit)
-            let response = try CLIService().createExtrudedCircle(
-                target: target,
+            return .createExtrudedCircle(
                 name: name,
                 plane: try CLISketchPlaneReferenceParser.reference(plane: plane, constructionPlaneID: constructionPlaneID),
                 center: SketchPoint(x: values.centerX, y: values.centerY),
                 radius: values.radius,
                 depth: values.depth,
-                direction: direction.extrudeDirection,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                dryRun: dryRun,
-                writePolicy: writePolicy,
-                forceFileEdit: forceFileEdit,
-                client: agentClient
-            )
-            try CLIOutput.write(
-                response: response,
-                asJSON: json
+                direction: direction.extrudeDirection
             )
         }
-    }
-
-    private func parsedSessionID(_ value: String?) throws -> UUID? {
-        guard let value else {
-            return nil
-        }
-        guard let id = UUID(uuidString: value) else {
-            throw ValidationError("Session ID must be a UUID.")
-        }
-        return id
     }
 
     private func dimensionExpressions(
@@ -2142,27 +1471,16 @@ public struct CylinderModelCommand: ParsableCommand {
         )
     }
 
-    private func makeAgentClient(
-        mode: CLIEditMode,
-        sessionID: UUID?,
-        socket: String?
-    ) throws -> AgentClient? {
-        try CLIAgentClientFactory.makeAgentClient(
-            mode: mode,
-            sessionID: sessionID,
-            socket: socket
-        )
-    }
 }
 
-public struct ExtrudeModelCommand: ParsableCommand {
+public struct ExtrudeModelCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "extrude",
         abstract: "Extrude an existing closed sketch profile."
     )
 
-    @Argument(help: "Path to the .swcad document.")
-    public var file: String
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
 
     @Option(help: "Feature name.")
     public var name: String = "Extrude"
@@ -2179,85 +1497,25 @@ public struct ExtrudeModelCommand: ParsableCommand {
     @Option(help: "Extrude direction: normal or symmetric.")
     public var direction: CLIExtrudeDirection = .normal
 
-    @Option(help: "Edit mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Flag(help: "Validate the command without saving the changed file.")
-    public var dryRun: Bool = false
-
-    @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
-    public var forceFileEdit: Bool = false
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
-
-    @OptionGroup
-    public var writeDestination: CLIWriteDestinationOptions
-
     public init() {}
 
-    public func run() throws {
-        let id = try parsedSessionID(sessionID)
+    public func run() async throws {
         let profile = try profileReference()
 
-        try CLIExitCode.run {
-            let writePolicy = try writeDestination.writePolicy(file: file, mode: mode, sessionID: id)
-            let url = URL(fileURLWithPath: file)
-            let target = CLIDocumentTarget(
-                fileURL: url,
-                sessionID: id
-            )
-            let agentClient = try makeAgentClient(
-                mode: mode,
-                sessionID: id,
-                socket: agentSocket
-            )
-            let lengthUnit = try CLILengthUnitResolver.resolve(
+        try await CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try await CLILengthUnitResolver.resolve(
                 unitName: unit,
-                target: target,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: forceFileEdit || writePolicy.requiresFileMode,
-                client: agentClient
+                document: document,
+                sessionID: sessionID
             )
             let distanceExpression = distanceExpression(unit: lengthUnit)
-            let response = try CLIService().extrudeProfile(
-                target: target,
+            return .extrudeProfile(
                 name: name,
                 profile: profile,
                 distance: distanceExpression,
-                direction: direction.extrudeDirection,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                dryRun: dryRun,
-                writePolicy: writePolicy,
-                forceFileEdit: forceFileEdit,
-                client: agentClient
-            )
-            try CLIOutput.write(
-                response: response,
-                asJSON: json
+                direction: direction.extrudeDirection
             )
         }
-    }
-
-    private func parsedSessionID(_ value: String?) throws -> UUID? {
-        guard let value else {
-            return nil
-        }
-        guard let id = UUID(uuidString: value) else {
-            throw ValidationError("Session ID must be a UUID.")
-        }
-        return id
     }
 
     private func profileReference() throws -> ProfileReference {
@@ -2273,39 +1531,19 @@ public struct ExtrudeModelCommand: ParsableCommand {
         return .constant(Quantity(value: lengthUnit.meters(from: distance), kind: .length))
     }
 
-    private func makeAgentClient(
-        mode: CLIEditMode,
-        sessionID: UUID?,
-        socket: String?
-    ) throws -> AgentClient? {
-        try CLIAgentClientFactory.makeAgentClient(
-            mode: mode,
-            sessionID: sessionID,
-            socket: socket
-        )
-    }
 }
 
-public struct ExportDocument: ParsableCommand {
+public struct ExportDocument: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "export",
         abstract: "Export a Rupa document to an exchange file."
     )
 
-    @Argument(help: "Path to the .swcad document.")
-    public var file: String
+    @OptionGroup
+    public var document: CLIReadDocumentOptions
 
     @Option(help: "Output file path. The extension selects the export format.")
     public var output: String
-
-    @Option(help: "Export mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
 
     @Option(help: "Export preset name.")
     public var preset: String?
@@ -2316,379 +1554,160 @@ public struct ExportDocument: ParsableCommand {
     @Flag(help: "Evaluate and validate the export without writing the output file.")
     public var dryRun: Bool = false
 
-    @Flag(help: "Allow direct file export even if the app reports the same file as open.")
-    public var forceFileEdit: Bool = false
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
-
     public init() {}
 
-    public func run() throws {
-        let id = try parsedSessionID(sessionID)
+    public func run() async throws {
+        let id = try document.resolvedSessionID()
 
-        try CLIExitCode.run {
-            let url = URL(fileURLWithPath: file)
+        try await CLIExitCode.run {
             let outputURL = URL(fileURLWithPath: output)
-            let agentClient = try makeAgentClient(
-                mode: mode,
-                sessionID: id,
-                socket: agentSocket
-            )
-            let response = try CLIService().exportDocument(
-                target: CLIDocumentTarget(
-                    fileURL: url,
-                    sessionID: id
-                ),
+            let response = try await CLIService().exportDocument(
+                target: document.target(sessionID: id),
                 outputURL: outputURL,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                mode: document.mode,
+                expectedGeneration: document.generation(),
                 options: ExportOptions(
                     presetName: preset,
                     destinationPolicy: destinationPolicy
                 ),
-                dryRun: dryRun,
-                forceFileEdit: forceFileEdit,
-                client: agentClient
+                dryRun: dryRun
             )
             try CLIOutput.write(
                 response: response,
-                asJSON: json
+                asJSON: document.json
             )
         }
     }
-
-    private func parsedSessionID(_ value: String?) throws -> UUID? {
-        guard let value else {
-            return nil
-        }
-        guard let id = UUID(uuidString: value) else {
-            throw ValidationError("Session ID must be a UUID.")
-        }
-        return id
-    }
-
-    private func makeAgentClient(
-        mode: CLIEditMode,
-        sessionID: UUID?,
-        socket: String?
-    ) throws -> AgentClient? {
-        try CLIAgentClientFactory.makeAgentClient(
-            mode: mode,
-            sessionID: sessionID,
-            socket: socket
-        )
-    }
 }
 
-public struct EvaluateDocument: ParsableCommand {
+public struct EvaluateDocument: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "eval",
         abstract: "Evaluate a Rupa document."
     )
 
-    @Argument(help: "Path to the .swcad document.")
-    public var file: String
-
-    @Option(help: "Evaluation mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Option(help: "Optional Rupa agent socket used to detect open document sessions.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
+    @OptionGroup
+    public var document: CLIReadDocumentOptions
 
     public init() {}
 
-    public func run() throws {
-        let id = try parsedSessionID(sessionID)
+    public func run() async throws {
+        let id = try document.resolvedSessionID()
 
-        try CLIExitCode.run {
-            let url = URL(fileURLWithPath: file)
-            let agentClient = try makeAgentClient(
-                mode: mode,
-                sessionID: id,
-                socket: agentSocket
-            )
-            let response = try CLIService().evaluateDocument(
-                target: CLIDocumentTarget(
-                    fileURL: url,
-                    sessionID: id
-                ),
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                client: agentClient
-            )
+        try await CLIExitCode.run {
+            let envelope = try await CLIService().read(
+                target: document.target(sessionID: id),
+                mode: document.mode,
+                expectedGeneration: document.generation()
+            ) { sessionID in
+                .evaluate(
+                    sessionID: sessionID,
+                    expectedGeneration: document.generation()
+                )
+            }
             try CLIOutput.write(
-                response: response,
-                asJSON: json
+                response: try CLIResponseProjector.evaluation(envelope),
+                asJSON: document.json
             )
         }
-    }
-
-    private func parsedSessionID(_ value: String?) throws -> UUID? {
-        guard let value else {
-            return nil
-        }
-        guard let id = UUID(uuidString: value) else {
-            throw ValidationError("Session ID must be a UUID.")
-        }
-        return id
-    }
-
-    private func makeAgentClient(
-        mode: CLIEditMode,
-        sessionID: UUID?,
-        socket: String?
-    ) throws -> AgentClient? {
-        try CLIAgentClientFactory.makeAgentClient(
-            mode: mode,
-            sessionID: sessionID,
-            socket: socket
-        )
     }
 }
 
-public struct MeasureDocument: ParsableCommand {
+public struct MeasureDocument: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "measure",
         abstract: "Measure a Rupa document."
     )
 
-    @Argument(help: "Path to the .swcad document.")
-    public var file: String
-
-    @Option(help: "Measurement mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Option(help: "Optional Rupa agent socket used to detect open document sessions.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
+    @OptionGroup
+    public var document: CLIReadDocumentOptions
 
     public init() {}
 
-    public func run() throws {
-        let id = try parsedSessionID(sessionID)
+    public func run() async throws {
+        let id = try document.resolvedSessionID()
 
-        try CLIExitCode.run {
-            let url = URL(fileURLWithPath: file)
-            let agentClient = try makeAgentClient(
-                mode: mode,
-                sessionID: id,
-                socket: agentSocket
-            )
-            let response = try CLIService().measureDocument(
-                target: CLIDocumentTarget(
-                    fileURL: url,
-                    sessionID: id
-                ),
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                client: agentClient
-            )
+        try await CLIExitCode.run {
+            let envelope = try await CLIService().read(
+                target: document.target(sessionID: id),
+                mode: document.mode,
+                expectedGeneration: document.generation()
+            ) { sessionID in
+                .measure(
+                    sessionID: sessionID,
+                    expectedGeneration: document.generation()
+                )
+            }
             try CLIOutput.write(
-                response: response,
-                asJSON: json
+                response: try CLIResponseProjector.measurement(envelope),
+                asJSON: document.json
             )
         }
-    }
-
-    private func parsedSessionID(_ value: String?) throws -> UUID? {
-        guard let value else {
-            return nil
-        }
-        guard let id = UUID(uuidString: value) else {
-            throw ValidationError("Session ID must be a UUID.")
-        }
-        return id
-    }
-
-    private func makeAgentClient(
-        mode: CLIEditMode,
-        sessionID: UUID?,
-        socket: String?
-    ) throws -> AgentClient? {
-        try CLIAgentClientFactory.makeAgentClient(
-            mode: mode,
-            sessionID: sessionID,
-            socket: socket
-        )
     }
 }
 
-public struct MeshDocument: ParsableCommand {
+public struct MeshDocument: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "mesh",
         abstract: "Summarize evaluated Rupa document meshes."
     )
 
-    @Argument(help: "Path to the .swcad document.")
-    public var file: String
-
-    @Option(help: "Mesh summary mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Option(help: "Optional Rupa agent socket used to detect open document sessions.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
+    @OptionGroup
+    public var document: CLIReadDocumentOptions
 
     public init() {}
 
-    public func run() throws {
-        let id = try parsedSessionID(sessionID)
+    public func run() async throws {
+        let id = try document.resolvedSessionID()
 
-        try CLIExitCode.run {
-            let url = URL(fileURLWithPath: file)
-            let agentClient = try makeAgentClient(
-                mode: mode,
-                sessionID: id,
-                socket: agentSocket
-            )
-            let response = try CLIService().meshSummary(
-                target: CLIDocumentTarget(
-                    fileURL: url,
-                    sessionID: id
-                ),
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                client: agentClient
-            )
+        try await CLIExitCode.run {
+            let envelope = try await CLIService().read(
+                target: document.target(sessionID: id),
+                mode: document.mode,
+                expectedGeneration: document.generation()
+            ) { sessionID in
+                .meshSummary(
+                    sessionID: sessionID,
+                    expectedGeneration: document.generation()
+                )
+            }
             try CLIOutput.write(
-                response: response,
-                asJSON: json
+                response: try CLIResponseProjector.meshSummary(envelope),
+                asJSON: document.json
             )
         }
-    }
-
-    private func parsedSessionID(_ value: String?) throws -> UUID? {
-        guard let value else {
-            return nil
-        }
-        guard let id = UUID(uuidString: value) else {
-            throw ValidationError("Session ID must be a UUID.")
-        }
-        return id
-    }
-
-    private func makeAgentClient(
-        mode: CLIEditMode,
-        sessionID: UUID?,
-        socket: String?
-    ) throws -> AgentClient? {
-        try CLIAgentClientFactory.makeAgentClient(
-            mode: mode,
-            sessionID: sessionID,
-            socket: socket
-        )
     }
 }
 
-public struct SaveDocument: ParsableCommand {
+public struct SaveDocument: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "save",
         abstract: "Save a Rupa document."
     )
 
-    @Argument(help: "Path to the .swcad document.")
-    public var file: String
-
-    @Option(help: "Save mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Flag(help: "Allow direct file save even if the app reports the same file as open.")
-    public var forceFileEdit: Bool = false
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
+    @OptionGroup
+    public var document: CLIReadDocumentOptions
 
     public init() {}
 
-    public func run() throws {
-        let id = try parsedSessionID(sessionID)
+    public func run() async throws {
+        let id = try document.resolvedSessionID()
 
-        try CLIExitCode.run {
-            let url = URL(fileURLWithPath: file)
-            let agentClient = try makeAgentClient(
-                mode: mode,
-                sessionID: id,
-                socket: agentSocket
-            )
-            let response = try CLIService().saveDocument(
-                target: CLIDocumentTarget(
-                    fileURL: url,
-                    sessionID: id
-                ),
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: forceFileEdit,
-                client: agentClient
+        try await CLIExitCode.run {
+            let response = try await CLIService().saveDocument(
+                target: document.target(sessionID: id),
+                mode: document.mode,
+                expectedGeneration: document.generation()
             )
             try CLIOutput.write(
                 response: response,
-                asJSON: json
+                asJSON: document.json
             )
         }
     }
-
-    private func parsedSessionID(_ value: String?) throws -> UUID? {
-        guard let value else {
-            return nil
-        }
-        guard let id = UUID(uuidString: value) else {
-            throw ValidationError("Session ID must be a UUID.")
-        }
-        return id
-    }
-
-    private func makeAgentClient(
-        mode: CLIEditMode,
-        sessionID: UUID?,
-        socket: String?
-    ) throws -> AgentClient? {
-        try CLIAgentClientFactory.makeAgentClient(
-            mode: mode,
-            sessionID: sessionID,
-            socket: socket
-        )
-    }
 }
 
-public struct ParameterCommand: ParsableCommand {
+public struct ParameterCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "param",
         abstract: "Inspect or edit document parameters.",
@@ -2704,89 +1723,46 @@ public struct ParameterCommand: ParsableCommand {
     public init() {}
 }
 
-public struct ListParameterCommand: ParsableCommand {
+public struct ListParameterCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "list",
         abstract: "List document parameters."
     )
 
-    @Argument(help: "Path to the .swcad document.")
-    public var file: String
-
-    @Option(help: "Read mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Option(help: "Optional Rupa agent socket used to detect open document sessions.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
+    @OptionGroup
+    public var document: CLIReadDocumentOptions
 
     public init() {}
 
-    public func run() throws {
-        let id = try parsedSessionID(sessionID)
+    public func run() async throws {
+        let id = try document.resolvedSessionID()
 
-        try CLIExitCode.run {
-            let url = URL(fileURLWithPath: file)
-            let agentClient = try makeAgentClient(
-                mode: mode,
-                sessionID: id,
-                socket: agentSocket
-            )
-            let response = try CLIService().listParameters(
-                target: CLIDocumentTarget(
-                    fileURL: url,
-                    sessionID: id
-                ),
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                client: agentClient
-            )
+        try await CLIExitCode.run {
+            let response = try await CLIService().send(
+                target: document.target(sessionID: id),
+                mode: document.mode
+            ) { sessionID in
+                .parameters(
+                    sessionID: sessionID,
+                    expectedGeneration: document.generation()
+                )
+            }
             try CLIOutput.write(
-                response: response,
-                asJSON: json
+                response: try CLIResponseProjector.parameters(response),
+                asJSON: document.json
             )
         }
-    }
-
-    private func parsedSessionID(_ value: String?) throws -> UUID? {
-        guard let value else {
-            return nil
-        }
-        guard let id = UUID(uuidString: value) else {
-            throw ValidationError("Session ID must be a UUID.")
-        }
-        return id
-    }
-
-    private func makeAgentClient(
-        mode: CLIEditMode,
-        sessionID: UUID?,
-        socket: String?
-    ) throws -> AgentClient? {
-        try CLIAgentClientFactory.makeAgentClient(
-            mode: mode,
-            sessionID: sessionID,
-            socket: socket
-        )
     }
 }
 
-public struct SetParameterCommand: ParsableCommand {
+public struct SetParameterCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "set",
         abstract: "Set a document parameter."
     )
 
-    @Argument(help: "Path to the .swcad document.")
-    public var file: String
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
 
     @Argument(help: "Parameter name.")
     public var name: String
@@ -2803,95 +1779,53 @@ public struct SetParameterCommand: ParsableCommand {
     @Option(help: "Length unit or angle unit for the numeric literal.")
     public var unit: String?
 
-    @Option(help: "Edit mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Flag(help: "Validate the command without saving the changed file.")
-    public var dryRun: Bool = false
-
-    @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
-    public var forceFileEdit: Bool = false
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
-
-    @OptionGroup
-    public var writeDestination: CLIWriteDestinationOptions
-
     public init() {}
 
-    public func run() throws {
-        let id = try parsedSessionID(sessionID)
+    public func run() async throws {
+        let id = try document.resolvedSessionID()
 
-        try CLIExitCode.run {
-            let context = try CLILegacyMutationContextResolver.resolve(
-                file: file,
-                mode: mode,
-                sessionID: id,
-                agentSocket: agentSocket,
-                forceFileEdit: forceFileEdit,
-                writeDestination: writeDestination
-            )
+        try await CLIExitCode.run {
             let service = CLIService()
-            let parameter = try parameterInput(
-                target: context.target,
-                forceFileEdit: context.forceFileEdit,
-                client: context.agentClient
-            )
+            let parameter = try await parameterInput(sessionID: id)
             let response: CLIResponse
             switch parameter {
             case .literal(let expression, let kind):
-                response = try service.setParameter(
-                    target: context.target,
-                    name: name,
-                    expression: expression,
-                    kind: kind,
-                    mode: mode,
-                    expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                    dryRun: dryRun,
-                    writePolicy: context.writePolicy,
-                    forceFileEdit: forceFileEdit,
-                    client: context.agentClient
+                response = try await service.applyAutomationCommand(
+                    target: try document.target(sessionID: id),
+                    command: .upsertParameter(
+                        name: name,
+                        expression: expression,
+                        kind: kind
+                    ),
+                    mode: document.mode,
+                    expectedGeneration: document.generation(),
+                    expectedWorkspaceRevision: document.workspaceRevision(),
+                    dryRun: document.dryRun,
+                    writePolicy: try document.writePolicy(sessionID: id)
                 )
             case .formula(let expression, let kind, let defaults):
-                response = try service.setParameterExpression(
-                    target: context.target,
-                    name: name,
-                    expression: expression,
-                    kind: kind,
-                    defaults: defaults,
-                    mode: mode,
-                    expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                    dryRun: dryRun,
-                    writePolicy: context.writePolicy,
-                    forceFileEdit: forceFileEdit,
-                    client: context.agentClient
-                )
+                response = try await service.executeCommandMutationRequest(
+                    target: try document.target(sessionID: id),
+                    mode: document.mode,
+                    expectedGeneration: document.generation(),
+                    dryRun: document.dryRun,
+                    writePolicy: try document.writePolicy(sessionID: id)
+                ) { sessionID in
+                    .setParameterExpression(
+                        sessionID: sessionID,
+                        name: name,
+                        expression: expression,
+                        kind: kind,
+                        defaults: defaults,
+                        expectedGeneration: document.generation()
+                    )
+                }
             }
             try CLIOutput.write(
                 response: response,
-                asJSON: json
+                asJSON: document.json
             )
         }
-    }
-
-    private func parsedSessionID(_ value: String?) throws -> UUID? {
-        guard let value else {
-            return nil
-        }
-        guard let id = UUID(uuidString: value) else {
-            throw ValidationError("Session ID must be a UUID.")
-        }
-        return id
     }
 
     private enum ParameterInput {
@@ -2899,11 +1833,7 @@ public struct SetParameterCommand: ParsableCommand {
         case formula(String, QuantityKind, ParameterExpressionDefaults)
     }
 
-    private func parameterInput(
-        target: CLIDocumentTarget,
-        forceFileEdit: Bool,
-        client: AgentClientProtocol?
-    ) throws -> ParameterInput {
+    private func parameterInput(sessionID: UUID?) async throws -> ParameterInput {
         if let expression {
             guard value == nil else {
                 throw ValidationError("Use either a numeric value or --expression, not both.")
@@ -2911,38 +1841,25 @@ public struct SetParameterCommand: ParsableCommand {
             return .formula(
                 expression,
                 kind.quantityKind,
-                try expressionDefaults(
-                    target: target,
-                    forceFileEdit: forceFileEdit,
-                    client: client
-                )
+                try await expressionDefaults(sessionID: sessionID)
             )
         }
-        let parsed = try parameterExpression(
-            target: target,
-            forceFileEdit: forceFileEdit,
-            client: client
-        )
+        let parsed = try await parameterExpression(sessionID: sessionID)
         return .literal(parsed.expression, parsed.kind)
     }
 
     private func parameterExpression(
-        target: CLIDocumentTarget,
-        forceFileEdit: Bool,
-        client: AgentClientProtocol?
-    ) throws -> (expression: CADExpression, kind: QuantityKind) {
+        sessionID: UUID?
+    ) async throws -> (expression: CADExpression, kind: QuantityKind) {
         guard let value else {
             throw ValidationError("Parameter set requires a numeric value or --expression.")
         }
         switch kind {
         case .length:
-            let lengthUnit = try CLILengthUnitResolver.resolve(
+            let lengthUnit = try await CLILengthUnitResolver.resolve(
                 unitName: unit,
-                target: target,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: forceFileEdit,
-                client: client
+                document: document,
+                sessionID: sessionID
             )
             return (
                 .constant(
@@ -2974,19 +1891,14 @@ public struct SetParameterCommand: ParsableCommand {
     }
 
     private func expressionDefaults(
-        target: CLIDocumentTarget,
-        forceFileEdit: Bool,
-        client: AgentClientProtocol?
-    ) throws -> ParameterExpressionDefaults {
+        sessionID: UUID?
+    ) async throws -> ParameterExpressionDefaults {
         switch kind {
         case .length:
-            let lengthUnit = try CLILengthUnitResolver.resolve(
+            let lengthUnit = try await CLILengthUnitResolver.resolve(
                 unitName: unit,
-                target: target,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: forceFileEdit,
-                client: client
+                document: document,
+                sessionID: sessionID
             )
             return ParameterExpressionDefaults(
                 lengthUnit: lengthUnit,
@@ -2997,13 +1909,10 @@ public struct SetParameterCommand: ParsableCommand {
             guard let angleUnit = AngleUnit(rawValue: unitName) else {
                 throw ValidationError("Angle unit must be radian or degree.")
             }
-            let lengthUnit = try CLILengthUnitResolver.resolve(
+            let lengthUnit = try await CLILengthUnitResolver.resolve(
                 unitName: nil,
-                target: target,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: forceFileEdit,
-                client: client
+                document: document,
+                sessionID: sessionID
             )
             return ParameterExpressionDefaults(
                 lengthUnit: lengthUnit,
@@ -3017,117 +1926,38 @@ public struct SetParameterCommand: ParsableCommand {
         }
     }
 
-    private func makeAgentClient(
-        mode: CLIEditMode,
-        sessionID: UUID?,
-        socket: String?
-    ) throws -> AgentClient? {
-        try CLIAgentClientFactory.makeAgentClient(
-            mode: mode,
-            sessionID: sessionID,
-            socket: socket
-        )
-    }
 }
 
-public struct DeleteParameterCommand: ParsableCommand {
+public struct DeleteParameterCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "delete",
         abstract: "Delete a document parameter."
     )
 
-    @Argument(help: "Path to the .swcad document.")
-    public var file: String
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
 
     @Argument(help: "Parameter name.")
     public var name: String
 
-    @Option(help: "Edit mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Flag(help: "Validate the command without saving the changed file.")
-    public var dryRun: Bool = false
-
-    @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
-    public var forceFileEdit: Bool = false
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
-
-    @OptionGroup
-    public var writeDestination: CLIWriteDestinationOptions
-
     public init() {}
 
-    public func run() throws {
-        let id = try parsedSessionID(sessionID)
-
-        try CLIExitCode.run {
-            let context = try CLILegacyMutationContextResolver.resolve(
-                file: file,
-                mode: mode,
-                sessionID: id,
-                agentSocket: agentSocket,
-                forceFileEdit: forceFileEdit,
-                writeDestination: writeDestination
-            )
-            let response = try CLIService().deleteParameter(
-                target: context.target,
-                name: name,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                dryRun: dryRun,
-                writePolicy: context.writePolicy,
-                forceFileEdit: forceFileEdit,
-                client: context.agentClient
-            )
-            try CLIOutput.write(
-                response: response,
-                asJSON: json
-            )
-        }
-    }
-
-    private func parsedSessionID(_ value: String?) throws -> UUID? {
-        guard let value else {
-            return nil
-        }
-        guard let id = UUID(uuidString: value) else {
-            throw ValidationError("Session ID must be a UUID.")
-        }
-        return id
-    }
-
-    private func makeAgentClient(
-        mode: CLIEditMode,
-        sessionID: UUID?,
-        socket: String?
-    ) throws -> AgentClient? {
-        try CLIAgentClientFactory.makeAgentClient(
-            mode: mode,
-            sessionID: sessionID,
-            socket: socket
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
+            document: document,
+            command: .deleteParameter(name: name)
         )
     }
 }
 
-public struct RenameParameterCommand: ParsableCommand {
+public struct RenameParameterCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "rename",
         abstract: "Rename a document parameter while preserving references."
     )
 
-    @Argument(help: "Path to the .swcad document.")
-    public var file: String
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
 
     @Argument(help: "Current parameter name.")
     public var currentName: String
@@ -3135,265 +1965,86 @@ public struct RenameParameterCommand: ParsableCommand {
     @Argument(help: "New parameter name.")
     public var newName: String
 
-    @Option(help: "Edit mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Flag(help: "Validate the command without saving the changed file.")
-    public var dryRun: Bool = false
-
-    @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
-    public var forceFileEdit: Bool = false
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
-
-    @OptionGroup
-    public var writeDestination: CLIWriteDestinationOptions
-
     public init() {}
 
-    public func run() throws {
-        let id = try parsedSessionID(sessionID)
-
-        try CLIExitCode.run {
-            let context = try CLILegacyMutationContextResolver.resolve(
-                file: file,
-                mode: mode,
-                sessionID: id,
-                agentSocket: agentSocket,
-                forceFileEdit: forceFileEdit,
-                writeDestination: writeDestination
-            )
-            let response = try CLIService().renameParameter(
-                target: context.target,
-                currentName: currentName,
-                newName: newName,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                dryRun: dryRun,
-                writePolicy: context.writePolicy,
-                forceFileEdit: forceFileEdit,
-                client: context.agentClient
-            )
-            try CLIOutput.write(
-                response: response,
-                asJSON: json
-            )
-        }
-    }
-
-    private func parsedSessionID(_ value: String?) throws -> UUID? {
-        guard let value else {
-            return nil
-        }
-        guard let id = UUID(uuidString: value) else {
-            throw ValidationError("Session ID must be a UUID.")
-        }
-        return id
-    }
-
-    private func makeAgentClient(
-        mode: CLIEditMode,
-        sessionID: UUID?,
-        socket: String?
-    ) throws -> AgentClient? {
-        try CLIAgentClientFactory.makeAgentClient(
-            mode: mode,
-            sessionID: sessionID,
-            socket: socket
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
+            document: document,
+            command: .renameParameter(currentName: currentName, newName: newName)
         )
     }
 }
 
-public struct RenameDocument: ParsableCommand {
+public struct RenameDocument: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "rename",
-        abstract: "Rename a closed Rupa document file."
+        abstract: "Rename a Rupa project."
     )
 
-    @Argument(help: "Path to the .swcad document.")
-    public var file: String
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
 
     @Option(help: "New document display name.")
     public var name: String
 
-    @Option(help: "Rename mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
-
-    @Option(help: "Open document session UUID for live mode.")
-    public var sessionID: String?
-
-    @Option(help: "Expected document generation for live mode.")
-    public var expectedGeneration: UInt64?
-
-    @Flag(help: "Validate the command without saving the changed file.")
-    public var dryRun: Bool = false
-
-    @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
-    public var forceFileEdit: Bool = false
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
-
-    @OptionGroup
-    public var writeDestination: CLIWriteDestinationOptions
-
     public init() {}
 
-    public func run() throws {
-        let id = try parsedSessionID(sessionID)
-
-        try CLIExitCode.run {
-            let context = try CLILegacyMutationContextResolver.resolve(
-                file: file,
-                mode: mode,
-                sessionID: id,
-                agentSocket: agentSocket,
-                forceFileEdit: forceFileEdit,
-                writeDestination: writeDestination
-            )
-            let response = try CLIService().renameDocument(
-                target: context.target,
-                name: name,
-                mode: mode,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                dryRun: dryRun,
-                writePolicy: context.writePolicy,
-                forceFileEdit: forceFileEdit,
-                client: context.agentClient
-            )
-            try CLIOutput.write(
-                response: response,
-                asJSON: json
-            )
-        }
-    }
-
-    private func parsedSessionID(_ value: String?) throws -> UUID? {
-        guard let value else {
-            return nil
-        }
-        guard let id = UUID(uuidString: value) else {
-            throw ValidationError("Session ID must be a UUID.")
-        }
-        return id
-    }
-
-    private func makeAgentClient(
-        mode: CLIEditMode,
-        sessionID: UUID?,
-        socket: String?
-    ) throws -> AgentClient? {
-        try CLIAgentClientFactory.makeAgentClient(
-            mode: mode,
-            sessionID: sessionID,
-            socket: socket
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
+            document: document,
+            command: .renameDocument(name: name)
         )
     }
 }
 
-public struct RenameLiveDocument: ParsableCommand {
-    public static let configuration = CommandConfiguration(
-        commandName: "rename-live",
-        abstract: "Rename an open Rupa document through the running app session."
-    )
-
-    @Argument(help: "Open document session UUID.")
-    public var sessionID: String
-
-    @Option(help: "New document display name.")
-    public var name: String
-
-    @Option(help: "Expected document generation.")
-    public var expectedGeneration: UInt64?
-
-    @Option(help: "Optional compatibility override for the Rupa agent endpoint.")
-    public var socket: String?
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
-
-    public init() {}
-
-    public func run() throws {
-        guard let id = UUID(uuidString: sessionID) else {
-            throw ValidationError("Session ID must be a UUID.")
-        }
-
-        try CLIExitCode.run {
-            let response = try CLIService().renameDocument(
-                target: CLIDocumentTarget(sessionID: id),
-                name: name,
-                mode: .live,
-                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                client: try CLIAgentClientFactory.makeRequiredAgentClient(
-                    socket: socket
-                )
-            )
-            try CLIOutput.write(response: response, asJSON: json)
-        }
-    }
-}
-
-public struct Sessions: ParsableCommand {
+public struct Sessions: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "sessions",
         abstract: "List open Rupa document sessions."
     )
 
-    @Option(help: "Optional compatibility override for the Rupa agent endpoint.")
-    public var socket: String?
-
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
 
     public init() {}
 
-    public func run() throws {
-        try CLIExitCode.run {
-            let response = try CLIService().sessions(
-                client: try CLIAgentClientFactory.makeRequiredAgentClient(
-                    socket: socket
-                )
-            )
+    public func run() async throws {
+        try await CLIExitCode.run {
+            let response = try await CLIService().sessions()
             try CLIOutput.write(response: response, asJSON: json)
         }
     }
 }
 
-public struct ValidateDocument: ParsableCommand {
+public struct ValidateDocument: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "validate",
-        abstract: "Validate a closed Rupa document file."
+        abstract: "Validate a Rupa project."
     )
 
-    @Argument(help: "Path to the .swcad document.")
-    public var file: String
-
-    @Flag(help: "Print a JSON result.")
-    public var json: Bool = false
+    @OptionGroup
+    public var document: CLIReadDocumentOptions
 
     public init() {}
 
-    public func run() throws {
-        try CLIExitCode.run {
-            let url = URL(fileURLWithPath: file)
-            let response = try CLIService().validateFile(at: url)
+    public func run() async throws {
+        let id = try document.resolvedSessionID()
+
+        try await CLIExitCode.run {
+            let envelope = try await CLIService().read(
+                target: document.target(sessionID: id),
+                mode: document.mode,
+                expectedGeneration: document.generation()
+            ) { sessionID in
+                .execute(
+                    sessionID: sessionID,
+                    command: .validateDocument,
+                    expectedGeneration: document.generation()
+                )
+            }
             try CLIOutput.write(
-                response: response,
-                asJSON: json
+                response: try CLIResponseProjector.command(envelope),
+                asJSON: document.json
             )
         }
     }

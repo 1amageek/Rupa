@@ -6,7 +6,7 @@ import SwiftCAD
 extension WorkspaceScalePreset: ExpressibleByArgument {}
 extension ViewportGridVisualSpacingMode: ExpressibleByArgument {}
 
-public struct DescribeDocumentCommand: ParsableCommand {
+public struct DescribeDocumentCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "describe",
         abstract: "Describe the current document settings, including workspace scale."
@@ -17,15 +17,15 @@ public struct DescribeDocumentCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .describeDocument
         )
     }
 }
 
-public struct SetDisplayUnitCommand: ParsableCommand {
+public struct SetDisplayUnitCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "set-display-unit",
         abstract: "Set the workspace display unit and its standard workspace ruler."
@@ -39,15 +39,15 @@ public struct SetDisplayUnitCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .setDisplayUnit(unit)
         )
     }
 }
 
-public struct SetWorkspaceScalePresetCommand: ParsableCommand {
+public struct SetWorkspaceScalePresetCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "set-scale-preset",
         abstract: "Apply a workspace scale preset from micro fabrication through regional planning."
@@ -61,15 +61,15 @@ public struct SetWorkspaceScalePresetCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .setWorkspaceScalePreset(preset)
         )
     }
 }
 
-public struct FitWorkspaceScaleCommand: ParsableCommand {
+public struct FitWorkspaceScaleCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "fit-workspace-scale",
         abstract: "Apply the recommended workspace scale preset for the current model size."
@@ -80,15 +80,15 @@ public struct FitWorkspaceScaleCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .fitWorkspaceScaleToModel
         )
     }
 }
 
-public struct RebaseWorkspaceOriginCommand: ParsableCommand {
+public struct RebaseWorkspaceOriginCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "rebase-origin",
         abstract: "Translate authored CAD source coordinates by a meter-space vector."
@@ -112,8 +112,8 @@ public struct RebaseWorkspaceOriginCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .rebaseWorkspaceOrigin(
                 translation: Vector3D(x: x, y: y, z: z)
@@ -122,7 +122,7 @@ public struct RebaseWorkspaceOriginCommand: ParsableCommand {
     }
 }
 
-public struct SetViewportGridCommand: ParsableCommand {
+public struct SetViewportGridCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "set-grid",
         abstract: "Set viewport grid display behavior without changing snap precision."
@@ -136,8 +136,8 @@ public struct SetViewportGridCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .setViewportGridSettings(
                 ViewportGridSettings(visualSpacingMode: visualSpacingMode)
@@ -146,7 +146,7 @@ public struct SetViewportGridCommand: ParsableCommand {
     }
 }
 
-public struct SetRulerConfigurationCommand: ParsableCommand {
+public struct SetRulerConfigurationCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "set-ruler",
         abstract: "Set the workspace display unit, ruler tick spacing, and visible workspace span."
@@ -169,8 +169,8 @@ public struct SetRulerConfigurationCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .setRulerConfiguration(
                 RulerConfiguration(

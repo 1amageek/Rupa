@@ -1,7 +1,7 @@
 import ArgumentParser
 import RupaAutomation
 
-public struct SketchTrimCommand: ParsableCommand {
+public struct SketchTrimCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "trim",
         abstract: "Trim a supported source sketch curve segment."
@@ -15,8 +15,8 @@ public struct SketchTrimCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .trimSketchCurveSegment(target: selection.decodedTarget())
         )

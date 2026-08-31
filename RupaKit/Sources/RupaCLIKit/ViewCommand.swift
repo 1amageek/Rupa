@@ -7,7 +7,7 @@ import SwiftCAD
 extension DrawingProjectionPagePreset: ExpressibleByArgument {}
 extension DrawingProjectionStylePreset: ExpressibleByArgument {}
 
-public struct ViewCommand: ParsableCommand {
+public struct ViewCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "view",
         abstract: "Create and manage saved drawing and viewport views.",
@@ -25,7 +25,7 @@ public struct ViewCommand: ParsableCommand {
     public init() {}
 }
 
-public struct ViewListCommand: ParsableCommand {
+public struct ViewListCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "list",
         abstract: "List saved views in a document."
@@ -36,15 +36,15 @@ public struct ViewListCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .describeSavedViews
         )
     }
 }
 
-public struct ViewCreateCommand: ParsableCommand {
+public struct ViewCreateCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "create",
         abstract: "Create a saved view from explicit camera, projection, and scale data."
@@ -61,8 +61,8 @@ public struct ViewCreateCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .createSavedView(
                 definition.savedView(id: try CLISavedViewIDParser.optionalID(id))
@@ -71,7 +71,7 @@ public struct ViewCreateCommand: ParsableCommand {
     }
 }
 
-public struct ViewUpdateCommand: ParsableCommand {
+public struct ViewUpdateCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "update",
         abstract: "Replace an existing saved view with explicit camera, projection, and scale data."
@@ -88,8 +88,8 @@ public struct ViewUpdateCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .updateSavedView(
                 definition.savedView(id: try CLISavedViewIDParser.id(id))
@@ -98,7 +98,7 @@ public struct ViewUpdateCommand: ParsableCommand {
     }
 }
 
-public struct ViewRemoveCommand: ParsableCommand {
+public struct ViewRemoveCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "remove",
         abstract: "Remove a saved view."
@@ -112,15 +112,15 @@ public struct ViewRemoveCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .removeSavedView(id: try CLISavedViewIDParser.id(id))
         )
     }
 }
 
-public struct ViewProjectionCommand: ParsableCommand {
+public struct ViewProjectionCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "projection",
         abstract: "Generate structured drawing projection strokes from a saved orthographic view."
@@ -155,8 +155,8 @@ public struct ViewProjectionCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIExitCode.run {
+    public func run() async throws {
+        try await CLIExitCode.run {
             guard maximumStrokeCount > 0 else {
                 throw ValidationError("--maximum-stroke-count must be positive.")
             }
@@ -166,7 +166,7 @@ public struct ViewProjectionCommand: ParsableCommand {
                     throw ValidationError("--tolerance-meters must be finite and positive.")
                 }
             }
-            var response = try CLIAutomationCommandRunner.response(
+            var response = try await CLIAutomationCommandRunner.response(
                 document: document,
                 command: .generateDrawingProjection(
                     query: DrawingProjectionQuery(
@@ -189,7 +189,7 @@ public struct ViewProjectionCommand: ParsableCommand {
     }
 }
 
-public struct ViewRenderCommand: ParsableCommand {
+public struct ViewRenderCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "render",
         abstract: "Generate a one-shot drawing projection from explicit camera, projection, and scale data without saving a view."
@@ -224,8 +224,8 @@ public struct ViewRenderCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIExitCode.run {
+    public func run() async throws {
+        try await CLIExitCode.run {
             guard maximumStrokeCount > 0 else {
                 throw ValidationError("--maximum-stroke-count must be positive.")
             }
@@ -235,7 +235,7 @@ public struct ViewRenderCommand: ParsableCommand {
                     throw ValidationError("--tolerance-meters must be finite and positive.")
                 }
             }
-            var response = try CLIAutomationCommandRunner.response(
+            var response = try await CLIAutomationCommandRunner.response(
                 document: document,
                 command: .generateDrawingProjectionFromView(
                     savedView: definition.savedView(id: SavedViewID()),

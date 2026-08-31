@@ -1,9 +1,12 @@
-import Foundation
 import RupaAgentProtocol
 
-/// Observes the process-lifetime Agent host without starting the application.
+/// Observes the reachable live Rupa host without opening a project.
 @MainActor
-public protocol LiveProjectAccessObserving: Sendable {
+public protocol ProjectAccessObserving: Sendable {
+    func capabilities(
+        deadline: ContinuousClock.Instant
+    ) async throws -> [AgentCapabilityDescriptor]
+
     func status(
         deadline: ContinuousClock.Instant
     ) async throws -> AgentStatus

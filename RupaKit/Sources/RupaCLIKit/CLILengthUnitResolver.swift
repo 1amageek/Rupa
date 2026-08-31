@@ -8,15 +8,14 @@ enum CLILengthUnitResolver {
         unitName: String?,
         document: CLIWriteDocumentOptions,
         sessionID: UUID?
-    ) throws -> LengthDisplayUnit {
+    ) async throws -> LengthDisplayUnit {
         let writePolicy = try document.writePolicy(sessionID: sessionID)
-        return try resolve(
+        return try await resolve(
             unitName: unitName,
             target: try document.target(sessionID: sessionID),
             mode: document.mode,
             expectedGeneration: document.generation(),
-            forceFileEdit: document.forceFileEdit || writePolicy.requiresFileMode,
-            client: try document.agentClient(sessionID: sessionID)
+            outputURL: writePolicy.outputURL
         )
     }
 
@@ -24,9 +23,9 @@ enum CLILengthUnitResolver {
         unit: LengthDisplayUnit?,
         document: CLIWriteDocumentOptions,
         sessionID: UUID?
-    ) throws -> LengthDisplayUnit {
+    ) async throws -> LengthDisplayUnit {
         guard let unit else {
-            return try resolve(
+            return try await resolve(
                 unitName: nil,
                 document: document,
                 sessionID: sessionID
@@ -40,9 +39,8 @@ enum CLILengthUnitResolver {
         target: CLIDocumentTarget,
         mode: CLIEditMode,
         expectedGeneration: DocumentGeneration?,
-        forceFileEdit: Bool,
-        client: AgentClientProtocol?
-    ) throws -> LengthDisplayUnit {
+        outputURL: URL?
+    ) async throws -> LengthDisplayUnit {
         if let unitName {
             guard let unit = LengthDisplayUnit(rawValue: unitName) else {
                 throw ValidationError("Length unit must be a supported Rupa display unit.")
@@ -50,12 +48,11 @@ enum CLILengthUnitResolver {
             return unit
         }
 
-        return try CLIService().workspaceScale(
+        return try await CLIService().workspaceScale(
             target: target,
             mode: mode,
             expectedGeneration: expectedGeneration,
-            forceFileEdit: forceFileEdit,
-            client: client
+            outputURL: outputURL
         ).displayUnit
     }
 }

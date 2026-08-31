@@ -1,14 +1,13 @@
 import ArgumentParser
 import Foundation
-import RupaAgentTransport
 import RupaCore
 
 public struct CLIWriteDocumentOptions: ParsableArguments {
-    @Argument(help: "Path to the .swcad document for file or auto mode.")
+    @Argument(help: "Path to the .rupa project.")
     public var file: String?
 
-    @Option(help: "Edit mode: auto, file, or live.")
-    public var mode: CLIEditMode = .auto
+    @Option(help: "Access mode: live or file.")
+    public var mode: CLIEditMode = .live
 
     @Option(help: "Open document session UUID for live mode.")
     public var sessionID: String?
@@ -24,12 +23,6 @@ public struct CLIWriteDocumentOptions: ParsableArguments {
 
     @OptionGroup
     public var destination: CLIWriteDestinationOptions
-
-    @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
-    public var forceFileEdit: Bool = false
-
-    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
-    public var agentSocket: String?
 
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
@@ -60,20 +53,13 @@ public struct CLIWriteDocumentOptions: ParsableArguments {
         expectedWorkspaceRevision.map(WorkspaceRevision.init)
     }
 
-    public func agentClient(sessionID: UUID?) throws -> AgentClient? {
-        try CLIAgentClientFactory.makeAgentClient(
-            mode: mode,
-            sessionID: sessionID,
-            socket: agentSocket
-        )
-    }
 }
 
 public struct CLIWriteDestinationOptions: ParsableArguments {
-    @Flag(name: .customLong("in-place"), help: "Write file-mode mutations back to the input file. This is the default when --output is omitted.")
+    @Flag(name: .customLong("in-place"), help: "Write file-mode mutations back to the input project. This is the default when --output is omitted.")
     public var inPlace: Bool = false
 
-    @Option(help: "Write file-mode mutations to a new .swcad output file instead of modifying the input file.")
+    @Option(help: "Write file-mode mutations to a new .rupa output project instead of modifying the input project.")
     public var output: String?
 
     public init() {}
@@ -106,17 +92,6 @@ public struct CLIWriteDestinationOptions: ParsableArguments {
         )
     }
 
-    public func forcesFileMode(
-        file: String?,
-        mode: CLIEditMode,
-        sessionID: UUID?
-    ) throws -> Bool {
-        try writePolicy(
-            file: file,
-            mode: mode,
-            sessionID: sessionID
-        ).requiresFileMode
-    }
 }
 
 enum CLIDocumentWritePolicyResolver {
@@ -138,8 +113,8 @@ enum CLIDocumentWritePolicyResolver {
             return .inPlace
         }
         let outputURL = URL(fileURLWithPath: output)
-        guard outputURL.pathExtension.lowercased() == "swcad" else {
-            throw ValidationError("--output must use the .swcad document extension.")
+        guard outputURL.pathExtension.lowercased() == "rupa" else {
+            throw ValidationError("--output must use the .rupa project extension.")
         }
         return .output(outputURL)
     }
@@ -155,13 +130,13 @@ enum CLIDocumentWritePolicyResolver {
             throw ValidationError("--in-place and --output cannot be combined.")
         }
         guard !(output != nil && mode == .live) else {
-            throw ValidationError("--output can only be used in file or auto mode.")
+            throw ValidationError("--output can only be used with --mode file.")
         }
         guard !(output != nil && sessionID != nil) else {
             throw ValidationError("--output cannot be combined with --session-id.")
         }
         guard !(inPlace && mode == .live) else {
-            throw ValidationError("--in-place can only be used in file or auto mode.")
+            throw ValidationError("--in-place can only be used with --mode file.")
         }
         guard !(inPlace && sessionID != nil) else {
             throw ValidationError("--in-place cannot be combined with --session-id.")

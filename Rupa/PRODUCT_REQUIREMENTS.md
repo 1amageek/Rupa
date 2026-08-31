@@ -137,7 +137,7 @@ The following capabilities are required in the universal CAD model and must be r
 | Selection | Body, face, edge, vertex, sketch entity, component, material, annotation, and construction reference selection must be stable and command-addressable. |
 | Validation | Validation rules must be generic, composable, typed, and available from GUI, CLI, and Agent workflows. |
 | Export presets | Export settings must be saved in the document and invokable from GUI, CLI, and automation. |
-| Templates | Templates may preconfigure units, UI surface defaults, materials, validation rules, and export presets, but they must create the same `.swcad` document type. |
+| Templates | Templates may preconfigure units, UI surface defaults, materials, validation rules, and export presets, but they must create the same schema-v3 `.rupa` project type. |
 | Deferred workspace preset | Workspace presets may eventually group templates, validation policies, export presets, UI emphasis, and unit/ruler defaults without changing document type, capability availability, command behavior, or geometry semantics. |
 
 ## Document Model Extensions
@@ -197,7 +197,7 @@ flowchart LR
 |---|---|
 | Introduce late | Do not implement WorkspacePreset until generic discovery and required acceptance use cases work. |
 | Non-destructive switching | Switching profiles must not rewrite geometry, feature history, component hierarchy, or command semantics. |
-| Same document type | Profiles must operate on `.swcad`; no profile-specific document extension or package layout. |
+| Same document type | Profiles must operate on schema-v3 `.rupa`; no profile-specific document extension or package layout. |
 | Same commands | GUI, CLI, MCP, and Agent commands remain preset-independent. Registered domain capabilities remain explicit. |
 | Preset grouping only | Workspace presets group defaults and UI choices; they do not register, authorize, or remove capabilities. |
 | Reversible | Switching presets does not rewrite source or lose CAD/domain data. |

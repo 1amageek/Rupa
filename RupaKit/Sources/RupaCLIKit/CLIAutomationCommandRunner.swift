@@ -6,38 +6,21 @@ enum CLIAutomationCommandRunner {
     static func run(
         document: CLIWriteDocumentOptions,
         command: AutomationCommand
-    ) throws {
-        let sessionID = try document.resolvedSessionID()
-        try run(
-            document: document,
-            sessionID: sessionID,
-            command: command
-        )
+    ) async throws {
+        try await run(document: document) { _ in command }
     }
 
     static func run(
         document: CLIWriteDocumentOptions,
-        command: (UUID?) throws -> AutomationCommand
-    ) throws {
+        command: (UUID?) async throws -> AutomationCommand
+    ) async throws {
         let sessionID = try document.resolvedSessionID()
-        let resolvedCommand = try command(sessionID)
-        try run(
-            document: document,
-            sessionID: sessionID,
-            command: resolvedCommand
-        )
-    }
-
-    private static func run(
-        document: CLIWriteDocumentOptions,
-        sessionID: UUID?,
-        command: AutomationCommand
-    ) throws {
-        try CLIExitCode.run {
-            let response = try response(
+        try await CLIExitCode.run {
+            let resolvedCommand = try await command(sessionID)
+            let response = try await response(
                 document: document,
                 sessionID: sessionID,
-                command: command
+                command: resolvedCommand
             )
             try CLIOutput.write(response: response, asJSON: document.json)
         }
@@ -46,9 +29,9 @@ enum CLIAutomationCommandRunner {
     static func response(
         document: CLIWriteDocumentOptions,
         command: AutomationCommand
-    ) throws -> CLIResponse {
+    ) async throws -> CLIResponse {
         let sessionID = try document.resolvedSessionID()
-        return try response(
+        return try await response(
             document: document,
             sessionID: sessionID,
             command: command
@@ -59,17 +42,15 @@ enum CLIAutomationCommandRunner {
         document: CLIWriteDocumentOptions,
         sessionID: UUID?,
         command: AutomationCommand
-    ) throws -> CLIResponse {
-        try CLIService().applyAutomationCommand(
+    ) async throws -> CLIResponse {
+        try await CLIService().applyAutomationCommand(
             target: try document.target(sessionID: sessionID),
             command: command,
             mode: document.mode,
             expectedGeneration: document.generation(),
             expectedWorkspaceRevision: document.workspaceRevision(),
             dryRun: document.dryRun,
-            writePolicy: try document.writePolicy(sessionID: sessionID),
-            forceFileEdit: document.forceFileEdit,
-            client: try document.agentClient(sessionID: sessionID)
+            writePolicy: try document.writePolicy(sessionID: sessionID)
         )
     }
 
@@ -77,8 +58,8 @@ enum CLIAutomationCommandRunner {
         unitName: String?,
         document: CLIWriteDocumentOptions,
         sessionID: UUID?
-    ) throws -> LengthDisplayUnit {
-        try CLILengthUnitResolver.resolve(
+    ) async throws -> LengthDisplayUnit {
+        try await CLILengthUnitResolver.resolve(
             unitName: unitName,
             document: document,
             sessionID: sessionID

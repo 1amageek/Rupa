@@ -1,7 +1,7 @@
 import ArgumentParser
 import RupaCore
 
-public struct InspectSelectionMeasurementCommand: ParsableCommand {
+public struct InspectSelectionMeasurementCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "selection-measurement",
         abstract: "Return a point, distance, or angle measurement for typed SelectionReference values."
@@ -18,7 +18,7 @@ public struct InspectSelectionMeasurementCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
+    public func run() async throws {
         let id = try options.resolvedSessionID()
         let measurementQuery: CADAgentMeasurementQuery = try CLISelectionInputParser.decodeSingleSelectionInput(
             inlinePayload: query,
@@ -26,14 +26,19 @@ public struct InspectSelectionMeasurementCommand: ParsableCommand {
             valueName: "CADAgentMeasurementQuery"
         )
 
-        try CLIExitCode.run {
-            let response = try CLIService().selectionMeasurement(
+        try await CLIExitCode.run {
+            let envelope = try await CLIService().read(
                 target: options.target(sessionID: id),
-                query: measurementQuery,
                 mode: options.mode,
-                expectedGeneration: options.generation(),
-                client: try options.agentClient(sessionID: id)
-            )
+                expectedGeneration: options.generation()
+            ) { sessionID in
+                .selectionMeasurement(
+                    sessionID: sessionID,
+                    query: measurementQuery,
+                    expectedGeneration: options.generation()
+                )
+            }
+            let response = try CLIResponseProjector.selectionMeasurement(envelope)
             try CLIOutput.write(response: response, asJSON: options.json)
         }
     }

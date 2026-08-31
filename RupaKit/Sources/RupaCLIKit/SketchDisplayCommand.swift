@@ -1,7 +1,7 @@
 import ArgumentParser
 import RupaAutomation
 
-public struct SketchCurvatureDisplayCommand: ParsableCommand {
+public struct SketchCurvatureDisplayCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "curvature-display",
         abstract: "Set or toggle source curve curvature-comb display."
@@ -24,8 +24,8 @@ public struct SketchCurvatureDisplayCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .setCurveCurvatureDisplay(
                 target: selection.decodedTarget(),
@@ -49,7 +49,7 @@ public struct SketchCurvatureDisplayCommand: ParsableCommand {
     }
 }
 
-public struct SketchPointDisplayCommand: ParsableCommand {
+public struct SketchPointDisplayCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "point-display",
         abstract: "Set or toggle source curve point display."
@@ -69,8 +69,8 @@ public struct SketchPointDisplayCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        try CLIAutomationCommandRunner.run(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(
             document: document,
             command: .setPointDisplay(
                 target: selection.decodedTarget(),

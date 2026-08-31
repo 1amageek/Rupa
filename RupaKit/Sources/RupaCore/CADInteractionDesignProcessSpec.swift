@@ -698,7 +698,7 @@ struct CADInteractionDesignProcessSpec: Sendable {
                     core: "Core command and readback contracts",
                     automation: "AutomationRunner",
                     agent: "ProjectAgentCommandController",
-                    cli: "rupa live/file/auto modes",
+                    cli: "rupa live/file modes",
                     kernel: "SwiftCAD command/evaluation bridge",
                     evaluation: "Agent-readable evaluation summaries",
                     measurement: "Agent measurement readback",

@@ -4,7 +4,7 @@ import RupaCore
 extension PolygonSizingMode: ExpressibleByArgument {}
 extension PolygonInclinationMode: ExpressibleByArgument {}
 
-public struct PolygonSketchCommand: ParsableCommand {
+public struct PolygonSketchCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "polygon",
         abstract: "Create a regular polygon sketch."
@@ -51,18 +51,15 @@ public struct PolygonSketchCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
-        let sessionID = try document.resolvedSessionID()
-
-        try CLIExitCode.run {
-            let lengthUnit = try CLILengthUnitResolver.resolve(
+    public func run() async throws {
+        try await CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try await CLILengthUnitResolver.resolve(
                 unit: unit,
                 document: document,
                 sessionID: sessionID
             )
             let input = try polygonInput(unit: lengthUnit)
-            let response = try CLIService().createPolygonSketch(
-                target: try document.target(sessionID: sessionID),
+            return .createPolygonSketch(
                 name: name,
                 plane: try CLISketchPlaneReferenceParser.reference(plane: plane, constructionPlaneID: constructionPlaneID),
                 center: input.center,
@@ -70,15 +67,8 @@ public struct PolygonSketchCommand: ParsableCommand {
                 sides: sides,
                 sizingMode: sizingMode,
                 inclinationMode: inclinationMode,
-                rotationAngle: input.rotationAngle,
-                mode: document.mode,
-                expectedGeneration: document.generation(),
-                dryRun: document.dryRun,
-                writePolicy: try document.writePolicy(sessionID: sessionID),
-                forceFileEdit: document.forceFileEdit,
-                client: try document.agentClient(sessionID: sessionID)
+                rotationAngle: input.rotationAngle
             )
-            try CLIOutput.write(response: response, asJSON: document.json)
         }
     }
 

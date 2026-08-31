@@ -1,6 +1,6 @@
 import ArgumentParser
 
-public struct InspectCurvesCommand: ParsableCommand {
+public struct InspectCurvesCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "curves",
         abstract: "Return source curve samples, lengths, curvature, and continuity joins."
@@ -11,16 +11,21 @@ public struct InspectCurvesCommand: ParsableCommand {
 
     public init() {}
 
-    public func run() throws {
+    public func run() async throws {
         let id = try options.resolvedSessionID()
 
-        try CLIExitCode.run {
-            let response = try CLIService().curveAnalysis(
+        try await CLIExitCode.run {
+            let envelope = try await CLIService().read(
                 target: options.target(sessionID: id),
                 mode: options.mode,
-                expectedGeneration: options.generation(),
-                client: try options.agentClient(sessionID: id)
-            )
+                expectedGeneration: options.generation()
+            ) { sessionID in
+                .curveAnalysis(
+                    sessionID: sessionID,
+                    expectedGeneration: options.generation()
+                )
+            }
+            let response = try CLIResponseProjector.curves(envelope)
             try CLIOutput.write(response: response, asJSON: options.json)
         }
     }
