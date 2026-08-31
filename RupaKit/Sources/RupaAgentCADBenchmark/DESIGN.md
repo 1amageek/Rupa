@@ -25,6 +25,23 @@ review, and commit evidence. Aggregate execution is a separate child component
 that composes those completed paths without replacing their evidence. This
 document remains the authority for the cumulative contracts.
 
+### CADAPI-100 current acceptance authority
+
+The completed T12 result of 95 realized cases plus five
+`expectedUnsupported` sphere cases is historical capability evidence only. It
+is not success evidence for the new semantic CAD API. CADAPI-100 preserves all
+100 case IDs, public targets, tolerances, and exact source/B-Rep oracles, but
+requires exactly 100 realized outcomes. `SPH-001`...`SPH-005` must use a
+universal analytic-sphere operation lowered to the existing kernel analytic
+sphere primitive; unsupported, Mesh, polyhedral, cylindrical, bounds-only, or
+benchmark-specific substitutes fail.
+
+The required production route is the signed `rupa` executable through
+`RupaProjectAccess`, authenticated loopback HTTP, the Rupa App-owned registered
+workspace, and its sole `ProjectController`. Later historical sections that
+describe unavailable sphere behavior or direct benchmark-controller harnesses
+document the prior T12 baseline and provide no compatibility or fallback.
+
 ## Responsibilities and Boundaries
 
 The module owns:
@@ -242,7 +259,7 @@ case's Vertical Case Gate passes and its evidence is committed.
 | `CYL` | `CYL-001`...`CYL-008` | 8 | Closed analytic cylinder solids with circular profile, axis, and depth |
 | `LIN` | `LIN-001`...`LIN-012` | 12 | Exact finite line segments with specified endpoints and length |
 | `REC` | `REC-001`...`REC-012` | 12 | Exact rectangle sketch entities with width, height, plane, and placement |
-| `SPH` | `SPH-001`...`SPH-005` | 5 | Genuine analytic sphere surface/topology and radius/center, or explicit unsupported result |
+| `SPH` | `SPH-001`...`SPH-005` | 5 | Genuine analytic sphere surface/topology and radius/center; unsupported or substitute geometry fails CADAPI-100 |
 | `TRN` | `TRN-001`...`TRN-008` | 8 | Translation/rotation placements of source geometry |
 | **Total** | **all IDs above** | **100** | **No implicit or generated cases** |
 
@@ -3077,7 +3094,8 @@ through the following vertical work items:
 | Shared lifecycle extraction | T12-REC-001 | All completed line tests remain green with unchanged route coordinates, timeout/late-registration cleanup, cancellation/stale rejection, publication no-retry, counts, and telemetry; static review proves both facades dispatch only through `ProjectAgentCommandController` and the harness cannot access private expectations |
 | First rectangle behavior | T12-REC-001 | REC-001 alone is activated; exact 40 by 20 mm centred XY four-line/profile realization, same-area swapped-dimension postpublication rejection without retry, off-plane prepublication rejection, typed timeout, zero leaked registrations, candidate privacy, count/timing telemetry, and designer review pass through the shared harness and thin rectangle facade |
 | Cumulative semantic stability | Every `T12-<CATEGORY>-G` | Review all committed cases in the category for shared assumptions, false positives/negatives, route authority, tolerance/plane semantics, and measured bounds before the next category |
-| Sphere honesty | T12-SPH-001...005 | Production Agent capability observation yields typed `analyticSphereUnavailable` and expected unsupported with zero command/publication while Agent ingress is absent, even though the kernel has an analytic constructor; substitutes remain rejected by the unchanged exact contract |
+| Historical sphere honesty | T12-SPH-001...005 | The prior Agent capability observation yielded typed `analyticSphereUnavailable` and expected unsupported with zero command/publication while ingress was absent; this remains historical provenance, not CADAPI-100 success. |
+| Current 100-case API realization | CADAPI-X / CADAPI-IV | All 100 unchanged target specifications, including five genuine analytic spheres, realize through the semantic direct/program vocabulary and the actual signed App/CLI production route; every exact oracle passes and expected-unsupported count is zero. |
 | Exactly 100 implemented cases | T12-LIN through T12-SPH | Catalog identity plus one reviewed vertical evidence commit per stable case; catalog structure alone is insufficient |
 | External candidate executor | T12-XA-A | Exact activated twenty-ID allow-list, value-equal request/live contexts, arbitrary protocol candidate line/rectangle success and mismatch through the production route/oracle, explicit discriminator golden JSON, legacy-shape rejection, typed inactive/error projection, cleanup, privacy/static boundary, and focused tests |
 | REC-009 authority transition | T12-REC-009 | Frozen first-twenty replay and request bytes/digest remain unchanged; exact current twenty-one-ID order, 1.0 by 0.5 inch XZ realization, same-numeric millimetre postpublication rejection/no-retry, off-XZ prepublication rejection, timeout/cleanup/telemetry, refrozen twenty-one-request aggregate, bounded CLI request/evaluation, REC-010 typed inactivity, and unchanged catalog/wire versions |

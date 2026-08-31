@@ -1,5 +1,11 @@
 # RupaAgentCADBenchmarkCLI
 
+> CADAPI-100 supersession: this dedicated executable records the historical T12
+> process boundary and is not the production `rupa` modeling client. Its
+> unsupported-sphere behavior is not accepted by CADAPI-100 and is not retained
+> as compatibility. Current proof must use the signed `rupa` executable and
+> realize all 100 cases through `RupaProjectAccess` and App-owned authority.
+
 ## Purpose and Scope
 
 `RupaAgentCADBenchmarkCLI` is the dedicated native executable that exchanges

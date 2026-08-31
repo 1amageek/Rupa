@@ -34,6 +34,15 @@ operation vocabulary exposed in exactly two forms: a direct one-operation
 invocation and a bounded declarative program. It is a target design; current
 source remains legacy until the later implementation gates pass.
 
+CADAPI-100 tightens that target acceptance contract. The completed historical
+T12 run remains evidence of 95 realized cases and five honestly reported
+unavailable sphere cases, but `expectedUnsupported` is not success evidence for
+the new API. CADAPI completion requires all 100 unchanged target specifications,
+including `SPH-001`...`SPH-005`, to produce genuine source-controlled CAD and
+pass their exact source/B-Rep oracles through the signed `rupa` ->
+`RupaProjectAccess` -> authenticated loopback HTTP -> Rupa App ->
+`ProjectWorkspace` -> `ProjectController` production path.
+
 ## Responsibilities and Boundaries
 
 The system owns the cross-module rule that one registered `ProjectWorkspace`
@@ -82,12 +91,11 @@ the final immutable source/B-Rep snapshot.
 flowchart LR
     subgraph Access["RUPA-ACCESS authority boundary"]
         UIAccess["UI"] --> WorkspaceAuthority["ProjectWorkspace"]
-        CLIAccess["CLI"] --> AccessAPI
+        CLIAccess["signed rupa CLI"] --> AccessAPI
         MCPAccess["Future MCP"] -.-> AccessAPI
-        AccessAPI --> LiveAdapter["Live adapter"]
-        AccessAPI --> ClosedAdapter["Closed .rupa adapter"]
-        LiveAdapter --> WorkspaceRegistry["ProjectWorkspaceRegistry"]
-        ClosedAdapter --> WorkspaceRegistry
+        AccessAPI["RupaProjectAccess"] --> LiveAdapter["authenticated loopback HTTP"]
+        LiveAdapter --> AppHost["Rupa App Agent host"]
+        AppHost --> WorkspaceRegistry["ProjectWorkspaceRegistry"]
         WorkspaceRegistry --> WorkspaceAuthority
         WorkspaceAuthority --> ControllerAuthority["ProjectController"]
     end
@@ -161,11 +169,11 @@ flowchart LR
    retain save authority. Modeling success never implies save. CAD program
    nodes cannot open, close, save, export, edit package bytes, or select an
    alternate access route.
-7. Project-access adapters submit intent and exact session coordinates only.
-   They never edit package entries, instantiate a shadow `EditorSession`, or
-   publish a second project state. Live access releases only its access
-   resources on `finish`; closed access owns a temporary workspace and saves
-   only through an explicit successful save operation.
+7. Project-access adapters submit intent and exact live session coordinates
+   only. They never edit package entries, instantiate a shadow
+   `EditorSession` or controller, publish a second project state, or fall back
+   to closed-file mutation. `finish` releases only access resources; explicit
+   save remains an App-owned workspace/controller operation.
 8. Authored Mesh presentation evaluation shares immutable source buffers. A
    necessary Mesh edit copy is attributed at the T09 execution boundary.
 9. T12 benchmark cases use fresh `ProjectController`/`ProjectWorkspace`
@@ -183,10 +191,12 @@ flowchart LR
    from oracle-private expected source/B-Rep geometry. The T12 oracle uses
    immutable source and exact B-Rep observations, never renderer Mesh output or
    candidate assertions.
-11. T12 has exactly 100 stable case IDs and fixed category denominators. Each
-    case is binary for realization; expected unsupported capability decisions,
-    infrastructure validity, and natural-language reasoning claims are reported
-    separately.
+11. T12 has exactly 100 stable case IDs and fixed category denominators. The
+    historical baseline reports realization and expected-unsupported capability
+    decisions separately. CADAPI-100 preserves the same IDs, target geometry,
+    tolerances, and exact oracles but accepts only 100 realized outcomes;
+    unsupported, skipped, synthetic Mesh, or bounds-only substitutes fail the
+    new API acceptance gate.
 12. T12 keeps a versioned capability-availability baseline/digest separate from
     the evidence-derived execution-regression baseline/digest. The latter is
     established only by a complete valid production run and is never implicitly
@@ -349,7 +359,7 @@ fallback.
 | Shared vocabulary and cutover | Equivalent direct and one-node-program requests use the same descriptor/lowerer; catalog, protocol, codec, runtime, and CLI reject raw feature graphs and public Automation mutation payloads. |
 | CADAPI-D failure and bounds | Wrong type/unit/reference, duplicate/missing symbol, cycle, non-source effect, expansion/byte/work limits, stale/cancel/evaluation failure, rollback, committed no-retry, and dispatch uncertainty are exercised on the real workspace/controller route. |
 | T10 capability fixture | Agent CAD route, representation transition, application-owned save/load, renderer triangle traversal, and deterministic presentation output are exercised through the existing path. The fixture is not evidence of T11 L2 dimensional coherence, semantic bicycle parts, interfaces, manufacturing readiness, structural safety, or certification. |
-| T12 benchmark contract | `RupaAgentCADBenchmark` preserves all 100 individual production-route/oracle gates and composes them through serial replay, measured bounded scheduling, immutable capability/execution baselines, fixed-denominator scoring, and a canonical report. A reference-plan result is control-path evidence, not LLM reasoning evidence. |
+| T12 benchmark contract | `RupaAgentCADBenchmark` preserves all 100 target identities and exact oracles. Its historical 95-realized/5-unsupported report remains provenance only; CADAPI-100 must produce a new 100-realized report through the semantic API and actual signed App/CLI route. A reference-plan result is control-path evidence, not LLM reasoning evidence. |
 | T12 external candidate adapter | Golden JSON, bounded decode, fingerprint mismatch, inactive-case, process exit, privacy scan, and actual line/rectangle process tests prove that an external response reaches the same activated executor and exact oracle without exposing private expectations. |
 | Professional V8 reference | Recomputed power/thermal/mechanical invariants, cited provenance, semantic CAD inventory, save/load validation, viewer evaluation, and explicit unresolved production gates prove only the bounded engineering-reference claim. |
 | Portability | Focused Native runtime tests and compile/link evidence only for portable targets supported by their dependency graph; unavailable target entry failures are reported, not treated as success. |

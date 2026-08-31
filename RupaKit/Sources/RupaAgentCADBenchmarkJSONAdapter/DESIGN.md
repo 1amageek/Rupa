@@ -1,5 +1,11 @@
 # RupaAgentCADBenchmarkJSONAdapter
 
+> CADAPI-100 supersession: this adapter records the historical T12 candidate
+> exchange and its five unavailable-sphere outcomes. It is not a current
+> production modeling API or a compatibility route. CADAPI-X removes it from
+> current 100-case execution; new acceptance requires 100 realized outcomes
+> through the semantic API and signed Rupa App path.
+
 ## Purpose and Scope
 
 `RupaAgentCADBenchmarkJSONAdapter` is the vendor-neutral JSON exchange boundary

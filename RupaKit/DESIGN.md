@@ -90,7 +90,7 @@ program node without an adapter-specific variant.
 |---|---|---|
 | Parameters and datums | Declare or update bounded design values, planes, axes, and frames. | Parameter/datum references; values and units remain typed. |
 | Sketch and constraints | Create/edit primitives, profiles, dimensions, and geometric relations. | Sketch, entity, profile, and constraint references; no raw feature node. |
-| Feature creation | Extrude, revolve, sweep, loft, and other registered source features. | Feature and Body references allocated by Rupa. |
+| Feature creation | Analytic primitives including sphere, extrude, revolve, sweep, loft, and other registered source features. | Feature and source-body-role references allocated by Rupa; analytic sphere remains exact CAD rather than a polygonal or Mesh substitute. |
 | Feature modification | Boolean, edge treatment, shell/offset, and registered direct source edits. | Modified Feature/Body references with explicit target kinds. |
 | Placement and reuse | Transform source, define a component, and place instances. | Scene, Component, and Instance references; reuse does not duplicate defining source. |
 | Finite patterns | Linear, radial, curve, or other registered native pattern operations. | One Pattern reference and bounded occurrence telemetry; occurrence count does not expand program nodes. |
@@ -323,7 +323,7 @@ contracts rather than duplicating their behavioral cases:
 | CAD prepared execution | `RupaAutomation` / `RupaKit` | Later implementation must prove one program produces at most one source transaction, evaluation, undo entry, and publication; all prepublication failures roll back and postpublication failures are no-retry. |
 | Public cutover | `RupaAgentProtocol` / `RupaAgentRuntime` / `RupaCLIKit` | Later codec, catalog, runtime, and actual-CLI tests must prove one primitive is one direct call, a repeated assembly stays compact relative to distinct intent, both forms use the same compiler, and raw graph/Automation mutation payloads are absent or rejected. |
 | Application Agent host | `RupaAgentUI` / Rupa App | ACCESS-O focused same-workspace registration, router delegation, explicit save port, process-lifetime host, and typed failure preservation. |
-| Agent CAD benchmark | `RupaAgentCADBenchmark` | All 100 per-case and category gates plus serial replay, bounded concurrency measurement, capability/execution baselines, fixed-denominator score, committed canonical report, deadline, cancellation, and cleanup evidence. Reference-plan results are control-path evidence only. |
+| Agent CAD benchmark | `RupaAgentCADBenchmark` | The historical 95-realized/5-unsupported report remains provenance. CADAPI-100 reuses the exact 100 targets and oracles but requires 100 realized results through the semantic direct/program API, followed by actual signed App/CLI save/reload evidence. Reference-plan results are control-path evidence only. |
 | External benchmark JSON | JSON adapter / dedicated CLI | Explicit discriminator golden JSON, context fingerprint drift, bounded stdin/file decode, inactive-case/privacy rejection, direct protocol integration, and actual process exit/JSON behavior. |
 | Actual rendered workflow | T10 integration | Agent CAD bicycle assembly, Make Editable for every generated body, one representative Mesh edit, application save/load, all-Authored-Mesh presentation evaluation, renderer triangles, and deterministic PNG. |
 
