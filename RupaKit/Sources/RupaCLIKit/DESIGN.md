@@ -2,145 +2,95 @@
 
 ## Purpose and Scope
 
-`RupaCLIKit` owns command-line parsing and result projection for the `rupa`
-executable. It is a child of the [RupaKit package design](../../DESIGN.md).
-`RupaProjectAccess` is the only production command boundary. ACCESS-D removes
-the former transport and direct-file mutation routes completely. CADAPI-D fixes a simple command syntax for
-`capability.invoke` and a structured input syntax for `program.execute`; both
-are projections of one registered CAD operation vocabulary, not separate CLI
-command systems.
-
-CADAPI-D is not yet implemented. Current raw `AutomationCommand`/
-`appendFeatureGraph` exposure is a separate implementation gap, not an
-alternative project authority.
+`RupaCLIKit` owns asynchronous command parsing and result projection for the
+`rupa` executable. It is a child of the [RupaKit package design](../../DESIGN.md).
+`RupaProjectAccess` is its only production project boundary. Children: none.
 
 ## Responsibilities and Boundaries
 
-The module owns CLI arguments, user-facing JSON/text output, and translation of
-CLI intent to an injected access API. It does not own Product/CAD/Mesh mutation,
-project evaluation, semantic operation schemas, program compilation, persistent
-identifier allocation, presentation defaults, package entry editing, App
-lifecycle, or socket placement.
+The module owns CLI arguments, JSON/text output, and translation of intent to
+an injected access API. It does not own project mutation, evaluation,
+semantic operation schemas, program compilation, package persistence,
+application lifecycle, discovery, or transport framing.
 
-A simple CAD invocation supplies one operation identifier/version and typed
-arguments without a program wrapper. A complex invocation supplies a bounded
-declarative program document whose nodes use the same operation
-identifiers/versions and may use typed local symbols, parameters, output reuse,
-and native finite-pattern operations. CLI syntax never exposes raw feature
-graphs, asks callers to reserve persistent source IDs, or expands a native
-pattern into repeated occurrence payloads.
-
-Immutable live inspection includes the Product scene graph returned by the
-bounded `document.sceneGraphSnapshot` Agent request. The `inspect scene-graph`
-adapter exposes root ordering, node identity, source linkage, visibility, lock
-state, child IDs, and local transforms from the registered workspace. It does
-not request evaluated CAD/Mesh buffers, reconstruct placement from CAD-local
-bounds, or introduce a second read or mutation authority.
-
-`inspect viewport` exposes the exact immutable visible-item projection returned
-by `project.viewportSnapshot`, including project coordinates, navigation IDs,
-selected representation authority, world transforms and bounds, checked Mesh
-counts, aggregate bounds and triangle count, and copy telemetry. It is a
-live-only read and never receives geometry buffers.
-
-The module never opens package bytes or creates an `EditorSession` directly.
+CAD direct invocation and declarative programs remain one semantic vocabulary;
+CLI syntax carries intent and request-local symbols only. The App allocates
+persistent identifiers, validates coordinates, lowers operations, and returns
+typed receipts. Mesh and viewport reads carry bounded DTOs and never expose
+geometry buffers.
 
 ## Related Designs
 
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
-| [package design](../../DESIGN.md) | parent | module boundary | Keeps parsing above project access. | Do not import project internals for mutation. |
-| [RupaProjectAccess](../RupaProjectAccess/DESIGN.md) | depends on | observe/open/send/save/finish | Is the single production access port. | Mode selection is explicit and never fallback. |
-| [RupaAgentProtocol](../RupaAgentProtocol/DESIGN.md) | depends on | intent/result values | Supplies command payloads. | Semantic status contains no endpoint. |
-| [RupaAgentRuntime](../RupaAgentRuntime/DESIGN.md) | reached through access | one semantic dispatch path | Forwards either form to the single Foundation compiler, which alone normalizes direct invocation and compiles both forms through the same operation registry. | CLI and Runtime must not add a parallel recipe or lowering switch. |
-| [RupaDomainFoundation](../RupaDomainFoundation/DESIGN.md) | represented through protocol | bounded declarative program semantics | Defines local references, parameters, DAG ordering, and structural limits. | CLI parses syntax only; it does not validate semantic source authority. |
-| [RupaAgentTransport](../RupaAgentTransport/DESIGN.md) | composed above | live adapter | Carries live requests internally. | Production CLI must not expose the endpoint after ACCESS-D. |
+| [RupaKit package](../../DESIGN.md) | parent | module boundary | Keeps parsing above project authority. | Do not import project internals. |
+| [RupaProjectAccess](../RupaProjectAccess/DESIGN.md) | depends on | observe/open/send/save/finish | Is the only production project port. | All requests reach the App. |
+| [RupaAgentProtocol](../RupaAgentProtocol/DESIGN.md) | depends on | typed intent/result values | Supplies semantic payloads. | Discovery is not protocol state. |
+| [RupaAgentRuntime](../RupaAgentRuntime/DESIGN.md) | reached through access | semantic dispatch | Executes requests in the App workspace. | CLI does not duplicate dispatch. |
+| [RupaDomainFoundation](../RupaDomainFoundation/DESIGN.md) | represented through protocol | bounded program semantics | Defines operation and program values. | CLI performs syntax validation only. |
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    Args["CLI arguments"] --> Simple["capability.invoke\none operation"]
-    Args --> Complex["program.execute\nbounded DAG"]
-    Simple --> Access["ProjectAccessOpening"]
-    Complex --> Access
-    Access --> Session["ProjectAccessSession"]
-    Session --> Workspace["ProjectWorkspace"]
-    Workspace --> Controller["ProjectController"]
-    Session --> Result["bounded JSON / text"]
+    Args["CLI arguments"] --> Intent["Semantic intent"]
+    Intent --> Access["RupaProjectAccess"]
+    Access --> Session["One live access session"]
+    Session --> App["Rupa App ProjectController"]
+    App --> Result["Typed receipt"]
+    Result --> Output["Bounded JSON / text"]
 ```
 
 ## Contracts and Invariants
 
-1. CLI output projects semantic status only; it never reports a socket path.
-2. Project mutation and save must be delegated to a project-access session.
-3. CAD source mutation exposes exactly two CLI forms. Direct invocation carries
-   one operation and no local reference. Program execution carries a bounded
-   source-only DAG using the same descriptors/lowerers; it cannot mix reads,
-   workspace mutation, export, lifecycle, external I/O, or arbitrary code.
-4. CLI owns only user syntax and request-local symbol spelling. Rupa allocates
-   persistent IDs, chooses presentation/defaults, orders dependencies, validates
-   and lowers operations, and returns typed output bindings in a receipt.
-5. Persistence is always an explicit `ProjectAccessSession.save` action. A
-   successful non-dry-run file mutation invokes it on the same session before
-   returning; a live mutation does not. Dry run, prepublication failure,
-   uncertain outcome, or committed no-retry outcome is never followed by save
-   or replay.
-6. Mode is exactly `live` (default) or explicit `file`. There is no automatic
-   fallback, endpoint option, force-file bypass, direct `AgentClient`, or
-   direct `DocumentFileService`/`EditorSession` route.
-7. A live dispatch with uncertain outcome is never replayed through file mode.
-8. `inspect scene-graph` is a live Agent read. It carries the exact session and
-   expected generation, returns a geometry-free immutable snapshot, and fails
-   instead of falling back to direct file decoding.
-9. `inspect viewport` is a live Agent read with the same explicit session and
-   generation fence. It prints the protocol-owned geometry-free viewport result
-   and has no file fallback, mutation, save, or UI interaction path.
+1. Every project command opens at most one access session and uses one
+   monotonic deadline supplied by product composition. Production uses the
+   shared 120-second request budget. The CLI never creates a local workspace
+   or controller.
+2. Mutation and evaluation are sent to the App. Save is a separate explicit
+   API operation; no command edits package bytes directly.
+3. Status, sessions, and capabilities observe the App without starting a
+   project or creating state.
+4. Direct and composite CAD forms use the same descriptors, schemas, limits,
+   and lowerers. A program is sent once and is never expanded into multiple
+   external requests.
+5. Discovery, credential, session, semantic, deadline, cancellation, and
+   response-loss errors remain typed. A dispatched request with an unknown
+   outcome is never retried.
+6. CLI output contains semantic results only; endpoint, port, credential, and
+   Keychain record values are never projected.
 
 ## Runtime Flows
 
-The CLI parses exactly `live` or explicit `file`, opens one access session
-under one deadline, sends either one direct operation request or one composite
-program request, explicitly save only when requested, and finish the access
-resource. Both mutation forms are forwarded once; the CLI neither expands a
-program into multiple calls nor falls back between access modes. A successful
-non-dry-run file mutation explicitly invokes `ProjectAccessSession.save` before
-the temporary session is finished; live mutation remains memory-only until the
-separate save command. Status, sessions, and attach use the observation port
-and never launch the application.
+```mermaid
+sequenceDiagram
+    participant E as rupa executable
+    participant K as CLIKit
+    participant A as RupaProjectAccess
+    participant P as Rupa App
+    E->>K: parse one command
+    K->>A: open/send under one deadline
+    A->>P: authenticated API request
+    P-->>A: typed response
+    A-->>K: project result
+    K-->>E: bounded output
+```
 
 ## State, Ownership, and Lifecycle
 
-CLI command values are short-lived. A returned access session owns its adapter
-resources; the CLI owns neither the live document nor a persistent controller.
+CLI values are short-lived. The access session owns only client resources and
+its identity; the App owns workspace, controller, source, evaluation, and
+package lifetime.
 
 ## Failure, Concurrency, and Constraints
 
-Parsing, access, semantic, deadline, and output errors remain typed. Output is
-bounded by the existing response contracts. Unknown operations/versions,
-invalid values/units, duplicate or missing symbols, cycles, local-reference type
-mismatch, ineligible effects, resource limits, stale coordinates,
-cancellation, lowering/source/evaluation failure, and result-projection failure
-remain distinguishable typed failures. No automatic mutation retry is permitted
-after dispatch; a postpublication receipt carries exact committed coordinates
-and must-not-retry disposition.
+Parsing, access, semantic, coordinate, deadline, cancellation, and output
+errors are nonzero typed CLI results. No error selects a second authority or
+silently succeeds.
 
 ## Verification and Change Impact
 
-Tests cover status projection without endpoint leakage, full executable syntax,
-retained-command parity, explicit-mode routing, and legacy-route absence. The
-scene-graph adapter is verified by exact request routing,
-scene-node transform/visibility JSON projection, stale-generation rejection,
-and an actual bounded CLI-to-Agent process test.
-The viewport adapter is verified by exact live request routing, response
-projection, stale-generation preservation, and executable JSON decoding with no
-serialized Mesh buffer fields.
-
-CADAPI-D executable tests must prove a simple primitive succeeds with one direct
-call, the same operation descriptor/lowerer is used inside a program, a complex
-parameterized/patterned model remains compact instead of wire-expanding repeated
-geometry, and one program produces at most one workspace/controller
-publication. They must also prove raw graph/Automation payloads and
-caller-reserved persistent IDs are absent or rejected, program errors leave the
-project unchanged, and explicit save/reload succeeds through the actual CLI
-access path.
+Tests prove async executable syntax, API injection, one-session/deadline
+behavior, typed failure projection, direct/program parity, and no local
+authority path. Actual CLI tests prove mutation, immutable readback, explicit
+save, and restart recovery through the App.

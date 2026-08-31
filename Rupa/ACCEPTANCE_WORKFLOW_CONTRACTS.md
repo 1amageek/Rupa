@@ -85,7 +85,7 @@ flowchart TD
 | Concrete domains | Architecture, manufacturing, turbomachinery, character, and simulation semantics, validators, generators, and adapters. | Forked document types, bypassed command paths, or lower-layer imports. |
 | RupaProject | Session ordering, artifact/decision stores, export/job prepare-commit, shared application use cases. | Geometry/domain semantics or transport encoding. |
 | RupaUI | Generic interaction, compact canvas affordances, Inspector rendering from descriptors, viewport handles. | Domain rules that belong in validators or command lowerings. |
-| Agent and CLI | Structured discovery, preflight, execution, readback, and file/live transport. | Hidden mutation paths or domain-specific hard-coded behavior outside registered capabilities. |
+| Agent and CLI | Structured discovery, preflight, execution, readback, and authenticated live project access. | Hidden mutation paths or domain-specific hard-coded behavior outside registered capabilities. |
 
 ## Workflow A: Precision Mechanical Part
 
@@ -111,7 +111,7 @@ materials, exact inspection, and neutral CAD/drawing exchange.
 | Evidence | Required proof |
 |---|---|
 | Acceptance document | A schema-v3 `.rupa` fixture containing parameters, sketches, construction planes, solids, material, saved views, and neutral exchange presets. |
-| Mutation proof | The fixture can be edited through UI, Agent live mode, and CLI file mode without source drift. |
+| Mutation proof | The fixture can be edited through UI and through the live Agent/CLI API without source drift; both routes publish through the same App-owned `ProjectController`. |
 | Export proof | STEP and declared drawing outputs either succeed with fidelity reports or fail with typed unsupported diagnostics. |
 | Regression proof | Focused tests cover both successful and rejected feature cases. |
 

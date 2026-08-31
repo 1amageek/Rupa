@@ -7,17 +7,19 @@ import Testing
 @Test
 func projectAccessTargetAcceptsOnlyRupaProjectURLs() throws {
     let input = URL(fileURLWithPath: "/tmp/input.rupa")
-    let output = URL(fileURLWithPath: "/tmp/output.rupa")
 
     #expect(try ProjectAccessTarget.liveProject(input).validated() == .liveProject(input))
-    #expect(
-        try ProjectAccessTarget.closedProject(input: input, output: output).validated()
-            == .closedProject(input: input, output: output)
-    )
+    let sessionID = UUID()
+    #expect(try ProjectAccessTarget.liveSession(sessionID).validated() == .liveSession(sessionID))
 
-    let legacy = URL(fileURLWithPath: "/tmp/input.swcad")
-    #expect(throws: ProjectAccessError.unsupportedProjectFormat(legacy)) {
-        try ProjectAccessTarget.closedProject(input: legacy, output: nil).validated()
+    let unsupported = URL(fileURLWithPath: "/tmp/input.json")
+    #expect(throws: ProjectAccessError.unsupportedProjectFormat(unsupported)) {
+        try ProjectAccessTarget.liveProject(unsupported).validated()
+    }
+
+    let remote = URL(string: "https://example.invalid/project.rupa")!
+    #expect(throws: ProjectAccessError.invalidTarget(remote)) {
+        try ProjectAccessTarget.liveProject(remote).validated()
     }
 }
 

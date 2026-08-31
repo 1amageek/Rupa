@@ -103,7 +103,7 @@ the Authored Mesh source catalog.
 | [package design](../../DESIGN.md) | parent package | Package boundaries and no transport change | Places RupaKit above Project. | Do not move source authority into this module. |
 | [system design](../../../DESIGN.md) | system parent | Inspect/preview/commit flow | Defines exact source and view behavior. | A returned view must be the exact operation result. |
 | [RupaProject design](../RupaProject/DESIGN.md) | depends on | Project staging and publication | Provides the actor-backed authority port. | Use existing `ProjectOperating`; no second controller. |
-| [RupaProjectAccess](../RupaProjectAccess/DESIGN.md) | used by | transport-neutral target/session intent | Composes live or closed access above a workspace. | Access adapters cannot call Core or edit package entries directly. |
+| [RupaProjectAccess](../RupaProjectAccess/DESIGN.md) | used by | transport-neutral live target/session intent | Composes live access above the App-owned workspace. | Access adapters cannot call Core or edit package entries directly. |
 | [RupaCore design](../RupaCore/DESIGN.md) | used through Project | Source ID/content identity and shared asset rules | Defines what a Mesh handle targets. | Scene/representation context is navigation only. |
 | [RupaGeometry design](../RupaGeometry/DESIGN.md) | used through Core | Plan/executor/budget/receipt | Defines request semantics without transport knowledge. | Do not expose internal mutable buffers. |
 | [RupaDomainFoundation](../RupaDomainFoundation/DESIGN.md) | depends on | validated semantic program and exact route/effect | Supplies the generic one-vocabulary compiler contract. | RupaKit must not re-resolve or reinterpret semantic nodes. |

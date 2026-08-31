@@ -7,7 +7,7 @@ import Testing
 @testable import RupaCLIKit
 
 @Test(.timeLimit(.minutes(1)))
-func cliServiceSelectsExactLiveAndFileTargets() async throws {
+func cliServiceSelectsExactLiveProjectAndSessionTargets() async throws {
     let sessionID = UUID()
     let liveProjectSession = StubProjectAccessSession(
         sessionID: sessionID,
@@ -17,60 +17,41 @@ func cliServiceSelectsExactLiveAndFileTargets() async throws {
         sessionID: sessionID,
         steps: [.response(.status(AgentStatus(running: true, sessionCount: 1)))]
     )
-    let fileSession = StubProjectAccessSession(
-        sessionID: sessionID,
-        steps: [.response(.status(AgentStatus(running: true, sessionCount: 1)))]
-    )
     let liveProjectOpener = StubProjectAccessOpener(session: liveProjectSession)
     let liveSessionOpener = StubProjectAccessOpener(session: liveSession)
-    let fileOpener = StubProjectAccessOpener(session: fileSession)
     let observer = await makeStubProjectAccessObserver()
     let projectURL = URL(fileURLWithPath: "/tmp/target.rupa")
 
     try await withStubProjectAccess(opener: liveProjectOpener, observer: observer) {
         _ = try await CLIService().send(
             target: CLIDocumentTarget(fileURL: projectURL),
-            mode: .live,
             request: { .evaluate(sessionID: $0, expectedGeneration: nil) }
         )
     }
     try await withStubProjectAccess(opener: liveSessionOpener, observer: observer) {
         _ = try await CLIService().send(
             target: CLIDocumentTarget(sessionID: sessionID),
-            mode: .live,
-            request: { .evaluate(sessionID: $0, expectedGeneration: nil) }
-        )
-    }
-    try await withStubProjectAccess(opener: fileOpener, observer: observer) {
-        _ = try await CLIService().send(
-            target: CLIDocumentTarget(fileURL: projectURL),
-            mode: .file,
             request: { .evaluate(sessionID: $0, expectedGeneration: nil) }
         )
     }
 
     #expect(await liveProjectOpener.recordedTargets() == [.liveProject(projectURL)])
     #expect(await liveSessionOpener.recordedTargets() == [.liveSession(sessionID)])
-    #expect(await fileOpener.recordedTargets() == [
-        .closedProject(input: projectURL, output: nil),
-    ])
     #expect(await liveProjectSession.recordedFinishCount() == 1)
     #expect(await liveSession.recordedFinishCount() == 1)
-    #expect(await fileSession.recordedFinishCount() == 1)
 }
 
 @Test(.timeLimit(.minutes(1)))
-func cliRejectsLegacyProjectBeforeOpeningAccess() async {
+func cliRejectsUnsupportedProjectBeforeOpeningAccess() async {
     let session = StubProjectAccessSession(steps: [])
     let opener = StubProjectAccessOpener(session: session)
     let observer = await makeStubProjectAccessObserver()
-    let legacyURL = URL(fileURLWithPath: "/tmp/legacy.swcad")
+    let unsupportedURL = URL(fileURLWithPath: "/tmp/project.json")
 
-    await #expect(throws: ProjectAccessError.unsupportedProjectFormat(legacyURL)) {
+    await #expect(throws: ProjectAccessError.unsupportedProjectFormat(unsupportedURL)) {
         try await withStubProjectAccess(opener: opener, observer: observer) {
             _ = try await CLIService().send(
-                target: CLIDocumentTarget(fileURL: legacyURL),
-                mode: .file,
+                target: CLIDocumentTarget(fileURL: unsupportedURL),
                 request: { .evaluate(sessionID: $0, expectedGeneration: nil) }
             )
         }
@@ -97,7 +78,6 @@ func oneCLICommandReusesOneSessionAndFinishesItOnce() async throws {
             for _ in 0..<2 {
                 _ = try await CLIService().send(
                     target: CLIDocumentTarget(fileURL: projectURL),
-                    mode: .live,
                     request: { .evaluate(sessionID: $0, expectedGeneration: nil) }
                 )
             }
@@ -108,6 +88,45 @@ func oneCLICommandReusesOneSessionAndFinishesItOnce() async throws {
     #expect(await opener.recordedDeadlines().count == 1)
     #expect(await session.recordedRequests().count == 2)
     #expect(await session.recordedFinishCount() == 1)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func configuredRequestBudgetDefinesTheCommandsSingleDeadline() async throws {
+    let requestTimeout = Duration.seconds(120)
+    let session = StubProjectAccessSession(
+        steps: [
+            .response(.status(AgentStatus(running: true, sessionCount: 1))),
+        ]
+    )
+    let opener = StubProjectAccessOpener(session: session)
+    let observer = await makeStubProjectAccessObserver()
+    let projectURL = URL(fileURLWithPath: "/tmp/request-budget.rupa")
+    let before = ContinuousClock.now
+
+    try await withStubProjectAccess(
+        opener: opener,
+        observer: observer,
+        requestTimeout: requestTimeout
+    ) {
+        try await CLIProjectAccessRunner.withCommandScope {
+            _ = try await CLIService().agentStatus()
+            _ = try await CLIService().send(
+                target: CLIDocumentTarget(fileURL: projectURL),
+                request: { .evaluate(sessionID: $0, expectedGeneration: nil) }
+            )
+        }
+    }
+    let after = ContinuousClock.now
+
+    let openerDeadlines = await opener.recordedDeadlines()
+    let observerDeadlines = await MainActor.run {
+        observer.statusDeadlines
+    }
+    let deadline = try #require(openerDeadlines.first)
+    #expect(openerDeadlines.count == 1)
+    #expect(observerDeadlines == [deadline])
+    #expect(deadline >= before.advanced(by: requestTimeout))
+    #expect(deadline <= after.advanced(by: requestTimeout))
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -129,12 +148,10 @@ func concurrentWorkInOneCLICommandSharesOneOpeningTaskAndSession() async throws 
         try await CLIProjectAccessRunner.withCommandScope {
             async let first = CLIService().send(
                 target: CLIDocumentTarget(fileURL: projectURL),
-                mode: .live,
                 request: { .evaluate(sessionID: $0, expectedGeneration: nil) }
             )
             async let second = CLIService().send(
                 target: CLIDocumentTarget(fileURL: projectURL),
-                mode: .live,
                 request: { .evaluate(sessionID: $0, expectedGeneration: nil) }
             )
             _ = try await (first, second)
@@ -161,7 +178,6 @@ func selectedCLIOpenerFailureDoesNotRetryAnotherRoute() async {
         try await withStubProjectAccess(opener: opener, observer: observer) {
             _ = try await CLIService().send(
                 target: CLIDocumentTarget(fileURL: projectURL),
-                mode: .live,
                 request: { .evaluate(sessionID: $0, expectedGeneration: nil) }
             )
         }

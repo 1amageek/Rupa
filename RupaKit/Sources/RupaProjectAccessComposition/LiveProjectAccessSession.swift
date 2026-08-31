@@ -1,6 +1,5 @@
 import Foundation
 import RupaAgentProtocol
-import RupaAgentTransport
 import RupaCoreTypes
 import RupaProjectAccess
 
@@ -12,20 +11,6 @@ public final class LiveProjectAccessSession: ProjectAccessSession {
     private var transport: (any LiveProjectAccessTransport)?
     private let deadline: ContinuousClock.Instant
     private let sequencer = LiveProjectAccessOperationSequencer()
-
-    public init(
-        sessionID: UUID,
-        endpoint: UnixSocketEndpoint,
-        deadline: ContinuousClock.Instant,
-        requestTimeout: Duration = .seconds(30)
-    ) {
-        self.sessionID = sessionID
-        self.transport = LiveProjectAgentClient(
-            endpoint: endpoint,
-            requestTimeout: requestTimeout
-        )
-        self.deadline = deadline
-    }
 
     init(
         sessionID: UUID,

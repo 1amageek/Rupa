@@ -1,7 +1,7 @@
 import Foundation
 
 enum ApplicationAuthorityLeaseError: Error, Equatable, LocalizedError, Sendable {
-    case appGroupContainerUnavailable(String)
+    case applicationSupportDirectoryUnavailable
     case directoryPreparationFailed(URL, message: String)
     case lockFileOpenFailed(URL, errorNumber: Int32)
     case lockFilePermissionFailed(URL, errorNumber: Int32)
@@ -9,8 +9,8 @@ enum ApplicationAuthorityLeaseError: Error, Equatable, LocalizedError, Sendable 
 
     var errorDescription: String? {
         switch self {
-        case .appGroupContainerUnavailable(let identifier):
-            "The Rupa App Group container is unavailable: \(identifier)."
+        case .applicationSupportDirectoryUnavailable:
+            "The Rupa Application Support directory is unavailable."
         case .directoryPreparationFailed(let url, let message):
             "The Rupa authority directory could not be prepared at \(url.path): \(message)"
         case .lockFileOpenFailed(let url, let errorNumber):

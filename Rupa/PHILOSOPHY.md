@@ -105,11 +105,10 @@ flowchart TD
     Runtime --> Automation
     Agent["RupaAgent"] --> Runtime
     Agent --> Transport
-    CLI["RupaCLI"] --> CLIKit["RupaCLIKit"]
-    CLIKit --> Runtime
-    CLIKit --> Transport
-    CLIKit --> Automation
-    CLIKit --> Core
+    CLIProduct["Xcode RupaCLIProduct"] --> CLIComposition["RupaCLIComposition"]
+    CLIComposition --> CLIKit["RupaCLIKit"]
+    CLIComposition --> AccessComposition["RupaProjectAccessComposition"]
+    CLIKit --> Access["RupaProjectAccess"]
 ```
 
 | Module | Product-level responsibility |
@@ -122,7 +121,7 @@ flowchart TD
 | `RupaAutomation` | Stable command schema and batch execution contract. |
 | `RupaAgent` | Running-app coordination, IPC, workspace registry, locking. |
 | `RupaCLIKit` | Testable CLI command implementation, terminal UX, JSON output, exit codes. |
-| `RupaCLI` | Thin `rupa` executable entry point. |
+| Xcode `RupaCLIProduct` | Sole signed product wrapper for the thin `rupa` executable. |
 
 The umbrella module exists for convenient composition. Feature ownership remains in the specific modules.
 
@@ -149,8 +148,7 @@ flowchart LR
 | Surface | Contract |
 |---|---|
 | GUI | Convert gestures and controls into RupaCore commands. |
-| CLI file mode | Load a document, apply RupaCore commands, evaluate, validate, and write atomically. |
-| CLI live mode | Send automation commands to the app, where the registered `ProjectWorkspace` plans and applies them through `ProjectController`. |
+| CLI | Send automation commands to the app, where the registered `ProjectWorkspace` plans and applies them through `ProjectController`; explicit save persists the result atomically. |
 | Agent | Transport commands and results without owning CAD semantics. |
 
 This keeps undo, diagnostics, generation tracking, and rendering aligned across every entry point.
@@ -175,7 +173,7 @@ flowchart TD
 |---|---|
 | Unsaved app changes | Route CLI mutations to the open app session. |
 | Undo and redo | Live CLI commands participate where the command declares undo support. |
-| File corruption | Closed-project access uses the authority lease and rejects conflicts; no direct-file override or implicit mode switch exists. |
+| File corruption | The App-owned project controller validates and saves atomically; external clients have no direct package mutation route. |
 | Stale commands | Generation checks reject commands prepared against old document state. |
 | Diagnostics | The app and CLI receive the same structured result model. |
 
@@ -187,11 +185,11 @@ The first IPC contract should be local, inspectable, and easy to test.
 
 | Layer | Decision |
 |---|---|
-| Transport | Unix domain socket in a per-user runtime directory. |
+| Transport | Authenticated loopback HTTP over a dynamic TCP endpoint discovered through the Team Keychain. |
 | Message style | JSON-RPC style request and response envelopes. |
 | Command payload | `RupaAutomation` Codable types. |
 | Result payload | `AutomationResult` with diagnostics and document summary. |
-| Session discovery | `ProjectWorkspaceRegistry` exposed through `ProjectAgentCommandController`. |
+| Session discovery | `ProjectWorkspaceRegistry` exposed through `ProjectAgentCommandController`; endpoint discovery is owned by App composition. |
 
 IPC transports may evolve later. CAD semantics stay in RupaCore and RupaAutomation so transport changes do not redefine commands.
 
@@ -381,11 +379,10 @@ flowchart TD
     Runtime --> Kit
     Agent["RupaAgent"] --> Runtime
     Agent --> Transport
-    CLI["RupaCLI"] --> CLIKit["RupaCLIKit"]
-    CLIKit --> Runtime
-    CLIKit --> Transport
-    CLIKit --> Automation
-    CLIKit --> Core
+    CLIProduct["Xcode RupaCLIProduct"] --> CLIComposition["RupaCLIComposition"]
+    CLIComposition --> CLIKit["RupaCLIKit"]
+    CLIComposition --> AccessComposition["RupaProjectAccessComposition"]
+    CLIKit --> Access["RupaProjectAccess"]
     Core --> SwiftCAD["Swift-CAD"]
 ```
 
@@ -396,8 +393,8 @@ flowchart TD
 | `RupaAgentRuntime` imports Kit, Automation, Core, and protocol contracts. | IPC dispatches stable commands into registered project workspaces without owning their source. |
 | `RupaAgentUI` imports Agent runtime and transport. | The application-facing host owns Agent listener and workspace-registration lifecycle outside the editor UI. |
 | `RupaUI` imports Kit, Rendering, and Preview but not the Agent stack. | The editor surface consumes project operations and views without owning Agent lifecycle or CAD mutation semantics. |
-| `RupaCLIKit` imports Agent runtime/transport, Automation, and Core. | The CLI command implementation chooses live or file mode and reports results. |
-| `RupaCLI` imports RupaCLIKit. | The executable remains a thin shell that can be built and tested around a library boundary. |
+| `RupaCLIKit` imports Agent protocol/access and the semantic result contracts. | The CLI command implementation sends one live API request and reports results. |
+| Xcode `RupaCLIProduct` links `RupaCLIComposition`. | The sole signed executable remains a thin shell around the live access composition and command library boundaries. |
 
 Lower-level modules do not import higher-level product shells.
 
@@ -449,7 +446,7 @@ CAD failures are normal product events.
 | Generation error | The document changed after the caller prepared the request. |
 | Evaluation error | The document source exists but cannot regenerate successfully. |
 | File coordination error | The requested file mutation is unsafe or unavailable. |
-| Agent error | The app session, socket, or request dispatch failed. |
+| Agent error | The app session, HTTP authentication, or request dispatch failed. |
 | Export error | The target format cannot represent the requested document state. |
 
 Errors should be typed, serializable where they cross process boundaries, and surfaced through diagnostics.
@@ -461,8 +458,7 @@ Rupa development should preserve the following contracts:
 | Contract | Practical test |
 |---|---|
 | One mutation path | A GUI operation and equivalent CLI command produce the same document generation and diagnostics. |
-| Open documents are session-owned | CLI defaults to live mode when the target document is open in the app. |
-| File mode is atomic | Headless edits either fully succeed or leave the input untouched. |
+| Open documents are session-owned | CLI resolves the App-owned live workspace through `RupaProjectAccess`. |
 | Live batch is atomic | App-session batch edits either fully succeed or restore document, selection, and undo/redo state. |
 | Automation is stable | JSON command schemas are versioned and backward compatibility is intentional. |
 | App shell stays thin | Most behavior can be tested from RupaKit without launching `Rupa.app`. |

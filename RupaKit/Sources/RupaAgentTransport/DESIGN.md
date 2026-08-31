@@ -2,108 +2,141 @@
 
 ## Purpose and Scope
 
-`RupaAgentTransport` carries typed `RupaAgentProtocol` messages across a local
-Unix domain socket. It is a child of the [RupaKit package design](../../DESIGN.md)
-and has no child designs. ACCESS-A separates this transport from project-access
-semantics; ACCESS-C.1 completes endpoint injection, peer enforcement, and
-bounded request lifetime inside this module.
+`RupaAgentTransport` is the bounded HTTP adapter for the semantic Agent
+request contract. It is a child of the [RupaKit package design](../../DESIGN.md)
+and is used by the App host and the project-access client. Children: none.
 
 ## Responsibilities and Boundaries
 
-The module owns socket framing, connection lifecycle, bounded I/O, an injected
-Unix endpoint value, peer identity extraction, and the peer-authorization
-contract. It does not own
-project targets, sessions, `ProjectWorkspace`, `ProjectController`, package
-bytes, App Group identifiers, application launch policy, or command meaning.
+The module owns:
 
-`AgentRequestHandling` is the only semantic dependency of the listener and
-service. The handler never receives the socket path and semantic status never
-publishes it.
+- a loopback-only TCP listener with dynamic port allocation;
+- one challenge-plus-RPC exchange on one TCP connection;
+- bounded HTTP header/body parsing and response writing;
+- directional HMAC proof verification before JSON decoding;
+- monotonic deadlines, cancellation, connection admission, and drain;
+- a client that sends the existing `AgentRequestEnvelope` and decodes the
+  existing `AgentResponseEnvelope`.
+
+It does not own Keychain discovery, application lifecycle, project sessions,
+`ProjectWorkspace`, `ProjectController`, package bytes, or CLI syntax. The
+semantic handler receives a decoded `AgentRequest` only.
 
 ## Related Designs
 
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
-| [package design](../../DESIGN.md) | parent | dependency direction | Places transport below runtime/UI composition. | Do not depend on Project or RupaKit authority. |
-| [RupaAgentProtocol](../RupaAgentProtocol/DESIGN.md) | depends on | request/response codec and handler port | Supplies semantic values. | Transport failure is not a semantic success. |
-| [RupaProjectAccess](../RupaProjectAccess/DESIGN.md) | coordinates with | live adapter boundary | A later live adapter uses this transport. | Project access never edits socket files itself. |
-| [RupaAgentRuntime](../RupaAgentRuntime/DESIGN.md) | used by | request handler | Runtime handles decoded intent only. | Socket state must not flow into runtime. |
+| [RupaKit package](../../DESIGN.md) | parent | dependency direction | Places transport below runtime and access composition. | No project authority may be added here. |
+| [RupaAgentProtocol](../RupaAgentProtocol/DESIGN.md) | depends on | request/response envelopes and handler port | Supplies semantic values and JSON coding. | HTTP failures never become semantic success. |
+| [RupaProjectAccess](../RupaProjectAccess/DESIGN.md) | used by | transport-neutral session boundary | Carries API calls through this adapter. | Access owns target and session semantics. |
+| [RupaAgentRuntime](../RupaAgentRuntime/DESIGN.md) | used by | `AgentRequestHandling` | Executes decoded intent against the registered workspace. | Runtime never learns the listener address or credential. |
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    Composition["Product composition"] --> Endpoint["UnixSocketEndpoint"]
-    Endpoint --> Client["Agent client"]
-    Endpoint --> Listener["AgentSocketListener"]
-    Composition --> Authorizer["AgentPeerAuthorizing"]
-    Authorizer --> Listener
-    Listener --> Frame["bounded frame I/O"]
-    Frame --> Codec["AgentMessageCodec"]
+    Composition["Product composition"] --> Listener["Loopback HTTP listener\n127.0.0.1:dynamic-port"]
+    Composition --> Client["Loopback HTTP client"]
+    Listener --> Challenge["Fresh challenge nonce"]
+    Challenge --> Proof["Directional HMAC proof guard"]
+    Proof --> Body["Bounded JSON body"]
+    Body --> Codec["AgentMessageCodec"]
     Codec --> Handler["AgentRequestHandling"]
+    Handler --> Response["Bounded HTTP response"]
 ```
 
 ## Contracts and Invariants
 
-1. Every client and listener construction requires an injected
-   `UnixSocketEndpoint`. This module has no product endpoint resolver, default
-   path, App Group identifier, or temporary-directory fallback; semantic
-   protocol and status values contain no path.
-2. The listener depends only on `AgentRequestHandling`, not a socket-aware
-   subtype.
-3. The listener extracts the accepted Unix peer UID and calls its injected
-   `AgentPeerAuthorizing` before reading or decoding a frame. The production
-   same-user authorizer rejects every UID except its injected expected UID.
-4. The existing 16 MiB frame and 32-connection ceilings remain transport
-   correctness limits.
-5. One monotonic deadline created at the start of a client request bounds
-   connect, all connection retries, request write, and response read. Each
-   accepted server connection likewise uses one deadline for its frame read and
-   response write. A phase never resets the deadline. Live composition may pass
-   its existing absolute `ContinuousClock.Instant`; transport does not derive a
-   fresh relative timeout from it.
-6. Accepted connections use asynchronous nonblocking readiness waits; an idle
-   connection never occupies a cooperative-executor thread. Cancellation closes
-   the owned descriptor and interrupts bounded polling.
-   Listener stop rejects new connections, cancels accepted work, closes its
-   descriptors, and returns within its shutdown budget even if a semantic
-   handler does not cooperate.
-7. Transport loss after dispatch is not retried as another access mode.
-8. `AgentTransportFailure` distinguishes `.notDispatched` from
-   `.outcomeUnknown(requestID:)`. The latter is emitted only after the complete
-   request frame was written and any response read/decode subsequently failed,
-   so live composition never guesses dispatch state from an `EditorError`.
+1. The listener binds only `127.0.0.1` and asks the kernel for a dynamic
+   port. The bound port is returned only after the listener is ready.
+2. The only accepted routes are `POST /v1/challenge` followed by
+   `POST /v1/rpc` on the same TCP connection. The method, path, content type,
+   required `Content-Length`, and bounded header section are validated before
+   the corresponding body is decoded. A reconnect is never used to continue
+   a challenge or dispatch a request.
+3. The body and response are at most 16 MiB. `Content-Length` is required,
+   finite, and bounded; chunked transfer and ambiguous framing are rejected.
+4. The challenge endpoint returns a fresh server nonce and generation/port-
+   bound server proof. The client sends no semantic body until that proof is
+   verified. The RPC request carries a fresh client proof. The HMAC transcript
+   is length-delimited and domain-separated by protocol version: the challenge
+   proof binds `clientNonce`, `serverNonce`, `generation`, `port`, `version`,
+   and `requestID`; the client proof additionally binds the SHA-256
+   `bodyDigest`; the response proof additionally binds the HTTP `status` and
+   SHA-256 `responseDigest`. All proofs are compared in constant time before
+   JSON decoding or semantic dispatch.
+5. Each challenge is single-use and expires under the connection deadline.
+   A repeated challenge or RPC is rejected by the per-connection state machine
+   and the connection is closed; stale generations, wrong ports, malformed
+   proofs, and response proofs are typed failures. The HMAC key is never sent
+   on the wire.
+6. A connection owns one challenge state and admits exactly one semantic RPC
+   request/response on that same connection. A second challenge or RPC is
+   rejected, and the connection is closed after the exchange. The listener
+   admits at most 32 active exchanges and drains accepted work within its
+   shutdown budget. A connection remains tracked until its task actually exits,
+   even when shutdown has already closed its descriptor.
+7. One monotonic deadline covers connect, challenge, header/body I/O, semantic
+   dispatch, and response write. The transport races semantic dispatch against
+   that deadline, cancels the handler task at deadline or shutdown, and never
+   publishes a late transport response. Production semantic handlers must honor
+   task cancellation before publishing project state; the transport does not
+   claim that it can forcibly terminate arbitrary non-cooperative handler code.
+   Cancellation closes owned descriptors and no request is retried after a
+   response-loss or dispatch-uncertain failure.
+8. A complete request write followed by response loss is
+   `outcomeUnknown(requestID:)`; failure before the complete write is
+   `notDispatched`.
+9. The listener never resolves discovery records and never persists project
+   data. The client accepts an injected endpoint and HMAC key for tests and
+   alternate API compositions; the key is never serialized into an HTTP
+   request or response.
 
 ## Runtime Flows
 
-The listener accepts a bounded connection, extracts and authorizes the peer,
-reads one bounded frame, decodes one request, invokes one handler, writes one
-response under the same connection deadline, and releases the connection. A
-rejected peer reaches neither frame decoding nor the semantic handler.
+```mermaid
+sequenceDiagram
+    participant C as API client
+    participant L as Loopback listener
+    participant G as Credential guard
+    participant H as Semantic handler
+    C->>L: POST /v1/challenge + client nonce
+    L->>G: validate route and challenge headers
+    G-->>C: server nonce + server proof
+    C->>L: same connection POST /v1/rpc + digest-bound client proof
+    L->>G: single-use proof and generation check
+    G->>H: decode one bounded JSON envelope
+    H-->>L: AgentResponse
+    L-->>C: one bounded HTTP response then close
+```
 
 ## State, Ownership, and Lifecycle
 
-The listener actor owns descriptors, accept task, and active-connection tasks.
-The endpoint owner is product composition. Start creates or verifies the
-endpoint directory as owner-only mode `0700`, binds the socket, and applies mode
-`0600` before accepting peers. Stopping closes descriptors and removes only the
-injected socket file; it does not close a project session.
+The listener actor owns its TCP descriptors, accept task, and active
+connection tasks. `start()` creates the dynamic listener and returns its
+port; `stop()` rejects new connections, drains accepted work, and closes all
+owned descriptors. Blocking POSIX reads and writes run on dedicated threads so
+up to 32 admitted connections cannot starve Swift's cooperative executor. The
+App owns the listener lifetime and publishes discovery only after `start()`
+succeeds.
 
 ## Failure, Concurrency, and Constraints
 
-Socket, framing, deadline, cancellation, permission, and peer failures remain
-typed and do not reach the semantic handler as fabricated requests. Actor
-isolation owns listener state; no socket path is stored in the handler. The
-connection ceiling must remain reachable without executor starvation: thirty-two
-idle authorized peers can coexist while the listener actor still rejects the
-thirty-third peer and can execute `stop()`.
+Malformed headers, missing framing, oversized input, invalid credentials,
+wrong route, deadline exhaustion, cancellation, connection saturation, and
+listener errors remain typed transport failures. No fallback transport is
+selected. Actor isolation protects listener state and no external callback is
+run while a transport lock is held.
 
 ## Verification and Change Impact
 
-Transport tests cover request round trips, stale socket replacement, malformed
-and oversized frames, the 16-MiB boundary, the 32-connection ceiling,
-concurrent/half-open connections, one-deadline timeout, cancellation, bounded
-stop, endpoint validation, exact directory/socket permissions, and rejection
-before decode. Client, listener, host, and production-source scans reject a
-default path, legacy endpoint-compatibility owner, explicit override resolver,
-or duplicated endpoint placement.
+Focused transport tests prove loopback binding, dynamic-port readiness,
+challenge freshness/expiry/replay rejection, directional proof validation,
+complete transcript binding (nonces, generation, port, version, request ID,
+request/response digests, and response status), header/body limits, required
+framing, proof rejection before decode, same-connection state-machine
+enforcement without reconnect, 32-connection admission,
+deadline/cancellation, shutdown drain, response-loss classification, and
+exact request/response round trips. Changes require rechecking the App host
+lifecycle, Keychain record publication, and project-access client deadline
+contract.

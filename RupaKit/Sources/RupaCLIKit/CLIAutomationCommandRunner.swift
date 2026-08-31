@@ -44,13 +44,10 @@ enum CLIAutomationCommandRunner {
         command: AutomationCommand
     ) async throws -> CLIResponse {
         try await CLIService().applyAutomationCommand(
-            target: try document.target(sessionID: sessionID),
+            target: document.target(sessionID: sessionID),
             command: command,
-            mode: document.mode,
             expectedGeneration: document.generation(),
-            expectedWorkspaceRevision: document.workspaceRevision(),
-            dryRun: document.dryRun,
-            writePolicy: try document.writePolicy(sessionID: sessionID)
+            expectedWorkspaceRevision: document.workspaceRevision()
         )
     }
 

@@ -31,7 +31,7 @@ reevaluation or geometry materialization.
 It does not define a second command switch, define CAD operation schemas or
 lowerers, allocate persistent source identifiers, create an EditorSession,
 execute Mesh algorithms, prepare arbitrary Make Editable payloads, persist
-files, own socket I/O or endpoint state, or define CAD commands.
+files, own HTTP I/O or endpoint state, or define CAD commands.
 
 ## Related Designs
 
@@ -43,7 +43,7 @@ files, own socket I/O or endpoint state, or define CAD commands.
 | [package planned CAD domain boundary](../../DESIGN.md) | depends on through composition; planned module boundary | CAD operation descriptors and lowerers | Supplies the concrete vocabulary registered with the generic compiler. | No `RupaCADDomain` target exists yet; this is not current runtime evidence. |
 | [RupaAutomation](../RupaAutomation/DESIGN.md) | depends on for prepared execution | binding-aware prepared source-plan execution | Executes the compiler result as one staged source mutation. | Raw graph transactions remain internal lowering substrate, never Agent payloads. |
 | [RupaProjectAccess](../RupaProjectAccess/DESIGN.md) | used by later composition | session-bound semantic handler | Uses this runtime without acquiring source authority. | Runtime never opens targets or saves packages. |
-| [AgentTransport](../RupaAgentTransport/DESIGN.md) | used by | `AgentRequestHandling` | Delivers decoded intent through a transport-neutral port. | No socket path or lifecycle callback enters runtime. |
+| [AgentTransport](../RupaAgentTransport/DESIGN.md) | used by | `AgentRequestHandling` | Delivers decoded intent through a transport-neutral port. | No endpoint, credential, or lifecycle callback enters runtime. |
 | [RupaKit](../RupaKit/DESIGN.md) | depends on | exact-snapshot Make Editable and Mesh use cases | Performs bounded reads and atomic mutations. | Always pass the captured complete view and lease guard. |
 | [RupaGeometry](../RupaGeometry/DESIGN.md) | depends on | source-bound triangulation index and budgeted face triangulation | Supplies the same renderability contract used by the viewport render plan. | Triangle topology is counted and discarded; geometry buffers remain process-local. |
 | [RupaProject](../RupaProject/DESIGN.md) | transitively depends on | project publication/no-retry contract | Owns source and evaluation publication. | Runtime must not replay after committed failure. |

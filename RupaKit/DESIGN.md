@@ -66,7 +66,7 @@ The package design owns:
   a real SwiftPM target and its own module-root design are created.
 
 It does not own Mesh topology algorithms, concrete CAD operation semantics, source asset mutation,
-archive encoding, socket I/O, MCP, general CLI behavior, LLM reasoning, or a bicycle-specific or
+archive encoding, HTTP framing, MCP, general CLI behavior, LLM reasoning, or a bicycle-specific or
 benchmark-specific CAD command. Those are delegated to child designs or
 existing normative contracts. T12's runner, catalog, source/B-Rep oracle, and
 score values are owned by its child design; they do not become another project
@@ -134,7 +134,7 @@ flowchart LR
     Benchmark --> JSONAdapter["RupaAgentCADBenchmarkJSONAdapter\nversioned bounded JSON"]
     JSONAdapter --> BenchmarkCLI["RupaAgentCADBenchmarkCLI\ndedicated executable"]
     AgentProtocol --> Access["RupaProjectAccess\ntransport-neutral intent"]
-    CLIProduct["SwiftPM / Xcode rupa entries"] --> CLIComposition["RupaCLIComposition\nshared composition"]
+    CLIProduct["signed Xcode RupaCLI product"] --> CLIComposition["RupaCLIComposition\nexecutable composition"]
     CLIComposition --> CLIKit["RupaCLIKit\nparsing + projection"]
     CLIComposition --> Access
 ```
@@ -209,10 +209,10 @@ records are owned by the four child designs:
 | `RupaAutomation` owns the binding-aware internal source-plan execution substrate; `FeatureGraphTransaction` and `appendFeatureGraph` are internal lowering details, not public Agent operations. | [RupaAutomation design](Sources/RupaAutomation/DESIGN.md) |
 | The planned `RupaCADDomain` owns concrete CAD operation descriptors, typed output declarations, and lowerers. Until its target exists, this package design is the temporary design authority for that boundary and does not claim implementation. | This document. |
 | `RupaProjectAccess` is the transport-neutral access contract; it owns no workspace, package, or command state. | [RupaProjectAccess design](Sources/RupaProjectAccess/DESIGN.md) |
-| `RupaProjectAccessPlatform` owns product-local App Group/endpoint coordinates and Darwin file-authority leases without directly depending on workspace or CAD targets; its contract dependencies retain their existing transitive graph. | [RupaProjectAccessPlatform design](Sources/RupaProjectAccessPlatform/DESIGN.md) |
-| `RupaProjectAccessComposition` owns concrete closed-project and live-project sessions by composing `RupaProjectAccessPlatform`, `RupaAgentRuntime`, and the public `RupaKit` workspace APIs. | [RupaProjectAccessComposition design](Sources/RupaProjectAccessComposition/DESIGN.md) |
-| `RupaCLIComposition` is the sole executable composition for `rupa`; SwiftPM and Xcode entries are thin async launchers over it. | [RupaCLIComposition design](Sources/RupaCLIComposition/DESIGN.md) |
-| `RupaAgentTransport` carries protocol values over an injected local transport and never defines project semantics. | [RupaAgentTransport design](Sources/RupaAgentTransport/DESIGN.md) |
+| `RupaProjectAccessPlatform` owns the Team Keychain discovery record and its generation-guarded reader/writer contract without owning project state. | [RupaProjectAccessPlatform design](Sources/RupaProjectAccessPlatform/DESIGN.md) |
+| `RupaProjectAccessComposition` owns the concrete live-project session adapter by composing discovery, authenticated HTTP, `RupaAgentRuntime`, and the public `RupaKit` workspace APIs. | [RupaProjectAccessComposition design](Sources/RupaProjectAccessComposition/DESIGN.md) |
+| `RupaCLIComposition` is the sole executable composition for `rupa`; the signed Xcode product entry is a thin async launcher over it. | [RupaCLIComposition design](Sources/RupaCLIComposition/DESIGN.md) |
+| `RupaAgentTransport` carries protocol values over authenticated loopback HTTP and never defines project semantics. | [RupaAgentTransport design](Sources/RupaAgentTransport/DESIGN.md) |
 | `RupaAgentUI` owns the process-lifetime Agent host and registration bridge; the App composes one controller/router over the same workspace. | [RupaAgentUI design](Sources/RupaAgentUI/DESIGN.md) |
 | Existing CAD/Mesh and state contracts remain authoritative for their domains. | [CAD/Mesh responsibility](../Rupa/CAD_MESH_RESPONSIBILITY_CONTRACT.md), [state/project contract](../Rupa/STATE_AND_PROJECT_CONTRACT.md) |
 | `RupaAgentCADBenchmark` is a bounded verification composition above the production Agent route: all 100 targets retain individual reviewed evidence, while aggregate execution composes fresh isolated `ProjectAgentCommandController` runs into measured scheduling, immutable baselines, and one canonical report. | [RupaAgentCADBenchmark design](Sources/RupaAgentCADBenchmark/DESIGN.md) |
@@ -267,9 +267,9 @@ request routing to `RupaAgentRuntime`, Agent listener/registration lifetime to
 capability-availability/execution-regression baseline evidence, case/oracle,
 and report values to `RupaAgentCADBenchmark`. External request/response buffers
 and fingerprints are invocation-local values owned by the JSON adapter and CLI.
-`RupaProjectAccess` owns only immutable target, result, error, endpoint, and
-peer-authorization contracts; concrete live and closed session lifetimes are
-composed by later ACCESS work.
+`RupaProjectAccess` owns only immutable live target, session, result, and error
+contracts; the live App adapter owns the client session lifetime while transport
+endpoint and authentication details remain below the public API boundary.
 CADAPI-D program parameters, node symbols, typed local references, compiled
 plans, and result bindings are invocation-local immutable values. Persistent
 Feature, Body, Scene, Component, Instance, and Pattern identities are allocated

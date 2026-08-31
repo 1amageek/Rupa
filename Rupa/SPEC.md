@@ -63,10 +63,11 @@ flowchart TD
     UI --> Kit
     UI --> Rendering["RupaRendering"]
     UI --> Preview["RupaPreview"]
-    CLI["rupa CLI"] --> CLIKit["RupaCLIKit"]
-    CLIKit --> Runtime
-    CLIKit --> Transport
-    CLIKit --> Automation["RupaAutomation"]
+    CLIProduct["Xcode RupaCLIProduct"] --> CLIComposition["RupaCLIComposition"]
+    CLIComposition --> CLIKit["RupaCLIKit"]
+    CLIComposition --> AccessComposition["RupaProjectAccessComposition"]
+    CLIKit --> Access["RupaProjectAccess"]
+    AccessComposition --> Transport
     Runtime --> Kit
     Runtime --> Automation
     Kit --> Project["RupaProject"]
@@ -90,7 +91,7 @@ The supported implementation has one editing pipeline:
 | Source | Mutation path | Result |
 |---|---|---|
 | GUI tool | `ProjectWorkspace` source or interaction plan through `ProjectController` | Undoable source mutation or source-independent workspace publication and UI update. |
-| CLI file mode | RupaCore command on a loaded document | Atomic file write or structured failure. |
+| CLI project command | RupaCore command on the App-owned document | In-memory publication; persistence requires explicit API save. |
 | CLI live mode | RupaAgent request into the registered app `ProjectWorkspace` | Project mutation, dirty state, diagnostics, structured CLI result. |
 | Batch automation | Ordered `AutomationCommand` execution inside a `ProjectWorkspace` source or interaction transaction | Ordered results with project coordinates and diagnostics; failed batches publish no partial source, selection, workspace, or history state. |
 
@@ -190,7 +191,7 @@ ApplicationProfile switching is deliberately excluded from the initial package g
       RupaAgentTransport/
       RupaAgent/
       RupaCLIKit/
-      RupaCLI/
+      RupaCLIComposition/
     Tests/
       RupaKitTests/
       RupaCoreTests/
@@ -287,7 +288,7 @@ flowchart TD
 | `RupaProjectAccess` | Library | `RupaProjectAccess` |
 | `RupaAgent` | Library | `RupaAgent` |
 | `RupaCLIKit` | Library | `RupaCLIKit` |
-| `rupa` | Executable | `RupaCLI` |
+| `RupaCLIComposition` | Library | `RupaCLIComposition` |
 
 ## Package Responsibility Graph
 
@@ -303,8 +304,10 @@ flowchart TD
     AgentUI --> Transport["RupaAgentTransport"]
     Runtime --> Kit
     Transport --> Protocol["RupaAgentProtocol"]
-    CLI["RupaCLIKit"] --> Runtime
-    CLI --> Transport
+    CLI["RupaCLIKit"] --> Access["RupaProjectAccess"]
+    CLIComposition["RupaCLIComposition"] --> CLI
+    CLIComposition --> AccessComposition["RupaProjectAccessComposition"]
+    AccessComposition --> Transport
 
     Kit --> Project["RupaProject"]
     Project --> Core["RupaCore"]
@@ -324,7 +327,7 @@ flowchart TD
 | Project model, evaluation, and package | Immutable evaluation projection, purpose-selected provider resolution, schema-v3 Product/CAD/Mesh persistence, and source integrity. |
 | `RupaProject` / `RupaKit` | Atomic source/package/evaluation authority plus the shared application workspace operation boundary. |
 | `RupaUI` / viewport / rendering | Package-free immutable project-view consumption, user-intent planning, presentation MeshSource drawing and picking, and exact CAD-context affordances. |
-| Agent protocol/runtime/transport/UI | Message contracts, registered-workspace execution, independent socket transport, and application-owned host lifecycle. RupaUI is not an Agent dependency. |
+| Agent protocol/runtime/transport/UI | Message contracts, registered-workspace execution, authenticated loopback HTTP, and application-owned host lifecycle. RupaUI is not an Agent dependency. |
 | Automation/domain/CLI | Typed commands, semantic lowering, batch contracts, and headless/live adapters over the same project boundary. |
 
 ## Target Responsibilities
@@ -473,7 +476,7 @@ flowchart LR
 | Deletion safety | Deleting a parameter validates the resulting Swift-CAD document before mutation is committed; references from other parameters or model features reject the command. |
 | Rename safety | Renaming rejects missing parameters, duplicate names, invalid names, and unchanged names before mutation; existing expressions keep their `ParameterID` references and format with the new name after the mutation. |
 | Automation | Automation and Agent commands expose the same typed parameter upsert, rename, and deletion path. |
-| CLI | `rupa param set` supports numeric literals and parsed formulas for length, angle, and scalar parameters in live (default) or explicit file mode. `rupa param rename` and `rupa param delete` use the same access-session and authority model. |
+| CLI | `rupa param set` supports numeric literals and parsed formulas for length, angle, and scalar parameters through the App-owned live access session. `rupa param rename` and `rupa param delete` use the same API and authority model. |
 | Listing | `rupa param list` and `document.parameters` return parameter IDs, names, kinds, normalized expression strings, resolved values, direct dependency names, reverse dependent names, feature source usages, diagnostics, generation, and dirty state. |
 
 Parameter formulas are saved as Swift-CAD `CADExpression` AST values. Formula input strings are parsed at the command boundary and are not the source of truth after save. Parameter listing derives feature source usages from Swift-CAD feature expressions, not from formatted strings. Dependency-aware UI editing remains follow-up work.
@@ -528,9 +531,9 @@ flowchart LR
 | `chamferBodyEdges` | Applies a source-owned chamfer to selected body edge targets. Editable normal rectangle extrude vertical corner edges and generated vertical profile edges now resolve through the same ordered profile-loop rewrite path. The rewrite supports literal line loops and line+arc loops whose selected target maps to a line-line or line-arc source vertex; source elements are trimmed by path distance, existing arcs preserve their stored `SketchArc` geometry even when the ordered loop traverses them from `arcEnd` to `arcStart`, and a new chamfer line is inserted between the trimmed endpoints. Rewritable loops must not contain sketch dimensions, parameterized expressions, or constraints beyond endpoint `coincident` plus line `horizontal`/`vertical`; unsupported source state fails before mutation instead of dropping source intent. Targets can be the initial fixed body-edge IDs or `generatedTopology:<featureID>/<role>/<ordinal>` IDs resolved from `document.topologySummary`. The resulting body is marked as a source-edited solid instead of a Cube object. Unsupported edge targets, mixed body targets, unsupported profile loops, non-normal extrudes, and collapsing chamfer distances fail before mutation. |
 | `filletBodyEdges` | Applies a source-owned fillet to selected body edge targets. Editable normal rectangle extrude vertical corner edges and generated vertical profile edges now resolve through the same ordered profile-loop rewrite path. The rewrite supports literal line loops and line+arc loops whose selected target maps to a non-tangent convex line-line, line-arc, arc-line, or arc-arc source vertex. Source lines and arcs are trimmed by path distance, existing arcs preserve their stored `SketchArc` geometry even when the ordered loop traverses them from `arcEnd` to `arcStart`, and selected corners are stored as exact `SketchArc` entities. Rewritable loops must not contain sketch dimensions, parameterized expressions, or constraints beyond endpoint `coincident` plus line `horizontal`/`vertical`; unsupported source state fails before mutation instead of dropping source intent. The validated segment count is saved as profile-arc tessellation policy for evaluation/display/export compatibility and does not polygonize the source arc. Targets can be the initial fixed body-edge IDs or `generatedTopology:<featureID>/<role>/<ordinal>` IDs resolved from `document.topologySummary`. The resulting body is marked as a source-edited solid instead of a Cube object. Unsupported edge targets, mixed body targets, unsupported profile loops, non-normal extrudes, invalid segment counts, tangent-continuous arc-adjacent targets, and collapsing fillet radii fail before mutation. |
 | Sketch-only evaluation | A document with valid sketch source and no body-producing active feature evaluates as valid with zero generated bodies. |
-| CLI sketch | `rupa sketch line`, `rupa sketch circle`, and `rupa sketch rectangle` expose primitive sketch creation in default `live` or explicit `file` mode using numeric length literals. |
-| CLI modeling | `rupa model box`, `rupa model box-corners`, and `rupa model cylinder` expose initial solid workflows in default `live` or explicit `file` mode using numeric length literals; `rupa model extrude` extrudes an existing closed sketch profile by Feature ID through the same mode model. |
-| CLI dimension | `rupa dimension add-selection`, `rupa dimension set-selection`, `rupa dimension apply-selection`, and `rupa dimension remove-selection` persist, retarget, apply supported source line length, fixed-aware source sketch point-to-point distance including standalone sketch point entities and fixed-first fallback to a second movable point, source sketch point-to-whole-source-line closest finite-segment distance, solved arc endpoint distance, and spline control-point distance, circle/arc radius, line relative angle, and arc span selection dimensions, and remove selection dimensions in default `live` or explicit `file` mode using the same project-access authority as other mutating commands. |
+| CLI sketch | `rupa sketch line`, `rupa sketch circle`, and `rupa sketch rectangle` expose primitive sketch creation through one live project-access session using numeric length literals. |
+| CLI modeling | `rupa model box`, `rupa model box-corners`, and `rupa model cylinder` expose initial solid workflows through one live project-access session using numeric length literals; `rupa model extrude` extrudes an existing closed sketch profile by Feature ID through the same session. |
+| CLI dimension | `rupa dimension add-selection`, `rupa dimension set-selection`, `rupa dimension apply-selection`, and `rupa dimension remove-selection` persist, retarget, apply supported source line length, fixed-aware source sketch point-to-point distance including standalone sketch point entities and fixed-first fallback to a second movable point, source sketch point-to-whole-source-line closest finite-segment distance, solved arc endpoint distance, and spline control-point distance, circle/arc radius, line relative angle, and arc span selection dimensions, and remove selection dimensions through the same live project-access authority as other mutating commands. |
 
 General constraint solving, broader spline curvature constraints, exact spline BRep boundary preservation, drawing-sheet annotation layout, Metal identity-buffer generated-topology picking, direct viewport constraint handles, exact spline Slot boundary generation, general trim-curve editing, arbitrary NURBS surface editing beyond the current direct B-spline source subset and PolySpline corner/strict interior control-point subsets, evaluated UVN handles beyond the current strict interior Surface CV command path and selected boundary-vertex constraints, general kernel fillet/chamfer, tangent-continuous curve blending, continuity-driven smooth Loft, exact smooth rail-surface solving, rail-style sweep guide deformation beyond the current affine, signed-axis, convex quadrilateral bilinear, and convex mean-value cage point-guide sections, bridge surfaces, patch, and the broader feature set remain follow-up work. Selected-source-curve viewport dimension callouts exist for line length/angle, circle radius, and arc radius/span angle; line length, line angle, circle radius, arc radius, and arc span angle labels can be dragged to commit source dimensions through `setSketchEntityDimension`. Persistent selection dimensions can be created, target-edited, evaluated, removed, undone, redone, automated, discovered by Agent capabilities, mutated through CLI, and applied to the current source-line endpoint distance, same-plane source sketch point-to-point distance for non-fixed line endpoint/circle center/arc center references, standalone sketch point entities, first-fixed/second-movable source point pairs, same-plane source sketch point-to-whole-source-line closest finite-segment distance targets for non-arc source points or fixed-point/movable-line pairs, same-plane source arc endpoint point-distance targets with a valid circle-intersection solution, same-plane source spline control-point distance targets, source circle/arc radius, source line relative angle, and source arc span angle subsets without conflating them with drawing-sheet annotations or claiming arbitrary geometry solving before the solver exists. Already-satisfied zero-distance point dimensions refresh references without requiring a movable point. Initial fixed-aware point-reference propagation exists for `coincident` plus horizontal/vertical line constraints, initial affected-line angle propagation exists for `parallel`/`perpendicular` line angle constraints, equal-length line propagation exists for `equalLength` line constraints, initial line-to-circle/arc tangent propagation exists for `tangent` constraints, circular center propagation exists for `concentric` constraints, circular radius propagation exists for `equalRadius` constraints, spline control points have Swift-CAD point references for fixed/coincident constraints, endpoint reference and spline endpoint tangent migration, supported smooth internal-knot constraints, endpoint-to-line tangent constraints, and endpoint-to-endpoint tangent constraints, and fixed-aware constrained rectangle side dimension propagation exists through `setSketchEntityDimension`. `SketchArc` exists for source-owned curve loops, direct Agent/Core arc sketch creation, selected source line-to-arc conversion, Slot tangent end caps, open source arc Slot profiles, connected open line/arc chain Slot profiles, and one-shot viewport Arc tool creation. `SketchSpline` exists for source-owned cubic Bezier curve sketches, sketch summary, viewport rendering, control-point hit testing, measurement bounds, Inspector, selected viewport, Agent/Core control-point edits, selected source line-to-spline conversion with endpoint reference and spline endpoint tangent migration, one-shot viewport Spline tool creation, sampled open-spline Slot profile generation, and closed profile extrusion through adaptive tessellation. `offsetSketchVertex` exists for source-owned line/arc sketch vertex offset through Core, Automation, and Agent; `offsetCurve` dispatches into the same branch when a source line or arc endpoint `vertexHandle` is supplied; the branch splits adjacent source lines by distance and adjacent source arcs by arc length, inserts the two new vertices required by the Offset Vertex subset, preserves analytic `SketchArc` source geometry, migrates supported split-corner dimensions, and rejects unsupported constraints, disconnected arc-span dimensions, or planar offset options before mutation. `createSlotSketch` exists for source-owned selected source-line, connected open source line-chain, open source arc, connected open line/arc chain, and sampled open cubic Bezier spline Slot profiles with tangent semicircular caps, workspace context controls, Inspector open-curve controls, selected open-curve viewport width arrows, Core/Automation/Agent access, and closed-profile extrusion compatibility. `SweepFeature` exists for source-owned sweep history with explicit profile/path/guide/target roles and Automation/Agent command access; the Sweep tool can create that source from selected profile/path targets; Core and Agent can store body target references for boolean sweep operations while rejecting targetless boolean operations and new-body targets before mutation; its evaluator resolves identity straight paths into the exact prismatic solid subset, resolves curved paths, twist, end scale, compatible multiple point/chord guides, non-uniform affine point-guide rail deformation, signed-axis point-guide rail deformation, convex quadrilateral bilinear point-guide rail deformation, convex mean-value cage point-guide rail deformation, or curve-contact guides into a polygonal swept-solid subset with semantic generated topology names, resolves straight identity sheet output for line and circular-arc profile boundaries into capless exact open-shell side surfaces with `surface` scene metadata, resolves non-exact sheet output into an open-shell polygonal swept-sheet subset, and resolves exact axis-aligned box-prism union/difference/intersection/slice booleans with target replacement, separated-fragment difference output, z-through rectangular-frame difference output, orthogonal cell-union connected box difference output, keep-tools generated-name coverage, and semantic exact box/frame/cell-union boolean topology names; evaluated mesh bodies expose generated face/edge/vertex topology hit and highlight targets; `MeasurementService` reports typed sweep dimensions, volume, surface area where mesh-backed, and bounds for the supported sweep solid subsets, while rail deformation beyond the current affine, signed-axis, convex quadrilateral bilinear, and convex mean-value cage point-guide sections, non-box boolean operands, broader connected boolean topology outside the axis-aligned box cell-union subset, exact swept surfaces outside the straight identity analytic-boundary subset, Metal selection-buffer picking, broader mass-property diagnostics, and stable result topology naming beyond the exact box/frame/cell-union boolean subset and across exact-surface rewrites remain explicit unsupported evaluation cases. `LoftFeature` exists for source-owned ordered profile sections, optional guide curves, explicit section seam starts, ruled or smooth surface mode, solid or sheet output, and sheet-only closed section loops; the evaluator matches or boundary-progress resamples profile loops, uses guide endpoints to lock first and last section seams when explicit section starts are absent, inserts rail-following intermediate section rings for the multi-section multi-guide subset, and emits degree-1 ruled B-spline side faces or smooth cubic section-direction B-spline side faces plus cubic connector edges for open section chains with generated body/face/edge/vertex names. `Profile.boundarySegments` preserves line and circular-arc boundaries across profile extraction; closed spline profiles currently produce tessellated line boundaries, and collinear split vertices remain valid profile vertices when adjacent edges have non-zero length and the loop is still convex. Normal-direction circular-arc extrusion preserves analytic circular BRep edges and cylindrical side faces; curved planar faces use ear clipping after boundary sampling so concave line-chain Slot caps, open-arc Slot loops, connected open line/arc chain Slot loops, and sampled open-spline Slot loops remain meshable. Agent capability discovery returns structured descriptors for each supported command, including mutation behavior, discovery surfaces such as topology or sketch-entity summaries, compatible target kinds, and failure contracts, so Agent workflows can choose face, edge, vertex, and source-curve operations without relying on command-name guessing.
 
@@ -633,7 +636,7 @@ flowchart LR
 | Units | Mesh coordinates remain canonical meters; readable bounds use the document display unit. |
 | Non-mutation | UI Mesh, Agent mesh summary, and CLI mesh read source/evaluated data without changing generation, dirty state, or undo stack. |
 | Empty source | Valid sketch-only or empty documents return a zero-mesh summary with an informational diagnostic. |
-| CLI | `rupa mesh` uses the same default `live` or explicit `file` mode model as other document read commands. |
+| CLI | `rupa mesh` opens the same live project-access session as other document read commands. |
 
 Mesh repair, decimation, smoothing, material-aware mesh editing, and preview tessellation controls remain follow-up work.
 
@@ -767,7 +770,7 @@ flowchart LR
 | Scope reporting | `MeasurementResult.scope` reports whether the result was computed for the whole document or the current selection. |
 | Selection | When a sketch scene node is selected, measurement reports that sketch profile and bounds. When a body scene node is selected, measurement reports the selected solid plus the source profile required to compute area and volume. Non-feature scene nodes return an empty selection measurement with diagnostics. |
 | Unsupported source | Open sketches and unsupported mixed profile primitives remain counted as source/sketch primitives but do not contribute profile area or solid volume. |
-| CLI | `rupa measure` exposes the same `file` and `live` mode model as other document read commands. File mode measures the closed project; live mode uses the open session selection when one exists. |
+| CLI | `rupa measure` observes the App-owned live project through the same access session as other document read commands. |
 
 Manual drawing-sheet label editing UI, general curved-surface face area annotations, arbitrary analytic curved-edge length annotations, and broader non-source-driving dimensions remain follow-up work. Measurement-backed drawing annotations are resolved into drawing projection output from `ProductMetadata.measurements`; distance, radius, diameter, angle, boundary-anchor perimeter, boundary-anchor area, generated line-loop planar face area, exact generated line/circular edge-length annotations, and numerically integrated generated B-spline edge-length annotations preserve canonical meters, degrees, or square meters in the projection result and exports; automatic drawing label layout preserves authored label positions, lays out unlabeled annotations deterministically, stores label bounds and leader geometry, and reports adjusted labels when overlap avoidance moves a label. Selected source-curve viewport callouts show line length/angle, circle radius, and arc radius/span angle; explicit drag commits update supported source dimensions through `setSketchEntityDimension`. Persistent selection dimensions can drive supported source sketch distances, radii, angles, and generated opposing editable body face-pair distances through the shared Core command path.
 
@@ -786,9 +789,9 @@ flowchart LR
 
 | Concern | Contract |
 |---|---|
-| File mode | Load the supported closed `.rupa` project through a temporary `ProjectWorkspace`/`ProjectController`, evaluate it, and write the requested exchange file without mutating the input unless an explicit project save is requested; `.swcad` is rejected. |
+| Project access | Load, evaluate, mutate, and save only through the App-owned `ProjectWorkspace`/`ProjectController`; unsupported project formats are rejected. |
 | Live mode | Export the running app session so unsaved in-memory edits are reflected in output. |
-| Safety | Closed mode acquires the project-access authority lease and never bypasses a live workspace; live mode resolves only the requested app session. |
+| Safety | Export resolves only the requested App-owned live session and never bypasses its workspace or `ProjectController`. |
 | Dry run | Evaluate and resolve the output format without writing an output file. |
 | Preset selection | `ExportOptions` may select a `ExportPreset` by ID or name. The selected preset defines the exchange format, output unit, tessellation policy, validation rule references, metadata inclusion preference, and default destination policy. |
 | Format check | When a preset is selected, the output path extension must resolve to the same `ExchangeFileFormat` as the preset. Mismatches fail before writing. |
@@ -1046,21 +1049,20 @@ RupaAgent coordinates the running app and command-line clients. The target is an
 |---|---|
 | `RupaAgentProtocol` | Request/response/error envelopes, `AgentMessage`, `AgentMessageCodec`, `AgentClientProtocol`, capability descriptors, and `WorkspaceSessionSummary`. |
 | `RupaAgentRuntime` | `ProjectAgentCommandController`, `ProjectWorkspaceRegistry`, capability/domain dispatch, and project-coordinate validation. |
-| `RupaAgentTransport` | `AgentClient`, `AgentSocketListener`/`AgentSocketService`, `AgentSocketAddress`, `AgentSocketIO`, and `AgentSocketPath`. |
+| `RupaAgentTransport` | Authenticated loopback HTTP client/listener, bounded HTTP framing, and response-loss classification. |
 
 App-facing agent-host wiring lives one layer up in `RupaAgentUI`. The following types are the combined responsibility surface of the umbrella:
 
 | Type | Responsibility |
 |---|---|
 | `ProjectAgentCommandController` | Handles decoded Agent requests, exposes capabilities, resolves registered workspaces, and dispatches reads and mutations through `ProjectWorkspace`. |
-| `AgentSocketListener` | Owns Unix domain socket lifecycle and routes socket requests into the agent service. |
-| `AgentSocketService` | Applies transport limits and dispatches decoded requests to the project command controller. |
+| `AgentHTTPListener` | Owns loopback HTTP listener lifecycle and routes one bounded request per connection into the Agent service. |
+| `AgentHTTPService` | Applies HTTP limits, verifies credentials before JSON decoding, and dispatches decoded requests to the project command controller. |
 | `AgentClient` | Connects from CLI, checks status, lists sessions, applies commands. |
-| `AgentClientProtocol` | Provides a testable boundary for in-memory and socket-backed clients. |
+| `AgentHTTPClient` | Provides authenticated request/response transport through the injected live endpoint. |
 | `AgentMessage` | Request, response, error, and session summary envelopes. |
 | `AgentMessageCodec` | Encodes and decodes agent request and response payloads. |
-| `AgentSocketAddress` | Builds Unix socket addresses for client and listener. |
-| `AgentSocketIO` | Provides blocking read/write helpers for socket payloads. |
+| `AgentHTTPFraming` | Provides bounded request/response header and body parsing. |
 | `ProjectWorkspaceRegistry` | Registers, reconciles, leases, and resolves application-owned workspaces by runtime session ID and file path. |
 
 RupaAgent transports automation requests. It does not implement CAD commands.
@@ -1079,7 +1081,7 @@ the independently composed editor UI.
 
 | Type | Responsibility |
 |---|---|
-| `AgentHost` | Starts and stops the socket-backed Agent command service under app-host lifecycle control, receives the app-composed `DomainRegistry`, and registers the app-owned `ProjectWorkspace` with `ProjectWorkspaceRegistry` on MainActor. |
+| `AgentHost` | Starts and stops the loopback HTTP Agent service for the App process lifetime, receives the app-composed `DomainRegistry`, and registers the App-owned `ProjectWorkspace` with `ProjectWorkspaceRegistry` on MainActor. |
 
 ### RupaCLIKit
 
@@ -1088,31 +1090,21 @@ RupaCLIKit provides the testable CLI command implementation used by the `rupa` e
 | Type | Responsibility |
 |---|---|
 | `CLICommand.swift` | ArgumentParser command tree. |
-| `CLIService.swift` | Testable CLI workflow implementation for file mode, live mode, status, sessions, and conflict checks. |
+| `CLIService.swift` | Testable CLI workflow implementation for live access, status, sessions, and coordinate checks. |
 | `CLIResponses.swift` | Stable Codable response shapes for JSON output. |
 | `CLIOutput+Inspect.swift` / `CLIOutput+SelectionDimension.swift` | Human and JSON output formatting. |
 | `CLIExitCode.swift` | Process exit code mapping. |
 
 The CLI supports both human-readable output and stable JSON output.
 
-### CLI Edit Modes
+### CLI Project Access
 
-CLI document mutation commands use one shared mode model.
-
-| Mode | Behavior |
-|---|---|
-| `live` | Default. Resolve or launch the App-owned project by `.rupa` path, or attach to an explicitly identified existing session. Mutations remain in memory until an explicit save. |
-| `file` | Explicit. Load the closed `.rupa` package through a temporary `ProjectWorkspace`/`ProjectController` and persist only through the same access session's explicit save. |
-
-Every project command uses this shared `--mode` model. There is no compatibility command, implicit live/file switch, or direct file-mutation override.
-
-### RupaCLI
-
-RupaCLI is a thin executable target.
-
-| Type | Responsibility |
-|---|---|
-| `CLI.swift` | Executable entry point that starts `CLICommand`. |
+Every project command opens exactly one live `RupaProjectAccess` session by
+`.rupa` path or existing session ID. The signed Xcode `RupaCLIProduct` bundles
+the thin async entry over `RupaCLIComposition`; SwiftPM does not publish a second
+`rupa` executable. Mutations remain in the App-owned workspace until the same
+session performs an explicit save. There is no file mode, `--mode` switch,
+direct package mutation, or compatibility executable.
 
 ## Open Project Model
 
@@ -1191,39 +1183,34 @@ workspace and validates its current project, source, and workspace coordinates.
 
 `rupa` has one transport-neutral access API. Every project command resolves one
 `ProjectAccessSession` through the executable's injected opener and sends the
-operation through that session. The default mode is `live`; `file` is selected
-only when explicitly requested. There is no mode inference or authority
+operation through that session. The session always targets the App-owned live
+workspace; there is no filesystem mutation route, mode inference, or authority
 fallback.
 
 | Option | Behavior |
 |---|---|
-| `--mode live` | Resolve or launch the App-owned workspace for the `.rupa` target. |
-| `--mode file` | Open the closed schema-v3 `.rupa` project in a temporary workspace/controller. |
+| `--project <path>` | Resolve or launch the App-owned workspace for the canonical `.rupa` target. |
 | `--session-id <id>` | Select an already registered live session; it never launches an App. |
-| `--in-place` | Save a successful file-mode mutation to its input project after the command completes. |
-| `--output <path>` | Save a successful file-mode mutation to a `.rupa` output project. It is invalid in live mode. |
-| `--dry-run` | Stage and evaluate a file-mode mutation without saving. |
+| `--save` | Send an explicit save request to the App after a successful live mutation. |
+| `--dry-run` | Validate and evaluate intent without publishing a mutation. |
 | `--json` | Emit stable JSON output. |
 
-The access session is the only mutation and save boundary. A successful live
-mutation stays in memory until the separate explicit `save` command. A file
-mutation uses the same session for staging and explicit save; failure, cancel,
-stale coordinates, evaluation failure, or an uncertain response leaves the
-input unchanged and is never retried through another mode. `.swcad` and other
-legacy project formats are typed `unsupportedProjectFormat` failures.
+The access session is the only mutation and save boundary. A successful
+mutation stays in memory until the separate explicit `save` command. Failure,
+cancel, stale coordinates, evaluation failure, or an uncertain response leaves
+the current project unchanged and is never retried through another authority.
+Unsupported project formats are typed `unsupportedProjectFormat` failures.
 
-### Mode Selection
+### Session Selection
 
 ```mermaid
 flowchart TD
-    Start["CLI command"] --> Mode{"Requested --mode"}
-    Mode -->|omitted| Live["live (default)"]
-    Mode -->|live| Live
-    Mode -->|file| File["closed file"]
+    Start["CLI command"] --> Target{"project or session ID"}
+    Target -->|project| Live["App-owned live workspace"]
+    Target -->|session| Live
     Live --> Session["ProjectAccessSession"]
-    File --> Session
     Session --> Send["send intent once"]
-    Send --> Save{"explicit file save?"}
+    Send --> Save{"explicit save?"}
     Save -->|no| Finish["finish access"]
     Save -->|yes| Persist["session.save"]
     Persist --> Finish
@@ -1259,8 +1246,8 @@ Live mode routes the command to the running app through the same
 ```mermaid
 flowchart TD
     CLI["rupa CLI"] --> Session["ProjectAccessSession"]
-    Session --> IPC["injected local transport"]
-    IPC --> Listener["AgentSocketListener inside Rupa.app"]
+    Session --> IPC["injected loopback HTTP transport"]
+    IPC --> Listener["AgentHTTPHost inside Rupa.app"]
     Listener --> Controller["ProjectAgentCommandController"]
     Controller --> Registry["ProjectWorkspaceRegistry"]
     Registry --> Workspace["ProjectWorkspace"]
@@ -1290,19 +1277,24 @@ This section summarizes the app-level transport and method surface.
 
 ### Transport
 
-Initial implementation uses a local Unix domain socket.
+The App exposes a dynamic loopback HTTP endpoint discovered through the Team
+Keychain. The endpoint record contains only the port, launch generation, and a
+32-byte HMAC-SHA256 key. The App is the sole discovery writer; the signed CLI
+is a reader and sends no filesystem or endpoint override.
 
 | Field | Value |
 |---|---|
-| Transport | Unix domain socket |
+| Transport | Loopback TCP HTTP |
+| Authentication | Same-connection `/v1/challenge` then `/v1/rpc` with domain-separated HMAC proofs |
 | Message format | JSON-RPC style request and response envelopes |
-| Runtime directory | Product-composed App Group coordination endpoint; its path is injected by composition and is not part of semantic Agent status or CLI arguments. |
-| Endpoint ownership | `RupaProjectAccessPlatform` resolves the one endpoint for the App and signed CLI; the access adapter receives it and never invents an override or temporary fallback. |
+| Discovery | Team Keychain record containing dynamic port, generation, and HMAC key; no project payload |
+| Endpoint ownership | `AgentHost` binds and publishes after readiness; access composition reads the current generation |
 
-The package-level socket listener supports start, stop, stale socket replacement,
-malformed request recovery, and client/server round trips. App-hosted startup
-routes requests through `AgentHost`, `ProjectAgentCommandController`, and the
-registered application-owned `ProjectWorkspace`; source authority remains in
+The HTTP listener supports start, stop, bounded request parsing, challenge
+expiry/replay rejection, response authentication, malformed request recovery,
+and client/server round trips. App-hosted startup routes requests through
+`AgentHost`, `ProjectAgentCommandController`, and the registered
+application-owned `ProjectWorkspace`; source authority remains in
 `ProjectController`, while MainActor owns workspace registration and publication.
 
 ### Request Envelope
@@ -1401,7 +1393,7 @@ registered application-owned `ProjectWorkspace`; source authority remains in
 | `document.surfaceBoundaryContinuityCompatibility` | Preflight whether two source-owned direct B-spline trim boundary references can be matched at G0/G1/G2, returning pair-level diagnostics, maximum supported continuity, and recommended reference direction/match side without mutating source. |
 | `selection.selectTargets` | Replace the open session selection with typed object or subobject targets without mutating CAD source. |
 | `selection.selectReferences` | Replace the open session selection with typed Swift-CAD `SelectionReference` values, including source-owned Surface CV references returned by `surfaceSourceSummary`, without mutating CAD source. |
-| `document.export` | Export an open document session to an exchange artifact without mutating source, using the same `ExportOptions` as file-mode CLI export. |
+| `document.export` | Export an open document session to an exchange artifact without mutating source, using the shared `ExportOptions` contract. |
 
 ## Stable References
 
@@ -1428,19 +1420,15 @@ flowchart LR
 
 ## Project Access Authority and Coordination
 
-Rupa uses one access session and a project-file authority lease to avoid App
-and CLI conflicts. The lease is acquired by the closed-project access adapter;
-the CLI does not inspect or edit package entries itself.
+Rupa uses one live access session. The App-owned `ProjectWorkspace` and
+`ProjectController` are the only live mutation and persistence authority; the
+CLI does not inspect or edit package entries itself.
 
 ```mermaid
 flowchart TD
     Request["CLI project request"] --> Access["ProjectAccessOpening"]
-    Access --> Live{"mode"}
-    Live -->|live| Workspace["App ProjectWorkspace"]
-    Live -->|file| Acquire["Closed authority lease"]
-    Acquire --> Temporary["Temporary ProjectWorkspace"]
+    Access --> Workspace["App ProjectWorkspace"]
     Workspace --> Controller["ProjectController"]
-    Temporary --> Controller
     Controller --> Send["send intent"]
     Send --> Save{"explicit file save?"}
     Save -->|yes| Atomic["Atomic schema-v3 save"]
@@ -1450,12 +1438,12 @@ flowchart TD
 
 | Requirement | Contract |
 |---|---|
-| Open document detection | Live mode resolves the requested registered workspace; file mode acquires its own canonical input/output authority lease. |
-| Direct mutation prevention | All modes send through `ProjectAccessSession`; no CLI path mutates a package or editor session directly. |
-| Atomic writes | Explicit file-mode `session.save` writes through the schema-v3 package atomic replacement path. |
+| Open document detection | Live mode resolves the requested registered workspace through the App access opener. |
+| Direct mutation prevention | Every request sends through `ProjectAccessSession`; no CLI path mutates a package or editor session directly. |
+| Atomic writes | Explicit `session.save` writes through the App-owned schema-v3 package atomic replacement path. |
 | Dirty state | Live sessions expose unsaved state to CLI. |
 | Generation validation | Requests may include `expectedGeneration`; mismatches fail before mutation. |
-| Lock lifetime | The closed access session retains its lease through load, send, save, and finish; live access does not acquire a file lease. |
+| Session lifetime | `finish` releases API connection resources without closing or replacing the App document. |
 
 ## CLI Commands
 
@@ -1467,12 +1455,12 @@ Currently implemented command groups:
 | `rupa sessions` | List open app sessions. |
 | `rupa attach <document>` | Resolve and attach to an open file-backed document session. |
 | `rupa attach --session <id>` | Resolve and attach to an open document session by session ID. |
-| `rupa rename <document> --name <name>` | Rename a project through the selected access session; live is the default and file mode is explicit. |
-| `rupa rename <document> --name <name> --mode file --dry-run` | Validate a file-mode rename without saving. |
+| `rupa rename <document> --name <name>` | Rename a project through the App-owned live access session. |
+| `rupa rename <document> --name <name> --dry-run` | Validate a live rename without publishing a mutation. |
 | `rupa rename <document> --name <name> --session-id <id>` | Rename through an already registered live session. |
 | `rupa param set <document> <name> <value>` | Set a numeric length, angle, or scalar parameter literal. |
 | `rupa param set <document> <name> --expression <formula>` | Set a parameter from a parsed formula using units, parameter references, arithmetic, parentheses, and basic trigonometric functions. |
-| `rupa param delete <document> <name>` | Delete a parameter in live (default) or explicit file mode after dependency validation. |
+| `rupa param delete <document> <name>` | Delete a parameter in the App-owned live session after dependency validation. |
 | `rupa param list <document>` | List a project or live-session's parameters with resolved values and diagnostics. |
 | `rupa plane create <document> --name <name> --plane <xy|yz|zx>` | Create a saved standard construction plane. |
 | `rupa plane create-view <document> --name <name> --normal-x <value> --normal-y <value> --normal-z <value>` | Create a saved view-aligned construction plane from explicit origin and view normal. |
@@ -1516,11 +1504,11 @@ Currently implemented command groups:
 | `rupa model edge-chamfer <document> --target <json> --distance <value>` | Chamfer one or more supported editable body edges. |
 | `rupa model edge-fillet <document> --target <json> --radius <value>` | Fillet one or more supported editable body edges. |
 | `rupa model vertex-move <document> --target <json> --delta-x <value> --delta-y <value>` | Move a supported editable body vertex in the source profile plane. |
-| `rupa eval <document>` | Evaluate a file or matching live session and return generation-keyed diagnostics. |
-| `rupa mesh <document>` | Summarize evaluated meshes for a file or matching live session and return body, vertex, triangle, bounds, and diagnostics. |
-| `rupa measure <document>` | Measure a file or matching live session and return counts, bounds, profile area, solid volume, and diagnostics. |
-| `rupa save <document>` | Save a closed document or matching live session without changing generation. |
-| `rupa export <document> --output <path>` | Export a closed or live document to a Swift-CAD exchange format selected by output extension. |
+| `rupa eval <document>` | Resolve the App-owned live session and return generation-keyed evaluation diagnostics. |
+| `rupa mesh <document>` | Resolve the App-owned live session and return evaluated body, vertex, triangle, bounds, and diagnostics. |
+| `rupa measure <document>` | Resolve the App-owned live session and return counts, bounds, profile area, solid volume, and diagnostics. |
+| `rupa save <document>` | Explicitly save the matching App-owned live session without changing generation. |
+| `rupa export <document> --output <path>` | Export the matching App-owned live session to a Swift-CAD exchange format selected by output extension. |
 | `rupa export <document> --output <path> --preset <name>` | Export using a named `ExportPreset` for format, output unit, and default destination policy. |
 | `rupa export <document> --output <path> --destination-policy <policy>` | Override destination behavior with `prompt`, `overwrite`, or `versioned`. |
 | `rupa selection references --session-id <id> --reference <json>` | Replace a live session selection with one or more Swift-CAD `SelectionReference` values. |
@@ -1536,13 +1524,13 @@ Currently implemented command groups:
 | `rupa dimension remove-selection <document> --dimension-id <uuid>` | Remove an existing persistent CAD selection dimension. |
 | `rupa dimension set-sketch <document> --target <json>` | Update one supported source sketch dimension through the shared command pipeline. |
 | `rupa dimension set-object <document> --target <json>` | Update one supported object dimension through the shared command pipeline. |
-| `rupa surface sources <document>` | Return source-owned surface references, patch contracts, trim references, and editable Surface CV references for a file or live session. |
+| `rupa surface sources <document>` | Return source-owned surface references, patch contracts, trim references, and editable Surface CV references from the matching live session. |
 | `rupa surface move-control-point <document> --reference <json>` | Move one editable Surface CV selected by a Swift-CAD `SelectionReference`. |
 | `rupa surface slide-control-points <document> --reference <json>` | Slide one or more editable Surface CV references along local U, V, or normal directions. |
 | `rupa surface split-span <document> --reference <json> --fraction <value>` | Split one editable direct B-spline surface span at a normalized fraction by shape-preserving knot insertion. |
 | `rupa surface set-knot-multiplicity <document> --reference <json> --multiplicity <value>` | Raise one editable direct B-spline internal knot to an explicit multiplicity by repeated shape-preserving knot insertion. |
 | `rupa surface match-boundary-continuity <document> --target <json> --reference <json>` | Match compatible direct B-spline trim boundaries at G0/G1/G2 through source-owned control-row edits. |
-| `rupa validate <document>` | Validate a closed document file. |
+| `rupa validate <document>` | Validate the matching App-owned live session. |
 
 Required command groups:
 
@@ -1554,7 +1542,7 @@ Required command groups:
 | `rupa save <document>` | Save a document. |
 | `rupa batch --input <path>` | Execute a batch file. |
 
-All mutating commands accept the relevant mode, save, dry-run, and JSON options.
+All mutating commands accept the relevant save, dry-run, and JSON options.
 
 ### Undo and Batch Policy
 
@@ -1563,7 +1551,6 @@ All mutating commands accept the relevant mode, save, dry-run, and JSON options.
 | GUI command | Participates in undo and redo according to its command definition. |
 | Live CLI command | Participates in the app undo stack when the command definition supports undo. |
 | Live batch | Applies as one project source transaction and creates one undo entry; a failed batch restores document, selection, and undo/redo history without publication. |
-| File mode command | Does not participate in app undo because no app session owns the mutation. |
 
 Live mode uses the same undo-capable `CommandStack` and cannot leave partial
 session state after a failed batch. A future non-atomic script sequence requires
@@ -1576,7 +1563,6 @@ Every automation result includes enough information for humans, scripts, and age
 | Field | Meaning |
 |---|---|
 | `success` | Whether the command or batch completed. |
-| `mode` | `live`, `file`, or `dryRun`. |
 | `document` | Document summary after execution when available. |
 | `generationBefore` | Document generation before mutation when available. |
 | `generationAfter` | Document generation after mutation when available. |
@@ -1614,9 +1600,9 @@ CLI exit codes map from these typed errors through `CLIExitCode`.
 | `RupaUI` | Depends on SwiftUI and platform UI availability. |
 | `RupaRendering` | Depends on Metal and platform view bridges. |
 | `RupaPreview` | Depends on RealityKit, Quick Look, and USD tooling availability. |
-| `RupaAgent` | Initial Unix domain socket implementation is macOS first. |
+| `RupaAgent` | Loopback HTTP host and client are macOS first through the App composition. |
 | `RupaCLIKit` | Testable CLI implementation. Commands that touch live sessions are macOS first through RupaAgent. |
-| `RupaCLI` | macOS first. |
+| Xcode `RupaCLIProduct` | Signed macOS application wrapper that distributes the `rupa` executable. |
 
 If package-wide iOS and visionOS platforms are declared, macOS-only targets and APIs must be guarded explicitly.
 
@@ -1637,12 +1623,12 @@ RupaKit tests are split by module boundary.
 | `RupaAutomationTests` | Codable schema, batch ordering, parameter mutation, reference resolution, result encoding. |
 | `RupaDomainFoundationTests` | Domain registry, ownership, command lowering, generic execution, dry-run restoration, and simulation adapter contracts. |
 | `RupaManufacturingTests` | Manufacturing domain registration and printability preflight command lowering. |
-| `RupaUIPackageTests` | Generic domain command catalog mapping, `MainView` domain registry injection, and application-facing `AgentHost` lifecycle, socket capability publication, and shared `ProjectWorkspace` registration. |
-| `RupaAgentTests` | Message encoding, session resolution, generation mismatch, lock behavior, client/server lifecycle. |
+| `RupaUIPackageTests` | Generic domain command catalog mapping, `MainView` domain registry injection, and application-facing `AgentHost` lifecycle, Keychain discovery publication, and shared `ProjectWorkspace` registration. |
+| `RupaAgentTests` | Message encoding, session resolution, generation mismatch, authenticated client/server lifecycle, and response-loss behavior. |
 | `RupaRenderingTests` | Universal CAD/Mesh/mixed presentation, MeshSource drawing and identity picking, exact-CAD affordance gating, projection/unprojection layout, model coordinate mapping, and empty-document drag-plane behavior. |
-| `RupaCLITests` | Argument parsing, mode selection, file/live parameter workflows, JSON output, exit code mapping. |
+| `RupaCLITests` | Argument parsing, live-session parameter workflows, JSON output, exit code mapping, and explicit save. |
 
-Swift tests should be run through `xcodebuild test` with explicit timeouts when an Xcode workspace or project exists. Tests that touch shared files, sockets, or static state must use a shared serialization mechanism.
+Swift tests should be run through `xcodebuild test` with explicit timeouts when an Xcode workspace or project exists. Tests that touch shared files, network listeners, or static state must use a shared serialization mechanism.
 
 ## Acceptance Criteria
 
@@ -1651,28 +1637,26 @@ Initial implementation is accepted when these behavior contracts pass.
 | Scenario | Expected result |
 |---|---|
 | GUI parameter edit | Mutation goes through `CommandStack`, increments generation, evaluates, updates diagnostics, and invalidates rendering. |
-| CLI parameter edit | `rupa param set` and `rupa param delete` mutate a closed file or live session through the same command path and generation checks. Parsed formulas validate references and cycles before mutation, and deletion rejects still-referenced parameters before mutation. |
-| CLI file edit | Closed document loads, mutates through RupaCore, evaluates, and writes atomically. |
+| CLI parameter edit | `rupa param set` and `rupa param delete` mutate the App-owned live session through the same command path and generation checks. Parsed formulas validate references and cycles before mutation, and deletion rejects still-referenced parameters before mutation. |
 | CLI live edit | Open project resolves through `ProjectWorkspaceRegistry`, mutates through the shared project transaction path, updates UI state, and returns JSON when requested. |
-| Open document file conflict | Closed access acquires an authority lease and rejects a conflicting open/leased project; no forced direct-file mutation path exists. |
+| App session conflict | A request for a different dirty project is rejected; no forced direct-file mutation path exists. |
 | Generation mismatch | Request with stale `expectedGeneration` fails before mutation with `document.generationMismatch`. |
 | Dry run | Command validates and evaluates without saving or incrementing persisted file state. |
 | Product metadata persistence | Scene/component/material/validation/export/template metadata round-trips through `.rupa` and participates in undo/redo. |
 | Sessions JSON | `rupa sessions --json` returns stable session summaries with ID, path, dirty state, generation, and display name. |
-| Agent status | `rupa agent status --json` reports semantic running state and session count; it does not expose socket placement. |
+| Agent status | `rupa agent status --json` reports semantic running state and session count; it does not expose endpoint placement or credentials. |
 | Stable reference failure | Unresolvable references fail with `reference.unresolved` and actionable diagnostics. |
-| CLI dependency boundary | `RupaCLI` builds without importing `RupaUI` or the app target. |
+| CLI dependency boundary | Xcode `RupaCLIProduct` composes `RupaCLIComposition` without importing `RupaUI` or the app target. |
 
 ## Open Decisions
 
 | Topic | Decision needed |
 |---|---|
 | Document format boundary | Resolved: `.rupa` project schema v3 separates required Product source, optional CAD source, and optional Authored Mesh catalog/blob source under one manifest. |
-| App sandbox socket path | Resolved: the socket lives in the shared app-group container (`WWCKBW8CKN.team.stamp.rupa`) so the sandboxed app and external clients resolve the same path; distribution-signing validation remains before release. |
-| iPadOS and visionOS CLI exclusion | Decide whether `RupaCLI` is macOS-only in a separate package configuration or guarded in the shared package. |
-| XPC migration | Decide the threshold for replacing Unix domain sockets with XPC. |
+| App discovery | Resolved: the App publishes its dynamic loopback port, launch generation, and HMAC key in the Team Keychain after listener readiness; the signed CLI reads the matching record. |
+| iPadOS and visionOS CLI exclusion | Resolved: the signed Xcode `RupaCLIProduct` is macOS-only; shared CLI libraries remain separate from the product wrapper. |
 | Command schema versioning | During development, replace incorrect schemas without deprecated aliases. Freeze Agent/CLI compatibility independently when a conformance profile is released, following `SPECIFICATION_AUTHORITY.md`. |
-| Direct file mutation override | Resolved: direct-file overrides and implicit mode switching are removed; callers select `live` or `file` explicitly and use only the selected access session. |
+| Direct file mutation override | Resolved: external callers have no direct package mutation route; all operations use the live `RupaProjectAccess` session and explicit save. |
 | Batch undo grouping | Resolved by `DOMAIN_TRANSACTION_CONTRACT.md`: atomic and domain projection batches commit as one undo unit. A future explicitly non-atomic script sequence must use a different contract. |
 | Expected generation policy | Mutating transactions require expected generation at remote/live boundaries. Queries bind results to the generation and artifact identity they actually read. Dry run uses the same base-generation precondition. |
 | Stable reference precedence | Resolved by `REFERENCE_ARTIFACT_CONTRACT.md`: public operations use explicit tagged reference cases; ambiguous untyped input is rejected rather than resolved by precedence. |

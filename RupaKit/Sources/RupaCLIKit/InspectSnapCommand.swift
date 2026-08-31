@@ -39,7 +39,6 @@ public struct InspectSnapCommand: AsyncParsableCommand {
         try await CLIExitCode.run {
             let envelope = try await CLIService().read(
                 target: document.target(sessionID: id),
-                mode: document.mode,
                 expectedGeneration: document.generation()
             ) { sessionID in
                 .resolveSnap(

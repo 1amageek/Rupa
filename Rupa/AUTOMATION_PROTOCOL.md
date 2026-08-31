@@ -23,7 +23,7 @@ flowchart LR
 | Layer | Responsibility |
 |---|---|
 | External client | Chooses commands, supplies typed targets, and correlates request IDs. |
-| `RupaProjectAccess` | Opens an explicit live or closed-project access session without owning project semantics. |
+| `RupaProjectAccess` | Opens an explicit live access session without owning project semantics. |
 | Transport adapter | Moves bounded envelopes and preserves request/response correlation; it does not select another execution path on failure. |
 | Application router | Resolves lifecycle and session routing, then delegates project work to the selected workspace. |
 | `ProjectWorkspace` | Owns the open project session and is the only route from Agent requests to project authority. |
@@ -41,9 +41,10 @@ application coordinator, workspace, and `ProjectController`.
 
 | Field | Contract |
 |---|---|
-| Transport | Local Unix domain socket. |
-| Endpoint | A product-composition-owned `UnixSocketEndpoint` is injected into the adapter. The semantic protocol does not expose or choose a socket path. |
-| Fallback | None. Endpoint resolution, connection, dispatch, or response failure is a typed failure and never changes project authority. |
+| Transport | Authenticated loopback HTTP over dynamic TCP. |
+| Endpoint | A product-composition-owned loopback endpoint and Keychain HMAC key are injected into the adapter. The semantic protocol does not expose or choose endpoint discovery. |
+| Authentication | One TCP connection performs `/v1/challenge` then `/v1/rpc`; domain-separated HMAC proofs bind nonces, generation, port, version, request ID, request digest, response status, and response digest. |
+| Fallback | None. Discovery, connection, authentication, dispatch, or response failure is a typed failure and never changes project authority. |
 | Encoding | UTF-8 JSON. |
 | Message style | JSON-RPC-style envelopes with Rupa-specific method/result correlation. |
 | Protocol version | `jsonrpc` must be `"2.0"`. |

@@ -129,10 +129,6 @@ let package = Package(
             targets: ["RupaCLIKit"]
         ),
         .executable(
-            name: "rupa",
-            targets: ["RupaCLI"]
-        ),
-        .executable(
             name: "rupa-performance-benchmark",
             targets: ["RupaPerformanceBenchmark"]
         ),
@@ -266,20 +262,10 @@ let package = Package(
                 "RupaProjectAccessPlatform",
                 "RupaAgentProtocol",
                 "RupaCoreTypes",
-                "RupaAgentRuntime",
                 "RupaAgentTransport",
-                "RupaKit",
             ],
             path: "Sources/RupaProjectAccessComposition",
             exclude: ["DESIGN.md"]
-        ),
-        .executableTarget(
-            name: "ProjectAuthorityLeaseCrashProbe",
-            dependencies: [
-                "RupaProjectAccessComposition",
-                "RupaProjectAccessPlatform",
-            ],
-            path: "Tests/ProjectAuthorityLeaseCrashProbe"
         ),
         .target(
             name: "RupaUI",
@@ -461,12 +447,6 @@ let package = Package(
             exclude: ["DESIGN.md"]
         ),
         .executableTarget(
-            name: "RupaCLI",
-            dependencies: [
-                "RupaCLIComposition",
-            ]
-        ),
-        .executableTarget(
             name: "RupaPerformanceBenchmark",
             dependencies: [
                 "RupaKit",
@@ -574,22 +554,21 @@ let package = Package(
             ]
         ),
         .testTarget(
+            name: "RupaProjectAccessPlatformTests",
+            dependencies: [
+                "RupaProjectAccessPlatform",
+                "RupaAgentTransport",
+            ]
+        ),
+        .testTarget(
             name: "RupaProjectAccessCompositionTests",
             dependencies: [
                 "RupaProjectAccessComposition",
                 "RupaProjectAccess",
                 "RupaProjectAccessPlatform",
                 "RupaAgentProtocol",
-                "RupaAgentRuntime",
-                "RupaAutomation",
                 "RupaCoreTypes",
                 "RupaCore",
-                "RupaEvaluation",
-                "RupaGeometry",
-                "RupaProject",
-                "RupaProjectModel",
-                "RupaProjectPackage",
-                "RupaKit",
                 "RupaAgentTransport",
             ]
         ),

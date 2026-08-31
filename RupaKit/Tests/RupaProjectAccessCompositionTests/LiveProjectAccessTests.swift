@@ -4,8 +4,57 @@ import RupaAgentTransport
 import RupaCore
 import RupaCoreTypes
 import RupaProjectAccess
+import RupaProjectAccessPlatform
+import Synchronization
 @testable import RupaProjectAccessComposition
 import Testing
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func liveProjectDiscoveryWaitsForReadinessWithinTheCallerDeadline() async throws {
+    let expected = try AgentDiscoveryRecord(
+        port: 45_321,
+        generation: 7,
+        key: Data(repeating: 0xA5, count: AgentDiscoveryRecord.keyByteCount)
+    )
+    let reader = LiveAccessDiscoveryReader(
+        unavailableReadCount: 2,
+        record: expected
+    )
+
+    let record = try await LiveAgentDiscoveryRecordResolver(
+        reader: reader
+    ).resolve(
+        waitingForAvailability: true,
+        deadline: ContinuousClock.now.advanced(by: .seconds(1))
+    )
+
+    #expect(record == expected)
+    #expect(reader.readCount == 3)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func liveSessionDiscoveryDoesNotWaitOrSelectAnotherAuthority() async throws {
+    let reader = LiveAccessDiscoveryReader(
+        unavailableReadCount: 1,
+        record: try AgentDiscoveryRecord(
+            port: 45_322,
+            generation: 8,
+            key: Data(repeating: 0x5A, count: AgentDiscoveryRecord.keyByteCount)
+        )
+    )
+
+    await #expect(throws: AgentDiscoveryError.unavailable("Not ready.")) {
+        _ = try await LiveAgentDiscoveryRecordResolver(
+            reader: reader
+        ).resolve(
+            waitingForAvailability: false,
+            deadline: ContinuousClock.now.advanced(by: .seconds(1))
+        )
+    }
+    #expect(reader.readCount == 1)
+}
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
@@ -133,6 +182,116 @@ func liveProjectOpeningLaunchesOnceWhenTargetIsNotAttached() async throws {
     #expect(session.sessionID == sessionID)
     #expect(launcher.calls == [target.standardizedFileURL])
     await session.finish()
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func liveProjectReadinessNeverReconnectsARejectedGenerationAndAcceptsANewOne() async throws {
+    let target = URL(fileURLWithPath: "/tmp/live-project-generation-readiness.rupa")
+    let summary = liveSummary(id: UUID(), path: target.path)
+    let rejectedRecord = try AgentDiscoveryRecord(
+        port: 45_323,
+        generation: 9,
+        key: Data(repeating: 0x19, count: AgentDiscoveryRecord.keyByteCount)
+    )
+    let readyRecord = try AgentDiscoveryRecord(
+        port: 45_324,
+        generation: 10,
+        key: Data(repeating: 0x2A, count: AgentDiscoveryRecord.keyByteCount)
+    )
+    let reader = LiveAccessSequencedDiscoveryReader(
+        records: [rejectedRecord, rejectedRecord, readyRecord]
+    )
+    let transportFactory = LiveAccessGenerationTransportFactory(
+        rejectedGeneration: rejectedRecord.generation,
+        readyGeneration: readyRecord.generation,
+        summary: summary
+    )
+    let launcher = LiveAccessRecordingLauncher()
+    let opening = LiveProjectAccessOpening(
+        discoveryReader: reader,
+        launcher: launcher,
+        transportFactory: transportFactory.makeTransport
+    )
+
+    let session = try await opening.open(
+        .liveProject(target),
+        deadline: liveDeadline()
+    )
+
+    #expect(session.sessionID == summary.id)
+    #expect(launcher.calls == [target.standardizedFileURL])
+    #expect(reader.readCount == 3)
+    #expect(
+        transportFactory.connectionGenerations == [
+            rejectedRecord.generation,
+            readyRecord.generation,
+        ]
+    )
+    #expect(
+        transportFactory.requestGenerations == [
+            rejectedRecord.generation,
+            readyRecord.generation,
+        ]
+    )
+    await session.finish()
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func liveProjectSemanticConnectionFailureIsNotRetried() async throws {
+    let target = URL(fileURLWithPath: "/tmp/live-project-semantic-failure.rupa")
+    let failure = EditorError(
+        code: .agentConnectionFailed,
+        message: "The App rejected the observation after dispatch."
+    )
+    let transport = LiveAccessRecordingTransport(
+        responses: [.failure(failure)]
+    )
+    let launcher = LiveAccessRecordingLauncher()
+    let opening = LiveProjectAccessOpening(
+        launcher: launcher,
+        resolver: LiveProjectSessionResolver(transport: transport),
+        transport: transport
+    )
+
+    await #expect(throws: EditorError.self) {
+        _ = try await opening.open(
+            .liveProject(target),
+            deadline: liveDeadline()
+        )
+    }
+    #expect(transport.requests.count == 1)
+    #expect(launcher.calls == [target.standardizedFileURL])
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func liveSessionConnectionFailureIsNotRetriedOrReopened() async {
+    let sessionID = UUID()
+    let failure = EditorError(
+        code: .agentConnectionFailed,
+        message: "The live endpoint is unavailable."
+    )
+    let transport = LiveAccessRecordingTransport(
+        responses: [],
+        failure: failure
+    )
+    let launcher = LiveAccessRecordingLauncher()
+    let opening = LiveProjectAccessOpening(
+        launcher: launcher,
+        resolver: LiveProjectSessionResolver(transport: transport),
+        transport: transport
+    )
+
+    await #expect(throws: EditorError.self) {
+        _ = try await opening.open(
+            .liveSession(sessionID),
+            deadline: liveDeadline()
+        )
+    }
+    #expect(transport.requests.count == 1)
+    #expect(launcher.calls.isEmpty)
 }
 
 @MainActor
@@ -541,6 +700,91 @@ private final class LiveAccessSuspendingTransport: LiveProjectAccessTransport {
 }
 
 @MainActor
+private final class LiveAccessGenerationTransportFactory {
+    private let rejectedGeneration: UInt64
+    private let readyGeneration: UInt64
+    private let summary: WorkspaceSessionSummary
+    private(set) var connectionGenerations: [UInt64] = []
+    private(set) var requestGenerations: [UInt64] = []
+
+    init(
+        rejectedGeneration: UInt64,
+        readyGeneration: UInt64,
+        summary: WorkspaceSessionSummary
+    ) {
+        self.rejectedGeneration = rejectedGeneration
+        self.readyGeneration = readyGeneration
+        self.summary = summary
+    }
+
+    func makeTransport(
+        record: AgentDiscoveryRecord,
+        requestTimeout: Duration
+    ) throws -> any LiveProjectAccessTransport {
+        _ = requestTimeout
+        connectionGenerations.append(record.generation)
+        return LiveAccessGenerationTransport(
+            generation: record.generation,
+            rejectedGeneration: rejectedGeneration,
+            readyGeneration: readyGeneration,
+            summary: summary,
+            onRequest: { [weak self] generation in
+                self?.requestGenerations.append(generation)
+            }
+        )
+    }
+}
+
+@MainActor
+private final class LiveAccessGenerationTransport: LiveProjectAccessTransport {
+    private let generation: UInt64
+    private let rejectedGeneration: UInt64
+    private let readyGeneration: UInt64
+    private let summary: WorkspaceSessionSummary
+    private let onRequest: @MainActor (UInt64) -> Void
+
+    init(
+        generation: UInt64,
+        rejectedGeneration: UInt64,
+        readyGeneration: UInt64,
+        summary: WorkspaceSessionSummary,
+        onRequest: @escaping @MainActor (UInt64) -> Void
+    ) {
+        self.generation = generation
+        self.rejectedGeneration = rejectedGeneration
+        self.readyGeneration = readyGeneration
+        self.summary = summary
+        self.onRequest = onRequest
+    }
+
+    func send(
+        _ request: AgentRequest,
+        deadline: ContinuousClock.Instant
+    ) async throws -> AgentResponse {
+        try checkLiveProjectDeadline(deadline)
+        onRequest(generation)
+        if generation == rejectedGeneration {
+            throw AgentTransportFailure(
+                disposition: .notDispatched,
+                cause: .transport(
+                    EditorError(
+                        code: .agentConnectionFailed,
+                        message: "The rejected generation closed before RPC dispatch."
+                    )
+                )
+            )
+        }
+        guard generation == readyGeneration else {
+            throw EditorError(
+                code: .agentConnectionFailed,
+                message: "The fixture received an unexpected discovery generation."
+            )
+        }
+        return .sessions([summary])
+    }
+}
+
+@MainActor
 private final class ProjectApplicationWorkspaceOpeningProbe:
     ProjectApplicationWorkspaceOpening {
     private let applicationURL: URL?
@@ -571,6 +815,67 @@ private final class ProjectApplicationWorkspaceOpeningProbe:
         openedApplications.append(applicationURL)
         if let openResult {
             completionHandler(openResult)
+        }
+    }
+}
+
+private final class LiveAccessDiscoveryReader: AgentDiscoveryRecordReading, Sendable {
+    private struct State: Sendable {
+        var unavailableReadCount: Int
+        var readCount = 0
+    }
+
+    private let state: Mutex<State>
+    private let record: AgentDiscoveryRecord
+
+    init(
+        unavailableReadCount: Int,
+        record: AgentDiscoveryRecord
+    ) {
+        self.state = Mutex(State(unavailableReadCount: unavailableReadCount))
+        self.record = record
+    }
+
+    var readCount: Int {
+        state.withLock { $0.readCount }
+    }
+
+    func read() throws -> AgentDiscoveryRecord {
+        try state.withLock { state in
+            state.readCount += 1
+            guard state.unavailableReadCount == 0 else {
+                state.unavailableReadCount -= 1
+                throw AgentDiscoveryError.unavailable("Not ready.")
+            }
+            return record
+        }
+    }
+}
+
+private final class LiveAccessSequencedDiscoveryReader:
+    AgentDiscoveryRecordReading,
+    Sendable {
+    private struct State: Sendable {
+        var records: [AgentDiscoveryRecord]
+        var readCount = 0
+    }
+
+    private let state: Mutex<State>
+
+    init(records: [AgentDiscoveryRecord]) {
+        precondition(!records.isEmpty)
+        self.state = Mutex(State(records: records))
+    }
+
+    var readCount: Int {
+        state.withLock { $0.readCount }
+    }
+
+    func read() throws -> AgentDiscoveryRecord {
+        state.withLock { state in
+            let index = min(state.readCount, state.records.count - 1)
+            state.readCount += 1
+            return state.records[index]
         }
     }
 }

@@ -55,7 +55,6 @@ public struct Capabilities: AsyncParsableCommand {
     }
 }
 
-extension CLIEditMode: ExpressibleByArgument {}
 extension ExportPreset.DestinationPolicy: ExpressibleByArgument {}
 extension LengthDisplayUnit: ExpressibleByArgument {}
 extension SurfaceBoundaryContinuityLevel: ExpressibleByArgument {}
@@ -322,8 +321,7 @@ public struct SelectionReferencesCommand: AsyncParsableCommand {
 
         try await CLIExitCode.run {
             let response = try await CLIService().send(
-                target: CLIDocumentTarget(sessionID: id),
-                mode: .live
+                target: CLIDocumentTarget(sessionID: id)
             ) { sessionID in
                 .selectReferences(
                     sessionID: sessionID,
@@ -384,8 +382,7 @@ public struct SelectionTargetsCommand: AsyncParsableCommand {
 
         try await CLIExitCode.run {
             let response = try await CLIService().send(
-                target: CLIDocumentTarget(sessionID: id),
-                mode: .live
+                target: CLIDocumentTarget(sessionID: id)
             ) { sessionID in
                 .selectTargets(
                     sessionID: sessionID,
@@ -588,7 +585,6 @@ public struct DimensionSketchSummaryCommand: AsyncParsableCommand {
         try await CLIExitCode.run {
             let envelope = try await CLIService().read(
                 target: document.target(sessionID: id),
-                mode: document.mode,
                 expectedGeneration: document.generation()
             ) { sessionID in
                 .sketchDimensionSummary(
@@ -637,7 +633,6 @@ public struct DimensionObjectSummaryCommand: AsyncParsableCommand {
         try await CLIExitCode.run {
             let envelope = try await CLIService().read(
                 target: document.target(sessionID: id),
-                mode: document.mode,
                 expectedGeneration: document.generation()
             ) { sessionID in
                 .objectDimensionSummary(
@@ -697,17 +692,14 @@ public struct DimensionSetSketchCommand: AsyncParsableCommand {
                 sessionID: id
             )
             let response = try await CLIService().applyAutomationCommand(
-                target: try document.target(sessionID: id),
+                target: document.target(sessionID: id),
                 command: .setSketchEntityDimension(
                     target: selectionTarget,
                     kind: kind,
                     value: expression
                 ),
-                mode: document.mode,
                 expectedGeneration: document.generation(),
-                expectedWorkspaceRevision: document.workspaceRevision(),
-                dryRun: document.dryRun,
-                writePolicy: try document.writePolicy(sessionID: id)
+                expectedWorkspaceRevision: document.workspaceRevision()
             )
             try CLIOutput.write(
                 response: response,
@@ -758,17 +750,14 @@ public struct DimensionSetObjectCommand: AsyncParsableCommand {
                 sessionID: id
             )
             let response = try await CLIService().applyAutomationCommand(
-                target: try document.target(sessionID: id),
+                target: document.target(sessionID: id),
                 command: .setObjectDimension(
                     target: selectionTarget,
                     kind: kind,
                     value: expression
                 ),
-                mode: document.mode,
                 expectedGeneration: document.generation(),
-                expectedWorkspaceRevision: document.workspaceRevision(),
-                dryRun: document.dryRun,
-                writePolicy: try document.writePolicy(sessionID: id)
+                expectedWorkspaceRevision: document.workspaceRevision()
             )
             try CLIOutput.write(
                 response: response,
@@ -865,7 +854,6 @@ public struct SurfaceSourcesCommand: AsyncParsableCommand {
         try await CLIExitCode.run {
             let envelope = try await CLIService().read(
                 target: document.target(sessionID: id),
-                mode: document.mode,
                 expectedGeneration: document.generation()
             ) { sessionID in
                 .surfaceSourceSummary(
@@ -926,18 +914,15 @@ public struct SurfaceMoveControlPointCommand: AsyncParsableCommand {
             )
             let deltas = deltaExpressions(unit: lengthUnit)
             let response = try await CLIService().applyAutomationCommand(
-                target: try document.target(sessionID: id),
+                target: document.target(sessionID: id),
                 command: .moveSurfaceControlPoint(
                     target: surfaceReference,
                     deltaX: deltas.x,
                     deltaY: deltas.y,
                     deltaZ: deltas.z
                 ),
-                mode: document.mode,
                 expectedGeneration: document.generation(),
-                expectedWorkspaceRevision: document.workspaceRevision(),
-                dryRun: document.dryRun,
-                writePolicy: try document.writePolicy(sessionID: id)
+                expectedWorkspaceRevision: document.workspaceRevision()
             )
             try CLIOutput.write(
                 response: response,
@@ -1008,17 +993,14 @@ public struct SurfaceSlideControlPointsCommand: AsyncParsableCommand {
             )
             let distanceExpression = lengthExpression(unit: lengthUnit)
             let response = try await CLIService().applyAutomationCommand(
-                target: try document.target(sessionID: id),
+                target: document.target(sessionID: id),
                 command: .slideSurfaceControlPoints(
                     targets: references,
                     direction: direction.slideDirection,
                     distance: distanceExpression
                 ),
-                mode: document.mode,
                 expectedGeneration: document.generation(),
-                expectedWorkspaceRevision: document.workspaceRevision(),
-                dryRun: document.dryRun,
-                writePolicy: try document.writePolicy(sessionID: id)
+                expectedWorkspaceRevision: document.workspaceRevision()
             )
             try CLIOutput.write(
                 response: response,
@@ -1564,7 +1546,6 @@ public struct ExportDocument: AsyncParsableCommand {
             let response = try await CLIService().exportDocument(
                 target: document.target(sessionID: id),
                 outputURL: outputURL,
-                mode: document.mode,
                 expectedGeneration: document.generation(),
                 options: ExportOptions(
                     presetName: preset,
@@ -1597,7 +1578,6 @@ public struct EvaluateDocument: AsyncParsableCommand {
         try await CLIExitCode.run {
             let envelope = try await CLIService().read(
                 target: document.target(sessionID: id),
-                mode: document.mode,
                 expectedGeneration: document.generation()
             ) { sessionID in
                 .evaluate(
@@ -1630,7 +1610,6 @@ public struct MeasureDocument: AsyncParsableCommand {
         try await CLIExitCode.run {
             let envelope = try await CLIService().read(
                 target: document.target(sessionID: id),
-                mode: document.mode,
                 expectedGeneration: document.generation()
             ) { sessionID in
                 .measure(
@@ -1663,7 +1642,6 @@ public struct MeshDocument: AsyncParsableCommand {
         try await CLIExitCode.run {
             let envelope = try await CLIService().read(
                 target: document.target(sessionID: id),
-                mode: document.mode,
                 expectedGeneration: document.generation()
             ) { sessionID in
                 .meshSummary(
@@ -1696,7 +1674,6 @@ public struct SaveDocument: AsyncParsableCommand {
         try await CLIExitCode.run {
             let response = try await CLIService().saveDocument(
                 target: document.target(sessionID: id),
-                mode: document.mode,
                 expectedGeneration: document.generation()
             )
             try CLIOutput.write(
@@ -1739,8 +1716,7 @@ public struct ListParameterCommand: AsyncParsableCommand {
 
         try await CLIExitCode.run {
             let response = try await CLIService().send(
-                target: document.target(sessionID: id),
-                mode: document.mode
+                target: document.target(sessionID: id)
             ) { sessionID in
                 .parameters(
                     sessionID: sessionID,
@@ -1791,25 +1767,19 @@ public struct SetParameterCommand: AsyncParsableCommand {
             switch parameter {
             case .literal(let expression, let kind):
                 response = try await service.applyAutomationCommand(
-                    target: try document.target(sessionID: id),
+                    target: document.target(sessionID: id),
                     command: .upsertParameter(
                         name: name,
                         expression: expression,
                         kind: kind
                     ),
-                    mode: document.mode,
                     expectedGeneration: document.generation(),
-                    expectedWorkspaceRevision: document.workspaceRevision(),
-                    dryRun: document.dryRun,
-                    writePolicy: try document.writePolicy(sessionID: id)
+                    expectedWorkspaceRevision: document.workspaceRevision()
                 )
             case .formula(let expression, let kind, let defaults):
                 response = try await service.executeCommandMutationRequest(
-                    target: try document.target(sessionID: id),
-                    mode: document.mode,
-                    expectedGeneration: document.generation(),
-                    dryRun: document.dryRun,
-                    writePolicy: try document.writePolicy(sessionID: id)
+                    target: document.target(sessionID: id),
+                    expectedGeneration: document.generation()
                 ) { sessionID in
                     .setParameterExpression(
                         sessionID: sessionID,
@@ -2033,7 +2003,6 @@ public struct ValidateDocument: AsyncParsableCommand {
         try await CLIExitCode.run {
             let envelope = try await CLIService().read(
                 target: document.target(sessionID: id),
-                mode: document.mode,
                 expectedGeneration: document.generation()
             ) { sessionID in
                 .execute(

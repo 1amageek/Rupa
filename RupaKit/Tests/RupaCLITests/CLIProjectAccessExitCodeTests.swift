@@ -29,8 +29,6 @@ func projectAccessErrorsMapToStableCLIExitCategories() {
         (.unsupportedProjectFormat(other), .usage),
         (.sessionMismatch(expected: expectedSessionID, actual: actualSessionID), .data),
         (.outcomeUnknown(requestID: UUID()), .data),
-        (.fileAuthorityConflict(input), .data),
-        (.fileAuthorityLost(input), .data),
         (.committedMutation(outcome), .data),
         (.saveUnavailable, .inputOutput),
         (.sessionUnavailable(expectedSessionID), .unavailable),

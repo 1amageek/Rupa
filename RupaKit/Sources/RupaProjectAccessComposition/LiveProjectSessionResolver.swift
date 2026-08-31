@@ -1,32 +1,18 @@
 import Foundation
 import RupaAgentProtocol
-import RupaAgentTransport
 import RupaCoreTypes
 import RupaProjectAccess
 
 /// Resolves an already registered App-owned workspace through the Agent
 /// observation route. It never starts or replaces an application.
 @MainActor
-public final class LiveProjectSessionResolver: ProjectAccessObserving {
-    private let endpoint: UnixSocketEndpoint?
-    private let requestTimeout: Duration
-    private let injectedTransport: (any LiveProjectAccessTransport)?
-
-    public init(
-        endpoint: UnixSocketEndpoint,
-        requestTimeout: Duration = .seconds(30)
-    ) {
-        self.endpoint = endpoint
-        self.requestTimeout = requestTimeout
-        self.injectedTransport = nil
-    }
+final class LiveProjectSessionResolver: ProjectAccessObserving {
+    private let transport: any LiveProjectAccessTransport
 
     init(
         transport: any LiveProjectAccessTransport
     ) {
-        self.endpoint = nil
-        self.requestTimeout = .seconds(30)
-        self.injectedTransport = transport
+        self.transport = transport
     }
 
     public func capabilities(
@@ -130,7 +116,6 @@ public final class LiveProjectSessionResolver: ProjectAccessObserving {
         deadline: ContinuousClock.Instant
     ) async throws -> AgentResponse {
         try checkLiveProjectDeadline(deadline)
-        let transport = makeTransport()
         do {
             let response = try await transport.send(request, deadline: deadline)
             try checkLiveProjectDeadline(deadline)
@@ -141,19 +126,6 @@ public final class LiveProjectSessionResolver: ProjectAccessObserving {
         } catch {
             throw mapLiveProjectTransportError(error)
         }
-    }
-
-    private func makeTransport() -> any LiveProjectAccessTransport {
-        if let injectedTransport {
-            return injectedTransport
-        }
-        guard let endpoint else {
-            preconditionFailure("A live resolver requires an endpoint or test transport.")
-        }
-        return LiveProjectAgentClient(
-            endpoint: endpoint,
-            requestTimeout: requestTimeout
-        )
     }
 
     private func unexpectedObservationResponse(

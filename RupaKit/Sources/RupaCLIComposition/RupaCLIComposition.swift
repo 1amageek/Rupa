@@ -2,39 +2,34 @@ import RupaCLIKit
 import RupaProjectAccessComposition
 import RupaProjectAccessPlatform
 
-/// Provides the one executable composition shared by every `rupa` product.
+/// Provides the executable composition for the signed Xcode `rupa` product.
 @MainActor
 public enum RupaCLIComposition {
     /// Resolves product coordination, installs one access composition, and
     /// invokes the existing asynchronous CLI command tree.
     public static func run() async {
-        do {
-            let access = try makeAccess()
-            let dependencies = CLIProjectAccessDependencies(
-                opener: access,
-                observer: access
-            )
-            await CLIProjectAccessContext.$current.withValue(dependencies) {
-                await CLICommand.main()
-            }
-        } catch {
-            CLICommand.exit(withError: error)
+        let configuration = RupaProductAccessConfiguration.current
+        let access = makeAccess(configuration: configuration)
+        let dependencies = CLIProjectAccessDependencies(
+            opener: access,
+            observer: access,
+            requestTimeout: configuration.requestTimeout
+        )
+        await CLIProjectAccessContext.$current.withValue(dependencies) {
+            await CLICommand.main()
         }
     }
 
-    private static func makeAccess() throws -> DefaultProjectAccess {
-        let endpoint = try RupaAgentEndpointComposition.productEndpoint()
-        let authorityDirectory = try RupaProjectFileAuthorityComposition
-            .projectFileDirectory()
-        let live = LiveProjectAccessOpening(
-            endpoint: endpoint,
-            launcher: LaunchServicesProjectApplicationLauncher()
+    private static func makeAccess(
+        configuration: RupaProductAccessConfiguration
+    ) -> LiveProjectAccessOpening {
+        return LiveProjectAccessOpening(
+            discoveryReader: configuration.makeDiscoveryStore(),
+            launcher: LaunchServicesProjectApplicationLauncher(
+                applicationBundleIdentifier:
+                    configuration.applicationBundleIdentifier
+            ),
+            requestTimeout: configuration.requestTimeout
         )
-        let closed = ClosedProjectAccessOpening(
-            leaseStore: ProjectFileAuthorityLeaseStore(
-                rootDirectory: authorityDirectory
-            )
-        )
-        return DefaultProjectAccess(live: live, closed: closed)
     }
 }

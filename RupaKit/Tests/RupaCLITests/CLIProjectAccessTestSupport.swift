@@ -176,10 +176,15 @@ final class StubProjectAccessObserver: ProjectAccessObserving {
 func withStubProjectAccess<Result>(
     opener: any ProjectAccessOpening,
     observer: any ProjectAccessObserving,
+    requestTimeout: Duration = .seconds(5),
     operation: () async throws -> Result
 ) async rethrows -> Result {
     try await CLIProjectAccessContext.$current.withValue(
-        CLIProjectAccessDependencies(opener: opener, observer: observer)
+        CLIProjectAccessDependencies(
+            opener: opener,
+            observer: observer,
+            requestTimeout: requestTimeout
+        )
     ) {
         try await operation()
     }

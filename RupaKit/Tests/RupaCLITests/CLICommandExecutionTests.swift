@@ -9,9 +9,8 @@ import Testing
 @testable import RupaCLIKit
 
 @Test(.timeLimit(.minutes(1)))
-func lineCommandParsesImplicitUnitAndRunsThroughOneOutputAuthority() async throws {
+func lineCommandParsesImplicitUnitAndRunsThroughLiveAuthority() async throws {
     let inputURL = URL(fileURLWithPath: "/tmp/line-input.rupa")
-    let outputURL = URL(fileURLWithPath: "/tmp/line-output.rupa")
     let session = StubProjectAccessSession(
         steps: [
             .response(.command(stubAutomationResult(
@@ -32,9 +31,7 @@ func lineCommandParsesImplicitUnitAndRunsThroughOneOutputAuthority() async throw
     let observer = await makeStubProjectAccessObserver()
     let command = try LineSketchCommand.parse([
         inputURL.path,
-        "--mode", "file",
         "--expected-generation", "3",
-        "--output", outputURL.path,
         "--name", "API Line",
         "--start-x", "1",
         "--start-y", "2",
@@ -47,10 +44,8 @@ func lineCommandParsesImplicitUnitAndRunsThroughOneOutputAuthority() async throw
         try await command.run()
     }
 
-    #expect(await opener.recordedTargets() == [
-        .closedProject(input: inputURL, output: outputURL),
-    ])
-    #expect(await session.recordedSaveGenerations() == [DocumentGeneration(4)])
+    #expect(await opener.recordedTargets() == [.liveProject(inputURL)])
+    #expect(await session.recordedSaveGenerations().isEmpty)
     #expect(await session.recordedFinishCount() == 1)
     let requests = await session.recordedRequests()
     #expect(requests.count == 2)
@@ -97,7 +92,6 @@ func parameterListCommandParsesAndProjectsOneReadRequest() async throws {
     let observer = await makeStubProjectAccessObserver()
     let command = try ListParameterCommand.parse([
         projectURL.path,
-        "--mode", "file",
         "--expected-generation", String(generation.value),
         "--json",
     ])
@@ -106,9 +100,7 @@ func parameterListCommandParsesAndProjectsOneReadRequest() async throws {
         try await command.run()
     }
 
-    #expect(await opener.recordedTargets() == [
-        .closedProject(input: projectURL, output: nil),
-    ])
+    #expect(await opener.recordedTargets() == [.liveProject(projectURL)])
     #expect(await session.recordedSaveGenerations().isEmpty)
     let requests = await session.recordedRequests()
     #expect(requests.count == 1)
@@ -141,7 +133,6 @@ func displayUnitCommandParsesAndProjectsOneWorkspaceMutation() async throws {
     let command = try SetDisplayUnitCommand.parse([
         projectURL.path,
         "centimeter",
-        "--mode", "live",
         "--expected-generation", String(generation.value),
         "--expected-workspace-revision", String(workspaceRevision.value),
         "--json",
@@ -169,7 +160,7 @@ func displayUnitCommandParsesAndProjectsOneWorkspaceMutation() async throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
-func batchCommandParsesJSONAndRunsOneAtomicFileRequest() async throws {
+func batchCommandParsesJSONAndRunsOneAtomicLiveRequest() async throws {
     let projectURL = URL(fileURLWithPath: "/tmp/command-batch.rupa")
     let fixtureDirectory = FileManager.default.temporaryDirectory
         .appendingPathComponent("rupa-cli-batch-\(UUID().uuidString)", isDirectory: true)
@@ -210,7 +201,6 @@ func batchCommandParsesJSONAndRunsOneAtomicFileRequest() async throws {
     let observer = await makeStubProjectAccessObserver()
     let command = try BatchCommand.parse([
         projectURL.path,
-        "--mode", "file",
         "--input", batchURL.path,
         "--json",
     ])
@@ -219,7 +209,8 @@ func batchCommandParsesJSONAndRunsOneAtomicFileRequest() async throws {
         try await command.run()
     }
 
-    #expect(await session.recordedSaveGenerations() == [DocumentGeneration(6)])
+    #expect(await opener.recordedTargets() == [.liveProject(projectURL)])
+    #expect(await session.recordedSaveGenerations().isEmpty)
     let requests = await session.recordedRequests()
     #expect(requests.count == 1)
     guard case .executeBatch(_, let projectedBatch) = requests[0] else {
@@ -238,7 +229,6 @@ func explicitSaveCommandParsesAndUsesSessionSaveAPI() async throws {
     let observer = await makeStubProjectAccessObserver()
     let command = try SaveDocument.parse([
         projectURL.path,
-        "--mode", "live",
         "--expected-generation", String(generation.value),
         "--json",
     ])
@@ -282,7 +272,6 @@ func exportCommandParsesAndProjectsExportWithoutProjectSave() async throws {
     let observer = await makeStubProjectAccessObserver()
     let command = try ExportDocument.parse([
         projectURL.path,
-        "--mode", "live",
         "--expected-generation", String(generation.value),
         "--output", outputURL.path,
         "--preset", "Mesh",
@@ -306,4 +295,29 @@ func exportCommandParsesAndProjectsExportWithoutProjectSave() async throws {
     #expect(expectedGeneration == generation)
     #expect(options.presetName == "Mesh")
     #expect(options.destinationPolicy == .overwrite)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectMutationCommandsRejectRemovedFileAuthorityOptions() {
+    let requiredLineArguments = [
+        "--start-x", "0",
+        "--start-y", "0",
+        "--end-x", "1",
+        "--end-y", "1",
+    ]
+    for removedOption in [
+        ["--mode", "file"],
+        ["--output", "/tmp/output.rupa"],
+        ["--in-place"],
+        ["--dry-run"],
+    ] {
+        do {
+            _ = try LineSketchCommand.parse(
+                ["/tmp/input.rupa"] + requiredLineArguments + removedOption
+            )
+            Issue.record("Removed project mutation option was still accepted: \(removedOption)")
+        } catch {
+            // Rejection is part of the live-only public syntax contract.
+        }
+    }
 }

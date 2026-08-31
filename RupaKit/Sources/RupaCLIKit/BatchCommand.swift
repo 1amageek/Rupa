@@ -6,9 +6,8 @@ public struct BatchCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "batch",
         abstract: """
-        Apply an AutomationBatch JSON file to a file or live document. Batch \
-        execution is atomic: file mode saves only after every command succeeds, \
-        and live mode dispatches one app-session transaction that rolls \
+        Apply an AutomationBatch JSON file to a live document. Batch \
+        execution dispatches one app-session transaction that rolls \
         back document, selection, and undo history on failure.
         """
     )
@@ -27,11 +26,8 @@ public struct BatchCommand: AsyncParsableCommand {
 
         try await CLIExitCode.run {
             let response = try await CLIService().runBatch(
-                target: try document.target(sessionID: sessionID),
-                batch: batch,
-                mode: document.mode,
-                dryRun: document.dryRun,
-                writePolicy: try document.writePolicy(sessionID: sessionID)
+                target: document.target(sessionID: sessionID),
+                batch: batch
             )
             try CLIOutput.write(response: response, asJSON: document.json)
         }

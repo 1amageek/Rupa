@@ -5,11 +5,9 @@
 //  Created by 1amageek on 2026/06/04.
 //
 
-import Darwin
 import Foundation
 import SwiftUI
 import RupaAgentRuntime
-import RupaAgentTransport
 import RupaAgentUI
 import RupaKit
 import RupaProjectAccessPlatform
@@ -17,7 +15,8 @@ import RupaUI
 
 @main
 struct ApplicationRoot: App {
-    @State private var agentHost: AgentHost?
+    @NSApplicationDelegateAdaptor(ApplicationLifecycleDelegate.self)
+    private var applicationDelegate
     @State private var projectCoordinator: ApplicationProjectCoordinator
 
     private let domainConfiguration: ApplicationDomainRegistryConfiguration
@@ -35,7 +34,6 @@ struct ApplicationRoot: App {
             self.applicationAuthorityLease = applicationAuthorityLease
         } catch {
             self.applicationAuthorityLease = nil
-            self._agentHost = State(initialValue: nil)
             self._projectCoordinator = State(
                 initialValue: ApplicationProjectCoordinator(
                     launchFailure: error,
@@ -53,35 +51,26 @@ struct ApplicationRoot: App {
                 )
             )
             let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
-            let projectFileLeaseStore = ProjectFileAuthorityLeaseStore(
-                rootDirectory: try ApplicationProductConfiguration
-                    .projectFileAuthorityDirectory()
-            )
             let projectCoordinator = ApplicationProjectCoordinator(
                 workspace: workspace,
                 agentRegistrar: agentController,
                 operationSequencer: projectOperationSequencer,
-                projectFileLeaseStore: projectFileLeaseStore,
                 initialURL: Self.initialProjectURL()
             )
             let requestRouter = ApplicationAgentRequestRouter(
                 projectHandler: agentController,
                 lifecycle: projectCoordinator
             )
-            let agentEndpoint = try RupaAgentEndpointComposition.productEndpoint()
-            let agentPeerAuthorizer = SameUserAgentPeerAuthorizer(
-                expectedUserID: UInt32(getuid())
-            )
-            self._agentHost = State(
-                initialValue: AgentHost(
-                    handler: requestRouter,
-                    endpoint: agentEndpoint,
-                    peerAuthorizer: agentPeerAuthorizer
-                )
+            let agentLifecycle = try ApplicationAgentHostLifecycle(
+                handler: requestRouter,
+                discoveryStore: ApplicationProductConfiguration
+                    .makeDiscoveryStore(),
+                requestTimeout: ApplicationProductConfiguration
+                    .access.requestTimeout
             )
             self._projectCoordinator = State(initialValue: projectCoordinator)
+            applicationDelegate.configure(agentLifecycle: agentLifecycle)
         } catch {
-            self._agentHost = State(initialValue: nil)
             self._projectCoordinator = State(
                 initialValue: ApplicationProjectCoordinator(
                     launchFailure: error,
@@ -102,11 +91,6 @@ struct ApplicationRoot: App {
             }
             .task {
                 await projectCoordinator.launch()
-                guard projectCoordinator.hasRegisteredAgentSession,
-                      let agentHost else {
-                    return
-                }
-                await agentHost.start()
             }
             .onOpenURL { url in
                 projectCoordinator.receiveOpenURL(url)

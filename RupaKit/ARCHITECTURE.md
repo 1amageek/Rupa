@@ -14,12 +14,13 @@ this file remains the package graph index and current-route summary.
 Package schema v3 and the `ProjectController` source boundary are implemented.
 Application composition selects the verified single `ProjectWorkspace`, shared
 `ProjectWorkspaceOperationSequencer`, and `ProjectController` route for viewport,
-commands, file/history lifecycle, and live Agent access. The CLI closed-file
-and live mutation paths use the same `RupaProjectAccess` contract. A single
-`RupaCLIComposition` injects live and closed openers into `RupaCLIKit`; every
-command obtains one `ProjectAccessSession`, and only that session can send a
-mutation or perform an explicit save. CLIKit never opens package bytes or
-constructs an `EditorSession`. No schema-v2 compatibility layer remains.
+commands, file/history lifecycle, and live Agent access. All external mutation
+and save requests use the same live `RupaProjectAccess` contract. A single
+`RupaCLIComposition` injects the live opener and discovery observer into
+`RupaCLIKit`; every command obtains one `ProjectAccessSession`, and only that
+session can send a mutation or perform an explicit save. CLIKit never opens
+package bytes or constructs an `EditorSession`. No schema-v2 compatibility layer
+remains.
 
 ```mermaid
 flowchart LR
@@ -120,8 +121,7 @@ flowchart LR
     CLI --> Automation
     CLI --> Domain
     CLI --> SwiftCAD
-    SwiftPMEntry[RupaCLI] --> CLIComposition[RupaCLIComposition]
-    XcodeEntry[RupaCLIProduct] --> CLIComposition
+    XcodeEntry[RupaCLIProduct\nsigned non-UI bundle] --> CLIComposition[RupaCLIComposition]
     CLIComposition --> CLI
     CLIComposition --> AccessComposition[RupaProjectAccessComposition]
     CLIComposition --> AccessPlatform[RupaProjectAccessPlatform]
@@ -138,18 +138,18 @@ flowchart LR
 | `RupaCore` | Product document state, retained representation sets, Authored Mesh assets, CAD runtime/source state, semantic validation, source commands, and domain services | Evaluation projection persistence, UI state, transport protocol, CLI parsing |
 | `RupaCore/Surface` | Surface analysis, PolySpline editing, UVN frame and source summaries | Viewport drawing or Agent request routing |
 | `RupaAutomation` | Stable command vocabulary and command execution bridge | Agent protocol envelopes or view-specific state |
-| `RupaAgentProtocol` | Agent-facing request/response schema, envelopes, codec, transport-neutral request-handler port, session-coordinate projection, capabilities, and protocol summaries | Workspace registry, endpoint state, socket IO, CAD mutation logic |
-| `RupaAgentRuntime` | Main-actor registry of shared `ProjectWorkspace` instances, immutable project snapshot reads, capability/domain dispatch, and Agent request routing through the project-operation boundary | Independent editor sessions, package/source authority, Unix socket IO, SwiftUI workspace layout |
-| `RupaAgentTransport` | Bounded framed Unix socket IO, listener/client connection ownership, deadlines, and injected endpoint and peer-authorization contracts | Product endpoint placement, Agent command semantics, semantic endpoint status, or CAD mutation logic |
-| `RupaProjectAccess` | Transport-neutral live/closed target, session, explicit-save, finish, monotonic-open, and typed access-failure contracts | Workspace/controller construction, package bytes, socket IO, App lifecycle, or CLI parsing |
+| `RupaAgentProtocol` | Agent-facing request/response schema, envelopes, codec, transport-neutral request-handler port, session-coordinate projection, capabilities, and protocol summaries | Workspace registry, endpoint state, HTTP IO, CAD mutation logic |
+| `RupaAgentRuntime` | Main-actor registry of shared `ProjectWorkspace` instances, immutable project snapshot reads, capability/domain dispatch, and Agent request routing through the project-operation boundary | Independent editor sessions, package/source authority, HTTP IO, SwiftUI workspace layout |
+| `RupaAgentTransport` | Bounded loopback HTTP IO, same-connection challenge/RPC authentication, listener/client connection ownership, deadlines, and injected endpoint/key contracts | Product discovery placement, Agent command semantics, semantic endpoint status, or CAD mutation logic |
+| `RupaProjectAccess` | Transport-neutral live target, session, explicit-save, finish, monotonic-open, and typed access-failure contracts | Workspace/controller construction, package bytes, HTTP IO, App lifecycle, or CLI parsing |
 | `RupaAgent` | Compatibility facade that re-exports protocol, runtime, and transport | New implementation ownership |
 | `RupaViewportScene` | Viewport scene data model, scene construction, projection basis, hit policy, identity pick index, and viewport transform utilities | SwiftUI view layout, Metal drawing backend |
 | `RupaRendering` | SwiftUI viewport, drawing backend, interaction geometry, and rendering affordance services | Persistent document mutation |
-| `RupaUI` | SwiftUI workspace state, command panels, inspectors, and project-view presentation | Agent registration, socket/runtime implementation, or Core CAD algorithms |
-| `RupaAgentUI` | Concrete Agent socket-host composition and registration of application-owned `ProjectWorkspace` instances | A second editor/source authority, workspace editing UI, or Agent protocol schema |
+| `RupaUI` | SwiftUI workspace state, command panels, inspectors, and project-view presentation | Agent registration, HTTP/runtime implementation, or Core CAD algorithms |
+| `RupaAgentUI` | Concrete Agent HTTP-host composition and registration of application-owned `ProjectWorkspace` instances | A second editor/source authority, workspace editing UI, or Agent protocol schema |
 | `RupaCLIKit` | Async argument parsing and terminal response formatting through the injected `RupaProjectAccess` opener and observer | Product/CAD/Mesh authority, package-entry editing, transport endpoint selection, or direct session/controller construction |
-| `RupaCLIComposition` | One executable composition of the access opener/observer and platform endpoint/authority dependencies for `RupaCLIKit` | Command parsing, project authority, package-entry editing, signing, or a second live/file route |
-| `RupaCLI` / Xcode `RupaCLIProduct` | Thin async entries over `RupaCLIComposition`; the Xcode target owns signed distribution as product name `rupa` | Access construction, command parsing, project state, or duplicated mutation/save behavior |
+| `RupaCLIComposition` | One executable composition of the access opener/observer and platform discovery dependencies for `RupaCLIKit` | Command parsing, project authority, package-entry editing, signing, or a second access route |
+| Xcode `RupaCLIProduct` | Sole thin async product entry over `RupaCLIComposition`; owns signed distribution of the executable named `rupa` | Access construction, command parsing, project state, or duplicated mutation/save behavior |
 
 ## Dependency Rules
 
@@ -166,13 +166,13 @@ flowchart LR
 | `ProjectController.prepareMakeCADRepresentationEditableCommand` evaluates the selected CAD modeling representation against the current immutable document and binds the resulting occurrence Mesh to its project, purpose, transaction revision, representation reference, and exact CAD content identity. Before staging, `ProjectController` evaluates the current modeling projection again and requires an exact occurrence-Mesh match; it rejects a revision that changed during that evaluation. `DefaultGeometrySourceCommandApplier` then revalidates the document-owned bindings before adding a `derivedFromCAD` Authored Mesh asset. | A caller cannot promote an arbitrary Mesh by copying valid-looking snapshot or CAD identities. A derived evaluation snapshot cannot become source authority through inference, a stale cache, or a presentation-only result. Promotion is an explicit source command, while CAD authority and modeling selection remain retained. |
 | `DesignDocumentProjectBridge` creates a derived evaluation projection and its explicit occurrence-to-scene-node navigation index only. `RupaProject.ProjectEvaluatorPreparing` requires `ProjectController` to prepare an evaluator from the exact immutable `DesignDocument` being evaluated; `DefaultDesignDocumentProjectEvaluatorFactory` implements that port while owning provider registration and the shared CAD evaluation-cache lifetime. | Evaluation projection must not become a second persisted CAD source, occurrence IDs must not be parsed to recover editor identity, and a controller must not retain an evaluator bound to an older CAD document while cache lifetime outlives one snapshot build. |
 | `ProjectController` publishes one `ProjectStateSnapshot` containing the matching document lifetime, document generation, transaction revision, publication sequence, presentation evaluation, optional CAD interaction context, selection, workspace state, package, and history flags. `ProjectWorkspace` converts it away from the main actor into a package-free `ProjectViewSnapshot`, returns the exact view produced for each operation, and replaces its observable view only when that candidate is newer. | UI cannot combine geometry, CAD interaction, selection, or history from different publications; a late exact result remains available to its caller without regressing newer observable state; loading or replacing a document renews presentation lifetime even when the persisted project ID is unchanged; package bytes and source mutation authority do not enter observable UI state. |
-| `RupaAgentProtocol` must not depend on `RupaAgentRuntime` or `RupaAgentTransport`. | Tooling can encode/decode requests without loading workspace registries or socket code. |
+| `RupaAgentProtocol` must not depend on `RupaAgentRuntime` or `RupaAgentTransport`. | Tooling can encode/decode requests without loading workspace registries or HTTP code. |
 | `RupaProjectAccess` depends only on `RupaAgentProtocol` and `RupaCoreTypes`. | Target/session intent remains independent from transport, App, workspace, controller, and package implementations. |
-| `RupaAgentTransport` depends only on `RupaAgentProtocol` and `RupaCoreTypes`; runtime handlers implement the protocol-owned request port. | Socket ownership remains independent from workspace registries and command execution. |
-| Agent transport messages use an unsigned 64-bit network-order length prefix, a 16 MiB payload limit, and total monotonic IO deadlines; the listener tracks bounded concurrent connections and shuts them down before awaiting handler ownership during stop. | Message boundaries do not depend on peer EOF, malformed or stalled peers cannot allocate unbounded memory, and listener shutdown converges for half-open connections. |
-| `RupaAgentRuntime` registers the same `ProjectWorkspace` observed by UI and routes reads, source mutations, interaction mutations, history, evaluation, capability, and domain requests through it. File create/open/close/save are typed unsupported because file URLs, security-scoped access, windows, and user-facing lifecycle belong to `ApplicationRoot`; export accepts only CAD-only authority. | Agent execution cannot create a shadow `EditorSession`, take ownership of application file/window lifecycle, silently bypass package/evaluation publication, or infer an export source from Mesh or mixed representations. |
-| `ProjectWorkspaceRegistry` validates the exact published project coordinates before registration and identity reconciliation. A project-identity collision is a non-destructive typed rejection. Unregister stops new operations, waits for every previously acquired operation lease to finish, and only then removes the registration. | A load that changes project identity cannot leave a stale registry owner, transient view publication gaps cannot invalidate a valid registration, and socket teardown cannot race an already accepted mutation or export. |
-| `RupaAgentUI.AgentHost` owns socket lifecycle and registration only; application composition owns the registered workspace lifetime. | Agent availability and workspace source authority remain independent responsibilities. |
+| `RupaAgentTransport` depends only on `RupaAgentProtocol` and `RupaCoreTypes`; runtime handlers implement the protocol-owned request port. | HTTP connection and HMAC ownership remain independent from workspace registries and command execution. |
+| Agent transport uses bounded HTTP headers and Content-Length bodies, a 16 MiB payload limit, a same-connection challenge/RPC state machine, and total monotonic IO deadlines; the listener tracks bounded concurrent connections and drains accepted work before stop completes. | Message boundaries do not depend on peer EOF, unauthenticated peers cannot submit semantic bodies, malformed or stalled peers cannot allocate unbounded memory, and listener shutdown converges for half-open connections. |
+| `RupaAgentRuntime` registers the same `ProjectWorkspace` observed by UI and routes reads, source mutations, interaction mutations, history, evaluation, capability, and domain requests through it. File and window lifecycle belong to `ApplicationRoot`; export accepts only CAD-only authority. | Agent execution cannot create a shadow `EditorSession`, take ownership of application file/window lifecycle, silently bypass package/evaluation publication, or infer an export source from Mesh or mixed representations. |
+| `ProjectWorkspaceRegistry` validates the exact published project coordinates before registration and identity reconciliation. A project-identity collision is a non-destructive typed rejection. Unregister stops new operations, waits for every previously acquired operation lease to finish, and only then removes the registration. | A load that changes project identity cannot leave a stale registry owner, transient view publication gaps cannot invalidate a valid registration, and HTTP teardown cannot race an already accepted mutation or export. |
+| `RupaAgentUI.AgentHost` owns HTTP lifecycle and registration only; application composition owns the registered workspace lifetime. | Agent availability and workspace source authority remain independent responsibilities. |
 | `RupaRendering` consumes `RupaViewportScene`; scene construction must remain SwiftUI-free. | Viewport scene, projection, and hit policy can be tested without UI composition. |
 
 ## Project Source Boundary
@@ -227,7 +227,7 @@ flowchart LR
 |---|---|---|
 | Saved baseline | `EditorSession.markClean()` | Saving a document must mark the current store and the current command-history cursor as clean. Callers must not call `CADDocumentStore.markClean()` directly after a save because undo/redo snapshots would keep stale dirty flags. |
 | Non-mutating command errors | `EditorSession.record(_:)` | UI-friendly command wrappers may record diagnostics, but they must preserve the existing evaluation status and cache generation when the document did not mutate. A command error is not a geometry evaluation failure. |
-| CLI live mutation dry-run | `RupaCLIKit` | File dry-run means "execute without saving". CLI live-session mutation remains rejected before dispatch; project-backed capability dry-run uses `ProjectWorkspace.preview` and does not publish source, package, evaluation, or workspace state. |
+| CLI live mutation dry-run | `RupaCLIKit` | Live dry-run validates and evaluates intent without publishing source, package, evaluation, or workspace state. |
 | CLI process tests | `RupaCLITests` | Process E2E tests must execute the current Xcode build product only, must have bounded process timeouts, and must not fall back to package `.build` executables that could be stale. |
 | Agent source batch | `ProjectWorkspace.executeAutomation` and `ProjectController` | Related source commands are prepared from one published project snapshot, staged as one project transaction, evaluated and packaged before publication, and create one undo entry. Stale coordinates or any staging/evaluation/package failure leave the previous source, package, evaluation, history, selection, and workspace publication unchanged. |
 | Agent committed-mutation receipt | `ProjectWorkspacePostCommitError` and `AgentCommittedMutationOutcome` | If source, interaction, history, or evaluation authority commits but the response projection fails, the Agent returns the exact committed coordinates with a mandatory no-retry outcome and attempts view-only recovery without replaying the mutation. CLI callers preserve this outcome as a typed error. |
@@ -273,7 +273,7 @@ M3 is complete for source-owned authored trim p-curve control points, weights, a
 |---|---|
 | `RupaAgentTests/AgentCommandControllerTests.swift` | Capability contract tests and protocol codec/fixture tests |
 | `RupaAgentTests/AgentCommandIntegrationTests.swift` | Agent workflow test files for display, projection, dimensions, construction planes, direct modeling, patterns, sketch commands, inspection, offsets, sweeps/revolves, topology, persistence, and transport |
-| `RupaAgentTests/AgentIntegrationFixtures.swift` | Agent support files for socket transport, sketch/profile fixtures, topology targets, selection dimensions, and pattern arrays |
+| `RupaAgentTests/AgentIntegrationFixtures.swift` | Agent support files for HTTP transport, sketch/profile fixtures, topology targets, selection dimensions, and pattern arrays |
 | `RupaCore/DesignDocument.swift` | Focused document command extensions for construction planes, section planes, and measurement annotations |
 | `RupaCore/DesignDocument.swift` | Pattern array command extension plus dedicated output synchronizer and ownership resolver services |
 | `RupaCore/DesignDocument.swift` | Focused document command extensions for document settings, parameters, components, and simple scene-node edits |

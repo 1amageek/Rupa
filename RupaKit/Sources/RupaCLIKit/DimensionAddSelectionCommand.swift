@@ -47,7 +47,6 @@ public struct DimensionAddSelectionCommand: AsyncParsableCommand {
 
         try await CLIExitCode.run {
             let targetExpression = try await expression(sessionID: sessionID)
-            let writePolicy = try document.writePolicy(sessionID: sessionID)
             let execution = try await CLIService().executeAutomationMutationCommand(
                 .addSelectionDimension(
                     name: name,
@@ -56,12 +55,9 @@ public struct DimensionAddSelectionCommand: AsyncParsableCommand {
                     second: second,
                     target: targetExpression
                 ),
-                target: try document.target(sessionID: sessionID),
-                mode: document.mode,
+                target: document.target(sessionID: sessionID),
                 expectedGeneration: document.generation(),
-                expectedWorkspaceRevision: document.workspaceRevision(),
-                dryRun: document.dryRun,
-                writePolicy: writePolicy
+                expectedWorkspaceRevision: document.workspaceRevision()
             )
             let response = CLISelectionDimensionAddResponse(
                 result: execution.result,

@@ -1,7 +1,6 @@
 import AppKit
 import Foundation
 import RupaProjectAccess
-import RupaProjectAccessPlatform
 
 @MainActor
 protocol ProjectApplicationWorkspaceOpening: Sendable {
@@ -92,10 +91,7 @@ public struct LaunchServicesProjectApplicationLauncher: LiveProjectApplicationLa
     private let applicationBundleIdentifier: String
     private let workspace: any ProjectApplicationWorkspaceOpening
 
-    public init(
-        applicationBundleIdentifier: String =
-            RupaAgentEndpointComposition.applicationBundleIdentifier
-    ) {
+    public init(applicationBundleIdentifier: String) {
         self.applicationBundleIdentifier = applicationBundleIdentifier
         self.workspace = DefaultProjectApplicationWorkspaceOpener()
     }

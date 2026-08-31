@@ -88,11 +88,10 @@ public struct CLIService {
 
     public func read(
         target: CLIDocumentTarget,
-        mode: CLIEditMode = .live,
         expectedGeneration: DocumentGeneration? = nil,
         request: @escaping (UUID) -> AgentRequest
     ) async throws -> CLIReadEnvelope {
-        try await CLIProjectAccessRunner.withSession(target: target, mode: mode) { session in
+        try await CLIProjectAccessRunner.withSession(target: target) { session in
             let state = try await documentState(
                 session: session,
                 expectedGeneration: expectedGeneration
@@ -105,10 +104,9 @@ public struct CLIService {
 
     public func send(
         target: CLIDocumentTarget,
-        mode: CLIEditMode = .live,
         request: @escaping (UUID) -> AgentRequest
     ) async throws -> AgentResponse {
-        try await CLIProjectAccessRunner.withSession(target: target, mode: mode) { session in
+        try await CLIProjectAccessRunner.withSession(target: target) { session in
             let response = try await session.send(request(session.sessionID))
             try Self.throwIfFailure(response)
             return response
@@ -117,15 +115,11 @@ public struct CLIService {
 
     public func workspaceScale(
         target: CLIDocumentTarget,
-        mode: CLIEditMode = .live,
-        expectedGeneration: DocumentGeneration? = nil,
-        outputURL: URL? = nil
+        expectedGeneration: DocumentGeneration? = nil
     ) async throws -> WorkspaceScaleSnapshot {
         let state = try await withState(
             target: target,
-            mode: mode,
-            expectedGeneration: expectedGeneration,
-            outputURL: outputURL
+            expectedGeneration: expectedGeneration
         )
         guard let scale = state.workspaceScale else {
             throw Self.unexpectedResponse("Document description did not include workspace scale.")
@@ -136,38 +130,24 @@ public struct CLIService {
     public func applyAutomationCommand(
         target: CLIDocumentTarget,
         command: AutomationCommand,
-        mode: CLIEditMode = .live,
         expectedGeneration: DocumentGeneration? = nil,
-        expectedWorkspaceRevision: WorkspaceRevision? = nil,
-        dryRun: Bool = false,
-        writePolicy: CLIDocumentWritePolicy = .inPlace
+        expectedWorkspaceRevision: WorkspaceRevision? = nil
     ) async throws -> CLIResponse {
         try await executeAutomationMutationCommand(
             command,
             target: target,
-            mode: mode,
             expectedGeneration: expectedGeneration,
-            expectedWorkspaceRevision: expectedWorkspaceRevision,
-            dryRun: dryRun,
-            writePolicy: writePolicy
+            expectedWorkspaceRevision: expectedWorkspaceRevision
         ).response
     }
 
     public func executeAutomationMutationCommand(
         _ command: AutomationCommand,
         target: CLIDocumentTarget,
-        mode: CLIEditMode,
         expectedGeneration: DocumentGeneration?,
-        expectedWorkspaceRevision: WorkspaceRevision? = nil,
-        dryRun: Bool,
-        writePolicy: CLIDocumentWritePolicy
+        expectedWorkspaceRevision: WorkspaceRevision? = nil
     ) async throws -> CLIAutomationMutationExecution {
-        try validateMutation(mode: mode, dryRun: dryRun, writePolicy: writePolicy)
-        return try await CLIProjectAccessRunner.withSession(
-            target: target,
-            mode: mode,
-            outputURL: writePolicy.outputURL
-        ) { session in
+        return try await CLIProjectAccessRunner.withSession(target: target) { session in
             let preconditions = try await commandPreconditions(
                 command: command,
                 session: session,
@@ -183,114 +163,63 @@ public struct CLIService {
                 )
             )
             let result = try Self.commandResult(from: response)
-            let saved = try await saveFileMutationIfNeeded(
-                mode: mode,
-                dryRun: dryRun,
-                shouldPersist: result.didMutate || writePolicy.outputURL != nil,
-                generation: result.generation,
-                session: session
-            )
             return CLIAutomationMutationExecution(
                 result: result,
-                dirty: saved ? false : result.sourceDirty,
-                saved: saved
+                dirty: result.sourceDirty,
+                saved: false
             )
         }
     }
 
     public func executeCommandMutationRequest(
         target: CLIDocumentTarget,
-        mode: CLIEditMode,
         expectedGeneration: DocumentGeneration?,
-        dryRun: Bool,
-        writePolicy: CLIDocumentWritePolicy,
         request: @escaping (UUID) -> AgentRequest
     ) async throws -> CLIResponse {
-        try validateMutation(mode: mode, dryRun: dryRun, writePolicy: writePolicy)
-        return try await CLIProjectAccessRunner.withSession(
-            target: target,
-            mode: mode,
-            outputURL: writePolicy.outputURL
-        ) { session in
+        return try await CLIProjectAccessRunner.withSession(target: target) { session in
             let response = try await session.send(request(session.sessionID))
             let result = try Self.commandResult(from: response)
-            let saved = try await saveFileMutationIfNeeded(
-                mode: mode,
-                dryRun: dryRun,
-                shouldPersist: result.didMutate || writePolicy.outputURL != nil,
-                generation: result.generation,
-                session: session
-            )
             return CLIResponse(
                 result: result,
-                dirty: saved ? false : result.sourceDirty,
-                saved: saved
+                dirty: result.sourceDirty,
+                saved: false
             )
         }
     }
 
     public func executeDomain(
         target: CLIDocumentTarget,
-        request: DomainCommandRequest,
-        mode: CLIEditMode = .live,
-        writePolicy: CLIDocumentWritePolicy = .inPlace
+        request: DomainCommandRequest
     ) async throws -> CLIDomainExecutionResponse {
-        try validateMutation(mode: mode, dryRun: request.dryRun, writePolicy: writePolicy)
-        return try await CLIProjectAccessRunner.withSession(
-            target: target,
-            mode: mode,
-            outputURL: writePolicy.outputURL
-        ) { session in
+        return try await CLIProjectAccessRunner.withSession(target: target) { session in
             let response = try await session.send(
                 .executeDomain(sessionID: session.sessionID, request: request)
             )
             let result = try Self.domainResult(from: response)
-            let saved = try await saveFileMutationIfNeeded(
-                mode: mode,
-                dryRun: request.dryRun,
-                shouldPersist: result.didMutate || writePolicy.outputURL != nil,
-                generation: result.generation,
-                session: session
-            )
             return CLIDomainExecutionResponse(
                 result: result,
-                dirty: saved ? false : result.didMutate,
-                saved: saved
+                dirty: result.didMutate,
+                saved: false
             )
         }
     }
 
     public func runBatch(
         target: CLIDocumentTarget,
-        batch: AutomationBatch,
-        mode: CLIEditMode = .live,
-        dryRun: Bool = false,
-        writePolicy: CLIDocumentWritePolicy = .inPlace
+        batch: AutomationBatch
     ) async throws -> CLIBatchResponse {
-        try validateMutation(mode: mode, dryRun: dryRun, writePolicy: writePolicy)
-        return try await CLIProjectAccessRunner.withSession(
-            target: target,
-            mode: mode,
-            outputURL: writePolicy.outputURL
-        ) { session in
+        return try await CLIProjectAccessRunner.withSession(target: target) { session in
             let effectiveBatch = try await batchWithPreconditions(batch, session: session)
             let response = try await session.send(
                 .executeBatch(sessionID: session.sessionID, batch: effectiveBatch)
             )
             let result = try Self.batchResult(from: response)
-            let saved = try await saveFileMutationIfNeeded(
-                mode: mode,
-                dryRun: dryRun,
-                shouldPersist: result.didMutate || writePolicy.outputURL != nil,
-                generation: result.generation,
-                session: session
-            )
             return CLIBatchResponse(
                 results: result.results,
                 generation: result.generation,
                 workspaceRevision: result.workspaceRevision,
-                dirty: saved ? false : result.dirty,
-                saved: saved,
+                dirty: result.dirty,
+                saved: false,
                 metrics: result.metrics
             )
         }
@@ -298,10 +227,9 @@ public struct CLIService {
 
     public func saveDocument(
         target: CLIDocumentTarget,
-        mode: CLIEditMode = .live,
         expectedGeneration: DocumentGeneration? = nil
     ) async throws -> CLISaveResponse {
-        try await CLIProjectAccessRunner.withSession(target: target, mode: mode) { session in
+        try await CLIProjectAccessRunner.withSession(target: target) { session in
             CLISaveResponse(
                 result: try await session.save(expectedGeneration: expectedGeneration)
             )
@@ -311,12 +239,11 @@ public struct CLIService {
     public func exportDocument(
         target: CLIDocumentTarget,
         outputURL: URL,
-        mode: CLIEditMode = .live,
         expectedGeneration: DocumentGeneration? = nil,
         options: ExportOptions = ExportOptions(),
         dryRun: Bool = false
     ) async throws -> CLIExportResponse {
-        try await CLIProjectAccessRunner.withSession(target: target, mode: mode) { session in
+        try await CLIProjectAccessRunner.withSession(target: target) { session in
             let response = try await session.send(
                 .export(
                     sessionID: session.sessionID,
@@ -345,15 +272,9 @@ public struct CLIService {
 
     private func withState(
         target: CLIDocumentTarget,
-        mode: CLIEditMode,
-        expectedGeneration: DocumentGeneration?,
-        outputURL: URL?
+        expectedGeneration: DocumentGeneration?
     ) async throws -> AutomationResult {
-        try await CLIProjectAccessRunner.withSession(
-            target: target,
-            mode: mode,
-            outputURL: outputURL
-        ) { session in
+        try await CLIProjectAccessRunner.withSession(target: target) { session in
             try await documentState(session: session, expectedGeneration: expectedGeneration)
         }
     }
@@ -416,33 +337,6 @@ public struct CLIService {
                 ? batch.expectedWorkspaceRevision ?? state.workspaceRevision
                 : batch.expectedWorkspaceRevision
         )
-    }
-
-    private func saveFileMutationIfNeeded(
-        mode: CLIEditMode,
-        dryRun: Bool,
-        shouldPersist: Bool,
-        generation: DocumentGeneration,
-        session: any ProjectAccessSession
-    ) async throws -> Bool {
-        guard mode == .file, !dryRun, shouldPersist else {
-            return false
-        }
-        _ = try await session.save(expectedGeneration: generation)
-        return true
-    }
-
-    private func validateMutation(
-        mode: CLIEditMode,
-        dryRun: Bool,
-        writePolicy: CLIDocumentWritePolicy
-    ) throws {
-        if mode == .live, dryRun {
-            throw invalidCommand("Dry-run mutation requires --mode file.")
-        }
-        if mode == .live, writePolicy.outputURL != nil {
-            throw invalidCommand("--output can only be used with --mode file.")
-        }
     }
 
     private static func throwIfFailure(_ response: AgentResponse) throws {

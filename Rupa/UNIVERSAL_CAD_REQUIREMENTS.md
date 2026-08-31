@@ -180,7 +180,8 @@ Validation must be generic and composable.
 | Documentation readiness | Stale drawing view, missing dimension, missing metadata. |
 | Interop readiness | Unsupported export feature, missing semantic mapping, lossy conversion. |
 
-Validation rules must be callable from GUI, CLI file mode, CLI live mode, and automation.
+Validation rules must be callable from the GUI and from external clients through
+the live Rupa project API. Both routes use the App-owned `ProjectController`.
 
 ## 11. Import, Export, and Presets
 

@@ -1,5 +1,4 @@
 import ArgumentParser
-import RupaCore
 
 public struct InspectViewportCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
@@ -13,18 +12,11 @@ public struct InspectViewportCommand: AsyncParsableCommand {
     public init() {}
 
     public func run() async throws {
-        guard options.mode == .live else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Viewport inspection requires explicit live mode."
-            )
-        }
         let sessionID = try options.resolvedSessionID()
 
         try await CLIExitCode.run {
             let envelope = try await CLIService().read(
                 target: options.target(sessionID: sessionID),
-                mode: .live,
                 expectedGeneration: options.generation()
             ) { resolvedSessionID in
                 .viewportSnapshot(

@@ -1,27 +1,56 @@
 import Foundation
 import RupaAgentProtocol
 import RupaAgentTransport
+import RupaCoreTypes
 import RupaProjectAccess
+import RupaProjectAccessPlatform
 
 /// Opens an existing App-owned session or launches the App for one project URL.
 @MainActor
 public final class LiveProjectAccessOpening: ProjectAccessOpening, ProjectAccessObserving {
-    private let endpoint: UnixSocketEndpoint?
+    private let discoveryReader: (any AgentDiscoveryRecordReading)?
     private let launcher: any LiveProjectApplicationLaunching
     private let requestTimeout: Duration
     private let resolverOverride: LiveProjectSessionResolver?
     private let transportOverride: (any LiveProjectAccessTransport)?
+    private let transportFactory: @MainActor (
+        AgentDiscoveryRecord,
+        Duration
+    ) throws -> any LiveProjectAccessTransport
 
     public init(
-        endpoint: UnixSocketEndpoint,
+        discoveryReader: any AgentDiscoveryRecordReading,
         launcher: any LiveProjectApplicationLaunching,
         requestTimeout: Duration = .seconds(30)
     ) {
-        self.endpoint = endpoint
+        self.discoveryReader = discoveryReader
         self.launcher = launcher
         self.requestTimeout = requestTimeout
         self.resolverOverride = nil
         self.transportOverride = nil
+        self.transportFactory = { record, requestTimeout in
+            try LiveProjectAgentClient(
+                record: record,
+                requestTimeout: requestTimeout
+            )
+        }
+    }
+
+    init(
+        discoveryReader: any AgentDiscoveryRecordReading,
+        launcher: any LiveProjectApplicationLaunching,
+        requestTimeout: Duration = .seconds(30),
+        transportFactory: @escaping @MainActor (
+            AgentDiscoveryRecord,
+            Duration
+        ) throws -> any LiveProjectAccessTransport
+    ) {
+        self.discoveryReader = discoveryReader
+        self.launcher = launcher
+        self.requestTimeout = requestTimeout
+        self.resolverOverride = nil
+        self.transportOverride = nil
+        self.transportFactory = transportFactory
     }
 
     init(
@@ -29,11 +58,12 @@ public final class LiveProjectAccessOpening: ProjectAccessOpening, ProjectAccess
         resolver: LiveProjectSessionResolver,
         transport: any LiveProjectAccessTransport
     ) {
-        self.endpoint = nil
+        self.discoveryReader = nil
         self.launcher = launcher
         self.requestTimeout = .seconds(30)
         self.resolverOverride = resolver
         self.transportOverride = transport
+        self.transportFactory = { _, _ in transport }
     }
 
     public func open(
@@ -42,22 +72,38 @@ public final class LiveProjectAccessOpening: ProjectAccessOpening, ProjectAccess
     ) async throws -> any ProjectAccessSession {
         try checkLiveProjectDeadline(deadline)
         let validatedTarget = try target.validated()
-        let resolver = try makeResolver()
+
+        if case .liveProject(let projectURL) = validatedTarget {
+            try await launcher.launch(
+                projectURL: canonicalLiveProjectURL(projectURL),
+                deadline: deadline
+            )
+            try checkLiveProjectDeadline(deadline)
+        }
+
+        let connection: LiveConnection
+        let initialSummaries: [WorkspaceSessionSummary]?
+        switch validatedTarget {
+        case .liveProject:
+            let ready = try await makeReadyConnection(deadline: deadline)
+            connection = ready.connection
+            initialSummaries = ready.sessions
+        case .liveSession:
+            connection = try await makeConnection(
+                waitingForAvailability: false,
+                deadline: deadline
+            )
+            initialSummaries = nil
+        }
+        let resolver = connection.resolver
 
         let summary: WorkspaceSessionSummary
         switch validatedTarget {
         case .liveProject(let projectURL):
             let canonicalURL = canonicalLiveProjectURL(projectURL)
-            // The application coordinator owns the open decision. It treats a
-            // request for its current canonical URL as a no-op only after the
-            // retained file authority validates; this adapter sends exactly
-            // one open event and waits on the same outer deadline.
-            try await launcher.launch(
-                projectURL: canonicalURL,
-                deadline: deadline
-            )
-            try checkLiveProjectDeadline(deadline)
-            let initialSummaries = try await resolver.sessions(deadline: deadline)
+            guard let initialSummaries else {
+                throw ProjectAccessError.authorityUnavailable
+            }
             var exactMatches: [WorkspaceSessionSummary] = []
             for summary in initialSummaries where
                 try canonicalLiveSessionPath(summary.path) == canonicalURL {
@@ -82,60 +128,154 @@ public final class LiveProjectAccessOpening: ProjectAccessOpening, ProjectAccess
                 sessionID: sessionID,
                 deadline: deadline
             )
-        case .closedProject:
-            throw ProjectAccessError.authorityUnavailable
         }
 
         try checkLiveProjectDeadline(deadline)
-        if let transportOverride {
-            return LiveProjectAccessSession(
-                sessionID: summary.id,
-                transport: transportOverride,
-                deadline: deadline
-            )
-        }
-        guard let endpoint else {
-            throw ProjectAccessError.authorityUnavailable
-        }
         return LiveProjectAccessSession(
             sessionID: summary.id,
-            endpoint: endpoint,
-            deadline: deadline,
-            requestTimeout: requestTimeout
+            transport: connection.transport,
+            deadline: deadline
         )
     }
 
     public func status(
         deadline: ContinuousClock.Instant
     ) async throws -> AgentStatus {
-        let resolver = try makeResolver()
+        let resolver = try await makeConnection(
+            waitingForAvailability: false,
+            deadline: deadline
+        ).resolver
         return try await resolver.status(deadline: deadline)
     }
 
     public func capabilities(
         deadline: ContinuousClock.Instant
     ) async throws -> [AgentCapabilityDescriptor] {
-        let resolver = try makeResolver()
+        let resolver = try await makeConnection(
+            waitingForAvailability: false,
+            deadline: deadline
+        ).resolver
         return try await resolver.capabilities(deadline: deadline)
     }
 
     public func sessions(
         deadline: ContinuousClock.Instant
     ) async throws -> [WorkspaceSessionSummary] {
-        let resolver = try makeResolver()
+        let resolver = try await makeConnection(
+            waitingForAvailability: false,
+            deadline: deadline
+        ).resolver
         return try await resolver.sessions(deadline: deadline)
     }
 
-    private func makeResolver() throws -> LiveProjectSessionResolver {
-        if let resolverOverride {
-            return resolverOverride
+    private func makeConnection(
+        waitingForAvailability: Bool,
+        excludingGenerations: Set<UInt64> = [],
+        deadline: ContinuousClock.Instant
+    ) async throws -> LiveConnection {
+        if let resolverOverride, let transportOverride {
+            return LiveConnection(
+                resolver: resolverOverride,
+                transport: transportOverride
+            )
         }
-        guard let endpoint else {
+        guard resolverOverride == nil, transportOverride == nil,
+              let discoveryReader else {
             throw ProjectAccessError.authorityUnavailable
         }
-        return LiveProjectSessionResolver(
-            endpoint: endpoint,
-            requestTimeout: requestTimeout
+        let record = try await LiveAgentDiscoveryRecordResolver(
+            reader: discoveryReader
+        ).resolve(
+            waitingForAvailability: waitingForAvailability,
+            excludingGenerations: excludingGenerations,
+            deadline: deadline
         )
+        let transport = try transportFactory(record, requestTimeout)
+        return LiveConnection(
+            resolver: LiveProjectSessionResolver(transport: transport),
+            transport: transport,
+            discoveryGeneration: record.generation
+        )
+    }
+
+    private func makeReadyConnection(
+        deadline: ContinuousClock.Instant
+    ) async throws -> (
+        connection: LiveConnection,
+        sessions: [WorkspaceSessionSummary]
+    ) {
+        var rejectedGenerations: Set<UInt64> = []
+        while true {
+            let connection = try await makeConnection(
+                waitingForAvailability: true,
+                excludingGenerations: rejectedGenerations,
+                deadline: deadline
+            )
+            let readinessResolver = LiveProjectSessionResolver(
+                transport: LiveProjectReadinessAttemptTransport(
+                    transport: connection.transport
+                )
+            )
+            do {
+                return (
+                    connection,
+                    try await readinessResolver.sessions(deadline: deadline)
+                )
+            } catch let failure as LiveProjectReadinessConnectionFailure {
+                guard let generation = connection.discoveryGeneration else {
+                    throw mapLiveProjectTransportError(failure.transportFailure)
+                }
+                rejectedGenerations.insert(generation)
+                try checkLiveProjectDeadline(deadline)
+            }
+        }
+    }
+
+    private struct LiveConnection {
+        let resolver: LiveProjectSessionResolver
+        let transport: any LiveProjectAccessTransport
+        let discoveryGeneration: UInt64?
+
+        init(
+            resolver: LiveProjectSessionResolver,
+            transport: any LiveProjectAccessTransport,
+            discoveryGeneration: UInt64? = nil
+        ) {
+            self.resolver = resolver
+            self.transport = transport
+            self.discoveryGeneration = discoveryGeneration
+        }
+    }
+}
+
+private struct LiveProjectReadinessConnectionFailure: Error {
+    let transportFailure: AgentTransportFailure
+}
+
+@MainActor
+private final class LiveProjectReadinessAttemptTransport:
+    LiveProjectAccessTransport {
+    private let transport: any LiveProjectAccessTransport
+
+    init(transport: any LiveProjectAccessTransport) {
+        self.transport = transport
+    }
+
+    func send(
+        _ request: AgentRequest,
+        deadline: ContinuousClock.Instant
+    ) async throws -> AgentResponse {
+        do {
+            return try await transport.send(request, deadline: deadline)
+        } catch let failure as AgentTransportFailure {
+            guard case .notDispatched = failure.disposition,
+                  case .transport(let editorError) = failure.cause,
+                  editorError.code == .agentConnectionFailed else {
+                throw failure
+            }
+            throw LiveProjectReadinessConnectionFailure(
+                transportFailure: failure
+            )
+        }
     }
 }

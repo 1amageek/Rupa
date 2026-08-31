@@ -5,18 +5,11 @@ import RupaCore
 import RupaCoreTypes
 import RupaKit
 import RupaProject
-import RupaProjectAccess
-import RupaProjectAccessPlatform
 import RupaUI
 
 @MainActor
 @Observable
 final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
-    private enum ProjectFileLeaseStoreState {
-        case available(ProjectFileAuthorityLeaseStore)
-        case unavailable
-    }
-
     enum Lifecycle: Equatable {
         case preparing
         case ready
@@ -43,17 +36,13 @@ final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
     @ObservationIgnored
     private let securityScopedAccessOpener: any SecurityScopedProjectAccessOpening
     @ObservationIgnored
-    private let projectFileLeaseStoreState: ProjectFileLeaseStoreState
-    @ObservationIgnored
-    private let projectLeaseAcquisitionDuration: Duration
-    @ObservationIgnored
     private let launchArguments: [String]
     @ObservationIgnored
     private var pendingInitialURL: URL?
     @ObservationIgnored
     private var registeredSessionID: UUID?
     @ObservationIgnored
-    private var fileAuthority: ApplicationProjectFileAuthority?
+    private var projectFileAccess: ApplicationProjectFileAccess?
     @ObservationIgnored
     private var activeTask: Task<Void, Never>?
     @ObservationIgnored
@@ -67,9 +56,6 @@ final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
             ProjectWorkspaceOperationSequencer(),
         securityScopedAccessOpener: any SecurityScopedProjectAccessOpening =
             DefaultSecurityScopedProjectAccessOpener(),
-        projectFileLeaseStore: ProjectFileAuthorityLeaseStore,
-        projectLeaseAcquisitionDuration: Duration =
-            ApplicationProductConfiguration.projectLeaseAcquisitionDuration,
         initialURL: URL? = nil,
         launchArguments: [String] = ProcessInfo.processInfo.arguments
     ) {
@@ -77,8 +63,6 @@ final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
         self.agentRegistrar = agentRegistrar
         self.operationSequencer = operationSequencer
         self.securityScopedAccessOpener = securityScopedAccessOpener
-        self.projectFileLeaseStoreState = .available(projectFileLeaseStore)
-        self.projectLeaseAcquisitionDuration = projectLeaseAcquisitionDuration
         self.launchArguments = launchArguments
         self.pendingInitialURL = initialURL?.standardizedFileURL
         self.lifecycle = .preparing
@@ -108,9 +92,6 @@ final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
         self.agentRegistrar = agentRegistrar
         self.operationSequencer = operationSequencer
         self.securityScopedAccessOpener = securityScopedAccessOpener
-        self.projectFileLeaseStoreState = .unavailable
-        self.projectLeaseAcquisitionDuration =
-            ApplicationProductConfiguration.projectLeaseAcquisitionDuration
         self.launchArguments = []
         self.pendingInitialURL = nil
         self.lifecycle = .unavailable(failure)
@@ -121,7 +102,7 @@ final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
     }
 
     var currentFileURL: URL? {
-        fileAuthority?.url
+        projectFileAccess?.url
     }
 
     var snapshot: ProjectViewSnapshot? {
@@ -332,7 +313,7 @@ final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
                 with: .empty(named: name),
                 operationGuard: Self.cancellationGuard
             )
-            await clearFileAuthority()
+            clearProjectFileAccess()
             _ = await synchronizeAgentPathAfterCommittedView(
                 nil,
                 view: replaced,
@@ -342,7 +323,7 @@ final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
                 failureMessage: "The new project committed, but its Agent file path could not be cleared"
             )
         } catch let error as ProjectWorkspacePersistencePublicationError {
-            await clearFileAuthority()
+            clearProjectFileAccess()
             _ = await handleCommittedPersistenceFailure(
                 error,
                 path: nil
@@ -369,27 +350,10 @@ final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
         if let currentFileURL,
            Self.canonicalProjectURL(currentFileURL)
                 == Self.canonicalProjectURL(normalizedURL) {
-            guard let fileAuthority else {
-                let authorityFailure = await terminateAfterCurrentFileAuthorityLoss(
-                    kind: .load,
-                    message: "The current project file authority was unavailable before reopening the same canonical project."
-                )
-                failure = authorityFailure
-                return
-            }
-            do {
-                try await fileAuthority.validate()
-                // Reopening the current canonical project is an idempotent App
-                // lifecycle request only while its existing authority remains
-                // valid. Preserve dirty state and publication after validation.
-                failure = nil
-            } catch {
-                let authorityFailure = await terminateAfterCurrentFileAuthorityLoss(
-                    kind: .load,
-                    message: "The current project file authority was lost before reopening the same canonical project: \(error.localizedDescription)"
-                )
-                failure = authorityFailure
-            }
+            // Reopening the current canonical project is an idempotent App
+            // lifecycle request. The retained security-scoped access remains
+            // alive for the current document and no filesystem lease is used.
+            failure = nil
             return
         }
         guard !isDirty else {
@@ -474,8 +438,7 @@ final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
                 )
             case .committed(
                 let initialOutcome,
-                let viewIsAvailable,
-                let fileAuthorityIsAvailable
+                let viewIsAvailable
             ):
                 let synchronization = await synchronizeAgentPath(
                     currentFileURL,
@@ -486,15 +449,13 @@ final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
                     return
                 }
                 let committedFailure = ApplicationProjectFailure(
-                    kind: viewIsAvailable || !fileAuthorityIsAvailable
-                        ? .save
-                        : .viewRecovery,
+                    kind: viewIsAvailable ? .save : .viewRecovery,
                     message: outcome.message,
                     didCommit: true,
                     committedMutation: outcome
                 )
                 failure = committedFailure
-                if !viewIsAvailable || !fileAuthorityIsAvailable {
+                if !viewIsAvailable {
                     await terminateProjectAccess(with: committedFailure)
                 }
             }
@@ -561,8 +522,7 @@ final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
                 ))
             case .committed(
                 let initialOutcome,
-                let viewIsAvailable,
-                let fileAuthorityIsAvailable
+                let viewIsAvailable
             ):
                 let synchronization = await synchronizeAgentPath(
                     currentFileURL,
@@ -573,15 +533,13 @@ final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
                     return .committed(outcome)
                 }
                 let committedFailure = ApplicationProjectFailure(
-                    kind: viewIsAvailable || !fileAuthorityIsAvailable
-                        ? .save
-                        : .viewRecovery,
+                    kind: viewIsAvailable ? .save : .viewRecovery,
                     message: outcome.message,
                     didCommit: true,
                     committedMutation: outcome
                 )
                 failure = committedFailure
-                if !viewIsAvailable || !fileAuthorityIsAvailable {
+                if !viewIsAvailable {
                     await terminateProjectAccess(with: committedFailure)
                 }
                 return .committed(outcome)
@@ -909,8 +867,7 @@ final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
         case saved(ProjectViewSnapshot)
         case committed(
             outcome: AgentCommittedMutationOutcome,
-            viewIsAvailable: Bool,
-            fileAuthorityIsAvailable: Bool
+            viewIsAvailable: Bool
         )
     }
 
@@ -918,88 +875,45 @@ final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
         from url: URL,
         workspace: ProjectWorkspace
     ) async throws -> LoadExecutionResult {
-        let candidate = try await authorityCandidate(
-            for: url,
-            requiresExistingFile: true
-        )
+        let candidate = projectFileAccessCandidate(for: url)
+        let loaded: ProjectViewSnapshot
         do {
-            let loaded: ProjectViewSnapshot
+            loaded = try await workspace.load(
+                from: url,
+                operationGuard: Self.cancellationGuard
+            )
+        } catch let publicationError as ProjectWorkspacePersistencePublicationError
+            where publicationError.operation == .load {
+            installProjectFileAccess(candidate)
             do {
-                loaded = try await workspace.load(
-                    from: url,
+                let recovered = try await workspace.recoverCommittedView(
+                    publicationError.state,
                     operationGuard: Self.cancellationGuard
                 )
-            } catch let publicationError as ProjectWorkspacePersistencePublicationError
-                where publicationError.operation == .load {
-                do {
-                    try await candidate.authority.validate()
-                } catch let authorityError {
-                    await discardFileAuthoritiesAfterCommittedReplacement(
-                        candidate.authority
-                    )
-                    throw Self.committedApplicationFailure(
+                return LoadExecutionResult(
+                    view: recovered,
+                    warning: Self.committedApplicationFailure(
                         kind: .load,
                         state: publicationError.state,
                         mutation: .source,
                         requestMethod: "project.open",
                         message: publicationError.message
-                            + " The committed project file authority was lost: "
-                            + String(describing: authorityError)
                     )
-                }
-                await installFileAuthority(candidate.authority)
-                do {
-                    let recovered = try await workspace.recoverCommittedView(
-                        publicationError.state,
-                        operationGuard: Self.cancellationGuard
-                    )
-                    return LoadExecutionResult(
-                        view: recovered,
-                        warning: Self.committedApplicationFailure(
-                            kind: .load,
-                            state: publicationError.state,
-                            mutation: .source,
-                            requestMethod: "project.open",
-                            message: publicationError.message
-                        )
-                    )
-                } catch let recoveryError {
-                    throw Self.committedApplicationFailure(
-                        kind: .viewRecovery,
-                        state: publicationError.state,
-                        mutation: .source,
-                        requestMethod: "project.open",
-                        message: publicationError.message
-                            + " Automatic view recovery also failed: "
-                            + String(describing: recoveryError)
-                    )
-                }
-            }
-
-            do {
-                try await candidate.authority.validate()
-            } catch {
-                await discardFileAuthoritiesAfterCommittedReplacement(
-                    candidate.authority
                 )
+            } catch let recoveryError {
                 throw Self.committedApplicationFailure(
-                    kind: .load,
-                    view: loaded,
+                    kind: .viewRecovery,
+                    state: publicationError.state,
                     mutation: .source,
                     requestMethod: "project.open",
-                    message: "The project loaded, but its file authority was lost: "
-                        + String(describing: error)
+                    message: publicationError.message
+                        + " Automatic view recovery also failed: "
+                        + String(describing: recoveryError)
                 )
             }
-            await installFileAuthority(candidate.authority)
-            return LoadExecutionResult(view: loaded, warning: nil)
-        } catch {
-            if candidate.isNew,
-               fileAuthority !== candidate.authority {
-                await candidate.authority.release()
-            }
-            throw error
         }
+        installProjectFileAccess(candidate)
+        return LoadExecutionResult(view: loaded, warning: nil)
     }
 
     private func executeSave(
@@ -1023,210 +937,74 @@ final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
             }
         }
 
-        let candidate = try await authorityCandidate(
-            for: url,
-            requiresExistingFile: false
-        )
+        let candidate = projectFileAccessCandidate(for: url)
         do {
+            let saved = try await workspace.save(
+                to: url,
+                operationGuard: Self.cancellationGuard
+            )
+            installProjectFileAccess(candidate)
+            return .saved(saved)
+        } catch let publicationError as ProjectWorkspacePersistencePublicationError
+            where publicationError.operation == .save {
+            installProjectFileAccess(candidate)
             do {
-                let saved = try await workspace.save(
-                    to: url,
+                _ = try await workspace.recoverCommittedView(
+                    publicationError.state,
                     operationGuard: Self.cancellationGuard
                 )
-                do {
-                    try await candidate.authority.adoptPublished(url)
-                } catch {
-                    await discardFileAuthoritiesAfterCommittedReplacement(
-                        candidate.authority
-                    )
-                    return .committed(
-                        outcome: Self.committedMutationOutcome(
-                            view: saved,
-                            mutation: .save,
-                            requestMethod: requestMethod,
-                            message: "The project saved, but its published file authority could not be rebound: "
-                                + String(describing: error)
-                        ),
-                        viewIsAvailable: true,
-                        fileAuthorityIsAvailable: false
-                    )
-                }
-                await installFileAuthority(candidate.authority)
-                return .saved(saved)
-            } catch let publicationError as ProjectWorkspacePersistencePublicationError
-                where publicationError.operation == .save {
-                do {
-                    try await candidate.authority.adoptPublished(url)
-                } catch let authorityError {
-                    await discardFileAuthoritiesAfterCommittedReplacement(
-                        candidate.authority
-                    )
-                    return .committed(
-                        outcome: Self.committedMutationOutcome(
-                            state: publicationError.state,
-                            mutation: .save,
-                            requestMethod: requestMethod,
-                            message: publicationError.message
-                                + " The published file authority could not be rebound: "
-                                + String(describing: authorityError)
-                        ),
-                        viewIsAvailable: false,
-                        fileAuthorityIsAvailable: false
-                    )
-                }
-                await installFileAuthority(candidate.authority)
-                do {
-                    _ = try await workspace.recoverCommittedView(
-                        publicationError.state,
-                        operationGuard: Self.cancellationGuard
-                    )
-                    return .committed(
-                        outcome: Self.committedMutationOutcome(
-                            state: publicationError.state,
-                            mutation: .save,
-                            requestMethod: requestMethod,
-                            message: publicationError.message
-                        ),
-                        viewIsAvailable: true,
-                        fileAuthorityIsAvailable: true
-                    )
-                } catch let recoveryError {
-                    return .committed(
-                        outcome: Self.committedMutationOutcome(
-                            state: publicationError.state,
-                            mutation: .save,
-                            requestMethod: requestMethod,
-                            message: publicationError.message
-                                + " Automatic view recovery also failed: "
-                                + String(describing: recoveryError)
-                        ),
-                        viewIsAvailable: false,
-                        fileAuthorityIsAvailable: true
-                    )
-                }
-            }
-        } catch {
-            if candidate.isNew,
-               fileAuthority !== candidate.authority {
-                await candidate.authority.release()
-            }
-            throw error
-        }
-    }
-
-    private func authorityCandidate(
-        for url: URL,
-        requiresExistingFile: Bool
-    ) async throws -> (
-        authority: ApplicationProjectFileAuthority,
-        isNew: Bool
-    ) {
-        if let fileAuthority, fileAuthority.owns(url) {
-            do {
-                try await fileAuthority.validate()
-            } catch {
-                let authorityFailure = await terminateAfterCurrentFileAuthorityLoss(
-                    kind: .save,
-                    message: "The current project file authority was lost before save; no project source or package publication was changed: \(error.localizedDescription)"
+                return .committed(
+                    outcome: Self.committedMutationOutcome(
+                        state: publicationError.state,
+                        mutation: .save,
+                        requestMethod: requestMethod,
+                        message: publicationError.message
+                    ),
+                    viewIsAvailable: true
                 )
-                throw authorityFailure
+            } catch let recoveryError {
+                return .committed(
+                    outcome: Self.committedMutationOutcome(
+                        state: publicationError.state,
+                        mutation: .save,
+                        requestMethod: requestMethod,
+                        message: publicationError.message
+                            + " Automatic view recovery also failed: "
+                            + String(describing: recoveryError)
+                    ),
+                    viewIsAvailable: false
+                )
             }
-            return (fileAuthority, false)
-        }
-
-        let deadline = ContinuousClock.now.advanced(
-            by: projectLeaseAcquisitionDuration
-        )
-        // Powerbox authority must exist before filesystem lease acquisition.
-        let access = securityScopedAccessOpener.open(url)
-        guard case .available(let projectFileLeaseStore) =
-                projectFileLeaseStoreState else {
-            throw ProjectAccessError.authorityUnavailable
-        }
-        let lease = try await projectFileLeaseStore.acquire(
-            paths: [access.url],
-            requiredPaths: requiresExistingFile ? [access.url] : [],
-            deadline: deadline
-        )
-        return (
-            ApplicationProjectFileAuthority(access: access, lease: lease),
-            true
-        )
-    }
-
-    private func installFileAuthority(
-        _ candidate: ApplicationProjectFileAuthority
-    ) async {
-        let previous = fileAuthority
-        fileAuthority = candidate
-        if let previous, previous !== candidate {
-            await previous.release()
         }
     }
 
-    private func clearFileAuthority() async {
-        let previous = fileAuthority
-        fileAuthority = nil
-        await previous?.release()
+    private func projectFileAccessCandidate(
+        for url: URL
+    ) -> ApplicationProjectFileAccess {
+        if let projectFileAccess, projectFileAccess.owns(url) {
+            return projectFileAccess
+        }
+        return ApplicationProjectFileAccess(
+            access: securityScopedAccessOpener.open(url)
+        )
     }
 
-    private func terminateAfterCurrentFileAuthorityLoss(
-        kind: ApplicationProjectFailure.Kind,
-        message: String
-    ) async -> ApplicationProjectFailure {
-        let authorityFailure = ApplicationProjectFailure(
-            kind: kind,
-            message: message
-        )
-        await terminateProjectAccess(
-            with: authorityFailure,
-            releasesFileAuthority: true
-        )
-        return authorityFailure
+    private func installProjectFileAccess(
+        _ candidate: ApplicationProjectFileAccess
+    ) {
+        projectFileAccess = candidate
+    }
+
+    private func clearProjectFileAccess() {
+        projectFileAccess = nil
     }
 
     private func terminateProjectAccess(
-        with terminalFailure: ApplicationProjectFailure,
-        releasesFileAuthority: Bool = false
+        with terminalFailure: ApplicationProjectFailure
     ) async {
         lifecycle = .unavailable(terminalFailure)
         failure = terminalFailure
         await revokeAgentSession()
-        if releasesFileAuthority {
-            await clearFileAuthority()
-        }
-    }
-
-    private func discardFileAuthoritiesAfterCommittedReplacement(
-        _ candidate: ApplicationProjectFileAuthority
-    ) async {
-        let previous = fileAuthority
-        fileAuthority = nil
-        if let previous, previous !== candidate {
-            await previous.release()
-        }
-        await candidate.release()
-    }
-
-    private static func committedApplicationFailure(
-        kind: ApplicationProjectFailure.Kind,
-        view: ProjectViewSnapshot,
-        mutation: AgentCommittedMutationOutcome.Mutation,
-        requestMethod: String,
-        message: String
-    ) -> ApplicationProjectFailure {
-        let outcome = committedMutationOutcome(
-            view: view,
-            mutation: mutation,
-            requestMethod: requestMethod,
-            message: message
-        )
-        return ApplicationProjectFailure(
-            kind: kind,
-            message: message,
-            didCommit: true,
-            committedMutation: outcome
-        )
     }
 
     private static func committedApplicationFailure(

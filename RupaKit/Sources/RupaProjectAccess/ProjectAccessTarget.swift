@@ -3,7 +3,6 @@ import Foundation
 public enum ProjectAccessTarget: Equatable, Sendable {
     case liveProject(URL)
     case liveSession(UUID)
-    case closedProject(input: URL, output: URL?)
 
     public func validated() throws -> ProjectAccessTarget {
         switch self {
@@ -11,12 +10,6 @@ public enum ProjectAccessTarget: Equatable, Sendable {
             return self
         case .liveProject(let url):
             try Self.validateProjectURL(url)
-            return self
-        case .closedProject(let input, let output):
-            try Self.validateProjectURL(input)
-            if let output {
-                try Self.validateProjectURL(output)
-            }
             return self
         }
     }

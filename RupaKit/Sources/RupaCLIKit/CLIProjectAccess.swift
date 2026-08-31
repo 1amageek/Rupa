@@ -7,23 +7,21 @@ import RupaProjectAccess
 public struct CLIProjectAccessDependencies: Sendable {
     public let opener: any ProjectAccessOpening
     public let observer: any ProjectAccessObserving
+    public let requestTimeout: Duration
 
     public init(
         opener: any ProjectAccessOpening,
-        observer: any ProjectAccessObserving
+        observer: any ProjectAccessObserving,
+        requestTimeout: Duration
     ) {
         self.opener = opener
         self.observer = observer
+        self.requestTimeout = requestTimeout
     }
 }
 
 public enum CLIProjectAccessContext {
     @TaskLocal public static var current: CLIProjectAccessDependencies?
-}
-
-public enum CLIEditMode: String, Codable, Equatable, Sendable, CaseIterable {
-    case live
-    case file
 }
 
 public struct CLIDocumentTarget: Equatable, Sendable {
@@ -39,22 +37,7 @@ public struct CLIDocumentTarget: Equatable, Sendable {
     }
 }
 
-public enum CLIDocumentWritePolicy: Equatable, Sendable {
-    case inPlace
-    case output(URL)
-
-    var outputURL: URL? {
-        switch self {
-        case .inPlace:
-            nil
-        case .output(let url):
-            url
-        }
-    }
-}
-
 enum CLIProjectAccessRunner {
-    private static let accessTimeout = Duration.seconds(30)
     @TaskLocal private static var commandScope: CLIProjectAccessCommandScope?
 
     static func withCommandScope<Result>(
@@ -63,8 +46,11 @@ enum CLIProjectAccessRunner {
         if commandScope != nil {
             return try await operation()
         }
+        let dependencies = try dependencies()
         let scope = CLIProjectAccessCommandScope(
-            deadline: ContinuousClock.now.advanced(by: accessTimeout)
+            deadline: ContinuousClock.now.advanced(
+                by: dependencies.requestTimeout
+            )
         )
         do {
             let result = try await $commandScope.withValue(scope) {
@@ -80,16 +66,10 @@ enum CLIProjectAccessRunner {
 
     static func withSession<Result>(
         target: CLIDocumentTarget,
-        mode: CLIEditMode,
-        outputURL: URL? = nil,
         _ operation: (any ProjectAccessSession) async throws -> Result
     ) async throws -> Result {
         let dependencies = try dependencies()
-        let accessTarget = try projectAccessTarget(
-            target: target,
-            mode: mode,
-            outputURL: outputURL
-        )
+        let accessTarget = try projectAccessTarget(target: target)
         if let commandScope {
             let session = try await commandScope.session(
                 target: accessTarget,
@@ -98,7 +78,9 @@ enum CLIProjectAccessRunner {
             )
             return try await operation(session)
         }
-        let deadline = ContinuousClock.now.advanced(by: accessTimeout)
+        let deadline = ContinuousClock.now.advanced(
+            by: dependencies.requestTimeout
+        )
         let session = try await dependencies.opener.open(
             accessTarget,
             deadline: deadline
@@ -116,61 +98,41 @@ enum CLIProjectAccessRunner {
 
     @MainActor
     static func capabilities() async throws -> [AgentCapabilityDescriptor] {
-        try await dependencies().observer.capabilities(
-            deadline: commandScope?.deadline
-                ?? ContinuousClock.now.advanced(by: accessTimeout)
-        )
+        let dependencies = try dependencies()
+        let deadline = commandScope?.deadline
+            ?? ContinuousClock.now.advanced(by: dependencies.requestTimeout)
+        return try await dependencies.observer.capabilities(deadline: deadline)
     }
 
     @MainActor
     static func status() async throws -> AgentStatus {
-        try await dependencies().observer.status(
-            deadline: commandScope?.deadline
-                ?? ContinuousClock.now.advanced(by: accessTimeout)
-        )
+        let dependencies = try dependencies()
+        let deadline = commandScope?.deadline
+            ?? ContinuousClock.now.advanced(by: dependencies.requestTimeout)
+        return try await dependencies.observer.status(deadline: deadline)
     }
 
     @MainActor
     static func sessions() async throws -> [WorkspaceSessionSummary] {
-        try await dependencies().observer.sessions(
-            deadline: commandScope?.deadline
-                ?? ContinuousClock.now.advanced(by: accessTimeout)
-        )
+        let dependencies = try dependencies()
+        let deadline = commandScope?.deadline
+            ?? ContinuousClock.now.advanced(by: dependencies.requestTimeout)
+        return try await dependencies.observer.sessions(deadline: deadline)
     }
 
     static func projectAccessTarget(
-        target: CLIDocumentTarget,
-        mode: CLIEditMode,
-        outputURL: URL?
+        target: CLIDocumentTarget
     ) throws -> ProjectAccessTarget {
-        switch mode {
-        case .live:
-            guard outputURL == nil else {
-                throw ValidationError("--output can only be used with --mode file.")
-            }
-            guard !(target.fileURL != nil && target.sessionID != nil) else {
-                throw ValidationError("Live access accepts either a project path or --session-id, not both.")
-            }
-            if let sessionID = target.sessionID {
-                return .liveSession(sessionID)
-            }
-            guard let fileURL = target.fileURL else {
-                throw ValidationError("Live access requires a .rupa project path or --session-id.")
-            }
-            return try ProjectAccessTarget.liveProject(fileURL).validated()
-
-        case .file:
-            guard target.sessionID == nil else {
-                throw ValidationError("File access cannot be combined with --session-id.")
-            }
-            guard let fileURL = target.fileURL else {
-                throw ValidationError("File access requires a .rupa project path.")
-            }
-            return try ProjectAccessTarget.closedProject(
-                input: fileURL,
-                output: outputURL
-            ).validated()
+        guard !(target.fileURL != nil && target.sessionID != nil) else {
+            throw ValidationError("Project access accepts either a project path or --session-id, not both.")
         }
+        if let sessionID = target.sessionID {
+            return .liveSession(sessionID)
+        }
+        guard let fileURL = target.fileURL else {
+            throw ValidationError("Project access requires a .rupa project path or --session-id.")
+        }
+        return try ProjectAccessTarget.liveProject(fileURL).validated()
     }
 
     private static func dependencies() throws -> CLIProjectAccessDependencies {

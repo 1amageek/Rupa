@@ -8,11 +8,10 @@ import Testing
 @testable import RupaCLIKit
 
 @Test(.timeLimit(.minutes(1)))
-func implicitUnitAndFileOutputShareOneClosedSessionAndSaveOnce() async throws {
+func implicitUnitAndLiveMutationShareOneSessionWithoutSaving() async throws {
     let inputURL = URL(fileURLWithPath: "/tmp/source.rupa")
-    let outputURL = URL(fileURLWithPath: "/tmp/result.rupa")
     let generation = DocumentGeneration(3)
-    let savedGeneration = DocumentGeneration(4)
+    let changedGeneration = DocumentGeneration(4)
     let session = StubProjectAccessSession(
         steps: [
             .response(.command(stubAutomationResult(
@@ -25,7 +24,7 @@ func implicitUnitAndFileOutputShareOneClosedSessionAndSaveOnce() async throws {
             ))),
             .response(.command(stubAutomationResult(
                 message: "Renamed.",
-                generation: savedGeneration
+                generation: changedGeneration
             ))),
         ]
     )
@@ -33,12 +32,10 @@ func implicitUnitAndFileOutputShareOneClosedSessionAndSaveOnce() async throws {
     let observer = await MainActor.run { StubProjectAccessObserver() }
     let options = try CLIWriteDocumentOptions.parse([
         inputURL.path,
-        "--mode", "file",
         "--expected-generation", String(generation.value),
-        "--output", outputURL.path,
     ])
 
-    try await withStubProjectAccess(opener: opener, observer: observer) {
+    _ = try await withStubProjectAccess(opener: opener, observer: observer) {
         try await CLIProjectAccessRunner.withCommandScope {
             let unit = try await CLILengthUnitResolver.resolve(
                 unitName: nil,
@@ -48,24 +45,19 @@ func implicitUnitAndFileOutputShareOneClosedSessionAndSaveOnce() async throws {
             #expect(unit == .millimeter)
 
             let response = try await CLIService().applyAutomationCommand(
-                target: try options.target(sessionID: nil),
+                target: options.target(sessionID: nil),
                 command: .renameDocument(name: "Result"),
-                mode: options.mode,
-                expectedGeneration: options.generation(),
-                dryRun: false,
-                writePolicy: try options.writePolicy(sessionID: nil)
+                expectedGeneration: options.generation()
             )
-            #expect(response.saved)
-            #expect(!response.dirty)
-            #expect(response.generation == savedGeneration.value)
+            #expect(!response.saved)
+            #expect(response.dirty)
+            #expect(response.generation == changedGeneration.value)
         }
     }
 
-    #expect(await opener.recordedTargets() == [
-        .closedProject(input: inputURL, output: outputURL),
-    ])
+    #expect(await opener.recordedTargets() == [.liveProject(inputURL)])
     #expect(await opener.recordedDeadlines().count == 1)
-    #expect(await session.recordedSaveGenerations() == [savedGeneration])
+    #expect(await session.recordedSaveGenerations().isEmpty)
     #expect(await session.recordedFinishCount() == 1)
 
     let requests = await session.recordedRequests()
@@ -83,7 +75,7 @@ func implicitUnitAndFileOutputShareOneClosedSessionAndSaveOnce() async throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
-func fileDryRunAndCommandFailureNeverSave() async throws {
+func liveCommandFailureNeverSavesOrFallsBack() async throws {
     let projectURL = URL(fileURLWithPath: "/tmp/no-save.rupa")
     let commandFailure = EditorError(
         code: .commandFailed,
@@ -91,12 +83,6 @@ func fileDryRunAndCommandFailureNeverSave() async throws {
     )
     let session = StubProjectAccessSession(
         steps: [
-            .response(.command(stubAutomationResult(
-                message: "Previewed.",
-                generation: DocumentGeneration(2),
-                sourceDirty: false,
-                didMutate: false
-            ))),
             .response(.failure(commandFailure)),
         ]
     )
@@ -106,31 +92,19 @@ func fileDryRunAndCommandFailureNeverSave() async throws {
 
     try await withStubProjectAccess(opener: opener, observer: observer) {
         try await CLIProjectAccessRunner.withCommandScope {
-            let preview = try await CLIService().applyAutomationCommand(
-                target: target,
-                command: .renameDocument(name: "Preview"),
-                mode: .file,
-                expectedGeneration: DocumentGeneration(1),
-                dryRun: true
-            )
-            #expect(!preview.saved)
-
             await #expect(throws: EditorError.self) {
                 _ = try await CLIService().applyAutomationCommand(
                     target: target,
                     command: .renameDocument(name: "Failure"),
-                    mode: .file,
-                    expectedGeneration: DocumentGeneration(2),
-                    dryRun: false
+                    expectedGeneration: DocumentGeneration(2)
                 )
             }
         }
     }
 
     #expect(await session.recordedSaveGenerations().isEmpty)
-    #expect(await opener.recordedTargets() == [
-        .closedProject(input: projectURL, output: nil),
-    ])
+    #expect(await opener.recordedTargets() == [.liveProject(projectURL)])
+    #expect(await session.recordedRequests().count == 1)
     #expect(await session.recordedFinishCount() == 1)
 }
 
@@ -154,7 +128,6 @@ func liveMutationDoesNotSaveUntilExplicitSave() async throws {
         let mutation = try await CLIService().applyAutomationCommand(
             target: target,
             command: .renameDocument(name: "Live"),
-            mode: .live,
             expectedGeneration: DocumentGeneration(8)
         )
         #expect(!mutation.saved)
@@ -167,7 +140,6 @@ func liveMutationDoesNotSaveUntilExplicitSave() async throws {
     try await withStubProjectAccess(opener: saveOpener, observer: observer) {
         let save = try await CLIService().saveDocument(
             target: target,
-            mode: .live,
             expectedGeneration: generation
         )
         #expect(save.generation == generation.value)
@@ -194,7 +166,6 @@ func unknownAndCommittedMutationOutcomesAreNeverRetried() async throws {
             _ = try await CLIService().applyAutomationCommand(
                 target: CLIDocumentTarget(fileURL: projectURL),
                 command: .renameDocument(name: "Unknown"),
-                mode: .live,
                 expectedGeneration: DocumentGeneration(1)
             )
         }
@@ -224,7 +195,6 @@ func unknownAndCommittedMutationOutcomesAreNeverRetried() async throws {
             _ = try await CLIService().applyAutomationCommand(
                 target: CLIDocumentTarget(fileURL: projectURL),
                 command: .renameDocument(name: "Committed"),
-                mode: .live,
                 expectedGeneration: DocumentGeneration(1)
             )
         }

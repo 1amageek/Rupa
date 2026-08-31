@@ -4,7 +4,7 @@ import RupaAutomation
 public struct ApplyAutomationCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "apply",
-        abstract: "Apply one AutomationCommand JSON payload to a file or live document."
+        abstract: "Apply one AutomationCommand JSON payload to a live document."
     )
 
     @OptionGroup

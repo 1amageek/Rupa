@@ -23,7 +23,6 @@ public struct InspectSurfacesCommand: AsyncParsableCommand {
         try await CLIExitCode.run {
             let envelope = try await CLIService().read(
                 target: options.target(sessionID: id),
-                mode: options.mode,
                 expectedGeneration: options.generation()
             ) { sessionID in
                 .surfaceAnalysis(

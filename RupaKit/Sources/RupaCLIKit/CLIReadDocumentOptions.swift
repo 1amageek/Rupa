@@ -6,13 +6,10 @@ public struct CLIReadDocumentOptions: ParsableArguments {
     @Argument(help: "Path to the .rupa project.")
     public var file: String?
 
-    @Option(help: "Access mode: live or file.")
-    public var mode: CLIEditMode = .live
-
-    @Option(help: "Open document session UUID for live mode.")
+    @Option(help: "Open document session UUID.")
     public var sessionID: String?
 
-    @Option(help: "Expected document generation for live mode.")
+    @Option(help: "Expected document generation.")
     public var expectedGeneration: UInt64?
 
     @Flag(help: "Print a JSON result.")

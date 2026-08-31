@@ -3,156 +3,103 @@
 ## Purpose and Scope
 
 `RupaCLIComposition` is the executable composition boundary for the
-distributable `rupa` command. It is a child of the [RupaKit package
-design](../../DESIGN.md) and is used by both the SwiftPM executable entry and
-the Xcode `RupaCLIProduct` entry.
+distributable signed Xcode `rupa` command. It is a child of the
+[RupaKit package design](../../DESIGN.md) and is used only by the Xcode CLI
+product entry. Children: none.
 
-This module constructs exactly one `RupaProjectAccess` composition from the
-product endpoint and project-file authority directory, installs the resulting
-access ports for `RupaCLIKit`, and invokes its async command parser. It owns no
-project, workspace, controller, package, semantic operation, transport
-override, fallback, or compatibility route.
-
-Parent: [RupaKit package design](../../DESIGN.md). Children: none.
+It constructs one live `RupaProjectAccess` composition from the Team Keychain
+discovery reader and installs it for one asynchronous CLI invocation.
 
 ## Responsibilities and Boundaries
 
 This module owns:
 
-- the public async entry shared by all `rupa` executable products;
-- product endpoint and authority-directory resolution through the platform
-  composition;
-- construction of one live opener, one closed opener, one `DefaultProjectAccess`,
-  and the corresponding CLI access dependencies;
-- installation of those dependencies for the duration of one CLI command
-  process.
+- the shared asynchronous executable entry;
+- construction of one discovery reader, live opener, and observation port;
+- installation of those ports for the lifetime of one CLI process.
 
-It does not own:
-
-- CLI syntax or user-facing result projection, which belong to
-  `RupaCLIKit`;
-- project mutation, evaluation, or persistence, which belong to the
-  `ProjectWorkspace`/`ProjectController` path reached by project access;
-- package archive entries, a second `EditorSession`, or a direct file writer;
-- endpoint placement, socket framing, peer authentication, or App lifecycle;
-- an alternate `live`/`file` route, retry, fallback, or legacy compatibility
-  decoder.
+It does not own project state, semantic commands, package bytes, listener
+lifecycle, Keychain writes, App lifecycle, or a second controller. All
+project operations go through `RupaProjectAccess` to the App-owned
+`ProjectWorkspace` and `ProjectController`.
 
 ## Related Designs
 
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
-| [RupaKit package](../../DESIGN.md) | parent | target graph and one authority rule | Indexes this executable composition target. | The package design does not duplicate this composition. |
-| [RupaCLIKit](../RupaCLIKit/DESIGN.md) | depends on | CLI access dependencies and async command tree | Parses intent and projects results through injected access ports. | This module must not add command-specific authority. |
-| [RupaProjectAccess](../RupaProjectAccess/DESIGN.md) | depends on | opening, observation, session, and explicit-save protocols | Supplies the transport-neutral project access contract. | The composition transports the contract; it does not reinterpret requests. |
-| [RupaProjectAccessComposition](../RupaProjectAccessComposition/DESIGN.md) | depends on | live and closed access openers | Implements the workspace/controller access adapters. | No direct `ProjectWorkspace` or package construction occurs here. |
-| [RupaProjectAccessPlatform](../RupaProjectAccessPlatform/DESIGN.md) | depends on | product endpoint and file-authority coordinates | Provides the shared App Group coordination composition. | App Group contains only endpoint/authority coordination state. |
-| [Rupa application package](../../../Rupa/DESIGN.md) | used by | signed Xcode CLI product entry | Registers the Xcode product beside the Rupa App. | The CLI is non-sandboxed for explicit input/output paths and is not App authority. |
-| [Rupa App](../../../Rupa/Rupa/Rupa/DESIGN.md) | coordinates with | same product Team/App Group values | The App owns the live workspace while the CLI attaches through access. | CLI process lifetime never creates or replaces the App workspace. |
+| [RupaKit package](../../DESIGN.md) | parent | target graph and single authority | Indexes this executable composition. | Do not duplicate access policy. |
+| [RupaCLIKit](../RupaCLIKit/DESIGN.md) | depends on | async command tree and access ports | Parses intent and projects results. | It never constructs a transport. |
+| [RupaProjectAccess](../RupaProjectAccess/DESIGN.md) | depends on | live opening, observation, session, save | Defines the external API boundary. | Composition only wires dependencies. |
+| [RupaProjectAccessComposition](../RupaProjectAccessComposition/DESIGN.md) | depends on | live opener and session | Forwards API calls to the App. | No local project fallback exists. |
+| [RupaProjectAccessPlatform](../RupaProjectAccessPlatform/DESIGN.md) | depends on | Keychain discovery reader | Resolves current App endpoint and credential. | CLI is a reader, never a writer. |
+| [Rupa App](../../../Rupa/Rupa/Rupa/DESIGN.md) | coordinates with | App-owned listener and workspace | Owns all live project mutation and persistence. | CLI never creates a workspace. |
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    SwiftPM["SwiftPM @main"] --> Entry["RupaCLIComposition.run()"]
-    Xcode["Signed RupaCLIProduct\nPRODUCT_NAME=rupa"] --> Entry
-    Entry --> Platform["ProjectAccessPlatform\nproduct endpoint + authority root"]
-    Platform --> Openers["LiveProjectAccessOpening +\nClosedProjectAccessOpening"]
-    Openers --> Access["DefaultProjectAccess"]
-    Access --> Dependencies["CLIProjectAccessDependencies"]
-    Dependencies --> CLIKit["RupaCLIKit\nAsyncParsableCommand"]
-    CLIKit --> Session["ProjectAccessSession"]
-    Session --> Workspace["ProjectWorkspace → ProjectController"]
-```
-
-There is one composition edge:
-
-```text
-RupaCLIProduct entry
-SwiftPM entry
-        -> RupaCLIComposition
-            -> RupaProjectAccessPlatform
-            -> RupaProjectAccessComposition
-            -> RupaCLIKit
-                -> ProjectAccessSession
-                    -> ProjectWorkspace / ProjectController
+    Entry["signed Xcode rupa"] --> Composition["RupaCLIComposition"]
+    Composition --> Reader["Team Keychain discovery reader"]
+    Composition --> Access["RupaProjectAccess"]
+    Access --> HTTP["Authenticated loopback HTTP"]
+    HTTP --> App["Rupa App"]
+    App --> Workspace["ProjectWorkspace → ProjectController"]
 ```
 
 ## Contracts and Invariants
 
-1. SwiftPM and Xcode executable entries call the same public async
-   `RupaCLIComposition` entry. They contain no access construction or command
-   dispatch logic.
-2. The composition resolves the product endpoint and file-authority root only
-   through `RupaProjectAccessPlatform`. It accepts no socket/path override and
-   creates no temporary fallback endpoint.
-3. `DefaultProjectAccess` is the only route selector. A live target reaches
-   the live opener, an explicit file target reaches the closed opener, and
-   observation reaches only the live observer.
-4. The composition creates no project authority. All Product/CAD/Mesh
-   mutation, evaluation, and persistence remain behind one
-   `ProjectWorkspace`/`ProjectController` composition.
-5. The command access dependencies are installed only for one process
-   invocation. Session finish remains owned by the CLI access runner, and
-   explicit save remains a separate session operation.
-6. Composition failure is typed and terminal. It never reports success,
-   switches access modes, retries a dispatched request, or edits package bytes.
-7. The Xcode CLI target uses Team `WWCKBW8CKN`, carries the product App Group
-   entitlement needed for the shared endpoint/authority coordination, and
-   contains no `com.apple.security.app-sandbox` entitlement. It is a command
-   tool, not a second App document or process authority.
+1. The signed Xcode entry calls this async composition and contains no command
+   or authority logic. There is no production SwiftPM `rupa` executable.
+2. The CLI resolves only a Keychain record and an authenticated loopback
+   endpoint. No endpoint/path override, filesystem discovery, or alternate
+   transport is accepted.
+3. One CLI command opens at most one access session and uses one monotonic
+   deadline. Product composition injects the same 120-second request budget
+   used by the App listener. Session finish releases client resources only.
+4. Status, sessions, and capabilities observe the App and never start a
+   project or create local state.
+5. Mutation and evaluation use the App-owned workspace/controller. Save is a
+   separate explicit operation; no package bytes are edited by the CLI.
+6. Credential, discovery, session, semantic, deadline, cancellation, and
+   response-loss errors remain typed. An uncertain dispatch is never retried.
+7. The Xcode CLI target is non-sandboxed and carries only the Team Keychain
+   access-group entitlement required to read discovery. It has no project
+   authority and never publishes discovery.
 
 ## Runtime Flows
 
 ```mermaid
 sequenceDiagram
-    participant E as SwiftPM/Xcode entry
-    participant C as RupaCLIComposition
-    participant P as Platform composition
-    participant A as DefaultProjectAccess
-    participant K as RupaCLIKit
-    participant W as ProjectWorkspace
-    E->>C: run()
-    C->>P: resolve endpoint + authority root
-    C->>A: compose live/closed access
-    C->>K: install dependencies and invoke async parser
-    K->>A: open/observe one explicit target
-    A->>W: route through ProjectController
-    W-->>K: typed response
-    K-->>E: bounded CLI result
+    participant E as rupa executable
+    participant C as CLI composition
+    participant K as Keychain reader
+    participant A as Rupa App
+    participant P as ProjectController
+    E->>C: async run()
+    C->>K: read current discovery record
+    C->>A: open one authenticated API session
+    A->>P: stage/evaluate/publish
+    P-->>A: immutable result
+    A-->>C: response
+    C-->>E: bounded JSON/text receipt
 ```
-
-Status, sessions, and capabilities use the observation port and do not launch
-the App or open a closed project. A mutation session is finished after the
-command; a file-mode non-dry mutation invokes explicit save on that same
-session before finish. No entrypoint performs a second lifecycle operation.
 
 ## State, Ownership, and Lifecycle
 
-The composition owns only short-lived opener and dependency values created for
-one CLI process. `RupaProjectAccessComposition` owns access-resource lifetime;
-the App owns live project lifetime; `ProjectWorkspace` and `ProjectController`
-own project state and publication. The composition never stores mutable project
-state and never transfers a controller or package backing across the CLI
-boundary.
+The composition owns only short-lived dependency values. The App owns the
+listener, discovery generation, workspace, project controller, and project
+lifetime. The CLI owns neither project memory nor package persistence.
 
 ## Failure, Concurrency, and Constraints
 
-The public entry is asynchronous and runs under the command tree's existing
-deadline policy. Endpoint, authority-root, opener, session, coordinate,
-semantic, package, and result failures remain typed. Concurrent commands each
-receive an independent composition value, while each command's access runner
-serializes its session operations and uses one target/deadline. No shared
-mutable project state is introduced by this module.
+Discovery unavailability, invalid credentials, stale generation, unavailable
+session, deadline exhaustion, cancellation, semantic failure, and response
+loss terminate the command with a typed failure. No fallback or retry changes
+the authority route.
 
 ## Verification and Change Impact
 
-Composition tests and static scans must prove that both executable entries
-refer to one composition, no second project/mutation/save route exists, no
-endpoint override or fallback remains, and status observation does not launch
-or open a project. The project-default Xcode build must produce a signed
-`rupa` executable whose Team and App Group entitlements are present and whose
-entitlements omit App Sandbox. Changes to the endpoint or authority
-composition require rechecking [RupaProjectAccessPlatform](../RupaProjectAccessPlatform/DESIGN.md),
-[RupaProjectAccessComposition](../RupaProjectAccessComposition/DESIGN.md), and
-the application design.
+Composition tests prove the signed executable uses one composition, Keychain
+reader injection, one-session/deadline behavior, no local project creation,
+and typed no-fallback failures. Project-default Xcode builds must show the CLI
+Keychain access group and no App Sandbox or shared-container capability.

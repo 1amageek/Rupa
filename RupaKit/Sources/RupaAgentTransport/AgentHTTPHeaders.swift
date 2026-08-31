@@ -1,0 +1,15 @@
+enum AgentHTTPHeaders {
+    static let version = "X-Rupa-Version"
+    static let requestID = "X-Rupa-Request-ID"
+    static let generation = "X-Rupa-Generation"
+    static let port = "X-Rupa-Port"
+    static let clientNonce = "X-Rupa-Client-Nonce"
+    static let serverNonce = "X-Rupa-Server-Nonce"
+    static let serverProof = "X-Rupa-Server-Proof"
+    static let responseProof = "X-Rupa-Response-Proof"
+    static let clientProof = "X-Rupa-Client-Proof"
+    static let bodyDigest = "X-Rupa-Body-Digest"
+    static let responseDigest = "X-Rupa-Response-Digest"
+    static let contentType = "Content-Type"
+    static let connection = "Connection"
+}

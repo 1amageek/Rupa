@@ -36,7 +36,7 @@ It does not own:
 - `ProjectController`, `ProjectWorkspace`, revision/history, or evaluation;
 - application file activation, security-scoped URL lifetime, or process
   authority;
-- Agent request routing, socket transport, UI state, or save policy;
+- Agent request routing, HTTP transport, UI state, or API save policy;
 - a persisted `ProjectSourceModel` projection.
 
 The package boundary is intentionally opaque: source codecs create or consume

@@ -3,9 +3,8 @@ import RupaProjectAccessPlatform
 import UniformTypeIdentifiers
 
 enum ApplicationProductConfiguration {
-    static let appGroupIdentifier = RupaAgentEndpointComposition.appGroupIdentifier
     nonisolated static let projectTypeIdentifier = "team.stamp.rupa.project"
-    static let projectLeaseAcquisitionDuration: Duration = .seconds(5)
+    nonisolated static let access = RupaProductAccessConfiguration.current
 
     static var projectContentType: UTType {
         UTType(
@@ -14,27 +13,25 @@ enum ApplicationProductConfiguration {
         )
     }
 
-    static func authorityDirectory(
+    nonisolated static func authorityDirectory(
         fileManager: FileManager = .default
     ) throws -> URL {
-        try projectFileAuthorityDirectory(fileManager: fileManager)
-            .deletingLastPathComponent()
+        guard let applicationSupport = fileManager.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first else {
+            throw ApplicationAuthorityLeaseError
+                .applicationSupportDirectoryUnavailable
+        }
+        return applicationSupport
+            .appendingPathComponent(
+                access.applicationBundleIdentifier,
+                isDirectory: true
+            )
+            .appendingPathComponent("Authority", isDirectory: true)
     }
 
-    static func projectFileAuthorityDirectory(
-        fileManager: FileManager = .default
-    ) throws -> URL {
-        do {
-            return try RupaProjectFileAuthorityComposition.projectFileDirectory(
-                fileManager: fileManager
-            )
-        } catch let error as RupaProjectFileAuthorityComposition.ResolutionError {
-            switch error {
-            case .appGroupContainerUnavailable(let identifier):
-                throw ApplicationAuthorityLeaseError.appGroupContainerUnavailable(
-                    identifier
-                )
-            }
-        }
+    nonisolated static func makeDiscoveryStore() -> KeychainAgentDiscoveryStore {
+        access.makeDiscoveryStore()
     }
 }

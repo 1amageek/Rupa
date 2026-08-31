@@ -1,8 +1,0 @@
-import RupaCLIComposition
-
-@main
-struct CLI {
-    static func main() async {
-        await RupaCLIComposition.run()
-    }
-}

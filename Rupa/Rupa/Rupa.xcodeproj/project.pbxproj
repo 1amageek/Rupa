@@ -22,6 +22,7 @@
 		A7A6D677A40B4A3CA7F536C4 /* RupaProjectAccessPlatform in Frameworks */ = {isa = PBXBuildFile; productRef = 43970830C8FF4D0C816A6D80 /* RupaProjectAccessPlatform */; };
 		A7A6D678A40B4A3CA7F536C4 /* RupaProjectAccessPlatform in Frameworks */ = {isa = PBXBuildFile; productRef = 43970830C8FF4D0C816A6D80 /* RupaProjectAccessPlatform */; };
 		A7A6D679A40B4A3CA7F536C4 /* RupaAgentTransport in Frameworks */ = {isa = PBXBuildFile; productRef = 43970831C8FF4D0C816A6D80 /* RupaAgentTransport */; };
+		B10000000000000000000007 /* RupaCLIComposition in Frameworks */ = {isa = PBXBuildFile; productRef = B1000000000000000000000B /* RupaCLIComposition */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -45,6 +46,7 @@
 		12459AD62FD133B100034B5E /* Rupa.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Rupa.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		12459AE52FD133B200034B5E /* RupaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RupaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		12459AEF2FD133B200034B5E /* RupaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RupaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B10000000000000000000002 /* RupaCLI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RupaCLI.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -54,6 +56,14 @@
 				Info.plist,
 			);
 			target = 12459AD52FD133B100034B5E /* Rupa */;
+		};
+		B10000000000000000000004 /* Exceptions for "RupaCLI" folder in "RupaCLIProduct" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				DESIGN.md,
+				RupaCLIProduct.entitlements,
+			);
+			target = B10000000000000000000001 /* RupaCLIProduct */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -74,6 +84,14 @@
 		12459AF22FD133B200034B5E /* RupaUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = RupaUITests;
+			sourceTree = "<group>";
+		};
+		B10000000000000000000003 /* RupaCLI */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B10000000000000000000004 /* Exceptions for "RupaCLI" folder in "RupaCLIProduct" target */,
+			);
+			path = RupaCLI;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -115,6 +133,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B10000000000000000000006 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000000000000000000007 /* RupaCLIComposition in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -122,6 +148,7 @@
 			isa = PBXGroup;
 			children = (
 				12459AD82FD133B100034B5E /* Rupa */,
+				B10000000000000000000003 /* RupaCLI */,
 				12459AE82FD133B200034B5E /* RupaTests */,
 				12459AF22FD133B200034B5E /* RupaUITests */,
 				12459AD72FD133B100034B5E /* Products */,
@@ -132,6 +159,7 @@
 			isa = PBXGroup;
 			children = (
 				12459AD62FD133B100034B5E /* Rupa.app */,
+				B10000000000000000000002 /* RupaCLI.app */,
 				12459AE52FD133B200034B5E /* RupaTests.xctest */,
 				12459AEF2FD133B200034B5E /* RupaUITests.xctest */,
 			);
@@ -224,6 +252,28 @@
 			productReference = 12459AEF2FD133B200034B5E /* RupaUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		B10000000000000000000001 /* RupaCLIProduct */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B1000000000000000000000A /* Build configuration list for PBXNativeTarget "RupaCLIProduct" */;
+			buildPhases = (
+				B10000000000000000000005 /* Sources */,
+				B10000000000000000000006 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				B10000000000000000000003 /* RupaCLI */,
+			);
+			name = RupaCLIProduct;
+			packageProductDependencies = (
+				B1000000000000000000000B /* RupaCLIComposition */,
+			);
+			productName = rupa;
+			productReference = B10000000000000000000002 /* RupaCLI.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -245,6 +295,9 @@
 						CreatedOnToolsVersion = 26.4.1;
 						TestTargetID = 12459AD52FD133B100034B5E;
 					};
+					B10000000000000000000001 = {
+						CreatedOnToolsVersion = 27.0;
+					};
 				};
 			};
 			buildConfigurationList = 12459AD12FD133B100034B5E /* Build configuration list for PBXProject "Rupa" */;
@@ -265,6 +318,7 @@
 			projectRoot = "";
 			targets = (
 				12459AD52FD133B100034B5E /* Rupa */,
+				B10000000000000000000001 /* RupaCLIProduct */,
 				12459AE42FD133B200034B5E /* RupaTests */,
 				12459AEE2FD133B200034B5E /* RupaUITests */,
 			);
@@ -311,6 +365,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		12459AEB2FD133B200034B5E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B10000000000000000000005 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -477,7 +538,6 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = team.stamp.Rupa;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -511,7 +571,6 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = team.stamp.Rupa;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -601,6 +660,50 @@
 			};
 			name = Release;
 		};
+		B10000000000000000000008 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = RupaCLI/RupaCLIProduct.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = WWCKBW8CKN;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				EXECUTABLE_NAME = rupa;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSBackgroundOnly = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = team.stamp.rupa.cli;
+				PRODUCT_NAME = RupaCLI;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		B10000000000000000000009 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = RupaCLI/RupaCLIProduct.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = WWCKBW8CKN;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				EXECUTABLE_NAME = rupa;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSBackgroundOnly = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = team.stamp.rupa.cli;
+				PRODUCT_NAME = RupaCLI;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -636,6 +739,15 @@
 			buildConfigurations = (
 				12459B002FD133B200034B5E /* Debug */,
 				12459B012FD133B200034B5E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B1000000000000000000000A /* Build configuration list for PBXNativeTarget "RupaCLIProduct" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B10000000000000000000008 /* Debug */,
+				B10000000000000000000009 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -700,124 +812,12 @@
 			package = 04A0884D275749F9B7818D23 /* XCLocalSwiftPackageReference "../../RupaKit" */;
 			productName = RupaAgentTransport;
 		};
-/* End XCSwiftPackageProductDependency section */
-	};
-	rootObject = 12459ACE2FD133B100034B5E /* Project object */;
-}
-		B10000000000000000000007 /* RupaCLIComposition in Frameworks */ = {isa = PBXBuildFile; productRef = B1000000000000000000000B /* RupaCLIComposition */; };
-		B10000000000000000000002 /* rupa */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = rupa; sourceTree = BUILT_PRODUCTS_DIR; };
-		B10000000000000000000004 /* Exceptions for "RupaCLI" folder in "RupaCLIProduct" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				DESIGN.md,
-				RupaCLIProduct.entitlements,
-			);
-			target = B10000000000000000000001 /* RupaCLIProduct */;
-		};
-		B10000000000000000000003 /* RupaCLI */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				B10000000000000000000004 /* Exceptions for "RupaCLI" folder in "RupaCLIProduct" target */,
-			);
-			path = RupaCLI;
-			sourceTree = "<group>";
-		};
-		B10000000000000000000006 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				B10000000000000000000007 /* RupaCLIComposition in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-				B10000000000000000000003 /* RupaCLI */,
-				B10000000000000000000002 /* rupa */,
-		B10000000000000000000001 /* RupaCLIProduct */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = B1000000000000000000000A /* Build configuration list for PBXNativeTarget "RupaCLIProduct" */;
-			buildPhases = (
-				B10000000000000000000005 /* Sources */,
-				B10000000000000000000006 /* Frameworks */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				B10000000000000000000003 /* RupaCLI */,
-			);
-			name = RupaCLIProduct;
-			packageProductDependencies = (
-				B1000000000000000000000B /* RupaCLIComposition */,
-			);
-			productName = rupa;
-			productReference = B10000000000000000000002 /* rupa */;
-			productType = "com.apple.product-type.tool";
-		};
-					B10000000000000000000001 = {
-						CreatedOnToolsVersion = 27.0;
-					};
-				B10000000000000000000001 /* RupaCLIProduct */,
-		B10000000000000000000005 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		B10000000000000000000008 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = RupaCLI/RupaCLIProduct.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = WWCKBW8CKN;
-				ENABLE_APP_SANDBOX = NO;
-				ENABLE_HARDENED_RUNTIME = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = team.stamp.rupa.cli;
-				PRODUCT_NAME = rupa;
-				REGISTER_APP_GROUPS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_VERSION = 6.0;
-			};
-			name = Debug;
-		};
-		B10000000000000000000009 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = RupaCLI/RupaCLIProduct.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = WWCKBW8CKN;
-				ENABLE_APP_SANDBOX = NO;
-				ENABLE_HARDENED_RUNTIME = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = team.stamp.rupa.cli;
-				PRODUCT_NAME = rupa;
-				REGISTER_APP_GROUPS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_VERSION = 6.0;
-			};
-			name = Release;
-		};
-		B1000000000000000000000A /* Build configuration list for PBXNativeTarget "RupaCLIProduct" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				B10000000000000000000008 /* Debug */,
-				B10000000000000000000009 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		B1000000000000000000000B /* RupaCLIComposition */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 04A0884D275749F9B7818D23 /* XCLocalSwiftPackageReference "../../RupaKit" */;
 			productName = RupaCLIComposition;
 		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 12459ACE2FD133B100034B5E /* Project object */;
+}

@@ -16,7 +16,7 @@ final class ApplicationAuthorityLease {
         fileManager: FileManager = .default
     ) throws -> ApplicationAuthorityLease {
         try acquire(
-            in: ApplicationProductConfiguration.authorityDirectory(
+            in: try ApplicationProductConfiguration.authorityDirectory(
                 fileManager: fileManager
             ),
             fileManager: fileManager

@@ -9,13 +9,10 @@ enum CLILengthUnitResolver {
         document: CLIWriteDocumentOptions,
         sessionID: UUID?
     ) async throws -> LengthDisplayUnit {
-        let writePolicy = try document.writePolicy(sessionID: sessionID)
         return try await resolve(
             unitName: unitName,
-            target: try document.target(sessionID: sessionID),
-            mode: document.mode,
-            expectedGeneration: document.generation(),
-            outputURL: writePolicy.outputURL
+            target: document.target(sessionID: sessionID),
+            expectedGeneration: document.generation()
         )
     }
 
@@ -37,9 +34,7 @@ enum CLILengthUnitResolver {
     static func resolve(
         unitName: String?,
         target: CLIDocumentTarget,
-        mode: CLIEditMode,
-        expectedGeneration: DocumentGeneration?,
-        outputURL: URL?
+        expectedGeneration: DocumentGeneration?
     ) async throws -> LengthDisplayUnit {
         if let unitName {
             guard let unit = LengthDisplayUnit(rawValue: unitName) else {
@@ -50,9 +45,7 @@ enum CLILengthUnitResolver {
 
         return try await CLIService().workspaceScale(
             target: target,
-            mode: mode,
-            expectedGeneration: expectedGeneration,
-            outputURL: outputURL
+            expectedGeneration: expectedGeneration
         ).displayUnit
     }
 }

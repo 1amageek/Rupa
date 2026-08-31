@@ -9,7 +9,7 @@ import Testing
 @testable import RupaCLIKit
 
 @Test(.timeLimit(.minutes(1)))
-func batchRequestUsesOneProjectAccessTransactionAndOneSave() async throws {
+func batchRequestUsesOneLiveTransactionAndDoesNotSaveImplicitly() async throws {
     let projectURL = URL(fileURLWithPath: "/tmp/batch.rupa")
     let batch = AutomationBatch(
         commands: [
@@ -38,18 +38,16 @@ func batchRequestUsesOneProjectAccessTransactionAndOneSave() async throws {
     try await withStubProjectAccess(opener: opener, observer: observer) {
         let response = try await CLIService().runBatch(
             target: CLIDocumentTarget(fileURL: projectURL),
-            batch: batch,
-            mode: .file
+            batch: batch
         )
-        #expect(response.saved)
+        #expect(!response.saved)
+        #expect(response.dirty)
         #expect(response.generation == 6)
         #expect(response.results == [result])
     }
 
-    #expect(await opener.recordedTargets() == [
-        .closedProject(input: projectURL, output: nil),
-    ])
-    #expect(await session.recordedSaveGenerations() == [DocumentGeneration(6)])
+    #expect(await opener.recordedTargets() == [.liveProject(projectURL)])
+    #expect(await session.recordedSaveGenerations().isEmpty)
     let requests = await session.recordedRequests()
     #expect(requests.count == 1)
     guard case .executeBatch(_, let projectedBatch) = requests[0] else {
@@ -60,7 +58,7 @@ func batchRequestUsesOneProjectAccessTransactionAndOneSave() async throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
-func domainRequestPreservesTypedPayloadAndSavesOnlyItsCommittedGeneration() async throws {
+func domainRequestPreservesTypedPayloadWithoutImplicitSave() async throws {
     let projectURL = URL(fileURLWithPath: "/tmp/domain.rupa")
     let request = DomainCommandRequest(
         capabilityID: DomainCapabilityID(rawValue: "architecture.rename"),
@@ -89,19 +87,68 @@ func domainRequestPreservesTypedPayloadAndSavesOnlyItsCommittedGeneration() asyn
     try await withStubProjectAccess(opener: opener, observer: observer) {
         let response = try await CLIService().executeDomain(
             target: CLIDocumentTarget(fileURL: projectURL),
-            request: request,
-            mode: .file
+            request: request
         )
-        #expect(response.saved)
+        #expect(!response.saved)
+        #expect(response.dirty)
         #expect(response.capabilityID == request.capabilityID)
         #expect(response.payload == request.payload)
     }
 
-    #expect(await session.recordedSaveGenerations() == [DocumentGeneration(3)])
+    #expect(await opener.recordedTargets() == [.liveProject(projectURL)])
+    #expect(await session.recordedSaveGenerations().isEmpty)
     let requests = await session.recordedRequests()
     #expect(requests.count == 1)
     guard case .executeDomain(_, let projectedRequest) = requests[0] else {
         Issue.record("Domain execution must remain a typed Agent domain request.")
+        return
+    }
+    #expect(projectedRequest == request)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func domainSemanticDryRunIsForwardedWithoutMutationOrSave() async throws {
+    let projectURL = URL(fileURLWithPath: "/tmp/domain-preview.rupa")
+    let request = DomainCommandRequest(
+        capabilityID: DomainCapabilityID(rawValue: "architecture.rename"),
+        namespace: SemanticNamespaceID(rawValue: "architecture"),
+        payload: .object(["name": .string("Preview")]),
+        expectedGeneration: DocumentGeneration(2),
+        dryRun: true
+    )
+    let result = DomainExecutionResult(
+        capabilityID: request.capabilityID,
+        namespace: request.namespace,
+        message: "Domain command previewed.",
+        baseGeneration: DocumentGeneration(2),
+        generation: DocumentGeneration(2),
+        proposedGeneration: DocumentGeneration(3),
+        didMutate: false,
+        wouldMutate: true,
+        dryRun: true,
+        payload: request.payload
+    )
+    let session = StubProjectAccessSession(
+        steps: [.response(.domainExecution(result))]
+    )
+    let opener = StubProjectAccessOpener(session: session)
+    let observer = await makeStubProjectAccessObserver()
+
+    try await withStubProjectAccess(opener: opener, observer: observer) {
+        let response = try await CLIService().executeDomain(
+            target: CLIDocumentTarget(fileURL: projectURL),
+            request: request
+        )
+        #expect(response.dryRun)
+        #expect(response.wouldMutate)
+        #expect(!response.dirty)
+        #expect(!response.saved)
+    }
+
+    #expect(await session.recordedSaveGenerations().isEmpty)
+    let requests = await session.recordedRequests()
+    guard case .executeDomain(_, let projectedRequest) = requests.first else {
+        Issue.record("Domain preview must remain one typed Agent domain request.")
         return
     }
     #expect(projectedRequest == request)
@@ -143,7 +190,6 @@ func exportRequestUsesProjectAccessAndNeverInvokesProjectSave() async throws {
         let response = try await CLIService().exportDocument(
             target: CLIDocumentTarget(fileURL: projectURL),
             outputURL: outputURL,
-            mode: .live,
             expectedGeneration: generation,
             options: options
         )

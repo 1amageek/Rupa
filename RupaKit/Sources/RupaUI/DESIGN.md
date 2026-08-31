@@ -36,7 +36,7 @@ flowchart LR
 
 1. `ProjectViewSnapshot.projectName` is the sole navigation/window title input.
 2. Empty project names display the bounded fallback `Untitled`; CAD metadata,
-   file names, socket state, and Agent responses never replace a nonempty
+   file names, transport state, and Agent responses never replace a nonempty
    snapshot name.
 3. `MainView` sends intent to its injected workspace and retains no source or
    package authority.

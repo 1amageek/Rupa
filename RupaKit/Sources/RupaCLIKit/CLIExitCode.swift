@@ -25,8 +25,6 @@ public enum CLIExitCode: Int32, Codable, Equatable, Sendable {
                 return .usage
             case .sessionMismatch,
                  .outcomeUnknown,
-                 .fileAuthorityConflict,
-                 .fileAuthorityLost,
                  .committedMutation:
                 return .data
             case .saveUnavailable:
