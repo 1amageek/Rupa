@@ -101,6 +101,13 @@ command-result responsibilities. An identity absent from the accepted staged
 source, a duplicate or wrong-kind identity, and an identity reported by a
 failed, rolled-back, or no-op mutation are invalid.
 
+For package-internal prepared execution, `EditorSession` exposes only the
+read-only fact that its existing `CommandStack` currently owns an active source
+command group. The observation cannot enter, leave, or retain the group and
+does not expose the stack. It allows `RupaAutomation` to reject execution on an
+ordinary session before mutation; source rollback, deferred evaluation, and the
+single history entry remain owned by `withSourceCommandGroup`.
+
 1. The Mesh edit target contains only `GeometrySourceID` and expected
    `ContentIdentity`. Scene-node and representation IDs are not part of source
    authority.

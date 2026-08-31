@@ -47,6 +47,12 @@ public final class EditorSession {
     public var transactionRevision: DocumentTransactionRevision {
         documentState.transactionRevision
     }
+
+    /// Reports whether the existing command stack owns the active source group.
+    /// The package-internal observation cannot enter, leave, or retain that group.
+    package var hasActiveSourceCommandGroup: Bool {
+        commandStack.isExecutingGroupedSourceCommands
+    }
     public private(set) var polygonToolState: PolygonToolState
     public private(set) var sketchInputState: SketchInputState
     public var selectedTool: ModelingTool
