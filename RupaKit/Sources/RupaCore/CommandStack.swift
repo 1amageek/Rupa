@@ -276,7 +276,7 @@ public final class CommandStack {
         store.evaluateCurrentDocument()
         redoEntries.append(entry)
         recordMutation()
-        return CommandExecutionResult(
+        return try CommandExecutionResult(
             commandName: "undo.\(entry.commandName)",
             generation: store.generation,
             didMutate: true,
@@ -296,7 +296,7 @@ public final class CommandStack {
         store.evaluateCurrentDocument()
         undoEntries.append(entry)
         recordMutation()
-        return CommandExecutionResult(
+        return try CommandExecutionResult(
             commandName: "redo.\(entry.commandName)",
             generation: store.generation,
             didMutate: true,

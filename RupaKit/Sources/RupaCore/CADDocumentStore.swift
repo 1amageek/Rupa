@@ -263,7 +263,7 @@ public final class CADDocumentStore {
         var createdConstructionPlaneID: ConstructionPlaneSourceID?
         var primaryFeatureID: FeatureID?
         var didMutate = command.mutatesDocument
-        let previousFeatureCount = document.cadDocument.designGraph.order.count
+        let identityBaseline = document
         switch command {
         case .createSavedView:
             func run() throws {
@@ -2641,16 +2641,22 @@ public final class CADDocumentStore {
             try run()
         }
 
-        let createdFeatureIDs = Array(
-            document.cadDocument.designGraph.order.dropFirst(previousFeatureCount)
+        let generatedIdentities = try CommandGeneratedIdentityDelta(
+            before: identityBaseline,
+            after: document,
+            didMutate: didMutate
         )
-        return CommandExecutionResult(
+        if let primaryFeatureID,
+           document.cadDocument.designGraph.nodes[primaryFeatureID] == nil {
+            throw CommandGeneratedIdentityError.missingFeature(primaryFeatureID)
+        }
+        return try CommandExecutionResult(
             commandName: command.name,
             generation: generation,
             didMutate: didMutate,
             diagnostics: diagnostics,
             primaryFeatureID: primaryFeatureID,
-            createdFeatureIDs: createdFeatureIDs,
+            generatedIdentities: generatedIdentities,
             curveRebuildReport: curveRebuildReport,
             addedSelectionDimensionID: addedSelectionDimensionID,
             createdConstructionPlaneID: createdConstructionPlaneID
