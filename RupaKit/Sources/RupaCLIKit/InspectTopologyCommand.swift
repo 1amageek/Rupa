@@ -19,7 +19,7 @@ public struct InspectTopologyCommand: ParsableCommand {
                 target: options.target(sessionID: id),
                 mode: options.mode,
                 expectedGeneration: options.generation(),
-                client: options.agentClient(sessionID: id)
+                client: try options.agentClient(sessionID: id)
             )
             try CLIOutput.write(response: response, asJSON: options.json)
         }

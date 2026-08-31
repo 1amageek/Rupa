@@ -1,6 +1,7 @@
 import Darwin
 import Foundation
 import RupaProjectAccessComposition
+import RupaProjectAccessPlatform
 
 @main
 struct ProjectAuthorityLeaseCrashProbe {

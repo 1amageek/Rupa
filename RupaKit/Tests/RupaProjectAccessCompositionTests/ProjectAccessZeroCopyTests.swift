@@ -7,6 +7,7 @@ import RupaCoreTypes
 import RupaKit
 import RupaProjectAccess
 import RupaProjectAccessComposition
+import RupaProjectAccessPlatform
 import RupaProjectModel
 import Testing
 

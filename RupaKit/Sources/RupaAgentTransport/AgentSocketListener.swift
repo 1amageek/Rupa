@@ -9,27 +9,31 @@ public actor AgentSocketListener {
         let task: Task<Void, Never>
     }
 
-    private static let maximumConcurrentConnectionCount = 32
+    static let maximumConcurrentConnectionCount = 32
 
-    private let socketPath: AgentSocketPath
+    private let endpoint: UnixSocketEndpoint
+    private let peerAuthorizer: any AgentPeerAuthorizing
     private let service: AgentSocketService
+    private let requestTimeout: Duration
+    private let shutdownTimeout: Duration
     private var listenDescriptor: Int32?
     private var acceptTask: Task<Void, Never>?
     private var activeConnections: [UInt64: ActiveConnection] = [:]
     private var nextConnectionID: UInt64 = 0
     private var isStopping = false
-    private var stoppingTasks: [Task<Void, Never>] = []
 
     public init(
         handler: any AgentRequestHandling,
-        socketPath: AgentSocketPath = AgentSocketPath()
+        endpoint: UnixSocketEndpoint,
+        peerAuthorizer: any AgentPeerAuthorizing,
+        requestTimeout: Duration = .seconds(30),
+        shutdownTimeout: Duration = .seconds(5)
     ) {
-        self.socketPath = socketPath
+        self.endpoint = endpoint
+        self.peerAuthorizer = peerAuthorizer
         self.service = AgentSocketService(handler: handler)
-    }
-
-    public var path: String {
-        socketPath.value
+        self.requestTimeout = requestTimeout
+        self.shutdownTimeout = shutdownTimeout
     }
 
     public var isRunning: Bool {
@@ -63,13 +67,19 @@ public actor AgentSocketListener {
         }
 
         do {
-            try AgentSocketAddress.withUnixAddress(path: socketPath.value) { address, length in
+            try AgentSocketAddress.withUnixAddress(path: endpoint.path) { address, length in
                 guard Darwin.bind(descriptor, address, length) == 0 else {
                     throw EditorError(
                         code: .agentUnavailable,
                         message: "Failed to bind Rupa agent socket. errno=\(errno)"
                     )
                 }
+            }
+            guard chmod(endpoint.path, mode_t(0o600)) == 0 else {
+                throw EditorError(
+                    code: .agentUnavailable,
+                    message: "Failed to set owner-only Rupa agent socket permissions. errno=\(errno)"
+                )
             }
 
             guard Darwin.listen(descriptor, SOMAXCONN) == 0 else {
@@ -95,9 +105,8 @@ public actor AgentSocketListener {
 
     public func stop() async {
         if isStopping {
-            let tasks = stoppingTasks
-            for task in tasks {
-                await task.value
+            while isStopping {
+                await Task.yield()
             }
             return
         }
@@ -111,48 +120,86 @@ public actor AgentSocketListener {
         isStopping = true
         let descriptor = listenDescriptor
         let task = acceptTask
-        let connections = Array(activeConnections.values)
         listenDescriptor = nil
         acceptTask = nil
-        stoppingTasks = connections.map(\.task)
-        if let task {
-            stoppingTasks.append(task)
-        }
 
         task?.cancel()
         if let descriptor {
             Darwin.shutdown(descriptor, SHUT_RDWR)
             Darwin.close(descriptor)
         }
-        for connection in connections {
+        for connection in activeConnections.values {
+            connection.task.cancel()
             Darwin.shutdown(connection.descriptor, SHUT_RDWR)
         }
         removeSocketFile()
-        await task?.value
-        for connection in connections {
-            await connection.task.value
+
+        let deadline: AgentSocketDeadline?
+        do {
+            deadline = try AgentSocketDeadline.request(timeout: shutdownTimeout)
+        } catch {
+            deadline = nil
         }
-        stoppingTasks.removeAll(keepingCapacity: true)
+        while !activeConnections.isEmpty {
+            guard let deadline else {
+                break
+            }
+            do {
+                _ = try deadline.remainingMilliseconds()
+                try await Task.sleep(for: .milliseconds(5))
+            } catch {
+                break
+            }
+        }
+
+        for connection in activeConnections.values {
+            Darwin.close(connection.descriptor)
+        }
+        activeConnections.removeAll(keepingCapacity: true)
         isStopping = false
     }
 
     private func prepareSocketDirectory() throws {
-        let directory = URL(fileURLWithPath: socketPath.value).deletingLastPathComponent()
-        do {
-            try FileManager.default.createDirectory(
-                at: directory,
-                withIntermediateDirectories: true
-            )
-        } catch {
+        let directory = endpoint.fileURL.deletingLastPathComponent()
+        var directoryState = stat()
+        if lstat(directory.path, &directoryState) == 0 {
+            guard directoryState.st_uid == getuid(),
+                  directoryState.st_mode & S_IFMT == S_IFDIR else {
+                throw EditorError(
+                    code: .agentUnavailable,
+                    message: "Rupa agent socket directory must be an owner-controlled directory."
+                )
+            }
+        } else if errno == ENOENT {
+            do {
+                try FileManager.default.createDirectory(
+                    at: directory,
+                    withIntermediateDirectories: true,
+                    attributes: [.posixPermissions: 0o700]
+                )
+            } catch {
+                throw EditorError(
+                    code: .agentUnavailable,
+                    message: "Failed to create Rupa agent socket directory: \(error.localizedDescription)"
+                )
+            }
+        } else {
             throw EditorError(
                 code: .agentUnavailable,
-                message: "Failed to create Rupa agent socket directory: \(error.localizedDescription)"
+                message: "Failed to inspect Rupa agent socket directory. errno=\(errno)"
+            )
+        }
+
+        guard chmod(directory.path, mode_t(0o700)) == 0 else {
+            throw EditorError(
+                code: .agentUnavailable,
+                message: "Failed to set owner-only Rupa agent directory permissions. errno=\(errno)"
             )
         }
     }
 
     private func removeStaleSocketIfNeeded() throws {
-        guard FileManager.default.fileExists(atPath: socketPath.value) else {
+        guard FileManager.default.fileExists(atPath: endpoint.path) else {
             return
         }
 
@@ -167,7 +214,7 @@ public actor AgentSocketListener {
             Darwin.close(descriptor)
         }
 
-        let isActive = try AgentSocketAddress.withUnixAddress(path: socketPath.value) {
+        let isActive = try AgentSocketAddress.withUnixAddress(path: endpoint.path) {
             address,
             length in
             Darwin.connect(descriptor, address, length) == 0
@@ -175,11 +222,11 @@ public actor AgentSocketListener {
         guard !isActive else {
             throw EditorError(
                 code: .agentUnavailable,
-                message: "Rupa agent socket is already in use at \(socketPath.value)."
+                message: "The injected Rupa agent endpoint is already in use."
             )
         }
 
-        guard unlink(socketPath.value) == 0 || errno == ENOENT else {
+        guard unlink(endpoint.path) == 0 || errno == ENOENT else {
             throw EditorError(
                 code: .agentUnavailable,
                 message: "Failed to remove stale Rupa agent socket. errno=\(errno)"
@@ -188,7 +235,7 @@ public actor AgentSocketListener {
     }
 
     private func removeSocketFile() {
-        guard unlink(socketPath.value) == 0 || errno == ENOENT else {
+        guard unlink(endpoint.path) == 0 || errno == ENOENT else {
             return
         }
     }
@@ -212,8 +259,15 @@ public actor AgentSocketListener {
         let connectionID = nextConnectionID
         nextConnectionID += 1
         let service = service
+        let peerAuthorizer = peerAuthorizer
+        let requestTimeout = requestTimeout
         let task = Task.detached {
-            await Self.handle(connection: descriptor, service: service)
+            await Self.handle(
+                connection: descriptor,
+                service: service,
+                peerAuthorizer: peerAuthorizer,
+                requestTimeout: requestTimeout
+            )
             await self.connectionDidFinish(connectionID)
         }
         activeConnections[connectionID] = ActiveConnection(
@@ -249,19 +303,61 @@ public actor AgentSocketListener {
 
     private nonisolated static func handle(
         connection: Int32,
-        service: AgentSocketService
+        service: AgentSocketService,
+        peerAuthorizer: any AgentPeerAuthorizing,
+        requestTimeout: Duration
     ) async {
         do {
-            let requestData = try AgentSocketIO.readFrame(from: connection)
+            let peer = try peerIdentity(for: connection)
+            try peerAuthorizer.authorize(peer)
+        } catch {
+            return
+        }
+
+        let deadline: AgentSocketDeadline
+        do {
+            deadline = try AgentSocketDeadline.request(timeout: requestTimeout)
+        } catch {
+            return
+        }
+
+        do {
+            let requestData = try await AgentSocketIO.readFrameAsynchronously(
+                from: connection,
+                deadline: deadline
+            )
             let responseData = try await service.responseData(for: requestData)
-            try AgentSocketIO.writeFrame(responseData, to: connection)
+            try await AgentSocketIO.writeFrameAsynchronously(
+                responseData,
+                to: connection,
+                deadline: deadline
+            )
+        } catch is CancellationError {
+            return
         } catch {
             do {
                 let responseData = try await service.failureResponseData(for: error)
-                try AgentSocketIO.writeFrame(responseData, to: connection)
+                try await AgentSocketIO.writeFrameAsynchronously(
+                    responseData,
+                    to: connection,
+                    deadline: deadline
+                )
             } catch {
                 return
             }
         }
+    }
+
+    private nonisolated static func peerIdentity(
+        for descriptor: Int32
+    ) throws -> UnixSocketPeerIdentity {
+        var userID: uid_t = 0
+        var groupID: gid_t = 0
+        guard getpeereid(descriptor, &userID, &groupID) == 0 else {
+            throw AgentPeerAuthorizationError.identityUnavailable(
+                errorNumber: errno
+            )
+        }
+        return UnixSocketPeerIdentity(userID: userID)
     }
 }

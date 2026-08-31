@@ -6,6 +6,8 @@ import RupaCoreTypes
 @testable import RupaGeometry
 import RupaKit
 import RupaProject
+import RupaProjectAccess
+import RupaProjectAccessPlatform
 import RupaProjectModel
 import RupaProjectPackage
 import RupaUI
@@ -22,6 +24,7 @@ func applicationLaunchPublishesBeforeRegisteringTheSharedWorkspace() async throw
     let coordinator = ApplicationProjectCoordinator(
         workspace: workspace,
         agentRegistrar: registrar,
+        projectFileLeaseStore: applicationProjectFileLeaseStore(),
         launchArguments: []
     )
 
@@ -41,6 +44,7 @@ func applicationLaunchIsOwnedByExactlyOneConcurrentCaller() async throws {
     let coordinator = ApplicationProjectCoordinator(
         workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
         agentRegistrar: registrar,
+        projectFileLeaseStore: applicationProjectFileLeaseStore(),
         launchArguments: []
     )
 
@@ -70,6 +74,7 @@ func applicationLaunchFailurePublishesUnavailableWithoutAgentRegistration() asyn
     let coordinator = ApplicationProjectCoordinator(
         workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
         agentRegistrar: registrar,
+        projectFileLeaseStore: applicationProjectFileLeaseStore(),
         initialURL: missingURL,
         launchArguments: []
     )
@@ -101,6 +106,7 @@ func applicationInitialURLLoadsWithoutPublishingAnEmptyProjectFirst() async thro
         let coordinator = ApplicationProjectCoordinator(
             workspace: targetWorkspace,
             agentRegistrar: registrar,
+            projectFileLeaseStore: applicationProjectFileLeaseStore(),
             initialURL: packageURL,
             launchArguments: []
         )
@@ -132,6 +138,7 @@ func applicationAgentRouterMutatesAndExplicitlySavesTheRegisteredWorkspace() asy
         let coordinator = ApplicationProjectCoordinator(
             workspace: workspace,
             agentRegistrar: controller,
+            projectFileLeaseStore: applicationProjectFileLeaseStore(),
             initialURL: packageURL,
             launchArguments: []
         )
@@ -237,6 +244,7 @@ func applicationAgentRouterRejectsUntitledSaveWithoutOpeningUI() async throws {
     let coordinator = ApplicationProjectCoordinator(
         workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
         agentRegistrar: controller,
+        projectFileLeaseStore: applicationProjectFileLeaseStore(),
         launchArguments: []
     )
     let router = ApplicationAgentRequestRouter(
@@ -289,6 +297,7 @@ func applicationAgentSaveReturnsCommittedNoRetryReceiptAfterViewFailure() async 
         let coordinator = ApplicationProjectCoordinator(
             workspace: workspace,
             agentRegistrar: controller,
+            projectFileLeaseStore: applicationProjectFileLeaseStore(),
             initialURL: packageURL,
             launchArguments: []
         )
@@ -331,6 +340,454 @@ func applicationAgentSaveReturnsCommittedNoRetryReceiptAfterViewFailure() async 
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
+func applicationCurrentProjectLeaseExcludesClosedAccessAndSurvivesSamePathSave() async throws {
+    try await withApplicationProjectTemporaryDirectory { directory in
+        let sourceWorkspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
+            document: try applicationMeshOnlyDocument(named: "Leased Project")
+        )
+        _ = try await sourceWorkspace.evaluate()
+        let packageURL = directory.appendingPathComponent("leased.rupa")
+        _ = try await sourceWorkspace.save(to: packageURL)
+
+        let leaseRoot = directory.appendingPathComponent("lease-root")
+        let leaseStore = ProjectFileAuthorityLeaseStore(rootDirectory: leaseRoot)
+        let accessOpener = ApplicationSecurityScopedAccessOpenerProbe()
+        let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
+        let coordinator = ApplicationProjectCoordinator(
+            workspace: workspace,
+            agentRegistrar: ApplicationAgentSessionRegistrarProbe(),
+            securityScopedAccessOpener: accessOpener,
+            projectFileLeaseStore: leaseStore,
+            projectLeaseAcquisitionDuration: .milliseconds(100),
+            initialURL: packageURL,
+            launchArguments: []
+        )
+        await coordinator.launch()
+        let initial = try #require(coordinator.snapshot)
+
+        let contenderStore = ProjectFileAuthorityLeaseStore(rootDirectory: leaseRoot)
+        await #expect(throws: ProjectAccessError.fileAuthorityConflict(
+            packageURL.standardizedFileURL
+        )) {
+            _ = try await contenderStore.acquire(
+                paths: [packageURL],
+                requiredPaths: [packageURL],
+                deadline: ContinuousClock.now.advanced(by: .seconds(1))
+            )
+        }
+
+        let renamed = try await workspace.commit(
+            ProjectSourceTransaction(
+                name: "appTest.same-path-lease",
+                commands: [.renameDocument(name: "Same Path Save")],
+                expectedProjectID: initial.projectID,
+                expectedTransactionRevision: initial.transactionRevision,
+                expectedPublicationSequence: initial.publicationSequence
+            )
+        )
+        await coordinator.save(to: packageURL)
+
+        #expect(coordinator.failure == nil)
+        #expect(coordinator.currentFileURL == packageURL.standardizedFileURL)
+        #expect(coordinator.snapshot?.documentGeneration == renamed.documentGeneration)
+        #expect(accessOpener.openedProjectURLs == [packageURL.standardizedFileURL])
+        await #expect(throws: ProjectAccessError.fileAuthorityConflict(
+            packageURL.standardizedFileURL
+        )) {
+            _ = try await contenderStore.acquire(
+                paths: [packageURL],
+                requiredPaths: [packageURL],
+                deadline: ContinuousClock.now.advanced(by: .seconds(1))
+            )
+        }
+
+        await coordinator.newProject()
+        let released = try await contenderStore.acquire(
+            paths: [packageURL],
+            requiredPaths: [packageURL],
+            deadline: ContinuousClock.now.advanced(by: .seconds(1))
+        )
+        await released.release()
+    }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func applicationCurrentProjectAuthorityLossBeforeSaveIsTerminalWithoutPublication() async throws {
+    try await withApplicationProjectTemporaryDirectory { directory in
+        let sourceWorkspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
+            document: try applicationMeshOnlyDocument(named: "Authority Loss Source")
+        )
+        _ = try await sourceWorkspace.evaluate()
+        let packageURL = directory.appendingPathComponent("authority-loss-save.rupa")
+        _ = try await sourceWorkspace.save(to: packageURL)
+
+        let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
+        let controller = ProjectAgentCommandController()
+        let registrar = ApplicationAgentSessionRegistrarProbeProxy(controller)
+        let coordinator = ApplicationProjectCoordinator(
+            workspace: workspace,
+            agentRegistrar: registrar,
+            projectFileLeaseStore: ProjectFileAuthorityLeaseStore(
+                rootDirectory: directory.appendingPathComponent("lease-root")
+            ),
+            projectLeaseAcquisitionDuration: .milliseconds(100),
+            initialURL: packageURL,
+            launchArguments: []
+        )
+        let router = ApplicationAgentRequestRouter(
+            projectHandler: controller,
+            lifecycle: coordinator
+        )
+        await coordinator.launch()
+        guard case .sessions(let sessions) = await router.handle(.sessions),
+              sessions.count == 1 else {
+            Issue.record("Expected the App-owned Agent session.")
+            return
+        }
+        let initial = try #require(coordinator.snapshot)
+        let dirty = try await workspace.commit(
+            ProjectSourceTransaction(
+                name: "appTest.authority-loss-before-save",
+                commands: [.renameDocument(name: "Unsaved Authority Loss")],
+                expectedProjectID: initial.projectID,
+                expectedTransactionRevision: initial.transactionRevision,
+                expectedPublicationSequence: initial.publicationSequence
+            )
+        )
+        let packageBytes = try Data(contentsOf: packageURL)
+        try replaceApplicationProjectFileWithoutLeaseAdoption(packageURL)
+
+        await coordinator.save(to: packageURL)
+
+        guard case .unavailable(let lifecycleFailure) = coordinator.lifecycle else {
+            Issue.record("Expected pre-save authority loss to terminate App access.")
+            return
+        }
+        #expect(lifecycleFailure.kind == .save)
+        #expect(lifecycleFailure.didCommit == false)
+        #expect(coordinator.failure == lifecycleFailure)
+        #expect(coordinator.currentFileURL == nil)
+        #expect(coordinator.hasRegisteredAgentSession == false)
+        #expect(registrar.unregisterCallCount == 1)
+        #expect(try Data(contentsOf: packageURL) == packageBytes)
+        try expectApplicationPublication(coordinator.snapshot, unchangedFrom: dirty)
+
+        guard case .sessions(let remainingSessions) = await router.handle(.sessions) else {
+            Issue.record("Expected Agent session observation after authority loss.")
+            return
+        }
+        #expect(remainingSessions.isEmpty)
+        try expectApplicationPublication(coordinator.snapshot, unchangedFrom: dirty)
+    }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func applicationSuccessfulSaveAsTransfersAuthorityOnlyAfterCommit() async throws {
+    try await withApplicationProjectTemporaryDirectory { directory in
+        let sourceWorkspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
+            document: try applicationMeshOnlyDocument(named: "Save As Authority")
+        )
+        _ = try await sourceWorkspace.evaluate()
+        let inputURL = directory.appendingPathComponent("save-as-input.rupa")
+        _ = try await sourceWorkspace.save(to: inputURL)
+
+        let leaseRoot = directory.appendingPathComponent("lease-root")
+        let leaseStore = ProjectFileAuthorityLeaseStore(rootDirectory: leaseRoot)
+        let accessOpener = ApplicationSecurityScopedAccessOpenerProbe()
+        let coordinator = ApplicationProjectCoordinator(
+            workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
+            agentRegistrar: ApplicationAgentSessionRegistrarProbe(),
+            securityScopedAccessOpener: accessOpener,
+            projectFileLeaseStore: leaseStore,
+            projectLeaseAcquisitionDuration: .milliseconds(100),
+            initialURL: inputURL,
+            launchArguments: []
+        )
+        await coordinator.launch()
+        let outputURL = directory.appendingPathComponent("save-as-output.rupa")
+
+        await coordinator.save(to: outputURL)
+
+        #expect(coordinator.failure == nil)
+        #expect(coordinator.currentFileURL == outputURL.standardizedFileURL)
+        #expect(
+            accessOpener.activeProjectURLs
+                == [outputURL.standardizedFileURL]
+        )
+        let contenderStore = ProjectFileAuthorityLeaseStore(rootDirectory: leaseRoot)
+        let releasedInput = try await contenderStore.acquire(
+            paths: [inputURL],
+            requiredPaths: [inputURL],
+            deadline: ContinuousClock.now.advanced(by: .seconds(1))
+        )
+        await #expect(throws: ProjectAccessError.fileAuthorityConflict(
+            outputURL.standardizedFileURL
+        )) {
+            _ = try await contenderStore.acquire(
+                paths: [outputURL],
+                requiredPaths: [outputURL],
+                deadline: ContinuousClock.now.advanced(by: .seconds(1))
+            )
+        }
+        await releasedInput.release()
+        await coordinator.newProject()
+    }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func applicationSaveAsFailureReleasesCandidateAndRetainsCurrentFileLease() async throws {
+    try await withApplicationProjectTemporaryDirectory { directory in
+        let sourceWorkspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
+            document: try applicationMeshOnlyDocument(named: "Retained Authority")
+        )
+        _ = try await sourceWorkspace.evaluate()
+        let inputURL = directory.appendingPathComponent("input.rupa")
+        _ = try await sourceWorkspace.save(to: inputURL)
+
+        let leaseRoot = directory.appendingPathComponent("lease-root")
+        let leaseStore = ProjectFileAuthorityLeaseStore(rootDirectory: leaseRoot)
+        let workspace = ProjectWorkspace(
+            project: try applicationProjectController(
+                document: .empty(named: "Before Load"),
+                packageWriter: ApplicationFailingProjectPackageWriter()
+            )
+        )
+        let accessOpener = ApplicationSecurityScopedAccessOpenerProbe()
+        let coordinator = ApplicationProjectCoordinator(
+            workspace: workspace,
+            agentRegistrar: ApplicationAgentSessionRegistrarProbe(),
+            securityScopedAccessOpener: accessOpener,
+            projectFileLeaseStore: leaseStore,
+            projectLeaseAcquisitionDuration: .milliseconds(100),
+            initialURL: inputURL,
+            launchArguments: []
+        )
+        await coordinator.launch()
+        let outputURL = directory.appendingPathComponent("failed-output.rupa")
+
+        await coordinator.save(to: outputURL)
+
+        #expect(coordinator.failure?.kind == .save)
+        #expect(coordinator.failure?.didCommit == false)
+        #expect(coordinator.currentFileURL == inputURL.standardizedFileURL)
+        #expect(FileManager.default.fileExists(atPath: outputURL.path) == false)
+        #expect(accessOpener.activeProjectURLs == [inputURL.standardizedFileURL])
+
+        let contenderStore = ProjectFileAuthorityLeaseStore(rootDirectory: leaseRoot)
+        let outputLease = try await contenderStore.acquire(
+            paths: [outputURL],
+            deadline: ContinuousClock.now.advanced(by: .seconds(1))
+        )
+        await #expect(throws: ProjectAccessError.fileAuthorityConflict(
+            inputURL.standardizedFileURL
+        )) {
+            _ = try await contenderStore.acquire(
+                paths: [inputURL],
+                requiredPaths: [inputURL],
+                deadline: ContinuousClock.now.advanced(by: .seconds(1))
+            )
+        }
+        await outputLease.release()
+        await coordinator.newProject()
+    }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func applicationAgentSaveReportsExactCommittedReceiptWhenPublishedLeaseCannotRebind() async throws {
+    try await withApplicationProjectTemporaryDirectory { directory in
+        let sourceWorkspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
+            document: try applicationMeshOnlyDocument(named: "Lease Rebind")
+        )
+        _ = try await sourceWorkspace.evaluate()
+        let packageURL = directory.appendingPathComponent("lease-rebind.rupa")
+        _ = try await sourceWorkspace.save(to: packageURL)
+
+        let project = try applicationProjectController(
+            document: .empty(named: "Before Load"),
+            packageWriter: ApplicationRemovingPublishedProjectPackageWriter()
+        )
+        let workspace = ProjectWorkspace(project: project)
+        let controller = ProjectAgentCommandController()
+        let registrar = ApplicationAgentSessionRegistrarProbeProxy(controller)
+        let coordinator = ApplicationProjectCoordinator(
+            workspace: workspace,
+            agentRegistrar: registrar,
+            projectFileLeaseStore: ProjectFileAuthorityLeaseStore(
+                rootDirectory: directory.appendingPathComponent("lease-root")
+            ),
+            projectLeaseAcquisitionDuration: .milliseconds(100),
+            initialURL: packageURL,
+            launchArguments: []
+        )
+        let router = ApplicationAgentRequestRouter(
+            projectHandler: controller,
+            lifecycle: coordinator
+        )
+        await coordinator.launch()
+        guard case .sessions(let sessions) = await router.handle(.sessions),
+              let session = sessions.first else {
+            Issue.record("Expected the App-owned Agent session.")
+            return
+        }
+
+        let response = await router.handle(
+            .save(
+                sessionID: session.id,
+                expectedGeneration: session.generation
+            )
+        )
+        guard case .committedMutation(let outcome) = response else {
+            Issue.record("Expected a committed no-retry save receipt.")
+            return
+        }
+        let committedView = try #require(coordinator.snapshot)
+        #expect(outcome.stage == .viewProjection)
+        #expect(outcome.mutation == .save)
+        #expect(outcome.requestMethod == "document.save")
+        #expect(outcome.retryDisposition == .mustNotRetry)
+        #expect(outcome.projectID == committedView.projectID)
+        #expect(outcome.documentGeneration == committedView.documentGeneration)
+        #expect(outcome.transactionRevision == committedView.transactionRevision)
+        #expect(outcome.publicationSequence == committedView.publicationSequence)
+        #expect(outcome.workspaceRevision == committedView.workspaceState.revision)
+        #expect(coordinator.currentFileURL == nil)
+        guard case .unavailable(let lifecycleFailure) = coordinator.lifecycle else {
+            Issue.record("Expected file-authority loss to make the App unavailable.")
+            return
+        }
+        #expect(lifecycleFailure.kind == .save)
+        #expect(lifecycleFailure.didCommit)
+        #expect(lifecycleFailure.committedMutation == outcome)
+        #expect(registrar.updatedPaths.count == 1)
+        #expect(registrar.updatedPaths[0] == nil)
+        #expect(registrar.unregisterCallCount == 1)
+        #expect(FileManager.default.fileExists(atPath: packageURL.path) == false)
+
+        guard case .sessions(let remainingSessions) = await router.handle(.sessions) else {
+            Issue.record("Expected Agent session observation after authority loss.")
+            return
+        }
+        #expect(remainingSessions.isEmpty)
+        guard case .failure(let mutationFailure) = await router.handle(
+            .resetDocument(
+                sessionID: session.id,
+                name: "Must Not Publish",
+                expectedGeneration: committedView.documentGeneration
+            )
+        ) else {
+            Issue.record("Expected mutation rejection after authority loss.")
+            return
+        }
+        #expect(mutationFailure.code == .sessionNotFound)
+        guard case .failure(let saveFailure) = await router.handle(
+            .save(
+                sessionID: session.id,
+                expectedGeneration: committedView.documentGeneration
+            )
+        ) else {
+            Issue.record("Expected save rejection after authority loss.")
+            return
+        }
+        #expect(saveFailure.code == .sessionNotFound)
+        #expect(
+            coordinator.snapshot?.publicationSequence
+                == committedView.publicationSequence
+        )
+        #expect(
+            coordinator.snapshot?.documentGeneration
+                == committedView.documentGeneration
+        )
+    }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func applicationCommittedLoadAuthorityLossRevokesSessionAndPreservesCoordinates() async throws {
+    try await withApplicationProjectTemporaryDirectory { directory in
+        let sourceWorkspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
+            document: try applicationMeshOnlyDocument(named: "Committed Authority Loss")
+        )
+        _ = try await sourceWorkspace.evaluate()
+        let packageURL = directory.appendingPathComponent("committed-load-loss.rupa")
+        _ = try await sourceWorkspace.save(to: packageURL)
+
+        let project = try applicationProjectController(
+            document: .empty(named: "Before Committed Load"),
+            packageReader: ApplicationRemovingLoadedProjectPackageReader()
+        )
+        let workspace = ProjectWorkspace(project: project)
+        let controller = ProjectAgentCommandController()
+        let registrar = ApplicationAgentSessionRegistrarProbeProxy(controller)
+        let coordinator = ApplicationProjectCoordinator(
+            workspace: workspace,
+            agentRegistrar: registrar,
+            projectFileLeaseStore: ProjectFileAuthorityLeaseStore(
+                rootDirectory: directory.appendingPathComponent("lease-root")
+            ),
+            projectLeaseAcquisitionDuration: .milliseconds(100),
+            launchArguments: []
+        )
+        let router = ApplicationAgentRequestRouter(
+            projectHandler: controller,
+            lifecycle: coordinator
+        )
+        await coordinator.launch()
+        guard case .sessions(let sessions) = await router.handle(.sessions),
+              let session = sessions.first else {
+            Issue.record("Expected the App-owned Agent session before load.")
+            return
+        }
+
+        await coordinator.load(from: packageURL)
+
+        let committed = try #require(coordinator.snapshot)
+        guard case .unavailable(let lifecycleFailure) = coordinator.lifecycle,
+              let outcome = lifecycleFailure.committedMutation else {
+            Issue.record("Expected committed load authority loss to terminate App access with a receipt.")
+            return
+        }
+        #expect(lifecycleFailure.kind == .load)
+        #expect(lifecycleFailure.didCommit)
+        #expect(coordinator.failure == lifecycleFailure)
+        #expect(outcome.mutation == .source)
+        #expect(outcome.requestMethod == "project.open")
+        #expect(outcome.retryDisposition == .mustNotRetry)
+        #expect(outcome.projectID == committed.projectID)
+        #expect(outcome.documentGeneration == committed.documentGeneration)
+        #expect(outcome.transactionRevision == committed.transactionRevision)
+        #expect(outcome.publicationSequence == committed.publicationSequence)
+        #expect(outcome.workspaceRevision == committed.workspaceState.revision)
+        #expect(committed.projectName == "Committed Authority Loss")
+        #expect(coordinator.currentFileURL == nil)
+        #expect(registrar.unregisterCallCount == 1)
+        #expect(FileManager.default.fileExists(atPath: packageURL.path) == false)
+
+        guard case .sessions(let remainingSessions) = await router.handle(.sessions) else {
+            Issue.record("Expected session observation after committed authority loss.")
+            return
+        }
+        #expect(remainingSessions.isEmpty)
+        guard case .failure(let mutationFailure) = await router.handle(
+            .execute(
+                sessionID: session.id,
+                command: .renameDocument(name: "Must Not Publish"),
+                expectedGeneration: committed.documentGeneration
+            )
+        ) else {
+            Issue.record("Expected the former session mutation to be rejected.")
+            return
+        }
+        #expect(mutationFailure.code == .sessionNotFound)
+        try expectApplicationPublication(coordinator.snapshot, unchangedFrom: committed)
+    }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
 func applicationLaunchConsumesAnOpenURLThatArrivesDuringAgentRegistration() async throws {
     try await withApplicationProjectTemporaryDirectory { directory in
         let sourceWorkspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
@@ -345,6 +802,7 @@ func applicationLaunchConsumesAnOpenURLThatArrivesDuringAgentRegistration() asyn
         let coordinator = ApplicationProjectCoordinator(
             workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
             agentRegistrar: registrar,
+            projectFileLeaseStore: applicationProjectFileLeaseStore(),
             launchArguments: []
         )
         let launch = Task { @MainActor in
@@ -379,6 +837,7 @@ func applicationRouteRoundTripsCADMeshAndMixedProjects() async throws {
             let coordinator = ApplicationProjectCoordinator(
                 workspace: workspace,
                 agentRegistrar: registrar,
+                projectFileLeaseStore: applicationProjectFileLeaseStore(),
                 launchArguments: []
             )
             await coordinator.launch()
@@ -453,6 +912,7 @@ func applicationRejectsOpenWhileDirtyWithoutChangingFileOwnership() async throws
             workspace: workspace,
             agentRegistrar: registrar,
             securityScopedAccessOpener: accessOpener,
+            projectFileLeaseStore: applicationProjectFileLeaseStore(),
             launchArguments: []
         )
         await coordinator.launch()
@@ -487,6 +947,107 @@ func applicationRejectsOpenWhileDirtyWithoutChangingFileOwnership() async throws
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
+func applicationReopeningCurrentCanonicalProjectWhileDirtyIsAnIdempotentNoOp() async throws {
+    try await withApplicationProjectTemporaryDirectory { directory in
+        let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
+            document: try applicationMeshOnlyDocument(named: "Retained Project")
+        )
+        let registrar = ApplicationAgentSessionRegistrarProbe()
+        let accessOpener = ApplicationSecurityScopedAccessOpenerProbe()
+        let coordinator = ApplicationProjectCoordinator(
+            workspace: workspace,
+            agentRegistrar: registrar,
+            securityScopedAccessOpener: accessOpener,
+            projectFileLeaseStore: applicationProjectFileLeaseStore(),
+            launchArguments: []
+        )
+        await coordinator.launch()
+        let originalURL = directory.appendingPathComponent("retained.rupa")
+        await coordinator.save(to: originalURL)
+        let clean = try #require(coordinator.snapshot)
+        let dirty = try await workspace.commit(
+            ProjectSourceTransaction(
+                name: "appTest.reopen-current-dirty",
+                commands: [.renameDocument(name: "Dirty Retained Project")],
+                expectedProjectID: clean.projectID,
+                expectedTransactionRevision: clean.transactionRevision,
+                expectedPublicationSequence: clean.publicationSequence
+            )
+        )
+        let retainedPaths = registrar.updatedPaths
+        let retainedRegistrationID = registrar.registeredID
+        let retainedOpenedURLs = accessOpener.openedProjectURLs
+        let retainedPublication = dirty
+
+        await coordinator.load(from: originalURL)
+
+        #expect(coordinator.failure == nil)
+        #expect(coordinator.currentFileURL == originalURL.standardizedFileURL)
+        #expect(coordinator.isDirty)
+        try expectApplicationPublication(coordinator.snapshot, unchangedFrom: retainedPublication)
+        #expect(registrar.updatedPaths == retainedPaths)
+        #expect(registrar.registeredID == retainedRegistrationID)
+        #expect(accessOpener.openedProjectURLs == retainedOpenedURLs)
+    }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func applicationReopeningCurrentCanonicalProjectRejectsLostAuthorityWithoutReloading() async throws {
+    try await withApplicationProjectTemporaryDirectory { directory in
+        let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
+            document: try applicationMeshOnlyDocument(named: "Retained Project")
+        )
+        let registrar = ApplicationAgentSessionRegistrarProbe()
+        let accessOpener = ApplicationSecurityScopedAccessOpenerProbe()
+        let coordinator = ApplicationProjectCoordinator(
+            workspace: workspace,
+            agentRegistrar: registrar,
+            securityScopedAccessOpener: accessOpener,
+            projectFileLeaseStore: ProjectFileAuthorityLeaseStore(
+                rootDirectory: directory.appendingPathComponent("lease-root")
+            ),
+            projectLeaseAcquisitionDuration: .milliseconds(100),
+            launchArguments: []
+        )
+        await coordinator.launch()
+        let packageURL = directory.appendingPathComponent("lost-reopen.rupa")
+        await coordinator.save(to: packageURL)
+        let clean = try #require(coordinator.snapshot)
+        let dirty = try await workspace.commit(
+            ProjectSourceTransaction(
+                name: "appTest.lost-authority-reopen",
+                commands: [.renameDocument(name: "Dirty Authority Loss")],
+                expectedProjectID: clean.projectID,
+                expectedTransactionRevision: clean.transactionRevision,
+                expectedPublicationSequence: clean.publicationSequence
+            )
+        )
+        let openedURLs = accessOpener.openedProjectURLs
+        let updatedPaths = registrar.updatedPaths
+        try replaceApplicationProjectFileWithoutLeaseAdoption(packageURL)
+
+        await coordinator.load(from: packageURL)
+
+        guard case .unavailable(let lifecycleFailure) = coordinator.lifecycle else {
+            Issue.record("Expected same-project reopen with lost authority to terminate App access.")
+            return
+        }
+        #expect(lifecycleFailure.kind == .load)
+        #expect(lifecycleFailure.didCommit == false)
+        #expect(coordinator.failure == lifecycleFailure)
+        #expect(coordinator.currentFileURL == nil)
+        #expect(coordinator.hasRegisteredAgentSession == false)
+        #expect(registrar.unregisterCallCount == 1)
+        #expect(registrar.updatedPaths == updatedPaths)
+        #expect(accessOpener.openedProjectURLs == openedURLs)
+        #expect(accessOpener.activeProjectURLs.isEmpty)
+        try expectApplicationPublication(coordinator.snapshot, unchangedFrom: dirty)
+    }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
 func applicationRejectsLegacyProjectFormatWithoutChangingPublishedAuthority() async throws {
     try await withApplicationProjectTemporaryDirectory { directory in
         let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
@@ -498,6 +1059,7 @@ func applicationRejectsLegacyProjectFormatWithoutChangingPublishedAuthority() as
             workspace: workspace,
             agentRegistrar: registrar,
             securityScopedAccessOpener: accessOpener,
+            projectFileLeaseStore: applicationProjectFileLeaseStore(),
             launchArguments: []
         )
         await coordinator.launch()
@@ -533,6 +1095,7 @@ func applicationRejectsLegacyInitialURLBeforeRegistration() async throws {
         workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
         agentRegistrar: registrar,
         securityScopedAccessOpener: accessOpener,
+        projectFileLeaseStore: applicationProjectFileLeaseStore(),
         initialURL: legacyURL,
         launchArguments: []
     )
@@ -564,6 +1127,7 @@ func applicationLateUnsupportedURLPreservesThePublishedLaunchWorkspace() async t
         ),
         agentRegistrar: registrar,
         securityScopedAccessOpener: accessOpener,
+        projectFileLeaseStore: applicationProjectFileLeaseStore(),
         launchArguments: []
     )
     let launch = Task { @MainActor in
@@ -604,6 +1168,7 @@ func applicationInvalidRupaPackagePreservesPublishedAuthority() async throws {
             workspace: workspace,
             agentRegistrar: registrar,
             securityScopedAccessOpener: accessOpener,
+            projectFileLeaseStore: applicationProjectFileLeaseStore(),
             launchArguments: []
         )
         await coordinator.launch()
@@ -637,6 +1202,7 @@ func applicationRejectsNewProjectWhileDirty() async throws {
     let coordinator = ApplicationProjectCoordinator(
         workspace: workspace,
         agentRegistrar: ApplicationAgentSessionRegistrarProbe(),
+        projectFileLeaseStore: applicationProjectFileLeaseStore(),
         launchArguments: []
     )
     await coordinator.launch()
@@ -682,6 +1248,7 @@ func applicationSameProjectIDReloadChangesPresentationLifetime() async throws {
         let coordinator = ApplicationProjectCoordinator(
             workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(document: original),
             agentRegistrar: ApplicationAgentSessionRegistrarProbe(),
+            projectFileLeaseStore: applicationProjectFileLeaseStore(),
             launchArguments: []
         )
         await coordinator.launch()
@@ -707,6 +1274,7 @@ func applicationPrecommitLoadFailureRetainsPublishedAuthorityAndAgentPath() asyn
     let coordinator = ApplicationProjectCoordinator(
         workspace: workspace,
         agentRegistrar: registrar,
+        projectFileLeaseStore: applicationProjectFileLeaseStore(),
         launchArguments: []
     )
     await coordinator.launch()
@@ -736,6 +1304,7 @@ func applicationPrecommitSaveFailureRetainsDirtyAuthorityAndFileOwnership() asyn
         let coordinator = ApplicationProjectCoordinator(
             workspace: workspace,
             agentRegistrar: registrar,
+            projectFileLeaseStore: applicationProjectFileLeaseStore(),
             launchArguments: []
         )
         await coordinator.launch()
@@ -767,6 +1336,18 @@ func applicationPrecommitSaveFailureRetainsDirtyAuthorityAndFileOwnership() asyn
 @MainActor
 @Test(.timeLimit(.minutes(1)))
 func applicationCancelledLoadDoesNotPublishOrRebindAgentPath() async throws {
+    let loadURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+        "cancelled-load-\(UUID().uuidString).rupa"
+    )
+    let leaseRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
+        "cancelled-load-lease-\(UUID().uuidString)",
+        isDirectory: true
+    )
+    try Data().write(to: loadURL)
+    defer {
+        removeApplicationProjectTestFile(loadURL)
+        removeApplicationProjectTestFile(leaseRoot)
+    }
     let loadedController = try applicationProjectController(
         document: try applicationMeshOnlyDocument(named: "Cancelled Load")
     )
@@ -781,15 +1362,20 @@ func applicationCancelledLoadDoesNotPublishOrRebindAgentPath() async throws {
     )
     let workspace = ProjectWorkspace(project: controller)
     let registrar = ApplicationAgentSessionRegistrarProbe()
+    let leaseStore = ProjectFileAuthorityLeaseStore(rootDirectory: leaseRoot)
+    let accessOpener = ApplicationSecurityScopedAccessOpenerProbe()
     let coordinator = ApplicationProjectCoordinator(
         workspace: workspace,
         agentRegistrar: registrar,
+        securityScopedAccessOpener: accessOpener,
+        projectFileLeaseStore: leaseStore,
+        projectLeaseAcquisitionDuration: .milliseconds(100),
         launchArguments: []
     )
     await coordinator.launch()
     let retained = try #require(coordinator.snapshot)
 
-    coordinator.startLoad(from: URL(fileURLWithPath: "/ignored/cancelled.rupa"))
+    coordinator.startLoad(from: loadURL)
     while !gate.didStart {
         await Task.yield()
     }
@@ -806,11 +1392,24 @@ func applicationCancelledLoadDoesNotPublishOrRebindAgentPath() async throws {
     #expect(coordinator.snapshot?.projectName == "Retained Cancellation")
     #expect(coordinator.currentFileURL == nil)
     #expect(registrar.updatePathAttemptCount == 0)
+    #expect(accessOpener.activeProjectURLs.isEmpty)
+    let contenderStore = ProjectFileAuthorityLeaseStore(rootDirectory: leaseRoot)
+    let releasedCandidate = try await contenderStore.acquire(
+        paths: [loadURL],
+        requiredPaths: [loadURL],
+        deadline: ContinuousClock.now.advanced(by: .seconds(1))
+    )
+    await releasedCandidate.release()
 }
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
 func applicationStaleLoadCannotReplaceANewerWorkspacePublication() async throws {
+    let loadURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+        "stale-load-\(UUID().uuidString).rupa"
+    )
+    try Data().write(to: loadURL)
+    defer { removeApplicationProjectTestFile(loadURL) }
     let loadedController = try applicationProjectController(
         document: try applicationMeshOnlyDocument(named: "Stale Load")
     )
@@ -827,13 +1426,14 @@ func applicationStaleLoadCannotReplaceANewerWorkspacePublication() async throws 
     let coordinator = ApplicationProjectCoordinator(
         workspace: workspace,
         agentRegistrar: ApplicationAgentSessionRegistrarProbe(),
+        projectFileLeaseStore: applicationProjectFileLeaseStore(),
         launchArguments: []
     )
     await coordinator.launch()
     let initial = try #require(coordinator.snapshot)
 
     let load = Task { @MainActor in
-        await coordinator.load(from: URL(fileURLWithPath: "/ignored/stale.rupa"))
+        await coordinator.load(from: loadURL)
     }
     while !gate.didStart {
         await Task.yield()
@@ -880,6 +1480,7 @@ func applicationRecoversACommittedLoadWithItsNewProjectIdentity() async throws {
         let coordinator = ApplicationProjectCoordinator(
             workspace: workspace,
             agentRegistrar: registrar,
+            projectFileLeaseStore: applicationProjectFileLeaseStore(),
             launchArguments: []
         )
         await coordinator.launch()
@@ -918,6 +1519,7 @@ func applicationRecoversACommittedSaveViewWithoutReplayingTheSave() async throws
         let coordinator = ApplicationProjectCoordinator(
             workspace: workspace,
             agentRegistrar: registrar,
+            projectFileLeaseStore: applicationProjectFileLeaseStore(),
             launchArguments: []
         )
         await coordinator.launch()
@@ -951,6 +1553,7 @@ func applicationRecoversACommittedUndoWithoutReplayingHistory() async throws {
     let coordinator = ApplicationProjectCoordinator(
         workspace: workspace,
         agentRegistrar: ApplicationAgentSessionRegistrarProbe(),
+        projectFileLeaseStore: applicationProjectFileLeaseStore(),
         launchArguments: []
     )
     await coordinator.launch()
@@ -988,6 +1591,7 @@ func applicationReportsAgentPathRebindFailureAfterACommittedSave() async throws 
         let coordinator = ApplicationProjectCoordinator(
             workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
             agentRegistrar: registrar,
+            projectFileLeaseStore: applicationProjectFileLeaseStore(),
             launchArguments: []
         )
         await coordinator.launch()
@@ -995,13 +1599,122 @@ func applicationReportsAgentPathRebindFailureAfterACommittedSave() async throws 
 
         await coordinator.save(to: packageURL)
 
-        #expect(coordinator.failure?.kind == .agentRegistration)
-        #expect(coordinator.failure?.didCommit == true)
-        #expect(coordinator.snapshot?.isDirty == false)
+        let committed = try #require(coordinator.snapshot)
+        guard case .unavailable(let lifecycleFailure) = coordinator.lifecycle,
+              let outcome = lifecycleFailure.committedMutation else {
+            Issue.record("Expected save path rebind failure to terminate App access with a receipt.")
+            return
+        }
+        #expect(lifecycleFailure.kind == .agentRegistration)
+        #expect(lifecycleFailure.didCommit)
+        #expect(coordinator.failure == lifecycleFailure)
+        #expect(outcome.mutation == .save)
+        #expect(outcome.requestMethod == "project.save")
+        #expect(outcome.retryDisposition == .mustNotRetry)
+        #expect(outcome.projectID == committed.projectID)
+        #expect(outcome.documentGeneration == committed.documentGeneration)
+        #expect(outcome.transactionRevision == committed.transactionRevision)
+        #expect(outcome.publicationSequence == committed.publicationSequence)
+        #expect(outcome.workspaceRevision == committed.workspaceState.revision)
+        #expect(committed.isDirty == false)
         #expect(coordinator.currentFileURL == packageURL.standardizedFileURL)
         #expect(registrar.updatePathAttemptCount == 1)
+        #expect(registrar.unregisterCallCount == 1)
         #expect(FileManager.default.fileExists(atPath: packageURL.path))
     }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func applicationLoadPathRebindFailureIsTerminalWithExactCommittedReceipt() async throws {
+    try await withApplicationProjectTemporaryDirectory { directory in
+        let sourceWorkspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
+            document: try applicationMeshOnlyDocument(named: "Loaded Before Path Failure")
+        )
+        _ = try await sourceWorkspace.evaluate()
+        let packageURL = directory.appendingPathComponent("load-path-failure.rupa")
+        _ = try await sourceWorkspace.save(to: packageURL)
+        let registrar = ApplicationAgentSessionRegistrarProbe(
+            updatePathFailure: ApplicationProjectFailure(
+                kind: .agentRegistration,
+                message: "Fixture load path failure."
+            )
+        )
+        let coordinator = ApplicationProjectCoordinator(
+            workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
+            agentRegistrar: registrar,
+            projectFileLeaseStore: ProjectFileAuthorityLeaseStore(
+                rootDirectory: directory.appendingPathComponent("lease-root")
+            ),
+            projectLeaseAcquisitionDuration: .milliseconds(100),
+            launchArguments: []
+        )
+        await coordinator.launch()
+
+        await coordinator.load(from: packageURL)
+
+        let committed = try #require(coordinator.snapshot)
+        guard case .unavailable(let lifecycleFailure) = coordinator.lifecycle,
+              let outcome = lifecycleFailure.committedMutation else {
+            Issue.record("Expected load path rebind failure to terminate App access with a receipt.")
+            return
+        }
+        #expect(lifecycleFailure.kind == .agentRegistration)
+        #expect(lifecycleFailure.didCommit)
+        #expect(outcome.mutation == .source)
+        #expect(outcome.requestMethod == "project.open")
+        #expect(outcome.retryDisposition == .mustNotRetry)
+        #expect(outcome.projectID == committed.projectID)
+        #expect(outcome.documentGeneration == committed.documentGeneration)
+        #expect(outcome.transactionRevision == committed.transactionRevision)
+        #expect(outcome.publicationSequence == committed.publicationSequence)
+        #expect(outcome.workspaceRevision == committed.workspaceState.revision)
+        #expect(committed.projectName == "Loaded Before Path Failure")
+        #expect(coordinator.currentFileURL == packageURL.standardizedFileURL)
+        #expect(registrar.updatePathAttemptCount == 1)
+        #expect(registrar.unregisterCallCount == 1)
+    }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func applicationNewProjectPathClearFailureIsTerminalWithExactCommittedReceipt() async throws {
+    let registrar = ApplicationAgentSessionRegistrarProbe(
+        updatePathFailure: ApplicationProjectFailure(
+            kind: .agentRegistration,
+            message: "Fixture new-project path failure."
+        )
+    )
+    let coordinator = ApplicationProjectCoordinator(
+        workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
+        agentRegistrar: registrar,
+        projectFileLeaseStore: applicationProjectFileLeaseStore(),
+        launchArguments: []
+    )
+    await coordinator.launch()
+
+    await coordinator.newProject(named: "Committed New Project")
+
+    let committed = try #require(coordinator.snapshot)
+    guard case .unavailable(let lifecycleFailure) = coordinator.lifecycle,
+          let outcome = lifecycleFailure.committedMutation else {
+        Issue.record("Expected new-project path clear failure to terminate App access with a receipt.")
+        return
+    }
+    #expect(lifecycleFailure.kind == .agentRegistration)
+    #expect(lifecycleFailure.didCommit)
+    #expect(outcome.mutation == .source)
+    #expect(outcome.requestMethod == "project.new")
+    #expect(outcome.retryDisposition == .mustNotRetry)
+    #expect(outcome.projectID == committed.projectID)
+    #expect(outcome.documentGeneration == committed.documentGeneration)
+    #expect(outcome.transactionRevision == committed.transactionRevision)
+    #expect(outcome.publicationSequence == committed.publicationSequence)
+    #expect(outcome.workspaceRevision == committed.workspaceState.revision)
+    #expect(committed.projectName == "Committed New Project")
+    #expect(coordinator.currentFileURL == nil)
+    #expect(registrar.updatePathAttemptCount == 1)
+    #expect(registrar.unregisterCallCount == 1)
 }
 
 @MainActor
@@ -1016,6 +1729,7 @@ func applicationSaveDoesNotAdvertiseOrAcceptMidCommitCancellation() async throws
         let coordinator = ApplicationProjectCoordinator(
             workspace: ProjectWorkspace(project: controller),
             agentRegistrar: ApplicationAgentSessionRegistrarProbe(),
+            projectFileLeaseStore: applicationProjectFileLeaseStore(),
             launchArguments: []
         )
         await coordinator.launch()
@@ -1048,6 +1762,7 @@ func applicationHistorySharesSubmissionOrderWithWorkspaceUIOperations() async th
         workspace: workspace,
         agentRegistrar: ApplicationAgentSessionRegistrarProbe(),
         operationSequencer: sequencer,
+        projectFileLeaseStore: applicationProjectFileLeaseStore(),
         launchArguments: []
     )
     await coordinator.launch()
@@ -1094,6 +1809,40 @@ private func expectApplicationPublication(
     #expect(actual.projectName == expected.projectName)
     #expect(actual.viewport == expected.viewport)
     #expect(actual.isDirty == expected.isDirty)
+}
+
+private func removeApplicationProjectTestFile(_ url: URL) {
+    do {
+        try FileManager.default.removeItem(at: url)
+    } catch {
+        Issue.record("Failed to remove application project test file: \(error)")
+    }
+}
+
+private func replaceApplicationProjectFileWithoutLeaseAdoption(
+    _ url: URL
+) throws {
+    let replacementURL = url.deletingLastPathComponent().appendingPathComponent(
+        ".\(url.lastPathComponent).replacement-\(UUID().uuidString)"
+    )
+    try FileManager.default.copyItem(at: url, to: replacementURL)
+    try FileManager.default.removeItem(at: url)
+    try FileManager.default.moveItem(at: replacementURL, to: url)
+}
+
+private enum ApplicationProjectFileLeaseTestContext {
+    static let store = ProjectFileAuthorityLeaseStore(
+        rootDirectory: FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "rupa-app-file-authority-\(ProcessInfo.processInfo.processIdentifier)",
+                isDirectory: true
+            )
+    )
+}
+
+private func applicationProjectFileLeaseStore()
+    -> ProjectFileAuthorityLeaseStore {
+    ApplicationProjectFileLeaseTestContext.store
 }
 
 @MainActor
@@ -1146,6 +1895,37 @@ private final class ApplicationAgentSessionRegistrarProbe: ApplicationAgentSessi
     }
 
     func unregister(id _: UUID) async {
+        unregisterCallCount += 1
+    }
+}
+
+@MainActor
+private final class ApplicationAgentSessionRegistrarProbeProxy:
+    ApplicationAgentSessionRegistering
+{
+    private let controller: ProjectAgentCommandController
+    private(set) var updatedPaths: [URL?] = []
+    private(set) var unregisterCallCount = 0
+
+    init(_ controller: ProjectAgentCommandController) {
+        self.controller = controller
+    }
+
+    func register(
+        workspace: ProjectWorkspace,
+        path: URL?,
+        id: UUID
+    ) async throws -> UUID {
+        try await controller.register(workspace: workspace, path: path, id: id)
+    }
+
+    func updatePath(id: UUID, path: URL?) async throws {
+        try await controller.updatePath(id: id, path: path)
+        updatedPaths.append(path?.standardizedFileURL)
+    }
+
+    func unregister(id: UUID) async {
+        await controller.unregister(id: id)
         unregisterCallCount += 1
     }
 }
@@ -1255,6 +2035,16 @@ private struct ApplicationBlockingProjectPackageReader: ProjectPackageReading {
     }
 }
 
+private struct ApplicationRemovingLoadedProjectPackageReader:
+    ProjectPackageReading
+{
+    func load(from url: URL) throws -> ProjectPackageDocument {
+        let package = try ProjectPackageStore().load(from: url)
+        try FileManager.default.removeItem(at: url)
+        return package
+    }
+}
+
 private struct ApplicationBlockingProjectPackageWriter: ProjectPackageWriting {
     let gate: ApplicationBlockingOperationGate
 
@@ -1276,6 +2066,19 @@ private struct ApplicationFailingProjectPackageWriter: ProjectPackageWriting {
             code: .atomicSaveFailure,
             message: "Fixture package save failure."
         )
+    }
+}
+
+private struct ApplicationRemovingPublishedProjectPackageWriter:
+    ProjectPackageWriting
+{
+    func save(
+        _ document: ProjectPackageDocument,
+        to url: URL
+    ) throws -> ProjectPackageSaveResult {
+        let result = try ProjectPackageStore().save(document, to: url)
+        try FileManager.default.removeItem(at: url)
+        return result
     }
 }
 

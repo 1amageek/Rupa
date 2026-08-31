@@ -63,7 +63,7 @@ public struct InspectSurfaceBoundaryContinuityCompatibilityCommand: ParsableComm
                 reference: referenceReference,
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                client: CLIAgentClientFactory.makeAgentClient(
+                client: try CLIAgentClientFactory.makeAgentClient(
                     mode: mode,
                     sessionID: id,
                     socket: agentSocket

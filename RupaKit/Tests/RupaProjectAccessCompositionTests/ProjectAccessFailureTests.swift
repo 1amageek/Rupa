@@ -12,6 +12,7 @@ import RupaProjectPackage
 import Synchronization
 import Testing
 @testable import RupaProjectAccessComposition
+import RupaProjectAccessPlatform
 @testable import RupaKit
 
 @MainActor

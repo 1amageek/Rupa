@@ -5,6 +5,7 @@ import RupaAgentRuntime
 import RupaAgentTransport
 import RupaAutomation
 import RupaCore
+import RupaProjectAccessPlatform
 
 public struct CLICommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
@@ -157,8 +158,8 @@ public struct AgentStatusCommand: ParsableCommand {
         abstract: "Print Rupa agent status."
     )
 
-    @Option(help: "Path to the Rupa agent socket.")
-    public var socket: String = AgentSocketPath.defaultPath
+    @Option(help: "Optional compatibility override for the Rupa agent endpoint.")
+    public var socket: String?
 
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
@@ -168,7 +169,9 @@ public struct AgentStatusCommand: ParsableCommand {
     public func run() throws {
         try CLIExitCode.run {
             let response = try CLIService().agentStatus(
-                client: AgentClient(socketPath: AgentSocketPath(socket))
+                client: try CLIAgentClientFactory.makeRequiredAgentClient(
+                    socket: socket
+                )
             )
             try CLIOutput.write(response: response, asJSON: json)
         }
@@ -187,8 +190,8 @@ public struct AttachDocument: ParsableCommand {
     @Option(help: "Open document session UUID.")
     public var session: String?
 
-    @Option(help: "Path to the Rupa agent socket.")
-    public var socket: String = AgentSocketPath.defaultPath
+    @Option(help: "Optional compatibility override for the Rupa agent endpoint.")
+    public var socket: String?
 
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
@@ -204,7 +207,9 @@ public struct AttachDocument: ParsableCommand {
                     fileURL: file.map(URL.init(fileURLWithPath:)),
                     sessionID: id
                 ),
-                client: AgentClient(socketPath: AgentSocketPath(socket))
+                client: try CLIAgentClientFactory.makeRequiredAgentClient(
+                    socket: socket
+                )
             )
             try CLIOutput.write(response: response, asJSON: json)
         }
@@ -321,8 +326,8 @@ public struct SelectionReferencesCommand: ParsableCommand {
     @Option(help: "Expected document generation.")
     public var expectedGeneration: UInt64?
 
-    @Option(help: "Path to the Rupa agent socket.")
-    public var socket: String = AgentSocketPath.defaultPath
+    @Option(help: "Optional compatibility override for the Rupa agent endpoint.")
+    public var socket: String?
 
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
@@ -338,7 +343,9 @@ public struct SelectionReferencesCommand: ParsableCommand {
                 sessionID: id,
                 references: references,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                client: AgentClient(socketPath: AgentSocketPath(socket))
+                client: try CLIAgentClientFactory.makeRequiredAgentClient(
+                    socket: socket
+                )
             )
             try CLIOutput.write(
                 response: response,
@@ -382,8 +389,8 @@ public struct SelectionTargetsCommand: ParsableCommand {
     @Option(help: "Expected document generation.")
     public var expectedGeneration: UInt64?
 
-    @Option(help: "Path to the Rupa agent socket.")
-    public var socket: String = AgentSocketPath.defaultPath
+    @Option(help: "Optional compatibility override for the Rupa agent endpoint.")
+    public var socket: String?
 
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
@@ -399,7 +406,9 @@ public struct SelectionTargetsCommand: ParsableCommand {
                 sessionID: id,
                 targets: targets,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                client: AgentClient(socketPath: AgentSocketPath(socket))
+                client: try CLIAgentClientFactory.makeRequiredAgentClient(
+                    socket: socket
+                )
             )
             try CLIOutput.write(
                 response: response,
@@ -609,7 +618,7 @@ public struct DimensionSketchSummaryCommand: ParsableCommand {
         )
 
         try CLIExitCode.run {
-            let agentClient = CLIAgentClientFactory.makeAgentClient(
+            let agentClient = try CLIAgentClientFactory.makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket
@@ -677,7 +686,7 @@ public struct DimensionObjectSummaryCommand: ParsableCommand {
         )
 
         try CLIExitCode.run {
-            let agentClient = CLIAgentClientFactory.makeAgentClient(
+            let agentClient = try CLIAgentClientFactory.makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket
@@ -1004,7 +1013,7 @@ public struct SurfaceSourcesCommand: ParsableCommand {
         let id = try CLISelectionInputParser.optionalSessionID(sessionID)
 
         try CLIExitCode.run {
-            let agentClient = CLIAgentClientFactory.makeAgentClient(
+            let agentClient = try CLIAgentClientFactory.makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket
@@ -1250,18 +1259,26 @@ enum CLIAgentClientFactory {
         mode: CLIEditMode,
         sessionID: UUID?,
         socket: String?
-    ) -> AgentClient? {
-        let resolvedSocket: String?
-        if let socket {
-            resolvedSocket = socket
-        } else if mode == .live || sessionID != nil {
-            resolvedSocket = AgentSocketPath.defaultPath
-        } else {
-            resolvedSocket = nil
+    ) throws -> AgentClient? {
+        guard socket != nil || mode == .live || sessionID != nil else {
+            return nil
         }
-        return resolvedSocket.map { socket in
-            AgentClient(socketPath: AgentSocketPath(socket))
+        return try makeRequiredAgentClient(socket: socket)
+    }
+
+    static func makeRequiredAgentClient(
+        socket: String?,
+        endpointResolver: () throws -> UnixSocketEndpoint = {
+            try RupaAgentEndpointComposition.productEndpoint()
         }
+    ) throws -> AgentClient {
+        guard socket == nil else {
+            throw ValidationError(
+                "Explicit Agent endpoint overrides are unsupported."
+            )
+        }
+        let endpoint = try endpointResolver()
+        return AgentClient(endpoint: endpoint)
     }
 }
 
@@ -1334,7 +1351,7 @@ public struct LineSketchCommand: ParsableCommand {
                 fileURL: url,
                 sessionID: id
             )
-            let agentClient = makeAgentClient(
+            let agentClient = try makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket
@@ -1404,18 +1421,12 @@ public struct LineSketchCommand: ParsableCommand {
         mode: CLIEditMode,
         sessionID: UUID?,
         socket: String?
-    ) -> AgentClient? {
-        let resolvedSocket: String?
-        if let socket {
-            resolvedSocket = socket
-        } else if mode == .live || sessionID != nil {
-            resolvedSocket = AgentSocketPath.defaultPath
-        } else {
-            resolvedSocket = nil
-        }
-        return resolvedSocket.map { socket in
-                AgentClient(socketPath: AgentSocketPath(socket))
-        }
+    ) throws -> AgentClient? {
+        try CLIAgentClientFactory.makeAgentClient(
+            mode: mode,
+            sessionID: sessionID,
+            socket: socket
+        )
     }
 }
 
@@ -1485,7 +1496,7 @@ public struct CircleSketchCommand: ParsableCommand {
                 fileURL: url,
                 sessionID: id
             )
-            let agentClient = makeAgentClient(
+            let agentClient = try makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket
@@ -1552,18 +1563,12 @@ public struct CircleSketchCommand: ParsableCommand {
         mode: CLIEditMode,
         sessionID: UUID?,
         socket: String?
-    ) -> AgentClient? {
-        let resolvedSocket: String?
-        if let socket {
-            resolvedSocket = socket
-        } else if mode == .live || sessionID != nil {
-            resolvedSocket = AgentSocketPath.defaultPath
-        } else {
-            resolvedSocket = nil
-        }
-        return resolvedSocket.map { socket in
-                AgentClient(socketPath: AgentSocketPath(socket))
-        }
+    ) throws -> AgentClient? {
+        try CLIAgentClientFactory.makeAgentClient(
+            mode: mode,
+            sessionID: sessionID,
+            socket: socket
+        )
     }
 }
 
@@ -1630,7 +1635,7 @@ public struct RectangleSketchCommand: ParsableCommand {
                 fileURL: url,
                 sessionID: id
             )
-            let agentClient = makeAgentClient(
+            let agentClient = try makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket
@@ -1694,18 +1699,12 @@ public struct RectangleSketchCommand: ParsableCommand {
         mode: CLIEditMode,
         sessionID: UUID?,
         socket: String?
-    ) -> AgentClient? {
-        let resolvedSocket: String?
-        if let socket {
-            resolvedSocket = socket
-        } else if mode == .live || sessionID != nil {
-            resolvedSocket = AgentSocketPath.defaultPath
-        } else {
-            resolvedSocket = nil
-        }
-        return resolvedSocket.map { socket in
-                AgentClient(socketPath: AgentSocketPath(socket))
-        }
+    ) throws -> AgentClient? {
+        try CLIAgentClientFactory.makeAgentClient(
+            mode: mode,
+            sessionID: sessionID,
+            socket: socket
+        )
     }
 }
 
@@ -1778,7 +1777,7 @@ public struct BoxModelCommand: ParsableCommand {
                 fileURL: url,
                 sessionID: id
             )
-            let agentClient = makeAgentClient(
+            let agentClient = try makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket
@@ -1842,18 +1841,12 @@ public struct BoxModelCommand: ParsableCommand {
         mode: CLIEditMode,
         sessionID: UUID?,
         socket: String?
-    ) -> AgentClient? {
-        let resolvedSocket: String?
-        if let socket {
-            resolvedSocket = socket
-        } else if mode == .live || sessionID != nil {
-            resolvedSocket = AgentSocketPath.defaultPath
-        } else {
-            resolvedSocket = nil
-        }
-        return resolvedSocket.map { socket in
-                AgentClient(socketPath: AgentSocketPath(socket))
-        }
+    ) throws -> AgentClient? {
+        try CLIAgentClientFactory.makeAgentClient(
+            mode: mode,
+            sessionID: sessionID,
+            socket: socket
+        )
     }
 }
 
@@ -1932,7 +1925,7 @@ public struct BoxCornersModelCommand: ParsableCommand {
                 fileURL: url,
                 sessionID: id
             )
-            let agentClient = makeAgentClient(
+            let agentClient = try makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket
@@ -2006,18 +1999,12 @@ public struct BoxCornersModelCommand: ParsableCommand {
         mode: CLIEditMode,
         sessionID: UUID?,
         socket: String?
-    ) -> AgentClient? {
-        let resolvedSocket: String?
-        if let socket {
-            resolvedSocket = socket
-        } else if mode == .live || sessionID != nil {
-            resolvedSocket = AgentSocketPath.defaultPath
-        } else {
-            resolvedSocket = nil
-        }
-        return resolvedSocket.map { socket in
-                AgentClient(socketPath: AgentSocketPath(socket))
-        }
+    ) throws -> AgentClient? {
+        try CLIAgentClientFactory.makeAgentClient(
+            mode: mode,
+            sessionID: sessionID,
+            socket: socket
+        )
     }
 }
 
@@ -2093,7 +2080,7 @@ public struct CylinderModelCommand: ParsableCommand {
                 fileURL: url,
                 sessionID: id
             )
-            let agentClient = makeAgentClient(
+            let agentClient = try makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket
@@ -2159,18 +2146,12 @@ public struct CylinderModelCommand: ParsableCommand {
         mode: CLIEditMode,
         sessionID: UUID?,
         socket: String?
-    ) -> AgentClient? {
-        let resolvedSocket: String?
-        if let socket {
-            resolvedSocket = socket
-        } else if mode == .live || sessionID != nil {
-            resolvedSocket = AgentSocketPath.defaultPath
-        } else {
-            resolvedSocket = nil
-        }
-        return resolvedSocket.map { socket in
-            AgentClient(socketPath: AgentSocketPath(socket))
-        }
+    ) throws -> AgentClient? {
+        try CLIAgentClientFactory.makeAgentClient(
+            mode: mode,
+            sessionID: sessionID,
+            socket: socket
+        )
     }
 }
 
@@ -2235,7 +2216,7 @@ public struct ExtrudeModelCommand: ParsableCommand {
                 fileURL: url,
                 sessionID: id
             )
-            let agentClient = makeAgentClient(
+            let agentClient = try makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket
@@ -2296,18 +2277,12 @@ public struct ExtrudeModelCommand: ParsableCommand {
         mode: CLIEditMode,
         sessionID: UUID?,
         socket: String?
-    ) -> AgentClient? {
-        let resolvedSocket: String?
-        if let socket {
-            resolvedSocket = socket
-        } else if mode == .live || sessionID != nil {
-            resolvedSocket = AgentSocketPath.defaultPath
-        } else {
-            resolvedSocket = nil
-        }
-        return resolvedSocket.map { socket in
-            AgentClient(socketPath: AgentSocketPath(socket))
-        }
+    ) throws -> AgentClient? {
+        try CLIAgentClientFactory.makeAgentClient(
+            mode: mode,
+            sessionID: sessionID,
+            socket: socket
+        )
     }
 }
 
@@ -2358,7 +2333,7 @@ public struct ExportDocument: ParsableCommand {
         try CLIExitCode.run {
             let url = URL(fileURLWithPath: file)
             let outputURL = URL(fileURLWithPath: output)
-            let agentClient = makeAgentClient(
+            let agentClient = try makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket
@@ -2400,18 +2375,12 @@ public struct ExportDocument: ParsableCommand {
         mode: CLIEditMode,
         sessionID: UUID?,
         socket: String?
-    ) -> AgentClient? {
-        let resolvedSocket: String?
-        if let socket {
-            resolvedSocket = socket
-        } else if mode == .live || sessionID != nil {
-            resolvedSocket = AgentSocketPath.defaultPath
-        } else {
-            resolvedSocket = nil
-        }
-        return resolvedSocket.map { socket in
-                AgentClient(socketPath: AgentSocketPath(socket))
-        }
+    ) throws -> AgentClient? {
+        try CLIAgentClientFactory.makeAgentClient(
+            mode: mode,
+            sessionID: sessionID,
+            socket: socket
+        )
     }
 }
 
@@ -2446,7 +2415,7 @@ public struct EvaluateDocument: ParsableCommand {
 
         try CLIExitCode.run {
             let url = URL(fileURLWithPath: file)
-            let agentClient = makeAgentClient(
+            let agentClient = try makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket
@@ -2481,18 +2450,12 @@ public struct EvaluateDocument: ParsableCommand {
         mode: CLIEditMode,
         sessionID: UUID?,
         socket: String?
-    ) -> AgentClient? {
-        let resolvedSocket: String?
-        if let socket {
-            resolvedSocket = socket
-        } else if mode == .live || sessionID != nil {
-            resolvedSocket = AgentSocketPath.defaultPath
-        } else {
-            resolvedSocket = nil
-        }
-        return resolvedSocket.map { socket in
-                AgentClient(socketPath: AgentSocketPath(socket))
-        }
+    ) throws -> AgentClient? {
+        try CLIAgentClientFactory.makeAgentClient(
+            mode: mode,
+            sessionID: sessionID,
+            socket: socket
+        )
     }
 }
 
@@ -2527,7 +2490,7 @@ public struct MeasureDocument: ParsableCommand {
 
         try CLIExitCode.run {
             let url = URL(fileURLWithPath: file)
-            let agentClient = makeAgentClient(
+            let agentClient = try makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket
@@ -2562,18 +2525,12 @@ public struct MeasureDocument: ParsableCommand {
         mode: CLIEditMode,
         sessionID: UUID?,
         socket: String?
-    ) -> AgentClient? {
-        let resolvedSocket: String?
-        if let socket {
-            resolvedSocket = socket
-        } else if mode == .live || sessionID != nil {
-            resolvedSocket = AgentSocketPath.defaultPath
-        } else {
-            resolvedSocket = nil
-        }
-        return resolvedSocket.map { socket in
-                AgentClient(socketPath: AgentSocketPath(socket))
-        }
+    ) throws -> AgentClient? {
+        try CLIAgentClientFactory.makeAgentClient(
+            mode: mode,
+            sessionID: sessionID,
+            socket: socket
+        )
     }
 }
 
@@ -2608,7 +2565,7 @@ public struct MeshDocument: ParsableCommand {
 
         try CLIExitCode.run {
             let url = URL(fileURLWithPath: file)
-            let agentClient = makeAgentClient(
+            let agentClient = try makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket
@@ -2643,18 +2600,12 @@ public struct MeshDocument: ParsableCommand {
         mode: CLIEditMode,
         sessionID: UUID?,
         socket: String?
-    ) -> AgentClient? {
-        let resolvedSocket: String?
-        if let socket {
-            resolvedSocket = socket
-        } else if mode == .live || sessionID != nil {
-            resolvedSocket = AgentSocketPath.defaultPath
-        } else {
-            resolvedSocket = nil
-        }
-        return resolvedSocket.map { socket in
-                AgentClient(socketPath: AgentSocketPath(socket))
-        }
+    ) throws -> AgentClient? {
+        try CLIAgentClientFactory.makeAgentClient(
+            mode: mode,
+            sessionID: sessionID,
+            socket: socket
+        )
     }
 }
 
@@ -2692,7 +2643,7 @@ public struct SaveDocument: ParsableCommand {
 
         try CLIExitCode.run {
             let url = URL(fileURLWithPath: file)
-            let agentClient = makeAgentClient(
+            let agentClient = try makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket
@@ -2728,18 +2679,12 @@ public struct SaveDocument: ParsableCommand {
         mode: CLIEditMode,
         sessionID: UUID?,
         socket: String?
-    ) -> AgentClient? {
-        let resolvedSocket: String?
-        if let socket {
-            resolvedSocket = socket
-        } else if mode == .live || sessionID != nil {
-            resolvedSocket = AgentSocketPath.defaultPath
-        } else {
-            resolvedSocket = nil
-        }
-        return resolvedSocket.map { socket in
-                AgentClient(socketPath: AgentSocketPath(socket))
-        }
+    ) throws -> AgentClient? {
+        try CLIAgentClientFactory.makeAgentClient(
+            mode: mode,
+            sessionID: sessionID,
+            socket: socket
+        )
     }
 }
 
@@ -2790,7 +2735,7 @@ public struct ListParameterCommand: ParsableCommand {
 
         try CLIExitCode.run {
             let url = URL(fileURLWithPath: file)
-            let agentClient = makeAgentClient(
+            let agentClient = try makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket
@@ -2825,18 +2770,12 @@ public struct ListParameterCommand: ParsableCommand {
         mode: CLIEditMode,
         sessionID: UUID?,
         socket: String?
-    ) -> AgentClient? {
-        let resolvedSocket: String?
-        if let socket {
-            resolvedSocket = socket
-        } else if mode == .live || sessionID != nil {
-            resolvedSocket = AgentSocketPath.defaultPath
-        } else {
-            resolvedSocket = nil
-        }
-        return resolvedSocket.map { socket in
-                AgentClient(socketPath: AgentSocketPath(socket))
-        }
+    ) throws -> AgentClient? {
+        try CLIAgentClientFactory.makeAgentClient(
+            mode: mode,
+            sessionID: sessionID,
+            socket: socket
+        )
     }
 }
 
@@ -3082,18 +3021,12 @@ public struct SetParameterCommand: ParsableCommand {
         mode: CLIEditMode,
         sessionID: UUID?,
         socket: String?
-    ) -> AgentClient? {
-        let resolvedSocket: String?
-        if let socket {
-            resolvedSocket = socket
-        } else if mode == .live || sessionID != nil {
-            resolvedSocket = AgentSocketPath.defaultPath
-        } else {
-            resolvedSocket = nil
-        }
-        return resolvedSocket.map { socket in
-                AgentClient(socketPath: AgentSocketPath(socket))
-        }
+    ) throws -> AgentClient? {
+        try CLIAgentClientFactory.makeAgentClient(
+            mode: mode,
+            sessionID: sessionID,
+            socket: socket
+        )
     }
 }
 
@@ -3178,18 +3111,12 @@ public struct DeleteParameterCommand: ParsableCommand {
         mode: CLIEditMode,
         sessionID: UUID?,
         socket: String?
-    ) -> AgentClient? {
-        let resolvedSocket: String?
-        if let socket {
-            resolvedSocket = socket
-        } else if mode == .live || sessionID != nil {
-            resolvedSocket = AgentSocketPath.defaultPath
-        } else {
-            resolvedSocket = nil
-        }
-        return resolvedSocket.map { socket in
-                AgentClient(socketPath: AgentSocketPath(socket))
-        }
+    ) throws -> AgentClient? {
+        try CLIAgentClientFactory.makeAgentClient(
+            mode: mode,
+            sessionID: sessionID,
+            socket: socket
+        )
     }
 }
 
@@ -3278,18 +3205,12 @@ public struct RenameParameterCommand: ParsableCommand {
         mode: CLIEditMode,
         sessionID: UUID?,
         socket: String?
-    ) -> AgentClient? {
-        let resolvedSocket: String?
-        if let socket {
-            resolvedSocket = socket
-        } else if mode == .live || sessionID != nil {
-            resolvedSocket = AgentSocketPath.defaultPath
-        } else {
-            resolvedSocket = nil
-        }
-        return resolvedSocket.map { socket in
-                AgentClient(socketPath: AgentSocketPath(socket))
-        }
+    ) throws -> AgentClient? {
+        try CLIAgentClientFactory.makeAgentClient(
+            mode: mode,
+            sessionID: sessionID,
+            socket: socket
+        )
     }
 }
 
@@ -3374,18 +3295,12 @@ public struct RenameDocument: ParsableCommand {
         mode: CLIEditMode,
         sessionID: UUID?,
         socket: String?
-    ) -> AgentClient? {
-        let resolvedSocket: String?
-        if let socket {
-            resolvedSocket = socket
-        } else if mode == .live || sessionID != nil {
-            resolvedSocket = AgentSocketPath.defaultPath
-        } else {
-            resolvedSocket = nil
-        }
-        return resolvedSocket.map { socket in
-                AgentClient(socketPath: AgentSocketPath(socket))
-        }
+    ) throws -> AgentClient? {
+        try CLIAgentClientFactory.makeAgentClient(
+            mode: mode,
+            sessionID: sessionID,
+            socket: socket
+        )
     }
 }
 
@@ -3404,8 +3319,8 @@ public struct RenameLiveDocument: ParsableCommand {
     @Option(help: "Expected document generation.")
     public var expectedGeneration: UInt64?
 
-    @Option(help: "Path to the Rupa agent socket.")
-    public var socket: String = AgentSocketPath.defaultPath
+    @Option(help: "Optional compatibility override for the Rupa agent endpoint.")
+    public var socket: String?
 
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
@@ -3423,7 +3338,9 @@ public struct RenameLiveDocument: ParsableCommand {
                 name: name,
                 mode: .live,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                client: AgentClient(socketPath: AgentSocketPath(socket))
+                client: try CLIAgentClientFactory.makeRequiredAgentClient(
+                    socket: socket
+                )
             )
             try CLIOutput.write(response: response, asJSON: json)
         }
@@ -3436,8 +3353,8 @@ public struct Sessions: ParsableCommand {
         abstract: "List open Rupa document sessions."
     )
 
-    @Option(help: "Path to the Rupa agent socket.")
-    public var socket: String = AgentSocketPath.defaultPath
+    @Option(help: "Optional compatibility override for the Rupa agent endpoint.")
+    public var socket: String?
 
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
@@ -3447,7 +3364,9 @@ public struct Sessions: ParsableCommand {
     public func run() throws {
         try CLIExitCode.run {
             let response = try CLIService().sessions(
-                client: AgentClient(socketPath: AgentSocketPath(socket))
+                client: try CLIAgentClientFactory.makeRequiredAgentClient(
+                    socket: socket
+                )
             )
             try CLIOutput.write(response: response, asJSON: json)
         }

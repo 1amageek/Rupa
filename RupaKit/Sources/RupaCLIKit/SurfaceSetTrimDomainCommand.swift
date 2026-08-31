@@ -82,7 +82,7 @@ public struct SurfaceSetTrimDomainCommand: ParsableCommand {
 
         try CLIExitCode.run {
             let writePolicy = try writeDestination.writePolicy(file: file, mode: mode, sessionID: id)
-            let agentClient = CLIAgentClientFactory.makeAgentClient(
+            let agentClient = try CLIAgentClientFactory.makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket

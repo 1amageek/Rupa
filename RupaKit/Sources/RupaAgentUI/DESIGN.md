@@ -7,9 +7,9 @@ transport-handler injection. It is a child of the
 [RupaKit package design](../../DESIGN.md) and has no child designs.
 
 The host is a transport/application composition boundary, not a project or
-package authority. ACCESS-O.4 fixes the target composition described here;
-ACCESS-O.6 will replace the current private-controller and scene-phase wiring
-with the injected process-lifetime composition.
+package authority. ACCESS-O established the injected process-lifetime
+composition, and ACCESS-C binds its required endpoint and authenticated
+listener without reintroducing scene-phase or private-controller ownership.
 
 ## Responsibilities and Boundaries
 
@@ -18,6 +18,8 @@ The module owns:
 - `AgentHost` availability state and listener start/stop lifecycle;
 - injection of one transport-neutral `AgentRequestHandling` implementation
   into the socket listener;
+- injection of the product-composed `UnixSocketEndpoint` and
+  `AgentPeerAuthorizing` into that listener without publishing the path;
 - bounded transport startup/shutdown and typed listener failures.
 
 It does not own:
@@ -103,14 +105,17 @@ silently redirected.
    coordinates from `ProjectWorkspacePersistencePublicationError.state`, and
    `mustNotRetry`, whether or not best-effort view recovery succeeds. It never
    reports an ambiguous ordinary failure that invites save replay.
-6. `AgentHost` starts once for the process lifetime after registration and
+6. `AgentHost` requires an endpoint and peer authorizer from product
+   composition. Its observable state is stopped, starting, running, or a typed
+   startup failure; running state never exposes a socket path.
+7. `AgentHost` starts once for the process lifetime after registration and
    remains available across active, inactive, and background scene phases. It
    stops only during process shutdown or an explicit application teardown path;
    scene visibility is not host ownership.
-7. Listener, router, controller, workspace, and coordinator are MainActor
+8. Listener, router, controller, workspace, and coordinator are MainActor
    composed where their concrete contracts require it. Transport I/O remains
    bounded and asynchronous, and no socket connection owns document lifetime.
-8. Host failures are typed and observable. They do not fall back to a closed
+9. Host failures are typed and observable. They do not fall back to a closed
    package, a second process, a second registry, or direct file mutation.
 
 ## Runtime Flows
@@ -171,6 +176,8 @@ transition alone performs this sequence.
 ## State, Ownership, and Lifecycle
 
 `AgentHost` owns listener state for the lifetime of the application process.
+It retains no endpoint path in observable state; the injected endpoint exists
+only in the listener composition.
 The application owns the host instance, controller/router composition, current
 URL, workspace, and coordinator. `ProjectAgentCommandController` owns registry
 entries and operation leases; `ProjectController` owns source/publication state;
@@ -222,5 +229,5 @@ Changes to `AgentHost`, `AgentRequestHandling`, registry leases, coordinator
 save ports, or package replacement sequencing require rechecking the [Rupa App
 design](../../../Rupa/Rupa/Rupa/DESIGN.md), [RupaAgentRuntime
 design](../RupaAgentRuntime/DESIGN.md), and [RupaProjectPackage
-design](../RupaProjectPackage/DESIGN.md). O.4 is design-only; O.6 owns the
-source composition and O.7 owns the integrated signed-App evidence.
+design](../RupaProjectPackage/DESIGN.md). ACCESS-IV owns the cumulative
+signed-App and CLI evidence for this completed source composition.

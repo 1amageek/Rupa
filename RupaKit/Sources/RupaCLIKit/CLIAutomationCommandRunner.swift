@@ -69,7 +69,7 @@ enum CLIAutomationCommandRunner {
             dryRun: document.dryRun,
             writePolicy: try document.writePolicy(sessionID: sessionID),
             forceFileEdit: document.forceFileEdit,
-            client: document.agentClient(sessionID: sessionID)
+            client: try document.agentClient(sessionID: sessionID)
         )
     }
 

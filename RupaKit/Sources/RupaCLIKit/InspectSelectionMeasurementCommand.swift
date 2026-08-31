@@ -32,7 +32,7 @@ public struct InspectSelectionMeasurementCommand: ParsableCommand {
                 query: measurementQuery,
                 mode: options.mode,
                 expectedGeneration: options.generation(),
-                client: options.agentClient(sessionID: id)
+                client: try options.agentClient(sessionID: id)
             )
             try CLIOutput.write(response: response, asJSON: options.json)
         }

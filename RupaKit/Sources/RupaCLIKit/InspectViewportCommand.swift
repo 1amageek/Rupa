@@ -25,7 +25,7 @@ public struct InspectViewportCommand: ParsableCommand {
                 message: "Viewport inspection requires a live session ID."
             )
         }
-        guard let client = options.agentClient(sessionID: sessionID) else {
+        guard let client = try options.agentClient(sessionID: sessionID) else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Viewport inspection requires a live Agent client."

@@ -52,7 +52,7 @@ public struct PlaneCreateCommand: ParsableCommand {
                 dryRun: document.dryRun,
                 writePolicy: try document.writePolicy(sessionID: id),
                 forceFileEdit: document.forceFileEdit,
-                client: document.agentClient(sessionID: id)
+                client: try document.agentClient(sessionID: id)
             )
             try CLIOutput.write(response: response, asJSON: document.json)
         }
@@ -118,7 +118,7 @@ public struct PlaneCreateViewCommand: ParsableCommand {
                 dryRun: document.dryRun,
                 writePolicy: try document.writePolicy(sessionID: id),
                 forceFileEdit: document.forceFileEdit,
-                client: document.agentClient(sessionID: id)
+                client: try document.agentClient(sessionID: id)
             )
             try CLIOutput.write(response: response, asJSON: document.json)
         }
@@ -237,7 +237,7 @@ public struct PlaneSetActiveCommand: ParsableCommand {
                 dryRun: document.dryRun,
                 writePolicy: try document.writePolicy(sessionID: sessionID),
                 forceFileEdit: document.forceFileEdit,
-                client: document.agentClient(sessionID: sessionID)
+                client: try document.agentClient(sessionID: sessionID)
             )
             try CLIOutput.write(response: response, asJSON: document.json)
         }
@@ -275,7 +275,7 @@ public struct PlaneRenameCommand: ParsableCommand {
                 dryRun: document.dryRun,
                 writePolicy: try document.writePolicy(sessionID: sessionID),
                 forceFileEdit: document.forceFileEdit,
-                client: document.agentClient(sessionID: sessionID)
+                client: try document.agentClient(sessionID: sessionID)
             )
             try CLIOutput.write(response: response, asJSON: document.json)
         }

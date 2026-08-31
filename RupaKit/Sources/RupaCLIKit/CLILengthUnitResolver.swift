@@ -16,7 +16,7 @@ enum CLILengthUnitResolver {
             mode: document.mode,
             expectedGeneration: document.generation(),
             forceFileEdit: document.forceFileEdit || writePolicy.requiresFileMode,
-            client: document.agentClient(sessionID: sessionID)
+            client: try document.agentClient(sessionID: sessionID)
         )
     }
 

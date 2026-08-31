@@ -30,7 +30,7 @@ enum CLILegacyMutationContextResolver {
             ),
             writePolicy: writePolicy,
             forceFileEdit: forceFileEdit || writePolicy.requiresFileMode,
-            agentClient: CLIAgentClientFactory.makeAgentClient(
+            agentClient: try CLIAgentClientFactory.makeAgentClient(
                 mode: mode,
                 sessionID: sessionID,
                 socket: agentSocket

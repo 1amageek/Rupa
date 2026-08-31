@@ -2,6 +2,7 @@ import Foundation
 import RupaAgentRuntime
 import RupaKit
 import RupaProjectAccess
+import RupaProjectAccessPlatform
 
 /// Composes closed `.rupa` access through a temporary ProjectWorkspace.
 @MainActor

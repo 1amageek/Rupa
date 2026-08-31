@@ -4,6 +4,7 @@ import RupaAgentRuntime
 import RupaCoreTypes
 import RupaKit
 import RupaProjectAccess
+import RupaProjectAccessPlatform
 
 @MainActor
 private final class ClosedProjectAccessOperationSequencer {

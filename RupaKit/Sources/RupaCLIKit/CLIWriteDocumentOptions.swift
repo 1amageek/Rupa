@@ -60,8 +60,8 @@ public struct CLIWriteDocumentOptions: ParsableArguments {
         expectedWorkspaceRevision.map(WorkspaceRevision.init)
     }
 
-    public func agentClient(sessionID: UUID?) -> AgentClient? {
-        CLIAgentClientFactory.makeAgentClient(
+    public func agentClient(sessionID: UUID?) throws -> AgentClient? {
+        try CLIAgentClientFactory.makeAgentClient(
             mode: mode,
             sessionID: sessionID,
             socket: agentSocket

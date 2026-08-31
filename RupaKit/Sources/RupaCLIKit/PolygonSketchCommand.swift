@@ -76,7 +76,7 @@ public struct PolygonSketchCommand: ParsableCommand {
                 dryRun: document.dryRun,
                 writePolicy: try document.writePolicy(sessionID: sessionID),
                 forceFileEdit: document.forceFileEdit,
-                client: document.agentClient(sessionID: sessionID)
+                client: try document.agentClient(sessionID: sessionID)
             )
             try CLIOutput.write(response: response, asJSON: document.json)
         }

@@ -43,7 +43,7 @@ public struct InspectSnapCommand: ParsableCommand {
                 options: snapOptions,
                 mode: document.mode,
                 expectedGeneration: document.generation(),
-                client: document.agentClient(sessionID: id)
+                client: try document.agentClient(sessionID: id)
             )
             try CLIOutput.write(response: response, asJSON: document.json)
         }

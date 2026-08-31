@@ -16,14 +16,15 @@ struct AgentSocketListenerTests {
             removeTemporaryDirectory(temporaryDirectory)
         }
         let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
-        let socketPath = AgentSocketPath(socketURL.path)
+        let endpoint = try UnixSocketEndpoint(fileURL: socketURL)
         let bridge = MainActorAgentBridge()
         let sessionID = UUID()
         let session = EditorSession()
         bridge.register(session: session, id: sessionID)
         let listener = AgentSocketListener(
             handler: bridge,
-            socketPath: socketPath
+            endpoint: endpoint,
+            peerAuthorizer: sameUserPeerAuthorizer()
         )
 
         try await listener.start()
@@ -33,7 +34,7 @@ struct AgentSocketListenerTests {
                 command: .renameDocument(name: "Socket Main Actor"),
                 expectedGeneration: DocumentGeneration(0)
             )
-            let response = try await sendThroughClient(request, socketPath: socketPath)
+            let response = try await sendThroughClient(request, endpoint: endpoint)
 
             guard case .command(let result) = response else {
                 #expect(Bool(false))
@@ -209,22 +210,27 @@ struct AgentSocketListenerTests {
         let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
         let listener = AgentSocketListener(
             handler: AgentCommandHandler(),
-            socketPath: AgentSocketPath(socketURL.path)
+            endpoint: try UnixSocketEndpoint(fileURL: socketURL),
+            peerAuthorizer: sameUserPeerAuthorizer()
         )
-        let client = AgentClient(socketPath: AgentSocketPath(socketURL.path))
+        let client = AgentClient(
+            endpoint: try UnixSocketEndpoint(fileURL: socketURL),
+            requestTimeout: .milliseconds(150)
+        )
 
         try await listener.start()
         #expect(FileManager.default.fileExists(atPath: socketURL.path))
         await listener.stop()
         #expect(!FileManager.default.fileExists(atPath: socketURL.path))
 
-        var caught: EditorError?
+        var caught: AgentTransportFailure?
         do {
             _ = try await client.send(.status)
-        } catch let error as EditorError {
+        } catch let error as AgentTransportFailure {
             caught = error
         }
-        #expect(caught?.code == .agentConnectionFailed)
+        #expect(caught?.disposition == .notDispatched)
+        #expect(caught?.cause == .deadlineExceeded)
     }
 
     @Test(.timeLimit(.minutes(1))) func replacesStaleSocketFile() async throws {
@@ -289,9 +295,12 @@ struct AgentSocketListenerTests {
         let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
         let listener = AgentSocketListener(
             handler: AgentCommandHandler(),
-            socketPath: AgentSocketPath(socketURL.path)
+            endpoint: try UnixSocketEndpoint(fileURL: socketURL),
+            peerAuthorizer: sameUserPeerAuthorizer()
         )
-        let client = AgentClient(socketPath: AgentSocketPath(socketURL.path))
+        let client = AgentClient(
+            endpoint: try UnixSocketEndpoint(fileURL: socketURL)
+        )
 
         try await listener.start()
         let halfOpenDescriptor = try connectedDescriptor(to: socketURL)
@@ -322,7 +331,8 @@ struct AgentSocketListenerTests {
         let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
         let listener = AgentSocketListener(
             handler: AgentCommandHandler(),
-            socketPath: AgentSocketPath(socketURL.path)
+            endpoint: try UnixSocketEndpoint(fileURL: socketURL),
+            peerAuthorizer: sameUserPeerAuthorizer()
         )
 
         try await listener.start()
@@ -369,7 +379,10 @@ struct AgentSocketListenerTests {
                 ]),
                 to: descriptor
             )
-            let failureData = try AgentSocketIO.readFrame(from: descriptor)
+            let failureData = try AgentSocketIO.readFrame(
+                from: descriptor,
+                deadline: AgentSocketDeadline.request(timeout: .seconds(5))
+            )
             let failure = try AgentMessageCodec().decodeResponse(from: failureData)
             guard case .failure(let error) = failure else {
                 Issue.record("Expected an oversized frame failure.")
@@ -390,12 +403,13 @@ struct AgentSocketListenerTests {
         socketURL: URL,
         operation: (AgentSocketListener, AgentClient) async throws -> T
     ) async throws -> T {
-        let socketPath = AgentSocketPath(socketURL.path)
+        let endpoint = try UnixSocketEndpoint(fileURL: socketURL)
         let listener = AgentSocketListener(
             handler: AgentCommandHandler(controller: controller),
-            socketPath: socketPath
+            endpoint: endpoint,
+            peerAuthorizer: sameUserPeerAuthorizer()
         )
-        let client = AgentClient(socketPath: socketPath)
+        let client = AgentClient(endpoint: endpoint)
 
         try await listener.start()
         do {
@@ -414,8 +428,16 @@ struct AgentSocketListenerTests {
             Darwin.close(descriptor)
         }
 
-        try AgentSocketIO.writeFrame(data, to: descriptor)
-        return try AgentSocketIO.readFrame(from: descriptor)
+        let deadline = try AgentSocketDeadline.request(timeout: .seconds(5))
+        try AgentSocketIO.writeFrame(
+            data,
+            to: descriptor,
+            deadline: deadline
+        )
+        return try AgentSocketIO.readFrame(
+            from: descriptor,
+            deadline: deadline
+        )
     }
 
     private func connectedDescriptor(to socketURL: URL) throws -> Int32 {
@@ -486,9 +508,9 @@ struct AgentSocketListenerTests {
 
     private func sendThroughClient(
         _ request: AgentRequest,
-        socketPath: AgentSocketPath
+        endpoint: UnixSocketEndpoint
     ) async throws -> AgentResponse {
-        let client = AgentClient(socketPath: socketPath)
+        let client = AgentClient(endpoint: endpoint)
         return try await client.send(request)
     }
 
@@ -524,4 +546,8 @@ struct AgentSocketListenerTests {
             Issue.record("Failed to remove temporary directory: \(error)")
         }
     }
+}
+
+private func sameUserPeerAuthorizer() -> SameUserAgentPeerAuthorizer {
+    SameUserAgentPeerAuthorizer(expectedUserID: getuid())
 }

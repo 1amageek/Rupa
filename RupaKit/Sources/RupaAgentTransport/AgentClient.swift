@@ -3,92 +3,163 @@ import Foundation
 import RupaAgentProtocol
 import RupaCoreTypes
 
-public final class AgentClient: AgentClientProtocol {
+public final class AgentClient: AgentClientProtocol, Sendable {
     private struct ConnectionEstablishmentError: Error, Sendable {
         let editorError: EditorError
     }
 
-    private static let asynchronousConnectionAttemptLimit = 100
     private static let asynchronousConnectionRetryDelay = Duration.milliseconds(20)
 
-    public let socketPath: AgentSocketPath
+    public let endpoint: UnixSocketEndpoint
+    public let requestTimeout: Duration
 
-    public init(socketPath: AgentSocketPath = AgentSocketPath()) {
-        self.socketPath = socketPath
+    public init(
+        endpoint: UnixSocketEndpoint,
+        requestTimeout: Duration = .seconds(30)
+    ) {
+        self.endpoint = endpoint
+        self.requestTimeout = requestTimeout
     }
 
     public func send(_ request: AgentRequest) throws -> AgentResponse {
         do {
+            let deadline = try AgentSocketDeadline.request(timeout: requestTimeout)
             return try Self.sendOnce(
                 request,
-                socketPath: socketPath,
+                endpoint: endpoint,
+                deadline: deadline,
                 codec: AgentMessageCodec()
             )
+        } catch let failure as AgentTransportFailure {
+            throw failure
         } catch let error as ConnectionEstablishmentError {
-            throw error.editorError
+            throw Self.failure(
+                error.editorError,
+                disposition: .notDispatched
+            )
+        } catch {
+            throw Self.failure(error, disposition: .notDispatched)
         }
     }
 
     public func send(_ request: AgentRequest) async throws -> AgentResponse {
-        let socketPath = socketPath
-        var lastError: EditorError?
-        for attempt in 0..<Self.asynchronousConnectionAttemptLimit {
-            do {
-                return try await Self.sendOnceInBackground(
-                    request,
-                    socketPath: socketPath
-                )
-            } catch let error as ConnectionEstablishmentError {
-                lastError = error.editorError
-                guard attempt + 1 < Self.asynchronousConnectionAttemptLimit else {
-                    break
-                }
-                try await Task.sleep(for: Self.asynchronousConnectionRetryDelay)
-            }
+        let deadline: AgentSocketDeadline
+        do {
+            deadline = try AgentSocketDeadline.request(timeout: requestTimeout)
+        } catch {
+            throw Self.failure(error, disposition: .notDispatched)
         }
-
-        throw lastError ?? EditorError(
-            code: .agentConnectionFailed,
-            message: "Failed to connect to Rupa agent at \(socketPath.value)."
-        )
+        return try await send(request, deadline: deadline)
     }
 
-    private static func sendOnceInBackground(
+    public func send(
         _ request: AgentRequest,
-        socketPath: AgentSocketPath
+        deadline: ContinuousClock.Instant
     ) async throws -> AgentResponse {
-        try await Task.detached {
-            try sendOnce(
-                request,
-                socketPath: socketPath,
-                codec: AgentMessageCodec()
-            )
-        }.value
+        let transportDeadline: AgentSocketDeadline
+        do {
+            transportDeadline = try AgentSocketDeadline.absolute(deadline)
+        } catch {
+            throw Self.failure(error, disposition: .notDispatched)
+        }
+        return try await send(request, deadline: transportDeadline)
+    }
+
+    private func send(
+        _ request: AgentRequest,
+        deadline: AgentSocketDeadline
+    ) async throws -> AgentResponse {
+        let endpoint = endpoint
+        let transportTask = Task.detached {
+            do {
+                return try await Self.sendWithConnectionRetries(
+                    request,
+                    endpoint: endpoint,
+                    deadline: deadline
+                )
+            } catch let failure as AgentTransportFailure {
+                throw failure
+            } catch {
+                throw Self.failure(error, disposition: .notDispatched)
+            }
+        }
+        return try await withTaskCancellationHandler {
+            try await transportTask.value
+        } onCancel: {
+            transportTask.cancel()
+        }
+    }
+
+    private static func sendWithConnectionRetries(
+        _ request: AgentRequest,
+        endpoint: UnixSocketEndpoint,
+        deadline: AgentSocketDeadline
+    ) async throws -> AgentResponse {
+        while true {
+            try Task.checkCancellation()
+            do {
+                return try sendOnce(
+                    request,
+                    endpoint: endpoint,
+                    deadline: deadline,
+                    codec: AgentMessageCodec()
+                )
+            } catch is ConnectionEstablishmentError {
+                let remainingMilliseconds = try deadline.remainingMilliseconds()
+                let retryDelay = min(
+                    asynchronousConnectionRetryDelay,
+                    .milliseconds(Int64(remainingMilliseconds))
+                )
+                try await Task.sleep(for: retryDelay)
+            }
+        }
     }
 
     private static func sendOnce(
         _ request: AgentRequest,
-        socketPath: AgentSocketPath,
+        endpoint: UnixSocketEndpoint,
+        deadline: AgentSocketDeadline,
         codec: AgentMessageCodec
     ) throws -> AgentResponse {
-        let descriptor = try makeConnectedSocket(socketPath: socketPath)
+        let descriptor = try makeConnectedSocket(
+            endpoint: endpoint,
+            deadline: deadline
+        )
         defer {
             Darwin.close(descriptor)
         }
 
-        let requestID = UUID().uuidString
-        let requestData = try codec.encode(request, id: requestID)
-        try AgentSocketIO.writeFrame(requestData, to: descriptor)
-
-        let responseData = try AgentSocketIO.readFrame(from: descriptor)
-        return try codec.decodeResponse(
-            from: responseData,
-            expectedID: requestID,
-            expectedMethod: request.methodName
+        let requestID = UUID()
+        let requestIDString = requestID.uuidString
+        let requestData = try codec.encode(request, id: requestIDString)
+        try AgentSocketIO.writeFrame(
+            requestData,
+            to: descriptor,
+            deadline: deadline
         )
+
+        do {
+            let responseData = try AgentSocketIO.readFrame(
+                from: descriptor,
+                deadline: deadline
+            )
+            return try codec.decodeResponse(
+                from: responseData,
+                expectedID: requestIDString,
+                expectedMethod: request.methodName
+            )
+        } catch {
+            throw failure(
+                error,
+                disposition: .outcomeUnknown(requestID: requestID)
+            )
+        }
     }
 
-    private static func makeConnectedSocket(socketPath: AgentSocketPath) throws -> Int32 {
+    private static func makeConnectedSocket(
+        endpoint: UnixSocketEndpoint,
+        deadline: AgentSocketDeadline
+    ) throws -> Int32 {
         let descriptor = Darwin.socket(AF_UNIX, SOCK_STREAM, 0)
         guard descriptor >= 0 else {
             throw socketError(
@@ -99,9 +170,13 @@ public final class AgentClient: AgentClientProtocol {
 
         do {
             try AgentSocketIO.configure(descriptor)
-            try connect(descriptor, socketPath: socketPath)
+            try connect(
+                descriptor,
+                endpoint: endpoint,
+                deadline: deadline
+            )
             return descriptor
-        } catch let error as EditorError where error.code == .agentConnectionFailed {
+        } catch let error as EditorError {
             Darwin.close(descriptor)
             throw ConnectionEstablishmentError(editorError: error)
         } catch {
@@ -112,13 +187,42 @@ public final class AgentClient: AgentClientProtocol {
 
     private static func connect(
         _ descriptor: Int32,
-        socketPath: AgentSocketPath
+        endpoint: UnixSocketEndpoint,
+        deadline: AgentSocketDeadline
     ) throws {
-        try AgentSocketAddress.withUnixAddress(path: socketPath.value) { address, length in
-            guard Darwin.connect(descriptor, address, length) == 0 else {
+        try AgentSocketAddress.withUnixAddress(path: endpoint.path) { address, length in
+            let result = Darwin.connect(descriptor, address, length)
+            if result == 0 || errno == EISCONN {
+                return
+            }
+            guard errno == EINPROGRESS || errno == EALREADY || errno == EAGAIN else {
                 throw socketError(
                     code: .agentConnectionFailed,
-                    message: "Failed to connect to Rupa agent at \(socketPath.value)."
+                    message: "Failed to connect to the injected Rupa agent endpoint."
+                )
+            }
+
+            try AgentSocketIO.wait(
+                for: Int16(POLLOUT),
+                on: descriptor,
+                deadline: deadline
+            )
+            var connectionError: Int32 = 0
+            var connectionErrorLength = socklen_t(
+                MemoryLayout.size(ofValue: connectionError)
+            )
+            guard getsockopt(
+                descriptor,
+                SOL_SOCKET,
+                SO_ERROR,
+                &connectionError,
+                &connectionErrorLength
+            ) == 0,
+            connectionError == 0 else {
+                let resolvedError = connectionError == 0 ? errno : connectionError
+                throw EditorError(
+                    code: .agentConnectionFailed,
+                    message: "Failed to connect to the injected Rupa agent endpoint. errno=\(resolvedError)"
                 )
             }
         }
@@ -131,6 +235,31 @@ public final class AgentClient: AgentClientProtocol {
         EditorError(
             code: code,
             message: "\(message) errno=\(errno)"
+        )
+    }
+
+    private static func failure(
+        _ error: Error,
+        disposition: AgentTransportFailure.DispatchDisposition
+    ) -> AgentTransportFailure {
+        let cause: AgentTransportFailure.Cause
+        if error is CancellationError {
+            cause = .cancelled
+        } else if error is AgentSocketDeadlineError {
+            cause = .deadlineExceeded
+        } else if let editorError = error as? EditorError {
+            cause = .transport(editorError)
+        } else {
+            cause = .transport(
+                EditorError(
+                    code: .agentConnectionFailed,
+                    message: error.localizedDescription
+                )
+            )
+        }
+        return AgentTransportFailure(
+            disposition: disposition,
+            cause: cause
         )
     }
 }

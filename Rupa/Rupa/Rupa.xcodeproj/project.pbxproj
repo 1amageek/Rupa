@@ -19,6 +19,9 @@
 		A7A6D674A40B4A3CA7F536C4 /* RupaAgentRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = 4397082FC8FF4D0C816A6D80 /* RupaAgentRuntime */; };
 		A7A6D675A40B4A3CA7F536C4 /* RupaAgentProtocol in Frameworks */ = {isa = PBXBuildFile; productRef = 4397082EC8FF4D0C816A6D80 /* RupaAgentProtocol */; };
 		A7A6D676A40B4A3CA7F536C4 /* RupaAgentRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = 4397082FC8FF4D0C816A6D80 /* RupaAgentRuntime */; };
+		A7A6D677A40B4A3CA7F536C4 /* RupaProjectAccessPlatform in Frameworks */ = {isa = PBXBuildFile; productRef = 43970830C8FF4D0C816A6D80 /* RupaProjectAccessPlatform */; };
+		A7A6D678A40B4A3CA7F536C4 /* RupaProjectAccessPlatform in Frameworks */ = {isa = PBXBuildFile; productRef = 43970830C8FF4D0C816A6D80 /* RupaProjectAccessPlatform */; };
+		A7A6D679A40B4A3CA7F536C4 /* RupaAgentTransport in Frameworks */ = {isa = PBXBuildFile; productRef = 43970831C8FF4D0C816A6D80 /* RupaAgentTransport */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -80,6 +83,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A7A6D677A40B4A3CA7F536C4 /* RupaProjectAccessPlatform in Frameworks */,
+				A7A6D679A40B4A3CA7F536C4 /* RupaAgentTransport in Frameworks */,
 				A7A6D670A40B4A3CA7F536C4 /* RupaKit in Frameworks */,
 				A7A6D66DA40B4A3CA7F536C4 /* RupaCore in Frameworks */,
 				A7A6D673A40B4A3CA7F536C4 /* RupaAgentProtocol in Frameworks */,
@@ -95,6 +100,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A7A6D678A40B4A3CA7F536C4 /* RupaProjectAccessPlatform in Frameworks */,
 				A7A6D671A40B4A3CA7F536C4 /* RupaKit in Frameworks */,
 				A7A6D672A40B4A3CA7F536C4 /* RupaCore in Frameworks */,
 				A7A6D675A40B4A3CA7F536C4 /* RupaAgentProtocol in Frameworks */,
@@ -152,6 +158,8 @@
 			);
 			name = Rupa;
 			packageProductDependencies = (
+				43970830C8FF4D0C816A6D80 /* RupaProjectAccessPlatform */,
+				43970831C8FF4D0C816A6D80 /* RupaAgentTransport */,
 				4397082DC8FF4D0C816A6D80 /* RupaKit */,
 				4397082AC8FF4D0C816A6D80 /* RupaCore */,
 				4397082EC8FF4D0C816A6D80 /* RupaAgentProtocol */,
@@ -183,6 +191,7 @@
 			);
 			name = RupaTests;
 			packageProductDependencies = (
+				43970830C8FF4D0C816A6D80 /* RupaProjectAccessPlatform */,
 				4397082DC8FF4D0C816A6D80 /* RupaKit */,
 				4397082AC8FF4D0C816A6D80 /* RupaCore */,
 				4397082EC8FF4D0C816A6D80 /* RupaAgentProtocol */,
@@ -680,6 +689,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 04A0884D275749F9B7818D23 /* XCLocalSwiftPackageReference "../../RupaKit" */;
 			productName = RupaAgentRuntime;
+		};
+		43970830C8FF4D0C816A6D80 /* RupaProjectAccessPlatform */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 04A0884D275749F9B7818D23 /* XCLocalSwiftPackageReference "../../RupaKit" */;
+			productName = RupaProjectAccessPlatform;
+		};
+		43970831C8FF4D0C816A6D80 /* RupaAgentTransport */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 04A0884D275749F9B7818D23 /* XCLocalSwiftPackageReference "../../RupaKit" */;
+			productName = RupaAgentTransport;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

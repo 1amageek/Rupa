@@ -5,11 +5,14 @@
 //  Created by 1amageek on 2026/06/04.
 //
 
+import Darwin
 import Foundation
 import SwiftUI
 import RupaAgentRuntime
+import RupaAgentTransport
 import RupaAgentUI
 import RupaKit
+import RupaProjectAccessPlatform
 import RupaUI
 
 @main
@@ -50,18 +53,31 @@ struct ApplicationRoot: App {
                 )
             )
             let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
+            let projectFileLeaseStore = ProjectFileAuthorityLeaseStore(
+                rootDirectory: try ApplicationProductConfiguration
+                    .projectFileAuthorityDirectory()
+            )
             let projectCoordinator = ApplicationProjectCoordinator(
                 workspace: workspace,
                 agentRegistrar: agentController,
                 operationSequencer: projectOperationSequencer,
+                projectFileLeaseStore: projectFileLeaseStore,
                 initialURL: Self.initialProjectURL()
             )
             let requestRouter = ApplicationAgentRequestRouter(
                 projectHandler: agentController,
                 lifecycle: projectCoordinator
             )
+            let agentEndpoint = try RupaAgentEndpointComposition.productEndpoint()
+            let agentPeerAuthorizer = SameUserAgentPeerAuthorizer(
+                expectedUserID: UInt32(getuid())
+            )
             self._agentHost = State(
-                initialValue: AgentHost(handler: requestRouter)
+                initialValue: AgentHost(
+                    handler: requestRouter,
+                    endpoint: agentEndpoint,
+                    peerAuthorizer: agentPeerAuthorizer
+                )
             )
             self._projectCoordinator = State(initialValue: projectCoordinator)
         } catch {

@@ -1,4 +1,5 @@
 import ArgumentParser
+import Darwin
 import Foundation
 import Testing
 import RupaAgentProtocol
@@ -358,7 +359,8 @@ func cliExecutableAutoParameterFormulaAndListUsesLiveSessionThroughSocketAsJSON(
     server.register(session: session, path: documentURL)
     let listener = AgentSocketListener(
         handler: AgentCommandHandler(controller: server),
-        socketPath: AgentSocketPath(socketURL.path)
+        endpoint: try UnixSocketEndpoint(fileURL: socketURL),
+        peerAuthorizer: SameUserAgentPeerAuthorizer(expectedUserID: getuid())
     )
 
     try await listener.start()
@@ -1486,7 +1488,8 @@ func cliExecutableListsAndAttachesOpenSessionThroughSocketAsJSON() async throws 
     )
     let listener = AgentSocketListener(
         handler: AgentCommandHandler(controller: server),
-        socketPath: AgentSocketPath(socketURL.path)
+        endpoint: try UnixSocketEndpoint(fileURL: socketURL),
+        peerAuthorizer: SameUserAgentPeerAuthorizer(expectedUserID: getuid())
     )
 
     try await listener.start()
@@ -1538,7 +1541,8 @@ func cliExecutableRenameLiveMutatesOpenSessionThroughSocketAsJSON() async throws
     server.register(session: EditorSession(document: .empty(named: "Before Live")), id: sessionID)
     let listener = AgentSocketListener(
         handler: AgentCommandHandler(controller: server),
-        socketPath: AgentSocketPath(socketURL.path)
+        endpoint: try UnixSocketEndpoint(fileURL: socketURL),
+        peerAuthorizer: SameUserAgentPeerAuthorizer(expectedUserID: getuid())
     )
 
     try await listener.start()
@@ -1609,7 +1613,8 @@ func cliExecutableSelectionReferencesSelectsLiveSurfaceControlPointAsJSON() asyn
     server.register(session: session, id: sessionID)
     let listener = AgentSocketListener(
         handler: AgentCommandHandler(controller: server),
-        socketPath: AgentSocketPath(socketURL.path)
+        endpoint: try UnixSocketEndpoint(fileURL: socketURL),
+        peerAuthorizer: SameUserAgentPeerAuthorizer(expectedUserID: getuid())
     )
 
     try await listener.start()
@@ -1751,7 +1756,8 @@ func cliExecutableInspectsExactLiveSceneGraphAsJSON() async throws {
     server.register(session: session, id: sessionID)
     let listener = AgentSocketListener(
         handler: AgentCommandHandler(controller: server),
-        socketPath: AgentSocketPath(socketURL.path)
+        endpoint: try UnixSocketEndpoint(fileURL: socketURL),
+        peerAuthorizer: SameUserAgentPeerAuthorizer(expectedUserID: getuid())
     )
 
     try await listener.start()
@@ -3880,7 +3886,8 @@ struct CLICommandApplyTests {
         )
         let listener = AgentSocketListener(
             handler: AgentCommandHandler(controller: server),
-            socketPath: AgentSocketPath(socketURL.path)
+            endpoint: try UnixSocketEndpoint(fileURL: socketURL),
+            peerAuthorizer: SameUserAgentPeerAuthorizer(expectedUserID: getuid())
         )
         let batch = AutomationBatch(
             commands: [
@@ -3953,7 +3960,8 @@ struct CLICommandApplyTests {
         )
         let listener = AgentSocketListener(
             handler: AgentCommandHandler(controller: server),
-            socketPath: AgentSocketPath(socketURL.path)
+            endpoint: try UnixSocketEndpoint(fileURL: socketURL),
+            peerAuthorizer: SameUserAgentPeerAuthorizer(expectedUserID: getuid())
         )
         let batch = AutomationBatch(
             commands: [
@@ -4018,7 +4026,8 @@ struct CLICommandApplyTests {
         )
         let listener = AgentSocketListener(
             handler: AgentCommandHandler(controller: server),
-            socketPath: AgentSocketPath(socketURL.path)
+            endpoint: try UnixSocketEndpoint(fileURL: socketURL),
+            peerAuthorizer: SameUserAgentPeerAuthorizer(expectedUserID: getuid())
         )
         let batch = AutomationBatch(
             commands: [
@@ -4621,7 +4630,8 @@ struct CLICommandApplyTests {
         server.register(session: EditorSession(document: document), id: sessionID)
         let listener = AgentSocketListener(
             handler: AgentCommandHandler(controller: server),
-            socketPath: AgentSocketPath(socketURL.path)
+            endpoint: try UnixSocketEndpoint(fileURL: socketURL),
+            peerAuthorizer: SameUserAgentPeerAuthorizer(expectedUserID: getuid())
         )
 
         try await listener.start()
@@ -7459,7 +7469,8 @@ func cliExecutableAutoEvaluateUsesLiveSessionThroughSocketAsJSON() async throws 
     server.register(session: session, path: documentURL)
     let listener = AgentSocketListener(
         handler: AgentCommandHandler(controller: server),
-        socketPath: AgentSocketPath(socketURL.path)
+        endpoint: try UnixSocketEndpoint(fileURL: socketURL),
+        peerAuthorizer: SameUserAgentPeerAuthorizer(expectedUserID: getuid())
     )
 
     try await listener.start()
@@ -7512,7 +7523,8 @@ func cliExecutableAutoSavePersistsLiveSessionThroughSocketAsJSON() async throws 
     server.register(session: session, path: documentURL)
     let listener = AgentSocketListener(
         handler: AgentCommandHandler(controller: server),
-        socketPath: AgentSocketPath(socketURL.path)
+        endpoint: try UnixSocketEndpoint(fileURL: socketURL),
+        peerAuthorizer: SameUserAgentPeerAuthorizer(expectedUserID: getuid())
     )
 
     try await listener.start()
@@ -7585,7 +7597,8 @@ func cliExecutableAutoExportUsesLiveSessionThroughSocketAsJSON() async throws {
     server.register(session: session, path: documentURL)
     let listener = AgentSocketListener(
         handler: AgentCommandHandler(controller: server),
-        socketPath: AgentSocketPath(socketURL.path)
+        endpoint: try UnixSocketEndpoint(fileURL: socketURL),
+        peerAuthorizer: SameUserAgentPeerAuthorizer(expectedUserID: getuid())
     )
 
     try await listener.start()
@@ -7638,7 +7651,8 @@ func cliExecutableFileModeRejectsOpenDocumentConflictAndForceOverridesAsJSON() a
     )
     let listener = AgentSocketListener(
         handler: AgentCommandHandler(controller: server),
-        socketPath: AgentSocketPath(socketURL.path)
+        endpoint: try UnixSocketEndpoint(fileURL: socketURL),
+        peerAuthorizer: SameUserAgentPeerAuthorizer(expectedUserID: getuid())
     )
 
     try await listener.start()
@@ -7836,7 +7850,8 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     server.register(session: session, id: sessionID)
     let listener = AgentSocketListener(
         handler: AgentCommandHandler(controller: server),
-        socketPath: AgentSocketPath(socketURL.path)
+        endpoint: try UnixSocketEndpoint(fileURL: socketURL),
+        peerAuthorizer: SameUserAgentPeerAuthorizer(expectedUserID: getuid())
     )
 
     try await listener.start()

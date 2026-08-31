@@ -1,4 +1,5 @@
 import Foundation
+import RupaAgentProtocol
 
 struct ApplicationProjectFailure: Error, Equatable, LocalizedError, Sendable {
     enum Kind: String, Equatable, Sendable {
@@ -19,11 +20,18 @@ struct ApplicationProjectFailure: Error, Equatable, LocalizedError, Sendable {
     let kind: Kind
     let message: String
     let didCommit: Bool
+    let committedMutation: AgentCommittedMutationOutcome?
 
-    init(kind: Kind, message: String, didCommit: Bool = false) {
+    init(
+        kind: Kind,
+        message: String,
+        didCommit: Bool = false,
+        committedMutation: AgentCommittedMutationOutcome? = nil
+    ) {
         self.kind = kind
         self.message = message
         self.didCommit = didCommit
+        self.committedMutation = committedMutation
     }
 
     var errorDescription: String? {

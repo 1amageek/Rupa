@@ -22,6 +22,7 @@ Parent: [system design](../DESIGN.md). Direct children used by T10/T12 are:
 - [RupaKit integration target](Sources/RupaKit/DESIGN.md)
 - [RupaAgentProtocol](Sources/RupaAgentProtocol/DESIGN.md)
 - [RupaProjectAccess](Sources/RupaProjectAccess/DESIGN.md)
+- [RupaProjectAccessPlatform](Sources/RupaProjectAccessPlatform/DESIGN.md)
 - [RupaProjectAccessComposition](Sources/RupaProjectAccessComposition/DESIGN.md)
 - [RupaUI](Sources/RupaUI/DESIGN.md)
 - [RupaAgentUI](Sources/RupaAgentUI/DESIGN.md)
@@ -204,7 +205,8 @@ records are owned by the four child designs:
 | `RupaAutomation` owns the binding-aware internal source-plan execution substrate; `FeatureGraphTransaction` and `appendFeatureGraph` are internal lowering details, not public Agent operations. | [RupaAutomation design](Sources/RupaAutomation/DESIGN.md) |
 | The planned `RupaCADDomain` owns concrete CAD operation descriptors, typed output declarations, and lowerers. Until its target exists, this package design is the temporary design authority for that boundary and does not claim implementation. | This document. |
 | `RupaProjectAccess` is the transport-neutral access contract; it owns no workspace, package, or command state. | [RupaProjectAccess design](Sources/RupaProjectAccess/DESIGN.md) |
-| `RupaProjectAccessComposition` owns concrete closed-project access sessions and file authority leases by composing `RupaProjectAccess`, `RupaAgentRuntime`, and the public `RupaKit` workspace APIs. | [RupaProjectAccessComposition design](Sources/RupaProjectAccessComposition/DESIGN.md) |
+| `RupaProjectAccessPlatform` owns product-local App Group/endpoint coordinates and Darwin file-authority leases without directly depending on workspace or CAD targets; its contract dependencies retain their existing transitive graph. | [RupaProjectAccessPlatform design](Sources/RupaProjectAccessPlatform/DESIGN.md) |
+| `RupaProjectAccessComposition` owns concrete closed-project and live-project sessions by composing `RupaProjectAccessPlatform`, `RupaAgentRuntime`, and the public `RupaKit` workspace APIs. | [RupaProjectAccessComposition design](Sources/RupaProjectAccessComposition/DESIGN.md) |
 | `RupaAgentTransport` carries protocol values over an injected local transport and never defines project semantics. | [RupaAgentTransport design](Sources/RupaAgentTransport/DESIGN.md) |
 | `RupaAgentUI` owns the process-lifetime Agent host and registration bridge; the App composes one controller/router over the same workspace. | [RupaAgentUI design](Sources/RupaAgentUI/DESIGN.md) |
 | Existing CAD/Mesh and state contracts remain authoritative for their domains. | [CAD/Mesh responsibility](../Rupa/CAD_MESH_RESPONSIBILITY_CONTRACT.md), [state/project contract](../Rupa/STATE_AND_PROJECT_CONTRACT.md) |

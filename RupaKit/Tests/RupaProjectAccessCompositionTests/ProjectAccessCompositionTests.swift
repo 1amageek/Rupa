@@ -9,6 +9,7 @@ import RupaGeometry
 import RupaKit
 import RupaProjectAccess
 @testable import RupaProjectAccessComposition
+import RupaProjectAccessPlatform
 import RupaProjectModel
 import RupaProjectPackage
 import Testing

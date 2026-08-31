@@ -5,7 +5,7 @@ import RupaAgentTransport
 public enum AgentHostState: Equatable, Sendable {
     case stopped
     case starting
-    case running(socketPath: String)
+    case running
     case failed(message: String)
 }
 
@@ -14,27 +14,25 @@ public final class AgentHost {
     public private(set) var state: AgentHostState
 
     private let listener: any AgentHostListening
-    private let socketPath: AgentSocketPath
     private var lifecycleGeneration: Int
 
     public init(
         handler: any AgentRequestHandling,
-        socketPath: AgentSocketPath = AgentSocketPath()
+        endpoint: UnixSocketEndpoint,
+        peerAuthorizer: any AgentPeerAuthorizing
     ) {
-        self.socketPath = socketPath
         self.listener = AgentSocketListener(
             handler: handler,
-            socketPath: socketPath
+            endpoint: endpoint,
+            peerAuthorizer: peerAuthorizer
         )
         self.state = .stopped
         self.lifecycleGeneration = 0
     }
 
     init(
-        socketPath: AgentSocketPath,
         listener: any AgentHostListening
     ) {
-        self.socketPath = socketPath
         self.listener = listener
         self.state = .stopped
         self.lifecycleGeneration = 0
@@ -56,7 +54,7 @@ public final class AgentHost {
             guard lifecycleGeneration == generation else {
                 return
             }
-            state = .running(socketPath: socketPath.value)
+            state = .running
         } catch {
             guard lifecycleGeneration == generation else {
                 return

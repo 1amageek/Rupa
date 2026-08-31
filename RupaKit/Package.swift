@@ -53,6 +53,10 @@ let package = Package(
             targets: ["RupaProjectAccess"]
         ),
         .library(
+            name: "RupaProjectAccessPlatform",
+            targets: ["RupaProjectAccessPlatform"]
+        ),
+        .library(
             name: "RupaProjectAccessComposition",
             targets: ["RupaProjectAccessComposition"]
         ),
@@ -243,12 +247,23 @@ let package = Package(
             exclude: ["DESIGN.md"]
         ),
         .target(
+            name: "RupaProjectAccessPlatform",
+            dependencies: [
+                "RupaProjectAccess",
+                "RupaAgentTransport",
+            ],
+            path: "Sources/RupaProjectAccessPlatform",
+            exclude: ["DESIGN.md"]
+        ),
+        .target(
             name: "RupaProjectAccessComposition",
             dependencies: [
                 "RupaProjectAccess",
+                "RupaProjectAccessPlatform",
                 "RupaAgentProtocol",
                 "RupaCoreTypes",
                 "RupaAgentRuntime",
+                "RupaAgentTransport",
                 "RupaKit",
             ],
             path: "Sources/RupaProjectAccessComposition",
@@ -256,7 +271,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "ProjectAuthorityLeaseCrashProbe",
-            dependencies: ["RupaProjectAccessComposition"],
+            dependencies: [
+                "RupaProjectAccessComposition",
+                "RupaProjectAccessPlatform",
+            ],
             path: "Tests/ProjectAuthorityLeaseCrashProbe"
         ),
         .target(
@@ -424,6 +442,7 @@ let package = Package(
                 "RupaAgentProtocol",
                 "RupaAgentRuntime",
                 "RupaAgentTransport",
+                "RupaProjectAccessPlatform",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "SwiftCAD", package: "swift-CAD"),
             ],
@@ -547,6 +566,7 @@ let package = Package(
             dependencies: [
                 "RupaProjectAccessComposition",
                 "RupaProjectAccess",
+                "RupaProjectAccessPlatform",
                 "RupaAgentProtocol",
                 "RupaAgentRuntime",
                 "RupaAutomation",
@@ -558,6 +578,7 @@ let package = Package(
                 "RupaProjectModel",
                 "RupaProjectPackage",
                 "RupaKit",
+                "RupaAgentTransport",
             ]
         ),
         .testTarget(

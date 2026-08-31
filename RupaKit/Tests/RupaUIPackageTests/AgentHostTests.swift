@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import RupaAgentProtocol
 import RupaAgentRuntime
@@ -17,13 +18,17 @@ import Testing
         removeTemporaryDirectory(temporaryDirectory)
     }
 
-    let socketPath = AgentSocketPath(
-        temporaryDirectory
-            .appendingPathComponent("rupa.sock")
-            .path
+    let endpoint = try UnixSocketEndpoint(
+        fileURL: temporaryDirectory.appendingPathComponent("rupa.sock")
     )
     let controller = ProjectAgentCommandController()
-    let host = AgentHost(handler: controller, socketPath: socketPath)
+    let host = AgentHost(
+        handler: controller,
+        endpoint: endpoint,
+        peerAuthorizer: SameUserAgentPeerAuthorizer(
+            expectedUserID: getuid()
+        )
+    )
     let sessionID = UUID()
     let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
         document: .empty(named: "Host Open")
@@ -33,14 +38,13 @@ import Testing
 
     await host.start()
     do {
-        guard case .running(let path) = host.state else {
+        guard host.state == .running else {
             #expect(Bool(false))
             await host.stop()
             return
         }
-        #expect(path == socketPath.value)
 
-        let status = try await sendThroughDetachedClient(.status, socketPath: socketPath)
+        let status = try await sendThroughDetachedClient(.status, endpoint: endpoint)
         guard case .status(let agentStatus) = status else {
             #expect(Bool(false))
             await host.stop()
@@ -49,7 +53,7 @@ import Testing
         #expect(agentStatus.running)
         #expect(agentStatus.sessionCount == 1)
 
-        let sessions = try await sendThroughDetachedClient(.sessions, socketPath: socketPath)
+        let sessions = try await sendThroughDetachedClient(.sessions, endpoint: endpoint)
         guard case .sessions(let summaries) = sessions else {
             #expect(Bool(false))
             await host.stop()
@@ -69,7 +73,7 @@ import Testing
                 command: .renameDocument(name: "Agent Renamed"),
                 expectedGeneration: initial.generation
             ),
-            socketPath: socketPath
+            endpoint: endpoint
         )
         guard case .command(let sourceResult) = sourceResponse else {
             #expect(Bool(false))
@@ -85,7 +89,7 @@ import Testing
                 expectedGeneration: sourceResult.generation,
                 expectedWorkspaceRevision: sourceResult.workspaceRevision
             ),
-            socketPath: socketPath
+            endpoint: endpoint
         )
         guard case .command(let interactionResult) = interactionResponse else {
             #expect(Bool(false))
@@ -99,7 +103,7 @@ import Testing
                 sessionID: sessionID,
                 expectedGeneration: sourceResult.generation
             ),
-            socketPath: socketPath
+            endpoint: endpoint
         )
         guard case .measurement(let measurement) = readResponse else {
             #expect(Bool(false))
@@ -110,7 +114,7 @@ import Testing
 
         let renamedSessions = try await sendThroughDetachedClient(
             .sessions,
-            socketPath: socketPath
+            endpoint: endpoint
         )
         guard case .sessions(let renamedSummaries) = renamedSessions else {
             #expect(Bool(false))
@@ -134,10 +138,8 @@ import Testing
         removeTemporaryDirectory(temporaryDirectory)
     }
 
-    let socketPath = AgentSocketPath(
-        temporaryDirectory
-            .appendingPathComponent("rupa-domain.sock")
-            .path
+    let endpoint = try UnixSocketEndpoint(
+        fileURL: temporaryDirectory.appendingPathComponent("rupa-domain.sock")
     )
     let capabilityID: DomainCapabilityID = "manufacturing.validatePrintability"
     let domainRegistry = try DomainRegistry(
@@ -167,11 +169,17 @@ import Testing
     let controller = ProjectAgentCommandController(
         domainRegistry: domainRegistry
     )
-    let host = AgentHost(handler: controller, socketPath: socketPath)
+    let host = AgentHost(
+        handler: controller,
+        endpoint: endpoint,
+        peerAuthorizer: SameUserAgentPeerAuthorizer(
+            expectedUserID: getuid()
+        )
+    )
 
     await host.start()
     do {
-        let response = try await sendThroughDetachedClient(.capabilities, socketPath: socketPath)
+        let response = try await sendThroughDetachedClient(.capabilities, endpoint: endpoint)
         guard case .capabilities(let descriptors) = response else {
             #expect(Bool(false))
             await host.stop()
@@ -200,9 +208,8 @@ private struct AgentHostFixtureDomainLowering: DomainCommandLowering {
 
 @MainActor
 @Test(.timeLimit(.minutes(1))) func agentHostDoesNotReturnToRunningAfterStopDuringStart() async throws {
-    let socketPath = AgentSocketPath("/tmp/rupa-host-race-\(UUID().uuidString).sock")
     let listener = BlockingAgentHostListener()
-    let host = AgentHost(socketPath: socketPath, listener: listener)
+    let host = AgentHost(listener: listener)
 
     let startTask = Task { @MainActor in
         await host.start()
@@ -230,9 +237,9 @@ private struct AgentHostFixtureDomainLowering: DomainCommandLowering {
 
 private func sendThroughDetachedClient(
     _ request: AgentRequest,
-    socketPath: AgentSocketPath
+    endpoint: UnixSocketEndpoint
 ) async throws -> AgentResponse {
-    let client = AgentClient(socketPath: socketPath)
+    let client = AgentClient(endpoint: endpoint)
     return try await client.send(request)
 }
 

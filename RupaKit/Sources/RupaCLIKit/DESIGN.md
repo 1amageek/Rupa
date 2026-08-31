@@ -87,8 +87,11 @@ flowchart LR
    invocation form implies save, and dry run, prepublication failure, uncertain
    outcome, or committed no-retry outcome is never followed by an automatic
    save or replay.
-6. ACCESS-D removes `.auto`, force-file bypass, production endpoint override,
-   and the direct `DocumentFileService`/`EditorSession` mutation route.
+6. ACCESS-D removes `.auto`, force-file bypass, production endpoint options,
+   direct `AgentClient`, and the direct `DocumentFileService`/`EditorSession`
+   mutation route. Until that cutover, the single central client factory
+   accepts only the product-composed required endpoint; it rejects every
+   explicit endpoint override and has no default-path or temporary fallback.
 7. A live dispatch with uncertain outcome is never replayed through file mode.
 8. `inspect scene-graph` is a live Agent read. It carries the exact session and
    expected generation, returns a geometry-free immutable snapshot, and fails
