@@ -14,8 +14,8 @@
           "publicationSequence": 0,
           "workspaceRevision": {"value": 0}
         },
-        "proposedDocumentGeneration": {"value": 0},
-        "proposedTransactionRevision": {"value": 0},
+        "proposedDocumentGeneration": {"value": 1},
+        "proposedTransactionRevision": {"value": 1},
         "diagnostics": [],
         "telemetry": {
           "compilation": {

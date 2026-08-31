@@ -538,10 +538,10 @@ public struct AgentResponseEncodingPlan: Sendable, Equatable {
                         "Preview authority must exactly match the planned authority."
                     )
                 }
-                guard receipt.proposedDocumentGeneration == authority.documentGeneration,
-                      receipt.proposedTransactionRevision == authority.transactionRevision else {
+                guard receipt.proposedDocumentGeneration > authority.documentGeneration,
+                      receipt.proposedTransactionRevision > authority.transactionRevision else {
                     throw AgentResponseEncodingError.invalidPlan(
-                        "Preview proposed coordinates must match the planned authority."
+                        "Preview proposed coordinates must advance from the planned authority."
                     )
                 }
                 try Self.validate(authority: receipt.authority, limits: limits)

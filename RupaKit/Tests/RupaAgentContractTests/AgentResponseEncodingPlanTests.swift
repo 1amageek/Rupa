@@ -772,6 +772,25 @@ func agentResponsePlanValidatesPlannedAuthorityIdentityAndPreviewCoordinates() t
         )
     }
 
+    let validPreview = AgentResponse.programExecution(
+        .success(
+            .preview(
+                AgentSemanticPreviewReceipt(
+                    authority: testAuthority,
+                    proposedDocumentGeneration: DocumentGeneration(
+                        testAuthority.documentGeneration.value + 1
+                    ),
+                    proposedTransactionRevision: DocumentTransactionRevision(
+                        testAuthority.transactionRevision.value + 1
+                    ),
+                    diagnostics: [],
+                    telemetry: testTelemetry
+                )
+            )
+        )
+    )
+    try plan.validate(response: validPreview)
+
     let changedPreview = AgentResponse.programExecution(
         .success(
             .preview(
@@ -791,7 +810,7 @@ func agentResponsePlanValidatesPlannedAuthorityIdentityAndPreviewCoordinates() t
     } catch let error as AgentResponseEncodingError {
         #expect(
             error == .invalidPlan(
-                "Preview proposed coordinates must match the planned authority."
+                "Preview proposed coordinates must advance from the planned authority."
             )
         )
     }

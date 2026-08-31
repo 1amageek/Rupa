@@ -158,8 +158,8 @@ func semanticExecutionResultsRoundTripForPreviewCommittedAndFailures() throws {
             .preview(
                 AgentSemanticPreviewReceipt(
                     authority: SelfTestFixtures.authority,
-                    proposedDocumentGeneration: SelfTestFixtures.authority.documentGeneration,
-                    proposedTransactionRevision: SelfTestFixtures.authority.transactionRevision,
+                    proposedDocumentGeneration: DocumentGeneration(1),
+                    proposedTransactionRevision: DocumentTransactionRevision(1),
                     diagnostics: [],
                     telemetry: telemetry
                 )

@@ -70,7 +70,10 @@ flowchart LR
    and encoding never fabricate, infer, or promote one identity kind into
    another, and dry-run receipts contain neither persistent nor evaluated IDs.
    Only outputs requested in the decoded semantic form may appear in a success
-   receipt; Protocol preserves that selection but does not infer it.
+   receipt; Protocol preserves that selection but does not infer it. A preview
+   retains the exact input authority as its base and carries strictly advanced
+   proposed document-generation and transaction-revision values computed by
+   the workspace; it does not claim a publication or persistent identity.
 9. Protocol owns exact encoded-response sizing. Its limits validation proves
    that the configured ceiling can always carry the largest fixed
    `responsePlanRejected` envelope under the configured correlation and
