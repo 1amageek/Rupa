@@ -6,6 +6,12 @@ public struct AgentErrorEnvelope: Codable, Equatable, Sendable {
     public var message: String
     public var committedMutation: AgentCommittedMutationOutcome?
 
+    private enum CodingKeys: String, CodingKey {
+        case code
+        case message
+        case committedMutation
+    }
+
     public init(
         code: EditorError.Code,
         message: String,
@@ -28,6 +34,20 @@ public struct AgentErrorEnvelope: Codable, Equatable, Sendable {
             code: .commandFailed,
             message: committedMutation.message,
             committedMutation: committedMutation
+        )
+    }
+
+    public init(from decoder: Decoder) throws {
+        try AgentSemanticCoding.rejectUnknownKeys(
+            from: decoder,
+            allowedKeys: ["code", "message", "committedMutation"]
+        )
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.code = try container.decode(EditorError.Code.self, forKey: .code)
+        self.message = try container.decode(String.self, forKey: .message)
+        self.committedMutation = try container.decodeIfPresent(
+            AgentCommittedMutationOutcome.self,
+            forKey: .committedMutation
         )
     }
 

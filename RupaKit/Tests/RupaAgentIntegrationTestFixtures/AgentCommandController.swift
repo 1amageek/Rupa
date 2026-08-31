@@ -333,46 +333,26 @@ public final class AgentCommandController: AgentClientProtocol {
                     return .domainExecution(result)
                 }
                 return try run()
+            // FIXME(INCOMPLETE_IMPLEMENTATION): The test integration handler mirrors the production fail-closed capability.invoke route without mutating its EditorSession. Remove this marker only when the fixture delegates to the completed ProjectWorkspace and ProjectController semantic path.
             case .invokeCapability:
-                func run() throws -> AgentResponse {
-                    guard case let .invokeCapability(sessionID, invocation, expectedWorkspaceRevision) = request else {
-                        throw EditorError(
-                            code: .commandInvalid,
-                            message: "Agent request dispatch expected a different request payload."
-                        )
-                    }
-                    let session = try registry.session(id: sessionID)
-                    let capabilityDescriptor = try capabilityRegistry().descriptor(
-                        for: invocation.capabilityID,
-                        version: invocation.version
-                    )
-                    let agentName = String(
-                        invocation.capabilityID.rawValue.dropFirst("agent.".count)
-                    )
-                    guard invocation.capabilityID.rawValue.hasPrefix("agent."),
-                          let agentDescriptor = AgentCapabilityCatalog.descriptors(
-                            domainRegistry: domainRegistry
-                          ).first(where: { $0.name == agentName }) else {
-                        throw AgentCapabilityExecutionError(
-                            code: .unsupportedRoute,
-                            message: "Capability \(invocation.capabilityID.rawValue) is not an Agent capability."
-                        )
-                    }
-                    return .capabilityExecution(
-                        try AgentCapabilityInvocationExecutor(
-                            runner: runner,
-                            domainRegistry: domainRegistry
-                        ).execute(
-                            invocation,
-                            descriptor: capabilityDescriptor,
-                            agentDescriptor: agentDescriptor,
-                            sessionID: sessionID,
-                            expectedWorkspaceRevision: expectedWorkspaceRevision,
-                            in: session
+                return .capabilityExecution(
+                    .prepublicationFailure(
+                        AgentSemanticPrepublicationFailure(
+                            stage: .dispatchUnavailable,
+                            code: AgentSemanticPrepublicationFailure.dispatchUnavailableCode
                         )
                     )
-                }
-                return try run()
+                )
+            // FIXME(INCOMPLETE_IMPLEMENTATION): The test integration handler mirrors the production fail-closed program.execute route without mutating its EditorSession. Remove this marker only when the fixture delegates to the completed atomic ProjectWorkspace and ProjectController semantic path.
+            case .executeProgram:
+                return .programExecution(
+                    .prepublicationFailure(
+                        AgentSemanticPrepublicationFailure(
+                            stage: .dispatchUnavailable,
+                            code: AgentSemanticPrepublicationFailure.dispatchUnavailableCode
+                        )
+                    )
+                )
             case .parameters:
                 func run() throws -> AgentResponse {
                     guard case let .parameters(sessionID, expectedGeneration) = request else {

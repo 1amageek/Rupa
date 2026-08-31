@@ -67,22 +67,6 @@ public struct ProjectAgentErrorMapper: Sendable {
             }
             return EditorError(code: code, message: error.message)
         }
-        if let error = error as? AgentCapabilityExecutionError {
-            let code: EditorError.Code
-            switch error.code {
-            case .unsupportedRoute:
-                code = .commandUnsupported
-            case .staleRevision:
-                code = .documentTransactionRevisionMismatch
-            case .staleWorkspaceRevision:
-                code = .workspaceRevisionMismatch
-            case .invalidPayload, .effectMismatch:
-                code = .commandInvalid
-            case .invalidResult:
-                code = .commandFailed
-            }
-            return EditorError(code: code, message: error.message)
-        }
         if let error = error as? ProjectMeshReadError {
             return EditorError(
                 code: Self.editorCode(for: error.code),

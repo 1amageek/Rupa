@@ -44,14 +44,21 @@ flowchart LR
    typed payload. Unknown versions, methods, required fields, and structural
    mismatches fail during decode.
 2. CAD direct invocation and declarative programs use one semantic vocabulary;
-   protocol decoding never expands a program into multiple requests.
+   protocol decoding never expands a program into multiple requests. The
+   direct DTO losslessly carries semantic schema version, one invocation, and
+   requested descriptor output IDs; the program DTO losslessly carries its
+   schema version, nodes, and requested `node.output` references.
 3. Session-bearing requests preserve session, generation, workspace, and
    transaction coordinates. Those values are checked by the App runtime.
-4. Payload limits are validated before semantic dispatch. No decoder silently
-   truncates values or drops identity, limit, plan, or receipt fields.
-5. Response receipts distinguish success, typed failure, committed result
-   projection failure, and outcome-unknown dispatch. A committed receipt is
-   not retryable.
+4. Encoded request/response byte limits and strict DTO structure are validated
+   before semantic dispatch. Transport separately owns HTTP frame/body limits;
+   Foundation owns decoded semantic graph/value/expression/work limits. No
+   decoder silently truncates values or drops identity, plan, or receipt fields.
+5. Server response receipts distinguish success, typed prepublication failure,
+   and committed result-projection failure. A committed receipt is not
+   retryable. `outcomeUnknown` is not a server response or protocol DTO; the
+   ProjectAccess client creates that local classification only when a complete
+   request was dispatched and no authenticated response was received.
 6. `AgentStatus` and session observations contain semantic service state only;
    endpoint, port, HMAC key, and discovery records are not protocol fields.
 7. Mesh buffers and renderer resources are not encoded. Mesh read/edit
@@ -62,6 +69,25 @@ flowchart LR
    appear only when requested after successful publication. Protocol decoding
    and encoding never fabricate, infer, or promote one identity kind into
    another, and dry-run receipts contain neither persistent nor evaluated IDs.
+   Only outputs requested in the decoded semantic form may appear in a success
+   receipt; Protocol preserves that selection but does not infer it.
+9. Protocol owns exact encoded-response sizing. Its limits validation proves
+   that the configured ceiling can always carry the largest fixed
+   `responsePlanRejected` envelope under the configured correlation and
+   project-identity bounds. From the Foundation result charge and fixed
+   response schema it creates one immutable `AgentResponseEncodingPlan`
+   before Runtime may stage workspace mutation. A full plan reserves success,
+   the fixed committed failure, and the fixed prepublication failure. When
+   request-specific success planning overflows or exceeds the ceiling,
+   Protocol instead returns a failure-only plan that reserves only the fixed
+   prepublication failure and forbids staging. Every reservation is consumed
+   by exactly one encode attempt; the encoder does not discover oversize after
+   publication and then attempt a generic-error re-encode.
+10. The fixed committed failure contains only its typed code, exact authority
+    coordinate, and `mustNotRetry`; it contains no arbitrary message,
+    diagnostics, telemetry, or requested bindings. Encoding a value that does
+    not match its preflight plan is an internal invariant violation, never a
+    retryable transport failure.
 
 ## Runtime Flows
 
@@ -86,12 +112,21 @@ controller, package, credential, connection, or persistent source ID.
 
 ## Failure, Concurrency, and Constraints
 
-Malformed JSON, unsupported discriminator, invalid typed values, coordinate
-mismatch, missing fields, and response projection errors are explicit typed
-failures. The codec never converts an error into an empty success value.
+Malformed JSON, unsupported discriminator, encoded-payload byte excess, invalid
+typed-value or coordinate encoding shape, missing fields, and response-plan
+errors before staging are explicit typed failures. Semantic value validity and
+coordinate freshness are not codec decisions. The codec never converts an
+error into an empty success value.
 
 ## Verification and Change Impact
 
-Protocol tests prove deterministic envelope coding, all supported semantic
-responses, malformed and oversized-value rejection, coordinate preservation,
-committed/no-retry receipts, and absence of transport discovery fields.
+Protocol tests prove deterministic envelope coding, explicit semantic schema
+version and requested-output round trips for both forms, all supported server
+semantic responses, malformed and encoded-byte-boundary rejection,
+coordinate-shape preservation, committed/no-retry receipts, rejection of any
+server `outcomeUnknown` discriminator, and absence of transport discovery
+fields. HTTP frame/body and client-local response-loss classification remain
+Transport/ProjectAccess-owned. Response-plan tests prove exact boundary and
+boundary-plus-one behavior before staging, the fixed committed alternative is
+always below the ceiling, and each selected plan is encoded once without a
+postpublication fallback attempt.

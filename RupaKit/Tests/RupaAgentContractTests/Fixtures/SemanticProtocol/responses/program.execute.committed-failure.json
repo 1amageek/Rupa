@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "id": "fixture-committed-1",
+  "method": "program.execute",
+  "result": {
+    "kind": "committedFailure",
+    "committedFailure": {
+      "code": "authorityValidationFailed",
+      "authority": {
+        "projectID": "project.test",
+        "documentGeneration": {"value": 0},
+        "transactionRevision": {"value": 0},
+        "publicationSequence": 0,
+        "workspaceRevision": {"value": 0}
+      },
+      "retryDisposition": "mustNotRetry"
+    }
+  }
+}

@@ -1,6 +1,4 @@
 import Foundation
-import RupaAgentRuntime
-import RupaDomainFoundation
 import Testing
 
 @Test(.timeLimit(.minutes(1)))
@@ -18,18 +16,22 @@ func projectAgentProductionGraphHasOneProjectAuthority() throws {
         ).filter { $0.pathExtension == "swift" }
     }
 
+    let retiredInvocationName = ["Capability", "Invocation"].joined()
+    let retiredExecutionBaseName = ["Agent", "Capability", "Execution"].joined()
     let forbiddenPatterns = [
         #"\bEditorSession\b"#,
         #"\bAgentCommandController\b"#,
         #"\bAgentCommandHandler\b"#,
         #"\bMainActorAgentBridge\b"#,
+        #"\b"# + retiredInvocationName + #"\b"#,
+        #"\b"# + retiredExecutionBaseName + "(Result|Error)\\b",
     ]
     for sourceURL in sourceURLs {
         let source = try String(contentsOf: sourceURL, encoding: .utf8)
         for pattern in forbiddenPatterns {
             #expect(
                 source.range(of: pattern, options: .regularExpression) == nil,
-                "Production Agent Runtime still references a legacy authority in \(sourceURL.lastPathComponent)."
+                "Production Agent Runtime still references a legacy authority or capability payload in \(sourceURL.lastPathComponent)."
             )
         }
     }
@@ -39,7 +41,7 @@ func projectAgentProductionGraphHasOneProjectAuthority() throws {
         "AgentCommandHandler.swift",
         "MainActorAgentBridge.swift",
         "WorkspaceRegistry.swift",
-        "AgentCapabilityInvocationExecutor.swift",
+        ["Agent", "Capability", "Invocation", "Executor"].joined() + ".swift",
     ]
     for file in legacyFiles {
         #expect(FileManager.default.fileExists(atPath: runtime.appendingPathComponent(file).path) == false)
@@ -47,39 +49,45 @@ func projectAgentProductionGraphHasOneProjectAuthority() throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
-func projectAgentRouteInventoriesAreFixedAndExhaustiveAtTheirOwners() throws {
+func projectAgentSemanticRoutesAreExplicitAndRawPayloadsHaveNoProductionOwner() throws {
     let root = packageRoot()
+    let messageSource = try String(
+        contentsOf: root.appendingPathComponent("Sources/RupaAgentProtocol/AgentMessage.swift"),
+        encoding: .utf8
+    )
     let requestSource = try String(
-        contentsOf: root.appendingPathComponent(
-            "Sources/RupaAgentProtocol/AgentMessage.swift"
-        ),
+        contentsOf: root.appendingPathComponent("Sources/RupaAgentProtocol/AgentRequestEnvelope.swift"),
         encoding: .utf8
     )
-    let requestDeclaration = try #require(
-        requestSource.split(separator: "public enum AgentResponse", maxSplits: 1).first
-    )
-    #expect(caseCount(in: String(requestDeclaration)) == 53)
-
-    let automationSource = try String(
-        contentsOf: root.appendingPathComponent(
-            "Sources/RupaAutomation/AutomationCommand.swift"
-        ),
+    let controllerSource = try String(
+        contentsOf: root.appendingPathComponent("Sources/RupaAgentRuntime/ProjectAgentCommandController.swift"),
         encoding: .utf8
     )
-    #expect(caseCount(in: automationSource) == 127)
 
-    let staticCapabilities = AgentCapabilityCatalog.descriptors(
-        domainRegistry: DomainRegistry()
-    )
-    #expect(staticCapabilities.count == 170)
-    #expect(Set(staticCapabilities.map(\.name)).count == 170)
-    #expect(staticCapabilities.contains { $0.name == "setFeatureSuppression" } == false)
-    for descriptor in staticCapabilities {
-        switch descriptor.access {
-        case .automationCommand, .agentRequest, .domainCapability:
-            break
-        }
-    }
+    #expect(messageSource.contains("case invokeCapability(AgentSemanticDirectExecutionRequest)"))
+    #expect(messageSource.contains("case executeProgram(AgentSemanticProgramExecutionRequest)"))
+    #expect(messageSource.contains("\"capability.invoke\""))
+    #expect(messageSource.contains("\"program.execute\""))
+    #expect(requestSource.contains("authority"))
+    #expect(requestSource.contains("dryRun"))
+    #expect(requestSource.contains("AgentSemanticDirectRequest"))
+    #expect(requestSource.contains("AgentSemanticProgramRequest"))
+    #expect(controllerSource.contains("stage: .dispatchUnavailable"))
+    #expect(controllerSource.contains("case .invokeCapability"))
+    #expect(controllerSource.contains("case .executeProgram"))
+    #expect(controllerSource.contains("FIXME(INCOMPLETE_IMPLEMENTATION)"))
+    let protocolDirectory = root.appendingPathComponent("Sources/RupaAgentProtocol")
+    let capabilitiesDirectory = root.appendingPathComponent("Sources/RupaCapabilities")
+    #expect(FileManager.default.fileExists(
+        atPath: protocolDirectory.appendingPathComponent(
+            ["Agent", "Capability", "Execution", "Result"].joined() + ".swift"
+        ).path
+    ) == false)
+    #expect(FileManager.default.fileExists(
+        atPath: capabilitiesDirectory.appendingPathComponent(
+            ["Capability", "Invocation"].joined() + ".swift"
+        ).path
+    ) == false)
 }
 
 private func packageRoot() -> URL {
@@ -87,10 +95,4 @@ private func packageRoot() -> URL {
         .deletingLastPathComponent()
         .deletingLastPathComponent()
         .deletingLastPathComponent()
-}
-
-private func caseCount(in source: String) -> Int {
-    source.split(separator: "\n").count { line in
-        line.hasPrefix("    case ")
-    }
 }

@@ -1,0 +1,14 @@
+{
+  "jsonrpc": "2.0",
+  "id": "fixture-prepub-1",
+  "method": "program.execute",
+  "result": {
+    "kind": "prepublicationFailure",
+    "prepublicationFailure": {
+      "stage": "authorityRejected",
+      "code": "authorityRejected",
+      "publicationDisposition": "notPublished",
+      "retryDisposition": "retryPermitted"
+    }
+  }
+}

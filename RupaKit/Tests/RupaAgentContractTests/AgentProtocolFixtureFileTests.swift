@@ -1,163 +1,125 @@
 import Foundation
-import Testing
+import RupaAgentProtocol
 import RupaCore
+import RupaCoreTypes
+import RupaDomainFoundation
+import Testing
 @testable import RupaAgent
 
-@Suite("Automation protocol fixture files")
+@Suite("Semantic Agent protocol fixtures")
 struct AgentProtocolFixtureFileTests {
-    @Test func requestFixturesCoverEveryAgentMethod() throws {
+    @Test func requestFixturesDecodeOnlySemanticRoutes() throws {
         let fixtures = try AgentProtocolFixtureFiles.loadJSONFiles(at: ["requests"])
-        let fixtureMethods = Set(fixtures.map(\.stem))
-
-        #expect(fixtureMethods == Self.allRequestMethods)
-
+        #expect(Set(fixtures.map(\.name)) == ["capability.invoke.json", "program.execute.json"])
         let codec = AgentMessageCodec()
+
         for fixture in fixtures {
             let envelope = try codec.decodeRequestEnvelope(from: fixture.data)
-            #expect(envelope.method == fixture.stem)
-            #expect(envelope.params.methodName == fixture.stem)
-        }
-    }
-
-    @Test func successResponseFixturesDecodeAsFlatResults() throws {
-        let fixtures = try AgentProtocolFixtureFiles.loadJSONFiles(at: ["responses", "success"])
-        let codec = AgentMessageCodec()
-
-        #expect(Set(fixtures.map(\.stem)) == ["agent.status", "command.apply", "parameter.setExpression"])
-
-        for fixture in fixtures {
-            let envelope = try codec.decodeResponseEnvelope(from: fixture.data)
-            let response = try envelope.decodedResponse()
-            #expect(envelope.method == fixture.stem)
-            #expect(envelope.result != nil)
-            switch fixture.stem {
-            case "agent.status":
-                guard case .status(let status) = response else {
-                    Issue.record("agent.status fixture must decode as AgentResponse.status.")
-                    continue
-                }
-                #expect(status.running)
-                #expect(status.sessionCount == 2)
-            case "command.apply":
-                guard case .command(let result) = response else {
-                    Issue.record("command.apply fixture must decode as AgentResponse.command.")
-                    continue
-                }
-                #expect(result.commandName == "setRulerConfiguration")
-                #expect(result.generation == DocumentGeneration(4))
-                #expect(result.didMutate)
-                #expect(result.workspaceScale?.matchedPreset == .sitePlanning)
-                #expect(result.workspaceScale?.displayUnit == .kilometer)
-                #expect(result.workspaceInteractionScale?.operationStep.meters == 100.0)
-                #expect(result.workspaceInteractionScale?.operationStep.displayValue == 0.1)
-                #expect(result.workspaceInteractionScale?.operationStep.displayUnitSymbol == "km")
-                #expect(result.workspaceInteractionScale?.slotWidth.meters == 200.0)
-                #expect(result.workspaceBounds?.maximumSpan == 25_000.0)
-                #expect(result.viewportGridSettings?.visualSpacingMode == .adaptive)
-                #expect(result.viewportGridScale?.snapStep.meters == 100.0)
-                #expect(result.viewportGridScale?.snapStep.displayValue == 0.1)
-                #expect(result.viewportGridScale?.snapStep.displayUnitSymbol == "km")
-                #expect(result.viewportGridScale?.configuredMajorStep.text == "1 km")
-                #expect(result.viewportGridScale?.workspaceSpan.text == "100 km")
-            case "parameter.setExpression":
-                guard case .command(let result) = response else {
-                    Issue.record("parameter.setExpression fixture must decode as AgentResponse.command.")
-                    continue
-                }
-                #expect(result.commandName == "upsertParameter")
-                #expect(result.generation == DocumentGeneration(10))
+            #expect(envelope.method == fixture.method)
+            switch envelope.params {
+            case .invokeCapability(let request):
+                #expect(fixture.method == "capability.invoke")
+                #expect(request.request.schemaVersion == .init(major: 1, minor: 0, patch: 0))
+                #expect(request.request.operationVersion == .init(major: 1, minor: 0, patch: 0))
+            case .executeProgram(let request):
+                #expect(fixture.method == "program.execute")
+                #expect(request.program.schemaVersion == .init(major: 1, minor: 0, patch: 0))
             default:
-                Issue.record("Unexpected success response fixture: \(fixture.name).")
+                Issue.record("Semantic fixture decoded as a legacy request route.")
             }
         }
     }
 
-    @Test func errorResponseFixturesDecodeAsFailures() throws {
-        let fixtures = try AgentProtocolFixtureFiles.loadJSONFiles(at: ["responses", "error"])
+    @Test func responseFixturesRoundTripSuccessAndTypedFailures() throws {
+        let fixtures = try AgentProtocolFixtureFiles.loadJSONFiles(at: ["responses"])
+        #expect(Set(fixtures.map(\.name)) == [
+            "capability.invoke.success.json",
+            "program.execute.committed-failure.json",
+            "program.execute.prepublication-failure.json",
+        ])
         let codec = AgentMessageCodec()
-
-        #expect(Set(fixtures.map(\.stem)) == ["command.apply"])
 
         for fixture in fixtures {
             let envelope = try codec.decodeResponseEnvelope(from: fixture.data)
             let response = try envelope.decodedResponse()
-            #expect(envelope.method == fixture.stem)
-            #expect(envelope.error != nil)
-            guard case .failure(let error) = response else {
-                Issue.record("Error fixture must decode as AgentResponse.failure.")
-                continue
-            }
-            #expect(error.code == .documentGenerationMismatch)
-        }
-    }
+            #expect(envelope.method == fixture.method)
+            #expect(envelope.id == fixture.id)
 
-    @Test func invalidFixturesAreRejected() throws {
-        let fixtures = try AgentProtocolFixtureFiles.loadJSONFiles(at: ["invalid"])
-        let codec = AgentMessageCodec()
-
-        #expect(fixtures.isEmpty == false)
-
-        for fixture in fixtures {
-            var caught: EditorError?
             do {
-                _ = try codec.decodeRequestEnvelope(from: fixture.data)
-            } catch let error as EditorError {
-                caught = error
+                _ = try codec.encode(response, id: fixture.id, method: fixture.method)
+                Issue.record("A semantic fixture response was encoded without a response plan.")
+            } catch let error as AgentResponseEncodingError {
+                #expect(error == .responsePlanRequired(method: fixture.method))
             }
-            #expect(caught?.code == .commandInvalid)
+
+            let reservation = try codec.reserveResponse(
+                requestID: fixture.id,
+                method: fixture.method,
+                authority: responseAuthority(response),
+                requestedOutputs: [],
+                resultCharge: emptyResultCharge
+            )
+            let encoded = try codec.encode(response, consuming: reservation)
+            #expect(try codec.decodeResponse(
+                from: encoded,
+                expectedID: fixture.id,
+                expectedMethod: fixture.method
+            ) == response)
+            #expect(reservation.isConsumed)
         }
     }
 
-    private static let allRequestMethods: Set<String> = [
-        "agent.capabilities",
-        "agent.status",
-        "agent.cadInteractionQualityAssessment",
-        "sessions.list",
-        "document.create",
-        "document.open",
-        "document.close",
-        "document.reset",
-        "history.undo",
-        "history.redo",
-        "command.apply",
-        "parameter.setExpression",
-        "document.setSurfaceFrameDisplay",
-        "document.movePolySplineSurfaceVertex",
-        "document.parameters",
-        "document.evaluate",
-        "document.measure",
-        "selection.measure",
-        "snap.resolve",
-        "document.constructionPlaneSummary",
-        "document.sceneGraphSnapshot",
-        "project.viewportSnapshot",
-        "document.designDisplaySnapshot",
-        "document.patternArraySummary",
-        "document.meshSummary",
-        "document.polySplineMeshAnalysis",
-        "document.sketchEntitySummary",
-        "document.sketchDimensionSummary",
-        "selection.dimensionEvaluation",
-        "document.curveAnalysis",
-        "document.topologySummary",
-        "document.sweepEvaluationPlan",
-        "document.booleanEvaluationPlan",
-        "document.objectDimensionSummary",
-        "document.surfaceSourceSummary",
-        "document.surfaceAnalysis",
-        "document.surfaceFrames",
-        "document.surfaceContinuitySummary",
-        "document.surfaceBoundaryContinuityCompatibility",
-        "selection.selectTargets",
-        "document.save",
-        "document.export",
-    ]
+    private func responseAuthority(_ response: AgentResponse) -> AgentProjectAuthorityCoordinate {
+        switch response {
+        case .capabilityExecution(.success(.preview(let receipt))):
+            return receipt.authority
+        case .capabilityExecution(.success(.committed(let receipt))):
+            return receipt.authority
+        case .capabilityExecution(.committedFailure(let failure)):
+            return failure.authority
+        case .programExecution(.success(.preview(let receipt))):
+            return receipt.authority
+        case .programExecution(.success(.committed(let receipt))):
+            return receipt.authority
+        case .programExecution(.committedFailure(let failure)):
+            return failure.authority
+        case .capabilityExecution(.prepublicationFailure),
+             .programExecution(.prepublicationFailure):
+            return fixtureAuthority
+        default:
+            Issue.record("Expected a semantic fixture response.")
+            return fixtureAuthority
+        }
+    }
+
+    private var emptyResultCharge: SemanticResultCharge {
+        SemanticResultCharge(
+            requestedOutputCount: 0,
+            diagnosticRecordCount: 0,
+            diagnosticScalarCount: 0,
+            diagnosticStringUTF8ByteCount: 0,
+            telemetryRecordCount: 0,
+            telemetryScalarCount: 0,
+            telemetryStringUTF8ByteCount: 0
+        )
+    }
+
+    private var fixtureAuthority: AgentProjectAuthorityCoordinate {
+        AgentProjectAuthorityCoordinate(
+            projectID: ProjectID(rawValue: "project.test"),
+            documentGeneration: DocumentGeneration(0),
+            transactionRevision: DocumentTransactionRevision(0),
+            publicationSequence: 0,
+            workspaceRevision: WorkspaceRevision(0)
+        )
+    }
 }
 
 private struct AgentProtocolFixtureFile: Sendable {
-    var name: String
-    var stem: String
-    var data: Data
+    let name: String
+    let id: String
+    let method: String
+    let data: Data
 }
 
 private enum AgentProtocolFixtureFiles {
@@ -165,7 +127,7 @@ private enum AgentProtocolFixtureFiles {
         var directory = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .appendingPathComponent("Fixtures")
-            .appendingPathComponent("AutomationProtocol")
+            .appendingPathComponent("SemanticProtocol")
         for component in components {
             directory.appendPathComponent(component)
         }
@@ -174,13 +136,16 @@ private enum AgentProtocolFixtureFiles {
             includingPropertiesForKeys: nil
         )
             .filter { $0.pathExtension == "json" }
-            .sorted { lhs, rhs in lhs.lastPathComponent < rhs.lastPathComponent }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
 
         return try files.map { url in
-            AgentProtocolFixtureFile(
+            let data = try Data(contentsOf: url)
+            let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            return AgentProtocolFixtureFile(
                 name: url.lastPathComponent,
-                stem: url.deletingPathExtension().lastPathComponent,
-                data: try Data(contentsOf: url)
+                id: try #require(json["id"] as? String),
+                method: try #require(json["method"] as? String),
+                data: data
             )
         }
     }

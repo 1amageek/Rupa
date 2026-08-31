@@ -1,0 +1,47 @@
+{
+  "jsonrpc": "2.0",
+  "id": "fixture-success-1",
+  "method": "capability.invoke",
+  "result": {
+    "kind": "success",
+    "success": {
+      "kind": "preview",
+      "preview": {
+        "authority": {
+          "projectID": "project.test",
+          "documentGeneration": {"value": 0},
+          "transactionRevision": {"value": 0},
+          "publicationSequence": 0,
+          "workspaceRevision": {"value": 0}
+        },
+        "proposedDocumentGeneration": {"value": 0},
+        "proposedTransactionRevision": {"value": 0},
+        "diagnostics": [],
+        "telemetry": {
+          "compilation": {
+            "decodedValueCount": 0,
+            "decodedNestingDepth": 0,
+            "nodeCount": 0,
+            "edgeCount": 0,
+            "parameterCount": 0,
+            "requestedOutputCount": 0,
+            "localOutputReferenceCount": 0,
+            "expressionCount": 0,
+            "expressionDepth": 0,
+            "expressionWork": 0,
+            "loweredCommandCount": 0,
+            "expandedSourceWork": 0
+          },
+          "execution": {
+            "stepCount": 0,
+            "commandCount": 0,
+            "inputSlotCount": 0,
+            "outputSlotCount": 0,
+            "generatedIdentityCount": 0,
+            "generatedSourceWork": 0
+          }
+        }
+      }
+    }
+  }
+}

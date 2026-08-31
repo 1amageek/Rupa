@@ -58,6 +58,10 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
     }
 
     public init(from decoder: Decoder) throws {
+        try AgentSemanticCoding.rejectUnknownKeys(
+            from: decoder,
+            allowedKeys: ["jsonrpc", "id", "method", "result", "error"]
+        )
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.jsonrpc = try container.decode(String.self, forKey: .jsonrpc)
         self.id = try container.decodeIfPresent(String.self, forKey: .id)
@@ -190,6 +194,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             try container.encode(value, forKey: .result)
         case .capabilityExecution(let value):
             try container.encode(value, forKey: .result)
+        case .programExecution(let value):
+            try container.encode(value, forKey: .result)
         case .parameters(let value):
             try container.encode(value, forKey: .result)
         case .evaluation(let value):
@@ -316,7 +322,11 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             )
         case "capability.invoke":
             return .capabilityExecution(
-                try container.decode(AgentCapabilityExecutionResult.self, forKey: .result)
+                try container.decode(AgentSemanticExecutionResult.self, forKey: .result)
+            )
+        case "program.execute":
+            return .programExecution(
+                try container.decode(AgentSemanticExecutionResult.self, forKey: .result)
             )
         case "document.parameters":
             return .parameters(try container.decode(ParameterListResult.self, forKey: .result))
@@ -461,6 +471,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             "domain.execute"
         case .capabilityExecution:
             "capability.invoke"
+        case .programExecution:
+            "program.execute"
         case .parameters:
             "document.parameters"
         case .evaluation:
@@ -550,6 +562,7 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
              ("command.applyBatch", .batch),
              ("domain.execute", .domainExecution),
              ("capability.invoke", .capabilityExecution),
+             ("program.execute", .programExecution),
              ("parameter.setExpression", .command),
              ("document.setSurfaceFrameDisplay", .command),
              ("document.movePolySplineSurfaceVertex", .command),

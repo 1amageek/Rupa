@@ -2,7 +2,6 @@ import Foundation
 import RupaAgentProtocol
 import RupaAgentRuntime
 import RupaAutomation
-import RupaCapabilities
 import RupaCore
 import RupaDomainFoundation
 import RupaEvaluation
@@ -562,108 +561,45 @@ func staleViewCannotHideDuplicateCurrentProjectIdentityAtRegistration() async th
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
-func projectAgentCapabilityInvocationUsesProjectTransactionAuthority() async throws {
-    let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
-    _ = try await workspace.evaluate()
-    let controller = ProjectAgentCommandController()
-    let sessionID = try await controller.register(workspace: workspace)
-    let view = try #require(workspace.view)
-    let capabilityID = CapabilityID(rawValue: "agent.createExtrudedRectangle")
-    let descriptor = try #require(
-        controller.capabilityRegistry().descriptor(for: capabilityID)
-    )
-    let command = AutomationCommand.createExtrudedRectangle(
-        name: "Project Capability Box",
-        plane: .xy,
-        width: .length(20.0, .millimeter),
-        height: .length(12.0, .millimeter),
-        depth: .length(6.0, .millimeter),
-        direction: .normal
-    )
-    let invocation = CapabilityInvocation(
-        capabilityID: capabilityID,
-        version: descriptor.version,
-        payload: try canonicalValue(for: command),
-        expectedTransactionRevision: view.transactionRevision
-    )
-
-    let response = await controller.handle(
-        .invokeCapability(
-            sessionID: sessionID,
-            invocation: invocation,
-            expectedWorkspaceRevision: view.workspaceState.revision
-        )
-    )
-    guard case .capabilityExecution(let result) = response else {
-        Issue.record("Expected capability execution through the project authority.")
-        return
-    }
-    #expect(result.automation?.didMutate == true)
-    #expect(workspace.view?.documentGeneration.value == view.documentGeneration.value + 1)
-    #expect(workspace.view?.evaluationSnapshot.bodyCount == 1)
-}
-
-@MainActor
-@Test(.timeLimit(.minutes(1)))
-func projectAgentCapabilityRegistryDeclaresExportArtifactSideEffectsExactly() throws {
-    let controller = ProjectAgentCommandController()
-    let registry = try controller.capabilityRegistry()
-    let export = try #require(registry.descriptor(for: "agent.exportDocument"))
-    let validation = try #require(registry.descriptor(for: "agent.validateDocument"))
-
-    #expect(export.effect == .export)
-    #expect(export.result.kind == .exportArtifact)
-    #expect(export.execution.retrySafe == false)
-    #expect(export.execution.supportsDryRun)
-    #expect(export.execution.supportsCancellation)
-    #expect(validation.effect == .query)
-    #expect(validation.execution.retrySafe)
-    #expect(validation.summary.contains("without publishing project state"))
-}
-
-@MainActor
-@Test(.timeLimit(.minutes(1)))
-func projectAgentCapabilityRejectsSameEffectDifferentCommandIdentity() async throws {
+func projectAgentSemanticCapabilityRoutesFailClosedBeforeLeaseOrMutation() async throws {
     let (project, workspace) = try await makeProjectWorkspace(
-        document: .empty(named: "Capability Identity")
+        document: .empty(named: "Semantic Fail Closed")
     )
     let controller = ProjectAgentCommandController()
     let sessionID = try await controller.register(workspace: workspace)
     let view = try #require(workspace.view)
-    let capabilityID = CapabilityID(rawValue: "agent.renameDocument")
-    let descriptor = try #require(
-        controller.capabilityRegistry().descriptor(for: capabilityID)
-    )
-    let spoofedCommand = AutomationCommand.createExtrudedRectangle(
-        name: "Must Not Exist",
-        plane: .xy,
-        width: .length(10.0, .millimeter),
-        height: .length(10.0, .millimeter),
-        depth: .length(10.0, .millimeter),
-        direction: .normal
+    let request = AgentRequest.invokeCapability(
+        AgentSemanticDirectExecutionRequest(
+            sessionID: sessionID,
+            authority: AgentProjectAuthorityCoordinate(
+                projectID: view.projectID,
+                documentGeneration: view.documentGeneration,
+                transactionRevision: view.transactionRevision,
+                publicationSequence: view.publicationSequence,
+                workspaceRevision: view.workspaceState.revision
+            ),
+            dryRun: false,
+            request: AgentSemanticDirectRequest(
+                schemaVersion: .init(major: 1, minor: 0, patch: 0),
+                operationID: "cad.solid.box",
+                operationVersion: .init(major: 1, minor: 0, patch: 0),
+                requestedOutputs: ["body"]
+            )
+        )
     )
     let before = try await project.currentState()
+    let response = await controller.handle(request)
 
-    let response = await controller.handle(
-        .invokeCapability(
-            sessionID: sessionID,
-            invocation: CapabilityInvocation(
-                capabilityID: capabilityID,
-                version: descriptor.version,
-                payload: try canonicalValue(for: spoofedCommand),
-                expectedTransactionRevision: view.transactionRevision
-            ),
-            expectedWorkspaceRevision: view.workspaceState.revision
-        )
-    )
-    guard case .failure(let error) = response else {
-        Issue.record("Expected mismatched capability and Automation command identity to fail.")
+    guard case .capabilityExecution(.prepublicationFailure(let failure)) = response else {
+        Issue.record("Expected capability.invoke to fail closed before semantic dispatch is implemented.")
         return
     }
-    #expect(error.code == .commandInvalid)
+    #expect(failure.stage == .dispatchUnavailable)
+    #expect(failure.code == AgentSemanticPrepublicationFailure.dispatchUnavailableCode)
+    #expect(failure.publicationDisposition == .notPublished)
+    #expect(failure.retryDisposition == .retryPermitted)
     let after = try await project.currentState()
-    #expect(after.document.cadDocument.metadata.name == "Capability Identity")
-    #expect(after.evaluationSnapshot.bodyCount == 0)
+    #expect(after.documentGeneration == before.documentGeneration)
     #expect(after.transactionRevision == before.transactionRevision)
     #expect(after.publicationSequence == before.publicationSequence)
     #expect(after.package.productSource == before.package.productSource)
@@ -673,47 +609,54 @@ func projectAgentCapabilityRejectsSameEffectDifferentCommandIdentity() async thr
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
-func projectAgentCapabilityInvocationReportsWorkspaceRevisionMismatchExactly() async throws {
+func projectAgentSemanticProgramRouteFailsClosedBeforeLeaseOrMutation() async throws {
     let (project, workspace) = try await makeProjectWorkspace(
-        document: .empty(named: "Capability Workspace")
+        document: .empty(named: "Semantic Program Fail Closed")
     )
     let controller = ProjectAgentCommandController()
     let sessionID = try await controller.register(workspace: workspace)
     let view = try #require(workspace.view)
-    let capabilityID = CapabilityID(rawValue: "agent.setDisplayUnit")
-    let descriptor = try #require(
-        controller.capabilityRegistry().descriptor(for: capabilityID)
-    )
-    let before = try await project.currentState()
-    let response = await controller.handle(
-        .invokeCapability(
+    let request = AgentRequest.executeProgram(
+        AgentSemanticProgramExecutionRequest(
             sessionID: sessionID,
-            invocation: CapabilityInvocation(
-                capabilityID: capabilityID,
-                version: descriptor.version,
-                payload: try canonicalValue(
-                    for: AutomationCommand.setDisplayUnit(.centimeter)
-                ),
-                expectedTransactionRevision: view.transactionRevision
+            authority: AgentProjectAuthorityCoordinate(
+                projectID: view.projectID,
+                documentGeneration: view.documentGeneration,
+                transactionRevision: view.transactionRevision,
+                publicationSequence: view.publicationSequence,
+                workspaceRevision: view.workspaceState.revision
             ),
-            expectedWorkspaceRevision: WorkspaceRevision(
-                view.workspaceState.revision.value + 1
+            dryRun: true,
+            program: AgentSemanticProgramRequest(
+                schemaVersion: .init(major: 1, minor: 0, patch: 0),
+                nodes: [
+                    .init(
+                        symbol: "box",
+                        operationID: "cad.solid.box",
+                        operationVersion: .init(major: 1, minor: 0, patch: 0)
+                    ),
+                ]
             )
         )
     )
-    guard case .failure(let error) = response else {
-        Issue.record("Expected stale capability workspace coordinates to fail.")
+    let before = try await project.currentState()
+    let response = await controller.handle(request)
+
+    guard case .programExecution(.prepublicationFailure(let failure)) = response else {
+        Issue.record("Expected program.execute to fail closed before semantic dispatch is implemented.")
         return
     }
-    #expect(error.code == .workspaceRevisionMismatch)
+    #expect(failure.stage == .dispatchUnavailable)
+    #expect(failure.code == AgentSemanticPrepublicationFailure.dispatchUnavailableCode)
+    #expect(failure.publicationDisposition == .notPublished)
+    #expect(failure.retryDisposition == .retryPermitted)
     let after = try await project.currentState()
+    #expect(after.documentGeneration == before.documentGeneration)
+    #expect(after.transactionRevision == before.transactionRevision)
+    #expect(after.publicationSequence == before.publicationSequence)
     #expect(after.package.productSource == before.package.productSource)
     #expect(after.package.cadSource == before.package.cadSource)
-    #expect(after.evaluation.id == before.evaluation.id)
-    #expect(after.evaluation.occurrences.keys == before.evaluation.occurrences.keys)
-    #expect(after.publicationSequence == before.publicationSequence)
-    #expect(after.workspaceState.revision == before.workspaceState.revision)
-    #expect(after.workspaceState.displayUnit == before.workspaceState.displayUnit)
+    #expect(after.evaluationSnapshot == before.evaluationSnapshot)
 }
 
 @MainActor
@@ -769,62 +712,6 @@ func projectAgentDynamicDomainRouteUsesProjectTransactionAuthority() async throw
         return
     }
     #expect(result.didMutate)
-    #expect(workspace.view?.projectName == "Domain Project")
-}
-
-@MainActor
-@Test(.timeLimit(.minutes(1)))
-func projectAgentDynamicDomainCapabilityInvocationSupportsDryRunAndCommit() async throws {
-    let capabilityID: DomainCapabilityID = "architecture.renameCapabilityProject"
-    let registry = try projectAgentDomainRegistry(capabilityID: capabilityID)
-    let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
-    _ = try await workspace.evaluate()
-    let controller = ProjectAgentCommandController(domainRegistry: registry)
-    let sessionID = try await controller.register(workspace: workspace)
-    let before = try #require(workspace.view)
-    let agentCapabilityID = CapabilityID(rawValue: "agent.\(capabilityID.rawValue)")
-    let descriptor = try #require(
-        controller.capabilityRegistry().descriptor(for: agentCapabilityID)
-    )
-
-    let dryRun = await controller.handle(
-        .invokeCapability(
-            sessionID: sessionID,
-            invocation: CapabilityInvocation(
-                capabilityID: agentCapabilityID,
-                version: descriptor.version,
-                payload: .object([:]),
-                expectedTransactionRevision: before.transactionRevision,
-                dryRun: true
-            ),
-            expectedWorkspaceRevision: before.workspaceState.revision
-        )
-    )
-    guard case .capabilityExecution(let dryRunResult) = dryRun else {
-        Issue.record("Expected dynamic domain capability dry-run execution.")
-        return
-    }
-    #expect(dryRunResult.domain?.wouldMutate == true)
-    #expect(dryRunResult.domain?.didMutate == false)
-    #expect(workspace.view?.publicationSequence == before.publicationSequence)
-
-    let committed = await controller.handle(
-        .invokeCapability(
-            sessionID: sessionID,
-            invocation: CapabilityInvocation(
-                capabilityID: agentCapabilityID,
-                version: descriptor.version,
-                payload: .object([:]),
-                expectedTransactionRevision: before.transactionRevision
-            ),
-            expectedWorkspaceRevision: before.workspaceState.revision
-        )
-    )
-    guard case .capabilityExecution(let committedResult) = committed else {
-        Issue.record("Expected dynamic domain capability commit execution.")
-        return
-    }
-    #expect(committedResult.domain?.didMutate == true)
     #expect(workspace.view?.projectName == "Domain Project")
 }
 
@@ -2038,10 +1925,6 @@ private func makeProjectWorkspace(
     let workspace = ProjectWorkspace(project: project)
     _ = try await workspace.evaluate()
     return (project, workspace)
-}
-
-private func canonicalValue<Value: Encodable>(for value: Value) throws -> CanonicalValue {
-    try JSONDecoder().decode(CanonicalValue.self, from: JSONEncoder().encode(value))
 }
 
 private struct ProjectAgentDomainRenameLowering: DomainCommandLowering {

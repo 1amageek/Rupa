@@ -1,1532 +1,523 @@
-import Testing
-import Darwin
 import Foundation
-import RupaCapabilities
 import RupaAgentIntegrationTestFixtures
-import RupaAutomation
+import RupaAgentProtocol
 import RupaCore
+import RupaCoreTypes
 import RupaDomainFoundation
-import SwiftCAD
-@testable import RupaAgent
-
-@Test func agentHandlesCapabilitySchemaRequest() async throws {
-    let server = AgentCommandController()
-
-    let response = server.handle(.capabilities)
-
-    guard case .capabilities(let descriptors) = response else {
-        #expect(Bool(false))
-        return
-    }
-    #expect(descriptors == server.capabilityDescriptors())
-    #expect(descriptors.contains { $0.name == "moveBodyEdge" && $0.targets == [.edge] })
-    #expect(descriptors.contains { $0.name == "moveBodyVertex" && $0.targets == [.vertex] })
-    #expect(descriptors.contains { $0.name == "cadInteractionQualityAssessment" && !$0.requiresSession })
-    #expect(descriptors.contains { $0.name == "sceneGraphSnapshot" && $0.discovery == [.sceneGraphSnapshot] })
-    #expect(descriptors.contains { $0.name == "designDisplaySnapshot" && $0.discovery.contains(.designDisplaySnapshot) })
-    #expect(descriptors.contains { $0.name == "patternArraySummary" && $0.discovery.contains(.patternArraySummary) })
-}
-
-@Test func agentMessageCodecRoundTripsUniversalCapabilityRegistryRoute() async throws {
-    let codec = AgentMessageCodec()
-    let requestData = try codec.encode(.capabilityRegistry, id: "universal-request")
-    let request = try codec.decodeRequest(from: requestData)
-    #expect(request == .capabilityRegistry)
-
-    let response = AgentCommandController().handle(request)
-    let responseData = try codec.encode(
-        response,
-        id: "universal-request",
-        method: request.methodName
-    )
-    let decoded = try codec.decodeResponse(
-        from: responseData,
-        expectedID: "universal-request",
-        expectedMethod: request.methodName
-    )
-    guard case .capabilityRegistry(let descriptors) = decoded else {
-        Issue.record("Expected a universal capability registry response.")
-        return
-    }
-    #expect(descriptors.contains { $0.id.rawValue == "agent.createSweep" })
-}
+import Testing
 
 @Test(.timeLimit(.minutes(1)))
-func agentMessageCodecPreservesCommittedMutationReceiptAsWireError() throws {
+func semanticDirectRequestRoundTripsWithExplicitVersionsAndOutputs() throws {
     let codec = AgentMessageCodec()
-    let outcome = AgentCommittedMutationOutcome(
-        stage: .viewProjection,
-        mutation: .source,
-        requestMethod: "command.apply",
-        projectID: ProjectID(rawValue: "project.committed-receipt"),
-        documentGeneration: DocumentGeneration(7),
-        transactionRevision: DocumentTransactionRevision(5),
-        publicationSequence: 9,
-        workspaceRevision: WorkspaceRevision(3),
-        message: "Source committed but view projection failed."
-    )
-    let response = AgentResponse.committedMutation(outcome)
-    let encoded = try codec.encode(
-        response,
-        id: "committed-receipt",
-        method: "command.apply"
-    )
-    let envelope = try codec.decodeResponseEnvelope(from: encoded)
-
-    #expect(envelope.result == nil)
-    #expect(envelope.error?.committedMutation == outcome)
-    #expect(
-        try codec.decodeResponse(
-            from: encoded,
-            expectedID: "committed-receipt",
-            expectedMethod: "command.apply"
-        ) == response
-    )
-
-    var wrongIDError: EditorError?
-    do {
-        _ = try codec.decodeResponse(
-            from: encoded,
-            expectedID: "different-request",
-            expectedMethod: "command.apply"
-        )
-    } catch let error as EditorError {
-        wrongIDError = error
-    }
-    #expect(wrongIDError?.code == .agentConnectionFailed)
-
-    var wrongMethodError: EditorError?
-    do {
-        _ = try codec.decodeResponse(
-            from: encoded,
-            expectedID: "committed-receipt",
-            expectedMethod: "command.applyBatch"
-        )
-    } catch let error as EditorError {
-        wrongMethodError = error
-    }
-    #expect(wrongMethodError?.code == .agentConnectionFailed)
-
-    var relabeledReceiptError: EditorError?
-    do {
-        _ = try codec.encode(
-            response,
-            id: "committed-receipt",
-            method: "command.applyBatch"
-        )
-    } catch let error as EditorError {
-        relabeledReceiptError = error
-    }
-    #expect(relabeledReceiptError?.code == .commandInvalid)
-}
-
-@Test func universalCapabilityInvocationExecutesAutomationCommandAndRoundTrips() async throws {
-    let codec = AgentMessageCodec()
-    let server = AgentCommandController()
-    let sessionID = UUID()
-    let session = EditorSession()
-    server.register(session: session, id: sessionID)
-    let capabilityID = CapabilityID(rawValue: "agent.createExtrudedRectangle")
-    let descriptor = try #require(
-        server.capabilityRegistry().descriptor(for: capabilityID)
-    )
-    let command = AutomationCommand.createExtrudedRectangle(
-        name: "Universal Invocation Box",
-        plane: .xy,
-        width: .length(20.0, .millimeter),
-        height: .length(12.0, .millimeter),
-        depth: .length(6.0, .millimeter),
-        direction: .normal
-    )
-    let invocation = CapabilityInvocation(
-        capabilityID: capabilityID,
-        version: descriptor.version,
-        payload: try canonicalValue(for: command),
-        expectedTransactionRevision: session.transactionRevision
-    )
     let request = AgentRequest.invokeCapability(
-        sessionID: sessionID,
-        invocation: invocation,
-        expectedWorkspaceRevision: session.workspaceState.revision
-    )
-
-    let encodedRequest = try codec.encode(request, id: "capability-invocation")
-    #expect(try codec.decodeRequest(from: encodedRequest) == request)
-
-    let response = server.handle(request)
-    guard case .capabilityExecution(let result) = response else {
-        Issue.record("Expected universal capability execution response.")
-        return
-    }
-    #expect(result.capabilityID == capabilityID)
-    #expect(result.automation?.didMutate == true)
-    #expect(session.generation.value == 1)
-
-    let encodedResponse = try codec.encode(
-        response,
-        id: "capability-invocation",
-        method: request.methodName
-    )
-    #expect(
-        try codec.decodeResponse(
-            from: encodedResponse,
-            expectedID: "capability-invocation",
-            expectedMethod: request.methodName
-        ) == response
-    )
-}
-
-@Test func universalCapabilityInvocationRejectsStaleSourceRevision() throws {
-    let server = AgentCommandController()
-    let sessionID = UUID()
-    let session = EditorSession()
-    server.register(session: session, id: sessionID)
-    let capabilityID = CapabilityID(rawValue: "agent.createExtrudedRectangle")
-    let descriptor = try #require(
-        server.capabilityRegistry().descriptor(for: capabilityID)
-    )
-    let invocation = CapabilityInvocation(
-        capabilityID: capabilityID,
-        version: descriptor.version,
-        payload: .object([:]),
-        expectedTransactionRevision: DocumentTransactionRevision(99)
-    )
-
-    let response = server.handle(
-        .invokeCapability(
-            sessionID: sessionID,
-            invocation: invocation,
-            expectedWorkspaceRevision: session.workspaceState.revision
+        AgentSemanticDirectExecutionRequest(
+            sessionID: SelfTestFixtures.sessionID,
+            authority: SelfTestFixtures.authority,
+            dryRun: false,
+            request: AgentSemanticDirectRequest(
+                schemaVersion: SelfTestFixtures.schemaVersion,
+                operationID: "cad.solid.box",
+                operationVersion: SelfTestFixtures.operationVersion,
+                arguments: [
+                    .init(
+                        name: "origin",
+                        value: .literal(
+                            .point(
+                                AgentSemanticPoint3D(
+                                    x: 0,
+                                    y: 0,
+                                    z: 0,
+                                    unit: .meter
+                                )
+                            )
+                        )
+                    ),
+                    .init(
+                        name: "width",
+                        value: .literal(.number(0.02, unit: .meter))
+                    ),
+                    .init(
+                        name: "height",
+                        value: .literal(.number(0.012, unit: .meter))
+                    ),
+                ],
+                requestedOutputs: ["body"]
+            )
         )
     )
 
-    guard case .failure = response else {
-        Issue.record("Expected stale universal capability invocation to fail.")
-        return
-    }
-    #expect(session.generation.value == 0)
-}
-
-@Test func agentMessageCodecWrapsRequestsInJSONRPCEnvelope() async throws {
-    let codec = AgentMessageCodec()
-
-    let encoded = try codec.encode(AgentRequest.status, id: "request-1")
+    let encoded = try codec.encode(request, id: "direct-box-1")
+    let decoded = try codec.decodeRequest(from: encoded)
     let envelope = try codec.decodeRequestEnvelope(from: encoded)
     let json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
     let params = try #require(json["params"] as? [String: Any])
-
-    #expect(envelope == AgentRequestEnvelope(id: "request-1", params: .status))
-    #expect(json["jsonrpc"] as? String == "2.0")
-    #expect(json["id"] as? String == "request-1")
-    #expect(json["method"] as? String == "agent.status")
-    #expect(params.isEmpty)
-    #expect(params["status"] == nil)
-}
-
-@Test func agentMessageCodecUsesMethodSpecificRequestParams() async throws {
-    let codec = AgentMessageCodec()
-    let sessionID = UUID()
-    let request = AgentRequest.execute(
-        sessionID: sessionID,
-        command: .renameDocument(name: "Flat Params"),
-        expectedGeneration: DocumentGeneration(7),
-        expectedWorkspaceRevision: WorkspaceRevision(3)
-    )
-
-    let encoded = try codec.encode(request, id: "request-params")
-    let decoded = try codec.decodeRequest(from: encoded)
-    let json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-    let params = try #require(json["params"] as? [String: Any])
+    let payload = try #require(params["request"] as? [String: Any])
 
     #expect(decoded == request)
-    #expect(json["method"] as? String == "command.apply")
-    #expect(params["execute"] == nil)
-    #expect(params["sessionID"] as? String == sessionID.uuidString)
-    #expect(params["command"] != nil)
-    #expect(params["expectedGeneration"] != nil)
-    #expect(params["expectedWorkspaceRevision"] != nil)
+    #expect(envelope.method == "capability.invoke")
+    #expect(payload["schemaVersion"] != nil)
+    #expect(payload["operationID"] as? String == "cad.solid.box")
+    #expect(payload["operationVersion"] != nil)
+    #expect(payload["requestedOutputs"] as? [String] == ["body"])
+    #expect(params["invocation"] == nil)
+    #expect(params["command"] == nil)
 }
 
-@Test func agentMessageCodecUsesMethodSpecificBatchRequestParams() async throws {
-    let codec = AgentMessageCodec()
-    let sessionID = UUID()
-    let batch = AutomationBatch(
-        commands: [
-            .renameDocument(name: "Batch Params"),
-            .validateDocument,
-        ],
-        expectedGeneration: DocumentGeneration(7),
-        expectedWorkspaceRevision: WorkspaceRevision(3)
+@Test(.timeLimit(.minutes(1)))
+func semanticProgramRequestRoundTripsParametersAndLocalOutputs() throws {
+    let output = AgentSemanticOutputReference(
+        node: "box",
+        output: "body",
+        kind: .sourceBody(role: .body)
     )
-    let request = AgentRequest.executeBatch(
-        sessionID: sessionID,
-        batch: batch
-    )
-
-    let encoded = try codec.encode(request, id: "batch-request-params")
-    let decoded = try codec.decodeRequest(from: encoded)
-    let json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-    let params = try #require(json["params"] as? [String: Any])
-    let batchJSON = try #require(params["batch"] as? [String: Any])
-
-    #expect(decoded == request)
-    #expect(json["method"] as? String == "command.applyBatch")
-    #expect(params["executeBatch"] == nil)
-    #expect(params["sessionID"] as? String == sessionID.uuidString)
-    #expect(batchJSON["commands"] != nil)
-    #expect(batchJSON["expectedGeneration"] != nil)
-    #expect(batchJSON["expectedWorkspaceRevision"] != nil)
-}
-
-@Test func agentMessageCodecRoundTripsCallerOwnedFeatureGraphTransaction() async throws {
-    let codec = AgentMessageCodec()
-    let sessionID = UUID()
-    let featureID = FeatureID()
-    var builder = SketchBuilder(on: .xy)
-    builder.rectangle(
-        width: .length(20.0, .millimeter),
-        height: .length(10.0, .millimeter)
-    )
-    let transaction = FeatureGraphTransaction(
-        features: [
-            FeatureNode(
-                id: featureID,
-                name: "Caller Profile",
-                operation: .sketch(builder.build()),
-                outputs: [FeatureOutput(role: .profile)]
+    let program = AgentSemanticProgramRequest(
+        schemaVersion: SelfTestFixtures.schemaVersion,
+        parameters: [
+            .init(
+                name: "depth",
+                value: .number(0.006, unit: .meter)
             ),
         ],
-        primaryFeatureID: featureID
+        nodes: [
+            .init(
+                symbol: "box",
+                operationID: "cad.solid.box",
+                operationVersion: SelfTestFixtures.operationVersion,
+                arguments: [
+                    .init(
+                        name: "depth",
+                        value: .parameter("depth")
+                    ),
+                    .init(
+                        name: "bodyOutput",
+                        value: .local(output)
+                    ),
+                ]
+            ),
+        ],
+        requestedOutputs: [output]
     )
-    let request = AgentRequest.execute(
-        sessionID: sessionID,
-        command: .appendFeatureGraph(transaction),
-        expectedGeneration: DocumentGeneration(4)
+    let request = AgentRequest.executeProgram(
+        AgentSemanticProgramExecutionRequest(
+            sessionID: SelfTestFixtures.sessionID,
+            authority: SelfTestFixtures.authority,
+            dryRun: true,
+            program: program
+        )
     )
 
-    let encoded = try codec.encode(request, id: "feature-graph")
+    let codec = AgentMessageCodec()
+    let encoded = try codec.encode(request, id: "program-box-1")
     let decoded = try codec.decodeRequest(from: encoded)
+    let json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    let params = try #require(json["params"] as? [String: Any])
 
     #expect(decoded == request)
-}
-
-@Test func agentMessageCodecRoundTripsDomainExecuteRequestAndResponse() async throws {
-    let codec = AgentMessageCodec()
-    let sessionID = UUID()
-    let capabilityID: DomainCapabilityID = "architecture.createWall"
-    let namespace: SemanticNamespaceID = "architecture"
-    let request = AgentRequest.executeDomain(
-        sessionID: sessionID,
-        request: DomainCommandRequest(
-            capabilityID: capabilityID,
-            namespace: namespace,
-            payload: .object([
-                "kind": .string("wall"),
-                "height": .number(3.0),
-            ]),
-            expectedGeneration: DocumentGeneration(9),
-            dryRun: true
-        )
-    )
-    let response = AgentResponse.domainExecution(
-        DomainExecutionResult(
-            capabilityID: capabilityID,
-            namespace: namespace,
-            message: "Domain dry-run completed.",
-            baseGeneration: DocumentGeneration(9),
-            generation: DocumentGeneration(9),
-            proposedGeneration: DocumentGeneration(10),
-            didMutate: false,
-            wouldMutate: true,
-            dryRun: true,
-            diagnostics: [
-                EditorDiagnostic(
-                    severity: .info,
-                    message: "Domain request reached codec."
-                ),
-            ]
-        )
-    )
-
-    let encodedRequest = try codec.encode(request, id: "domain-request")
-    let decodedRequest = try codec.decodeRequest(from: encodedRequest)
-    let requestJSON = try #require(JSONSerialization.jsonObject(with: encodedRequest) as? [String: Any])
-    let requestParams = try #require(requestJSON["params"] as? [String: Any])
-    let encodedResponse = try codec.encode(
-        response,
-        id: "domain-request",
-        method: "domain.execute"
-    )
-    let decodedResponse = try codec.decodeResponse(
-        from: encodedResponse,
-        expectedID: "domain-request",
-        expectedMethod: "domain.execute"
-    )
-
-    #expect(decodedRequest == request)
-    #expect(decodedResponse == response)
-    guard case .domainExecution(let decodedDomainResult) = decodedResponse else {
-        Issue.record("Expected a domain execution response.")
-        return
+    #expect(json["method"] as? String == "program.execute")
+    #expect(params["program"] != nil)
+    #expect(params["invocation"] == nil)
+    #expect(params["command"] == nil)
+    if case .executeProgram(let decodedRequest) = decoded {
+        #expect(decodedRequest.dryRun)
+        #expect(decodedRequest.program.requestedOutputs == [output])
+        #expect(decodedRequest.program.nodes.first?.arguments.last?.value == .local(output))
+    } else {
+        Issue.record("Expected program.execute to decode as a semantic program request.")
     }
-    #expect(!decodedDomainResult.didMutate)
-    #expect(decodedDomainResult.wouldMutate)
-    #expect(decodedDomainResult.baseGeneration == DocumentGeneration(9))
-    #expect(decodedDomainResult.proposedGeneration == DocumentGeneration(10))
-    #expect(requestJSON["method"] as? String == "domain.execute")
-    #expect(requestParams["sessionID"] as? String == sessionID.uuidString)
-    #expect(requestParams["capabilityID"] as? String == capabilityID.rawValue)
-    #expect(requestParams["namespace"] as? String == namespace.rawValue)
-    #expect(requestParams["payload"] != nil)
-    #expect(requestParams["expectedGeneration"] != nil)
-    #expect(requestParams["dryRun"] as? Bool == true)
 }
 
-@Test func agentExecutesInjectedDomainCapability() async throws {
-    let namespace: SemanticNamespaceID = "architecture"
-    let capabilityID: DomainCapabilityID = "architecture.rename"
-    let registry = try agentDomainExecutionRegistry(
-        namespace: namespace,
-        capabilityID: capabilityID,
-        supportsDryRun: true,
-        lowering: AgentDomainRenameLowering(
-            capabilityID: capabilityID,
-            name: "Agent Domain"
+@Test(.timeLimit(.minutes(1)))
+func semanticExecutionResultsRoundTripForPreviewCommittedAndFailures() throws {
+    let codec = AgentMessageCodec()
+    let telemetry = AgentSemanticTelemetry(
+        compilation: .init(
+            decodedValueCount: 1,
+            decodedNestingDepth: 1,
+            nodeCount: 1,
+            edgeCount: 0,
+            parameterCount: 0,
+            requestedOutputCount: 0,
+            localOutputReferenceCount: 0,
+            expressionCount: 0,
+            expressionDepth: 0,
+            expressionWork: 0,
+            loweredCommandCount: 1,
+            expandedSourceWork: 1
+        ),
+        execution: .init(
+            stepCount: 1,
+            commandCount: 1,
+            inputSlotCount: 0,
+            outputSlotCount: 0,
+            generatedIdentityCount: 0,
+            generatedSourceWork: 1
         )
     )
-    let server = AgentCommandController(domainRegistry: registry)
-    let session = EditorSession(document: .empty(named: "Before"))
-    let sessionID = UUID()
-    server.register(session: session, id: sessionID)
-
-    let response = server.handle(
-        .executeDomain(
-            sessionID: sessionID,
-            request: DomainCommandRequest(
-                capabilityID: capabilityID,
-                namespace: namespace,
-                payload: .object([:]),
-                expectedGeneration: session.generation
+    let preview = AgentResponse.capabilityExecution(
+        .success(
+            .preview(
+                AgentSemanticPreviewReceipt(
+                    authority: SelfTestFixtures.authority,
+                    proposedDocumentGeneration: SelfTestFixtures.authority.documentGeneration,
+                    proposedTransactionRevision: SelfTestFixtures.authority.transactionRevision,
+                    diagnostics: [],
+                    telemetry: telemetry
+                )
+            )
+        )
+    )
+    let committed = AgentResponse.programExecution(
+        .success(
+            .committed(
+                AgentSemanticCommitReceipt(
+                    authority: SelfTestFixtures.authority,
+                    outputs: [],
+                    diagnostics: [],
+                    telemetry: telemetry
+                )
+            )
+        )
+    )
+    let prepublication = AgentResponse.capabilityExecution(
+        .prepublicationFailure(
+            AgentSemanticPrepublicationFailure(
+                stage: .authorityRejected,
+                code: DomainCapabilityErrorCode("authorityRejected")
+            )
+        )
+    )
+    let committedFailure = AgentResponse.programExecution(
+        .committedFailure(
+            AgentSemanticCommittedFailure(
+                code: .authorityValidationFailed,
+                authority: SelfTestFixtures.authority
             )
         )
     )
 
-    guard case .domainExecution(let result) = response else {
-        Issue.record("Expected domain execution response.")
-        return
+    for (response, method, id) in [
+        (preview, "capability.invoke", "preview-1"),
+        (committed, "program.execute", "commit-1"),
+        (prepublication, "capability.invoke", "prepub-1"),
+        (committedFailure, "program.execute", "failure-1"),
+    ] {
+        do {
+            _ = try codec.encode(response, id: id, method: method)
+            Issue.record("A semantic response was encoded without a response plan.")
+        } catch let error as AgentResponseEncodingError {
+            #expect(error == .responsePlanRequired(method: method))
+        }
+
+        let reservation = try codec.reserveResponse(
+            requestID: id,
+            method: method,
+            authority: SelfTestFixtures.authority,
+            requestedOutputs: [],
+            resultCharge: SelfTestFixtures.emptyResultCharge
+        )
+        let encoded = try codec.encode(response, consuming: reservation)
+        let decoded = try codec.decodeResponse(
+            from: encoded,
+            expectedID: id,
+            expectedMethod: method
+        )
+        #expect(decoded == response)
+        #expect(reservation.isConsumed)
+
+        do {
+            _ = try codec.encode(response, consuming: reservation)
+            Issue.record("A consumed response reservation was reused.")
+        } catch let error as AgentResponseEncodingError {
+            #expect(error == .responsePlanAlreadyConsumed)
+        }
     }
-    #expect(result.didMutate)
-    #expect(!result.dryRun)
-    #expect(session.document.cadDocument.metadata.name == "Agent Domain")
-    #expect(session.commandStack.canUndo)
 }
 
-@Test func agentDomainDryRunRestoresSessionState() async throws {
-    let namespace: SemanticNamespaceID = "architecture"
-    let capabilityID: DomainCapabilityID = "architecture.rename"
-    let registry = try agentDomainExecutionRegistry(
-        namespace: namespace,
-        capabilityID: capabilityID,
-        supportsDryRun: true,
-        lowering: AgentDomainRenameLowering(
-            capabilityID: capabilityID,
-            name: "Dry Agent Domain"
-        )
-    )
-    let server = AgentCommandController(domainRegistry: registry)
-    let session = EditorSession(document: .empty(named: "Before"))
-    let sessionID = UUID()
-    server.register(session: session, id: sessionID)
-
-    let response = server.handle(
-        .executeDomain(
-            sessionID: sessionID,
-            request: DomainCommandRequest(
-                capabilityID: capabilityID,
-                namespace: namespace,
-                payload: .object([:]),
-                expectedGeneration: session.generation,
-                dryRun: true
-            )
-        )
-    )
-
-    guard case .domainExecution(let result) = response else {
-        Issue.record("Expected domain execution response.")
-        return
-    }
-    #expect(!result.didMutate)
-    #expect(result.dryRun)
-    #expect(session.document.cadDocument.metadata.name == "Before")
-    #expect(!session.commandStack.canUndo)
-}
-
-@Test func agentMessageCodecAllowsOmittedExpressionDefaults() async throws {
+@Test(.timeLimit(.minutes(1)))
+func semanticProtocolRejectsRawGraphAndAutomationPayloadFields() throws {
     let codec = AgentMessageCodec()
-    let sessionID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
-    let requestJSON = """
+    let directEnvelope = """
     {
       "jsonrpc": "2.0",
-      "id": "parameter-defaults",
-      "method": "parameter.setExpression",
+      "id": "legacy-direct",
+      "method": "capability.invoke",
       "params": {
         "sessionID": "00000000-0000-0000-0000-000000000001",
-        "name": "siteWidth",
-        "expression": "12",
-        "kind": "length",
-        "expectedGeneration": {
-          "value": 4
+        "authority": {
+          "projectID": "project.test",
+          "documentGeneration": {"value": 0},
+          "transactionRevision": {"value": 0},
+          "publicationSequence": 0,
+          "workspaceRevision": {"value": 0}
+        },
+        "dryRun": false,
+        "invocation": {},
+        "command": {"name": "createExtrudedRectangle"}
+      }
+    }
+    """.data(using: .utf8)!
+
+    var didRejectDirect = false
+    do {
+        _ = try codec.decodeRequestEnvelope(from: directEnvelope)
+    } catch {
+        didRejectDirect = true
+    }
+    #expect(didRejectDirect)
+
+    let graphEnvelope = """
+    {
+      "jsonrpc": "2.0",
+      "id": "legacy-graph",
+      "method": "program.execute",
+      "params": {
+        "sessionID": "00000000-0000-0000-0000-000000000001",
+        "authority": {
+          "projectID": "project.test",
+          "documentGeneration": {"value": 0},
+          "transactionRevision": {"value": 0},
+          "publicationSequence": 0,
+          "workspaceRevision": {"value": 0}
+        },
+        "dryRun": false,
+        "program": {
+          "schemaVersion": {"major": 1, "minor": 0, "patch": 0},
+          "parameters": [],
+          "nodes": [],
+          "requestedOutputs": [],
+          "featureGraph": []
         }
       }
     }
     """.data(using: .utf8)!
 
-    let decoded = try codec.decodeRequest(from: requestJSON)
-
-    guard case .setParameterExpression(
-        let decodedSessionID,
-        let name,
-        let expression,
-        let kind,
-        let defaults,
-        let expectedGeneration
-    ) = decoded else {
-        #expect(Bool(false))
-        return
-    }
-    #expect(decodedSessionID == sessionID)
-    #expect(name == "siteWidth")
-    #expect(expression == "12")
-    #expect(kind == .length)
-    #expect(defaults == nil)
-    #expect(expectedGeneration == DocumentGeneration(4))
-}
-
-@Test func agentMessageCodecWrapsResponsesInJSONRPCEnvelope() async throws {
-    let codec = AgentMessageCodec()
-    let response = AgentResponse.status(
-        AgentStatus(
-            running: true,
-            sessionCount: 2
-        )
-    )
-
-    let encoded = try codec.encode(response, id: "request-2")
-    let decoded = try codec.decodeResponse(from: encoded, expectedID: "request-2")
-    let envelope = try codec.decodeResponseEnvelope(from: encoded)
-    let json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-    let result = try #require(json["result"] as? [String: Any])
-
-    #expect(decoded == response)
-    #expect(envelope.id == "request-2")
-    #expect(envelope.method == "agent.status")
-    #expect(json["jsonrpc"] as? String == "2.0")
-    #expect(json["id"] as? String == "request-2")
-    #expect(json["method"] as? String == "agent.status")
-    #expect(json["error"] == nil)
-    #expect(result["status"] == nil)
-    #expect(result["running"] as? Bool == true)
-    #expect(result["socketPath"] == nil)
-    #expect(result["sessionCount"] as? Int == 2)
-}
-
-@Test func agentMessageCodecWrapsBatchResponsesInJSONRPCEnvelope() async throws {
-    let codec = AgentMessageCodec()
-    let response = AgentResponse.batch(
-        AgentBatchResult(
-            results: [
-                AutomationResult(
-                    message: "Document renamed.",
-                    commandName: "renameDocument",
-                    generation: DocumentGeneration(1),
-                    didMutate: true
-                ),
-            ],
-            generation: DocumentGeneration(1),
-            workspaceRevision: WorkspaceRevision(4),
-            dirty: true,
-            metrics: AutomationBatchMetrics(
-                commandCount: 1,
-                evaluationPassCount: 1,
-                historyEntryCount: 1,
-                richResultCount: 1
-            )
-        )
-    )
-
-    let encoded = try codec.encode(response, id: "batch-response")
-    let decoded = try codec.decodeResponse(
-        from: encoded,
-        expectedID: "batch-response",
-        expectedMethod: "command.applyBatch"
-    )
-    let envelope = try codec.decodeResponseEnvelope(from: encoded)
-    let json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-    let result = try #require(json["result"] as? [String: Any])
-
-    #expect(decoded == response)
-    #expect(envelope.method == "command.applyBatch")
-    #expect(json["method"] as? String == "command.applyBatch")
-    #expect(result["batch"] == nil)
-    #expect(result["results"] != nil)
-    #expect(result["generation"] != nil)
-    #expect(result["workspaceRevision"] != nil)
-    #expect(result["dirty"] as? Bool == true)
-    let metrics = try #require(result["metrics"] as? [String: Any])
-    #expect(metrics["commandCount"] as? Int == 1)
-    #expect(metrics["evaluationPassCount"] as? Int == 1)
-    #expect(metrics["historyEntryCount"] as? Int == 1)
-    #expect(metrics["richResultCount"] as? Int == 1)
-}
-
-@Test func agentMessageCodecWrapsFailuresAsResponseErrors() async throws {
-    let codec = AgentMessageCodec()
-    let error = EditorError(
-        code: .commandInvalid,
-        message: "Malformed command."
-    )
-
-    let encoded = try codec.encode(
-        AgentResponse.failure(error),
-        id: "request-3",
-        method: "agent.status"
-    )
-    let decoded = try codec.decodeResponse(
-        from: encoded,
-        expectedID: "request-3",
-        expectedMethod: "agent.status"
-    )
-    let json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-    let errorJSON = try #require(json["error"] as? [String: Any])
-
-    #expect(decoded == .failure(error))
-    #expect(json["method"] as? String == "agent.status")
-    #expect(json["result"] == nil)
-    #expect(errorJSON["code"] as? String == EditorError.Code.commandInvalid.rawValue)
-    #expect(errorJSON["message"] as? String == "Malformed command.")
-}
-
-@Test func agentMessageCodecRejectsRequestMethodPayloadMismatch() async throws {
-    let codec = AgentMessageCodec()
-    let encoded = Data(
-        """
-        {
-            "jsonrpc": "2.0",
-            "id": "request-4",
-            "method": "agent.status",
-            "params": {
-                "sessions": {}
-            }
-        }
-        """.utf8
-    )
-    var caught: EditorError?
-
+    var didRejectGraph = false
     do {
-        _ = try codec.decodeRequestEnvelope(from: encoded)
-    } catch let error as EditorError {
-        caught = error
+        _ = try codec.decodeRequestEnvelope(from: graphEnvelope)
+    } catch {
+        didRejectGraph = true
     }
-
-    #expect(caught?.code == .commandInvalid)
+    #expect(didRejectGraph)
 }
 
-@Test func agentMessageCodecRejectsResponseMethodMismatch() async throws {
+@Test(.timeLimit(.minutes(1)))
+func semanticProtocolRejectsDirectLocalReferencesAndDuplicateNamedEntries() throws {
     let codec = AgentMessageCodec()
-    let encoded = try codec.encode(
-        AgentResponse.status(
-            AgentStatus(
-                running: true,
-                sessionCount: 1
-            )
-        ),
-        id: "request-5"
-    )
-    var caught: EditorError?
+    let directLocal = """
+    {
+      "jsonrpc": "2.0",
+      "id": "direct-local",
+      "method": "capability.invoke",
+      "params": {
+        "sessionID": "00000000-0000-0000-0000-000000000001",
+        "authority": {
+          "projectID": "project.test",
+          "documentGeneration": {"value": 0},
+          "transactionRevision": {"value": 0},
+          "publicationSequence": 0,
+          "workspaceRevision": {"value": 0}
+        },
+        "dryRun": false,
+        "request": {
+          "schemaVersion": {"major": 1, "minor": 0, "patch": 0},
+          "operationID": "cad.solid.box",
+          "operationVersion": {"major": 1, "minor": 0, "patch": 0},
+          "arguments": [
+            {
+              "name": "body",
+              "value": {
+                "kind": "local",
+                "local": {
+                  "node": "box",
+                  "output": "body",
+                  "kind": {"kind": "sourceBody", "role": "body"}
+                }
+              }
+            }
+          ],
+          "requestedOutputs": []
+        }
+      }
+    }
+    """.data(using: .utf8)!
 
+    var didRejectDirectLocal = false
+    do {
+        _ = try codec.decodeRequestEnvelope(from: directLocal)
+    } catch {
+        didRejectDirectLocal = true
+    }
+    #expect(didRejectDirectLocal)
+
+    let duplicateEntries = """
+    {
+      "jsonrpc": "2.0",
+      "id": "duplicate-program",
+      "method": "program.execute",
+      "params": {
+        "sessionID": "00000000-0000-0000-0000-000000000001",
+        "authority": {
+          "projectID": "project.test",
+          "documentGeneration": {"value": 0},
+          "transactionRevision": {"value": 0},
+          "publicationSequence": 0,
+          "workspaceRevision": {"value": 0}
+        },
+        "dryRun": false,
+        "program": {
+          "schemaVersion": {"major": 1, "minor": 0, "patch": 0},
+          "parameters": [
+            {"name": "depth", "value": {"kind": "number", "number": 1, "unit": "meter"}},
+            {"name": "depth", "value": {"kind": "number", "number": 2, "unit": "meter"}}
+          ],
+          "nodes": [],
+          "requestedOutputs": []
+        }
+      }
+    }
+    """.data(using: .utf8)!
+
+    var didRejectDuplicate = false
+    do {
+        _ = try codec.decodeRequestEnvelope(from: duplicateEntries)
+    } catch {
+        didRejectDuplicate = true
+    }
+    #expect(didRejectDuplicate)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func semanticProtocolRejectsOutcomeUnknownAndCorrelatesIDAndMethod() throws {
+    let codec = AgentMessageCodec()
+    let unknownResult = """
+    {
+      "jsonrpc": "2.0",
+      "id": "unknown-1",
+      "method": "capability.invoke",
+      "result": {"kind": "outcomeUnknown"}
+    }
+    """.data(using: .utf8)!
+
+    var didRejectUnknown = false
+    do {
+        _ = try codec.decodeResponseEnvelope(from: unknownResult)
+    } catch {
+        didRejectUnknown = true
+    }
+    #expect(didRejectUnknown)
+
+    let response = AgentResponse.capabilityExecution(
+        .prepublicationFailure(
+            AgentSemanticPrepublicationFailure(
+                stage: .dispatchUnavailable,
+                code: AgentSemanticPrepublicationFailure.dispatchUnavailableCode
+            )
+        )
+    )
+    let reservation = try codec.reserveResponse(
+        requestID: "correlated-1",
+        method: "capability.invoke",
+        authority: SelfTestFixtures.authority,
+        requestedOutputs: [],
+        resultCharge: SelfTestFixtures.emptyResultCharge
+    )
+    let encoded = try codec.encode(response, consuming: reservation)
+    var didRejectID = false
     do {
         _ = try codec.decodeResponse(
             from: encoded,
-            expectedID: "request-5",
-            expectedMethod: "sessions.list"
+            expectedID: "wrong-id",
+            expectedMethod: "capability.invoke"
         )
-    } catch let error as EditorError {
-        caught = error
+    } catch {
+        didRejectID = true
     }
+    #expect(didRejectID)
 
-    #expect(caught?.code == .agentConnectionFailed)
-}
-
-@Test func agentMessageCodecTreatsParameterExpressionResponseAsCommandResult() async throws {
-    let codec = AgentMessageCodec()
-    let response = AgentResponse.command(
-        AutomationResult(
-            message: "Parameter height updated.",
-            commandName: "upsertParameter",
-            generation: DocumentGeneration(2),
-            didMutate: true
-        )
-    )
-
-    let encoded = try codec.encode(
-        response,
-        id: "request-parameter-expression",
-        method: "parameter.setExpression"
-    )
-    let decoded = try codec.decodeResponse(
-        from: encoded,
-        expectedID: "request-parameter-expression",
-        expectedMethod: "parameter.setExpression"
-    )
-    let json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-    let result = try #require(json["result"] as? [String: Any])
-
-    #expect(decoded == response)
-    #expect(json["method"] as? String == "parameter.setExpression")
-    #expect(result["command"] == nil)
-    #expect(result["commandName"] as? String == "upsertParameter")
-    #expect(result["didMutate"] as? Bool == true)
-}
-
-@Test func agentMessageCodecRoundTripsDedicatedSurfaceMutationMethods() async throws {
-    let codec = AgentMessageCodec()
-    let sessionID = UUID()
-
-    let frameDisplayRequest = AgentRequest.setSurfaceFrameDisplay(
-        sessionID: sessionID,
-        query: SurfaceFrameQuery(faceID: "face-1", u: 0.25, v: 0.75),
-        isVisible: true,
-        expectedGeneration: DocumentGeneration(7)
-    )
-    let frameEncoded = try codec.encode(frameDisplayRequest, id: "frame-display-1")
-    let frameEnvelope = try codec.decodeRequestEnvelope(from: frameEncoded)
-    let frameDecoded = try codec.decodeRequest(from: frameEncoded)
-    #expect(frameEnvelope.method == "document.setSurfaceFrameDisplay")
-    #expect(frameEnvelope.params.methodName == "document.setSurfaceFrameDisplay")
-    #expect(frameDecoded == frameDisplayRequest)
-
-    let vertexMoveRequest = AgentRequest.movePolySplineSurfaceVertex(
-        sessionID: sessionID,
-        target: SelectionTarget(sceneNodeID: SceneNodeID()),
-        deltaX: .length(0.0, .millimeter),
-        deltaY: .length(0.0, .millimeter),
-        deltaZ: .length(1.0, .millimeter),
-        expectedGeneration: DocumentGeneration(5)
-    )
-    let vertexEncoded = try codec.encode(vertexMoveRequest, id: "vertex-move-1")
-    let vertexEnvelope = try codec.decodeRequestEnvelope(from: vertexEncoded)
-    let vertexDecoded = try codec.decodeRequest(from: vertexEncoded)
-    #expect(vertexEnvelope.method == "document.movePolySplineSurfaceVertex")
-    #expect(vertexEnvelope.params.methodName == "document.movePolySplineSurfaceVertex")
-    #expect(vertexDecoded == vertexMoveRequest)
-}
-
-@Test func agentMessageCodecTreatsDedicatedSurfaceMutationResponsesAsCommandResults() async throws {
-    let codec = AgentMessageCodec()
-    let cases: [(method: String, commandName: String)] = [
-        ("document.setSurfaceFrameDisplay", "setSurfaceFrameDisplay"),
-        ("document.movePolySplineSurfaceVertex", "movePolySplineSurfaceVertex"),
-    ]
-    for entry in cases {
-        let response = AgentResponse.command(
-            AutomationResult(
-                message: "Surface mutated.",
-                commandName: entry.commandName,
-                generation: DocumentGeneration(2),
-                didMutate: true
-            )
-        )
-        let encoded = try codec.encode(
-            response,
-            id: "response-1",
-            method: entry.method
-        )
-        let decoded = try codec.decodeResponse(
+    var didRejectMethod = false
+    do {
+        _ = try codec.decodeResponse(
             from: encoded,
-            expectedID: "response-1",
-            expectedMethod: entry.method
+            expectedID: "correlated-1",
+            expectedMethod: "program.execute"
         )
-        let json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-        #expect(json["method"] as? String == entry.method)
-        #expect(decoded == response)
+    } catch {
+        didRejectMethod = true
     }
+    #expect(didRejectMethod)
 }
 
-@Test func agentCapabilitiesIncludeDedicatedSurfaceMutationMethods() async throws {
-    let capabilities = AgentCommandController().capabilities()
-    #expect(capabilities.contains("setSurfaceFrameDisplay"))
-    #expect(capabilities.contains("movePolySplineSurfaceVertex"))
-}
-
-@Test func agentProtocolRawJSONFixturesDecodeRepresentativeRequests() async throws {
-    let codec = AgentMessageCodec()
-    let sessionID = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000001"))
-    let surfaceReferenceJSON = try agentProtocolCodecSurfaceReferenceJSON()
-    let requestFixtures: [(json: String, validate: (AgentRequestEnvelope) throws -> Void)] = [
-        (
-            """
-            {
-              "jsonrpc": "2.0",
-              "id": "status-1",
-              "method": "agent.status",
-              "params": {}
-            }
-            """,
-            { envelope in
-                #expect(envelope.id == "status-1")
-                #expect(envelope.method == "agent.status")
-                #expect(envelope.params == .status)
-            }
-        ),
-        (
-            """
-            {
-              "jsonrpc": "2.0",
-              "id": "parameters-1",
-              "method": "document.parameters",
-              "params": {
-                "sessionID": "00000000-0000-0000-0000-000000000001",
-                "expectedGeneration": {
-                  "value": 2
-                }
-              }
-            }
-            """,
-            { envelope in
-                guard case .parameters(let decodedSessionID, let expectedGeneration) = envelope.params else {
-                    #expect(Bool(false))
-                    return
-                }
-                #expect(decodedSessionID == sessionID)
-                #expect(expectedGeneration == DocumentGeneration(2))
-            }
-        ),
-        (
-            """
-            {
-              "jsonrpc": "2.0",
-              "id": "command-1",
-              "method": "command.apply",
-              "params": {
-                "sessionID": "00000000-0000-0000-0000-000000000001",
-                "command": {
-                  "splitSurfaceSpan": {
-                    "target": {
-                      "kind": "surface",
-                      "surface": {
-                        "kind": "span",
-                        "span": {
-                          "surface": \(surfaceReferenceJSON),
-                          "direction": "u",
-                          "spanIndex": 0
-                        }
-                      }
-                    },
-                    "fraction": {
-                      "kind": "constant",
-                      "quantity": {
-                        "value": 0.5,
-                        "kind": "scalar"
-                      }
-                    }
-                  }
-                },
-                "expectedGeneration": {
-                  "value": 3
-                }
-              }
-            }
-            """,
-            { envelope in
-                guard case .execute(
-                    let decodedSessionID,
-                    let command,
-                    let expectedGeneration,
-                    let expectedWorkspaceRevision
-                ) = envelope.params else {
-                    #expect(Bool(false))
-                    return
-                }
-                let expectedTarget = SelectionReference.surface(.span(SurfaceSpanReference(
-                    surface: agentProtocolCodecSurfaceReference(),
-                    direction: .u,
-                    spanIndex: 0
-                )))
-                #expect(decodedSessionID == sessionID)
-                #expect(command == .splitSurfaceSpan(target: expectedTarget, fraction: .constant(.scalar(0.5))))
-                #expect(expectedGeneration == DocumentGeneration(3))
-                #expect(expectedWorkspaceRevision == nil)
-            }
-        ),
-        (
-            """
-            {
-              "jsonrpc": "2.0",
-              "id": "parameter-1",
-              "method": "parameter.setExpression",
-              "params": {
-                "sessionID": "00000000-0000-0000-0000-000000000001",
-                "name": "height",
-                "expression": "width * 2",
-                "kind": "length",
-                "defaults": {
-                  "lengthUnit": "millimeter",
-                  "angleUnit": "degree"
-                },
-                "expectedGeneration": {
-                  "value": 4
-                }
-              }
-            }
-            """,
-            { envelope in
-                guard case .setParameterExpression(
-                    let decodedSessionID,
-                    let name,
-                    let expression,
-                    let kind,
-                    let defaults,
-                    let expectedGeneration
-                ) = envelope.params else {
-                    #expect(Bool(false))
-                    return
-                }
-                #expect(decodedSessionID == sessionID)
-                #expect(name == "height")
-                #expect(expression == "width * 2")
-                #expect(kind == .length)
-                #expect(defaults == ParameterExpressionDefaults(lengthUnit: .millimeter, angleUnit: .degree))
-                #expect(expectedGeneration == DocumentGeneration(4))
-            }
-        ),
-        (
-            """
-            {
-              "jsonrpc": "2.0",
-              "id": "snap-1",
-              "method": "snap.resolve",
-              "params": {
-                "sessionID": "00000000-0000-0000-0000-000000000001",
-                "point": {
-                  "x": 0.012,
-                  "y": 0.024
-                },
-                "options": {
-                  "usesGrid": true,
-                  "usesObjects": false,
-                  "gridIntervalMeters": 0.001,
-                  "objectSearchRadiusMeters": 0.002,
-                  "maximumCandidateCount": 8
-                },
-                "expectedGeneration": {
-                  "value": 5
-                }
-              }
-            }
-            """,
-            { envelope in
-                guard case .resolveSnap(
-                    let decodedSessionID,
-                    let point,
-                    let options,
-                    let expectedGeneration
-                ) = envelope.params else {
-                    #expect(Bool(false))
-                    return
-                }
-                #expect(decodedSessionID == sessionID)
-                #expect(point == Point2D(x: 0.012, y: 0.024))
-                #expect(options.usesGrid)
-                #expect(!options.usesObjects)
-                #expect(options.maximumCandidateCount == 8)
-                #expect(expectedGeneration == DocumentGeneration(5))
-            }
-        ),
-        (
-            """
-            {
-              "jsonrpc": "2.0",
-              "id": "surface-analysis-1",
-              "method": "document.surfaceAnalysis",
-              "params": {
-                "sessionID": "00000000-0000-0000-0000-000000000001",
-                "options": {
-                  "sampleDensity": "high"
-                },
-                "expectedGeneration": {
-                  "value": 6
-                }
-              }
-            }
-            """,
-            { envelope in
-                guard case .surfaceAnalysis(
-                    let decodedSessionID,
-                    let options,
-                    let expectedGeneration
-                ) = envelope.params else {
-                    #expect(Bool(false))
-                    return
-                }
-                #expect(decodedSessionID == sessionID)
-                #expect(options == SurfaceAnalysisOptions(sampleDensity: .high))
-                #expect(expectedGeneration == DocumentGeneration(6))
-            }
-        ),
-        (
-            """
-            {
-              "jsonrpc": "2.0",
-              "id": "surface-frames-1",
-              "method": "document.surfaceFrames",
-              "params": {
-                "sessionID": "00000000-0000-0000-0000-000000000001",
-                "queries": [
-                  {
-                    "faceID": "face-1",
-                    "u": 0.25,
-                    "v": 0.75
-                  }
-                ],
-                "expectedGeneration": {
-                  "value": 7
-                }
-              }
-            }
-            """,
-            { envelope in
-                guard case .surfaceFrames(
-                    let decodedSessionID,
-                    let queries,
-                    let expectedGeneration
-                ) = envelope.params else {
-                    #expect(Bool(false))
-                    return
-                }
-                #expect(decodedSessionID == sessionID)
-                #expect(queries == [SurfaceFrameQuery(faceID: "face-1", u: 0.25, v: 0.75)])
-                #expect(expectedGeneration == DocumentGeneration(7))
-            }
-        ),
-        (
-            """
-            {
-              "jsonrpc": "2.0",
-              "id": "selection-1",
-              "method": "selection.selectTargets",
-              "params": {
-                "sessionID": "00000000-0000-0000-0000-000000000001",
-                "targets": [],
-                "expectedGeneration": {
-                  "value": 8
-                }
-              }
-            }
-            """,
-            { envelope in
-                guard case .selectTargets(
-                    let decodedSessionID,
-                    let targets,
-                    let expectedGeneration
-                ) = envelope.params else {
-                    #expect(Bool(false))
-                    return
-                }
-                #expect(decodedSessionID == sessionID)
-                #expect(targets.isEmpty)
-                #expect(expectedGeneration == DocumentGeneration(8))
-            }
-        ),
-        (
-            """
-            {
-              "jsonrpc": "2.0",
-              "id": "selection-reference-1",
-              "method": "selection.selectReferences",
-              "params": {
-                "sessionID": "00000000-0000-0000-0000-000000000001",
-                "references": [],
-                "expectedGeneration": {
-                  "value": 9
-                }
-              }
-            }
-            """,
-            { envelope in
-                guard case .selectReferences(
-                    let decodedSessionID,
-                    let references,
-                    let expectedGeneration
-                ) = envelope.params else {
-                    #expect(Bool(false))
-                    return
-                }
-                #expect(decodedSessionID == sessionID)
-                #expect(references.isEmpty)
-                #expect(expectedGeneration == DocumentGeneration(9))
-            }
-        ),
-        (
-            """
-            {
-              "jsonrpc": "2.0",
-              "id": "export-1",
-              "method": "document.export",
-              "params": {
-                "sessionID": "00000000-0000-0000-0000-000000000001",
-                "outputPath": "/tmp/rupa-fixture.obj",
-                "options": {},
-                "dryRun": true,
-                "expectedGeneration": {
-                  "value": 10
-                }
-              }
-            }
-            """,
-            { envelope in
-                guard case .export(
-                    let decodedSessionID,
-                    let outputPath,
-                    let expectedGeneration,
-                    let options,
-                    let dryRun
-                ) = envelope.params else {
-                    #expect(Bool(false))
-                    return
-                }
-                #expect(decodedSessionID == sessionID)
-                #expect(outputPath == "/tmp/rupa-fixture.obj")
-                #expect(expectedGeneration == DocumentGeneration(10))
-                #expect(options == ExportOptions())
-                #expect(dryRun)
-            }
-        ),
-    ]
-
-    for fixture in requestFixtures {
-        let envelope = try codec.decodeRequestEnvelope(from: rawAgentProtocolJSON(fixture.json))
-        try fixture.validate(envelope)
-    }
-}
-
-@Test func agentProtocolRawJSONFixtureDecodesFlatResponses() async throws {
-    let codec = AgentMessageCodec()
-    let statusResponse = try codec.decodeResponse(
-        from: rawAgentProtocolJSON(
-            """
-            {
-              "jsonrpc": "2.0",
-              "id": "status-1",
-              "method": "agent.status",
-              "result": {
-                "running": true,
-                "sessionCount": 2
-              }
-            }
-            """
-        ),
-        expectedID: "status-1",
-        expectedMethod: "agent.status"
-    )
-    let parameterResponse = try codec.decodeResponse(
-        from: rawAgentProtocolJSON(
-            """
-            {
-              "jsonrpc": "2.0",
-              "id": "parameter-1",
-              "method": "parameter.setExpression",
-              "result": {
-                "message": "Parameter height updated.",
-                "commandName": "upsertParameter",
-                "generation": {
-                  "value": 10
-                },
-                "didMutate": true,
-                "diagnostics": []
-              }
-            }
-            """
-        ),
-        expectedID: "parameter-1",
-        expectedMethod: "parameter.setExpression"
-    )
-
-    #expect(statusResponse == .status(AgentStatus(running: true, sessionCount: 2)))
-    guard case .command(let result) = parameterResponse else {
-        #expect(Bool(false))
-        return
-    }
-    #expect(result.commandName == "upsertParameter")
-    #expect(result.generation == DocumentGeneration(10))
-    #expect(result.didMutate)
-}
-
-@Test func agentProtocolRawJSONFixtureDecodesErrorResponse() async throws {
-    let codec = AgentMessageCodec()
-    let response = try codec.decodeResponse(
-        from: rawAgentProtocolJSON(
-            """
-            {
-              "jsonrpc": "2.0",
-              "id": "command-1",
-              "method": "command.apply",
-              "error": {
-                "code": "document.generationMismatch",
-                "message": "The document has changed since the command was prepared."
-              }
-            }
-            """
-        ),
-        expectedID: "command-1",
-        expectedMethod: "command.apply"
-    )
-
-    guard case .failure(let error) = response else {
-        #expect(Bool(false))
-        return
-    }
-    #expect(error.code == .documentGenerationMismatch)
-    #expect(error.message == "The document has changed since the command was prepared.")
-}
-
-@Test func agentProtocolRejectsUnknownTopLevelParamsFromRawJSON() async throws {
-    let codec = AgentMessageCodec()
-    var caught: EditorError?
-
-    do {
-        _ = try codec.decodeRequestEnvelope(
-            from: rawAgentProtocolJSON(
-                """
-                {
-                  "jsonrpc": "2.0",
-                  "id": "status-unknown-key",
-                  "method": "agent.status",
-                  "params": {
-                    "status": {}
-                  }
-                }
-                """
-            )
-        )
-    } catch let error as EditorError {
-        caught = error
-    }
-
-    #expect(caught?.code == .commandInvalid)
-    #expect(caught?.message.contains("Unsupported params for agent.status") == true)
-}
-
-@Test func agentProtocolEncodesStatusResponseAsFlatResult() async throws {
-    let codec = AgentMessageCodec()
-    let encoded = try codec.encode(
-        AgentResponse.status(
-            AgentStatus(
-                running: true,
-                sessionCount: 2
-            )
-        ),
-        id: "status-encoded"
-    )
-    let json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-    let result = try #require(json["result"] as? [String: Any])
-
-    #expect(json["method"] as? String == "agent.status")
-    #expect(result["status"] == nil)
-    #expect(result["running"] as? Bool == true)
-    #expect(result["sessionCount"] as? Int == 2)
-}
-
-private func rawAgentProtocolJSON(_ source: String) -> Data {
-    Data(source.utf8)
-}
-
-@Test func agentMessageCodecRejectsResponseIDMismatch() async throws {
-    let codec = AgentMessageCodec()
-    let encoded = try codec.encode(
-        AgentResponse.status(
-            AgentStatus(
-                running: true,
-                sessionCount: 1
-            )
-        ),
-        id: "actual-request"
-    )
-    var caught: EditorError?
-
-    do {
-        _ = try codec.decodeResponse(from: encoded, expectedID: "expected-request")
-    } catch let error as EditorError {
-        caught = error
-    }
-
-    #expect(caught?.code == .agentConnectionFailed)
-}
-
-@Test func agentMessageCodecRoundTripsParameterRequestsAndResponses() async throws {
-    let codec = AgentMessageCodec()
-    let capabilitiesRequest = AgentRequest.capabilities
-    let qualityAssessmentRequest = AgentRequest.cadInteractionQualityAssessment
-    let capabilitiesResponse = AgentResponse.capabilities([
-        AgentCapabilityDescriptor(
-            name: "topologySummary",
-            category: .read,
-            summary: "Discover generated topology.",
-            access: .agentRequest,
-            stateEffect: .readOnly,
-            discovery: [.topologySummary],
-            targets: [.face, .edge, .vertex],
-            failureMode: "Rejects stale generations before reading."
-        ),
-    ])
+@Test(.timeLimit(.minutes(1)))
+func integrationFixtureRejectsSemanticRoutesBeforeSessionMutation() throws {
+    let server = AgentCommandController()
+    let session = EditorSession(document: .empty(named: "Fixture"))
     let sessionID = UUID()
-    let listRequest = AgentRequest.parameters(
-        sessionID: sessionID,
-        expectedGeneration: DocumentGeneration(2)
+    _ = server.register(session: session, id: sessionID)
+    let authority = AgentProjectAuthorityCoordinate(
+        projectID: session.document.projectID,
+        documentGeneration: session.generation,
+        transactionRevision: session.transactionRevision,
+        publicationSequence: 0,
+        workspaceRevision: session.workspaceState.revision
     )
-    let constructionPlaneRequest = AgentRequest.constructionPlaneSummary(
-        sessionID: sessionID,
-        expectedGeneration: DocumentGeneration(2)
-    )
-    let sceneGraphRequest = AgentRequest.sceneGraphSnapshot(
-        sessionID: sessionID,
-        expectedGeneration: DocumentGeneration(2)
-    )
-    let displaySnapshotRequest = AgentRequest.designDisplaySnapshot(
-        sessionID: sessionID,
-        expectedGeneration: DocumentGeneration(2)
-    )
-    let patternArraySummaryRequest = AgentRequest.patternArraySummary(
-        sessionID: sessionID,
-        expectedGeneration: DocumentGeneration(2)
-    )
-    let objectDimensionTarget = SelectionTarget(sceneNodeID: SceneNodeID())
-    let objectDimensionRequest = AgentRequest.objectDimensionSummary(
-        sessionID: sessionID,
-        targets: [objectDimensionTarget],
-        expectedGeneration: DocumentGeneration(2)
-    )
-    let sketchDimensionTarget = SelectionTarget(
-        sceneNodeID: SceneNodeID(),
-        component: .sketchEntity(SelectionComponentID(rawValue: "sketchEntity:test"))
-    )
-    let sketchDimensionRequest = AgentRequest.sketchDimensionSummary(
-        sessionID: sessionID,
-        targets: [sketchDimensionTarget],
-        expectedGeneration: DocumentGeneration(2)
-    )
-    let selectionDimensionID = SelectionDimensionID()
-    let selectionDimensionRequest = AgentRequest.selectionDimensionEvaluation(
-        sessionID: sessionID,
-        dimensionID: selectionDimensionID,
-        expectedGeneration: DocumentGeneration(2)
-    )
-    let expressionRequest = AgentRequest.setParameterExpression(
-        sessionID: sessionID,
-        name: "height",
-        expression: "width * 2",
-        kind: .length,
-        defaults: ParameterExpressionDefaults(lengthUnit: .millimeter),
-        expectedGeneration: DocumentGeneration(2)
-    )
-    let listResponse = AgentResponse.parameters(
-        ParameterListResult(
-            message: "0 parameters.",
-            generation: DocumentGeneration(2),
-            dirty: false,
-            parameters: [],
-            diagnostics: []
-        )
-    )
-    let constructionPlaneResponse = AgentResponse.constructionPlaneSummary(
-        ConstructionPlaneSummaryResult(
-            activePlaneID: nil,
-            planes: []
-        )
-    )
-    let sceneGraphResponse = AgentResponse.sceneGraphSnapshot(
-        SceneGraphSnapshotResult(
-            generation: DocumentGeneration(2),
-            dirty: false,
-            rootSceneNodeIDs: [],
-            nodes: []
-        )
-    )
-    let displaySnapshotResponse = AgentResponse.designDisplaySnapshot(
-        DesignDisplaySnapshotResult(
-            generation: DocumentGeneration(2),
-            dirty: false,
-            viewportGridSettings: ViewportGridSettings(visualSpacingMode: .fixed),
-            viewportGridScale: ViewportGridScaleSnapshot(
-                ruler: RulerConfiguration(
-                    displayUnit: .meter,
-                    minorTickMeters: 0.5,
-                    majorTickMeters: 5.0,
-                    visibleSpanMeters: 5_000.0
-                ),
-                settings: ViewportGridSettings(visualSpacingMode: .fixed)
-            ),
-            workspaceBounds: MeasurementResult.Bounds(
-                minX: 0.0,
-                minY: 0.0,
-                minZ: 0.0,
-                maxX: 25_000.0,
-                maxY: 10_000.0,
-                maxZ: 100.0
-            ),
-            sketches: [],
-            extrudes: [],
-            straightPrismSweeps: [],
-            bodies: []
-        )
-    )
-    let patternArraySummaryResponse = AgentResponse.patternArraySummary(
-        PatternArraySummaryResult(
-            generation: DocumentGeneration(2),
-            dirty: false,
-            patternArrays: []
-        )
-    )
-    let objectDimensionResponse = AgentResponse.objectDimensionSummary(
-        ObjectDimensionSummaryResult(
-            displayUnit: .millimeter,
-            counts: ObjectDimensionSummaryResult.Counts(targetCount: 1, entryCount: 1),
-            entries: [
-                ObjectDimensionSummaryResult.Entry(
-                    target: objectDimensionTarget,
-                    sceneNodeID: objectDimensionTarget.sceneNodeID.description,
-                    sourceFeatureID: UUID().uuidString,
-                    sourceKind: .box,
-                    kind: .sizeX,
-                    label: "Size X",
-                    inputExpression: .length(24.0, .millimeter),
-                    resolvedMeters: 0.024,
-                    isPrimaryForTarget: true
-                ),
-            ]
-        )
-    )
-    let sketchDimensionResponse = AgentResponse.sketchDimensionSummary(
-        SketchDimensionSummaryResult(
-            displayUnit: .millimeter,
-            counts: SketchDimensionSummaryResult.Counts(targetCount: 1, entryCount: 1),
-            entries: [
-                SketchDimensionSummaryResult.Entry(
-                    requestedTarget: sketchDimensionTarget,
-                    target: sketchDimensionTarget,
-                    sceneNodeID: sketchDimensionTarget.sceneNodeID.description,
-                    sourceFeatureID: UUID().uuidString,
-                    entityID: UUID().uuidString,
-                    entityKind: "line",
-                    kind: .length,
-                    label: "Length",
-                    inputExpression: .length(24.0, .millimeter),
-                    resolvedValue: 0.024,
-                    isPrimaryForTarget: true
-                ),
-            ]
-        )
-    )
-    let selectionDimensionResponse = AgentResponse.selectionDimensionEvaluation(
-        SelectionDimensionEvaluationResult(displayUnit: .millimeter)
-    )
-    let qualityAssessmentResponse = AgentResponse.cadInteractionQualityAssessment(
-        CADInteractionQualityAssessmentService().assess()
-    )
-
-    #expect(try codec.decodeRequest(from: try codec.encode(capabilitiesRequest)) == capabilitiesRequest)
-    #expect(try codec.decodeRequest(from: try codec.encode(qualityAssessmentRequest)) == qualityAssessmentRequest)
-    #expect(try codec.decodeResponse(from: try codec.encode(capabilitiesResponse)) == capabilitiesResponse)
-    #expect(try codec.decodeRequest(from: try codec.encode(listRequest)) == listRequest)
-    #expect(try codec.decodeRequest(from: try codec.encode(constructionPlaneRequest)) == constructionPlaneRequest)
-    #expect(try codec.decodeRequest(from: try codec.encode(sceneGraphRequest)) == sceneGraphRequest)
-    #expect(try codec.decodeRequest(from: try codec.encode(displaySnapshotRequest)) == displaySnapshotRequest)
-    #expect(try codec.decodeRequest(from: try codec.encode(patternArraySummaryRequest)) == patternArraySummaryRequest)
-    #expect(try codec.decodeRequest(from: try codec.encode(objectDimensionRequest)) == objectDimensionRequest)
-    #expect(try codec.decodeRequest(from: try codec.encode(sketchDimensionRequest)) == sketchDimensionRequest)
-    #expect(try codec.decodeRequest(from: try codec.encode(selectionDimensionRequest)) == selectionDimensionRequest)
-    #expect(try codec.decodeRequest(from: try codec.encode(expressionRequest)) == expressionRequest)
-    #expect(try codec.decodeResponse(from: try codec.encode(listResponse)) == listResponse)
-    #expect(try codec.decodeResponse(from: try codec.encode(constructionPlaneResponse)) == constructionPlaneResponse)
-    #expect(try codec.decodeResponse(from: try codec.encode(sceneGraphResponse)) == sceneGraphResponse)
-    #expect(try codec.decodeResponse(from: try codec.encode(displaySnapshotResponse)) == displaySnapshotResponse)
-    #expect(try codec.decodeResponse(from: try codec.encode(patternArraySummaryResponse)) == patternArraySummaryResponse)
-    #expect(try codec.decodeResponse(from: try codec.encode(objectDimensionResponse)) == objectDimensionResponse)
-    #expect(try codec.decodeResponse(from: try codec.encode(sketchDimensionResponse)) == sketchDimensionResponse)
-    #expect(try codec.decodeResponse(from: try codec.encode(selectionDimensionResponse)) == selectionDimensionResponse)
-    #expect(try codec.decodeResponse(from: try codec.encode(qualityAssessmentResponse)) == qualityAssessmentResponse)
-}
-
-private struct AgentDomainRenameLowering: DomainCommandLowering {
-    var capabilityID: DomainCapabilityID
-    var name: String
-
-    func lower(_ request: DomainCommandRequest) throws -> DomainCommandPlan {
-        .automationBatch(
-            AutomationBatch(
-                commands: [.renameDocument(name: name)],
-                expectedGeneration: request.expectedGeneration
+    let direct = AgentRequest.invokeCapability(
+        AgentSemanticDirectExecutionRequest(
+            sessionID: sessionID,
+            authority: authority,
+            dryRun: false,
+            request: AgentSemanticDirectRequest(
+                schemaVersion: SelfTestFixtures.schemaVersion,
+                operationID: "cad.solid.box",
+                operationVersion: SelfTestFixtures.operationVersion
             )
         )
-    }
-}
-
-private func canonicalValue<Value: Encodable>(for value: Value) throws -> CanonicalValue {
-    let data = try JSONEncoder().encode(value)
-    return try JSONDecoder().decode(CanonicalValue.self, from: data)
-}
-
-private func agentDomainExecutionRegistry(
-    namespace: SemanticNamespaceID,
-    capabilityID: DomainCapabilityID,
-    supportsDryRun: Bool,
-    lowering: any DomainCommandLowering
-) throws -> DomainRegistry {
-    try DomainRegistry(
-        namespaces: [
-            DomainNamespaceRegistration(
-                namespace: namespace,
-                supportedSchemaVersions: [SemanticSchemaVersion(major: 0, minor: 1, patch: 0)]
-            ),
-        ],
-        capabilityDescriptors: [
-            DomainCapabilityDescriptor(
-                id: capabilityID,
-                namespace: namespace,
-                name: capabilityID.rawValue,
-                summary: "Execute an injected Agent domain capability.",
-                effect: .documentMutation,
-                resultKind: .documentTransaction,
-                supportsDryRun: supportsDryRun,
-                targetKinds: ["document"],
-                failureMode: "Rejects invalid injected Agent domain requests."
-            ),
-        ],
-        commandLowerings: [lowering]
     )
+    let program = AgentRequest.executeProgram(
+        AgentSemanticProgramExecutionRequest(
+            sessionID: sessionID,
+            authority: authority,
+            dryRun: true,
+            program: AgentSemanticProgramRequest(
+                schemaVersion: SelfTestFixtures.schemaVersion,
+                nodes: []
+            )
+        )
+    )
+
+    for request in [direct, program] {
+        let response = server.handle(request)
+        switch response {
+        case .capabilityExecution(.prepublicationFailure(let failure)),
+             .programExecution(.prepublicationFailure(let failure)):
+            #expect(failure.stage == .dispatchUnavailable)
+            #expect(failure.publicationDisposition == .notPublished)
+            #expect(failure.retryDisposition == .retryPermitted)
+        default:
+            Issue.record("The integration fixture must fail closed for semantic routes until the project executor is connected.")
+        }
+    }
+    #expect(session.generation == DocumentGeneration(0))
+    #expect(session.transactionRevision == DocumentTransactionRevision(0))
 }
 
-
-/// Stable surface reference fixture shared between the raw JSON fixture and
-/// the expected decoded value.
-private func agentProtocolCodecSurfaceReference() -> SurfaceReference {
-    let featureUUID = UUID(uuidString: "00000000-0000-0000-0000-000000000101") ?? UUID()
-    return SurfaceReference(subshape: StableSubshapeReference(
-        subshapeID: SubshapeID(
-            featureID: FeatureID(featureUUID),
-            role: "bSplineSurface.patch:0:face",
-            ordinal: 0
-        ),
-        geometrySignature: .face(FaceGeometrySignature(
-            surface: .plane(Plane3D(origin: .origin, normal: .unitZ)),
-            orientation: .forward,
-            loops: []
-        ))
-    ))
-}
-
-private func agentProtocolCodecSurfaceReferenceJSON() throws -> String {
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.sortedKeys]
-    let data = try encoder.encode(agentProtocolCodecSurfaceReference())
-    return String(decoding: data, as: UTF8.self)
+private enum SelfTestFixtures {
+    static let sessionID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+    static let schemaVersion = AgentSemanticSchemaVersion(major: 1, minor: 0, patch: 0)
+    static let operationVersion = AgentSemanticOperationVersion(major: 1, minor: 0, patch: 0)
+    static let authority = AgentProjectAuthorityCoordinate(
+        projectID: ProjectID(rawValue: "project.test"),
+        documentGeneration: DocumentGeneration(0),
+        transactionRevision: DocumentTransactionRevision(0),
+        publicationSequence: 0,
+        workspaceRevision: WorkspaceRevision(0)
+    )
+    static let emptyResultCharge = SemanticResultCharge(
+        requestedOutputCount: 0,
+        diagnosticRecordCount: 0,
+        diagnosticScalarCount: 0,
+        diagnosticStringUTF8ByteCount: 0,
+        telemetryRecordCount: 0,
+        telemetryScalarCount: 0,
+        telemetryStringUTF8ByteCount: 0
+    )
 }

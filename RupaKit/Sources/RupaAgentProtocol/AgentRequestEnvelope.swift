@@ -35,6 +35,7 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
     }
 
     public init(from decoder: Decoder) throws {
+        try Self.validateEnvelopeKeys(from: decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.jsonrpc = try container.decode(String.self, forKey: .jsonrpc)
         self.id = try container.decode(String.self, forKey: .id)
@@ -76,6 +77,10 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
             try request.validate()
         case .makeEditable(let request):
             try request.validate()
+        case .invokeCapability(let request):
+            _ = try request.request.semanticValue()
+        case .executeProgram(let request):
+            _ = try request.program.semanticValue()
         default:
             break
         }
@@ -144,12 +149,23 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                 ),
                 forKey: .params
             )
-        case let .invokeCapability(sessionID, invocation, expectedWorkspaceRevision):
+        case let .invokeCapability(request):
             try container.encode(
-                CapabilityInvokeParams(
-                    sessionID: sessionID,
-                    invocation: invocation,
-                    expectedWorkspaceRevision: expectedWorkspaceRevision
+                SemanticDirectExecuteParams(
+                    sessionID: request.sessionID,
+                    authority: request.authority,
+                    dryRun: request.dryRun,
+                    request: request.request
+                ),
+                forKey: .params
+            )
+        case let .executeProgram(request):
+            try container.encode(
+                SemanticProgramExecuteParams(
+                    sessionID: request.sessionID,
+                    authority: request.authority,
+                    dryRun: request.dryRun,
+                    program: request.program
                 ),
                 forKey: .params
             )
@@ -509,11 +525,24 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                 )
             )
         case "capability.invoke":
-            let payload = try decodeParams(CapabilityInvokeParams.self, from: container, method: method)
+            let payload = try decodeParams(SemanticDirectExecuteParams.self, from: container, method: method)
             return .invokeCapability(
-                sessionID: payload.sessionID,
-                invocation: payload.invocation,
-                expectedWorkspaceRevision: payload.expectedWorkspaceRevision
+                AgentSemanticDirectExecutionRequest(
+                    sessionID: payload.sessionID,
+                    authority: payload.authority,
+                    dryRun: payload.dryRun,
+                    request: payload.request
+                )
+            )
+        case "program.execute":
+            let payload = try decodeParams(SemanticProgramExecuteParams.self, from: container, method: method)
+            return .executeProgram(
+                AgentSemanticProgramExecutionRequest(
+                    sessionID: payload.sessionID,
+                    authority: payload.authority,
+                    dryRun: payload.dryRun,
+                    program: payload.program
+                )
             )
         case "document.parameters":
             let payload = try decodeParams(SessionGenerationParams.self, from: container, method: method)
@@ -839,6 +868,18 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
         }
     }
 
+    private static func validateEnvelopeKeys(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: AnyCodingKey.self)
+        let allowedKeys: Set<String> = ["jsonrpc", "id", "method", "params"]
+        let unknownKeys = Set(container.allKeys.map(\.stringValue)).subtracting(allowedKeys)
+        guard unknownKeys.isEmpty else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Unsupported agent request envelope fields: \(unknownKeys.sorted().joined(separator: ", "))."
+            )
+        }
+    }
+
     private static func decodeEmptyParams(
         from container: KeyedDecodingContainer<CodingKeys>,
         method: String
@@ -969,16 +1010,32 @@ private struct DomainExecuteParams: AgentRequestParameterPayload, Equatable {
     var dryRun: Bool
 }
 
-private struct CapabilityInvokeParams: AgentRequestParameterPayload, Equatable {
+private struct SemanticDirectExecuteParams: AgentRequestParameterPayload, Equatable {
     static let allowedKeys: Set<String> = [
         "sessionID",
-        "invocation",
-        "expectedWorkspaceRevision",
+        "authority",
+        "dryRun",
+        "request",
     ]
 
     var sessionID: UUID
-    var invocation: CapabilityInvocation
-    var expectedWorkspaceRevision: WorkspaceRevision?
+    var authority: AgentProjectAuthorityCoordinate
+    var dryRun: Bool
+    var request: AgentSemanticDirectRequest
+}
+
+private struct SemanticProgramExecuteParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = [
+        "sessionID",
+        "authority",
+        "dryRun",
+        "program",
+    ]
+
+    var sessionID: UUID
+    var authority: AgentProjectAuthorityCoordinate
+    var dryRun: Bool
+    var program: AgentSemanticProgramRequest
 }
 
 private struct SetParameterExpressionParams: AgentRequestParameterPayload, Equatable {

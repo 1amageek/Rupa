@@ -24,7 +24,9 @@ projection, error mapping, and committed mutation recovery/no-retry reporting.
 For CADAPI-D it forwards either invocation form unchanged to the same
 `RupaDomainFoundation` compiler port and submits the one resulting prepared
 source plan to the workspace. The Foundation compiler alone normalizes a direct
-invocation to a one-node semantic program. Immutable viewport
+request, including its explicit schema version and requested output IDs, to a
+one-node semantic program. Runtime passes the compiler's requested-output
+mapping unchanged to RupaKit result projection. Immutable viewport
 inspection projects the already-published application viewport without
 reevaluation or geometry materialization.
 
@@ -40,7 +42,7 @@ files, own HTTP I/O or endpoint state, or define CAD commands.
 | [package design](../../DESIGN.md) | parent | module composition | Places runtime above protocol and shared workspace. | Do not add a parallel controller. |
 | [AgentProtocol](../RupaAgentProtocol/DESIGN.md) | depends on | typed requests/results | Supplies wire-safe values. | A DTO is never project authority. |
 | [RupaDomainFoundation](../RupaDomainFoundation/DESIGN.md) | depends on for CADAPI-D | operation registry and bounded program compiler | Supplies the single semantic program path used by direct and composite CAD invocation. | Runtime dispatches through the contract and does not reimplement validation or ordering. |
-| [package planned CAD domain boundary](../../DESIGN.md) | depends on through composition; planned module boundary | CAD operation descriptors and lowerers | Supplies the concrete vocabulary registered with the generic compiler. | No `RupaCADDomain` target exists yet; this is not current runtime evidence. |
+| [RupaCADDomain design](../RupaCADDomain/DESIGN.md) | depends on through composition | CAD operation descriptors and lowerers | Supplies the concrete vocabulary registered with the generic compiler. | Runtime consumes the composed registry and never switches on operation IDs. |
 | [RupaAutomation](../RupaAutomation/DESIGN.md) | depends on for prepared execution | binding-aware prepared source-plan execution | Executes the compiler result as one staged source mutation. | Raw graph transactions remain internal lowering substrate, never Agent payloads. |
 | [RupaProjectAccess](../RupaProjectAccess/DESIGN.md) | used by later composition | session-bound semantic handler | Uses this runtime without acquiring source authority. | Runtime never opens targets or saves packages. |
 | [AgentTransport](../RupaAgentTransport/DESIGN.md) | used by | `AgentRequestHandling` | Delivers decoded intent through a transport-neutral port. | No endpoint, credential, or lifecycle callback enters runtime. |
@@ -76,8 +78,9 @@ flowchart LR
    operation descriptors, schemas, compiler, and lowerers. Runtime submits the
    original form and does not synthesize a node, choose defaults, resolve a
    version, or maintain a parallel switch or recipe library. The Foundation
-   compiler alone normalizes direct invocation to a one-node program and rejects
-   local references in that form.
+   compiler alone validates both explicit semantic schema versions, normalizes
+   direct invocation/requested output IDs to a one-node program/output mapping,
+   and rejects local references in that form.
 3. A CAD program is fully decoded, structurally and semantically bounded,
    dependency-checked, deterministically ordered, and lowered before any source
    mutation. Every resolved node must have source route and the aggregate
@@ -87,11 +90,14 @@ flowchart LR
    `ProjectWorkspace` source action, one `ProjectController` source
    transaction/evaluation/publication, and one undo/history unit. Nodes never
    publish independently.
-5. Clients own operation intent and request-local symbols only. The staged
+5. Clients own operation intent, requested declared outputs, and request-local
+   symbols only. The staged
    authority allocates persistent identifiers and presentation defaults;
-   Runtime projects typed output bindings and exact committed coordinates from
-   the resulting receipt. Dry run may project validation/lowering diagnostics
-   but never projects request-local outputs as persistent source references.
+   Runtime projects only compiler-retained requested output bindings and exact
+   committed coordinates from the resulting receipt. Unrequested generated
+   identities remain telemetry. Dry run may project validation/lowering
+   diagnostics but never projects request-local outputs as persistent source
+   references.
 6. Catalog/page/neighborhood call `ProjectMeshReading`; preview/commit call
    `ProjectMeshEditing`; Make Editable calls the RupaKit exact-snapshot use case.
    Runtime reimplements none of their validation or geometry semantics.
@@ -124,6 +130,19 @@ flowchart LR
    auxiliary diagnostic/telemetry records, and output string bytes. It checks
    the cumulative triangle ceiling while traversing. Exceeding a ceiling fails
    the whole read without truncation or partial output.
+14. Runtime produces only server semantic responses. It does not emit, encode,
+    or recover `outcomeUnknown`; authenticated response loss is classified
+    client-side by `RupaProjectAccessComposition` after Runtime can no longer
+    communicate an outcome.
+15. After compilation and before calling the workspace mutation action, Runtime
+    asks Protocol for one response reservation from the compiler's
+    requested-output mapping and result charge. A failure-only reservation is
+    returned as the fixed typed `responsePlanRejected` result without staging.
+    Only a full reservation permits Runtime to pass its transport-neutral
+    result budget into RupaKit and dispatch once. After publication Runtime
+    selects success or the already reserved committed alternative, and the
+    listener consumes the reservation with one encode attempt; no oversize
+    response is caught and retried as a generic transport failure.
 
 ## Runtime Flows
 
@@ -185,14 +204,20 @@ Behavioral tests must execute all routes through a registered real workspace,
 including stale generation/handle, cancellation, read/plan limits, preview
 nonpublication, one-commit history, Make Editable authority invariants, and a
 postcommit projection failure. CADAPI-D tests must prove direct and program
-forms resolve the same operation descriptor/lowerer, direct invocation has no
+forms with explicit matching schema versions and requested outputs resolve the
+same operation descriptor/lowerer/output mapping, direct invocation has no
 local-reference facility, order-independent program nodes compile to a
 deterministic DAG order, native finite patterns do not expand into wire-sized
 occurrence lists, and one complex program creates at most one source
 transaction/evaluation/publication. They must reject mixed effects, cycles,
 invalid bindings, stale coordinates, cancellation, and every resource ceiling
-without publication, and prove raw graph/Automation payloads are absent or
-rejected. Changes require rechecking protocol codecs,
+without publication, prove unrequested identities are not projected, prove
+Runtime has no outcome-unknown response case, and prove raw graph/Automation
+payloads are absent or rejected. Response-planning tests must also prove
+over-limit result shape fails before workspace staging, exact-limit success
+encodes once, and an injected postpublication projection failure uses the
+preplanned small committed envelope with exact coordinates and
+`mustNotRetry`. Changes require rechecking protocol codecs,
 RupaKit exact-view behavior, registry lease lifetime, and the system workflow.
 Viewport-read tests additionally compare the response against the same
 published viewport, reject stale generation and missing navigation, exercise

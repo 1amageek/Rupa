@@ -44,11 +44,8 @@ public enum AgentRequest: Codable, Equatable, Sendable {
         sessionID: UUID,
         request: DomainCommandRequest
     )
-    case invokeCapability(
-        sessionID: UUID,
-        invocation: CapabilityInvocation,
-        expectedWorkspaceRevision: WorkspaceRevision?
-    )
+    case invokeCapability(AgentSemanticDirectExecutionRequest)
+    case executeProgram(AgentSemanticProgramExecutionRequest)
     case parameters(
         sessionID: UUID,
         expectedGeneration: DocumentGeneration?
@@ -253,7 +250,8 @@ public enum AgentResponse: Codable, Equatable, Sendable {
     case command(AutomationResult)
     case batch(AgentBatchResult)
     case domainExecution(DomainExecutionResult)
-    case capabilityExecution(AgentCapabilityExecutionResult)
+    case capabilityExecution(AgentSemanticExecutionResult)
+    case programExecution(AgentSemanticExecutionResult)
     case parameters(ParameterListResult)
     case evaluation(EvaluationSnapshot)
     case measurement(MeasurementResult)
@@ -325,6 +323,8 @@ public extension AgentRequest {
             "domain.execute"
         case .invokeCapability:
             "capability.invoke"
+        case .executeProgram:
+            "program.execute"
         case .parameters:
             "document.parameters"
         case .setParameterExpression:

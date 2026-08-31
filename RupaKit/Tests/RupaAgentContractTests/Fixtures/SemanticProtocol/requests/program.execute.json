@@ -1,0 +1,22 @@
+{
+  "jsonrpc": "2.0",
+  "id": "fixture-program-1",
+  "method": "program.execute",
+  "params": {
+    "sessionID": "00000000-0000-0000-0000-000000000001",
+    "authority": {
+      "projectID": "project.test",
+      "documentGeneration": {"value": 0},
+      "transactionRevision": {"value": 0},
+      "publicationSequence": 0,
+      "workspaceRevision": {"value": 0}
+    },
+    "dryRun": true,
+    "program": {
+      "schemaVersion": {"major": 1, "minor": 0, "patch": 0},
+      "parameters": [],
+      "nodes": [],
+      "requestedOutputs": []
+    }
+  }
+}

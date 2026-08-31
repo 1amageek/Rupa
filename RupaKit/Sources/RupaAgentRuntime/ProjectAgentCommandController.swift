@@ -308,42 +308,25 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
                 )
             )
 
-        case .invokeCapability(
-            let sessionID,
-            let invocation,
-            let expectedWorkspaceRevision
-        ):
-            let lease = try await registry.lease(id: sessionID)
-            let workspace = lease.workspace
-            let snapshot = try currentView(workspace)
-            let descriptor = try capabilityRegistry().descriptor(
-                for: invocation.capabilityID,
-                version: invocation.version
-            )
-            let agentName = String(
-                invocation.capabilityID.rawValue.dropFirst("agent.".count)
-            )
-            guard invocation.capabilityID.rawValue.hasPrefix("agent."),
-                  let agentDescriptor = capabilityDescriptors().first(where: {
-                      $0.name == agentName
-                  }) else {
-                throw AgentCapabilityExecutionError(
-                    code: .unsupportedRoute,
-                    message: "Capability \(invocation.capabilityID.rawValue) is not an Agent capability."
-                )
-            }
+        // FIXME(INCOMPLETE_IMPLEMENTATION): Production capability.invoke currently fails closed here before acquiring a workspace lease or mutating source. Remove this marker only after this request executes through ProjectWorkspace and ProjectController with typed success, rollback, and committed-failure coverage.
+        case .invokeCapability:
             return .capabilityExecution(
-                try await ProjectAgentCapabilityInvocationExecutor(
-                    domainRegistry: domainRegistry
-                ).execute(
-                    invocation,
-                    descriptor: descriptor,
-                    agentDescriptor: agentDescriptor,
-                    sessionID: sessionID,
-                    expectedWorkspaceRevision: expectedWorkspaceRevision,
-                    workspace: workspace,
-                    snapshot: snapshot,
-                    operationGuard: lease.operationGuard
+                .prepublicationFailure(
+                    AgentSemanticPrepublicationFailure(
+                        stage: .dispatchUnavailable,
+                        code: AgentSemanticPrepublicationFailure.dispatchUnavailableCode
+                    )
+                )
+            )
+
+        // FIXME(INCOMPLETE_IMPLEMENTATION): Production program.execute currently fails closed here before acquiring a workspace lease or mutating source. Remove this marker only after this request executes atomically through ProjectWorkspace and ProjectController with typed success, rollback, and committed-failure coverage.
+        case .executeProgram:
+            return .programExecution(
+                .prepublicationFailure(
+                    AgentSemanticPrepublicationFailure(
+                        stage: .dispatchUnavailable,
+                        code: AgentSemanticPrepublicationFailure.dispatchUnavailableCode
+                    )
                 )
             )
 

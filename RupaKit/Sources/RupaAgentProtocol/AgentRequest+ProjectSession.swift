@@ -14,7 +14,6 @@ public extension AgentRequest {
         case .closeDocument(let id, _, _),
              .resetDocument(let id, _, _),
              .execute(let id, _, _, _),
-             .invokeCapability(let id, _, _),
              .setParameterExpression(let id, _, _, _, _, _),
              .setObjectDimensionExpression(let id, _, _, _, _, _),
              .setSketchEntityDimensionExpression(let id, _, _, _, _, _),
@@ -36,6 +35,10 @@ public extension AgentRequest {
              .selectReferences(let id, _, _),
              .export(let id, _, _, _, _):
             id
+        case .invokeCapability(let request):
+            request.sessionID
+        case .executeProgram(let request):
+            request.sessionID
         case .meshCatalog(let request):
             request.sessionID
         case .meshPage(let request):
