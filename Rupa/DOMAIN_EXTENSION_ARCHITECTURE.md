@@ -11,7 +11,7 @@ manufacturing preparation, and simulation.
 | Product | Rupa |
 | Scope | Domain extension architecture |
 | Primary rule | Specialized domains extend the universal CAD model; they do not fork the document type, command stack, UI model, or agent transport. |
-| Document type | `.swcad` |
+| Document type | Schema-v3 `.rupa` package |
 | CAD foundation | Swift-CAD |
 | Implementation design | `DOMAIN_FOUNDATION_DESIGN.md` |
 | Transaction authority | `DOMAIN_TRANSACTION_CONTRACT.md` |
@@ -65,6 +65,7 @@ flowchart TD
     App --> DomainC["RupaCharacterDesign"]
     App --> DomainM["RupaManufacturing"]
     App --> DomainS["RupaSimulation"]
+    App -. planned .-> CADDomain["RupaCADDomain"]
 
     CLI["Rupa CLI composition"] --> Project
     Agent["Agent / MCP composition"] --> Project
@@ -77,6 +78,8 @@ flowchart TD
     DomainC --> DomainFoundation
     DomainM --> DomainFoundation
     DomainS --> DomainFoundation
+    CADDomain --> DomainFoundation
+    CADDomain --> Automation
 
     DomainFoundation --> Automation["RupaAutomation"]
     DomainFoundation --> Core["RupaCore"]
@@ -97,6 +100,7 @@ flowchart TD
 | `RupaCore` | `RupaProjectModel`, `RupaEvaluation`, `RupaCapabilities`, generic transaction infrastructure | Architecture, turbomachinery, character, manufacturing, simulation, UI, CLI, Agent |
 | `RupaAutomation` | `RupaCore`, `RupaCapabilities` | `RupaProject`, CLI, Agent runtime, UI, concrete domains |
 | `RupaDomainFoundation` | `RupaCore`, `RupaAutomation` | Concrete domains, UI, CLI, Agent transport |
+| Planned `RupaCADDomain` | `RupaDomainFoundation`, `RupaAutomation`, universal CAD public contracts | UI, CLI, Agent transport, project authority internals |
 | Concrete domain modules | `RupaDomainFoundation`, `RupaCore`, `RupaAutomation` | Other concrete domains unless the dependency is moved to a shared lower module |
 | `RupaProject` | `RupaCore`, `RupaAutomation`, `RupaDomainFoundation`, `RupaCapabilities`, artifact/decision infrastructure | Concrete domains, UI, CLI, Agent transport |
 | `RupaUI` | `RupaProject`, `RupaCore`, rendering, preview, injected registries | Concrete domains by default |
@@ -145,7 +149,9 @@ operation payload, semantic validation, source projection, and domain diagnostic
 | Logical editable aggregate | `RupaCore.DesignDocument` | One in-memory source aggregate composed from exact CAD and disjoint product source. |
 | Immutable evaluation projection | `RupaProjectModel` | Derived provider-neutral scene/object input; never a second persisted copy of CAD authority. |
 | Session state, source transaction engine, undo/redo, structural validation | `RupaCore` | One mutation path over the project model. |
-| Stable operation schema shared by UI, CLI, Agent, and batches | `RupaAutomation` | Typed commands, typed results, transaction-revision/dependency checks, dry run where supported. |
+| Generic semantic operation and program contracts | `RupaDomainFoundation` | Operation IDs and versions, typed values, request-local symbols and output references, bounded DAG validation, deterministic compilation, and result projection contracts shared by direct and program forms. |
+| Universal CAD semantic vocabulary | Planned `RupaCADDomain` | Concrete CAD capability descriptors, payload schemas, result schemas, validators, and lowerers; no persistent-ID allocation or publication authority. |
+| Binding-aware prepared source execution and internal raw graph substrate | `RupaAutomation` | Target contract: execute a fully resolved source plan on caller-owned staging and report typed outputs; at CADAPI-D cutover, raw feature-graph mutation becomes internal and ceases to be an Agent capability. |
 | Neutral semantic storage | `RupaCore.ProductMetadata` | Stored semantic extension envelopes, projection manifests, and unknown namespace preservation in disjoint product source. |
 | Domain extension contracts | `RupaDomainFoundation` | Namespace registration, typed payload decoding, generator protocols, validator protocols, capability descriptors. |
 | Session, artifact, decision, export, and external-job orchestration | `RupaProject` | One use-case boundary shared by UI, CLI, MCP, and Agent adapters. |
@@ -155,17 +161,17 @@ operation payload, semantic validation, source projection, and domain diagnostic
 | Manufacturing preparation | `RupaManufacturing` | Process constraints, wall thickness, clearance, supportability, build volume, material process metadata. |
 | Simulation connection | `RupaSimulation` | Solver input preparation, boundary-condition mapping, result import, analysis artifact metadata. |
 | UI presentation | `RupaUI`, generic descriptors, and optional domain UI adapters | Generic controls cover schema-driven operations; specialized adapters provide rich interactions without owning domain rules. |
-| Agent operation | Agent runtime over `RupaProject` | Agent discovers capabilities and dispatches project use cases without owning sessions or domain semantics. |
+| Agent operation | Agent runtime over `RupaProject` | Agent discovers one semantic vocabulary and dispatches either one direct operation or a bounded program without owning sessions, persistent IDs, lowering rules, or domain semantics. |
 
 ## Document Model
 
-The `.swcad` package remains the editable document type. Domain source is stored
+The schema-v3 `.rupa` package remains the editable document type. Domain source is stored
 as semantic extensions with explicit source ownership and projection state.
 Project/session, artifact, audit, and package-adjunct lifetimes follow
 `STATE_AND_PROJECT_CONTRACT.md` and `DOCUMENT_PACKAGE_CONTRACT.md`.
 
 ```text
-Model.swcad
+Model.rupa
 |-- manifest.json
 |-- source/cad.json
 |-- source/product.json
@@ -233,8 +239,11 @@ not import `RupaDomainFoundation`.
 | `SemanticObjectDescriptor` | Type ID, display name, property schema, selectable references, source ownership policy. |
 | `SemanticExtensionEnvelope` | RupaCore-owned Codable storage boundary for domain payloads in product source. |
 | `ProjectionManifest` | RupaCore-owned mapping between semantic entity IDs, Swift-CAD feature IDs, scene node IDs, persistent topology names, drawing references, and solver boundary tags. |
+| `SemanticOperationDescriptor` | Domain-neutral ID, version, typed input/output schemas, effect, route eligibility, and resource-cost declaration used by every invocation form. |
+| `SemanticProgram` | Bounded declarative DAG of registered operations with parameters, request-local symbols, typed output references, and bounded pure expressions. |
+| `SemanticProgramCompiler` | Resolves one direct operation or a complete program against one immutable registry/snapshot, validates every route and aggregate effect, and emits one deterministic prepared plan before mutation. |
 | `SourceProjectionGenerator` | Converts one semantic operation into validated RupaCore or RupaAutomation commands. |
-| `DomainCommandAdapter` | Parses domain-specific operation payloads and returns universal command batches or typed failures. |
+| `DomainCommandAdapter` | Parses domain-specific operation payloads and returns binding-aware prepared source operations or typed failures. |
 | `DomainValidator` | Emits typed validation findings for semantic consistency, projection consistency, manufacturability, documentation readiness, or simulation readiness. |
 | `DomainCapabilityProvider` | Exposes command descriptors, required inputs, dry-run behavior, and result schemas for UI, CLI, and Agent discovery. |
 | `SimulationAdapter` | Converts evaluated geometry plus semantic tags into solver inputs and imports solver results as derived artifacts. |
@@ -244,37 +253,41 @@ composition layers register them.
 
 ## Command Flow
 
-Every domain mutation still enters through the same command stack and follows
-`DOMAIN_TRANSACTION_CONTRACT.md`. Semantic payload, projection manifest, CAD
-source, scene metadata, and ownership changes are one atomic history entry.
+Every domain mutation still enters through `ProjectWorkspace` and
+`ProjectController` and follows `DOMAIN_TRANSACTION_CONTRACT.md`. Semantic
+payload, projection manifest, CAD source, scene metadata, and ownership changes
+are one atomic history entry. Transport and runtime routing never mutate source.
 
 ```mermaid
 sequenceDiagram
     participant Agent
-    participant Domain as Domain capability
-    participant Core as RupaCore command stack
-    participant Store as CADDocumentStore
+    participant Router as Application router
+    participant Workspace as ProjectWorkspace
+    participant Domain as Domain registry/compiler
+    participant Controller as ProjectController
     participant Eval as Evaluation
     participant Report as Diagnostics
 
-    Agent->>Domain: domain operation payload
-    Domain->>Domain: validate semantic inputs
-    Domain->>Core: universal command batch
-    Core->>Store: transactional mutation
-    Store->>Store: update CAD source and semantic envelope
-    Store->>Eval: regenerate evaluated state
+    Agent->>Router: capability.invoke or program.execute
+    Router->>Workspace: resolved session request
+    Workspace->>Domain: immutable planning snapshot
+    Domain->>Domain: validate and lower complete intent
+    Domain-->>Workspace: one prepared source transaction
+    Workspace->>Controller: commit prepared transaction
+    Controller->>Controller: stage CAD and semantic source
+    Controller->>Eval: regenerate evaluated state once
     Eval->>Report: diagnostics and typed result
     Report-->>Agent: structured result
 ```
 
 | Step | Required behavior |
 |---|---|
-| Parse | Decode the domain operation payload with typed errors. |
-| Preflight | Validate references, parameters, units, ownership, and projection freshness before mutation. |
-| Generate | Produce one neutral source transaction containing universal source and semantic mutations. |
-| Commit | Commit one staged transaction through `CommandStack` so semantic source and CAD projection share one undo/redo entry and one transaction-revision increment. |
+| Parse | Decode one direct operation or one bounded program with typed errors. |
+| Preflight | Resolve one registry/snapshot and validate references, local binding types, parameters, units, route/effect eligibility, ownership, projection freshness, and all resource limits before mutation. |
+| Generate | Produce one binding-aware prepared source transaction containing universal source and semantic mutations. |
+| Commit | Commit through `ProjectWorkspace` and `ProjectController` so semantic source and CAD projection share one undo entry, exact evaluation, transaction-revision increment, and publication. |
 | Evaluate | Use normal evaluation and diagnostics publication. |
-| Report | Return semantic references, CAD references, generated topology roles, validation summaries, and actionable diagnostics. |
+| Report | Map request-local typed outputs to controller-allocated stable semantic, CAD, scene, component, instance, pattern, and topology references plus exact committed coordinates. |
 
 ## Domain Examples
 
@@ -378,23 +391,37 @@ flowchart TD
 ## Agent Capability Model
 
 Agents must operate through explicit capabilities. They should not infer private
-module behavior from file internals.
+module behavior from file internals. CAD source mutation exposes one registered
+semantic operation vocabulary through two forms: `capability.invoke` for one
+simple operation and `program.execute` for a bounded DAG of the same operations.
+The direct form is not a second command implementation.
+
+This is the CADAPI-D target contract. The current development catalog still
+exposes raw Automation commands, `command.apply`/`command.applyBatch`,
+`AutomationCommand.appendFeatureGraph`, and caller-supplied persistent IDs.
+Those routes are legacy implementation inventory and remain reachable until the
+cutover is implemented and verified.
 
 | Capability level | Example | Contract |
 |---|---|---|
-| Universal CAD | Create sketch, extrude, fillet, measure, export | `RupaAutomation` command or query |
-| Domain command | Create wall, place window, create blade row, create control cage | Registered domain capability mapped to command batch |
+| Universal CAD | Create sketch, extrude, fillet, measure, export | Planned `RupaCADDomain` semantic descriptor and lowerer for CAD operations; effect-specific queries/exports remain separate from source programs. |
+| Domain command | Create wall, place window, create blade row, create control cage | Registered domain descriptor and lowerer using the same generic Foundation operation contract. |
 | Validation | Check room closure, check blade clearance, check printability | Registered validator with structured diagnostics |
 | Simulation | Prepare CFD run, import result, compare variants | Simulation adapter with reproducible artifact metadata |
 | Repair | Regenerate projection, fix stale boundary tags, convert domain object to universal CAD | Explicit capability with ownership consequences |
 
-Agent-facing capability descriptors must include required inputs, units, reference
-types, dry-run support, mutation behavior, expected outputs, and failure modes.
+Agent-facing capability descriptors must include required inputs, units,
+reference types, typed named outputs, dry-run support, mutation behavior,
+route/effect eligibility, resource-cost declarations, expected outputs, and
+failure modes. Clients own intent, parameters, and request-local symbols only;
+they never supply persistent source or presentation identities.
 
 Domain capabilities may appear as high-level commands, but source mutation lowers
-to a neutral transaction. Artifact, export, job, and decision effects lower to
 their registered project execution plans. Concrete domain commands never become
-cases in a central command enum.
+cases in a central command enum. A source-mutation program cannot mix reads,
+workspace mutation, artifact, export, external-job, or decision effects. Native
+finite patterns remain one semantic operation rather than an expanded list of
+occurrence mutations.
 
 ## UI and Inspector Boundary
 
@@ -445,7 +472,7 @@ conformance manifests, authorization policies, or document forks.
 |---|---|
 | Domain module | Adds semantic object types, generators, validators, simulation adapters, and capabilities. |
 | Workspace preset | Chooses default units, templates, validation sets, export presets, and UI emphasis. |
-| Document type | Remains `.swcad` regardless of selected profile. |
+| Document type | Remains schema-v3 `.rupa` regardless of selected profile. |
 | Capability availability | Determined by registered modules and project authorization; a workspace preset only changes discoverability/emphasis. |
 
 A building workspace preset may surface room and wall tools first, while a
@@ -480,7 +507,7 @@ ready.
 | Can UI, CLI, and Agent discover the same capability contract? | Yes. |
 | Are validation and simulation outputs derived artifacts, not hidden source mutations? | Yes. |
 | Are unsupported or unknown semantic namespaces preserved but not edited blindly? | Yes. |
-| Can the document remain a valid `.swcad` without profile-specific branches? | Yes. |
+| Can the document remain a valid schema-v3 `.rupa` package without profile-specific branches? | Yes. |
 
 ## Milestones
 
@@ -504,7 +531,7 @@ flowchart TD
 |---|---|
 | M0 | This dependency and responsibility contract is documented, referenced by product/spec documents, and enforced by source-import plus Package.swift production target graph tests. |
 | M1 | `RupaDomainFoundation` contracts are introduced without concrete domain behavior. |
-| M2 | `.swcad` can preserve registered and unknown semantic extension envelopes with validation diagnostics. |
+| M2 | Schema-v3 `.rupa` can preserve registered and unknown semantic extension envelopes with validation diagnostics. |
 | M3 | Projection manifests map semantic references to CAD source, topology, scene nodes, and analysis boundary tags. |
 | M4 | Manufacturing validators run on universal CAD and domain-authored projections without owning domain semantics. |
 | M5 | Architecture pilot creates and edits a small semantic building model through shared commands. |

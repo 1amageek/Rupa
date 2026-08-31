@@ -5,7 +5,8 @@
 This is the system design master for the Rupa system. It indexes the shared
 RUPA-ACCESS authority boundary, T10 Agent-to-project geometry integration, T11
 professional bicycle reference design, T12 Agent CAD basic-geometry
-benchmarking, and the professional V8 engineering-reference artifact. T10 connects
+benchmarking, the CADAPI-D public modeling API, and the professional V8
+engineering-reference artifact. T10 connects
 the already implemented Agent CAD route and T09 Authored Mesh use cases without
 adding a second project authority or a modeling-specific transport. T11 defines
 a bounded L2 engineering-reference design and evidence contract; it does not
@@ -28,6 +29,10 @@ Geometry/Core/Project/Mesh contracts remain the verified lower foundation. T10
 changes only their application and Agent composition boundary; T11 consumes
 that boundary as an observed capability and design-evidence dependency; T12
 consumes it as a route and immutable source/B-Rep observation dependency.
+CADAPI-D replaces the external raw-feature-graph design with one semantic CAD
+operation vocabulary exposed in exactly two forms: a direct one-operation
+invocation and a bounded declarative program. It is a target design; current
+source remains legacy until the later implementation gates pass.
 
 ## Responsibilities and Boundaries
 
@@ -37,6 +42,12 @@ presentation evaluation, and application-owned persistence. UI, CLI, and
 future adapters submit typed intent through the project-access boundary; the
 workspace and its `ProjectController` remain the only Product/CAD/Mesh
 mutation, evaluation, and save authority.
+
+For CAD source mutation, the system additionally owns one-vocabulary/two-form
+composition: `capability.invoke` makes a simple operation simple, while
+`program.execute` composes those exact operations into one bounded atomic DAG.
+Neither form transfers persistent-ID, presentation-graph, feature-graph,
+package, or publication authority to the caller.
 
 It does not add an MCP server, general-purpose CLI command, bicycle-specific
 command, new Mesh kernel operation, renderer, Agent file-lifecycle authority,
@@ -62,6 +73,8 @@ the final immutable source/B-Rep snapshot.
 | [Current task progress](RupaKit/PROGRESS.md) | coordinates with | work order and evidence ownership | Tracks the cumulative T10/T11/T12 and professional-V8 design, implementation, and integration proof. | A design checkbox is not behavior evidence. |
 | [Professional bicycle reference](Artifacts/professional-bicycle/DESIGN.md) | child | T11 L2 fidelity, provenance, CAD authority, and rejection contract | Defines the bounded engineering-reference outcome for a later Agent-generated bicycle assembly. | It is a design/acceptance contract; it does not claim manufacturing, safety, certification, or production implementation. |
 | [Professional V8 reference](Artifacts/professional-v8-engine/DESIGN.md) | child | Engine requirement, thermodynamic/mechanical analysis, semantic CAD, and release-claim boundary | Defines one 4.0 L twin-turbo road/track engineering reference and the evidence required before its CAD can be accepted. | Calculation and CAD evidence do not replace FEA, CFD, combustion development, dyno durability, emissions, or production validation. |
+| [RupaDomainFoundation](RupaKit/Sources/RupaDomainFoundation/DESIGN.md) | descendant | generic operation/value/reference/program compiler contract | Defines the single semantic operation model shared by both forms. | It owns neither concrete CAD vocabulary nor project publication. |
+| [RupaAutomation](RupaKit/Sources/RupaAutomation/DESIGN.md) | descendant | binding-aware prepared source execution | Keeps raw feature-graph transactions as an internal lowering substrate. | Its current externally reachable raw commands are an implementation gap. |
 
 ## Architecture
 
@@ -88,6 +101,12 @@ flowchart LR
         Eval --> Scene["UniversalViewportScene"]
         Scene --> Render["Existing Mesh renderer triangles"]
         App["Application file lifecycle"] --> Project
+    end
+    subgraph CADAPI["CADAPI-D target contract"]
+        Direct["capability.invoke\none simple operation"] --> Semantic["one semantic CAD registry + compiler"]
+        Program["program.execute\nbounded declarative DAG"] --> Semantic
+        Semantic --> Prepared["one prepared source plan"]
+        Prepared --> WorkspaceAuthority
     end
     subgraph T11["T11 evidence/design branch"]
         Sources["Primary sources + observed capability"] --> Reference["L2 reference design"]
@@ -118,8 +137,11 @@ flowchart LR
 
 ## Contracts and Invariants
 
-1. Agent CAD operations continue to use the existing Automation request route;
-   T10 introduces no bicycle-specific command.
+1. Public Agent CAD source mutation uses one versioned semantic operation
+   vocabulary in exactly two forms. `capability.invoke` performs one operation
+   without a program wrapper or local reference. `program.execute` composes the
+   same descriptors and lowerers as a bounded declarative DAG with typed local
+   references. T10 introduces no bicycle-specific command.
 2. Make Editable explicitly evaluates the selected CAD modeling representation,
    commits a new independent Authored Mesh representation, retains CAD and its
    modeling selection, and may switch only presentation selection. This is the
@@ -134,10 +156,11 @@ flowchart LR
 5. Stale coordinates, cancellation, invalid limits/plans, and prepublication
    failures are typed and publish nothing. A postpublication projection failure
    returns the exact committed coordinate and must-not-retry disposition.
-6. Agent wire requests do not save or load `.rupa` files. Application code and
-   `RupaProjectAccess` retain that authority through
-   `ProjectWorkspace`/`ProjectController`; the existing Agent save request
-   remains unsupported as a wire operation.
+6. A caller may send an explicit save intent through the application router,
+   but application coordination, `ProjectWorkspace`, and `ProjectController`
+   retain save authority. Modeling success never implies save. CAD program
+   nodes cannot open, close, save, export, edit package bytes, or select an
+   alternate access route.
 7. Project-access adapters submit intent and exact session coordinates only.
    They never edit package entries, instantiate a shadow `EditorSession`, or
    publish a second project state. Live access releases only its access
@@ -154,6 +177,8 @@ flowchart LR
    it may not mutate `EditorSession`, `DesignDocument`, or
    `CADDocumentStore`, evaluate the CAD kernel, construct B-Rep, or bypass the
    route with direct swift-CAD or Mesh operations.
+   This retained benchmark-fixture allowance is historical T12 evidence and is
+   not a CADAPI-D public request contract.
 10. T12 candidate-visible challenge values and typed prior results are separate
    from oracle-private expected source/B-Rep geometry. The T12 oracle uses
    immutable source and exact B-Rep observations, never renderer Mesh output or
@@ -181,6 +206,26 @@ flowchart LR
     benchmark executor/controller/oracle path at concurrency 1, and cannot
     expose private expectations, activate later cases, retry a publication, or
     become source authority.
+16. Agent callers own semantic intent, argument values, references to existing
+    source, and request-local symbols only. Rupa allocates persistent Feature,
+    Body, Scene, Component, Instance, and Pattern identities and owns dependency
+    order, presentation structure/defaults, validation, and lowering.
+17. A CAD program is finite, source-only, and acyclic. It permits typed
+    parameters, bounded pure expressions, reuse, transforms, booleans,
+    sweeps/lofts, instances, and native finite patterns. It permits no arbitrary
+    code, I/O, callback, recursion, conditional, user-defined loop, read,
+    workspace, artifact, export, lifecycle, external-job, or Mesh-edit effect.
+18. Direct and program forms validate through the same semantic compiler. One
+    accepted program becomes at most one staged source transaction, exact
+    evaluation, undo entry, and publication through
+    `ProjectWorkspace -> ProjectController`. Prepublication failure changes
+    nothing; a postpublication projection failure returns exact committed
+    coordinates and `mustNotRetry`.
+19. Raw `AutomationCommand`, `FeatureNode`, `FeaturePresentation`,
+    `FeatureGraphTransaction`, and caller-minted persistent IDs are not target
+    Agent API values. The current `appendFeatureGraph` catalog/protocol route is
+    legacy implementation inventory and must be removed or rejected before
+    CADAPI-D can be called implemented.
 
 T10's bicycle workflow is a capability fixture for the Agent route, authority
 transition, application-owned save/load, and renderer traversal. Its
@@ -194,19 +239,30 @@ separate T11 evidence/design branch and require its own acceptance contract.
 ```mermaid
 sequenceDiagram
     participant A as Agent request
+    participant H as ApplicationAgentRequestRouter
     participant R as AgentRuntime
+    participant F as RupaDomainFoundation compiler
+    participant C as ApplicationProjectCoordinator
     participant W as ProjectWorkspace
     participant P as ProjectController
     participant V as Presentation renderer
-    A->>R: existing CAD Automation batch
-    R->>W: executeAutomation(exact view)
-    W->>P: atomic CAD source transaction
+    A->>H: capability.invoke or program.execute
+    H->>R: dispatch semantic CAD intent
+    R->>F: original semantic form + exact planning view
+    F->>F: one registry/compiler; normalize, validate, lower
+    F-->>R: one prepared source plan
+    R->>W: one prepared source-plan action with exact view
+    W->>P: at most one atomic CAD source transaction
     Note over A,P: T10 fixture may repeat Make Editable per fixture body; this is not a system-wide requirement
-    A->>R: catalog/page/neighborhood/edit preview/commit
+    A->>H: catalog/page/neighborhood/edit preview/commit
+    H->>R: dispatch bounded Mesh intent
     R->>W: existing bounded T09 Mesh use cases
     W->>P: at most one Mesh source transaction
-    Note over A,P: Agent has no save authority
-    W->>P: application-owned save then load
+    Note over A,P: mutation does not imply persistence
+    A->>H: separate explicit save intent when requested
+    H->>C: route lifecycle intent outside AgentRuntime
+    C->>W: application-coordinated save
+    W->>P: atomic package save
     P->>V: presentation evaluation -> scene -> real triangles
     V-->>V: deterministic acceptance PNG
 ```
@@ -249,6 +305,10 @@ candidate-response, oracle-result, and report values plus one isolated case
 runner at a time; it owns no project or CAD source state.
 The JSON adapter owns only immutable envelopes, bounded process buffers, and a
 single invocation; it retains no project or benchmark-private state.
+CADAPI-D parameters, node symbols, local references, compilation graph, and
+prepared-plan bindings are invocation-local. Persistent source identities begin
+only inside staged project authority and are returned through a typed committed
+receipt; a dry run never returns persistent identity claims.
 
 ## Failure, Concurrency, and Constraints
 
@@ -266,6 +326,16 @@ failure invalidates the run without updating the execution-regression baseline.
 The external adapter executes one activated case per process, reads at most one
 65,536-byte response, and uses no network, background scheduler, or fallback
 reference candidate.
+The CAD semantic compiler applies an injected owner-defined policy before any
+mutation. It bounds wire bytes, decoded values/nesting, nodes, edges,
+parameters, output references, expression depth/work, lowered commands, and
+expanded source/body/occurrence/pattern/evaluation work. Concrete default values
+must be selected from measured implementation fixtures rather than guessed or
+relaxed to make a request pass. Unknown operation/version, invalid type/unit/
+reference, duplicate or missing symbol, cycle, ineligible route/effect, limit,
+stale coordinate, cancellation, lowering, source, evaluation, projection, and
+dispatch-uncertain failures remain typed and never select raw graph or file
+fallback.
 
 ## Verification and Change Impact
 
@@ -274,6 +344,10 @@ reference candidate.
 | Wire contract | Agent request/response codec and fixture tests for all typed Mesh and Make Editable routes, malformed limits/plans, and no fallback decoder. |
 | Make Editable authority | Project/RupaKit tests for exact snapshot, CAD/modeling retention, presentation switch, provenance, zero-copy handoff, stale/cancel rollback, and one history entry. |
 | Agent routing | Runtime tests proving each request reaches the registered workspace use case and preserves typed stale/cancel/no-retry failures. |
+| CADAPI-D simple form | Later codec/runtime/actual-CLI evidence must prove one primitive is one `capability.invoke`, with no program wrapper, caller UUID, or presentation payload. |
+| CADAPI-D complex form | Later compiler and production-route evidence must prove a repeated multi-part assembly uses typed local bindings and native patterns, stays proportional to distinct intent, and publishes as one transaction/evaluation/undo/publication. |
+| Shared vocabulary and cutover | Equivalent direct and one-node-program requests use the same descriptor/lowerer; catalog, protocol, codec, runtime, and CLI reject raw feature graphs and public Automation mutation payloads. |
+| CADAPI-D failure and bounds | Wrong type/unit/reference, duplicate/missing symbol, cycle, non-source effect, expansion/byte/work limits, stale/cancel/evaluation failure, rollback, committed no-retry, and dispatch uncertainty are exercised on the real workspace/controller route. |
 | T10 capability fixture | Agent CAD route, representation transition, application-owned save/load, renderer triangle traversal, and deterministic presentation output are exercised through the existing path. The fixture is not evidence of T11 L2 dimensional coherence, semantic bicycle parts, interfaces, manufacturing readiness, structural safety, or certification. |
 | T12 benchmark contract | `RupaAgentCADBenchmark` preserves all 100 individual production-route/oracle gates and composes them through serial replay, measured bounded scheduling, immutable capability/execution baselines, fixed-denominator scoring, and a canonical report. A reference-plan result is control-path evidence, not LLM reasoning evidence. |
 | T12 external candidate adapter | Golden JSON, bounded decode, fingerprint mismatch, inactive-case, process exit, privacy scan, and actual line/rectangle process tests prove that an external response reaches the same activated executor and exact oracle without exposing private expectations. |

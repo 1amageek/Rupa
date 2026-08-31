@@ -1,15 +1,20 @@
 # Rupa Automation Protocol
 
-This document defines the external JSON contract used by CLI, MCP, and Agent
-clients to invoke ProjectController use cases. Public wire DTOs are versioned
-independently from internal Swift types.
+This document records both the current development wire inventory and the
+CADAPI-D target contract used by CLI, future MCP, and Agent clients. Public wire
+DTOs are versioned independently from internal Swift types. Sections explicitly
+marked **legacy implementation inventory** describe reachable code only; they
+are non-normative and must not be used as the target Agent CAD API.
 
 ## Responsibility Boundary
 
 ```mermaid
 flowchart LR
-    Client["External client"] --> Transport["AutomationGateway transport"]
-    Transport --> Controller["ProjectController"]
+    Client["External client"] --> Access["RupaProjectAccess"]
+    Access --> Transport["Injected transport adapter"]
+    Transport --> Router["ApplicationAgentRequestRouter"]
+    Router --> Workspace["ProjectWorkspace"]
+    Workspace --> Controller["ProjectController"]
     Controller --> Domain["Document and domain use cases"]
     Controller --> Artifacts["Artifact / decision / job stores"]
     Domain --> Kernel["SwiftCAD geometry kernel"]
@@ -18,26 +23,32 @@ flowchart LR
 | Layer | Responsibility |
 |---|---|
 | External client | Chooses commands, supplies typed targets, and correlates request IDs. |
-| AutomationGateway transport | Moves JSON envelopes over the local transport and preserves request/response correlation. |
-| ProjectController | Resolves caller/session, orders use cases, coordinates source, workspace, artifact, decision, export, and job effects, and returns typed results. |
+| `RupaProjectAccess` | Opens an explicit live or closed-project access session without owning project semantics. |
+| Transport adapter | Moves bounded envelopes and preserves request/response correlation; it does not select another execution path on failure. |
+| Application router | Resolves lifecycle and session routing, then delegates project work to the selected workspace. |
+| `ProjectWorkspace` | Owns the open project session and is the only route from Agent requests to project authority. |
+| `ProjectController` | Stages, validates, evaluates, publishes, and saves Product/CAD/Mesh state atomically. |
 | Rupa document/domain use cases | Own source mutation, evaluation, selection, measurement, and domain semantics. |
 | Artifact/decision/job stores | Own immutable derived results, authorized decisions, and managed external effects. |
 | SwiftCAD geometry kernel | Owns geometry, topology, curves, surfaces, units, and generated analysis data. |
 
-The transport layer is intentionally not the owner of project semantics. It only carries the automation protocol.
+The transport layer is intentionally not the owner of project semantics. It only
+carries the protocol. A transport failure never falls back to direct file
+mutation, and save remains a separate explicit intent routed through the
+application coordinator, workspace, and `ProjectController`.
 
 ## Transport
 
 | Field | Contract |
 |---|---|
 | Transport | Local Unix domain socket. |
-| Canonical socket path | `~/Library/Group Containers/WWCKBW8CKN.team.stamp.rupa/rupa-agent/rupa.sock` — the app-group container is the one location both the sandboxed app and external clients resolve identically. |
-| Fallback socket path | `$TMPDIR/rupa-agent/rupa.sock`, used only when the app-group container is unavailable. |
+| Endpoint | A product-composition-owned `UnixSocketEndpoint` is injected into the adapter. The semantic protocol does not expose or choose a socket path. |
+| Fallback | None. Endpoint resolution, connection, dispatch, or response failure is a typed failure and never changes project authority. |
 | Encoding | UTF-8 JSON. |
 | Message style | JSON-RPC-style envelopes with Rupa-specific method/result correlation. |
 | Protocol version | `jsonrpc` must be `"2.0"`. |
 
-## Envelope Contract
+## Current Envelope Contract (Legacy Inventory, Non-Normative)
 
 ### Request
 
@@ -91,7 +102,7 @@ The transport layer is intentionally not the owner of project semantics. It only
 }
 ```
 
-## Envelope Rules
+## Current Envelope Rules (Legacy Inventory, Non-Normative)
 
 | Rule | Contract |
 |---|---|
@@ -112,31 +123,81 @@ Wire schemas are declared in `RupaAgentProtocol` DTOs and fixtures. They do not
 inherit an internal Codable shape implicitly. Reusing a value type requires an
 explicit wire-schema/version decision and compatibility test.
 
-## Versioned Capability Protocol Migration
+## CADAPI-D Semantic Modeling Contract
 
-The method table below documents the current development protocol. The target
-project architecture introduces a breaking, independently versioned protocol
-rather than wrapping the current internal command enum. Capability descriptors
-declare CAD source, Product source, Authored Mesh source, purpose-selection, input, workspace,
-artifact, export, job, or decision effects as required by
-`CAD_MESH_RESPONSIBILITY_CONTRACT.md`:
+CAD source mutation has one semantic operation vocabulary and exactly two
+external invocation forms. This contract is fixed; the current implementation
+has not completed the cutover.
+
+```mermaid
+flowchart LR
+    Direct["capability.invoke\none operation"] --> Registry["same descriptor registry"]
+    Program["program.execute\nbounded declarative DAG"] --> Registry
+    Registry --> Compiler["same validators and lowerers"]
+    Compiler --> Prepared["one prepared source plan"]
+    Prepared --> Workspace["ProjectWorkspace"]
+    Workspace --> Controller["ProjectController"]
+```
+
+| Form | Contract |
+|---|---|
+| `capability.invoke` | Invokes one registered semantic operation without requiring a program wrapper. Internally, eligible CAD source mutation is normalized to a one-node program and uses the same descriptor, validation, and lowerer as the complex form. |
+| `program.execute` | Executes a bounded declarative DAG of those same operations. Nodes use request-local symbols, parameters, typed output references, and bounded pure expressions. The complete program lowers before mutation and publishes through at most one source transaction, evaluation, undo entry, and publication. |
+
+Persistent `FeatureID`, `SceneNodeID`, component, instance, and pattern identities
+are allocated by Rupa inside the staged authority boundary. Clients name only
+request-local symbols. A successful receipt maps typed local outputs to stable
+server identities and the exact committed project coordinates. A dry run does
+not claim persistent identities.
+
+The program form has no loops, conditionals, recursion, callbacks, file I/O, or
+embedded general-purpose language. Repetition is expressed through registered
+native pattern operations, so one pattern remains one semantic node regardless
+of occurrence count. Before staging, the compiler enforces explicit limits for
+wire bytes, decoded values and nesting, nodes, edges, parameters, local output
+references, expression depth and count, lowered commands, expanded source and
+evaluation work, and diagnostics. Every resolved operation in a CAD mutation
+program must prove the source route and the aggregate source-mutation effect.
+
+`RupaDomainFoundation` owns the generic operation, value, local-reference, DAG,
+validation, and compiler contracts. The planned `RupaCADDomain` module owns the
+concrete universal-CAD descriptors and lowerers. `RupaAutomation` owns the
+binding-aware prepared source executor and retains raw feature-graph mutation as
+an internal lowering substrate. `RupaAgentProtocol` owns wire DTOs, while
+`RupaAgentRuntime` only decodes and dispatches them.
+
+The versioned method families are:
 
 | vNext method family | Contract |
 |---|---|
 | `capabilities.list` | Returns descriptors from the composed `CapabilityRegistry`; no static Agent catalog exists. |
-| `capability.invoke` | Invokes one capability ID/version with canonical typed payload and effect-specific project context. |
-| `program.execute` | Executes a validated `ModelingProgram` DAG with typed result bindings, checkpoints, progress, and cancellation. |
+| `capability.invoke` | Invokes one capability ID/version with canonical typed payload and effect-specific project context. CAD source operations use the CADAPI-D direct form above. |
+| `program.execute` | Executes the CADAPI-D bounded DAG using the same registered operation definitions as the direct form. |
 | `operations.progress` / `operations.cancel` | Observes or cancels long evaluation, import/export, render, or job effects. |
 | `artifacts.read` | Reads bounded artifact metadata or a negotiated binary resource stream. |
 
-`expectedGeneration` in the current development schema is replaced for source
-mutation by `expectedTransactionRevision`. Evaluated results separately report
-their source dependency identity and evaluation snapshot identity. Method-specific
-ergonomic endpoints may remain only as adapters to registered capability IDs; they
-must not own separate handlers. The owning capability design packet and
-`COMPLETE_IMPLEMENTATION_PLAN.md` schedule this migration and delete
-`command.apply`/`command.applyBatch` only after equivalent capability/program
-routes and fixtures pass.
+The current development schema's lone `expectedGeneration` field is legacy.
+For source mutation, the vNext outer request envelope carries one complete
+`ProjectAuthorityCoordinate`: project ID, document generation, transaction
+revision, publication sequence, and workspace revision. None of these fields is
+replaced or dropped when either CAD invocation form is compiled. A committed
+result reports the exact same complete coordinate shape. Evaluated results
+separately report source dependency and evaluation snapshot identity.
+Method-specific ergonomic endpoints may remain only as adapters to registered
+capability IDs; they must not own separate handlers. Prepublication validation,
+lowering, cancellation, source mutation, evaluation, or stale-coordinate failure
+publishes no state. A response lost after publication reports the exact committed
+coordinates and a must-not-retry outcome.
+
+## Legacy Implementation Inventory (Non-Normative)
+
+The Common Params, Methods, fixtures, and error codes below document the current
+development implementation. In particular, `command.apply`,
+`command.applyBatch`, raw `AutomationCommand.appendFeatureGraph`, and
+caller-supplied persistent feature or scene identities are legacy implementation
+details targeted for removal from Agent capability discovery, wire decoding, and
+production CLI routing. Their presence below does not authorize them as
+CADAPI-D operations and does not claim that the cutover is implemented.
 
 ## Common Params
 

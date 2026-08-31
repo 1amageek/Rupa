@@ -20,6 +20,10 @@ Mesh, package, or persisted projection data. The application composes one
 `ProjectAgentCommandController` over the same workspace as the UI and one
 `ApplicationAgentRequestRouter`; non-lifecycle requests delegate to the
 controller and only explicit Agent save reaches the typed coordinator port.
+For CADAPI-D, both `capability.invoke` and `program.execute` are semantic
+requests delegated through that same controller/workspace path. The application
+does not interpret program nodes, allocate modeling IDs, expand patterns, or
+create a second transaction; explicit save remains a separate lifecycle intent.
 
 ## Related Designs
 
@@ -48,6 +52,15 @@ flowchart LR
     Controller --> Package["schema-v3 .rupa"]
 ```
 
+```mermaid
+flowchart LR
+    Direct["capability.invoke"] --> Router["ApplicationAgentRequestRouter"]
+    Program["program.execute"] --> Router
+    Router --> AgentController["ProjectAgentCommandController"]
+    AgentController --> Workspace["ProjectWorkspace"]
+    Workspace --> Controller["ProjectController"]
+```
+
 ## Contracts and Invariants
 
 1. The App-owned workspace/controller pair is the sole live mutation,
@@ -62,6 +75,12 @@ flowchart LR
 6. One process-lifetime application authority is acquired before the workspace,
    controller, router, or Agent host is created. Scene visibility never stops
    that host.
+7. The two CAD mutation forms share one semantic compiler and arrive at this
+   composition as one workspace action. The App defines no raw-feature-graph,
+   program-only operation switch, or modeling-specific save path.
+8. A successful CAD mutation changes in-memory project state only. Persistence
+   occurs only after a separately requested save reaches the coordinator and
+   the same `ProjectController`.
 
 ## Runtime Flows
 
@@ -95,6 +114,9 @@ file lifecycle and are not redirected through the Agent route. Package save
 stages and fully validates a destination-appropriate replacement before one
 atomic publication; post-replacement cleanup warnings are returned as typed
 metadata rather than triggering a fallible post-publication step.
+`capability.invoke` and `program.execute` follow the semantic delegation branch;
+the router never decomposes a program into multiple requests or retries it
+through a file adapter.
 
 ## State, Ownership, and Lifecycle
 
@@ -119,6 +141,10 @@ committed coordinates are returned as an `AgentCommittedMutationOutcome` with
 `Mutation.save`, `Stage.viewProjection`, and must-not-retry semantics.
 MainActor owns UI composition; the project controller actor owns source
 publication.
+An unknown operation/version, invalid program, stale coordinate, cancellation,
+limit failure, or dispatch-uncertain result remains typed. A program that
+published is never replayed; a program that failed before publication leaves
+the current App view and destination package unchanged.
 
 ## Verification and Change Impact
 
@@ -129,3 +155,7 @@ destination-preserving package staging, and failure preservation. ACCESS-O.5
 owns the package replacement implementation and ACCESS-O.6 owns application
 source composition; ACCESS-O.7/IV own the final signed App/CLI and
 same-workspace viewport evidence.
+CADAPI-D integration later adds actual signed-App/CLI proof that both forms use
+the same workspace/controller, complex programs publish once, explicit save is
+separate, and the App exposes no raw graph route. This document does not claim
+that source cutover is already implemented.

@@ -13,7 +13,7 @@ startup, window/project coordination, one App-owned `ProjectWorkspace`, one
 current project URL/security-scoped lifetime, UI publication, and internal
 Agent-host composition. It does not own CAD/Mesh semantics, socket framing,
 CLI parsing, package-entry mutation outside `ProjectController`, file
-migration, or save-as policy expansion.
+migration, semantic program compilation, or save-as policy expansion.
 
 ## Related Designs
 
@@ -65,6 +65,12 @@ flowchart LR
    to `ProjectWorkspace.load` and `ProjectController`.
 9. `ProjectViewSnapshot.projectName` is the visible navigation/window title
    authority.
+10. `capability.invoke` and `program.execute` are both non-lifecycle semantic
+    requests. The router delegates either unchanged to the same controller;
+    it never expands nodes, interprets CAD operations, or exposes raw graph
+    mutation.
+11. A CAD mutation and save are separate intents. Successful in-memory
+    publication does not cause implicit persistence.
 
 ## Runtime Flows
 
@@ -121,8 +127,8 @@ sequenceDiagram
 
     H->>R: decoded AgentRequest
     alt semantic read or mutation
-        R->>C: delegate unchanged
-        C->>W: registered workspace operation
+        R->>C: delegate unchanged, including either CAD mutation form
+        C->>W: one registered workspace operation
         W-->>C: typed AgentResponse
         C-->>R: response
     else explicit `.save`
@@ -142,6 +148,10 @@ or return a typed failure without changing the destination; failure to remove
 the now-empty staging directory after replacement is represented in the
 successful result as a typed warning and never converted into a retryable save
 failure.
+CADAPI-D program failures preserve the same boundary: prepublication failure
+leaves the App view and package unchanged, while postpublication projection or
+dispatch uncertainty is reported with exact no-retry coordinates and is never
+replayed through another route.
 
 ## State, Ownership, and Lifecycle
 
@@ -179,3 +189,7 @@ preservation. Its actual signed-App proof uses project signing/build locations
 without command-line signing, team, or DerivedData overrides. ACCESS-O.5 owns
 destination-appropriate package staging and ACCESS-O.6 owns the source
 composition; ACCESS-O.7/ACCESS-IV own cumulative signed App/CLI proof.
+CADAPI-D later requires an actual signed-App/CLI test showing direct and
+program forms reach this same workspace/controller, a complex program publishes
+once, explicit save remains separate, and no raw graph route is reachable. The
+current implementation has not yet satisfied that cutover proof.

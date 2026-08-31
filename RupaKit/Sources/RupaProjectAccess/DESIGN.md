@@ -12,6 +12,12 @@ and closed schema-v3 `.rupa` projects. ACCESS-A defines values and ports only;
 concrete live composition, closed-file workspace creation, authority leases,
 and CLI cutover belong to later ACCESS work.
 
+CADAPI-D adds no project authority here. An access session transports either of
+the two semantic CAD mutation envelopes (`capability.invoke` or
+`program.execute`) unchanged and keeps explicit save as a separate lifecycle
+operation. The semantic compiler and the removal of legacy raw graph payloads
+are target implementation work outside this module's current implementation.
+
 Parent: [RupaKit package design](../../DESIGN.md). Children: none.
 
 ## Responsibilities and Boundaries
@@ -20,11 +26,13 @@ This module owns:
 
 - the exact access target and immutable session identity;
 - the asynchronous open, request, explicit-save, and finish contracts;
+- transport of the protocol-owned simple-operation and bounded-program
+  requests without interpreting, compiling, splitting, or replaying them;
 - typed access outcomes and failures for coordinate, deadline, format, and
   uncertain-publication conditions;
 - transport-neutral lifecycle and save ports;
 - no ownership of a project, workspace, controller, package bytes, command
-  vocabulary, socket endpoint, or process lifecycle.
+  vocabulary, program compiler, socket endpoint, or process lifecycle.
 
 The only authority rule exposed here is that an implementation must delegate
 Product, CAD, Mesh, evaluation, and persistence operations to one
@@ -38,6 +46,8 @@ permit direct package-entry editing or a shadow `EditorSession`.
 | [system design](../../../DESIGN.md) | parent | single ProjectController authority | Places UI, CLI, and future adapters above this contract. | This module does not become project authority. |
 | [package design](../../DESIGN.md) | parent package | target dependency direction and CoreTypes value floor | Keeps this target below application and concrete transport composition. | Do not add a dependency on RupaCore or RupaProject. |
 | [RupaAgentProtocol](../RupaAgentProtocol/DESIGN.md) | depends on | typed Agent request/response values | Supplies the semantic request and response values carried by a session. | Protocol values are not workspace permission. |
+| [RupaAgentRuntime](../RupaAgentRuntime/DESIGN.md) | used by concrete access composition | semantic request dispatch and typed result projection | Resolves both CADAPI-D forms through the same workspace path. | Access must not compile, split, or retry a semantic program. |
+| [RupaDomainFoundation](../RupaDomainFoundation/DESIGN.md) | transitively used by runtime | bounded semantic program contract | Gives `program.execute` its source-only DAG semantics. | ProjectAccess transports the DTO and does not depend on compiler internals. |
 | [RupaProject](../RupaProject/DESIGN.md) | used by later composition | controller and publication authority | Owns staging, evaluation, rollback, and package persistence. | ACCESS-A defines no adapter to its concrete implementation. |
 | [Agent transport](../RupaAgentTransport/DESIGN.md) | coordinates later | injected endpoint and peer authorization | Carries protocol values for live access. | Endpoint placement is transport composition, not semantic status. |
 
@@ -48,6 +58,8 @@ flowchart LR
     UI["Rupa UI"] --> Workspace["ProjectWorkspace"]
     CLI["rupa CLI"] --> Access
     MCP["Future MCP"] -.-> Access
+    Simple["capability.invoke"] --> Access
+    Complex["program.execute"] --> Access
     Access --> Live["Live session adapter"]
     Access --> Closed["Closed .rupa adapter"]
     Live --> Workspace
@@ -107,6 +119,12 @@ Implementations must reject a request whose session coordinate does not match
 workspace/controller state; persistence requires an explicit successful
 `save`. `finish` releases access resources and never closes a live document.
 
+For CAD source mutation, `send` accepts only protocol-owned semantic intent.
+The simple and composite forms have the same session/generation fence and are
+forwarded as one request each. Access never converts a program into multiple
+requests, accepts caller-owned persistent source identifiers as creation
+authority, or exposes raw `AutomationCommand`/`appendFeatureGraph` payloads.
+
 ### Opening
 
 ```swift
@@ -126,7 +144,9 @@ target or file path.
 
 ### Lifecycle and save ports
 
-The session protocol is the only mutation-facing port. Implementations may
+The session protocol is the only mutation-facing port. A CADAPI-D request may
+publish at most once through that port; a successful mutation does not imply a
+save. Implementations may
 compose it with an application lifecycle owner, but that owner must preserve
 the same session identity, workspace, controller, and current URL. No lifecycle
 port may expose package entries or accept a direct `EditorSession`.
@@ -165,17 +185,21 @@ sequenceDiagram
     W->>P: load/evaluate under authority
     Opening-->>Caller: sessionID + session
     Caller->>Session: send(request)
-    Session->>W: typed intent + exact coordinates
+    Session->>W: one simple operation or one bounded program + exact coordinates
     W->>P: stage / evaluate / publish
     P-->>Session: typed response or failure
     Caller->>Session: save(expectedGeneration)
-    Session->>P: explicit atomic save
+    Session->>W: explicit save intent
+    W->>P: atomic save under the same authority
     Caller->>Session: finish()
 ```
 
 An implementation must keep the input package unchanged until explicit save
-succeeds. Cancellation, stale coordinates, command failure, evaluation
-failure, save failure, and uncertain dispatch do not authorize another route.
+succeeds. Cancellation, stale coordinates, invalid program, limit/lowering/
+command/evaluation failure, save failure, and uncertain dispatch do not
+authorize another route. A lost response after possible publication is
+`outcomeUnknown`, is not automatically replayed, and never causes fallback from
+live to closed-file access.
 
 ## State, Ownership, and Lifecycle
 
@@ -190,9 +214,11 @@ decision.
 
 Implementations are asynchronous and `Sendable`. They must serialize
 state-changing operations through the workspace/controller owner and must not
-pass mutable project state outside that owner. The API does not define retries,
-parallel command ordering, or socket I/O; those policies belong to the owning
-adapter design. Resource, frame, and peer limits remain transport-owned.
+pass mutable project state outside that owner. The API does not define semantic
+program ordering, lowerers, retries, parallel command execution, or socket I/O;
+those policies belong to the owning semantic/runtime/transport designs.
+Program semantic bounds remain compiler-owned, while resource, frame, and peer
+limits remain transport-owned.
 
 ## Verification and Change Impact
 
@@ -200,7 +226,10 @@ The contract target tests prove value equality, target discrimination, closed
 format validation, typed failure identity, and a fixture session's mismatch,
 deadline, save, and finish behavior. Later adapter tests must prove that these
 guards occur on the real workspace/controller path and that package bytes never
-become an API-owned mutable buffer.
+become an API-owned mutable buffer. CADAPI-D access tests must prove both forms
+are forwarded once without payload reinterpretation, explicit save is a
+separate call, prepublication failures do not save or fall back, and an
+uncertain or committed outcome is never replayed.
 
 Changes to target cases, session coordinates, save semantics, failure
 discriminators, or dependency imports require rechecking this design, the

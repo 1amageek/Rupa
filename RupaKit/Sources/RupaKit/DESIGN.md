@@ -1,10 +1,12 @@
-# RupaKit Mesh Use-Case Integration Design
+# RupaKit Application Use-Case Integration Design
 
 ## Purpose and Scope
 
 This module is the application-facing, transport-neutral boundary for Agent-
-ready Authored Mesh reads/edits and CAD Make Editable. It is a child of the [RupaKit package
-design](../../DESIGN.md) and the [system design](../../../DESIGN.md).
+ready Authored Mesh reads/edits, CAD Make Editable, and execution of a compiled
+CADAPI-D source program against one exact project view. It is a child of the
+[RupaKit package design](../../DESIGN.md) and the
+[system design](../../../DESIGN.md).
 
 Its direct users are the existing `RupaUI` and Agent runtime/UI. T10 connects
 AgentProtocol/Runtime to these use cases. `RupaProjectAccess` and its adapters
@@ -38,11 +40,14 @@ Parent: [RupaKit package design](../../DESIGN.md). Children: none.
 - an exact-snapshot Make Editable use case that asks `ProjectOperating` to
   prepare the current CAD modeling evaluation, commits it through one existing
   source transaction, and returns the exact view plus new Mesh handle.
+- adaptation of one fully validated semantic CAD invocation/program to one
+  `ProjectSourceTransaction`, preserving exact planning coordinates and the
+  `RupaAutomation` typed result bindings.
 
 It does not own Mesh topology algorithms, source asset replacement, project
 actor state, package encoding, Agent protocol envelopes, CLI parsing, MCP
-transport, project-level generic staging rules, or a shadow project/session
-authority.
+transport, semantic CAD operation definitions, program graph compilation,
+project-level generic staging rules, or a shadow project/session authority.
 
 The read records are transport-neutral values owned by this module:
 
@@ -101,6 +106,8 @@ the Authored Mesh source catalog.
 | [RupaProjectAccess](../RupaProjectAccess/DESIGN.md) | used by | transport-neutral target/session intent | Composes live or closed access above a workspace. | Access adapters cannot call Core or edit package entries directly. |
 | [RupaCore design](../RupaCore/DESIGN.md) | used through Project | Source ID/content identity and shared asset rules | Defines what a Mesh handle targets. | Scene/representation context is navigation only. |
 | [RupaGeometry design](../RupaGeometry/DESIGN.md) | used through Core | Plan/executor/budget/receipt | Defines request semantics without transport knowledge. | Do not expose internal mutable buffers. |
+| [RupaDomainFoundation](../RupaDomainFoundation/DESIGN.md) | depends on | validated semantic program and exact route/effect | Supplies the generic one-vocabulary compiler contract. | RupaKit must not re-resolve or reinterpret semantic nodes. |
+| [RupaAutomation](../RupaAutomation/DESIGN.md) | depends on | binding-aware prepared source execution | Applies one resolved source plan to caller-owned staging. | Raw feature graphs never become an application-facing input. |
 | [State and project contract](../../../Rupa/STATE_AND_PROJECT_CONTRACT.md) | depends on | Workspace and project snapshot lifecycle | Defines stale/cancel/no-retry behavior. | No post-commit replay after any publication-success projection or validation failure. |
 | [RupaKit tests](../../Tests/RupaKitTests) | verification owner | Use-case and workspace tests | Owns handle, pagination, preview, and exact-view proof. | Must exercise the real workspace/project path. |
 
@@ -126,6 +133,17 @@ flowchart TD
 Heavy reads may execute outside the MainActor on immutable source snapshots,
 but both pre-read and post-read coordinates are validated through the project
 authority before returning data.
+
+CADAPI-D composes beside the Mesh use cases without changing their authority:
+
+```mermaid
+flowchart LR
+    Compiled["validated compiled CAD program"] --> Guard["exact ProjectViewSnapshot guard"]
+    Guard --> Action["one workspace source action"]
+    Action --> Project["ProjectController staging + evaluation"]
+    Project --> Publish["one exact publication"]
+    Publish --> Receipt["symbol outputs + committed coordinates"]
+```
 
 ## Contracts and Invariants
 
@@ -196,6 +214,20 @@ authority before returning data.
     projection and presentation evaluation retain hidden occurrences, while the
     `ProjectViewSnapshot` filters items using Core's hierarchy-aware effective
     visibility and preserves the complete occurrence-to-scene navigation index.
+17. A CADAPI-D action accepts only a fully validated, source-only compiled plan
+    from the shared semantic compiler. It never accepts a wire DTO, raw
+    `FeatureGraphTransaction`, or caller-owned persistent identifiers.
+18. The complete compiled plan is one workspace action and at most one
+    `ProjectSourceTransaction`, exact evaluation, undo entry, workspace
+    revision, and publication. Nodes are never individually published.
+19. RupaKit revalidates the exact project/generation/transaction/publication/
+    workspace coordinates before staging and before publication. It does not
+    silently refresh or recompile against a newer view.
+20. Successful result projection returns every requested typed symbol binding,
+    exact committed coordinates, diagnostics, and expansion telemetry. Any
+    failure after publication retains the exact commit and `mustNotRetry`.
+21. CADAPI-D mutation and explicit save are separate application actions. This
+    use case never saves implicitly or edits package bytes.
 
 ## Runtime Flows
 
@@ -230,6 +262,12 @@ sequenceDiagram
 If a source/project coordinate becomes stale while a heavy read is running, the
 read result is rejected rather than silently relabeled as current.
 
+For a compiled CAD program, RupaKit captures one exact view, validates the
+prepared plan against it, submits one source transaction whose source closure
+uses the binding-aware Automation executor, evaluates the completed staged
+document once, and publishes only the final state. Failure before publication
+discards all staged bindings and source changes.
+
 ## State, Ownership, and Lifecycle
 
 - `ProjectViewSnapshot` is the caller's immutable observation anchor.
@@ -241,6 +279,9 @@ read result is rejected rather than silently relabeled as current.
   and revision state.
 - Bounded read response records are materialized at the read boundary and do
   not expose Geometry buffer pointers or leases beyond their lifetime.
+- Compiled programs, prepared bindings, and projected receipts are
+  invocation-local immutable values. `ProjectWorkspace` and
+  `ProjectController` remain the only retained mutable owners.
 
 ## Failure, Concurrency, and Constraints
 
@@ -256,6 +297,11 @@ The MainActor adapter never holds a Geometry mutable buffer. Heavy scans use
 immutable values outside the actor and revalidate the full snapshot before and
 after returning. Transport processes and external callbacks are outside this
 module's ownership.
+Semantic program byte/value/graph/expansion limits are validated before this
+boundary. RupaKit additionally enforces that actual staged command and expanded
+source work do not exceed the accepted plan. Stale, cancellation, Automation,
+Core, evaluation, and projection failures are typed; no node-level retry,
+raw-graph fallback, alternate access mode, or partial publication is allowed.
 
 ## Verification and Change Impact
 
@@ -271,7 +317,11 @@ T09-C owns the following behavioral proof:
 | Preview | No source/package/evaluation/history/view publication. |
 | Commit | Exact-view publication, one revision/undo, new handle, shared-source routing. |
 | Post-commit behavior | View projection and every post-publication result extraction, result/view/asset/handle validation, cancellation, and coordinate revalidation failure report the exact committed coordinates with no-retry semantics; no path can surface a retryable pre-commit error after publication. |
-| Scope | AgentProtocol/Runtime adapter changes only; no CLI/MCP or dedicated modeling command. |
+| CADAPI-D atomic action | Equivalent direct/one-node and multi-node compiled plans use one workspace action; a late command/evaluation failure publishes no source, history, or view. |
+| CADAPI-D result | Typed Feature/Body/Scene/Component/Instance/Pattern bindings and exact committed coordinates survive result projection; postcommit projection failure is must-not-retry. |
+| CADAPI-D bounds | Actual staged command and expansion telemetry cannot exceed the compiler-accepted policy. |
+| Scope | Exactly two public CAD mutation forms; no third command vocabulary, CLI/MCP authority, or direct package/session route. |
 
-Changes to the use-case request shape, snapshot coordinate, read materialization,
-or workspace publication require rechecking the Project and system designs.
+Changes to the use-case request shape, compiled-plan adaptation, snapshot
+coordinate, read materialization, or workspace publication require rechecking
+DomainFoundation, Automation, Project, Agent Runtime, and the system design.

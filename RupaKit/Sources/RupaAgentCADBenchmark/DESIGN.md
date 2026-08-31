@@ -2276,8 +2276,11 @@ records typed `analyticSphereUnavailable`, maps it to expectedUnsupported,
 issues zero commands and publications, and keeps the exact analytic-sphere
 oracle solely as a substitute-rejection authority. SPH-001 through SPH-004 are
 the active sphere cases today; the remaining identity is preparation-only
-until their individual gates. General `appendFeatureGraph` exposure or a new Agent
-sphere command would change product API scope and is not part of T12.
+until their individual gates. T12 did not authorize general
+`appendFeatureGraph` exposure or a new Agent sphere command. The later current
+runtime does expose raw graph mutation, but CADAPI-D classifies that route as
+legacy implementation inventory targeted for removal from the Agent boundary;
+neither its presence nor the T12 cases prove the new semantic CAD API.
 
 ### Vertical Case Gate
 

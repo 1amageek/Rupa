@@ -2,30 +2,49 @@
 
 ## Objective
 
-An Agent must be able to author a coherent model with work proportional to the
-affected geometry, not the number of protocol round trips multiplied by the
-size of the complete document.
+An Agent must be able to author a coherent model with request size proportional
+to distinct modeling intent and execution work proportional to affected
+geometry. Repeated structure must not require protocol payload proportional to
+expanded occurrences, and a simple operation must not require a program wrapper.
 
 ```mermaid
 flowchart LR
-    Agent["Agent modeling plan"] --> Batch["Typed automation batch"]
-    Batch --> Stage["Isolated source command group"]
-    Stage --> Eval["One final incremental exact evaluation"]
+    Direct["capability.invoke\none operation"] --> Registry["one semantic operation vocabulary"]
+    Program["program.execute\nbounded DAG"] --> Registry
+    Registry --> Lower["shared validation and lowering"]
+    Lower --> Stage["One prepared source plan"]
+    Stage --> Workspace["ProjectWorkspace"]
+    Workspace --> Controller["ProjectController"]
+    Controller --> Eval["One final incremental exact evaluation"]
     Eval --> History["One undo entry"]
-    History --> Result["Compact receipts + optional final context query"]
+    History --> Publish["One publication"]
+    Publish --> Result["Typed local-to-stable receipts"]
 ```
 
-## Current Contract
+## CADAPI-D Target Contract
+
+This contract is fixed but its Agent API cutover is not yet implemented.
 
 | Boundary | Required behavior |
 |---|---|
-| Protocol | Send related operations through `command.applyBatch` in one request. |
-| Source staging | Apply source commands to an isolated session. Intermediate state is not published. |
-| Evaluation | Defer ordinary evaluation requests and perform one final evaluation after all source commands succeed. |
+| Operation vocabulary | `capability.invoke` and `program.execute` resolve the same semantic operation IDs, versions, schemas, validators, and lowerers. Direct invocation normalizes to a one-node program internally. |
+| Program expression | A bounded declarative DAG uses parameters, bounded pure expressions, and typed request-local output references. Rupa allocates persistent IDs inside staging and returns the local-to-stable mapping only after successful publication. |
+| Repetition | Registered native finite-pattern operations represent repeated structure as one semantic node. Changing occurrence count does not change program node count. |
+| Source staging | Validate and lower the complete program before applying one prepared source plan through `ProjectWorkspace` to `ProjectController`. Intermediate state is not published. |
+| Evaluation | Perform at most one final exact evaluation after all source operations succeed. |
 | Validation | Reject the complete group when final evaluation does not reach the proposed generation or fails. |
-| Undo | Record one before/after history entry for the complete group. |
-| Result | Preserve command-specific IDs and reports for every command. Mutation receipts stay compact. A final explicit `describeDocument` command adds model bounds, precision, scale, grid, saved views, and diagnostics without another round trip. |
-| Observability | Return command, evaluation, history, rich-result, feature reuse, body tessellation, scoped-read, and topology-mutation counts. A normal source batch targets `N / 1 / 1 / 0`; appending `describeDocument` targets `N+1 / 1 / 1 / 1`. |
+| Undo and publication | Record one before/after history entry and publish at most once for the complete program. |
+| Result | Return typed local output mappings, exact committed coordinates, diagnostics, and compact observability. Dry run does not claim persistent identities. |
+| Bounds | Reject before staging when request bytes, values, nesting, graph nodes/edges, local references, expressions, lowered commands, expanded source/evaluation work, or diagnostics exceed their configured limits. |
+
+## Current Legacy Implementation Inventory
+
+The reachable implementation still accepts `command.applyBatch`, raw
+`AutomationCommand.appendFeatureGraph`, and caller-supplied persistent IDs. Its
+isolated source grouping, final evaluation, and grouped undo are useful internal
+substrates, but that public shape is non-normative and targeted for CADAPI-D
+cutover. No result in this document claims that `capability.invoke` and
+`program.execute` are already production-complete.
 
 `DocumentEvaluator` validates the geometry it has just generated without
 re-evaluating the source. Full source re-evaluation remains part of explicit
@@ -39,12 +58,12 @@ syntax alone:
 
 | Blender mechanism | Rupa equivalent | Status |
 |---|---|---|
-| Direct data API for context-independent scripting | Typed Automation and Core commands | Partial; command vocabulary is broad, but some workflows still require discovery round trips. |
+| Direct data API for context-independent scripting | `capability.invoke` using registered semantic CAD operations | Contract fixed; cutover pending. |
 | BMesh editing followed by one explicit mesh update | `BRepEditBuffer` plus one final publish/evaluation boundary | Implemented for incremental exact topology replay. |
 | Deferred dependency-graph recalculation | Deferred group evaluation | Implemented at source-command-group granularity. |
 | Tagged dependency-graph updates of affected data | Dependency-closure invalidation and cached exact feature outputs | Implemented; unchanged feature results and meshes are reused. |
 | Grouped undo | One command-history entry per source group | Implemented. |
-| In-process scripts and operators | One socket request carrying a typed batch | Implemented. |
+| In-process scripts and operators | One bounded `program.execute` request carrying semantic intent | Contract fixed; cutover and end-to-end measurement pending. |
 
 Primary references:
 
@@ -55,17 +74,18 @@ Primary references:
 
 ## Remaining Performance Milestones
 
-### P1: Referencable Modeling Programs - Complete
+### P1: Typed Local Program Bindings - Pending
 
-An Agent must reserve stable source IDs before execution and use them in later
-commands in the same batch. Until this exists, workflows that create a feature
-and then require its server-generated ID still need a round trip.
+An Agent names request-local outputs and refers to them from later DAG nodes.
+Rupa resolves those bindings while lowering, allocates stable source identities
+inside the staged authority boundary, and returns mappings only after success.
 
 Acceptance:
 
-- caller-reserved IDs are validated before staging;
-- later commands can reference earlier reserved outputs;
-- failure leaves no reserved identity published;
+- local symbols and typed output names are validated before staging;
+- later nodes can reference compatible earlier outputs without a round trip;
+- persistent feature, scene, component, instance, and pattern IDs are allocated by Rupa rather than supplied by the caller;
+- failure and dry run publish no identity mapping;
 - the complete program still evaluates and records history once.
 
 ### P2: Incremental Feature Evaluation - Complete for the default evaluator
@@ -107,13 +127,22 @@ evaluator still rebuilds invalidated features serially. Independent branches
 require deterministic parallel scheduling, isolated result buffers, and ordered
 merge validation.
 
-### P7: Compact Agent Program Transport - Pending
+### P7: Compact Semantic Program Transport - Contract Fixed, Implementation Pending
 
 The decoded Agent execution path is benchmarked separately from request
-serialization. Large explicit feature graphs still produce large JSON payloads.
-The transport contract needs a compact, typed modeling-program representation
-before socket or MCP end-to-end latency can be compared with an in-process
-Blender script.
+serialization. The target transport carries distinct semantic intent, not raw
+feature graph nodes. One native pattern operation represents its finite
+occurrences, and both invocation forms share the same descriptor and lowerer.
+The current raw request remains only a historical control until the production
+CLI path proves the compact program contract end to end.
+
+Acceptance:
+
+- request bytes scale with distinct operations and parameters rather than expanded persistent graph records;
+- direct and program forms produce equivalent one-node results for the same operation;
+- a finite pattern lowers as one native pattern operation rather than wire-expanded occurrences;
+- the whole program produces at most one source transaction, exact evaluation, undo entry, and publication;
+- actual CLI encode, transport, decode, lower, execute, save, reload, and receipt measurements are reported separately.
 
 ## Measured Baseline
 
@@ -149,9 +178,10 @@ The 1,000-body scale check also remains within the gate:
 | Create 1,000 bodies | 77.467 / 84.822 ms | 65.402 / 68.248 ms | 1.18x / 1.24x |
 | Edit one of 1,000 bodies | 0.186 / 0.232 ms | 1.635 / 1.964 ms | 0.11x / 0.12x |
 
-Encoding the explicit 100-body Agent request remains 14.806 / 15.770 ms for a
-573,155-byte payload. It is reported but excluded from the decoded execution
-gate because the Blender baseline also excludes script generation and parsing.
+Encoding the explicit 100-body raw feature-graph Agent request remains
+14.806 / 15.770 ms for a 573,155-byte payload. This is retained only as
+historical control evidence for the legacy representation. It is not evidence
+that CADAPI-D request-size, transport, binding, or production CLI goals pass.
 
 The Blender workload edits raw mesh vertices. Rupa edits parametric source,
 rebuilds exact BRep topology, tessellates the affected body, records undo, and
@@ -161,9 +191,10 @@ Core, and Agent boundaries separately.
 
 ## Known Limits
 
-The shared decoded execution workload is Blender-equivalent under the defined
-latency gate. This is not a claim of parity for every CAD operation or for
-socket/MCP end-to-end latency. Operation families beyond extrude still need
-deterministic topology allocation, invalidated independent branches are serial,
-preview evaluation is not cancellable or coalescing, and explicit feature-graph
-JSON remains larger than a procedural modeling program.
+The shared decoded legacy workload is Blender-equivalent under the defined
+latency gate. This is not a claim of parity for every CAD operation, CADAPI-D
+request compactness, local binding correctness, or socket/MCP end-to-end
+latency. Operation families beyond extrude still need deterministic topology
+allocation, invalidated independent branches are serial, preview evaluation is
+not cancellable or coalescing, and the production Agent path still exposes the
+legacy explicit feature-graph representation until cutover.

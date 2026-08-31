@@ -299,7 +299,8 @@ let package = Package(
             dependencies: [
                 "RupaCore",
                 "RupaCoreTypes",
-            ]
+            ],
+            exclude: ["DESIGN.md"]
         ),
         .target(
             name: "RupaDomainFoundation",
@@ -308,7 +309,8 @@ let package = Package(
                 "RupaCoreTypes",
                 "RupaAutomation",
                 "RupaCapabilities",
-            ]
+            ],
+            exclude: ["DESIGN.md"]
         ),
         .target(
             name: "RupaManufacturing",
