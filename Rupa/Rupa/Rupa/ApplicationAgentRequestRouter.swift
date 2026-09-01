@@ -19,9 +19,9 @@ final class ApplicationAgentRequestRouter: AgentRequestHandling {
         self.errorMapper = errorMapper
     }
 
-    func handle(_ request: AgentRequest) async -> AgentResponse {
-        guard case let .save(sessionID, expectedGeneration) = request else {
-            return await projectHandler.handle(request)
+    func handle(_ envelope: AgentRequestEnvelope) async -> AgentHandledResponse {
+        guard case let .save(sessionID, expectedGeneration) = envelope.params else {
+            return await projectHandler.handle(envelope)
         }
         do {
             switch try await lifecycle.save(
@@ -29,12 +29,12 @@ final class ApplicationAgentRequestRouter: AgentRequestHandling {
                 expectedGeneration: expectedGeneration
             ) {
             case .saved(let result):
-                return .save(result)
+                return .ordinary(.save(result))
             case .committed(let outcome):
-                return .committedMutation(outcome)
+                return .ordinary(.committedMutation(outcome))
             }
         } catch {
-            return .failure(errorMapper.editorError(for: error))
+            return .ordinary(.failure(errorMapper.editorError(for: error)))
         }
     }
 }

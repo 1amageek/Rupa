@@ -8,7 +8,7 @@ public actor AgentCommandHandler: AgentRequestHandling {
         self.controller = controller
     }
 
-    public func handle(_ request: AgentRequest) -> AgentResponse {
-        controller.handle(request)
+    public func handle(_ envelope: AgentRequestEnvelope) async -> AgentHandledResponse {
+        .ordinary(controller.handle(envelope.params))
     }
 }

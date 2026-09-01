@@ -110,8 +110,13 @@ public final class WorkspaceRegistry {
             path: entry.path?.path,
             displayName: entry.session.document.cadDocument.metadata.name ?? "Untitled",
             dirty: entry.session.isDirty,
-            generation: entry.session.generation,
-            workspaceRevision: entry.session.workspaceState.revision
+            authority: AgentProjectAuthorityCoordinate(
+                projectID: entry.session.document.projectID,
+                documentGeneration: entry.session.generation,
+                transactionRevision: entry.session.transactionRevision,
+                publicationSequence: 0,
+                workspaceRevision: entry.session.workspaceState.revision
+            )
         )
     }
 }

@@ -4,6 +4,8 @@ import RupaCoreTypes
 
 public protocol ProjectAccessSession: Sendable {
     var sessionID: UUID { get }
+    /// The exact five-part authority coordinate captured when this session opened.
+    var initialAuthority: AgentProjectAuthorityCoordinate { get }
 
     func send(_ request: AgentRequest) async throws -> AgentResponse
 

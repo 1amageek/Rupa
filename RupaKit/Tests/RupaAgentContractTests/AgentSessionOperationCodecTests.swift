@@ -37,8 +37,13 @@ import RupaCore
         path: "/tmp/Created.rupa",
         displayName: "Created",
         dirty: true,
-        generation: DocumentGeneration(3),
-        workspaceRevision: WorkspaceRevision(0)
+        authority: AgentProjectAuthorityCoordinate(
+            projectID: ProjectID(rawValue: "created-project"),
+            documentGeneration: DocumentGeneration(3),
+            transactionRevision: DocumentTransactionRevision(2),
+            publicationSequence: 4,
+            workspaceRevision: WorkspaceRevision(0)
+        )
     )
     let operations: [AgentSessionOperationResult.Operation] = [
         .create,
@@ -76,8 +81,13 @@ import RupaCore
                 path: nil,
                 displayName: "Untitled",
                 dirty: true,
-                generation: DocumentGeneration(1),
-                workspaceRevision: WorkspaceRevision(0)
+                authority: AgentProjectAuthorityCoordinate(
+                    projectID: ProjectID(rawValue: "untitled-project"),
+                    documentGeneration: DocumentGeneration(1),
+                    transactionRevision: DocumentTransactionRevision(0),
+                    publicationSequence: 1,
+                    workspaceRevision: WorkspaceRevision(0)
+                )
             ),
             canUndo: false,
             canRedo: true

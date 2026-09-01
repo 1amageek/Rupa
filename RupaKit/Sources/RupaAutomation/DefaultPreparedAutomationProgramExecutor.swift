@@ -22,6 +22,7 @@ public struct DefaultPreparedAutomationProgramExecutor: PreparedAutomationProgra
 
         for (stepIndex, step) in program.steps.enumerated() {
             try checkCancellation()
+            let ambientDiagnostics = stagedSession.diagnostics
 
             let inputs = try resolveInputs(
                 step.inputs,
@@ -108,7 +109,12 @@ public struct DefaultPreparedAutomationProgramExecutor: PreparedAutomationProgra
             generatedSourceWork = nextWork
             generatedIdentityCount += stepGeneratedIdentities.count
             outputBindings.append(contentsOf: stepBindings)
-            diagnostics.append(contentsOf: result.diagnostics)
+            diagnostics.append(
+                contentsOf: diagnosticsIntroduced(
+                    in: result.diagnostics,
+                    excluding: ambientDiagnostics
+                )
+            )
             stepReceipts.append(
                 PreparedAutomationStepReceipt(
                     stepIndex: stepIndex,
@@ -133,6 +139,19 @@ public struct DefaultPreparedAutomationProgramExecutor: PreparedAutomationProgra
             diagnostics: EditorDiagnostic.stableMerged([diagnostics]),
             telemetry: telemetry
         )
+    }
+
+    private func diagnosticsIntroduced(
+        in result: [EditorDiagnostic],
+        excluding ambient: [EditorDiagnostic]
+    ) -> [EditorDiagnostic] {
+        result.filter { diagnostic in
+            !ambient.contains { existing in
+                existing.severity == diagnostic.severity
+                    && existing.code == diagnostic.code
+                    && existing.message == diagnostic.message
+            }
+        }
     }
 
     private func resolveInputs(

@@ -26,7 +26,7 @@ func agentBuildsEditsPersistsAndRendersBicycleArtifact() async throws {
     )
     let workspace = ProjectWorkspace(project: project)
     _ = try await workspace.evaluate()
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = UUID(uuidString: "D3B981EC-DBB1-49F4-9607-25D123CB87CF")!
     try await controller.register(workspace: workspace, id: sessionID)
     let harness = BicycleArtifact.AgentHarness(
@@ -616,7 +616,7 @@ private enum BicycleArtifact {
         }
 
         func send(_ request: AgentRequest) async -> AgentResponse {
-            let response = await controller.handle(request)
+            let response = await controller.projectAgentHandle(request)
             let view = workspace.view
             transcript.append(
                 TranscriptEntry(

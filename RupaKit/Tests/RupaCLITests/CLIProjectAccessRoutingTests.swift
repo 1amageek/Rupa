@@ -196,8 +196,13 @@ func statusSessionsAndAttachObserveWithoutOpeningAProject() async throws {
         path: "/tmp/open.rupa",
         displayName: "Open",
         dirty: true,
-        generation: DocumentGeneration(4),
-        workspaceRevision: WorkspaceRevision(7)
+        authority: AgentProjectAuthorityCoordinate(
+            projectID: ProjectID(rawValue: "open-project"),
+            documentGeneration: DocumentGeneration(4),
+            transactionRevision: DocumentTransactionRevision(3),
+            publicationSequence: 8,
+            workspaceRevision: WorkspaceRevision(7)
+        )
     )
     let session = StubProjectAccessSession(steps: [])
     let opener = StubProjectAccessOpener(session: session)

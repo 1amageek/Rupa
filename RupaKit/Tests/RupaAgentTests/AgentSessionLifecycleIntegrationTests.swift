@@ -89,7 +89,7 @@ struct AgentSessionLifecycleIntegrationTests {
         )
         #expect(openResult.session.id != sessionID)
         #expect(openResult.session.displayName == "Persisted Rename")
-        #expect(openResult.session.generation == DocumentGeneration(0))
+        #expect(openResult.session.authority.documentGeneration == DocumentGeneration(0))
         #expect(!openResult.session.dirty)
     }
 
@@ -197,7 +197,7 @@ struct AgentSessionLifecycleIntegrationTests {
             operation: .undo
         )
         #expect(undoResult.commandName == "undo.renameDocument")
-        #expect(undoResult.session.generation == DocumentGeneration(2))
+        #expect(undoResult.session.authority.documentGeneration == DocumentGeneration(2))
         #expect(undoResult.canRedo)
         #expect(session.document.cadDocument.metadata.name == "Before")
 
@@ -208,7 +208,7 @@ struct AgentSessionLifecycleIntegrationTests {
             operation: .redo
         )
         #expect(redoResult.commandName == "redo.renameDocument")
-        #expect(redoResult.session.generation == DocumentGeneration(3))
+        #expect(redoResult.session.authority.documentGeneration == DocumentGeneration(3))
         #expect(session.document.cadDocument.metadata.name == "After")
 
         let resetResult = try requireSessionOperation(
@@ -222,7 +222,7 @@ struct AgentSessionLifecycleIntegrationTests {
             operation: .reset
         )
         #expect(resetResult.commandName == "resetDocument")
-        #expect(resetResult.session.generation == DocumentGeneration(4))
+        #expect(resetResult.session.authority.documentGeneration == DocumentGeneration(4))
         #expect(resetResult.canUndo)
         #expect(session.document.cadDocument.metadata.name == "Reset")
         #expect(session.document.cadDocument.designGraph.order.isEmpty)

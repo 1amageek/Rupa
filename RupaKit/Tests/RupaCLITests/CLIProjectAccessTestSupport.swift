@@ -13,6 +13,7 @@ enum StubProjectAccessStep: Sendable {
 
 actor StubProjectAccessSession: ProjectAccessSession {
     nonisolated let sessionID: UUID
+    nonisolated let initialAuthority: AgentProjectAuthorityCoordinate
 
     private var steps: [StubProjectAccessStep]
     private var requests: [AgentRequest] = []
@@ -22,10 +23,18 @@ actor StubProjectAccessSession: ProjectAccessSession {
 
     init(
         sessionID: UUID = UUID(),
+        initialAuthority: AgentProjectAuthorityCoordinate = AgentProjectAuthorityCoordinate(
+            projectID: ProjectID(rawValue: "stub-project"),
+            documentGeneration: DocumentGeneration(),
+            transactionRevision: DocumentTransactionRevision(),
+            publicationSequence: 0,
+            workspaceRevision: WorkspaceRevision()
+        ),
         steps: [StubProjectAccessStep],
         saveError: ProjectAccessError? = nil
     ) {
         self.sessionID = sessionID
+        self.initialAuthority = initialAuthority
         self.steps = steps
         self.saveError = saveError
     }

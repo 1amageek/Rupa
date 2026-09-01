@@ -59,6 +59,11 @@ flowchart LR
    outcome is never retried.
 6. CLI output contains semantic results only; endpoint, port, credential, and
    Keychain record values are never projected.
+7. `rupa cad invoke` accepts one qualified operation and explicit version with
+   typed arguments. `rupa cad program` reads one bounded structured semantic
+   program document. Each command opens one target, takes the session's exact
+   `initialAuthority`, sends exactly one semantic request, and never performs a
+   coordinate pre-read, request split, automatic retry, or implicit save.
 
 ## Runtime Flows
 

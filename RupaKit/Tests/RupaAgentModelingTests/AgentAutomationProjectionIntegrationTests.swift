@@ -25,7 +25,7 @@ import SwiftCAD
     #expect(sessions.count == 1)
     #expect(sessions[0].id == sessionID)
     #expect(sessions[0].displayName == "Open Document")
-    #expect(sessions[0].generation == DocumentGeneration(0))
+    #expect(sessions[0].authority.documentGeneration == DocumentGeneration(0))
 }
 
 @Test func agentDispatchesCommandThroughAutomationAndCore() async throws {

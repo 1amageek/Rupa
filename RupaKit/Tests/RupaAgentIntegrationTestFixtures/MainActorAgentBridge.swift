@@ -23,7 +23,7 @@ public final class MainActorAgentBridge: AgentRequestHandling {
         controller.unregister(id: id)
     }
 
-    public func handle(_ request: AgentRequest) -> AgentResponse {
-        controller.handle(request)
+    public func handle(_ envelope: AgentRequestEnvelope) async -> AgentHandledResponse {
+        .ordinary(controller.handle(envelope.params))
     }
 }

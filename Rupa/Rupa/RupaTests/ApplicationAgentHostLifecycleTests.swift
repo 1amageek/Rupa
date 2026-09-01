@@ -90,8 +90,8 @@ func applicationAgentHostDoesNotRemoveANewerDiscoveryGeneration() async throws {
 }
 
 private struct ApplicationAgentStatusHandler: AgentRequestHandling {
-    func handle(_ request: AgentRequest) async -> AgentResponse {
-        .status(AgentStatus(running: true, sessionCount: 0))
+    func handle(_ envelope: AgentRequestEnvelope) async -> AgentHandledResponse {
+        .ordinary(.status(AgentStatus(running: true, sessionCount: 0)))
     }
 }
 

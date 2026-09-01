@@ -17,8 +17,9 @@ implementation gate.
 
 ## Responsibilities and Boundaries
 
-Runtime owns registration leases, current-view capture, expected-coordinate
-checks, decoding/dispatch adaptation, construction of in-process RupaKit
+Runtime owns registration leases, one current-view capture, complete
+five-coordinate checks, semantic compilation limits, decoding/dispatch
+adaptation, construction of in-process RupaKit
 requests with the complete immutable `ProjectViewSnapshot`, typed result
 projection, error mapping, and committed mutation recovery/no-retry reporting.
 For CADAPI-D it forwards either invocation form unchanged to the same
@@ -143,6 +144,16 @@ flowchart LR
     selects success or the already reserved committed alternative, and the
     listener consumes the reservation with one encode attempt; no oversize
     response is caught and retried as a generic transport failure.
+16. Runtime receives an injected `SemanticProgramCompiling` implementation and
+    never constructs or falls back to an empty CAD registry. Its standard
+    compilation limits are a public immutable Runtime policy sized to the fixed
+    100-case CAD workload and remain injectable for boundary tests. The App
+    composes the concrete twelve-operation CAD registry and compiler once.
+17. Semantic context is derived only from the captured immutable document:
+    Feature, source body/sheet role, scene node, component definition,
+    component instance, and pattern-array source references. Evaluated
+    `BodyID`, Mesh identity, or a second snapshot is never admitted as compiler
+    source context.
 
 ## Runtime Flows
 
@@ -154,18 +165,18 @@ sequenceDiagram
     participant G as ProjectWorkspaceRegistry
     participant W as ProjectWorkspace
     participant PC as ProjectController
-    P->>R: capability.invoke or program.execute
+    P->>R: complete capability.invoke or program.execute envelope
     R->>G: acquire session operation lease
     G-->>R: workspace + cancellation guard
     R->>W: capture current full view
-    R->>R: validate expected generation and handle coordinate
+    R->>R: validate all five authority coordinates
     R->>C: original direct invocation or DAG program + exact view
     C-->>R: one bounded prepared source plan
     R->>W: submit one exact bounded read or source action
     W->>PC: stage / evaluate / publish once
     alt success
         W-->>R: exact result/view
-        R-->>P: projected Agent DTO
+        R-->>P: projected DTO + one response reservation
     else prepublication failure
         R-->>P: typed retryable/non-retryable source error
     else authority already published

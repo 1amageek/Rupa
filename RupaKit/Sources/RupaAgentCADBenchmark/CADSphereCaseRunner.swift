@@ -50,7 +50,7 @@ struct CADSphereCaseRunner {
     func run(candidate: any CADCandidateProtocol) async throws -> CADSphereCaseResult {
         let totalStart = now()
         let deadline = CADCaseDeadline(timeoutWallNanoseconds: timeoutWallNanoseconds)
-        let controller = ProjectAgentCommandController(name: caseID.rawValue)
+        let controller = try CADBenchmarkControllerFactory.make(name: caseID.rawValue)
 
         guard !Task.isCancelled else {
             let pending = result(
@@ -410,7 +410,12 @@ struct CADSphereCaseRunner {
     }
 
     private func sessionCount(_ controller: ProjectAgentCommandController) async -> Int {
-        guard case let .status(status) = await controller.handle(.status) else {
+        let envelope = CADBenchmarkControllerFactory.envelope(
+            request: .status,
+            id: "\(caseID.rawValue).status"
+        )
+        let handled = await controller.handle(envelope)
+        guard case let .ordinary(.status(status)) = handled else {
             return 1
         }
         return status.sessionCount

@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import RupaAgentProtocol
 import RupaAgentRuntime
 import RupaAgentUI
 import RupaKit
@@ -34,18 +35,25 @@ struct ApplicationRoot: App {
             self.applicationAuthorityLease = applicationAuthorityLease
         } catch {
             self.applicationAuthorityLease = nil
-            self._projectCoordinator = State(
-                initialValue: ApplicationProjectCoordinator(
-                    launchFailure: error,
-                    agentRegistrar: ApplicationUnavailableAgentSessionRegistrar(),
-                    operationSequencer: projectOperationSequencer
-                )
+            let projectCoordinator = ApplicationProjectCoordinator(
+                launchFailure: error,
+                agentRegistrar: ApplicationUnavailableAgentSessionRegistrar(),
+                operationSequencer: projectOperationSequencer
+            )
+            self._projectCoordinator = State(initialValue: projectCoordinator)
+            applicationDelegate.configure(
+                projectCoordinator: projectCoordinator,
+                agentLifecycle: nil
             )
             return
         }
         do {
+            let semanticProtocolEncodingLimits = AgentProtocolEncodingLimits()
             let agentController = ProjectAgentCommandController(
+                semanticProgramCompiler: try ApplicationDomainRegistry
+                    .makeCADSemanticCompiler(),
                 domainRegistry: domainConfiguration.registry,
+                semanticProtocolEncodingLimits: semanticProtocolEncodingLimits,
                 exportExecutor: ProjectAgentExportExecutor(
                     exportService: domainConfiguration.exportService
                 )
@@ -66,17 +74,24 @@ struct ApplicationRoot: App {
                 discoveryStore: ApplicationProductConfiguration
                     .makeDiscoveryStore(),
                 requestTimeout: ApplicationProductConfiguration
-                    .access.requestTimeout
+                    .access.requestTimeout,
+                protocolEncodingLimits: semanticProtocolEncodingLimits
             )
             self._projectCoordinator = State(initialValue: projectCoordinator)
-            applicationDelegate.configure(agentLifecycle: agentLifecycle)
+            applicationDelegate.configure(
+                projectCoordinator: projectCoordinator,
+                agentLifecycle: agentLifecycle
+            )
         } catch {
-            self._projectCoordinator = State(
-                initialValue: ApplicationProjectCoordinator(
-                    launchFailure: error,
-                    agentRegistrar: ApplicationUnavailableAgentSessionRegistrar(),
-                    operationSequencer: projectOperationSequencer
-                )
+            let projectCoordinator = ApplicationProjectCoordinator(
+                launchFailure: error,
+                agentRegistrar: ApplicationUnavailableAgentSessionRegistrar(),
+                operationSequencer: projectOperationSequencer
+            )
+            self._projectCoordinator = State(initialValue: projectCoordinator)
+            applicationDelegate.configure(
+                projectCoordinator: projectCoordinator,
+                agentLifecycle: nil
             )
         }
     }
@@ -88,12 +103,6 @@ struct ApplicationRoot: App {
                 ApplicationDomainStartupDiagnosticsView(
                     messages: domainConfiguration.startupDiagnostics
                 )
-            }
-            .task {
-                await projectCoordinator.launch()
-            }
-            .onOpenURL { url in
-                projectCoordinator.receiveOpenURL(url)
             }
             .alert(
                 projectCoordinator.failure?.didCommit == true

@@ -10,9 +10,11 @@ runtime, project access, transport, and CLI modules. Children: none.
 ## Responsibilities and Boundaries
 
 The module owns method names, envelopes, typed payloads, capability
-descriptors, and malformed-message rejection. It does not resolve discovery,
-parse HTTP, authenticate credentials, resolve sessions, read a workspace,
-mutate CAD/Mesh, save packages, or render previews.
+descriptors, malformed-message rejection, and the transport-neutral handler
+result that distinguishes ordinary responses from single-use planned semantic
+responses. It does not resolve discovery, parse HTTP, authenticate credentials,
+resolve sessions, read a workspace, mutate CAD/Mesh, save packages, or render
+previews.
 
 Protocol values describe intent and receipts only. Persistent identifiers,
 transaction validation, evaluation, and lowering remain App-owned.
@@ -33,7 +35,8 @@ transaction validation, evaluation, and lowering remain App-owned.
 flowchart LR
     Caller["API caller"] --> Request["AgentRequestEnvelope"]
     Request --> Runtime["App Agent runtime"]
-    Runtime --> Response["AgentResponseEnvelope"]
+    Runtime --> Handled["AgentHandledResponse"]
+    Handled --> Response["AgentResponseEnvelope"]
     Response --> Caller
     Runtime --> Project["ProjectWorkspace → ProjectController"]
 ```
@@ -91,6 +94,11 @@ flowchart LR
     diagnostics, telemetry, or requested bindings. Encoding a value that does
     not match its preflight plan is an internal invariant violation, never a
     retryable transport failure.
+11. `AgentRequestHandling` receives the complete decoded request envelope so
+    correlation ID and method are never reconstructed. It returns either an
+    ordinary response or a semantic response paired with one Protocol-created
+    reservation. Semantic methods may use only the planned form; no
+    compatibility overload accepts params without the envelope.
 
 ## Runtime Flows
 
@@ -102,9 +110,9 @@ sequenceDiagram
     participant R as Agent runtime
     C->>T: bounded JSON request body
     T->>P: decode envelope
-    P->>R: typed AgentRequest
-    R-->>P: typed AgentResponse
-    P-->>T: encode envelope
+    P->>R: complete typed request envelope
+    R-->>P: ordinary or planned handled response
+    P-->>T: ordinary encode or consume one reservation
     T-->>C: bounded JSON response body
 ```
 

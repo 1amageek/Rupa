@@ -133,6 +133,7 @@ public final class LiveProjectAccessOpening: ProjectAccessOpening, ProjectAccess
         try checkLiveProjectDeadline(deadline)
         return LiveProjectAccessSession(
             sessionID: summary.id,
+            initialAuthority: summary.authority,
             transport: connection.transport,
             deadline: deadline
         )

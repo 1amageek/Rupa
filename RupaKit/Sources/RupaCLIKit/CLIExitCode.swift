@@ -15,6 +15,9 @@ public enum CLIExitCode: Int32, Codable, Equatable, Sendable {
         if error is ValidationError {
             return .usage
         }
+        if error is CADSemanticInputError {
+            return .usage
+        }
         if error is CLICommittedMutationError {
             return .data
         }

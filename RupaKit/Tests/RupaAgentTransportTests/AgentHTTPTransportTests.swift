@@ -2,7 +2,9 @@ import Darwin
 import Foundation
 import Testing
 import RupaAgentProtocol
+import RupaCore
 import RupaCoreTypes
+import RupaDomainFoundation
 @testable import RupaAgentTransport
 
 @Suite(.serialized)
@@ -32,11 +34,119 @@ struct AgentHTTPTransportTests {
             let response = try await client.send(.status)
             #expect(response == .status(AgentStatus(running: true, sessionCount: 1)))
             #expect(await handler.requestCount == 1)
+            #expect(await handler.lastEnvelope?.method == "agent.status")
+            #expect(await handler.lastEnvelope?.params == .status)
             #expect(await listener.activeConnectionCount == 0)
             await listener.stop()
         } catch {
             await listener.stop()
             throw error
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func plannedSemanticResponseConsumesOneReservationAndPreservesCorrelation() async throws {
+        let key = Data(repeating: 0x2B, count: AgentHTTPAuthentication.keyByteCount)
+        let handler = PlannedSemanticHandler(limits: semanticProtocolLimits)
+        let listener = AgentHTTPListener(
+            handler: handler,
+            key: key,
+            generation: 8,
+            requestTimeout: .seconds(5),
+            shutdownTimeout: .seconds(1),
+            protocolEncodingLimits: semanticProtocolLimits
+        )
+        let endpoint = try await listener.start()
+        do {
+            let request = semanticDirectRequest()
+            let response = try await AgentHTTPClient(
+                endpoint: endpoint,
+                key: key,
+                generation: 8,
+                requestTimeout: .seconds(5)
+            ).send(request)
+            let expected = AgentResponse.capabilityExecution(
+                .prepublicationFailure(
+                    AgentSemanticPrepublicationFailure(
+                        stage: .authorityRejected,
+                        code: "authorityRejected"
+                    )
+                )
+            )
+            #expect(response == expected)
+            #expect(await handler.receivedMethod == "capability.invoke")
+            let reservation = try #require(await handler.lastReservation)
+            #expect(reservation.isConsumed)
+            do {
+                _ = try AgentMessageCodec().encode(
+                    expected,
+                    consuming: reservation
+                )
+                Issue.record("The transport reservation was reusable after a successful response.")
+            } catch let error as AgentResponseEncodingError {
+                #expect(error == .responsePlanAlreadyConsumed)
+            }
+            await listener.stop()
+        } catch {
+            await listener.stop()
+            throw error
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func postDispatchLimitMismatchClosesConnectionWithoutFailureResponse() async throws {
+        let key = Data(repeating: 0x2C, count: AgentHTTPAuthentication.keyByteCount)
+        let handler = MismatchedLimitsHandler()
+        let listener = AgentHTTPListener(
+            handler: handler,
+            key: key,
+            generation: 10,
+            requestTimeout: .seconds(5),
+            shutdownTimeout: .seconds(1),
+            protocolEncodingLimits: semanticProtocolLimits
+        )
+        let endpoint = try await listener.start()
+        do {
+            let response = try rawAuthenticatedRPCResponse(
+                endpoint: endpoint,
+                key: key,
+                generation: 10,
+                request: semanticDirectRequest()
+            )
+            #expect(response == nil)
+            #expect(await handler.requestCount == 1)
+            #expect(await handler.lastReservation?.isConsumed == true)
+            #expect(await eventually { await listener.activeConnectionCount == 0 })
+            await listener.stop()
+        } catch {
+            await listener.stop()
+            throw error
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func listenerRejectsProtocolLimitsAboveTransportFrameBeforeBinding() async throws {
+        let limits = AgentProtocolEncodingLimits(
+            maximumRequestByteCount: AgentHTTPWire.maximumBodyByteCount + 1
+        )
+        let listener = AgentHTTPListener(
+            handler: StatusHandler(),
+            key: Data(repeating: 0x2D, count: AgentHTTPAuthentication.keyByteCount),
+            generation: 11,
+            protocolEncodingLimits: limits
+        )
+        do {
+            _ = try await listener.start()
+            Issue.record("The listener accepted a protocol request ceiling above its HTTP frame ceiling.")
+            await listener.stop()
+        } catch let error as AgentResponseEncodingError {
+            #expect(
+                error == .invalidLimit(
+                    name: "maximumRequestByteCount",
+                    value: AgentHTTPWire.maximumBodyByteCount + 1
+                )
+            )
+            #expect(await listener.currentEndpoint == nil)
         }
     }
 
@@ -775,10 +885,12 @@ private func eventually(
 
 private actor StatusHandler: AgentRequestHandling {
     private(set) var requestCount = 0
+    private(set) var lastEnvelope: AgentRequestEnvelope?
 
-    func handle(_ request: AgentRequest) async -> AgentResponse {
+    func handle(_ envelope: AgentRequestEnvelope) async -> AgentHandledResponse {
         requestCount += 1
-        return .status(AgentStatus(running: true, sessionCount: 1))
+        lastEnvelope = envelope
+        return .ordinary(.status(AgentStatus(running: true, sessionCount: 1)))
     }
 }
 
@@ -786,7 +898,7 @@ private actor CooperativeSuspendingHandler: AgentRequestHandling {
     private(set) var startedCount = 0
     private(set) var cancellationCount = 0
 
-    func handle(_ request: AgentRequest) async -> AgentResponse {
+    func handle(_ envelope: AgentRequestEnvelope) async -> AgentHandledResponse {
         startedCount += 1
         do {
             try await Task.sleep(for: .seconds(30))
@@ -795,6 +907,192 @@ private actor CooperativeSuspendingHandler: AgentRequestHandling {
         } catch {
             Issue.record("The cooperative handler received an unexpected error: \(error)")
         }
-        return .status(AgentStatus(running: true, sessionCount: 1))
+        return .ordinary(.status(AgentStatus(running: true, sessionCount: 1)))
     }
+}
+
+private actor PlannedSemanticHandler: AgentRequestHandling {
+    private let limits: AgentProtocolEncodingLimits
+    private(set) var receivedMethod: String?
+    private(set) var lastReservation: AgentResponseEncodingReservation?
+
+    init(limits: AgentProtocolEncodingLimits) {
+        self.limits = limits
+    }
+
+    func handle(_ envelope: AgentRequestEnvelope) async -> AgentHandledResponse {
+        receivedMethod = envelope.method
+        guard case .invokeCapability(let request) = envelope.params else {
+            return .ordinary(.status(AgentStatus(running: true, sessionCount: 0)))
+        }
+        let response = AgentResponse.capabilityExecution(
+            .prepublicationFailure(
+                AgentSemanticPrepublicationFailure(
+                    stage: .authorityRejected,
+                    code: "authorityRejected"
+                )
+            )
+        )
+        do {
+            let reservation = try AgentMessageCodec(limits: limits).reserveResponse(
+                requestID: envelope.id,
+                method: envelope.method,
+                authority: request.authority,
+                requestedOutputs: [],
+                resultCharge: emptySemanticResultCharge
+            )
+            lastReservation = reservation
+            return .planned(response: response, reservation: reservation)
+        } catch {
+            Issue.record("The semantic transport fixture could not reserve its response: \(error)")
+            return .ordinary(response)
+        }
+    }
+}
+
+private actor MismatchedLimitsHandler: AgentRequestHandling {
+    private(set) var requestCount = 0
+    private(set) var lastReservation: AgentResponseEncodingReservation?
+
+    func handle(_ envelope: AgentRequestEnvelope) async -> AgentHandledResponse {
+        requestCount += 1
+        guard case .invokeCapability(let request) = envelope.params else {
+            return .ordinary(.status(AgentStatus(running: true, sessionCount: 0)))
+        }
+        let response = AgentResponse.capabilityExecution(
+            .prepublicationFailure(
+                AgentSemanticPrepublicationFailure(
+                    stage: .authorityRejected,
+                    code: "authorityRejected"
+                )
+            )
+        )
+        do {
+            let reservation = try AgentMessageCodec().reserveResponse(
+                requestID: envelope.id,
+                method: envelope.method,
+                authority: request.authority,
+                requestedOutputs: [],
+                resultCharge: emptySemanticResultCharge
+            )
+            lastReservation = reservation
+            return .planned(response: response, reservation: reservation)
+        } catch {
+            Issue.record("The mismatched semantic fixture could not reserve its response: \(error)")
+            return .ordinary(response)
+        }
+    }
+}
+
+private let semanticAuthority = AgentProjectAuthorityCoordinate(
+    projectID: ProjectID(rawValue: "transport.semantic.test"),
+    documentGeneration: DocumentGeneration(1),
+    transactionRevision: DocumentTransactionRevision(2),
+    publicationSequence: 3,
+    workspaceRevision: WorkspaceRevision(4)
+)
+
+private let semanticProtocolLimits = AgentProtocolEncodingLimits(
+    maximumRequestByteCount: 1024 * 1024,
+    maximumResponseByteCount: 1024 * 1024,
+    maximumIdentifierUTF8ByteCount: 128,
+    maximumProjectIDUTF8ByteCount: 128
+)
+
+private let emptySemanticResultCharge = SemanticResultCharge(
+    requestedOutputCount: 0,
+    diagnosticRecordCount: 0,
+    diagnosticScalarCount: 0,
+    diagnosticStringUTF8ByteCount: 0,
+    telemetryRecordCount: 0,
+    telemetryScalarCount: 0,
+    telemetryStringUTF8ByteCount: 0
+)
+
+private func semanticDirectRequest() -> AgentRequest {
+    .invokeCapability(
+        AgentSemanticDirectExecutionRequest(
+            sessionID: UUID(uuidString: "00000000-0000-0000-0000-000000000021")!,
+            authority: semanticAuthority,
+            dryRun: false,
+            request: AgentSemanticDirectRequest(
+                schemaVersion: AgentSemanticSchemaVersion(major: 1, minor: 0, patch: 0),
+                operationID: "cad.sketch.line",
+                operationVersion: AgentSemanticOperationVersion(major: 1, minor: 0, patch: 0)
+            )
+        )
+    )
+}
+
+private func rawAuthenticatedRPCResponse(
+    endpoint: AgentHTTPEndpoint,
+    key: Data,
+    generation: UInt64,
+    request: AgentRequest
+) throws -> AgentHTTPWire.Message? {
+    let deadline = try AgentHTTPDeadline.request(timeout: .seconds(2))
+    let descriptor = try AgentHTTPWire.connect(to: endpoint, deadline: deadline)
+    defer {
+        Darwin.shutdown(descriptor, SHUT_RDWR)
+        Darwin.close(descriptor)
+    }
+    let requestID = UUID().uuidString
+    let clientNonce = try AgentHTTPAuthentication.nonce()
+    let challengeRequest = try AgentHTTPWire.makeRequest(
+        method: "POST",
+        path: "/v1/challenge",
+        headers: [
+            AgentHTTPHeaders.version: AgentHTTPAuthentication.protocolVersion,
+            AgentHTTPHeaders.requestID: requestID,
+            AgentHTTPHeaders.clientNonce: AgentHTTPAuthentication.encode(clientNonce),
+            AgentHTTPHeaders.contentType: "application/json",
+            AgentHTTPHeaders.connection: "keep-alive",
+        ],
+        body: Data()
+    )
+    try AgentHTTPWire.writeAll(challengeRequest, to: descriptor, deadline: deadline)
+    var pending = Data()
+    let challenge = try AgentHTTPWire.readMessage(
+        from: descriptor,
+        pending: &pending,
+        deadline: deadline
+    )
+    guard challenge.status == 200,
+          let serverNonceText = challenge.headers[AgentHTTPHeaders.serverNonce.lowercased()],
+          let serverNonce = AgentHTTPAuthentication.decode(serverNonceText) else {
+        throw AgentHTTPError.authenticationFailed
+    }
+    let body = try AgentMessageCodec().encode(request, id: requestID)
+    let bodyDigest = AgentHTTPAuthentication.digest(body)
+    let clientProof = AgentHTTPAuthentication.clientProof(
+        key: key,
+        clientNonce: clientNonce,
+        serverNonce: serverNonce,
+        generation: generation,
+        port: endpoint.port,
+        requestID: requestID,
+        bodyDigest: bodyDigest
+    )
+    let rpc = try AgentHTTPWire.makeRequest(
+        method: "POST",
+        path: "/v1/rpc",
+        headers: [
+            AgentHTTPHeaders.version: AgentHTTPAuthentication.protocolVersion,
+            AgentHTTPHeaders.requestID: requestID,
+            AgentHTTPHeaders.generation: String(generation),
+            AgentHTTPHeaders.port: String(endpoint.port),
+            AgentHTTPHeaders.clientNonce: AgentHTTPAuthentication.encode(clientNonce),
+            AgentHTTPHeaders.serverNonce: AgentHTTPAuthentication.encode(serverNonce),
+            AgentHTTPHeaders.bodyDigest: AgentHTTPAuthentication.encode(bodyDigest),
+            AgentHTTPHeaders.clientProof: AgentHTTPAuthentication.encode(clientProof),
+            AgentHTTPHeaders.contentType: "application/json",
+            AgentHTTPHeaders.connection: "close",
+        ],
+        body: body
+    )
+    try AgentHTTPWire.writeAll(rpc, to: descriptor, deadline: deadline)
+    return try RawAgentHTTPTestFixture.readOptionalNextMessage(
+        from: descriptor,
+        pending: &pending
+    )
 }

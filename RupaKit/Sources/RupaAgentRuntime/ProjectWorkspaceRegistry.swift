@@ -143,8 +143,13 @@ struct ProjectWorkspaceRegistrationLease {
             path: path?.path,
             displayName: view.projectName,
             dirty: view.isDirty,
-            generation: view.documentGeneration,
-            workspaceRevision: view.workspaceState.revision
+            authority: AgentProjectAuthorityCoordinate(
+                projectID: view.projectID,
+                documentGeneration: view.documentGeneration,
+                transactionRevision: view.transactionRevision,
+                publicationSequence: view.publicationSequence,
+                workspaceRevision: view.workspaceState.revision
+            )
         )
     }
 }

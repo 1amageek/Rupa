@@ -7,6 +7,7 @@ import RupaProjectAccess
 @MainActor
 public final class LiveProjectAccessSession: ProjectAccessSession {
     public nonisolated let sessionID: UUID
+    public nonisolated let initialAuthority: AgentProjectAuthorityCoordinate
 
     private var transport: (any LiveProjectAccessTransport)?
     private let deadline: ContinuousClock.Instant
@@ -14,10 +15,12 @@ public final class LiveProjectAccessSession: ProjectAccessSession {
 
     init(
         sessionID: UUID,
+        initialAuthority: AgentProjectAuthorityCoordinate,
         transport: any LiveProjectAccessTransport,
         deadline: ContinuousClock.Instant
     ) {
         self.sessionID = sessionID
+        self.initialAuthority = initialAuthority
         self.transport = transport
         self.deadline = deadline
     }

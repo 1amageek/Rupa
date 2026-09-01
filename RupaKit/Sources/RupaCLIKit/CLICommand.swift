@@ -12,6 +12,7 @@ public struct CLICommand: AsyncParsableCommand {
             AgentCommand.self,
             AttachDocument.self,
             BatchCommand.self,
+            CADCommand.self,
             Capabilities.self,
             AutomationCommandGroup.self,
             DimensionCommand.self,

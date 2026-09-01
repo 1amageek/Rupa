@@ -19,7 +19,7 @@ func projectAgentAndUIShareOneWorkspaceAuthority() async throws {
         document: .empty(named: "Shared")
     )
     _ = try await workspace.evaluate()
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
 
     let initial = try #require(workspace.view)
@@ -30,7 +30,7 @@ func projectAgentAndUIShareOneWorkspaceAuthority() async throws {
     )
     _ = try await workspace.perform(uiAction)
 
-    let sessionsResponse = await controller.handle(.sessions)
+    let sessionsResponse = await controller.projectAgentHandle(.sessions)
     guard case .sessions(let summaries) = sessionsResponse else {
         Issue.record("Expected the Agent sessions read to observe the UI source commit.")
         return
@@ -38,7 +38,7 @@ func projectAgentAndUIShareOneWorkspaceAuthority() async throws {
     #expect(summaries.first?.displayName == "UI Source")
 
     let uiCommitted = try #require(workspace.view)
-    let agentResponse = await controller.handle(
+    let agentResponse = await controller.projectAgentHandle(
         .execute(
             sessionID: sessionID,
             command: .renameDocument(name: "Agent Source"),
@@ -54,7 +54,7 @@ func projectAgentAndUIShareOneWorkspaceAuthority() async throws {
 
     _ = try await workspace.applyWorkspace(.setDisplayUnit(.centimeter))
     let workspaceCommitted = try #require(workspace.view)
-    let measureResponse = await controller.handle(
+    let measureResponse = await controller.projectAgentHandle(
         .measure(
             sessionID: sessionID,
             expectedGeneration: workspaceCommitted.documentGeneration
@@ -91,11 +91,11 @@ func projectAgentSceneGraphReadUsesPublishedWorkspaceAndRejectsStaleGeneration()
         .setSceneNodeVisibility(id: bodySceneNodeID, isVisible: false)
     )
     let (_, workspace) = try await makeProjectWorkspace(document: session.document)
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
     let published = try #require(workspace.view)
 
-    let response = await controller.handle(
+    let response = await controller.projectAgentHandle(
         .sceneGraphSnapshot(
             sessionID: sessionID,
             expectedGeneration: published.documentGeneration
@@ -111,7 +111,7 @@ func projectAgentSceneGraphReadUsesPublishedWorkspaceAndRejectsStaleGeneration()
     #expect(bodyNode.localTransform == transform)
     #expect(!bodyNode.isVisible)
 
-    let stale = await controller.handle(
+    let stale = await controller.projectAgentHandle(
         .sceneGraphSnapshot(
             sessionID: sessionID,
             expectedGeneration: DocumentGeneration(published.documentGeneration.value + 1)
@@ -132,7 +132,7 @@ func staleAgentMutationLosesToUICommitWithoutPartialPublication() async throws {
     let (project, workspace) = try await makeProjectWorkspace(
         document: .empty(named: "Initial")
     )
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
     let sharedBase = try #require(workspace.view)
 
@@ -144,7 +144,7 @@ func staleAgentMutationLosesToUICommitWithoutPartialPublication() async throws {
     _ = try await workspace.perform(uiAction)
     let committed = try await project.currentState()
 
-    let staleResponse = await controller.handle(
+    let staleResponse = await controller.projectAgentHandle(
         .execute(
             sessionID: sessionID,
             command: .renameDocument(name: "Agent Loser"),
@@ -173,7 +173,7 @@ func staleAgentBatchTransactionRevisionIsNotRebasedOntoCurrentProject() async th
     let (project, workspace) = try await makeProjectWorkspace(
         document: .empty(named: "Initial")
     )
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
     let stale = try #require(workspace.view)
 
@@ -186,7 +186,7 @@ func staleAgentBatchTransactionRevisionIsNotRebasedOntoCurrentProject() async th
     let committed = try await project.currentState()
     #expect(committed.transactionRevision != stale.transactionRevision)
 
-    let response = await controller.handle(
+    let response = await controller.projectAgentHandle(
         .executeBatch(
             sessionID: sessionID,
             batch: AutomationBatch(
@@ -231,7 +231,7 @@ func registeredWorkspaceFollowsLoadAndRejectsItsOldAction() async throws {
     let (_, workspace) = try await makeProjectWorkspace(
         document: .empty(named: "Before Load")
     )
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
     let beforeLoad = try #require(workspace.view)
     let oldAction = try DefaultProjectWorkspaceActionPlanner().source(
@@ -248,7 +248,7 @@ func registeredWorkspaceFollowsLoadAndRejectsItsOldAction() async throws {
     let loaded = try await workspace.load(from: packageURL)
 
     #expect(loaded.projectID != beforeLoad.projectID)
-    guard case .sessions(let summaries) = await controller.handle(.sessions) else {
+    guard case .sessions(let summaries) = await controller.projectAgentHandle(.sessions) else {
         Issue.record("Expected the registered session to follow the loaded project.")
         return
     }
@@ -276,7 +276,7 @@ func registryRejectsDuplicateLoadedAuthorityUntilTheChangedSessionIsUnregistered
     let packageURL = temporaryDirectory.appendingPathComponent("authoritative.rupa")
     _ = try await authoritativeWorkspace.save(to: packageURL)
 
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let changedSessionID = try #require(
         UUID(uuidString: "00000000-0000-0000-0000-000000000001")
     )
@@ -291,14 +291,14 @@ func registryRejectsDuplicateLoadedAuthorityUntilTheChangedSessionIsUnregistered
     _ = try await changedWorkspace.load(from: packageURL)
     let loadedState = try #require(changedWorkspace.view)
 
-    let conflict = await controller.handle(.sessions)
+    let conflict = await controller.projectAgentHandle(.sessions)
     guard case .failure(let conflictError) = conflict else {
         Issue.record("Expected duplicate loaded project identity to invalidate the changed session.")
         return
     }
     #expect(conflictError.code == .documentOpenInApp)
 
-    let rejectedMutation = await controller.handle(
+    let rejectedMutation = await controller.projectAgentHandle(
         .execute(
             sessionID: changedSessionID,
             command: .renameDocument(name: "Must Not Mutate"),
@@ -314,7 +314,7 @@ func registryRejectsDuplicateLoadedAuthorityUntilTheChangedSessionIsUnregistered
     #expect(authoritativeWorkspace.view?.projectName == "Authoritative Session")
 
     await controller.unregister(id: changedSessionID)
-    guard case .sessions(let retained) = await controller.handle(.sessions) else {
+    guard case .sessions(let retained) = await controller.projectAgentHandle(.sessions) else {
         Issue.record("Expected the original project authority to remain registered.")
         return
     }
@@ -349,7 +349,7 @@ func registryDoesNotInvalidateFromAStaleVisibleIdentityDuringConsecutiveLoads() 
         viewBuilder: ProjectAgentGatedViewBuilder(gate: gate, blockedBuildNumber: 3)
     )
     _ = try await firstWorkspace.evaluate()
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let firstID = try await controller.register(workspace: firstWorkspace)
     let secondID = try await controller.register(workspace: secondWorkspace)
     _ = try await firstWorkspace.load(from: secondURL)
@@ -364,7 +364,7 @@ func registryDoesNotInvalidateFromAStaleVisibleIdentityDuringConsecutiveLoads() 
     #expect(firstWorkspace.view?.projectID == visibleSecond.projectID)
     #expect(try await firstProject.currentState().document.projectID != visibleSecond.projectID)
 
-    let duringGap = await controller.handle(
+    let duringGap = await controller.projectAgentHandle(
         .parameters(sessionID: firstID, expectedGeneration: visibleSecond.documentGeneration)
     )
     guard case .failure(let gapError) = duringGap else {
@@ -375,14 +375,14 @@ func registryDoesNotInvalidateFromAStaleVisibleIdentityDuringConsecutiveLoads() 
 
     gate.release()
     let visibleThird = try await thirdLoad.value
-    guard case .parameters = await controller.handle(
+    guard case .parameters = await controller.projectAgentHandle(
         .parameters(sessionID: firstID, expectedGeneration: visibleThird.documentGeneration)
     ) else {
         Issue.record("Expected the uniquely loaded session to remain registered.")
         return
     }
     let secondView = try #require(secondWorkspace.view)
-    guard case .parameters = await controller.handle(
+    guard case .parameters = await controller.projectAgentHandle(
         .parameters(sessionID: secondID, expectedGeneration: secondView.documentGeneration)
     ) else {
         Issue.record("Expected the original second-project session to remain registered.")
@@ -400,7 +400,7 @@ func projectAgentRegistryRejectsDuplicatesAndUnregistersExactly() async throws {
     _ = try await first.evaluate()
     _ = try await second.evaluate()
     _ = try await independent.evaluate()
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = UUID()
     let path = URL(fileURLWithPath: "/tmp/rupa-project-agent-\(UUID().uuidString).rupa")
 
@@ -420,7 +420,7 @@ func projectAgentRegistryRejectsDuplicatesAndUnregistersExactly() async throws {
     #expect(duplicateProjectError?.code == .documentOpenInApp)
 
     await controller.unregister(id: sessionID)
-    let response = await controller.handle(
+    let response = await controller.projectAgentHandle(
         .parameters(sessionID: sessionID, expectedGeneration: nil)
     )
     guard case .failure(let error) = response else {
@@ -439,7 +439,7 @@ func projectAgentRegistrationPathRebindsWithoutReplacingTheWorkspace() async thr
     )
     _ = try await firstWorkspace.evaluate()
     _ = try await secondWorkspace.evaluate()
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let firstID = UUID()
     let firstPath = URL(fileURLWithPath: "/tmp/first-\(UUID().uuidString).rupa")
     let reboundPath = URL(fileURLWithPath: "/tmp/rebound-\(UUID().uuidString).rupa")
@@ -450,7 +450,7 @@ func projectAgentRegistrationPathRebindsWithoutReplacingTheWorkspace() async thr
     )
 
     try await controller.updatePath(id: firstID, path: reboundPath)
-    guard case .sessions(let reboundSummaries) = await controller.handle(.sessions) else {
+    guard case .sessions(let reboundSummaries) = await controller.projectAgentHandle(.sessions) else {
         Issue.record("Expected the rebound Agent session summary.")
         return
     }
@@ -496,14 +496,14 @@ func projectAgentRegistrationRejectsAStalePublishedView() async throws {
         // The source authority committed while the published view stayed stale.
     }
 
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     do {
         _ = try await controller.register(workspace: workspace)
         Issue.record("Expected stale workspace registration to fail.")
     } catch let error as ProjectControllerError {
         #expect(error.code == .revisionConflict)
     }
-    guard case .status(let status) = await controller.handle(.status) else {
+    guard case .status(let status) = await controller.projectAgentHandle(.status) else {
         Issue.record("Expected registry status after rejected registration.")
         return
     }
@@ -520,7 +520,7 @@ func staleViewCannotHideDuplicateCurrentProjectIdentityAtRegistration() async th
     )
     let packageURL = temporaryDirectory.appendingPathComponent("registered.rupa")
     _ = try await authoritativeWorkspace.save(to: packageURL)
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let authoritativeID = try await controller.register(
         workspace: authoritativeWorkspace
     )
@@ -552,7 +552,7 @@ func staleViewCannotHideDuplicateCurrentProjectIdentityAtRegistration() async th
     } catch let error as ProjectControllerError {
         #expect(error.code == .projectMismatch)
     }
-    guard case .sessions(let sessions) = await controller.handle(.sessions) else {
+    guard case .sessions(let sessions) = await controller.projectAgentHandle(.sessions) else {
         Issue.record("Expected the original registered authority to remain available.")
         return
     }
@@ -561,95 +561,99 @@ func staleViewCannotHideDuplicateCurrentProjectIdentityAtRegistration() async th
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
-func projectAgentSemanticCapabilityRoutesFailClosedBeforeLeaseOrMutation() async throws {
+func projectAgentSemanticCapabilityCommitsThroughOneProjectAuthority() async throws {
     let (project, workspace) = try await makeProjectWorkspace(
-        document: .empty(named: "Semantic Fail Closed")
+        document: .empty(named: "Semantic Direct Commit")
     )
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
     let view = try #require(workspace.view)
-    let request = AgentRequest.invokeCapability(
-        AgentSemanticDirectExecutionRequest(
-            sessionID: sessionID,
-            authority: AgentProjectAuthorityCoordinate(
-                projectID: view.projectID,
-                documentGeneration: view.documentGeneration,
-                transactionRevision: view.transactionRevision,
-                publicationSequence: view.publicationSequence,
-                workspaceRevision: view.workspaceState.revision
-            ),
-            dryRun: false,
-            request: AgentSemanticDirectRequest(
-                schemaVersion: .init(major: 1, minor: 0, patch: 0),
-                operationID: "cad.solid.box",
-                operationVersion: .init(major: 1, minor: 0, patch: 0),
-                requestedOutputs: ["body"]
+    let envelope = AgentRequestEnvelope(
+        id: "semantic-direct-commit",
+        params: .invokeCapability(
+            projectAgentDirectBoxRequest(
+                sessionID: sessionID,
+                authority: projectAgentAuthority(view),
+                name: "Direct Box"
             )
         )
     )
     let before = try await project.currentState()
-    let response = await controller.handle(request)
+    let handled = await controller.handle(envelope)
 
-    guard case .capabilityExecution(.prepublicationFailure(let failure)) = response else {
-        Issue.record("Expected capability.invoke to fail closed before semantic dispatch is implemented.")
+    guard case .planned(let response, let reservation) = handled,
+          case .capabilityExecution(.success(.committed(let receipt))) = response else {
+        Issue.record("Expected capability.invoke to return a planned committed result.")
         return
     }
-    #expect(failure.stage == .dispatchUnavailable)
-    #expect(failure.code == AgentSemanticPrepublicationFailure.dispatchUnavailableCode)
-    #expect(failure.publicationDisposition == .notPublished)
-    #expect(failure.retryDisposition == .retryPermitted)
+    #expect(receipt.authority.documentGeneration.value == view.documentGeneration.value + 1)
+    #expect(receipt.authority.transactionRevision.value == view.transactionRevision.value + 1)
+    #expect(receipt.authority.publicationSequence == view.publicationSequence + 1)
+    #expect(receipt.outputs.count == 1)
+    #expect(receipt.outputs.first?.output.node == "direct")
+    #expect(receipt.outputs.first?.output.output == "body")
+    guard case .body = receipt.outputs.first?.value else {
+        Issue.record("Expected the requested body output to retain its typed source binding.")
+        return
+    }
+    let encoded = try AgentMessageCodec().encode(response, consuming: reservation)
+    #expect(try AgentMessageCodec().decodeResponse(from: encoded) == response)
+    #expect(throws: AgentResponseEncodingError.self) {
+        _ = try AgentMessageCodec().encode(response, consuming: reservation)
+    }
     let after = try await project.currentState()
-    #expect(after.documentGeneration == before.documentGeneration)
-    #expect(after.transactionRevision == before.transactionRevision)
-    #expect(after.publicationSequence == before.publicationSequence)
-    #expect(after.package.productSource == before.package.productSource)
-    #expect(after.package.cadSource == before.package.cadSource)
-    #expect(after.evaluationSnapshot == before.evaluationSnapshot)
+    #expect(after.documentGeneration.value == before.documentGeneration.value + 1)
+    #expect(after.transactionRevision.value == before.transactionRevision.value + 1)
+    #expect(after.publicationSequence == before.publicationSequence + 1)
+    #expect(after.document.cadDocument.designGraph.order.count == 2)
 }
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
-func projectAgentSemanticProgramRouteFailsClosedBeforeLeaseOrMutation() async throws {
+func projectAgentSemanticProgramPreviewAdvancesProposedCoordinatesWithoutPublication() async throws {
     let (project, workspace) = try await makeProjectWorkspace(
-        document: .empty(named: "Semantic Program Fail Closed")
+        document: .empty(named: "Semantic Program Preview")
     )
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
     let view = try #require(workspace.view)
-    let request = AgentRequest.executeProgram(
-        AgentSemanticProgramExecutionRequest(
-            sessionID: sessionID,
-            authority: AgentProjectAuthorityCoordinate(
-                projectID: view.projectID,
-                documentGeneration: view.documentGeneration,
-                transactionRevision: view.transactionRevision,
-                publicationSequence: view.publicationSequence,
-                workspaceRevision: view.workspaceState.revision
-            ),
-            dryRun: true,
-            program: AgentSemanticProgramRequest(
-                schemaVersion: .init(major: 1, minor: 0, patch: 0),
-                nodes: [
-                    .init(
-                        symbol: "box",
-                        operationID: "cad.solid.box",
-                        operationVersion: .init(major: 1, minor: 0, patch: 0)
-                    ),
-                ]
+    let output = AgentSemanticOutputReference(
+        node: "box",
+        output: "body",
+        kind: .sourceBody(role: .body)
+    )
+    let envelope = AgentRequestEnvelope(
+        id: "semantic-program-preview",
+        params: .executeProgram(
+            AgentSemanticProgramExecutionRequest(
+                sessionID: sessionID,
+                authority: projectAgentAuthority(view),
+                dryRun: true,
+                program: AgentSemanticProgramRequest(
+                    schemaVersion: .init(major: 1, minor: 0, patch: 0),
+                    nodes: [
+                        projectAgentProgramBoxNode(
+                            symbol: "box",
+                            name: "Preview Box"
+                        ),
+                    ],
+                    requestedOutputs: [output]
+                )
             )
         )
     )
     let before = try await project.currentState()
-    let response = await controller.handle(request)
+    let handled = await controller.handle(envelope)
 
-    guard case .programExecution(.prepublicationFailure(let failure)) = response else {
-        Issue.record("Expected program.execute to fail closed before semantic dispatch is implemented.")
+    guard case .planned(let response, let reservation) = handled,
+          case .programExecution(.success(.preview(let receipt))) = response else {
+        Issue.record("Expected program.execute dry-run to return a planned preview.")
         return
     }
-    #expect(failure.stage == .dispatchUnavailable)
-    #expect(failure.code == AgentSemanticPrepublicationFailure.dispatchUnavailableCode)
-    #expect(failure.publicationDisposition == .notPublished)
-    #expect(failure.retryDisposition == .retryPermitted)
+    #expect(receipt.authority == projectAgentAuthority(view))
+    #expect(receipt.proposedDocumentGeneration.value == view.documentGeneration.value + 1)
+    #expect(receipt.proposedTransactionRevision.value == view.transactionRevision.value + 1)
+    _ = try AgentMessageCodec().encode(response, consuming: reservation)
     let after = try await project.currentState()
     #expect(after.documentGeneration == before.documentGeneration)
     #expect(after.transactionRevision == before.transactionRevision)
@@ -691,11 +695,14 @@ func projectAgentDynamicDomainRouteUsesProjectTransactionAuthority() async throw
     )
     let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
     _ = try await workspace.evaluate()
-    let controller = ProjectAgentCommandController(domainRegistry: registry)
+    let controller = ProjectAgentCommandController(
+        semanticProgramCompiler: try projectAgentSemanticCompiler(),
+        domainRegistry: registry
+    )
     let sessionID = try await controller.register(workspace: workspace)
     let view = try #require(workspace.view)
 
-    let response = await controller.handle(
+    let response = await controller.projectAgentHandle(
         .executeDomain(
             sessionID: sessionID,
             request: DomainCommandRequest(
@@ -721,12 +728,12 @@ func projectAgentReadOnlyAutomationObservesProjectWithoutPublishing() async thro
     let (project, workspace) = try await makeProjectWorkspace(
         document: .empty(named: "Read Only")
     )
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
     let before = try #require(workspace.view)
     let beforeState = try await project.currentState()
 
-    let response = await controller.handle(
+    let response = await controller.projectAgentHandle(
         .execute(
             sessionID: sessionID,
             command: .describeDocument,
@@ -756,34 +763,34 @@ func projectAgentFileLifecycleAndNonCADExportFailExplicitly() async throws {
         document: .empty(named: "Unsupported")
     )
     _ = try await workspace.evaluate()
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
     let view = try #require(workspace.view)
 
     let responses = [
-        await controller.handle(.createDocument(name: "Created", outputPath: nil)),
-        await controller.handle(.openDocument(path: "/tmp/unsupported.rupa")),
-        await controller.handle(
+        await controller.projectAgentHandle(.createDocument(name: "Created", outputPath: nil)),
+        await controller.projectAgentHandle(.openDocument(path: "/tmp/unsupported.rupa")),
+        await controller.projectAgentHandle(
             .closeDocument(
                 sessionID: sessionID,
                 expectedGeneration: view.documentGeneration,
                 discardUnsavedChanges: false
             )
         ),
-        await controller.handle(
+        await controller.projectAgentHandle(
             .save(
                 sessionID: sessionID,
                 expectedGeneration: view.documentGeneration
             )
         ),
-        await controller.handle(
+        await controller.projectAgentHandle(
             .resetDocument(
                 sessionID: sessionID,
                 name: "Reset",
                 expectedGeneration: view.documentGeneration
             )
         ),
-        await controller.handle(
+        await controller.projectAgentHandle(
             .export(
                 sessionID: sessionID,
                 outputPath: "/tmp/unsupported.stl",
@@ -823,12 +830,12 @@ func projectAgentExportsCADOnlyProjectThroughStagedPublication() async throws {
     )
     let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace(document: document)
     _ = try await workspace.evaluate()
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
     let view = try #require(workspace.view)
     let outputURL = temporaryDirectory.appendingPathComponent("box.stl")
 
-    let response = await controller.handle(
+    let response = await controller.projectAgentHandle(
         .export(
             sessionID: sessionID,
             outputPath: outputURL.path,
@@ -876,10 +883,10 @@ func projectAgentRejectsExternalProviderNamedCADAsNonCADAuthority() async throws
 
     let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace(document: document)
     _ = try await workspace.evaluate()
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
     let view = try #require(workspace.view)
-    let response = await controller.handle(
+    let response = await controller.projectAgentHandle(
         .export(
             sessionID: sessionID,
             outputPath: "/tmp/external-spoof.stl",
@@ -907,13 +914,13 @@ func projectAgentRejectsMeshOnlyAndMixedAuthorityWithoutSideEffects() async thro
 
     for (index, document) in fixtures.enumerated() {
         let (project, workspace) = try await makeProjectWorkspace(document: document)
-        let controller = ProjectAgentCommandController()
+        let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
         let sessionID = try await controller.register(workspace: workspace)
         let view = try #require(workspace.view)
         let before = try await project.currentState()
         let outputURL = temporaryDirectory.appendingPathComponent("unsupported-\(index).stl")
 
-        let response = await controller.handle(
+        let response = await controller.projectAgentHandle(
             .export(
                 sessionID: sessionID,
                 outputPath: outputURL.path,
@@ -949,11 +956,11 @@ func projectAgentReportsCommittedMutationReceiptWhenViewProjectionFails() async 
         viewBuilder: ProjectAgentNthFailingViewBuilder(failingBuildNumber: 2)
     )
     _ = try await workspace.evaluate()
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
     let before = try #require(workspace.view)
 
-    let response = await controller.handle(
+    let response = await controller.projectAgentHandle(
         .execute(
             sessionID: sessionID,
             command: .renameDocument(name: "Committed Source"),
@@ -974,12 +981,12 @@ func projectAgentReportsCommittedMutationReceiptWhenViewProjectionFails() async 
     #expect(state.document.cadDocument.metadata.name == "Committed Source")
     #expect(workspace.view?.projectName == "Committed Source")
     #expect(workspace.view?.publicationSequence == outcome.publicationSequence)
-    guard case .sessions(let summaries) = await controller.handle(.sessions) else {
+    guard case .sessions(let summaries) = await controller.projectAgentHandle(.sessions) else {
         Issue.record("Expected recovered session summary after committed receipt.")
         return
     }
     #expect(summaries.first?.displayName == "Committed Source")
-    let nextResponse = await controller.handle(
+    let nextResponse = await controller.projectAgentHandle(
         .execute(
             sessionID: sessionID,
             command: .renameDocument(name: "After Recovery"),
@@ -1007,10 +1014,10 @@ func projectAgentReportsCommittedUndoReceiptWithoutMovingHistoryTwice() async th
         viewBuilder: ProjectAgentNthFailingViewBuilder(failingBuildNumber: 3)
     )
     _ = try await workspace.evaluate()
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
     let initial = try #require(workspace.view)
-    guard case .command = await controller.handle(
+    guard case .command = await controller.projectAgentHandle(
         .execute(
             sessionID: sessionID,
             command: .renameDocument(name: "Undo Candidate"),
@@ -1022,7 +1029,7 @@ func projectAgentReportsCommittedUndoReceiptWithoutMovingHistoryTwice() async th
     }
     let renamed = try #require(workspace.view)
 
-    let response = await controller.handle(
+    let response = await controller.projectAgentHandle(
         .undo(
             sessionID: sessionID,
             expectedGeneration: renamed.documentGeneration
@@ -1099,10 +1106,10 @@ func agentUndoReturnsItsExactCommittedViewWhenANewerInteractionPublishesFirst() 
         viewBuilder: ProjectAgentGatedViewBuilder(gate: gate, blockedBuildNumber: 3)
     )
     _ = try await workspace.evaluate()
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
     let initial = try #require(workspace.view)
-    guard case .command = await controller.handle(
+    guard case .command = await controller.projectAgentHandle(
         .execute(
             sessionID: sessionID,
             command: .renameDocument(name: "Exact Undo Candidate"),
@@ -1115,7 +1122,7 @@ func agentUndoReturnsItsExactCommittedViewWhenANewerInteractionPublishesFirst() 
     let renamed = try #require(workspace.view)
 
     let undoTask = Task {
-        await controller.handle(
+        await controller.projectAgentHandle(
             .undo(
                 sessionID: sessionID,
                 expectedGeneration: renamed.documentGeneration
@@ -1140,8 +1147,8 @@ func agentUndoReturnsItsExactCommittedViewWhenANewerInteractionPublishesFirst() 
         return
     }
     #expect(undoResult.operation == .undo)
-    #expect(undoResult.session.workspaceRevision == undoState.workspaceState.revision)
-    #expect(undoResult.session.workspaceRevision != newerView.workspaceState.revision)
+    #expect(undoResult.session.authority.workspaceRevision == undoState.workspaceState.revision)
+    #expect(undoResult.session.authority.workspaceRevision != newerView.workspaceState.revision)
     #expect(workspace.view?.publicationSequence == newerView.publicationSequence)
     #expect(workspace.view?.workspaceState.displayUnit == .centimeter)
 }
@@ -1160,12 +1167,12 @@ func unregisterWaitsForAnAlreadyLeasedAgentMutationBeforeReplacement() async thr
     )
     let workspace = ProjectWorkspace(project: project)
     _ = try await workspace.evaluate()
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = UUID()
     try await controller.register(workspace: workspace, id: sessionID)
     let before = try #require(workspace.view)
     let inFlight = Task {
-        await controller.handle(
+        await controller.projectAgentHandle(
             .execute(
                 sessionID: sessionID,
                 command: .renameDocument(name: "Agent Blocked"),
@@ -1181,7 +1188,7 @@ func unregisterWaitsForAnAlreadyLeasedAgentMutationBeforeReplacement() async thr
     }
     var didBeginUnregister = false
     for _ in 0..<1_000 {
-        let duringUnregister = await controller.handle(
+        let duringUnregister = await controller.projectAgentHandle(
             .parameters(sessionID: sessionID, expectedGeneration: before.documentGeneration)
         )
         if case .failure(let error) = duringUnregister,
@@ -1243,7 +1250,7 @@ func agentReadAndExportRejectProjectAuthorityNewerThanPublishedView() async thro
         viewBuilder: ProjectAgentGatedViewBuilder(gate: gate, blockedBuildNumber: 2)
     )
     _ = try await workspace.evaluate()
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
     let oldView = try #require(workspace.view)
     let uiAction = try DefaultProjectWorkspaceActionPlanner().source(
@@ -1260,7 +1267,7 @@ func agentReadAndExportRejectProjectAuthorityNewerThanPublishedView() async thro
     #expect(workspace.view?.publicationSequence == oldView.publicationSequence)
     #expect(try await project.currentState().publicationSequence > oldView.publicationSequence)
 
-    let readResponse = await controller.handle(
+    let readResponse = await controller.projectAgentHandle(
         .parameters(sessionID: sessionID, expectedGeneration: oldView.documentGeneration)
     )
     guard case .failure(let readError) = readResponse else {
@@ -1269,7 +1276,7 @@ func agentReadAndExportRejectProjectAuthorityNewerThanPublishedView() async thro
     }
     #expect(readError.code == .documentTransactionRevisionMismatch)
 
-    let sessionsResponse = await controller.handle(.sessions)
+    let sessionsResponse = await controller.projectAgentHandle(.sessions)
     guard case .failure(let sessionsError) = sessionsResponse else {
         Issue.record("Expected session summary validation against current project authority to fail.")
         return
@@ -1279,7 +1286,7 @@ func agentReadAndExportRejectProjectAuthorityNewerThanPublishedView() async thro
     let outputURL = temporaryDirectory.appendingPathComponent("retained.stl")
     let retainedBytes = Data("retained-export".utf8)
     try retainedBytes.write(to: outputURL)
-    let exportResponse = await controller.handle(
+    let exportResponse = await controller.projectAgentHandle(
         .export(
             sessionID: sessionID,
             outputPath: outputURL.path,
@@ -1319,7 +1326,7 @@ func agentRejectsWorkspaceOnlyPublicationGapWithExactTypedError() async throws {
         viewBuilder: ProjectAgentGatedViewBuilder(gate: gate, blockedBuildNumber: 2)
     )
     _ = try await workspace.evaluate()
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
     let oldView = try #require(workspace.view)
 
@@ -1333,7 +1340,7 @@ func agentRejectsWorkspaceOnlyPublicationGapWithExactTypedError() async throws {
     #expect(authoritative.transactionRevision == oldView.transactionRevision)
     #expect(authoritative.publicationSequence > oldView.publicationSequence)
 
-    let readResponse = await controller.handle(
+    let readResponse = await controller.projectAgentHandle(
         .parameters(sessionID: sessionID, expectedGeneration: oldView.documentGeneration)
     )
     guard case .failure(let readError) = readResponse else {
@@ -1342,7 +1349,7 @@ func agentRejectsWorkspaceOnlyPublicationGapWithExactTypedError() async throws {
     }
     #expect(readError.code == .projectPublicationMismatch)
 
-    let mutationResponse = await controller.handle(
+    let mutationResponse = await controller.projectAgentHandle(
         .execute(
             sessionID: sessionID,
             command: .renameDocument(name: "Must Not Commit"),
@@ -1381,6 +1388,7 @@ func cancelledAgentExportDiscardsStageAndPreservesDestination() async throws {
     let gate = ProjectAgentExportPreflightGate()
     defer { gate.release() }
     let controller = ProjectAgentCommandController(
+        semanticProgramCompiler: try projectAgentSemanticCompiler(),
         exportExecutor: ProjectAgentExportExecutor(
             exportService: DocumentExportService(
                 preflightValidators: [
@@ -1396,7 +1404,7 @@ func cancelledAgentExportDiscardsStageAndPreservesDestination() async throws {
     try retainedBytes.write(to: outputURL)
 
     let exportTask = Task {
-        await controller.handle(
+        await controller.projectAgentHandle(
             .export(
                 sessionID: sessionID,
                 outputPath: outputURL.path,
@@ -1442,6 +1450,7 @@ func unregisterLinearizesAfterAnAlreadyLeasedExportPublication() async throws {
     let gate = ProjectAgentExportPreflightGate()
     defer { gate.release() }
     let controller = ProjectAgentCommandController(
+        semanticProgramCompiler: try projectAgentSemanticCompiler(),
         exportExecutor: ProjectAgentExportExecutor(
             exportService: DocumentExportService(
                 preflightValidators: [
@@ -1455,7 +1464,7 @@ func unregisterLinearizesAfterAnAlreadyLeasedExportPublication() async throws {
     let outputURL = temporaryDirectory.appendingPathComponent("leased.stl")
 
     let exportTask = Task {
-        await controller.handle(
+        await controller.projectAgentHandle(
             .export(
                 sessionID: sessionID,
                 outputPath: outputURL.path,
@@ -1473,7 +1482,7 @@ func unregisterLinearizesAfterAnAlreadyLeasedExportPublication() async throws {
     }
     var didBeginUnregister = false
     for _ in 0..<1_000 {
-        let duringUnregister = await controller.handle(
+        let duringUnregister = await controller.projectAgentHandle(
             .parameters(sessionID: sessionID, expectedGeneration: view.documentGeneration)
         )
         if case .failure(let error) = duringUnregister,
@@ -1494,7 +1503,7 @@ func unregisterLinearizesAfterAnAlreadyLeasedExportPublication() async throws {
     #expect(FileManager.default.fileExists(atPath: outputURL.path))
     await unregisterTask.value
 
-    let afterUnregister = await controller.handle(
+    let afterUnregister = await controller.projectAgentHandle(
         .parameters(sessionID: sessionID, expectedGeneration: view.documentGeneration)
     )
     guard case .failure(let error) = afterUnregister else {
@@ -1532,11 +1541,11 @@ func projectAgentUnavailableHistoryFailsWithoutChangingProject() async throws {
     let (project, workspace) = try await makeProjectWorkspace(
         document: .empty(named: "No History")
     )
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
     let before = try await project.currentState()
 
-    let response = await controller.handle(
+    let response = await controller.projectAgentHandle(
         .undo(
             sessionID: sessionID,
             expectedGeneration: before.documentGeneration
@@ -1563,12 +1572,12 @@ func projectAgentMeshRoutesUseBoundedRegisteredWorkspaceAndExactHandles() async 
     let document = try projectAgentMeshOnlyDocument(named: "Agent Mesh Routes")
     let sourceAsset = try #require(document.authoredMeshAssets.values.first)
     let (_, workspace) = try await makeProjectWorkspace(document: document)
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
     let initial = try #require(workspace.view)
     let codec = AgentMessageCodec()
 
-    let catalogResponse = await controller.handle(
+    let catalogResponse = await controller.projectAgentHandle(
         .meshCatalog(
             AgentMeshCatalogRequest(
                 sessionID: sessionID,
@@ -1587,7 +1596,7 @@ func projectAgentMeshRoutesUseBoundedRegisteredWorkspaceAndExactHandles() async 
     #expect(catalogSource.handle.contentIdentity == sourceAsset.contentIdentity)
     #expect(try codec.decodeResponse(from: codec.encode(catalogResponse)) == catalogResponse)
 
-    let pageResponse = await controller.handle(
+    let pageResponse = await controller.projectAgentHandle(
         .meshPage(
             AgentMeshPageRequest(
                 sessionID: sessionID,
@@ -1610,7 +1619,7 @@ func projectAgentMeshRoutesUseBoundedRegisteredWorkspaceAndExactHandles() async 
     #expect(pageResult.page.domain == .vertex)
     #expect(try codec.decodeResponse(from: codec.encode(pageResponse)) == pageResponse)
 
-    let neighborhoodResponse = await controller.handle(
+    let neighborhoodResponse = await controller.projectAgentHandle(
         .meshNeighborhood(
             AgentMeshNeighborhoodRequest(
                 sessionID: sessionID,
@@ -1632,7 +1641,7 @@ func projectAgentMeshRoutesUseBoundedRegisteredWorkspaceAndExactHandles() async 
 
     let plan = try projectAgentMeshEditPlan(vertexID: vertex.id)
     let previewBase = try #require(workspace.view)
-    let previewResponse = await controller.handle(
+    let previewResponse = await controller.projectAgentHandle(
         .meshEdit(
             AgentMeshEditRequest(
                 sessionID: sessionID,
@@ -1661,7 +1670,7 @@ func projectAgentMeshRoutesUseBoundedRegisteredWorkspaceAndExactHandles() async 
             == sourceAsset.contentIdentity
     )
 
-    let commitResponse = await controller.handle(
+    let commitResponse = await controller.projectAgentHandle(
         .meshEdit(
             AgentMeshEditRequest(
                 sessionID: sessionID,
@@ -1694,7 +1703,7 @@ func projectAgentMeshRoutesUseBoundedRegisteredWorkspaceAndExactHandles() async 
             == commitResult.contentIdentity
     )
 
-    let staleResponse = await controller.handle(
+    let staleResponse = await controller.projectAgentHandle(
         .meshPage(
             AgentMeshPageRequest(
                 sessionID: sessionID,
@@ -1711,7 +1720,7 @@ func projectAgentMeshRoutesUseBoundedRegisteredWorkspaceAndExactHandles() async 
     }
     #expect(staleError.code == .documentTransactionRevisionMismatch)
 
-    let undoResponse = await controller.handle(
+    let undoResponse = await controller.projectAgentHandle(
         .undo(
             sessionID: sessionID,
             expectedGeneration: committed.documentGeneration
@@ -1735,7 +1744,7 @@ func projectAgentMeshRoutesUseBoundedRegisteredWorkspaceAndExactHandles() async 
 func projectAgentMakeEditableRouteRetainsCADAuthorityAndProjectsWireResult() async throws {
     let document = try projectAgentCADAndMeshDocument(named: "Agent Make Editable")
     let (_, workspace) = try await makeProjectWorkspace(document: document)
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
     let initial = try #require(workspace.view)
     let bodyNode = try #require(
@@ -1746,7 +1755,7 @@ func projectAgentMakeEditableRouteRetainsCADAuthorityAndProjectsWireResult() asy
     let sourceID = GeometrySourceID(rawValue: "mesh.agent.make-editable")
     let representationID = GeometryRepresentationID(rawValue: "representation.agent.make-editable")
 
-    let response = await controller.handle(
+    let response = await controller.projectAgentHandle(
         .makeEditable(
             AgentMakeEditableRequest(
                 sessionID: sessionID,
@@ -1791,11 +1800,11 @@ func projectAgentMakeEditableRouteRetainsCADAuthorityAndProjectsWireResult() asy
 func projectAgentGeometryRoutesRejectCancellationAndOverLimitWithoutPublication() async throws {
     let document = try projectAgentMeshOnlyDocument(named: "Agent Geometry Failure")
     let (_, workspace) = try await makeProjectWorkspace(document: document)
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
     let before = try #require(workspace.view)
 
-    let overLimitResponse = await controller.handle(
+    let overLimitResponse = await controller.projectAgentHandle(
         .meshCatalog(
             AgentMeshCatalogRequest(
                 sessionID: sessionID,
@@ -1813,7 +1822,7 @@ func projectAgentGeometryRoutesRejectCancellationAndOverLimitWithoutPublication(
     #expect(limitError.code == .commandInvalid)
 
     let cancellationTask = Task {
-        await controller.handle(
+        await controller.projectAgentHandle(
             .meshCatalog(
                 AgentMeshCatalogRequest(
                     sessionID: sessionID,
@@ -1852,11 +1861,11 @@ func projectAgentMeshCommitReportsPostPublicationFailureWithoutRetry() async thr
         viewBuilder: ProjectAgentNthFailingViewBuilder(failingBuildNumber: 2)
     )
     _ = try await workspace.evaluate()
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
     let before = try #require(workspace.view)
 
-    let catalogResponse = await controller.handle(
+    let catalogResponse = await controller.projectAgentHandle(
         .meshCatalog(
             AgentMeshCatalogRequest(
                 sessionID: sessionID,
@@ -1870,7 +1879,7 @@ func projectAgentMeshCommitReportsPostPublicationFailureWithoutRetry() async thr
         return
     }
     let plan = try projectAgentMeshEditPlan(vertexID: MeshVertexID(0))
-    let response = await controller.handle(
+    let response = await controller.projectAgentHandle(
         .meshEdit(
             AgentMeshEditRequest(
                 sessionID: sessionID,

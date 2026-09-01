@@ -339,6 +339,7 @@ func liveSessionSaveIsTheOnlyPersistenceDispatchAndFinishedWins() async throws {
     )
     let session = LiveProjectAccessSession(
         sessionID: sessionID,
+        initialAuthority: liveSummary(id: sessionID, path: nil).authority,
         transport: transport,
         deadline: liveDeadline()
     )
@@ -374,6 +375,7 @@ func liveSessionFinishWaitsForAnAcceptedRequestAndThenRejectsNewWork() async thr
     let transport = LiveAccessSuspendingTransport()
     let session = LiveProjectAccessSession(
         sessionID: sessionID,
+        initialAuthority: liveSummary(id: sessionID, path: nil).authority,
         transport: transport,
         deadline: liveDeadline()
     )
@@ -427,6 +429,7 @@ func liveSessionMismatchAndUnknownOutcomeAreTerminalBeforeRetry() async throws {
     )
     let session = LiveProjectAccessSession(
         sessionID: sessionID,
+        initialAuthority: liveSummary(id: sessionID, path: nil).authority,
         transport: transport,
         deadline: liveDeadline()
     )
@@ -891,8 +894,13 @@ private func liveSummary(
         path: path,
         displayName: "Live Project",
         dirty: dirty,
-        generation: DocumentGeneration(1),
-        workspaceRevision: WorkspaceRevision(1)
+        authority: AgentProjectAuthorityCoordinate(
+            projectID: ProjectID(rawValue: "live-project"),
+            documentGeneration: DocumentGeneration(1),
+            transactionRevision: DocumentTransactionRevision(1),
+            publicationSequence: 1,
+            workspaceRevision: WorkspaceRevision(1)
+        )
     )
 }
 

@@ -23,7 +23,8 @@ public final class AgentHost {
         key: Data,
         generation: UInt64,
         requestTimeout: Duration = .seconds(30),
-        shutdownTimeout: Duration = .seconds(5)
+        shutdownTimeout: Duration = .seconds(5),
+        protocolEncodingLimits: AgentProtocolEncodingLimits = AgentProtocolEncodingLimits()
     ) {
         self.listener = AgentHTTPListener(
             handler: handler,
@@ -31,7 +32,8 @@ public final class AgentHost {
             generation: generation,
             requestedPort: 0,
             requestTimeout: requestTimeout,
-            shutdownTimeout: shutdownTimeout
+            shutdownTimeout: shutdownTimeout,
+            protocolEncodingLimits: protocolEncodingLimits
         )
         self.state = .stopped
         self.endpoint = nil

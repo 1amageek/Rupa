@@ -45,11 +45,15 @@ flowchart LR
 2. Listener readiness returns a dynamic loopback port. App composition writes
    the port, per-launch HMAC key, and generation only after readiness; the key
    is never sent over the API connection.
-3. The host delegates decoded requests unchanged to one handler. It never
-   creates a workspace, registry, controller, or package writer.
-4. The listener enforces 16-MiB bodies, 32 connections, bounded headers,
-   required Content-Length, one same-connection challenge/RPC exchange, and
-   one deadline. It rejects a second challenge or RPC on that connection.
+3. The host delegates each complete decoded request envelope unchanged to one
+   handler. It never creates a workspace, registry, controller, or package
+   writer.
+4. The App injects one Protocol encoding-limit value into both Runtime and
+   host. The listener validates that value against its 16-MiB body ceiling and
+   uses it for decode and planned response encoding. It also enforces 32
+   connections, bounded headers, required Content-Length, one same-connection
+   challenge/RPC exchange, and one deadline. It rejects a second challenge or
+   RPC on that connection.
 5. HTTP mutual authentication uses a request nonce and directional HMAC
    proofs derived from the Keychain secret. The raw secret is never sent.
 6. Stop drains accepted requests, then App composition conditionally removes

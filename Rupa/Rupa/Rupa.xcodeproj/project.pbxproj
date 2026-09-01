@@ -22,6 +22,9 @@
 		A7A6D677A40B4A3CA7F536C4 /* RupaProjectAccessPlatform in Frameworks */ = {isa = PBXBuildFile; productRef = 43970830C8FF4D0C816A6D80 /* RupaProjectAccessPlatform */; };
 		A7A6D678A40B4A3CA7F536C4 /* RupaProjectAccessPlatform in Frameworks */ = {isa = PBXBuildFile; productRef = 43970830C8FF4D0C816A6D80 /* RupaProjectAccessPlatform */; };
 		A7A6D679A40B4A3CA7F536C4 /* RupaAgentTransport in Frameworks */ = {isa = PBXBuildFile; productRef = 43970831C8FF4D0C816A6D80 /* RupaAgentTransport */; };
+		A7A6D67AA40B4A3CA7F536C4 /* RupaCADDomain in Frameworks */ = {isa = PBXBuildFile; productRef = 43970832C8FF4D0C816A6D80 /* RupaCADDomain */; };
+		A7A6D67BA40B4A3CA7F536C4 /* RupaCADDomain in Frameworks */ = {isa = PBXBuildFile; productRef = 43970832C8FF4D0C816A6D80 /* RupaCADDomain */; };
+		A7A6D67CA40B4A3CA7F536C4 /* RupaDomainFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 4397082BC8FF4D0C816A6D80 /* RupaDomainFoundation */; };
 		B10000000000000000000007 /* RupaCLIComposition in Frameworks */ = {isa = PBXBuildFile; productRef = B1000000000000000000000B /* RupaCLIComposition */; };
 /* End PBXBuildFile section */
 
@@ -101,6 +104,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A7A6D67AA40B4A3CA7F536C4 /* RupaCADDomain in Frameworks */,
 				A7A6D677A40B4A3CA7F536C4 /* RupaProjectAccessPlatform in Frameworks */,
 				A7A6D679A40B4A3CA7F536C4 /* RupaAgentTransport in Frameworks */,
 				A7A6D670A40B4A3CA7F536C4 /* RupaKit in Frameworks */,
@@ -118,6 +122,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A7A6D67BA40B4A3CA7F536C4 /* RupaCADDomain in Frameworks */,
+				A7A6D67CA40B4A3CA7F536C4 /* RupaDomainFoundation in Frameworks */,
 				A7A6D678A40B4A3CA7F536C4 /* RupaProjectAccessPlatform in Frameworks */,
 				A7A6D671A40B4A3CA7F536C4 /* RupaKit in Frameworks */,
 				A7A6D672A40B4A3CA7F536C4 /* RupaCore in Frameworks */,
@@ -186,6 +192,7 @@
 			);
 			name = Rupa;
 			packageProductDependencies = (
+				43970832C8FF4D0C816A6D80 /* RupaCADDomain */,
 				43970830C8FF4D0C816A6D80 /* RupaProjectAccessPlatform */,
 				43970831C8FF4D0C816A6D80 /* RupaAgentTransport */,
 				4397082DC8FF4D0C816A6D80 /* RupaKit */,
@@ -219,6 +226,8 @@
 			);
 			name = RupaTests;
 			packageProductDependencies = (
+				43970832C8FF4D0C816A6D80 /* RupaCADDomain */,
+				4397082BC8FF4D0C816A6D80 /* RupaDomainFoundation */,
 				43970830C8FF4D0C816A6D80 /* RupaProjectAccessPlatform */,
 				4397082DC8FF4D0C816A6D80 /* RupaKit */,
 				4397082AC8FF4D0C816A6D80 /* RupaCore */,
@@ -811,6 +820,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 04A0884D275749F9B7818D23 /* XCLocalSwiftPackageReference "../../RupaKit" */;
 			productName = RupaAgentTransport;
+		};
+		43970832C8FF4D0C816A6D80 /* RupaCADDomain */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 04A0884D275749F9B7818D23 /* XCLocalSwiftPackageReference "../../RupaKit" */;
+			productName = RupaCADDomain;
 		};
 		B1000000000000000000000B /* RupaCLIComposition */ = {
 			isa = XCSwiftPackageProductDependency;

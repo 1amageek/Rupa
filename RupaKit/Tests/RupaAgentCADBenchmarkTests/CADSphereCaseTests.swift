@@ -73,7 +73,7 @@ struct CADSphereCaseTests {
     @Test(.timeLimit(.minutes(1)))
     func capabilityObservationUsesProductionControllerAndExcludesSphereIngress() async throws {
         let challenge = try CADBenchmarkCatalog().challenge(for: "SPH-001")
-        let controller = ProjectAgentCommandController(name: "SPH-001.observation")
+        let controller = try CADBenchmarkControllerFactory.make(name: "SPH-001.observation")
         let observation = try await CADSphereCapabilityObservation.observe(
             challenge: challenge,
             controller: controller
@@ -94,7 +94,11 @@ struct CADSphereCaseTests {
         #expect(capabilityVersion == challenge.requiredCapability.version)
         #expect(snapshotVersion == CADSphereCapabilityObservation.snapshotVersion)
 
-        guard case let .status(status) = await controller.handle(.status) else {
+        let statusEnvelope = CADBenchmarkControllerFactory.envelope(
+            request: .status,
+            id: "SPH-001.observation.status"
+        )
+        guard case let .ordinary(.status(status)) = await controller.handle(statusEnvelope) else {
             Issue.record("The fresh capability-only controller must answer its status request.")
             return
         }
@@ -443,7 +447,7 @@ struct CADSphereCaseTests {
         let challenge = try CADBenchmarkCatalog().challenge(for: "SPH-001")
         let executor = DefaultCADActivatedCaseExecutor()
         let context = try executor.context(for: "SPH-001")
-        let controller = ProjectAgentCommandController(name: "SPH-001.context")
+        let controller = try CADBenchmarkControllerFactory.make(name: "SPH-001.context")
         let observation = try await CADSphereCapabilityObservation.observe(
             challenge: challenge,
             controller: controller
@@ -511,7 +515,8 @@ struct CADSphereCaseTests {
             #expect(source.contains(forbidden) == false)
         }
         #expect(source.contains("CADSphereCapabilityObservation.observe"))
-        #expect(source.contains("controller.handle(.status)"))
+        #expect(source.contains("CADBenchmarkControllerFactory.envelope"))
+        #expect(source.contains("controller.handle(envelope)"))
     }
 }
 

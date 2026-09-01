@@ -430,15 +430,18 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
     let session = EditorSession()
     bridge.register(session: session, id: sessionID)
 
-    let response = bridge.handle(
-        .execute(
-            sessionID: sessionID,
-            command: .renameDocument(name: "Main Actor Live"),
-            expectedGeneration: DocumentGeneration(0)
+    let handled = await bridge.handle(
+        AgentRequestEnvelope(
+            id: "main-actor-live",
+            params: .execute(
+                sessionID: sessionID,
+                command: .renameDocument(name: "Main Actor Live"),
+                expectedGeneration: DocumentGeneration(0)
+            )
         )
     )
 
-    guard case .command(let result) = response else {
+    guard case .ordinary(.command(let result)) = handled else {
         #expect(Bool(false))
         return
     }

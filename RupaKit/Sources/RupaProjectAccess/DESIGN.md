@@ -61,6 +61,7 @@ authority.
 ```swift
 public protocol ProjectAccessSession: Sendable {
     var sessionID: UUID { get }
+    var initialAuthority: AgentProjectAuthorityCoordinate { get }
 
     func send(_ request: AgentRequest) async throws -> AgentResponse
 
@@ -72,7 +73,9 @@ public protocol ProjectAccessSession: Sendable {
 }
 ```
 
-`send` rejects a request whose session coordinate differs from `sessionID`.
+`initialAuthority` is the exact immutable five-part coordinate captured while
+opening the App-owned session. `send` rejects a request whose session identity
+differs from `sessionID`.
 It may change only App-owned in-memory state; persistence requires a separate
 successful `save`. `finish` releases API resources and never closes the App
 document.
@@ -127,9 +130,10 @@ sequenceDiagram
 
 ## State, Ownership, and Lifecycle
 
-All contract values are immutable. A session owns only its API adapter and
-session identity. The App owns project lifetime, workspace, controller, and
-discovery generation.
+All contract values are immutable. A session owns only its API adapter,
+session identity, and initial authority observation. The App owns project
+lifetime, workspace, controller, and discovery generation. A later authority
+advance does not mutate `initialAuthority`; stale use is rejected by Runtime.
 
 ## Failure, Concurrency, and Constraints
 

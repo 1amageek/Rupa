@@ -87,8 +87,12 @@ struct CADSphereCapabilityObservation: Equatable, Sendable {
             throw CADSphereCapabilityObservationError.invalidChallenge
         }
 
-        let response = await controller.handle(.capabilities)
-        guard case let .capabilities(descriptors) = response else {
+        let envelope = CADBenchmarkControllerFactory.envelope(
+            request: .capabilities,
+            id: "\(challenge.id.rawValue).capabilities"
+        )
+        let handled = await controller.handle(envelope)
+        guard case let .ordinary(.capabilities(descriptors)) = handled else {
             throw CADSphereCapabilityObservationError.unexpectedControllerResponse
         }
 

@@ -24,7 +24,7 @@ public struct DefaultCADActivatedCaseExecutor: CADActivatedCaseExecuting, Sendab
 
     public func context(for caseID: CADBenchmarkCaseID) throws -> CADCandidateContext {
         let challenge = try challenge(for: caseID)
-        let controller = ProjectAgentCommandController(name: caseID.rawValue)
+        let controller = try CADBenchmarkControllerFactory.make(name: caseID.rawValue)
         return CADActivatedCaseContextFactory.make(
             challenge: challenge,
             operationName: operationName(for: caseID),

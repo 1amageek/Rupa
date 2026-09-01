@@ -227,6 +227,11 @@ let package = Package(
                 "RupaGeometry",
                 "RupaProjectModel",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
+                .product(name: "CADCore", package: "swift-CAD"),
+                .product(name: "CADIR", package: "swift-CAD"),
+                .product(name: "CADModeling", package: "swift-CAD"),
+                .product(name: "CADTopology", package: "swift-CAD"),
+                .product(name: "HashTreeCollections", package: "swift-collections"),
             ]
         ),
         .target(
@@ -420,6 +425,8 @@ let package = Package(
                 "RupaProject",
                 "RupaCore",
                 "RupaCoreTypes",
+                "RupaCADDomain",
+                "RupaDomainFoundation",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
             ],
             exclude: ["DESIGN.md", "Aggregate/DESIGN.md"]
@@ -464,10 +471,12 @@ let package = Package(
             name: "RupaPerformanceBenchmark",
             dependencies: [
                 "RupaKit",
+                "RupaCADDomain",
                 "RupaAgentProtocol",
                 "RupaAgentRuntime",
                 "RupaAutomation",
                 "RupaCore",
+                "RupaDomainFoundation",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
             ]
         ),
@@ -570,6 +579,7 @@ let package = Package(
                 "RupaProjectAccess",
                 "RupaAgentProtocol",
                 "RupaCoreTypes",
+                "RupaCore",
             ]
         ),
         .testTarget(
@@ -754,6 +764,7 @@ let package = Package(
                 "RupaAgentUI",
                 "RupaAutomation",
                 "RupaCapabilities",
+                "RupaCADDomain",
                 "RupaCore",
                 "RupaCoreTypes",
                 "RupaDomainFoundation",

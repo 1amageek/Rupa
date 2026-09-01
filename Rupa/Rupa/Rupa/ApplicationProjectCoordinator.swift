@@ -155,7 +155,6 @@ final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
             return
         }
         launchStarted = true
-        await Task.yield()
         var launchWarning: ApplicationProjectFailure?
         do {
             if let requestedURL = pendingInitialURL {

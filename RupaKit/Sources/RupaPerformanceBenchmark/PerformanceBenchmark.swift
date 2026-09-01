@@ -2,7 +2,9 @@ import Foundation
 import RupaAgentProtocol
 import RupaAgentRuntime
 import RupaAutomation
+import RupaCADDomain
 import RupaCore
+import RupaDomainFoundation
 import RupaKit
 import SwiftCAD
 
@@ -200,15 +202,20 @@ struct PerformanceBenchmark {
     ) async throws -> TimedTelemetry {
         let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
         _ = try await workspace.evaluate()
-        let controller = ProjectAgentCommandController()
+        let controller = try makeAgentController()
         let sessionID = try await controller.register(workspace: workspace)
         let generation = try requiredView(workspace).documentGeneration
         let start = ContinuousClock.now
-        let response = await controller.handle(
-            .execute(
-                sessionID: sessionID,
-                command: .appendFeatureGraph(transaction),
-                expectedGeneration: generation
+        let response = try await ordinaryResponse(
+            from: controller.handle(
+                AgentRequestEnvelope(
+                    id: UUID().uuidString,
+                    params: .execute(
+                        sessionID: sessionID,
+                        command: .appendFeatureGraph(transaction),
+                        expectedGeneration: generation
+                    )
+                )
             )
         )
         let duration = start.duration(to: ContinuousClock.now)
@@ -262,6 +269,24 @@ struct PerformanceBenchmark {
         default:
             throw BenchmarkError.unexpectedAgentResponse
         }
+    }
+
+    @MainActor
+    private static func makeAgentController() throws -> ProjectAgentCommandController {
+        ProjectAgentCommandController(
+            semanticProgramCompiler: DefaultSemanticProgramCompiler(
+                registry: try RupaCADDomain.registry()
+            )
+        )
+    }
+
+    private static func ordinaryResponse(
+        from handled: AgentHandledResponse
+    ) throws -> AgentResponse {
+        guard case .ordinary(let response) = handled else {
+            throw BenchmarkError.unexpectedAgentResponse
+        }
+        return response
     }
 
     private static func makeBoxTransaction(bodyCount: Int) -> FeatureGraphTransaction {
@@ -426,18 +451,29 @@ private final class AgentEditBenchmark {
         }
         let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
         _ = try await workspace.evaluate()
-        let controller = ProjectAgentCommandController()
+        let controller = ProjectAgentCommandController(
+            semanticProgramCompiler: DefaultSemanticProgramCompiler(
+                registry: try RupaCADDomain.registry()
+            )
+        )
         let sessionID = try await controller.register(workspace: workspace)
         guard let initialView = workspace.view else {
             throw BenchmarkError.unexpectedAgentResponse
         }
-        _ = try Self.commandResult(from: await controller.handle(
-            .execute(
-                sessionID: sessionID,
-                command: .appendFeatureGraph(transaction),
-                expectedGeneration: initialView.documentGeneration
+        _ = try Self.commandResult(
+            from: try Self.ordinaryResponse(
+                from: await controller.handle(
+                    AgentRequestEnvelope(
+                        id: UUID().uuidString,
+                        params: .execute(
+                            sessionID: sessionID,
+                            command: .appendFeatureGraph(transaction),
+                            expectedGeneration: initialView.documentGeneration
+                        )
+                    )
+                )
             )
-        ))
+        )
         self.controller = controller
         self.workspace = workspace
         self.sessionID = sessionID
@@ -450,14 +486,19 @@ private final class AgentEditBenchmark {
         }
         let distance = usesExpandedDistance ? 10.0 : 12.0
         let start = ContinuousClock.now
-        let response = await controller.handle(
-            .execute(
-                sessionID: sessionID,
-                command: .setExtrudeDistance(
-                    featureID: featureID,
-                    distance: .length(distance, .millimeter)
-                ),
-                expectedGeneration: view.documentGeneration
+        let response = try Self.ordinaryResponse(
+            from: await controller.handle(
+                AgentRequestEnvelope(
+                    id: UUID().uuidString,
+                    params: .execute(
+                        sessionID: sessionID,
+                        command: .setExtrudeDistance(
+                            featureID: featureID,
+                            distance: .length(distance, .millimeter)
+                        ),
+                        expectedGeneration: view.documentGeneration
+                    )
+                )
             )
         )
         let duration = start.duration(to: ContinuousClock.now)
@@ -478,6 +519,15 @@ private final class AgentEditBenchmark {
         default:
             throw BenchmarkError.unexpectedAgentResponse
         }
+    }
+
+    private static func ordinaryResponse(
+        from handled: AgentHandledResponse
+    ) throws -> AgentResponse {
+        guard case .ordinary(let response) = handled else {
+            throw BenchmarkError.unexpectedAgentResponse
+        }
+        return response
     }
 }
 

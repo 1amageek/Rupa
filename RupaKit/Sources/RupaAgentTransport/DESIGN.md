@@ -16,11 +16,14 @@ The module owns:
 - directional HMAC proof verification before JSON decoding;
 - monotonic deadlines, cancellation, connection admission, and drain;
 - a client that sends the existing `AgentRequestEnvelope` and decodes the
-  existing `AgentResponseEnvelope`.
+  existing `AgentResponseEnvelope`;
+- exactly-once consumption of Protocol response reservations returned by the
+  semantic handler.
 
 It does not own Keychain discovery, application lifecycle, project sessions,
 `ProjectWorkspace`, `ProjectController`, package bytes, or CLI syntax. The
-semantic handler receives a decoded `AgentRequest` only.
+semantic handler receives the complete decoded envelope and owns neither HTTP
+state nor response writing.
 
 ## Related Designs
 
@@ -91,6 +94,12 @@ flowchart LR
    data. The client accepts an injected endpoint and HMAC key for tests and
    alternate API compositions; the key is never serialized into an HTTP
    request or response.
+10. The listener forwards the exact decoded envelope to the handler. Ordinary
+    results use generic encoding; semantic results must carry one reservation
+    and consume it exactly once. After semantic dispatch starts, cancellation,
+    deadline, encoding, proof, or write failure closes the connection without
+    sending a generic second response. Only failures before dispatch may use
+    the transport failure writer.
 
 ## Runtime Flows
 
@@ -105,8 +114,9 @@ sequenceDiagram
     G-->>C: server nonce + server proof
     C->>L: same connection POST /v1/rpc + digest-bound client proof
     L->>G: single-use proof and generation check
-    G->>H: decode one bounded JSON envelope
-    H-->>L: AgentResponse
+    G->>H: one complete bounded JSON envelope
+    H-->>L: ordinary response or planned semantic response
+    L->>L: consume semantic reservation once
     L-->>C: one bounded HTTP response then close
 ```
 

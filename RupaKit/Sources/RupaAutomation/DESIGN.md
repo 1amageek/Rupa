@@ -105,11 +105,13 @@ source-only; it is not a second semantic operation model.
    committing the group violates the caller contract. Nothing in this module
    publishes a partial result.
 9. The receipt contains every declared local-output binding, generated identity
-   kind from every complete Core delta, diagnostics, and measured step/source-
-   expansion work required for the upper layer to project the committed result.
-   It contains no mutable session. Local output bindings are a selected subset
-   of each complete delta, not an exhaustive declaration of all generated
-   Product/presentation identities.
+   kind from every complete Core delta, diagnostics introduced by this prepared
+   execution, and measured step/source-expansion work required for the upper
+   layer to project the committed result. Diagnostics already present in the
+   staged session at a step boundary are ambient project state and must not be
+   charged or returned as that step's result. It contains no mutable session.
+   Local output bindings are a selected subset of each complete delta, not an
+   exhaustive declaration of all generated Product/presentation identities.
 10. Current `AutomationBatch`, `PreparedAutomationBatch`,
     `AutomationStagedBatchExecutor`, and `AutomationRunner` behavior remains
     legacy compatibility inventory until later cutover. CADAPI-A does not alter
@@ -188,7 +190,7 @@ The later implementation must prove:
 | Atomic staging | A late command, binding, cancellation, or limit failure propagated out of the source-group closure leaves caller source, history, and evaluation state unchanged. |
 | Native repetition | Pattern count changes do not change prepared step count and execute one native pattern command. |
 | Internal graph boundary | Core graph success/rollback tests remain, while Agent catalog/codec/CLI tests reject raw graph payloads. |
-| Result completeness | Every declared symbol output maps to a server-generated typed identity; every complete Core delta and all measured work remain in the receipt even when generated identities are not selected into local slots. Duplicate selectors, missing selections, and wrong-kind selections are rejected. |
+| Result completeness | Every declared symbol output maps to a server-generated typed identity; every complete Core delta and all measured work remain in the receipt even when generated identities are not selected into local slots. Pre-existing session diagnostics are excluded while diagnostics introduced by the prepared execution remain. Duplicate selectors, missing selections, and wrong-kind selections are rejected. |
 | Limit boundaries | Each accepted ceiling succeeds at its boundary and rejects boundary-plus-one; dynamic excess unwinds the enclosing group without a receipt. |
 | Legacy isolation | Existing `PreparedAutomationBatch`, staged batch executor, and `AutomationRunner` behavior/tests remain unchanged. |
 | Compact native pattern | Changing occurrence count keeps prepared step, command, and output-slot counts constant for the same distinct intent while complete receipt identities and measured expanded work change. |

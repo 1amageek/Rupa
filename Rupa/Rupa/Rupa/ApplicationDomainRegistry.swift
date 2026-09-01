@@ -1,4 +1,5 @@
 import Foundation
+import RupaCADDomain
 import RupaCore
 import RupaDomainFoundation
 import RupaManufacturing
@@ -10,6 +11,10 @@ struct ApplicationDomainRegistryConfiguration {
 }
 
 enum ApplicationDomainRegistry {
+    static func makeCADSemanticCompiler() throws -> any SemanticProgramCompiling {
+        DefaultSemanticProgramCompiler(registry: try RupaCADDomain.registry())
+    }
+
     static func makeConfiguration() -> ApplicationDomainRegistryConfiguration {
         var diagnostics: [String] = []
         var registries: [DomainRegistry] = []

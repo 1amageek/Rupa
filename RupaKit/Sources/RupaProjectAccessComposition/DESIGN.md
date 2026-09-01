@@ -59,8 +59,10 @@ flowchart LR
    discovery, resolution, and the request. It never replaces a dirty project.
 3. A session ID request resolves only an already registered App session; it
    never starts or replaces an application.
-4. Each access session carries one exact session ID and forwards it unchanged
-   in the Agent request. Session mismatch is a typed failure.
+4. Each access session carries one exact session ID and the complete immutable
+   authority returned by the resolving `WorkspaceSessionSummary`. It forwards
+   both unchanged in one Agent request. Session mismatch or stale authority is
+   a typed failure; the adapter performs no pre-read or coordinate repair.
 5. Access operations serialize through the session. `finish()` releases only
    client transport resources and does not close or save the App document.
 6. `save` is explicit and reaches the App coordinator; successful mutations
@@ -99,9 +101,10 @@ sequenceDiagram
 ## State, Ownership, and Lifecycle
 
 `LiveProjectSessionResolver` owns no project state. `LiveProjectAccessSession`
-owns one client and one session ID until `finish`; operation serialization
-prevents overlapping requests on that client. The App owns workspace and
-document lifetime independently of every external session.
+owns one client, one session ID, and one immutable initial authority until
+`finish`; operation serialization prevents overlapping requests on that
+client. The App owns workspace and document lifetime independently of every
+external session.
 
 ## Failure, Concurrency, and Constraints
 

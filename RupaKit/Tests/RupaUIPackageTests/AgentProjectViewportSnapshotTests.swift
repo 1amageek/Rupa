@@ -18,11 +18,11 @@ func projectAgentViewportReadUsesTheExactPublishedViewportAndRejectsStaleGenerat
         document: session.document
     )
     _ = try await workspace.evaluate()
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
     let published = try #require(workspace.view)
 
-    let response = await controller.handle(
+    let response = await controller.projectAgentHandle(
         .viewportSnapshot(
             sessionID: sessionID,
             expectedGeneration: published.documentGeneration
@@ -66,7 +66,7 @@ func projectAgentViewportReadUsesTheExactPublishedViewportAndRejectsStaleGenerat
     }
     #expect(snapshot.triangleCount == expectedTriangleCount)
 
-    let stale = await controller.handle(
+    let stale = await controller.projectAgentHandle(
         .viewportSnapshot(
             sessionID: sessionID,
             expectedGeneration: DocumentGeneration(published.documentGeneration.value + 1)
@@ -236,7 +236,7 @@ func projectAgentViewportReadOmitsHiddenItemsWithoutDroppingEvaluationAuthority(
         document: session.document
     )
     _ = try await workspace.evaluate()
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
     let visible = try #require(workspace.view)
     let visibleItem = try #require(visible.viewport.items.first)
@@ -253,7 +253,7 @@ func projectAgentViewportReadOmitsHiddenItemsWithoutDroppingEvaluationAuthority(
             expectedPublicationSequence: visible.publicationSequence
         )
     )
-    let response = await controller.handle(
+    let response = await controller.projectAgentHandle(
         .viewportSnapshot(
             sessionID: sessionID,
             expectedGeneration: hidden.documentGeneration

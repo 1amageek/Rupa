@@ -18,6 +18,7 @@ public actor AgentHTTPListener {
     private let requestTimeout: Duration
     private let challengeTimeout: Duration
     private let shutdownTimeout: Duration
+    private let protocolEncodingLimits: AgentProtocolEncodingLimits
     private var listenDescriptor: Int32?
     private var acceptTask: Task<Void, Never>?
     private var activeConnections: [UInt64: ActiveConnection] = [:]
@@ -33,7 +34,8 @@ public actor AgentHTTPListener {
         requestedPort: UInt16 = 0,
         requestTimeout: Duration = .seconds(30),
         challengeTimeout: Duration = .seconds(5),
-        shutdownTimeout: Duration = .seconds(5)
+        shutdownTimeout: Duration = .seconds(5),
+        protocolEncodingLimits: AgentProtocolEncodingLimits = AgentProtocolEncodingLimits()
     ) {
         self.handler = handler
         self.key = key
@@ -42,6 +44,7 @@ public actor AgentHTTPListener {
         self.requestTimeout = requestTimeout
         self.challengeTimeout = challengeTimeout
         self.shutdownTimeout = shutdownTimeout
+        self.protocolEncodingLimits = protocolEncodingLimits
     }
 
     public var isRunning: Bool {
@@ -72,6 +75,19 @@ public actor AgentHTTPListener {
         }
         guard generation != 0 else {
             throw AgentHTTPError.invalidGeneration
+        }
+        try protocolEncodingLimits.validate()
+        guard protocolEncodingLimits.maximumRequestByteCount <= AgentHTTPWire.maximumBodyByteCount else {
+            throw AgentResponseEncodingError.invalidLimit(
+                name: "maximumRequestByteCount",
+                value: protocolEncodingLimits.maximumRequestByteCount
+            )
+        }
+        guard protocolEncodingLimits.maximumResponseByteCount <= AgentHTTPWire.maximumBodyByteCount else {
+            throw AgentResponseEncodingError.invalidLimit(
+                name: "maximumResponseByteCount",
+                value: protocolEncodingLimits.maximumResponseByteCount
+            )
         }
         let created = try AgentHTTPWire.makeListener(requestedPort: requestedPort)
         listenDescriptor = created.descriptor
@@ -155,6 +171,7 @@ public actor AgentHTTPListener {
         let generation = generation
         let requestTimeout = requestTimeout
         let challengeTimeout = challengeTimeout
+        let protocolEncodingLimits = protocolEncodingLimits
         let task = Task.detached {
             await Self.runConnection(
                 descriptor: descriptor,
@@ -163,6 +180,7 @@ public actor AgentHTTPListener {
                 generation: generation,
                 requestTimeout: requestTimeout,
                 challengeTimeout: challengeTimeout,
+                protocolEncodingLimits: protocolEncodingLimits,
                 handler: handler
             )
             await self.connectionDidFinish(connectionID)
@@ -210,6 +228,7 @@ public actor AgentHTTPListener {
         generation: UInt64,
         requestTimeout: Duration,
         challengeTimeout: Duration,
+        protocolEncodingLimits: AgentProtocolEncodingLimits,
         handler: any AgentRequestHandling
     ) async {
         let deadline: AgentHTTPDeadline
@@ -219,6 +238,7 @@ public actor AgentHTTPListener {
             return
         }
         var pending = Data()
+        var dispatchStarted = false
         do {
             let challengeRead = try await AgentHTTPBlockingIO.readMessage(
                 from: descriptor,
@@ -329,21 +349,37 @@ public actor AgentHTTPListener {
                 throw AgentHTTPError.authenticationFailed
             }
 
-            let codec = AgentMessageCodec()
+            let codec = AgentMessageCodec(limits: protocolEncodingLimits)
             let requestEnvelope = try codec.decodeRequestEnvelope(from: rpc.body)
             guard requestEnvelope.id == requestID else {
                 throw AgentHTTPError.authenticationFailed
             }
-            let response = try await dispatch(
-                requestEnvelope.params,
+            dispatchStarted = true
+            let handledResponse = try await dispatch(
+                requestEnvelope,
                 to: handler,
                 deadline: deadline
             )
-            let responseBody = try codec.encode(
-                response,
-                id: requestID,
-                method: requestEnvelope.method
-            )
+            let responseBody: Data
+            switch handledResponse {
+            case .ordinary(let response):
+                responseBody = try codec.encode(
+                    response,
+                    id: requestEnvelope.id,
+                    method: requestEnvelope.method
+                )
+            case .planned(let response, let reservation):
+                guard reservation.plan.requestID == requestEnvelope.id,
+                      reservation.plan.method == requestEnvelope.method else {
+                    throw AgentResponseEncodingError.invalidPlan(
+                        "The semantic response reservation does not match the request envelope."
+                    )
+                }
+                responseBody = try codec.encode(
+                    response,
+                    consuming: reservation
+                )
+            }
             let responseDigest = AgentHTTPAuthentication.digest(responseBody)
             let responseProof = AgentHTTPAuthentication.responseProof(
                 key: key,
@@ -377,6 +413,7 @@ public actor AgentHTTPListener {
         } catch is CancellationError {
             return
         } catch {
+            guard !dispatchStarted else { return }
             await sendFailure(
                 error,
                 to: descriptor,
@@ -446,15 +483,15 @@ public actor AgentHTTPListener {
     /// Races cooperative semantic work against the connection deadline without
     /// waiting for a non-cooperative handler after the transport has terminated.
     private nonisolated static func dispatch(
-        _ request: AgentRequest,
+        _ envelope: AgentRequestEnvelope,
         to handler: any AgentRequestHandling,
         deadline: AgentHTTPDeadline
-    ) async throws -> AgentResponse {
-        let (stream, continuation) = AsyncThrowingStream<AgentResponse, any Error>.makeStream(
+    ) async throws -> AgentHandledResponse {
+        let (stream, continuation) = AsyncThrowingStream<AgentHandledResponse, any Error>.makeStream(
             bufferingPolicy: .bufferingNewest(1)
         )
         let handlerTask = Task {
-            let response = await handler.handle(request)
+            let response = await handler.handle(envelope)
             guard !Task.isCancelled else { return }
             continuation.yield(response)
             continuation.finish()

@@ -51,7 +51,7 @@ struct CADCaseLifecycleHarness {
     ) async throws -> CADCaseLifecycleRecord {
         let totalStart = now()
         let deadline = CADCaseDeadline(timeoutWallNanoseconds: timeoutWallNanoseconds)
-        let controller = ProjectAgentCommandController(name: caseID.rawValue)
+        let controller = try CADBenchmarkControllerFactory.make(name: caseID.rawValue)
         guard !Task.isCancelled else {
             return await preflightResult(
                 outcome: .cancellation,
@@ -107,7 +107,7 @@ struct CADCaseLifecycleHarness {
     ) async throws -> CADCaseLifecycleRecord {
         let totalStart = now()
         let deadline = CADCaseDeadline(timeoutWallNanoseconds: timeoutWallNanoseconds)
-        let controller = ProjectAgentCommandController(name: caseID.rawValue)
+        let controller = try CADBenchmarkControllerFactory.make(name: caseID.rawValue)
         return await perform(
             action: action,
             controller: controller,
@@ -123,7 +123,7 @@ struct CADCaseLifecycleHarness {
     ) async throws -> CADCaseLifecycleRecord {
         let totalStart = now()
         let deadline = CADCaseDeadline(timeoutWallNanoseconds: timeoutWallNanoseconds)
-        let controller = ProjectAgentCommandController(name: "\(caseID.rawValue).stale")
+        let controller = try CADBenchmarkControllerFactory.make(name: "\(caseID.rawValue).stale")
         return await perform(
             action: action,
             controller: controller,
@@ -739,8 +739,14 @@ struct CADCaseLifecycleHarness {
                 try await Task.sleep(for: .nanoseconds(delay))
             }
         }
+        let envelope = CADBenchmarkControllerFactory.envelope(
+            request: request,
+            id: "\(caseID.rawValue).\(request.methodName)"
+        )
         return try await deadline.run { @MainActor in
-            await controller.handle(request)
+            try CADBenchmarkControllerFactory.ordinaryResponse(
+                from: await controller.handle(envelope)
+            )
         }
     }
 
@@ -794,7 +800,12 @@ struct CADCaseLifecycleHarness {
     }
 
     private func sessionCount(_ controller: ProjectAgentCommandController) async -> Int {
-        guard case .status(let status) = await controller.handle(.status) else {
+        let envelope = CADBenchmarkControllerFactory.envelope(
+            request: .status,
+            id: "\(caseID.rawValue).status"
+        )
+        let handled = await controller.handle(envelope)
+        guard case .ordinary(.status(let status)) = handled else {
             return 1
         }
         return status.sessionCount

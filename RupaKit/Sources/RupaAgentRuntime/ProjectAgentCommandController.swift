@@ -18,22 +18,45 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
     private let snapshotReadExecutor: ProjectAgentSnapshotReadExecutor
     private let exportExecutor: ProjectAgentExportExecutor
     private let errorMapper: ProjectAgentErrorMapper
+    private let semanticProgramCompiler: any SemanticProgramCompiling
+    private let semanticProgramLimits: SemanticProgramLimitPolicy
+    private let semanticMessageCodec: AgentMessageCodec
+    private let semanticContextBuilder: ProjectSemanticCompilationContextBuilder
+    private let semanticResultProjector: ProjectAgentSemanticResultProjector
+    private let semanticFailureMapper: ProjectAgentSemanticFailureMapper
 
     public init(
         name: String = "Rupa Agent",
+        semanticProgramCompiler: any SemanticProgramCompiling,
         registry: ProjectWorkspaceRegistry = ProjectWorkspaceRegistry(),
         domainRegistry: DomainRegistry = DomainRegistry(),
+        semanticProgramLimits: SemanticProgramLimitPolicy =
+            ProjectAgentSemanticProgramLimits.standard,
+        semanticProtocolEncodingLimits: AgentProtocolEncodingLimits =
+            AgentProtocolEncodingLimits(),
         snapshotReadExecutor: ProjectAgentSnapshotReadExecutor =
             ProjectAgentSnapshotReadExecutor(),
         exportExecutor: ProjectAgentExportExecutor = ProjectAgentExportExecutor(),
-        errorMapper: ProjectAgentErrorMapper = ProjectAgentErrorMapper()
+        errorMapper: ProjectAgentErrorMapper = ProjectAgentErrorMapper(),
+        semanticContextBuilder: ProjectSemanticCompilationContextBuilder =
+            ProjectSemanticCompilationContextBuilder(),
+        semanticResultProjector: ProjectAgentSemanticResultProjector =
+            ProjectAgentSemanticResultProjector()
     ) {
         self.name = name
+        self.semanticProgramCompiler = semanticProgramCompiler
         self.registry = registry
         self.domainRegistry = domainRegistry
+        self.semanticProgramLimits = semanticProgramLimits
+        self.semanticMessageCodec = AgentMessageCodec(
+            limits: semanticProtocolEncodingLimits
+        )
         self.snapshotReadExecutor = snapshotReadExecutor
         self.exportExecutor = exportExecutor
         self.errorMapper = errorMapper
+        self.semanticContextBuilder = semanticContextBuilder
+        self.semanticResultProjector = semanticResultProjector
+        self.semanticFailureMapper = ProjectAgentSemanticFailureMapper()
     }
 
     public func capabilityDescriptors() -> [AgentCapabilityDescriptor] {
@@ -61,7 +84,18 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
         try await registry.updatePath(id: id, path: path)
     }
 
-    public func handle(_ request: AgentRequest) async -> AgentResponse {
+    public func handle(_ envelope: AgentRequestEnvelope) async -> AgentHandledResponse {
+        switch envelope.params {
+        case .invokeCapability(let request):
+            return await executeSemanticDirect(request, envelope: envelope)
+        case .executeProgram(let request):
+            return await executeSemanticProgram(request, envelope: envelope)
+        default:
+            return .ordinary(await handleOrdinary(envelope.params))
+        }
+    }
+
+    private func handleOrdinary(_ request: AgentRequest) async -> AgentResponse {
         do {
             return try await execute(request)
         } catch let error as ProjectWorkspacePostCommitError {
@@ -147,6 +181,212 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
             return error.localizedDescription
         }
     }
+
+    private func executeSemanticDirect(
+        _ request: AgentSemanticDirectExecutionRequest,
+        envelope: AgentRequestEnvelope
+    ) async -> AgentHandledResponse {
+        await executeSemantic(
+            .direct(request),
+            envelope: envelope
+        )
+    }
+
+    private func executeSemanticProgram(
+        _ request: AgentSemanticProgramExecutionRequest,
+        envelope: AgentRequestEnvelope
+    ) async -> AgentHandledResponse {
+        await executeSemantic(
+            .program(request),
+            envelope: envelope
+        )
+    }
+
+    private func executeSemantic(
+        _ invocation: ProjectAgentSemanticInvocation,
+        envelope: AgentRequestEnvelope
+    ) async -> AgentHandledResponse {
+        let fallbackReservation: AgentResponseEncodingReservation
+        do {
+            fallbackReservation = try semanticMessageCodec.reserveResponse(
+                requestID: envelope.id,
+                method: invocation.method,
+                authority: invocation.authority,
+                requestedOutputs: [],
+                resultCharge: Self.prepublicationResultCharge
+            )
+        } catch {
+            return .ordinary(.failure(errorMapper.editorError(for: error)))
+        }
+        if fallbackReservation.plan.isFailureOnly {
+            return .planned(
+                response: invocation.response(
+                    .prepublicationFailure(
+                        semanticFailureMapper.responsePlanRejected()
+                    )
+                ),
+                reservation: fallbackReservation
+            )
+        }
+
+        do {
+            try Task.checkCancellation()
+            let lease = try await registry.lease(id: invocation.sessionID)
+            let view = try currentView(lease.workspace)
+            let authority = try requireSemanticAuthority(
+                invocation.authority,
+                snapshot: view
+            )
+            let contextBuilder = semanticContextBuilder
+            let context = try await lease.workspace.withValidatedAuthority(
+                from: view,
+                operationGuard: lease.operationGuard
+            ) {
+                contextBuilder.build(from: view.document.document)
+            }
+            let input = try invocation.compilationInput()
+            let compilation = try await compileSemantic(
+                input,
+                context: context
+            )
+            let requestedOutputs = compilation.requestedOutputs.map {
+                AgentSemanticOutputReference($0.source)
+            }
+            let reservation = try semanticMessageCodec.reserveResponse(
+                requestID: envelope.id,
+                method: invocation.method,
+                authority: invocation.authority,
+                requestedOutputs: requestedOutputs,
+                resultCharge: compilation.resultCharge
+            )
+            if reservation.plan.isFailureOnly {
+                return .planned(
+                    response: invocation.response(
+                        .prepublicationFailure(
+                            semanticFailureMapper.responsePlanRejected()
+                        )
+                    ),
+                    reservation: reservation
+                )
+            }
+
+            do {
+                let result = try await lease.workspace.executeSemanticProgram(
+                    ProjectSemanticProgramRequest(
+                        compilation: compilation,
+                        authority: authority,
+                        dryRun: invocation.dryRun,
+                        resultBudget: reservation.plan.resultBudget
+                    ),
+                    operationGuard: lease.operationGuard
+                )
+                return .planned(
+                    response: invocation.response(
+                        semanticResultProjector.project(result)
+                    ),
+                    reservation: reservation
+                )
+            } catch {
+                return .planned(
+                    response: invocation.response(
+                        .prepublicationFailure(
+                            semanticFailureMapper.failure(for: error)
+                        )
+                    ),
+                    reservation: reservation
+                )
+            }
+        } catch {
+            return .planned(
+                response: invocation.response(
+                    .prepublicationFailure(
+                        semanticFailureMapper.failure(for: error)
+                    )
+                ),
+                reservation: fallbackReservation
+            )
+        }
+    }
+
+    private func compileSemantic(
+        _ input: ProjectAgentSemanticCompilationInput,
+        context: SemanticCompilationContext
+    ) async throws -> SemanticCompilationResult {
+        let compiler = semanticProgramCompiler
+        let limits = semanticProgramLimits
+        let cancellation = TaskSemanticCompilationCancellation(
+            isCancelled: Task.isCancelled
+        )
+        return try await withTaskCancellationHandler {
+            try await Task.detached {
+                switch input {
+                case .direct(let request):
+                    return try compiler.compile(
+                        request,
+                        context: context,
+                        limits: limits,
+                        cancellation: cancellation
+                    )
+                case .program(let program):
+                    return try compiler.compile(
+                        program,
+                        context: context,
+                        limits: limits,
+                        cancellation: cancellation
+                    )
+                }
+            }.value
+        } onCancel: {
+            cancellation.cancel()
+        }
+    }
+
+    private func requireSemanticAuthority(
+        _ expected: AgentProjectAuthorityCoordinate,
+        snapshot: ProjectViewSnapshot
+    ) throws -> ProjectAuthorityCoordinate {
+        guard expected.projectID == snapshot.projectID else {
+            throw EditorError(
+                code: .projectMismatch,
+                message: "Semantic request belongs to a different project."
+            )
+        }
+        guard expected.documentGeneration == snapshot.documentGeneration else {
+            throw EditorError(
+                code: .documentGenerationMismatch,
+                message: "Semantic request document generation is stale."
+            )
+        }
+        guard expected.transactionRevision == snapshot.transactionRevision else {
+            throw EditorError(
+                code: .documentTransactionRevisionMismatch,
+                message: "Semantic request transaction revision is stale."
+            )
+        }
+        guard expected.publicationSequence == snapshot.publicationSequence else {
+            throw EditorError(
+                code: .projectPublicationMismatch,
+                message: "Semantic request publication sequence is stale."
+            )
+        }
+        guard expected.workspaceRevision == snapshot.workspaceState.revision else {
+            throw EditorError(
+                code: .workspaceRevisionMismatch,
+                message: "Semantic request workspace revision is stale."
+            )
+        }
+        return snapshot.authorityCoordinate
+    }
+
+    private static let prepublicationResultCharge = SemanticResultCharge(
+        requestedOutputCount: 0,
+        diagnosticRecordCount: 0,
+        diagnosticScalarCount: 0,
+        diagnosticStringUTF8ByteCount: 0,
+        telemetryRecordCount: 1,
+        telemetryScalarCount: 12,
+        telemetryStringUTF8ByteCount: 0
+    )
 
     private func execute(_ request: AgentRequest) async throws -> AgentResponse {
         switch request {
@@ -308,26 +548,10 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
                 )
             )
 
-        // FIXME(INCOMPLETE_IMPLEMENTATION): Production capability.invoke currently fails closed here before acquiring a workspace lease or mutating source. Remove this marker only after this request executes through ProjectWorkspace and ProjectController with typed success, rollback, and committed-failure coverage.
-        case .invokeCapability:
-            return .capabilityExecution(
-                .prepublicationFailure(
-                    AgentSemanticPrepublicationFailure(
-                        stage: .dispatchUnavailable,
-                        code: AgentSemanticPrepublicationFailure.dispatchUnavailableCode
-                    )
-                )
-            )
-
-        // FIXME(INCOMPLETE_IMPLEMENTATION): Production program.execute currently fails closed here before acquiring a workspace lease or mutating source. Remove this marker only after this request executes atomically through ProjectWorkspace and ProjectController with typed success, rollback, and committed-failure coverage.
-        case .executeProgram:
-            return .programExecution(
-                .prepublicationFailure(
-                    AgentSemanticPrepublicationFailure(
-                        stage: .dispatchUnavailable,
-                        code: AgentSemanticPrepublicationFailure.dispatchUnavailableCode
-                    )
-                )
+        case .invokeCapability, .executeProgram:
+            throw EditorError(
+                code: .commandFailed,
+                message: "Semantic requests must use the correlation-preserving planned dispatch path."
             )
 
         case .resetDocument:
@@ -1025,6 +1249,60 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
             lengthUnit: snapshot.workspaceState.displayUnit,
             angleUnit: .degree
         )
+    }
+}
+
+private enum ProjectAgentSemanticCompilationInput: Sendable {
+    case direct(SemanticDirectRequest)
+    case program(SemanticProgram)
+}
+
+private enum ProjectAgentSemanticInvocation: Sendable {
+    case direct(AgentSemanticDirectExecutionRequest)
+    case program(AgentSemanticProgramExecutionRequest)
+
+    var method: String {
+        switch self {
+        case .direct: "capability.invoke"
+        case .program: "program.execute"
+        }
+    }
+
+    var sessionID: UUID {
+        switch self {
+        case .direct(let request): request.sessionID
+        case .program(let request): request.sessionID
+        }
+    }
+
+    var authority: AgentProjectAuthorityCoordinate {
+        switch self {
+        case .direct(let request): request.authority
+        case .program(let request): request.authority
+        }
+    }
+
+    var dryRun: Bool {
+        switch self {
+        case .direct(let request): request.dryRun
+        case .program(let request): request.dryRun
+        }
+    }
+
+    func compilationInput() throws -> ProjectAgentSemanticCompilationInput {
+        switch self {
+        case .direct(let request):
+            .direct(try request.request.semanticValue())
+        case .program(let request):
+            .program(try request.program.semanticValue())
+        }
+    }
+
+    func response(_ result: AgentSemanticExecutionResult) -> AgentResponse {
+        switch self {
+        case .direct: .capabilityExecution(result)
+        case .program: .programExecution(result)
+        }
     }
 }
 

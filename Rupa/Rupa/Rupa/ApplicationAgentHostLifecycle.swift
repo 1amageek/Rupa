@@ -27,7 +27,8 @@ final class ApplicationAgentHostLifecycle {
         handler: any AgentRequestHandling,
         discoveryStore: any AgentDiscoveryRecordStore,
         requestTimeout: Duration = .seconds(30),
-        shutdownTimeout: Duration = .seconds(5)
+        shutdownTimeout: Duration = .seconds(5),
+        protocolEncodingLimits: AgentProtocolEncodingLimits = AgentProtocolEncodingLimits()
     ) throws {
         let credential = try ApplicationAgentAccessCredential.generate()
         self.credential = credential
@@ -37,7 +38,8 @@ final class ApplicationAgentHostLifecycle {
             key: credential.key,
             generation: credential.generation,
             requestTimeout: requestTimeout,
-            shutdownTimeout: shutdownTimeout
+            shutdownTimeout: shutdownTimeout,
+            protocolEncodingLimits: protocolEncodingLimits
         )
     }
 

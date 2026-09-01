@@ -11,7 +11,7 @@ import Testing
 func agentHostStartsAuthenticatedHTTPAndRoutesToRegisteredWorkspace() async throws {
     let key = Data(repeating: 0x42, count: 32)
     let generation: UInt64 = 41
-    let controller = ProjectAgentCommandController()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
         document: .empty(named: "Host Open")
     )
@@ -95,8 +95,8 @@ func agentHostDoesNotPublishRunningAfterStopDuringStart() async throws {
 }
 
 private struct StatusAgentRequestHandler: AgentRequestHandling {
-    func handle(_ request: AgentRequest) async -> AgentResponse {
-        .status(AgentStatus(running: true, sessionCount: 0))
+    func handle(_ envelope: AgentRequestEnvelope) async -> AgentHandledResponse {
+        .ordinary(.status(AgentStatus(running: true, sessionCount: 0)))
     }
 }
 

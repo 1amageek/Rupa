@@ -29,6 +29,25 @@ func preparedProgramRejectsInactiveSessionBeforeResolvingOrMutating() throws {
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
+func preparedProgramReceiptExcludesAmbientSessionDiagnostics() throws {
+    let ambient = EditorDiagnostic(
+        severity: .info,
+        message: "Evaluation completed before this prepared execution."
+    )
+    let session = EditorSession(diagnostics: [ambient])
+    let receipt = try session.withSourceCommandGroup(named: "prepared-diagnostic-boundary") { staged in
+        try DefaultPreparedAutomationProgramExecutor().execute(
+            makeSingleBoxProgram(),
+            in: staged
+        )
+    }
+
+    #expect(receipt.diagnostics.isEmpty)
+    #expect(session.diagnostics.isEmpty == false)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
 func preparedProgramCreatesAndReferencesAllSourceIdentityKinds() throws {
     let box = PreparedAutomationStep(
         outputs: [

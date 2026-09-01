@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import RupaAgentProtocol
 import RupaAgentRuntime
@@ -8,6 +9,7 @@ import RupaKit
 import RupaProject
 import RupaProjectModel
 import RupaProjectPackage
+import RupaProjectAccessPlatform
 import RupaUI
 import RupaViewportScene
 import Synchronization
@@ -112,6 +114,91 @@ func applicationInitialURLLoadsWithoutPublishingAnEmptyProjectFirst() async thro
         #expect(coordinator.snapshot?.publicationSequence == 1)
         #expect(coordinator.currentFileURL == packageURL.standardizedFileURL)
         #expect(registrar.registeredPath == packageURL.standardizedFileURL)
+        #expect(registrar.registerCallCount == 1)
+        #expect(registrar.updatedPaths.isEmpty)
+    }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func applicationLifecycleBuffersColdOpenUntilLoadedRegistrationPrecedesDiscovery() async throws {
+    try await withApplicationProjectTemporaryDirectory { directory in
+        let sourceWorkspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
+            document: .empty(named: "Lifecycle Cold Open")
+        )
+        _ = try await sourceWorkspace.evaluate()
+        let packageURL = directory.appendingPathComponent("lifecycle-cold-open.rupa")
+        _ = try await sourceWorkspace.save(to: packageURL)
+
+        let orderingState = ApplicationLifecycleOrderingState()
+        let agentController = try applicationProjectAgentCommandController()
+        let registrar = ApplicationLifecycleAgentRegistrar(
+            controller: agentController,
+            state: orderingState
+        )
+        let targetWorkspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
+        let coordinator = ApplicationProjectCoordinator(
+            workspace: targetWorkspace,
+            agentRegistrar: registrar,
+            launchArguments: []
+        )
+        let requestRouter = ApplicationAgentRequestRouter(
+            projectHandler: agentController,
+            lifecycle: coordinator
+        )
+        let discoveryStore = ApplicationLifecycleDiscoveryStore(state: orderingState)
+        let agentLifecycle = try ApplicationAgentHostLifecycle(
+            handler: requestRouter,
+            discoveryStore: discoveryStore,
+            requestTimeout: .seconds(5),
+            shutdownTimeout: .seconds(1)
+        )
+        let delegate = ApplicationLifecycleDelegate()
+        delegate.configure(
+            projectCoordinator: coordinator,
+            agentLifecycle: agentLifecycle
+        )
+
+        delegate.application(NSApplication.shared, open: [packageURL])
+
+        #expect(orderingState.snapshot().registrationCount == 0)
+        #expect(orderingState.snapshot().discoveryPublicationCount == 0)
+        #expect(coordinator.snapshot == nil)
+
+        delegate.applicationDidFinishLaunching(
+            Notification(name: NSApplication.didFinishLaunchingNotification)
+        )
+        await delegate.waitForStartupCompletion()
+
+        let ordering = orderingState.snapshot()
+        #expect(delegate.agentFailureMessage == nil)
+        #expect(coordinator.lifecycle == .ready)
+        #expect(coordinator.currentFileURL == packageURL.standardizedFileURL)
+        #expect(coordinator.snapshot?.projectName == "Lifecycle Cold Open")
+        #expect(coordinator.snapshot?.publicationSequence == 1)
+        #expect(ordering.registrationCount == 1)
+        #expect(ordering.registeredPath == packageURL.standardizedFileURL)
+        #expect(ordering.registeredPublicationSequence == 1)
+        #expect(ordering.discoveryPublicationCount == 1)
+        #expect(ordering.registrationCountAtDiscoveryPublication == 1)
+        #expect(ordering.pathAtDiscoveryPublication == packageURL.standardizedFileURL)
+        #expect(ordering.publicationSequenceAtDiscoveryPublication == 1)
+        #expect(agentLifecycle.state == .published)
+
+        guard case .sessions(let sessions) = try await applicationAgentResponse(
+            .sessions,
+            using: requestRouter
+        ),
+              let firstSession = sessions.first else {
+            Issue.record("Expected the cold-open Agent session to be observable.")
+            try await agentLifecycle.stop()
+            return
+        }
+        #expect(sessions.count == 1)
+        #expect(firstSession.path == packageURL.standardizedFileURL.path)
+        #expect(firstSession.authority.publicationSequence == 1)
+
+        try await agentLifecycle.stop()
     }
 }
 
@@ -128,7 +215,7 @@ func applicationAgentRouterMutatesAndExplicitlySavesTheRegisteredWorkspace() asy
         let bytesBeforeMutation = try Data(contentsOf: packageURL)
 
         let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
-        let controller = ProjectAgentCommandController()
+        let controller = try applicationProjectAgentCommandController()
         let coordinator = ApplicationProjectCoordinator(
             workspace: workspace,
             agentRegistrar: controller,
@@ -141,7 +228,10 @@ func applicationAgentRouterMutatesAndExplicitlySavesTheRegisteredWorkspace() asy
         )
         await coordinator.launch()
 
-        guard case .sessions(let sessions) = await router.handle(.sessions),
+        guard case .sessions(let sessions) = try await applicationAgentResponse(
+            .sessions,
+            using: router
+        ),
               let session = sessions.first else {
             Issue.record("Expected the App-owned workspace session.")
             return
@@ -150,13 +240,14 @@ func applicationAgentRouterMutatesAndExplicitlySavesTheRegisteredWorkspace() asy
         #expect(coordinator.workspace === workspace)
         #expect(session.path == packageURL.standardizedFileURL.path)
 
-        let staleGeneration = session.generation
-        let mutationResponse = await router.handle(
+        let staleGeneration = session.authority.documentGeneration
+        let mutationResponse = try await applicationAgentResponse(
             .execute(
                 sessionID: session.id,
                 command: .renameDocument(name: "Agent API Bicycle"),
-                expectedGeneration: session.generation
-            )
+                expectedGeneration: session.authority.documentGeneration
+            ),
+            using: router
         )
         guard case .command(let mutation) = mutationResponse else {
             Issue.record("Expected the semantic request to reach the registered workspace.")
@@ -166,30 +257,33 @@ func applicationAgentRouterMutatesAndExplicitlySavesTheRegisteredWorkspace() asy
         #expect(workspace.view?.projectName == "Agent API Bicycle")
         #expect(try Data(contentsOf: packageURL) == bytesBeforeMutation)
 
-        guard case .failure(let wrongSession) = await router.handle(
+        guard case .failure(let wrongSession) = try await applicationAgentResponse(
             .save(
                 sessionID: UUID(),
                 expectedGeneration: mutation.generation
-            )
+            ),
+            using: router
         ) else {
             Issue.record("Expected a wrong-session failure.")
             return
         }
         #expect(wrongSession.code == .sessionNotFound)
 
-        guard case .failure(let missingGeneration) = await router.handle(
-            .save(sessionID: session.id, expectedGeneration: nil)
+        guard case .failure(let missingGeneration) = try await applicationAgentResponse(
+            .save(sessionID: session.id, expectedGeneration: nil),
+            using: router
         ) else {
             Issue.record("Expected a missing-generation failure.")
             return
         }
         #expect(missingGeneration.code == .commandInvalid)
 
-        guard case .failure(let staleGenerationFailure) = await router.handle(
+        guard case .failure(let staleGenerationFailure) = try await applicationAgentResponse(
             .save(
                 sessionID: session.id,
                 expectedGeneration: staleGeneration
-            )
+            ),
+            using: router
         ) else {
             Issue.record("Expected a stale-generation failure.")
             return
@@ -197,11 +291,12 @@ func applicationAgentRouterMutatesAndExplicitlySavesTheRegisteredWorkspace() asy
         #expect(staleGenerationFailure.code == .documentGenerationMismatch)
         #expect(try Data(contentsOf: packageURL) == bytesBeforeMutation)
 
-        guard case .save(let saveResult) = await router.handle(
+        guard case .save(let saveResult) = try await applicationAgentResponse(
             .save(
                 sessionID: session.id,
                 expectedGeneration: mutation.generation
-            )
+            ),
+            using: router
         ) else {
             Issue.record("Expected explicit Agent save success.")
             return
@@ -217,11 +312,12 @@ func applicationAgentRouterMutatesAndExplicitlySavesTheRegisteredWorkspace() asy
         let reloaded = try await reloadedWorkspace.load(from: packageURL)
         #expect(reloaded.projectName == "Agent API Bicycle")
 
-        guard case .failure(let directSaveFailure) = await controller.handle(
+        guard case .failure(let directSaveFailure) = try await applicationAgentResponse(
             .save(
                 sessionID: session.id,
                 expectedGeneration: mutation.generation
-            )
+            ),
+            using: controller
         ) else {
             Issue.record("Expected direct runtime save to remain unsupported.")
             return
@@ -233,7 +329,7 @@ func applicationAgentRouterMutatesAndExplicitlySavesTheRegisteredWorkspace() asy
 @MainActor
 @Test(.timeLimit(.minutes(1)))
 func applicationAgentRouterRejectsUntitledSaveWithoutOpeningUI() async throws {
-    let controller = ProjectAgentCommandController()
+    let controller = try applicationProjectAgentCommandController()
     let coordinator = ApplicationProjectCoordinator(
         workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
         agentRegistrar: controller,
@@ -244,17 +340,21 @@ func applicationAgentRouterRejectsUntitledSaveWithoutOpeningUI() async throws {
         lifecycle: coordinator
     )
     await coordinator.launch()
-    guard case .sessions(let sessions) = await router.handle(.sessions),
+    guard case .sessions(let sessions) = try await applicationAgentResponse(
+        .sessions,
+        using: router
+    ),
           let session = sessions.first else {
         Issue.record("Expected the App-owned untitled session.")
         return
     }
 
-    guard case .failure(let failure) = await router.handle(
+    guard case .failure(let failure) = try await applicationAgentResponse(
         .save(
             sessionID: session.id,
-            expectedGeneration: session.generation
-        )
+            expectedGeneration: session.authority.documentGeneration
+        ),
+        using: router
     ) else {
         Issue.record("Expected current-URL save to reject an untitled project.")
         return
@@ -285,7 +385,7 @@ func applicationAgentSaveReturnsCommittedNoRetryReceiptAfterViewFailure() async 
                 failingBuildNumber: 2
             )
         )
-        let controller = ProjectAgentCommandController()
+        let controller = try applicationProjectAgentCommandController()
         let coordinator = ApplicationProjectCoordinator(
             workspace: workspace,
             agentRegistrar: controller,
@@ -297,17 +397,21 @@ func applicationAgentSaveReturnsCommittedNoRetryReceiptAfterViewFailure() async 
             lifecycle: coordinator
         )
         await coordinator.launch()
-        guard case .sessions(let sessions) = await router.handle(.sessions),
+        guard case .sessions(let sessions) = try await applicationAgentResponse(
+            .sessions,
+            using: router
+        ),
               let session = sessions.first else {
             Issue.record("Expected the committed-save App session.")
             return
         }
 
-        let response = await router.handle(
+        let response = try await applicationAgentResponse(
             .save(
                 sessionID: session.id,
-                expectedGeneration: session.generation
-            )
+                expectedGeneration: session.authority.documentGeneration
+            ),
+            using: router
         )
         guard case .committedMutation(let outcome) = response else {
             Issue.record("Expected a committed save receipt.")
@@ -1642,6 +1746,153 @@ private func applicationProjectController(
         packageReader: packageReader,
         packageWriter: packageWriter
     )
+}
+
+@MainActor
+private func applicationProjectAgentCommandController() throws -> ProjectAgentCommandController {
+    ProjectAgentCommandController(
+        semanticProgramCompiler: try ApplicationDomainRegistry.makeCADSemanticCompiler()
+    )
+}
+
+@MainActor
+private func applicationAgentResponse(
+    _ request: AgentRequest,
+    using handler: any AgentRequestHandling,
+    requestID: String = UUID().uuidString
+) async throws -> AgentResponse {
+    let handled = await handler.handle(
+        AgentRequestEnvelope(id: requestID, params: request)
+    )
+    guard case .ordinary(let response) = handled else {
+        throw ApplicationAgentTestError.expectedOrdinaryResponse
+    }
+    return response
+}
+
+private enum ApplicationAgentTestError: Error {
+    case expectedOrdinaryResponse
+}
+
+private final class ApplicationLifecycleOrderingState: Sendable {
+    struct Snapshot: Sendable {
+        var registrationCount = 0
+        var registeredPath: URL?
+        var registeredPublicationSequence: UInt64?
+        var discoveryPublicationCount = 0
+        var registrationCountAtDiscoveryPublication: Int?
+        var pathAtDiscoveryPublication: URL?
+        var publicationSequenceAtDiscoveryPublication: UInt64?
+        var discoveryRecord: AgentDiscoveryRecord?
+    }
+
+    private let state = Mutex(Snapshot())
+
+    func recordRegistration(path: URL?, publicationSequence: UInt64?) {
+        state.withLock { state in
+            state.registrationCount += 1
+            state.registeredPath = path?.standardizedFileURL
+            state.registeredPublicationSequence = publicationSequence
+        }
+    }
+
+    func recordDiscoveryPublication(_ record: AgentDiscoveryRecord) {
+        state.withLock { state in
+            state.discoveryPublicationCount += 1
+            state.registrationCountAtDiscoveryPublication = state.registrationCount
+            state.pathAtDiscoveryPublication = state.registeredPath
+            state.publicationSequenceAtDiscoveryPublication =
+                state.registeredPublicationSequence
+            state.discoveryRecord = record
+        }
+    }
+
+    func readDiscoveryRecord() throws -> AgentDiscoveryRecord {
+        try state.withLock { state in
+            guard let record = state.discoveryRecord else {
+                throw AgentDiscoveryError.unavailable(
+                    "The lifecycle fixture has no discovery record."
+                )
+            }
+            return record
+        }
+    }
+
+    func removeDiscoveryRecord(ifGeneration generation: UInt64) throws {
+        try state.withLock { state in
+            guard state.discoveryRecord?.generation == generation else {
+                throw AgentDiscoveryError.staleGeneration(
+                    expected: generation,
+                    actual: state.discoveryRecord?.generation
+                )
+            }
+            state.discoveryRecord = nil
+        }
+    }
+
+    func snapshot() -> Snapshot {
+        state.withLock { $0 }
+    }
+}
+
+@MainActor
+private final class ApplicationLifecycleAgentRegistrar:
+    ApplicationAgentSessionRegistering
+{
+    private let controller: ProjectAgentCommandController
+    private let state: ApplicationLifecycleOrderingState
+
+    init(
+        controller: ProjectAgentCommandController,
+        state: ApplicationLifecycleOrderingState
+    ) {
+        self.controller = controller
+        self.state = state
+    }
+
+    func register(
+        workspace: ProjectWorkspace,
+        path: URL?,
+        id: UUID
+    ) async throws -> UUID {
+        let registeredID = try await controller.register(
+            workspace: workspace,
+            path: path,
+            id: id
+        )
+        state.recordRegistration(
+            path: path,
+            publicationSequence: workspace.view?.publicationSequence
+        )
+        return registeredID
+    }
+
+    func updatePath(id: UUID, path: URL?) async throws {
+        try await controller.updatePath(id: id, path: path)
+    }
+
+    func unregister(id: UUID) async {
+        await controller.unregister(id: id)
+    }
+}
+
+private struct ApplicationLifecycleDiscoveryStore:
+    AgentDiscoveryRecordStore,
+    Sendable
+{
+    let state: ApplicationLifecycleOrderingState
+
+    func read() throws -> AgentDiscoveryRecord {
+        try state.readDiscoveryRecord()
+    }
+
+    func publish(_ record: AgentDiscoveryRecord) throws {
+        state.recordDiscoveryPublication(record)
+    }
+
+    func remove(ifGeneration generation: UInt64) throws {
+        try state.removeDiscoveryRecord(ifGeneration: generation)
+    }
 }
 
 private func applicationCADOnlyDocument(named name: String) throws -> DesignDocument {

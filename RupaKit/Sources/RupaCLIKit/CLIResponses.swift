@@ -169,8 +169,8 @@ public struct CLIAttachResponse: Codable, Equatable, Sendable {
         self.path = session.path
         self.displayName = session.displayName
         self.dirty = session.dirty
-        self.generation = session.generation.value
-        self.workspaceRevision = session.workspaceRevision.value
+        self.generation = session.authority.documentGeneration.value
+        self.workspaceRevision = session.authority.workspaceRevision.value
     }
 }
 

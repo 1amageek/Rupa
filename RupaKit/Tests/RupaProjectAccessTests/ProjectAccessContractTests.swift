@@ -1,5 +1,6 @@
 import Foundation
 import RupaAgentProtocol
+import RupaCore
 import RupaCoreTypes
 import RupaProjectAccess
 import Testing
@@ -86,11 +87,22 @@ func projectAccessOutcomeUnknownRetainsRequestIdentity() {
 
 private actor RecordingProjectAccessSession: ProjectAccessSession {
     nonisolated let sessionID: UUID
+    nonisolated let initialAuthority: AgentProjectAuthorityCoordinate
     private var isFinished = false
     private var explicitSaveCount = 0
 
-    init(sessionID: UUID) {
+    init(
+        sessionID: UUID,
+        initialAuthority: AgentProjectAuthorityCoordinate = AgentProjectAuthorityCoordinate(
+            projectID: ProjectID(rawValue: "recording-project"),
+            documentGeneration: DocumentGeneration(),
+            transactionRevision: DocumentTransactionRevision(),
+            publicationSequence: 0,
+            workspaceRevision: WorkspaceRevision()
+        )
+    ) {
         self.sessionID = sessionID
+        self.initialAuthority = initialAuthority
     }
 
     func send(_ request: AgentRequest) async throws -> AgentResponse {
