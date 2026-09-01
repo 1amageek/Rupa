@@ -25,6 +25,39 @@ func registryPublishesTheExactVersionOneCADDescriptorSchemas() {
 }
 
 @Test(.timeLimit(.minutes(1)))
+func registryRejectsDuplicateMissingAndUnexpectedCADComposition() throws {
+  let registrations = RupaCADDomain.registrations()
+  let duplicate = registrations + [try #require(registrations.first)]
+
+  #expect(throws: SemanticOperationRegistryError.self) {
+    try SemanticOperationRegistry(registrations: duplicate)
+  }
+
+  let missing = try SemanticOperationRegistry(registrations: Array(registrations.dropLast()))
+  #expect(throws: SemanticOperationRegistryError.self) {
+    try missing.validateOperations(
+      RupaCADSemanticOperationID.all,
+      version: RupaCADDomain.operationVersion
+    )
+  }
+
+  let complete = try SemanticOperationRegistry(registrations: registrations)
+  #expect(throws: SemanticOperationRegistryError.self) {
+    try complete.validateOperations(
+      Array(RupaCADSemanticOperationID.all.dropLast()),
+      version: RupaCADDomain.operationVersion
+    )
+  }
+
+  #expect(throws: SemanticOperationRegistryError.self) {
+    try complete.validateOperations(
+      RupaCADSemanticOperationID.all,
+      version: SemanticOperationVersion(major: 2, minor: 0, patch: 0)
+    )
+  }
+}
+
+@Test(.timeLimit(.minutes(1)))
 func everyCADOperationCompilesIdenticallyAsDirectAndOneNodeProgram() throws {
   let compiler = DefaultSemanticProgramCompiler(registry: try RupaCADDomain.registry())
 

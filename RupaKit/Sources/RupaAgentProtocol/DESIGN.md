@@ -18,6 +18,9 @@ previews.
 
 Protocol values describe intent and receipts only. Persistent identifiers,
 transaction validation, evaluation, and lowering remain App-owned.
+Capability discovery carries a typed, versioned projection of each registered
+semantic operation: inputs, outputs, selectors, route, effect, and supported
+direct/program invocation forms. Protocol does not invent that vocabulary.
 
 ## Related Designs
 
@@ -39,6 +42,8 @@ flowchart LR
     Handled --> Response["AgentResponseEnvelope"]
     Response --> Caller
     Runtime --> Project["ProjectWorkspace → ProjectController"]
+    Runtime --> Discovery["typed semantic descriptors"]
+    Discovery --> Caller
 ```
 
 ## Contracts and Invariants
@@ -98,7 +103,11 @@ flowchart LR
     correlation ID and method are never reconstructed. It returns either an
     ordinary response or a semantic response paired with one Protocol-created
     reservation. Semantic methods may use only the planned form; no
-    compatibility overload accepts params without the envelope.
+   compatibility overload accepts params without the envelope.
+12. A semantic capability descriptor is a lossless wire projection of one
+    registered operation descriptor. Its typed schema and invocation forms are
+    present only for registry-backed operations; an Agent-side string schema or
+    copied CAD operation list is invalid.
 
 ## Runtime Flows
 

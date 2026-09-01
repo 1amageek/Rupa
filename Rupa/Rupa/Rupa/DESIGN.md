@@ -34,6 +34,9 @@ flowchart LR
     Launch["Application launch / URL activation"] --> Lifecycle["ApplicationLifecycleDelegate"]
     Lifecycle --> Root["ApplicationRoot composition"]
     Root --> Authority["Process authority"]
+    Root --> Registry["one CAD semantic registry"]
+    Registry --> Compiler["compiler"]
+    Registry --> Capabilities["typed discovery"]
     Root --> Host["Loopback HTTP host"]
     Root --> Coordinator["ApplicationProjectCoordinator"]
     Lifecycle -->|buffered open URLs, then launch| Coordinator
@@ -75,7 +78,9 @@ flowchart LR
 9. Application composition creates `RupaCADDomain.registry()` and one
    `DefaultSemanticProgramCompiler` before starting Agent authority, injects it
    into `ProjectAgentCommandController`, and fails App Agent startup if that
-   composition fails. It never substitutes an empty semantic registry.
+   composition fails. Discovery is projected from the compiler's exact registry
+   and must contain the complete twelve-operation CAD set; it never substitutes
+   an empty or independently composed semantic registry.
 10. Cold file activation loads and registers the requested project before
     discovery publication. The first externally observable session therefore
     carries the loaded canonical path and its exact publication sequence; an

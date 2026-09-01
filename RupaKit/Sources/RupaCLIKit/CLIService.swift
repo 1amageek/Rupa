@@ -29,8 +29,13 @@ public struct CLIService {
     public init() {}
 
     @MainActor
+    public func capabilityDescriptors() async throws -> [AgentCapabilityDescriptor] {
+        try await CLIProjectAccessRunner.capabilities()
+    }
+
+    @MainActor
     public func capabilities() async throws -> [String] {
-        try await CLIProjectAccessRunner.capabilities().map(\.name)
+        try await capabilityDescriptors().map(\.name)
     }
 
     @MainActor

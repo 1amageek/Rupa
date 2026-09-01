@@ -154,6 +154,7 @@ public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
     public let semanticResult: CapabilityResultDescriptor?
     public let semanticRetrySafe: Bool?
     public let semanticSupportsCancellation: Bool?
+    public let semanticOperation: AgentSemanticOperationDescriptor?
 
     public init(
         name: String,
@@ -174,7 +175,8 @@ public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
         semanticEffect: CapabilityEffect? = nil,
         semanticResult: CapabilityResultDescriptor? = nil,
         semanticRetrySafe: Bool? = nil,
-        semanticSupportsCancellation: Bool? = nil
+        semanticSupportsCancellation: Bool? = nil,
+        semanticOperation: AgentSemanticOperationDescriptor? = nil
     ) {
         self.name = name
         self.category = category
@@ -195,5 +197,6 @@ public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
         self.semanticResult = semanticResult
         self.semanticRetrySafe = semanticRetrySafe
         self.semanticSupportsCancellation = semanticSupportsCancellation
+        self.semanticOperation = semanticOperation
     }
 }

@@ -249,7 +249,8 @@ func capabilitiesCommandUsesOneObserverCallAndNeverOpensAProject() async throws 
             stubCapability(name: "document.export"),
         ]
     }
-    let command = try Capabilities.parse([])
+    let command = try Capabilities.parse(["--json"])
+    #expect(command.json)
 
     try await withStubProjectAccess(opener: opener, observer: observer) {
         try await command.run()
@@ -273,15 +274,31 @@ func capabilitiesPreserveObserverOrderAndTheCommandsSingleDeadline() async throw
     )
     await MainActor.run {
         observer.capabilitiesResult = [
-            stubCapability(name: "z.last"),
+            stubCapability(
+                name: "z.last",
+                semanticOperation: AgentSemanticOperationDescriptor(
+                    version: .init(major: 1, minor: 2, patch: 3),
+                    inputs: [
+                        .init(id: "length", type: .number(unit: .meter), isRequired: true),
+                    ],
+                    outputs: [
+                        .init(id: "node", type: .sceneNode, selector: .sceneNode(index: 0)),
+                    ],
+                    route: .source,
+                    effect: .sourceMutation,
+                    invocationForms: [.direct, .program]
+                )
+            ),
             stubCapability(name: "a.first"),
         ]
     }
 
     try await withStubProjectAccess(opener: opener, observer: observer) {
         try await CLIProjectAccessRunner.withCommandScope {
-            let capabilities = try await CLIService().capabilities()
-            #expect(capabilities == ["z.last", "a.first"])
+            let descriptors = try await CLIService().capabilityDescriptors()
+            #expect(descriptors.map(\.name) == ["z.last", "a.first"])
+            let data = try CLIOutput.jsonData(descriptors)
+            #expect(try JSONDecoder().decode([AgentCapabilityDescriptor].self, from: data) == descriptors)
             _ = try await CLIService().agentStatus()
         }
     }
@@ -317,7 +334,10 @@ func capabilitiesObserverFailureIsTypedAndHasNoProjectFallback() async {
     #expect(await session.recordedRequests().isEmpty)
 }
 
-private func stubCapability(name: String) -> AgentCapabilityDescriptor {
+private func stubCapability(
+    name: String,
+    semanticOperation: AgentSemanticOperationDescriptor? = nil
+) -> AgentCapabilityDescriptor {
     AgentCapabilityDescriptor(
         name: name,
         category: .read,
@@ -326,6 +346,7 @@ private func stubCapability(name: String) -> AgentCapabilityDescriptor {
         stateEffect: .readOnly,
         requiresSession: false,
         requiresExpectedSourceGeneration: false,
-        failureMode: "Returns a typed project access failure."
+        failureMode: "Returns a typed project access failure.",
+        semanticOperation: semanticOperation
     )
 }

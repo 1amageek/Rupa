@@ -60,11 +60,16 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
     }
 
     public func capabilityDescriptors() -> [AgentCapabilityDescriptor] {
-        AgentCapabilityCatalog.descriptors(domainRegistry: domainRegistry)
+        AgentCapabilityCatalog.descriptors(
+            domainRegistry: domainRegistry,
+            semanticOperationRegistry: semanticProgramCompiler.semanticOperationRegistry
+        )
     }
 
     public func capabilityRegistry() throws -> CapabilityRegistry {
-        try AgentCapabilityCatalog.capabilityRegistry(domainRegistry: domainRegistry)
+        try AgentCapabilityCatalog.capabilityRegistry(
+            domainRegistry: domainRegistry
+        )
     }
 
     @discardableResult

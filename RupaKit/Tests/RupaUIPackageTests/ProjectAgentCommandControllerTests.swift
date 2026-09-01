@@ -2,6 +2,7 @@ import Foundation
 import RupaAgentProtocol
 import RupaAgentRuntime
 import RupaAutomation
+import RupaCADDomain
 import RupaCore
 import RupaDomainFoundation
 import RupaEvaluation
@@ -11,6 +12,47 @@ import RupaProject
 import RupaProjectModel
 import Synchronization
 import Testing
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func projectAgentDiscoveryProjectsItsCompilerRegistryExactly() throws {
+    let compiler = DefaultSemanticProgramCompiler(
+        registry: try RupaCADDomain.registry()
+    )
+    let controller = ProjectAgentCommandController(
+        semanticProgramCompiler: compiler
+    )
+    let discovered = controller.capabilityDescriptors().filter {
+        $0.name.hasPrefix("cad.")
+    }
+    let registered = compiler.semanticOperationRegistry.sortedDescriptors()
+
+    #expect(discovered.map(\.name) == registered.map(\.operationID.rawValue))
+    for (capability, descriptor) in zip(discovered, registered) {
+        let operation = try #require(capability.semanticOperation)
+        #expect(capability.access == .agentRequest)
+        #expect(operation.version == descriptor.version)
+        #expect(operation.inputs.map(\.id) == descriptor.inputs.map(\.id.rawValue))
+        #expect(operation.inputs.map(\.type) == descriptor.inputs.map(\.type))
+        #expect(operation.outputs.map(\.id) == descriptor.outputs.map(\.id.rawValue))
+        #expect(operation.outputs.map(\.type) == descriptor.outputs.map(\.type))
+        #expect(operation.outputs.map(\.selector) == descriptor.outputs.map(\.selector))
+        #expect(operation.route == descriptor.route)
+        #expect(operation.effect == descriptor.effect)
+        #expect(operation.invocationForms == [.direct, .program])
+    }
+
+    let codec = AgentMessageCodec()
+    let encoded = try codec.encode(AgentResponse.capabilities(discovered))
+    #expect(try codec.decodeResponse(from: encoded) == .capabilities(discovered))
+
+    let legacyRegistry = try controller.capabilityRegistry()
+    #expect(
+        legacyRegistry.sortedDescriptors().allSatisfy {
+            !$0.id.rawValue.hasPrefix("agent.cad.")
+        }
+    )
+}
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))

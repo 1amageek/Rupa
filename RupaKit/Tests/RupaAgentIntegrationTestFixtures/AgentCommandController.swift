@@ -38,12 +38,25 @@ public final class AgentCommandController: AgentClientProtocol {
         handle(request)
     }
 
+    private static let emptySemanticOperationRegistry: SemanticOperationRegistry = {
+        do {
+            return try SemanticOperationRegistry(registrations: [])
+        } catch {
+            preconditionFailure("An empty test semantic registry must be valid: \(error)")
+        }
+    }()
+
     public func capabilityDescriptors() -> [AgentCapabilityDescriptor] {
-        AgentCapabilityCatalog.descriptors(domainRegistry: domainRegistry)
+        AgentCapabilityCatalog.descriptors(
+            domainRegistry: domainRegistry,
+            semanticOperationRegistry: Self.emptySemanticOperationRegistry
+        )
     }
 
     public func capabilityRegistry() throws -> CapabilityRegistry {
-        try AgentCapabilityCatalog.capabilityRegistry(domainRegistry: domainRegistry)
+        try AgentCapabilityCatalog.capabilityRegistry(
+            domainRegistry: domainRegistry
+        )
     }
 
     @discardableResult

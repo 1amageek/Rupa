@@ -1,4 +1,4 @@
-public enum SemanticOperationRoute: String, Sendable, Equatable, Hashable {
+public enum SemanticOperationRoute: String, Codable, Sendable, Equatable, Hashable {
     case source
     case query
     case workspace

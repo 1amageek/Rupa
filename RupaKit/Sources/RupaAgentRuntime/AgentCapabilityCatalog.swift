@@ -2362,16 +2362,21 @@ public enum AgentCapabilityCatalog {
     ]
 
     public static func descriptors(
-        domainRegistry: DomainRegistry
+        domainRegistry: DomainRegistry,
+        semanticOperationRegistry: SemanticOperationRegistry
     ) -> [AgentCapabilityDescriptor] {
-        descriptors + domainRegistry.sortedCapabilityDescriptors().map(domainCapability)
+        descriptors
+            + semanticOperationRegistry.sortedDescriptors().map(semanticOperation)
+            + domainRegistry.sortedCapabilityDescriptors().map(domainCapability)
     }
 
     public static func capabilityRegistry(
         domainRegistry: DomainRegistry
     ) throws -> CapabilityRegistry {
         try CapabilityRegistry(
-            descriptors: descriptors(domainRegistry: domainRegistry).map {
+            descriptors: (
+                descriptors + domainRegistry.sortedCapabilityDescriptors().map(domainCapability)
+            ).map {
                 try $0.capabilityDescriptor()
             }
         )
@@ -2463,6 +2468,85 @@ public enum AgentCapabilityCatalog {
                 resultFidelity: descriptor.resultFidelity
             )
         )
+    }
+
+    private static func semanticOperation(
+        _ descriptor: SemanticOperationDescriptor
+    ) -> AgentCapabilityDescriptor {
+        let operation = AgentSemanticOperationDescriptor(
+            version: descriptor.version,
+            inputs: descriptor.inputs.map {
+                AgentSemanticOperationDescriptor.Input(
+                    id: $0.id.rawValue,
+                    type: $0.type,
+                    isRequired: $0.isRequired
+                )
+            },
+            outputs: descriptor.outputs.map {
+                AgentSemanticOperationDescriptor.Output(
+                    id: $0.id.rawValue,
+                    type: $0.type,
+                    selector: $0.selector
+                )
+            },
+            route: descriptor.route,
+            effect: descriptor.effect,
+            invocationForms: [.direct, .program]
+        )
+        return AgentCapabilityDescriptor(
+            name: descriptor.operationID.rawValue,
+            category: .domain,
+            summary: "Registered semantic operation.",
+            access: .agentRequest,
+            stateEffect: stateEffect(for: descriptor.effect),
+            requiresSession: true,
+            requiresExpectedSourceGeneration: true,
+            requiresExpectedWorkspaceRevision: false,
+            supportsDryRun: true,
+            failureMode: "Uses the registered semantic operation descriptor and lowerer; rejects invalid values, stale coordinates, cancellation, and failed source publication without fallback.",
+            semanticEffect: capabilityEffect(for: descriptor.effect),
+            semanticResult: CapabilityResultDescriptor(
+                kind: resultKind(for: descriptor.effect)
+            ),
+            semanticRetrySafe: descriptor.effect == .query,
+            semanticSupportsCancellation: true,
+            semanticOperation: operation
+        )
+    }
+
+    private static func stateEffect(
+        for semanticEffect: SemanticOperationEffect
+    ) -> AutomationCommandEffect {
+        switch semanticEffect {
+        case .query, .export, .lifecycle, .externalJob: .readOnly
+        case .sourceMutation, .meshMutation: .sourceMutation
+        case .workspaceMutation: .workspaceMutation
+        }
+    }
+
+    private static func capabilityEffect(
+        for semanticEffect: SemanticOperationEffect
+    ) -> CapabilityEffect {
+        switch semanticEffect {
+        case .query: .query
+        case .sourceMutation, .meshMutation: .sourceMutation
+        case .workspaceMutation: .workspaceMutation
+        case .export: .export
+        case .lifecycle: .decisionRecording
+        case .externalJob: .externalJob
+        }
+    }
+
+    private static func resultKind(
+        for semanticEffect: SemanticOperationEffect
+    ) -> CapabilityResultKind {
+        switch semanticEffect {
+        case .query: .semanticPayload
+        case .sourceMutation, .meshMutation: .sourceTransaction
+        case .workspaceMutation, .lifecycle: .workspaceTransaction
+        case .export: .exportArtifact
+        case .externalJob: .externalJob
+        }
     }
 
     private static func stateEffect(

@@ -1,4 +1,4 @@
-public enum SemanticOperationEffect: String, Sendable, Equatable, Hashable {
+public enum SemanticOperationEffect: String, Codable, Sendable, Equatable, Hashable {
     case sourceMutation
     case workspaceMutation
     case query

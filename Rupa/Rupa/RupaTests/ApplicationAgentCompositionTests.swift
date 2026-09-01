@@ -41,6 +41,39 @@ func applicationDomainRegistryCompilerResolvesExactlyTwelveCADOperations() throw
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
+func applicationCapabilityDiscoveryProjectsTheCompilerRegistryExactly() throws {
+    let compiler = try ApplicationDomainRegistry.makeCADSemanticCompiler()
+    let controller = ProjectAgentCommandController(
+        semanticProgramCompiler: compiler
+    )
+    let discovered = controller.capabilityDescriptors().filter {
+        $0.name.hasPrefix("cad.")
+    }
+    let registered = compiler.semanticOperationRegistry.sortedDescriptors()
+
+    #expect(discovered.map(\.name) == registered.map(\.operationID.rawValue))
+    #expect(discovered.count == 12)
+    for (capability, descriptor) in zip(discovered, registered) {
+        let operation = try #require(capability.semanticOperation)
+        #expect(capability.access == .agentRequest)
+        #expect(operation.version == descriptor.version)
+        #expect(operation.inputs.map(\.id) == descriptor.inputs.map(\.id.rawValue))
+        #expect(operation.inputs.map(\.type) == descriptor.inputs.map(\.type))
+        #expect(operation.outputs.map(\.id) == descriptor.outputs.map(\.id.rawValue))
+        #expect(operation.outputs.map(\.type) == descriptor.outputs.map(\.type))
+        #expect(operation.outputs.map(\.selector) == descriptor.outputs.map(\.selector))
+        #expect(operation.route == descriptor.route)
+        #expect(operation.effect == descriptor.effect)
+        #expect(operation.invocationForms == [.direct, .program])
+    }
+
+    let codec = AgentMessageCodec()
+    let encoded = try codec.encode(AgentResponse.capabilities(discovered))
+    #expect(try codec.decodeResponse(from: encoded) == .capabilities(discovered))
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
 func applicationAgentRouterPreservesEnvelopeCorrelationForItsInjectedProjectHandler() async {
     let projectHandler = ApplicationAgentEnvelopeHandlerProbe(
         response: .ordinary(.status(AgentStatus(running: true, sessionCount: 1)))

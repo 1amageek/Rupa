@@ -58,6 +58,7 @@ files, own HTTP I/O or endpoint state, or define CAD commands.
 flowchart LR
     Direct["capability.invoke"] --> Request["Decoded Agent request"]
     Program["program.execute"] --> Request
+    CompilerRegistry["compiler registry"] --> Discovery["capability projection"]
     Request --> Lease["Registry operation lease"]
     Lease --> View["Current complete ProjectViewSnapshot"]
     View --> Guard["generation + handle coordinate validation"]
@@ -81,7 +82,10 @@ flowchart LR
    version, or maintain a parallel switch or recipe library. The Foundation
    compiler alone validates both explicit semantic schema versions, normalizes
    direct invocation/requested output IDs to a one-node program/output mapping,
-   and rejects local references in that form.
+   and rejects local references in that form. `agent.capabilities` is the sole
+   semantic-operation discovery surface and projects that compiler registry
+   losslessly; the legacy universal registry does not duplicate semantic
+   operations in a lossy schema.
 3. A CAD program is fully decoded, structurally and semantically bounded,
    dependency-checked, deterministically ordered, and lowered before any source
    mutation. Every resolved node must have source route and the aggregate
@@ -154,6 +158,10 @@ flowchart LR
     component instance, and pattern-array source references. Evaluated
     `BodyID`, Mesh identity, or a second snapshot is never admitted as compiler
     source context.
+18. Capability discovery reads the exact immutable registry exposed by the
+    injected compiler and deterministically projects every registered semantic
+    descriptor. Runtime accepts no second, optional, empty, or copied semantic
+    registry, so compilation/discovery divergence is not representable.
 
 ## Runtime Flows
 

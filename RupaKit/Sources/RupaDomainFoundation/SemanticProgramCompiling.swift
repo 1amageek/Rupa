@@ -1,4 +1,11 @@
 public protocol SemanticProgramCompiling: Sendable {
+    /// The exact immutable registry snapshot used by this compiler.
+    ///
+    /// Product discovery projects this registry instead of maintaining a
+    /// copied operation list. Every implementation must supply this registry;
+    /// there is no empty discovery fallback.
+    var semanticOperationRegistry: SemanticOperationRegistry { get }
+
     func compile(
         _ request: SemanticDirectRequest,
         context: SemanticCompilationContext,

@@ -53,7 +53,9 @@ flowchart LR
    mode, or direct package mutation. It sends one API request through one
    access session under one monotonic deadline.
 3. Status, sessions, and capabilities are observations of the running App.
-   They do not start an App or create project state.
+   They do not start an App or create project state. Capability JSON preserves
+   the App-composed typed semantic operation descriptors without a product-side
+   vocabulary copy.
 4. Mutation and evaluation run in the App-owned workspace/controller. Save is
    explicit, and response-loss after dispatch is outcome-unknown with no
    retry.

@@ -44,6 +44,7 @@ flowchart LR
     Direct["capability.invoke"] --> Compiler["RupaDomainFoundation compiler"]
     Program["program.execute"] --> Compiler
     Registry["RupaCADDomain registry\none vocabulary"] --> Compiler
+    Registry --> Discovery["typed Agent discovery projection"]
     Compiler --> Lowerer["matching CAD lowerer"]
     Lowerer --> Prepared["one CADAPI-A prepared step"]
     Prepared --> Core["high-level RupaCore command"]
@@ -142,6 +143,9 @@ fixed benchmark without adding a third public form.
    accepted typed input and registry version, and available only when their
    required Core command exists. Registration never reports placeholder,
    benchmark-derived, or partial availability.
+9. Product composition validates exact set equality with the twelve IDs in the
+   version-1 table. Duplicate, missing, unexpected, or independently projected
+   registrations fail before Agent discovery is exposed.
 
 ## Runtime Flows
 

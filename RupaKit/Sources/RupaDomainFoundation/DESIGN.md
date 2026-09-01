@@ -55,6 +55,7 @@ flowchart LR
     Program["program.execute\nbounded DAG"] --> Validate
     Normalize --> Validate["schema + reference + DAG validation"]
     Registry["one SemanticOperationRegistry"] --> Validate
+    Registry --> Discovery["deterministic descriptor projection"]
     Limits["injected SemanticProgramLimitPolicy"] --> Validate
     Validate --> Preflight["resolve route/effect + expanded-work preflight"]
     Preflight --> Compile["same descriptor + lowerer per node"]
@@ -152,16 +153,20 @@ to the internal one-node output references used by `CompiledSemanticProgram`.
    registry, descriptor version, argument schema, lowerer, validation, limits,
    and result declaration. A second program-only CAD operation vocabulary is
    invalid.
-2. Direct invocation is a one-operation ergonomic form. Its request explicitly
+2. The compiler exposes the exact immutable registry it compiles against.
+   Product discovery projects deterministic descriptors from that registry;
+   an optional, empty, copied, or independently composed discovery registry is
+   invalid.
+3. Direct invocation is a one-operation ergonomic form. Its request explicitly
    carries semantic schema version, invocation, and requested descriptor output
    IDs. It is normalized internally to one program node and never requires the
    caller to construct a program, request-local symbol, persistent UUID, or
    presentation object.
-3. A program is a finite declarative DAG. Node array order is not dependency
+4. A program is a finite declarative DAG. Node array order is not dependency
    authority; typed local references define edges and the compiler emits one
    deterministic topological order. Duplicate symbols, missing outputs, type
    mismatches, self-reference, and cycles fail before lowering.
-4. Arguments may be typed literals, shared parameters, references to existing
+5. Arguments may be typed literals, shared parameters, references to existing
    authoritative source objects, references to declared local outputs, or
    bounded pure scalar expressions. Arrays and duplicate-safe ordered objects
    may recursively contain those argument forms. Every nested source reference
@@ -169,25 +174,25 @@ to the internal one-node output references used by `CompiledSemanticProgram`.
    reconstruct private slot identifiers. Arbitrary Swift/Python, callbacks,
    I/O, recursion, conditionals, and user-defined loops are not part of the
    model.
-5. Repetition uses registered native finite-pattern operations. Request and
+6. Repetition uses registered native finite-pattern operations. Request and
    compiled-node size remain proportional to distinct modeling intent, not the
    number of expanded occurrences, generated topology, presentation records,
    or persistent identifiers.
-6. Every accepted node must resolve to route `.source` and aggregate effect
+7. Every accepted node must resolve to route `.source` and aggregate effect
    `.sourceMutation`. Descriptor labels alone are insufficient: the fully
    resolved plan is checked. Read, workspace, export, artifact, lifecycle,
    external-job, and Mesh-edit effects cannot be mixed into a CAD source
    program.
-7. The compiler validates the complete graph before any staged source command
+8. The compiler validates the complete graph before any staged source command
    executes. It then asks each registered lowerer once for its pure,
    argument-dependent generated-source work estimate and rejects the aggregate
    limit before calling any lowerer. The estimate must be at least the
    descriptor's declared minimum, and the emitted prepared step must report the
    same exact value. It does not materialize a raw public feature graph.
-8. Clients own intent, argument values, existing references, and request-local
+9. Clients own intent, argument values, existing references, and request-local
    symbols. Rupa owns persistent ID allocation, dependency order, presentation
    structure/defaults, semantic validation, and lowering.
-9. A compiled program maps every requested `node.output` to one declared typed
+10. A compiled program maps every requested `node.output` to one declared typed
    prepared slot and retains that mapping in the immutable compiler result.
    Direct requested output IDs are first validated against the resolved
    descriptor, then normalized to that same mapping. Unrequested generated

@@ -39,6 +39,8 @@ flowchart LR
     Session --> App["Rupa App ProjectController"]
     App --> Result["Typed receipt"]
     Result --> Output["Bounded JSON / text"]
+    App --> Discovery["typed semantic capability descriptors"]
+    Discovery --> Output
 ```
 
 ## Contracts and Invariants
@@ -50,7 +52,9 @@ flowchart LR
 2. Mutation and evaluation are sent to the App. Save is a separate explicit
    API operation; no command edits package bytes directly.
 3. Status, sessions, and capabilities observe the App without starting a
-   project or creating state.
+   project or creating state. `capabilities --json` preserves the App's typed
+   semantic operation version, input/output schema, route/effect, and
+   invocation forms without a CLI-owned CAD table.
 4. Direct and composite CAD forms use the same descriptors, schemas, limits,
    and lowerers. A program is sent once and is never expanded into multiple
    external requests.

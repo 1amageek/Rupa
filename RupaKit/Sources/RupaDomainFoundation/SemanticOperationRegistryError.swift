@@ -11,4 +11,6 @@ public enum SemanticOperationRegistryError: Error, Equatable, Sendable {
     case lowererIdentityMismatch
     case lowererResultEstimateMismatch
     case duplicateOperation(DomainCapabilityID, SemanticOperationVersion)
+    case missingOperation(DomainCapabilityID, SemanticOperationVersion)
+    case unexpectedOperation(DomainCapabilityID, SemanticOperationVersion)
 }

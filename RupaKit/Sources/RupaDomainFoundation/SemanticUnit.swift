@@ -1,4 +1,4 @@
-public enum SemanticUnit: String, Sendable, Equatable, Hashable {
+public enum SemanticUnit: String, Codable, Sendable, Equatable, Hashable {
     case unitless
     case meter
     case degree

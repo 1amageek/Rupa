@@ -38,6 +38,53 @@ public struct SemanticOperationRegistry: Sendable {
 
     public var count: Int { registrations.count }
 
+    /// Returns the immutable operation vocabulary in a stable wire order.
+    ///
+    /// Discovery and compilation must read this same registry snapshot. The
+    /// registry remains the owner of descriptor validity; callers only receive
+    /// value-type views and cannot register a second operation list.
+    public func sortedDescriptors() -> [SemanticOperationDescriptor] {
+        registrations.values.sorted { lhs, rhs in
+            let leftID = lhs.descriptor.operationID.rawValue
+            let rightID = rhs.descriptor.operationID.rawValue
+            if leftID != rightID {
+                return leftID < rightID
+            }
+            return lhs.descriptor.version < rhs.descriptor.version
+        }.map(\.descriptor)
+    }
+
+    /// Verifies a product's required operation set without accepting a
+    /// partial registry or an unplanned extra operation.
+    public func validateOperations(
+        _ expectedOperationIDs: [DomainCapabilityID],
+        version: SemanticOperationVersion
+    ) throws {
+        let expected = Set(expectedOperationIDs.map {
+            Key(operationID: $0, version: version)
+        })
+        let actual = Set(registrations.keys)
+        if let missing = expected.subtracting(actual).sorted(by: Self.keyOrder).first {
+            throw SemanticOperationRegistryError.missingOperation(
+                missing.operationID,
+                missing.version
+            )
+        }
+        if let unexpected = actual.subtracting(expected).sorted(by: Self.keyOrder).first {
+            throw SemanticOperationRegistryError.unexpectedOperation(
+                unexpected.operationID,
+                unexpected.version
+            )
+        }
+    }
+
+    private static func keyOrder(_ lhs: Key, _ rhs: Key) -> Bool {
+        if lhs.operationID != rhs.operationID {
+            return lhs.operationID.rawValue < rhs.operationID.rawValue
+        }
+        return lhs.version < rhs.version
+    }
+
     private static func validate(_ registration: SemanticOperationRegistration) throws {
         let descriptor = registration.descriptor
         guard !descriptor.operationID.rawValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {

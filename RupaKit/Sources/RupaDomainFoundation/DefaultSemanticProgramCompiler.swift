@@ -4,6 +4,8 @@ import RupaAutomation
 public struct DefaultSemanticProgramCompiler: SemanticProgramCompiling, Sendable {
     private let registry: SemanticOperationRegistry
 
+    public var semanticOperationRegistry: SemanticOperationRegistry { registry }
+
     public init(registry: SemanticOperationRegistry) {
         self.registry = registry
     }

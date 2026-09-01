@@ -46,12 +46,15 @@ public struct Capabilities: AsyncParsableCommand {
         abstract: "Print supported command capabilities."
     )
 
+    @Flag(name: .long, help: "Print typed capability descriptors as JSON.")
+    public var json = false
+
     public init() {}
 
     public func run() async throws {
         try await CLIExitCode.run {
-            let capabilities = try await CLIService().capabilities()
-            print(capabilities.joined(separator: "\n"))
+            let capabilities = try await CLIService().capabilityDescriptors()
+            try CLIOutput.write(capabilities: capabilities, asJSON: json)
         }
     }
 }
@@ -2021,6 +2024,17 @@ public struct ValidateDocument: AsyncParsableCommand {
 }
 
 public enum CLIOutput {
+    public static func write(
+        capabilities: [AgentCapabilityDescriptor],
+        asJSON: Bool
+    ) throws {
+        try write(
+            capabilities,
+            fallback: capabilities.map(\.name).joined(separator: "\n"),
+            asJSON: asJSON
+        )
+    }
+
     public static func write(response: CLIResponse, asJSON: Bool) throws {
         try write(
             response,
@@ -2198,13 +2212,16 @@ public enum CLIOutput {
         asJSON: Bool
     ) throws {
         if asJSON {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let data = try encoder.encode(response)
-            FileHandle.standardOutput.write(data)
+            FileHandle.standardOutput.write(try jsonData(response))
             print()
         } else {
             print(fallback)
         }
+    }
+
+    static func jsonData<Response: Encodable>(_ response: Response) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(response)
     }
 }

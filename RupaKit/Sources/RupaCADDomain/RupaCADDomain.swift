@@ -25,6 +25,11 @@ public enum RupaCADDomain {
   }
 
   public static func registry() throws -> SemanticOperationRegistry {
-    try SemanticOperationRegistry(registrations: registrations())
+    let registry = try SemanticOperationRegistry(registrations: registrations())
+    try registry.validateOperations(
+      RupaCADSemanticOperationID.all,
+      version: operationVersion
+    )
+    return registry
   }
 }
