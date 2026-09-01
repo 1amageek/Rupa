@@ -7,6 +7,99 @@ struct ExpandedBodyOperationMeasurementTests {
     private let boxVolume = 0.040 * 0.020 * 0.010
 
     @Test(.timeLimit(.minutes(1)))
+    func measuresEveryPrimitiveDefinitionFromItsEvaluatedBodyOutput() throws {
+        let primitives: [(name: String, definition: PrimitiveDefinition, volume: Double)] = [
+            (
+                name: "Box",
+                definition: .box(BoxPrimitive(
+                    width: .constant(.length(2.0, unit: .millimeter)),
+                    depth: .constant(.length(3.0, unit: .millimeter)),
+                    height: .constant(.length(4.0, unit: .millimeter))
+                )),
+                volume: 24.0e-9
+            ),
+            (
+                name: "Cylinder",
+                definition: .cylinder(CylinderPrimitive(
+                    radius: .constant(.length(1.25, unit: .millimeter)),
+                    height: .constant(.length(3.0, unit: .millimeter))
+                )),
+                volume: Double.pi * 0.00125 * 0.00125 * 0.003
+            ),
+            (
+                name: "Cone",
+                definition: .cone(ConePrimitive(
+                    baseRadius: .constant(.length(1.5, unit: .millimeter)),
+                    height: .constant(.length(3.0, unit: .millimeter))
+                )),
+                volume: Double.pi * 0.0015 * 0.0015 * 0.003 / 3.0
+            ),
+            (
+                name: "Sphere",
+                definition: .sphere(SpherePrimitive(
+                    radius: .constant(.length(2.0, unit: .millimeter))
+                )),
+                volume: 4.0 * Double.pi * 0.002 * 0.002 * 0.002 / 3.0
+            ),
+            (
+                name: "Torus",
+                definition: .torus(TorusPrimitive(
+                    majorRadius: .constant(.length(4.0, unit: .meter)),
+                    minorRadius: .constant(.length(1.0, unit: .meter))
+                )),
+                volume: 8.0 * Double.pi * Double.pi
+            ),
+        ]
+
+        for primitive in primitives {
+            var cadDocument = CADDocument(units: .meters)
+            let featureID = FeatureID()
+            let node = try FeatureNodeFactory.make(
+                operation: .primitive(PrimitiveFeature(definition: primitive.definition)),
+                id: featureID,
+                name: primitive.name,
+                in: cadDocument,
+                tolerance: .standard
+            )
+            cadDocument.designGraph.nodes[featureID] = node
+            cadDocument.designGraph.order = [featureID]
+            cadDocument.designGraph.revision = cadDocument.designGraph.revision.advanced()
+            // Keep the presentation mesh bounded; solid volume remains exact B-rep data.
+            let document = DesignDocument(
+                cadDocument: cadDocument,
+                modelingSettings: DocumentModelingSettings(
+                    tolerance: .standard,
+                    tessellationOptions: TessellationOptions(
+                        linearTolerance: 1.0e-3,
+                        angularTolerance: 0.25
+                    )
+                )
+            )
+
+            let result = try MeasurementService().measure(
+                document: document,
+                ruler: .standard(for: .millimeter)
+            )
+            let solid = try #require(
+                result.solids.first,
+                Comment(rawValue: "\(primitive.name): \(result.diagnostics)")
+            )
+            #expect(result.counts.solids == 1)
+            #expect(solid.featureID == featureID.description)
+            #expect(solid.sourceFeatureID == featureID.description)
+            #expect(solid.volumeMethod == .exactBRep)
+            #expect(solid.surfaceAreaMethod == .tessellatedMesh)
+            #expect(solid.boundsMethod == .tessellatedMesh)
+            #expect(
+                abs(solid.volume.value - primitive.volume) <= max(
+                    primitive.volume * 1.0e-10,
+                    1.0e-18
+                )
+            )
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func mirrorMeasuresTheReplacementBodyInsteadOfTheConsumedSource() throws {
         var builder = DocumentBuilder(units: .millimeters, tolerance: .standard)
         let sourceID = try appendBox(to: &builder, centerX: 0.0)

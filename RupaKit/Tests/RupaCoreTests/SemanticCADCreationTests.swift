@@ -42,11 +42,22 @@ struct SemanticCADCreationTests {
         }
       )
       let object = try #require(sceneNode.object)
-      let evaluated = try #require(session.currentEvaluationCache).evaluatedDocument
+      let evaluation = try #require(session.currentEvaluation)
+      let evaluated = evaluation.evaluatedDocument
       let measuredVolume = try evaluated.brep.volume(
         tolerance: session.document.modelingSettings.tolerance
       )
       let expectedVolume = 4.0 * Double.pi * radius * radius * radius / 3.0
+      let stableReferences = try evaluated.subshapes.entries.map {
+        try evaluated.stableSubshapeReference(for: $0.key)
+      }
+      let measurement = try MeasurementService().measure(
+        document: session.document,
+        ruler: .standard(for: .millimeter),
+        currentEvaluation: evaluation,
+        currentGeneration: session.generation
+      )
+      let measuredSolid = try #require(measurement.solids.first)
 
       #expect(sphere.placement.origin == center)
       #expect(sphere.placement.axis == .unitZ)
@@ -77,6 +88,14 @@ struct SemanticCADCreationTests {
       #expect(evaluated.brep.faces.count == 8)
       #expect(evaluated.brep.edges.count == 12)
       #expect(evaluated.brep.vertices.count == 6)
+      #expect(evaluated.subshapes.entries.count == 27)
+      #expect(stableReferences.count == 27)
+      #expect(measurement.counts.solids == 1)
+      #expect(measuredSolid.featureID == featureID.description)
+      #expect(measuredSolid.sourceFeatureID == featureID.description)
+      #expect(measuredSolid.volumeMethod == .exactBRep)
+      #expect(measuredSolid.surfaceAreaMethod == .tessellatedMesh)
+      #expect(measuredSolid.boundsMethod == .tessellatedMesh)
       #expect(
         evaluated.brep.faces.values.allSatisfy { face in
           guard let surface = evaluated.brep.geometry.surfaces[face.surfaceID],
@@ -87,7 +106,16 @@ struct SemanticCADCreationTests {
           return surfaceCenter == center && surfaceRadius == radius
         })
       #expect(
-        abs(measuredVolume - expectedVolume) <= max(1.0, expectedVolume) * 1.0e-10
+        abs(measuredVolume - expectedVolume) <= max(
+          expectedVolume * 1.0e-10,
+          1.0e-18
+        )
+      )
+      #expect(
+        abs(measurement.totals.solidVolumeCubicMeters - expectedVolume) <= max(
+          expectedVolume * 1.0e-10,
+          1.0e-18
+        )
       )
     }
   }

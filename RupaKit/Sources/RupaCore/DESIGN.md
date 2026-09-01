@@ -76,6 +76,7 @@ remain the integration point.
 | [package design](../../DESIGN.md) | parent package | Package authority direction | Places Core between Geometry and Project. | Do not publish from Core directly. |
 | [system design](../../../DESIGN.md) | system parent | Source identity, shared references, one-plan flow | Defines the cross-layer behavior. | Local document validation remains Core-owned. |
 | [RupaGeometry design](../RupaGeometry/DESIGN.md) | depends on | Plan/executor/receipt and buffer contract | Supplies immutable result and copy telemetry. | Core must not reimplement Geometry algorithms. |
+| [Swift-CAD package design](../../../swift-CAD/DESIGN.md) | depends on | Exact evaluated B-rep topology, stable subshape references, and derived Mesh | Supplies the immutable evaluation and exact solid geometry consumed by Core measurement. | Core must not repair signatures, substitute Mesh volume, or create a sphere-specific measurement path. |
 | [RupaCADDomain design](../RupaCADDomain/DESIGN.md) | used by | High-level source commands and server-owned identity results | CADDomain lowers universal semantic operations to Core commands. | CADDomain may not construct persistent IDs or raw source graphs. |
 | [CAD/Mesh responsibility](../../../Rupa/CAD_MESH_RESPONSIBILITY_CONTRACT.md) | depends on | Authored Mesh authority, CAD coexistence, provenance | Defines representation meaning and CAD/Mesh independence. | Do not alter CAD or selection when editing Mesh. |
 | [State and project contract](../../../Rupa/STATE_AND_PROJECT_CONTRACT.md) | coordinates with | Source history and transaction staging | Project owns publication and revision. | Core results are staged values until Project commits. |
@@ -222,6 +223,29 @@ single history entry remain owned by `withSourceCommandGroup`.
     and navigation identities; presentation consumers omit them without deleting
     CAD features, representations, or Authored Mesh assets.
 
+### Evaluated primitive measurement contract
+
+Every solid `PrimitiveDefinition` uses the same output-driven
+`measureEvaluatedBodySolids` path as other evaluated body operations. The
+resolved evaluated body is the exact B-rep volume authority; its evaluated Mesh
+is used only for presentation surface area and bounds. A primitive kind is not a
+reason to skip output measurement, and a missing evaluated body, Mesh, or exact
+volume remains a diagnostic rather than a fabricated success.
+
+```mermaid
+flowchart LR
+    Primitive["Primitive source feature"] --> Evaluation["One immutable evaluated document"]
+    Evaluation --> Body["Generated solid body output"]
+    Body --> Volume["Exact B-rep volume"]
+    Body --> Mesh["Derived Mesh surface area/bounds"]
+    Volume --> Result["MeasurementResult.Solid"]
+    Mesh --> Result
+```
+
+This contract preserves source feature identity, selection filtering, and
+supersession behavior. It does not add a second measurement model or infer
+solid geometry from source parameters.
+
 ### Executor substitution boundary
 
 The public `DefaultGeometrySourceCommandApplier` initializer selects
@@ -312,6 +336,7 @@ T09-B owns the following behavioral proof:
 | History | One command-history entry plus undo/redo behavior. |
 | Error handling | Typed failures do not publish a partial document. |
 | Product visibility | Root, hidden-parent, visible-sibling, and hidden-descendant cases prove one effective-visibility result without source deletion. |
+| Evaluated primitives | Box, cylinder, cone, sphere, and torus all produce evaluated-body solids with exact B-rep volume and Mesh-only area/bounds through one cached evaluation path; unavailable outputs remain diagnostics. |
 
 CADAPI-C must additionally prove:
 

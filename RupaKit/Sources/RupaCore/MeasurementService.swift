@@ -950,6 +950,13 @@ public struct MeasurementService {
                     sourceFeatureID: unjoin.target.featureID,
                     operationName: "Unjoin Body"
                 )
+            case .primitive:
+                try measureEvaluatedBodyOperationCase(
+                    node: node,
+                    featureID: featureID,
+                    sourceFeatureID: featureID,
+                    operationName: "Primitive"
+                )
             case .bridgeCurve:
                 continue
             case .curveEdit:
@@ -958,8 +965,7 @@ public struct MeasurementService {
                 continue
             case .curveTrim:
                 continue
-            case .primitive,
-                 .patchSurface,
+            case .patchSurface,
                  .faceOffset,
                  .faceMove,
                  .edgeMove,
