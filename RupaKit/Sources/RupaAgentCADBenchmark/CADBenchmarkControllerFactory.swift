@@ -25,16 +25,27 @@ enum CADBenchmarkControllerFactory {
         AgentRequestEnvelope(id: id, params: request)
     }
 
-    static func ordinaryResponse(
-        from handled: AgentHandledResponse
+    static func semanticResponse(
+        from handled: AgentHandledResponse,
+        for envelope: AgentRequestEnvelope
     ) throws -> AgentResponse {
-        guard case let .ordinary(response) = handled else {
-            throw CADBenchmarkControllerError.unexpectedPlannedResponse
+        guard case let .planned(response, reservation) = handled else {
+            throw AgentResponseEncodingError.invalidPlan(
+                "A semantic benchmark request requires a planned response."
+            )
         }
-        return response
+        guard reservation.plan.requestID == envelope.id,
+              reservation.plan.method == envelope.method else {
+            throw AgentResponseEncodingError.invalidPlan(
+                "The semantic response reservation does not match the benchmark request."
+            )
+        }
+        let codec = AgentMessageCodec()
+        let encoded = try codec.encode(response, consuming: reservation)
+        return try codec.decodeResponse(
+            from: encoded,
+            expectedID: envelope.id,
+            expectedMethod: envelope.method
+        )
     }
-}
-
-enum CADBenchmarkControllerError: Error, Equatable, Sendable {
-    case unexpectedPlannedResponse
 }

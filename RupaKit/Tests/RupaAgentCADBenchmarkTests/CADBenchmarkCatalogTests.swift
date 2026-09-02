@@ -583,12 +583,12 @@ func typedUnsupportedAndBindingFailuresRemainExplicit() throws {
     try CADUnsupportedDeclaration(
         capabilityID: sphere.requiredCapability.id,
         capabilityVersion: sphere.requiredCapability.version,
-        reason: .analyticSphereUnavailable
+        reason: .capabilityUnavailable
     ).validate(for: sphere, capabilities: unavailable)
 
     requireUnsupportedFailure {
         try CADUnsupportedDeclaration(
-            capabilityID: sphere.requiredCapability.id,
+            capabilityID: "cad.solid.wrong",
             capabilityVersion: sphere.requiredCapability.version,
             reason: .capabilityUnavailable
         ).validate(for: sphere, capabilities: unavailable)
@@ -597,7 +597,7 @@ func typedUnsupportedAndBindingFailuresRemainExplicit() throws {
         try CADUnsupportedDeclaration(
             capabilityID: sphere.requiredCapability.id,
             capabilityVersion: sphere.requiredCapability.version,
-            reason: .analyticSphereUnavailable
+            reason: .capabilityUnavailable
         ).validate(for: sphere, capabilities: CADCapabilitySnapshot(
             version: "capabilities.v1",
             statuses: [CADCapabilityStatus(

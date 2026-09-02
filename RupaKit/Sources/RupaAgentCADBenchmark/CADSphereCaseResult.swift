@@ -1,12 +1,16 @@
 import Foundation
 
-/// The typed result of one authority-neutral sphere preparation attempt.
+struct CADSphereRecorder: Equatable, Sendable {
+    init() {}
+}
+
+/// The typed result of one analytic-sphere production attempt.
 struct CADSphereCaseResult: Equatable, Sendable {
     private let recorder: CADSphereRecorder
     let caseID: CADBenchmarkCaseID
     let outcome: CADCaseOutcome
-    let candidateDecision: CADCandidateDecision?
-    let capabilityError: CADSphereCapabilityObservationError?
+    let candidateResult: CADCandidateStepResult?
+    let roleBindings: CADOutputRoleBindings?
     let routeEvidence: CADSphereRouteEvidence
     let telemetry: CADSphereTelemetry
     let diagnostics: [String]
@@ -15,8 +19,8 @@ struct CADSphereCaseResult: Equatable, Sendable {
         recordedBy recorder: CADSphereRecorder,
         caseID: CADBenchmarkCaseID,
         outcome: CADCaseOutcome,
-        candidateDecision: CADCandidateDecision? = nil,
-        capabilityError: CADSphereCapabilityObservationError? = nil,
+        candidateResult: CADCandidateStepResult? = nil,
+        roleBindings: CADOutputRoleBindings? = nil,
         routeEvidence: CADSphereRouteEvidence,
         telemetry: CADSphereTelemetry,
         diagnostics: [String] = []
@@ -24,96 +28,79 @@ struct CADSphereCaseResult: Equatable, Sendable {
         self.recorder = recorder
         self.caseID = caseID
         self.outcome = outcome
-        self.candidateDecision = candidateDecision
-        self.capabilityError = capabilityError
+        self.candidateResult = candidateResult
+        self.roleBindings = roleBindings
         self.routeEvidence = routeEvidence
         self.telemetry = telemetry
         self.diagnostics = diagnostics
     }
 
-    var realized: Bool {
-        outcome == .realized
-    }
+    var realized: Bool { outcome == .realized }
 
-    func replacing(
-        routeEvidence: CADSphereRouteEvidence? = nil,
-        telemetry: CADSphereTelemetry? = nil,
-        diagnostics: [String]? = nil
-    ) -> CADSphereCaseResult {
+    func replacingTotalWallNanoseconds(_ value: UInt64) -> CADSphereCaseResult {
         CADSphereCaseResult(
             recordedBy: recorder,
             caseID: caseID,
             outcome: outcome,
-            candidateDecision: candidateDecision,
-            capabilityError: capabilityError,
-            routeEvidence: routeEvidence ?? self.routeEvidence,
-            telemetry: telemetry ?? self.telemetry,
-            diagnostics: diagnostics ?? self.diagnostics
-        )
-    }
-
-    func replacingTotalWallNanoseconds(_ value: UInt64) -> CADSphereCaseResult {
-        replacing(
-            telemetry: telemetry.replacing(totalWallNanoseconds: max(1, value))
+            candidateResult: candidateResult,
+            roleBindings: roleBindings,
+            routeEvidence: routeEvidence,
+            telemetry: telemetry.replacing(totalWallNanoseconds: max(1, value)),
+            diagnostics: diagnostics
         )
     }
 
     func validate() throws {
-        guard CADSpherePreparationCase(rawValue: caseID.rawValue) != nil,
+        guard CADActivatedSphereCase(rawValue: caseID.rawValue) != nil,
               diagnostics.allSatisfy({ !$0.isEmpty }) else {
             throw CADBenchmarkError.invalidInput(
                 caseID: caseID.rawValue,
-                reason: "The sphere result has an invalid preparation case or diagnostic."
+                reason: "The sphere result has an invalid case or diagnostic."
             )
         }
-        try routeEvidence.validate(
-            caseID: caseID,
-            requireCapabilityObservation: outcome == .expectedUnsupported
-        )
+        try candidateResult?.validate()
+        try routeEvidence.validate(caseID: caseID)
         try telemetry.validate(caseID: caseID)
         if outcome == .timeout {
             guard telemetry.totalWallNanoseconds >= telemetry.timeoutWallNanoseconds else {
                 throw CADBenchmarkError.invalidInput(
                     caseID: caseID.rawValue,
-                    reason: "A timed-out sphere observation must reach its wall-time bound."
+                    reason: "A timed-out sphere must reach its wall-time bound."
                 )
             }
         } else {
             guard telemetry.totalWallNanoseconds <= telemetry.timeoutWallNanoseconds else {
                 throw CADBenchmarkError.invalidInput(
                     caseID: caseID.rawValue,
-                    reason: "A non-timeout sphere observation cannot exceed its wall-time bound."
+                    reason: "A non-timeout sphere cannot exceed its wall-time bound."
                 )
             }
         }
-
-        guard outcome == .expectedUnsupported else { return }
-        guard case let .unsupported(declaration) = candidateDecision,
-              declaration.reason == .analyticSphereUnavailable,
-              capabilityError.map(isAnalyticSphereUnavailable) == true,
-              routeEvidence.didPublish == false,
-              routeEvidence.commandCount == 0,
-              routeEvidence.sourceMutationCount == 0,
-              telemetry.capabilityRequestCount == 1,
-              telemetry.actionCount == 0,
-              telemetry.commandCount == 0,
-              telemetry.publicationCount == 0,
-              telemetry.sourceMutationCount == 0 else {
+        guard outcome == .realized else { return }
+        guard let candidateResult,
+              let roleBindings,
+              candidateResult.status == .published,
+              candidateResult.createdFeatureIDs.count == 1,
+              candidateResult.primaryFeatureID == candidateResult.createdFeatureIDs.first,
+              roleBindings.bindings.count == 1,
+              let binding = roleBindings.bindings.first,
+              binding.role == "sphere",
+              binding.stepIndex == candidateResult.stepIndex,
+              binding.selector == .primary,
+              routeEvidence.didPublish,
+              telemetry.actionCount == 1,
+              telemetry.commandCount == 1,
+              telemetry.readCount == 2,
+              telemetry.featureCount == 1,
+              telemetry.bodyCount == 1,
+              telemetry.faceCount == 8,
+              telemetry.edgeCount == 12,
+              telemetry.vertexCount == 6,
+              telemetry.analyticSurfaceCount == 8 else {
             throw CADBenchmarkError.invalidInput(
                 caseID: caseID.rawValue,
-                reason: "Expected unsupported sphere results must retain the typed absence and zero-mutation evidence."
+                reason: "A realized sphere must retain exact analytic source and B-rep evidence."
             )
         }
     }
-
-    private func isAnalyticSphereUnavailable(
-        _ error: CADSphereCapabilityObservationError
-    ) -> Bool {
-        if case .analyticSphereUnavailable = error { return true }
-        return false
-    }
-}
-
-struct CADSphereRecorder: Equatable, Sendable {
-    init() {}
 }

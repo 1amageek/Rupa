@@ -1,47 +1,42 @@
 import Foundation
-import RupaAgentProtocol
-import RupaAgentRuntime
+import RupaCADDomain
+import RupaCore
+import RupaKit
+import SwiftCAD
 
-/// Runs one activated sphere case through the production Agent capability surface.
-///
-/// The current Agent has no sphere ingress, so this runner deliberately owns
-/// no project document and dispatches no action or command. It observes
-/// capabilities, evaluates the candidate's typed decision, and confirms that
-/// the fresh controller still has zero sessions before returning.
+/// Projects the shared production lifecycle into one analytic-sphere result.
 @MainActor
 struct CADSphereCaseRunner {
     private static let defaultTimeoutWallNanoseconds: UInt64 = 10_000_000_000
 
     private let activatedCase: CADActivatedSphereCase
-    private let timeoutWallNanoseconds: UInt64
-    private let preObservationDelayNanoseconds: UInt64
     private let recorder = CADSphereRecorder()
+    private let timeoutWallNanoseconds: UInt64
+    private let preRouteDelayNanoseconds: UInt64
 
     init(
         case activatedCase: CADActivatedSphereCase,
         timeoutWallNanoseconds: UInt64 = Self.defaultTimeoutWallNanoseconds,
-        preObservationDelayNanoseconds: UInt64 = 0
+        preRouteDelayNanoseconds: UInt64 = 0
     ) {
         self.activatedCase = activatedCase
         self.timeoutWallNanoseconds = max(1, timeoutWallNanoseconds)
-        self.preObservationDelayNanoseconds = preObservationDelayNanoseconds
+        self.preRouteDelayNanoseconds = preRouteDelayNanoseconds
     }
 
     init(
         caseID: CADBenchmarkCaseID,
         timeoutWallNanoseconds: UInt64 = Self.defaultTimeoutWallNanoseconds,
-        preObservationDelayNanoseconds: UInt64 = 0
+        preRouteDelayNanoseconds: UInt64 = 0
     ) throws {
         self.init(
             case: try CADActivatedSphereCase(caseID: caseID),
             timeoutWallNanoseconds: timeoutWallNanoseconds,
-            preObservationDelayNanoseconds: preObservationDelayNanoseconds
+            preRouteDelayNanoseconds: preRouteDelayNanoseconds
         )
     }
 
-    var caseID: CADBenchmarkCaseID {
-        activatedCase.caseID
-    }
+    private var caseID: CADBenchmarkCaseID { activatedCase.caseID }
 
     func runReference() async throws -> CADSphereCaseResult {
         try await run(candidate: CADSphereReferenceCandidate())
@@ -49,408 +44,346 @@ struct CADSphereCaseRunner {
 
     func run(candidate: any CADCandidateProtocol) async throws -> CADSphereCaseResult {
         let totalStart = now()
-        let deadline = CADCaseDeadline(timeoutWallNanoseconds: timeoutWallNanoseconds)
-        let controller = try CADBenchmarkControllerFactory.make(name: caseID.rawValue)
+        let entry = try activatedCase.catalogEntry
+        let record = try await harness(entry: entry).runReference(candidate: candidate)
+        return await project(record, entry: entry, totalStart: totalStart)
+    }
 
-        guard !Task.isCancelled else {
-            let pending = result(
-                outcome: .cancellation,
-                routeEvidence: .empty,
-                telemetry: telemetry(
-                    planningWallNanoseconds: elapsed(since: totalStart),
-                    routeWallNanoseconds: 0,
-                    totalStart: totalStart,
-                    capabilityRequestCount: 0,
-                    readCount: 0,
-                    cancellationCheckpointCount: 1
-                ),
-                diagnostics: [
-                    "\(caseID.rawValue) was cancelled before sphere capability observation."
-                ]
-            )
-            return await finalizeCleanup(
-                pending,
-                controller: controller,
-                totalStart: totalStart
-            )
-        }
+    func run(action: CADCandidateAction) async throws -> CADSphereCaseResult {
+        let totalStart = now()
+        let entry = try activatedCase.catalogEntry
+        let record = try await harness(entry: entry).run(action: action)
+        return await project(record, entry: entry, totalStart: totalStart)
+    }
 
-        let entry: CADCatalogEntry
-        do {
-            entry = try activatedCase.catalogEntry
-        } catch {
-            let pending = result(
-                outcome: .infrastructureFailure,
-                routeEvidence: .empty,
-                telemetry: telemetry(
-                    planningWallNanoseconds: elapsed(since: totalStart),
-                    routeWallNanoseconds: 0,
-                    totalStart: totalStart,
-                    capabilityRequestCount: 0,
-                    readCount: 0,
-                    cancellationCheckpointCount: 1
-                ),
-                diagnostics: [
-                    "\(caseID.rawValue) sphere catalog lookup failed: \(message(error))"
-                ]
-            )
-            return await finalizeCleanup(
-                pending,
-                controller: controller,
-                totalStart: totalStart
-            )
-        }
-
-        let planningStart = now()
-        let routeStart = now()
-        let observation: CADSphereCapabilityObservation
-        do {
-            if preObservationDelayNanoseconds > 0 {
-                let delay = Int64(min(preObservationDelayNanoseconds, UInt64(Int64.max)))
-                try await deadline.run {
-                    try await Task.sleep(for: .nanoseconds(delay))
-                }
-            }
-            observation = try await deadline.run {
-                try await CADSphereCapabilityObservation.observe(
-                    challenge: entry.challenge,
-                    controller: controller
-                )
-            }
-        } catch is CADCaseDeadlineError {
-            let pending = result(
-                outcome: .timeout,
-                routeEvidence: routeEvidence(capabilityObserved: false),
-                telemetry: telemetry(
-                    planningWallNanoseconds: elapsed(since: planningStart),
-                    routeWallNanoseconds: elapsed(since: routeStart),
-                    totalStart: totalStart,
-                    capabilityRequestCount: 0,
-                    readCount: 0,
-                    cancellationCheckpointCount: 2
-                ),
-                diagnostics: [
-                    "\(caseID.rawValue) production capability observation exceeded its shared deadline."
-                ]
-            )
-            return await finalizeCleanup(
-                pending,
-                controller: controller,
-                totalStart: totalStart
-            )
-        } catch is CancellationError {
-            let pending = result(
-                outcome: .cancellation,
-                routeEvidence: routeEvidence(capabilityObserved: false),
-                telemetry: telemetry(
-                    planningWallNanoseconds: elapsed(since: planningStart),
-                    routeWallNanoseconds: elapsed(since: routeStart),
-                    totalStart: totalStart,
-                    capabilityRequestCount: 0,
-                    readCount: 0,
-                    cancellationCheckpointCount: 2
-                ),
-                diagnostics: [
-                    "\(caseID.rawValue) was cancelled during capability observation."
-                ]
-            )
-            return await finalizeCleanup(
-                pending,
-                controller: controller,
-                totalStart: totalStart
-            )
-        } catch {
-            let pending = result(
-                outcome: .infrastructureFailure,
-                routeEvidence: routeEvidence(capabilityObserved: false),
-                telemetry: telemetry(
-                    planningWallNanoseconds: elapsed(since: planningStart),
-                    routeWallNanoseconds: elapsed(since: routeStart),
-                    totalStart: totalStart,
-                    capabilityRequestCount: 0,
-                    readCount: 0,
-                    cancellationCheckpointCount: 2
-                ),
-                diagnostics: [
-                    "\(caseID.rawValue) production capability observation failed: \(message(error))"
-                ]
-            )
-            return await finalizeCleanup(
-                pending,
-                controller: controller,
-                totalStart: totalStart
-            )
-        }
-
-        let routeWall = elapsed(since: routeStart)
-        let context = observation.candidateContext()
-        if Task.isCancelled {
-            let pending = result(
-                outcome: .cancellation,
-                capabilityError: observation.typedUnavailable,
-                routeEvidence: routeEvidence(capabilityObserved: true),
-                telemetry: telemetry(
-                    planningWallNanoseconds: elapsed(since: planningStart),
-                    routeWallNanoseconds: routeWall,
-                    totalStart: totalStart,
-                    capabilityRequestCount: observation.requestCount,
-                    readCount: observation.requestCount,
-                    cancellationCheckpointCount: 3
-                ),
-                diagnostics: [
-                    "\(caseID.rawValue) was cancelled before candidate decision."
-                ]
-            )
-            return await finalizeCleanup(
-                pending,
-                controller: controller,
-                totalStart: totalStart
-            )
-        }
-
-        let decision: CADCandidateDecision
-        do {
-            decision = try await deadline.run {
-                try await candidate.decide(for: context)
-            }
-        } catch is CADCaseDeadlineError {
-            let pending = result(
-                outcome: .timeout,
-                capabilityError: observation.typedUnavailable,
-                routeEvidence: routeEvidence(capabilityObserved: true),
-                telemetry: telemetry(
-                    planningWallNanoseconds: elapsed(since: planningStart),
-                    routeWallNanoseconds: routeWall,
-                    totalStart: totalStart,
-                    capabilityRequestCount: observation.requestCount,
-                    readCount: observation.requestCount,
-                    cancellationCheckpointCount: 3
-                ),
-                diagnostics: [
-                    "\(caseID.rawValue) candidate planning exceeded its shared deadline."
-                ]
-            )
-            return await finalizeCleanup(
-                pending,
-                controller: controller,
-                totalStart: totalStart
-            )
-        } catch is CancellationError {
-            let pending = result(
-                outcome: .cancellation,
-                capabilityError: observation.typedUnavailable,
-                routeEvidence: routeEvidence(capabilityObserved: true),
-                telemetry: telemetry(
-                    planningWallNanoseconds: elapsed(since: planningStart),
-                    routeWallNanoseconds: routeWall,
-                    totalStart: totalStart,
-                    capabilityRequestCount: observation.requestCount,
-                    readCount: observation.requestCount,
-                    cancellationCheckpointCount: 3
-                ),
-                diagnostics: [
-                    "\(caseID.rawValue) was cancelled during candidate planning."
-                ]
-            )
-            return await finalizeCleanup(
-                pending,
-                controller: controller,
-                totalStart: totalStart
-            )
-        } catch {
-            // Candidate failures are owned by the activated executor, which
-            // converts them to its typed candidateFailure error. Do not turn
-            // an arbitrary candidate error into an execution outcome here.
-            throw error
-        }
-
-        if Task.isCancelled {
-            let pending = result(
-                outcome: .cancellation,
-                candidateDecision: decision,
-                capabilityError: observation.typedUnavailable,
-                routeEvidence: routeEvidence(capabilityObserved: true),
-                telemetry: telemetry(
-                    planningWallNanoseconds: elapsed(since: planningStart),
-                    routeWallNanoseconds: routeWall,
-                    totalStart: totalStart,
-                    capabilityRequestCount: observation.requestCount,
-                    readCount: observation.requestCount,
-                    cancellationCheckpointCount: 4
-                ),
-                diagnostics: [
-                    "\(caseID.rawValue) was cancelled after candidate planning."
-                ]
-            )
-            return await finalizeCleanup(
-                pending,
-                controller: controller,
-                totalStart: totalStart
-            )
-        }
-
-        let candidateOutcome = evaluate(
-            decision: decision,
+    private func harness(entry: CADCatalogEntry) -> CADCaseLifecycleHarness {
+        CADCaseLifecycleHarness(
+            caseID: caseID,
             challenge: entry.challenge,
-            observation: observation
+            programPlanner: { action in
+                try DefaultCADSemanticProgramPlanner().plan(for: entry, action: action)
+            },
+            timeoutWallNanoseconds: timeoutWallNanoseconds,
+            preRouteDelayNanoseconds: preRouteDelayNanoseconds
         )
-        let pending = result(
-            outcome: candidateOutcome.outcome,
-            candidateDecision: decision,
-            capabilityError: candidateOutcome.capabilityError,
-            routeEvidence: routeEvidence(capabilityObserved: true),
-            telemetry: telemetry(
-                planningWallNanoseconds: elapsed(since: planningStart),
-                routeWallNanoseconds: routeWall,
-                totalStart: totalStart,
-                capabilityRequestCount: observation.requestCount,
-                readCount: observation.requestCount,
-                cancellationCheckpointCount: 4
-            ),
-            diagnostics: candidateOutcome.diagnostics
+    }
+
+    private func project(
+        _ record: CADCaseLifecycleRecord,
+        entry: CADCatalogEntry,
+        totalStart: UInt64
+    ) async -> CADSphereCaseResult {
+        let evidence = CADSphereRouteEvidence(from: record.routeEvidence)
+        let pending: CADSphereCaseResult
+        switch record.outcome {
+        case .published:
+            pending = await projectPublished(record, entry: entry, evidence: evidence)
+        case .cancelledAfterPublication:
+            pending = publishedMutation(record, evidence: evidence, outcome: .cancellation)
+        case .invalidSubmission:
+            pending = result(.invalidSubmission, record, evidence)
+        case .executionFailure:
+            pending = result(.executionFailure, record, evidence)
+        case .timeout:
+            pending = result(.timeout, record, evidence)
+        case .cancellation:
+            pending = result(.cancellation, record, evidence)
+        case .infrastructureFailure:
+            pending = result(.infrastructureFailure, record, evidence)
+        }
+        return pending.replacingTotalWallNanoseconds(elapsed(since: totalStart))
+    }
+
+    private func projectPublished(
+        _ record: CADCaseLifecycleRecord,
+        entry: CADCatalogEntry,
+        evidence: CADSphereRouteEvidence
+    ) async -> CADSphereCaseResult {
+        guard let finalView = record.finalView,
+              let receipt = CADSemanticExecutionEvidence.committedReceipt(from: record.response) else {
+            return result(.infrastructureFailure, record, evidence)
+        }
+        let semanticEvidence = CADSemanticExecutionEvidence(receipt: receipt)
+        let stepResult = semanticEvidence.stepResult(
+            node: "sphere",
+            operation: RupaCADSemanticOperationID.solidSphere.rawValue,
+            index: 0,
+            primaryOutputs: ["body"]
         )
-        return await finalizeCleanup(
-            pending,
-            controller: controller,
-            totalStart: totalStart
+        let bindings = CADOutputRoleBindings(bindings: [
+            CADOutputRoleBinding(role: "sphere", stepIndex: 0, selector: .primary),
+        ])
+        guard case let .sphere(expected, requiresAnalyticSurface) = entry.expected,
+              requiresAnalyticSurface,
+              let featureID = stepResult.primaryFeatureID else {
+            return result(
+                .infrastructureFailure,
+                record,
+                evidence,
+                candidateResult: stepResult,
+                roleBindings: bindings,
+                diagnostics: ["\(caseID.rawValue) sphere receipt or expectation is incomplete."]
+            )
+        }
+
+        let oracleStart = now()
+        let observed: CADSphereObservedGeometry
+        do {
+            observed = try await record.deadline.run {
+                try Self.observeSphere(featureID: featureID, in: finalView)
+            }
+        } catch is CADCaseDeadlineError {
+            return result(
+                .timeout,
+                record,
+                evidence,
+                candidateResult: stepResult,
+                roleBindings: bindings,
+                telemetry: telemetry(from: record).replacing(
+                    oracleWallNanoseconds: elapsed(since: oracleStart)
+                ),
+                diagnostics: [
+                    "\(caseID.rawValue) sphere source/B-rep observation exceeded its shared deadline after publication; no retry was attempted."
+                ]
+            )
+        } catch {
+            return result(
+                .oracleFailure,
+                record,
+                evidence,
+                candidateResult: stepResult,
+                roleBindings: bindings,
+                telemetry: telemetry(from: record).replacing(
+                    oracleWallNanoseconds: elapsed(since: oracleStart)
+                ),
+                diagnostics: ["\(caseID.rawValue) sphere observation failed: \(message(error))"]
+            )
+        }
+
+        let observedTelemetry = telemetry(from: record).replacing(
+            oracleWallNanoseconds: elapsed(since: oracleStart),
+            readCount: 2,
+            featureCount: observed.featureCount,
+            bodyCount: observed.bodyCount,
+            faceCount: observed.faceCount,
+            edgeCount: observed.edgeCount,
+            vertexCount: observed.vertexCount,
+            analyticSurfaceCount: observed.analyticSurfaceCount
+        )
+        do {
+            _ = try CADSphereOracle.evaluate(
+                expected: expected,
+                challenge: entry.challenge,
+                observed: observed,
+                modelingTolerance: finalView.document.document.modelingSettings.tolerance
+            )
+            return result(
+                .realized,
+                record,
+                evidence,
+                candidateResult: stepResult,
+                roleBindings: bindings,
+                telemetry: observedTelemetry
+            )
+        } catch let error as CADSphereOracleError {
+            return result(
+                .invalidSubmission,
+                record,
+                evidence,
+                candidateResult: stepResult,
+                roleBindings: bindings,
+                telemetry: observedTelemetry,
+                diagnostics: [error.description]
+            )
+        } catch {
+            return result(
+                .oracleFailure,
+                record,
+                evidence,
+                candidateResult: stepResult,
+                roleBindings: bindings,
+                telemetry: observedTelemetry,
+                diagnostics: ["\(caseID.rawValue) sphere oracle failed: \(message(error))"]
+            )
+        }
+    }
+
+    private func publishedMutation(
+        _ record: CADCaseLifecycleRecord,
+        evidence: CADSphereRouteEvidence,
+        outcome: CADCaseOutcome
+    ) -> CADSphereCaseResult {
+        guard let receipt = CADSemanticExecutionEvidence.committedReceipt(from: record.response) else {
+            return result(.infrastructureFailure, record, evidence)
+        }
+        let stepResult = CADSemanticExecutionEvidence(receipt: receipt).stepResult(
+            node: "sphere",
+            operation: RupaCADSemanticOperationID.solidSphere.rawValue,
+            index: 0,
+            primaryOutputs: ["body"]
+        )
+        return result(
+            outcome,
+            record,
+            evidence,
+            candidateResult: stepResult,
+            roleBindings: CADOutputRoleBindings(bindings: [
+                CADOutputRoleBinding(role: "sphere", stepIndex: 0, selector: .primary),
+            ])
         )
     }
 
     private func result(
-        outcome: CADCaseOutcome,
-        candidateDecision: CADCandidateDecision? = nil,
-        capabilityError: CADSphereCapabilityObservationError? = nil,
-        routeEvidence: CADSphereRouteEvidence,
-        telemetry: CADSphereTelemetry,
-        diagnostics: [String] = []
+        _ outcome: CADCaseOutcome,
+        _ record: CADCaseLifecycleRecord,
+        _ evidence: CADSphereRouteEvidence,
+        candidateResult: CADCandidateStepResult? = nil,
+        roleBindings: CADOutputRoleBindings? = nil,
+        telemetry: CADSphereTelemetry? = nil,
+        diagnostics: [String]? = nil
     ) -> CADSphereCaseResult {
         CADSphereCaseResult(
             recordedBy: recorder,
             caseID: caseID,
             outcome: outcome,
-            candidateDecision: candidateDecision,
-            capabilityError: capabilityError,
-            routeEvidence: routeEvidence,
-            telemetry: telemetry,
-            diagnostics: diagnostics
-        )
-    }
-
-    private func evaluate(
-        decision: CADCandidateDecision,
-        challenge: CADChallenge,
-        observation: CADSphereCapabilityObservation
-    ) -> (
-        outcome: CADCaseOutcome,
-        capabilityError: CADSphereCapabilityObservationError?,
-        diagnostics: [String]
-    ) {
-        switch decision {
-        case let .unsupported(declaration):
-            do {
-                try declaration.validate(
-                    for: challenge,
-                    capabilities: observation.snapshot
-                )
-                guard let unavailable = observation.typedUnavailable else {
-                    return (
-                        .unexpectedUnsupported,
-                        nil,
-                        [
-                            "\(caseID.rawValue) declared unsupported while the observed capability was available."
-                        ]
-                    )
-                }
-                return (.expectedUnsupported, unavailable, [])
-            } catch {
-                return (
-                    .invalidSubmission,
-                    observation.typedUnavailable,
-                    [
-                        "\(caseID.rawValue) unsupported declaration was invalid: \(message(error))"
-                    ]
-                )
-            }
-        case .action:
-            return (
-                .invalidSubmission,
-                observation.typedUnavailable,
-                [
-                    "\(caseID.rawValue) received an action even though no sphere Agent ingress exists."
-                ]
-            )
-        case .finish:
-            return (
-                .invalidSubmission,
-                observation.typedUnavailable,
-                [
-                    "\(caseID.rawValue) received a finish decision before a sphere capability became available."
-                ]
-            )
-        }
-    }
-
-    private func finalizeCleanup(
-        _ pending: CADSphereCaseResult,
-        controller: ProjectAgentCommandController,
-        totalStart: UInt64
-    ) async -> CADSphereCaseResult {
-        let cleanupStart = now()
-        let remaining = await sessionCount(controller)
-        let evidence = pending.routeEvidence.withCleanup(
-            cleanupWallNanoseconds: elapsed(since: cleanupStart),
-            remainingRegistrationCount: remaining
-        )
-        return pending.replacing(
+            candidateResult: candidateResult,
+            roleBindings: roleBindings,
             routeEvidence: evidence,
-            telemetry: pending.telemetry.replacing(
-                totalWallNanoseconds: elapsed(since: totalStart)
-            )
+            telemetry: telemetry ?? self.telemetry(from: record),
+            diagnostics: diagnostics ?? record.diagnostics
         )
     }
 
-    private func sessionCount(_ controller: ProjectAgentCommandController) async -> Int {
-        let envelope = CADBenchmarkControllerFactory.envelope(
-            request: .status,
-            id: "\(caseID.rawValue).status"
-        )
-        let handled = await controller.handle(envelope)
-        guard case let .ordinary(.status(status)) = handled else {
-            return 1
-        }
-        return status.sessionCount
-    }
-
-    private func routeEvidence(capabilityObserved: Bool) -> CADSphereRouteEvidence {
-        CADSphereRouteEvidence(
-            capabilityObservedThroughController: capabilityObserved
-        )
-    }
-
-    private func telemetry(
-        planningWallNanoseconds: UInt64,
-        routeWallNanoseconds: UInt64,
-        totalStart: UInt64,
-        capabilityRequestCount: Int,
-        readCount: Int,
-        cancellationCheckpointCount: Int
-    ) -> CADSphereTelemetry {
+    private func telemetry(from record: CADCaseLifecycleRecord) -> CADSphereTelemetry {
         CADSphereTelemetry(
-            planningWallNanoseconds: max(1, planningWallNanoseconds),
-            routeWallNanoseconds: routeWallNanoseconds,
+            planningWallNanoseconds: record.telemetry.planningWallNanoseconds,
+            routeWallNanoseconds: record.telemetry.routeWallNanoseconds,
             oracleWallNanoseconds: 0,
-            totalWallNanoseconds: max(1, elapsed(since: totalStart)),
-            capabilityRequestCount: capabilityRequestCount,
-            actionCount: 0,
-            commandCount: 0,
-            readCount: readCount,
-            entityCount: 0,
+            totalWallNanoseconds: record.telemetry.totalWallNanoseconds,
+            actionCount: record.telemetry.actionCount,
+            commandCount: record.telemetry.commandCount,
+            readCount: 0,
             featureCount: 0,
             bodyCount: 0,
-            publicationCount: 0,
-            sourceMutationCount: 0,
-            timeoutWallNanoseconds: timeoutWallNanoseconds,
-            cancellationCheckpointCount: cancellationCheckpointCount
+            faceCount: 0,
+            edgeCount: 0,
+            vertexCount: 0,
+            analyticSurfaceCount: 0,
+            timeoutWallNanoseconds: record.telemetry.timeoutWallNanoseconds,
+            cancellationCheckpointCount: record.telemetry.cancellationCheckpointCount
+        )
+    }
+
+    nonisolated private static func observeSphere(
+        featureID description: String,
+        in snapshot: ProjectViewSnapshot
+    ) throws -> CADSphereObservedGeometry {
+        guard let uuid = UUID(uuidString: description) else {
+            throw CADSphereOracleError.mismatch("The semantic body binding is not a FeatureID.")
+        }
+        let featureID = FeatureID(uuid)
+        let document = snapshot.document.document
+        let graph = document.cadDocument.designGraph
+        guard graph.order == [featureID],
+              graph.nodes.count == 1,
+              let node = graph.nodes[featureID],
+              node.isSuppressed == false,
+              node.outputs.contains(where: { $0.role == .body }),
+              case .primitive(let primitive) = node.operation else {
+            throw CADSphereOracleError.mismatch(
+                "The bound sphere must be the sole unsuppressed primitive source feature."
+            )
+        }
+
+        let representation: CADSphereRepresentationKind
+        let center: CADPoint3D
+        let radiusMeters: Double
+        switch primitive.definition {
+        case .sphere(let sphere):
+            let radius = try document.cadDocument.parameters.resolvedValue(for: sphere.radius)
+            guard radius.kind == .length else {
+                throw CADSphereOracleError.mismatch("The sphere radius is not a length.")
+            }
+            representation = .analyticSphere
+            center = CADPoint3D(
+                x: sphere.placement.origin.x,
+                y: sphere.placement.origin.y,
+                z: sphere.placement.origin.z,
+                unit: .meter
+            )
+            radiusMeters = radius.value
+        case .box:
+            representation = .box
+            center = CADPoint3D(x: 0, y: 0, z: 0, unit: .meter)
+            radiusMeters = 0
+        case .cylinder:
+            representation = .cylinder
+            center = CADPoint3D(x: 0, y: 0, z: 0, unit: .meter)
+            radiusMeters = 0
+        case .cone, .torus:
+            representation = .unknown
+            center = CADPoint3D(x: 0, y: 0, z: 0, unit: .meter)
+            radiusMeters = 0
+        }
+
+        let topology = try TopologySnapshotService().snapshot(
+            document: document,
+            objectRegistry: snapshot.objectRegistry,
+            currentEvaluation: snapshot.cadInteraction,
+            currentGeneration: snapshot.documentGeneration,
+            metricPolicy: .omit
+        )
+        let measurement = try MeasurementService().measure(
+            document: document,
+            ruler: snapshot.workspaceState.ruler,
+            objectRegistry: snapshot.objectRegistry,
+            currentEvaluation: snapshot.cadInteraction,
+            currentGeneration: snapshot.documentGeneration
+        )
+        guard let solid = measurement.solids.first(where: {
+            $0.featureID == description && $0.sourceFeatureID == description
+        }),
+        solid.volumeMethod == .exactBRep,
+        measurement.solids.count == 1 else {
+            throw CADSphereOracleError.mismatch(
+                "The sphere has no single exact evaluated solid measurement."
+            )
+        }
+
+        let primaryBody = SubshapeID(
+            featureID: featureID,
+            role: GeneratedSubshapeRole.body.rawValue,
+            ordinal: 0
+        )
+        guard let evaluation = snapshot.cadInteraction?.evaluatedDocument,
+              case .body(let bodyID) = try evaluation.subshapes.reference(for: primaryBody),
+              evaluation.brep.bodies[bodyID]?.kind == .solid else {
+            throw CADSphereOracleError.mismatch("The evaluated sphere body is not a closed solid.")
+        }
+        let sourceIsAuthoritative = document.productMetadata.sceneNodes.values.contains {
+            $0.reference == .body(featureID)
+                && $0.object?.category == .body
+                && $0.object?.geometryRole == .solid
+                && $0.object?.typeID == .sphere
+        }
+        let analyticSurfaceCount = topology.entries.filter {
+            $0.kind == .face
+                && $0.sourceFeatureID == description
+                && $0.surfaceKind == "analytic"
+        }.count
+        return CADSphereObservedGeometry(
+            representation: representation,
+            center: center,
+            radiusMeters: radiusMeters,
+            bodyCount: topology.counts.bodyCount,
+            faceCount: topology.counts.faceCount,
+            edgeCount: topology.counts.edgeCount,
+            vertexCount: topology.counts.vertexCount,
+            analyticSurfaceCount: analyticSurfaceCount,
+            featureCount: graph.nodes.count,
+            volumeCubicMeters: solid.volumeCubicMeters,
+            isClosed: true,
+            sourceIsAuthoritative: sourceIsAuthoritative
         )
     }
 

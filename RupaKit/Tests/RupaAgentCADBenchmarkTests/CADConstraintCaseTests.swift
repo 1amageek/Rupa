@@ -168,33 +168,6 @@ struct CADConstraintCaseTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func con001OracleRejectsMissingExtraAndSubstituteProductionSources() async throws {
-        let exactSketch = try exactConstraintSketch()
-
-        var missingSketch = exactSketch
-        let retainedID = try #require(missingSketch.entityOrder.first)
-        missingSketch.entities = [retainedID: try #require(missingSketch.entities[retainedID])]
-        missingSketch.entityOrder = [retainedID]
-        missingSketch.constraints = []
-        let missing = try await productionRecord(commands: [
-            .createSketch(name: "CON-001.missing", sketch: missingSketch, geometryRole: .curve),
-        ])
-        try expectOracleMismatch(record: missing, primaryStepIndex: 0)
-
-        let extra = try await productionRecord(commands: [
-            .createSketch(name: "CON-001", sketch: exactSketch, geometryRole: .curve),
-            circleSubstituteCommand(plane: exactSketch.plane, name: "CON-001.extra"),
-        ])
-        try expectOracleMismatch(record: extra, primaryStepIndex: 0)
-
-        let substitute = try await productionRecord(commands: [
-            circleSubstituteCommand(plane: exactSketch.plane, name: "CON-001.substitute"),
-        ])
-        try expectOracleMismatch(record: substitute, primaryStepIndex: 0)
-    }
-
-    @MainActor
-    @Test(.timeLimit(.minutes(1)))
     func con002CreatesExactParallelSourceRelationThroughProductionController() async throws {
         let result = try await CADConstraintCaseRunner(case: .constraint002).runReference()
 
@@ -1296,95 +1269,6 @@ struct CADConstraintCaseTests {
             sceneNodeID: fixture.sceneNodeID,
             tolerance: fixture.tolerance
         )
-    }
-
-    @MainActor
-    private func exactConstraintSketch() throws -> Sketch {
-        guard case .automation(.sketch(.constraint(let action))) = Self.action() else {
-            throw CADBenchmarkError.invalidInput(
-                caseID: "CON-001",
-                reason: "The exact constraint fixture has no constraint action."
-            )
-        }
-        return try CADConstraintGeometryMapping.sketch(
-            from: action,
-            modelingTolerance: .standard,
-            caseID: "CON-001"
-        )
-    }
-
-    private func circleSubstituteCommand(
-        plane: SketchPlane,
-        name: String
-    ) -> AutomationCommand {
-        .createCircleSketch(
-            name: name,
-            plane: SketchPlaneReference(sketchPlane: plane),
-            center: SketchPoint(
-                x: .constant(.length(0, unit: .meter)),
-                y: .constant(.length(0, unit: .meter))
-            ),
-            radius: .constant(.length(0.01, unit: .meter))
-        )
-    }
-
-    @MainActor
-    private func productionRecord(
-        commands: [AutomationCommand]
-    ) async throws -> CADCaseLifecycleRecord {
-        let challenge = try CADBenchmarkCatalog().challenge(for: "CON-001")
-        let harness = CADCaseLifecycleHarness(
-            caseID: "CON-001",
-            challenge: challenge,
-            routing: CADCaseActionRouting(
-                operationName: "createConstraint.fixture",
-                planBuilder: { _, _, _ in .batch(commands) }
-            ),
-            timeoutWallNanoseconds: 10_000_000_000
-        )
-        return try await harness.run(action: Self.action())
-    }
-
-    private func expectOracleMismatch(
-        record: CADCaseLifecycleRecord,
-        primaryStepIndex: Int
-    ) throws {
-        let view = try #require(record.finalView)
-        guard let response = record.response,
-              case .batch(let batch) = response else {
-            Issue.record("The constraint production fixture did not return one batch response.")
-            return
-        }
-        let steps = batch.results.enumerated().map { index, result in
-            CADCandidateStepResult(
-                stepIndex: index,
-                operation: "fixture.\(index)",
-                status: result.didMutate ? .published : .unchanged,
-                primaryFeatureID: result.primaryFeatureID?.description,
-                createdFeatureIDs: result.createdFeatureIDs.map(\.description)
-            )
-        }
-        let entry = try CADActivatedConstraintCase.constraint001.catalogEntry
-        guard case .constraint(let expected) = entry.expected else {
-            Issue.record("CON-001 has no private constraint expectation.")
-            return
-        }
-        let bindings = CADOutputRoleBindings(bindings: [
-            CADOutputRoleBinding(
-                role: "relation",
-                stepIndex: primaryStepIndex,
-                selector: .primary
-            ),
-        ])
-        #expect(throws: CADConstraintOracleError.self) {
-            try CADConstraintOracle.evaluate(
-                expected: expected,
-                challenge: entry.challenge,
-                bindings: bindings,
-                stepResults: steps,
-                snapshot: view
-            )
-        }
     }
 
     private func candidateContext(_ challenge: CADChallenge) -> CADCandidateContext {

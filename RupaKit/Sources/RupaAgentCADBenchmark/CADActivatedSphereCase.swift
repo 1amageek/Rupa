@@ -1,10 +1,6 @@
 import Foundation
 
-/// The sphere cases whose production capability boundary has been reviewed.
-///
-/// The kernel may support analytic sphere construction, but the Agent surface
-/// currently exposes no sphere ingress. SPH-001 through SPH-005 are activated
-/// as honest capability-observation cases after their individual gates.
+/// The sphere cases covered by the semantic CAD operation boundary.
 enum CADActivatedSphereCase: String, CaseIterable, Equatable, Hashable, Sendable {
     case sphere001 = "SPH-001"
     case sphere002 = "SPH-002"

@@ -1242,7 +1242,7 @@ struct CADBenchmarkCLIProcessTests {
 
     @Test(.timeLimit(.minutes(2)))
     @MainActor
-    func sph001UsesUnavailableRequestAndTypedUnsupportedProductionRoutes() throws {
+    func sph001UsesSemanticActionProductionRoutes() throws {
         let requestResult = try runCADBenchmarkCLI(["request", "SPH-001"])
         #expect(requestResult.terminationStatus == 0)
         #expect(requestResult.standardOutputData.count <= CADJSONAdapterSchema.maximumDocumentBytes)
@@ -1258,51 +1258,34 @@ struct CADBenchmarkCLIProcessTests {
         #expect(request.context.capabilities.statuses.count == 1)
         #expect(status.id == request.context.challenge.requiredCapability.id)
         #expect(status.version == request.context.challenge.requiredCapability.version)
-        #expect(status.available == false)
-        #expect(status.reasonCode == "not-exposed")
+        #expect(status.available)
+        #expect(status.reasonCode == nil)
         #expect(isPrivateFree(requestResult.standardOutput))
 
         let exact = try responseData(
             for: "SPH-001",
-            contextFingerprint: request.contextFingerprint,
-            decision: .unsupported(CADUnsupportedDeclaration(
-                capabilityID: request.context.challenge.requiredCapability.id,
-                capabilityVersion: request.context.challenge.requiredCapability.version,
-                reason: .analyticSphereUnavailable
-            ))
+            action: sphereAction(
+                name: "SPH-001",
+                center: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
+                radius: CADLength(value: 5, unit: .millimeter)
+            )
         )
         #expect(exact.count <= CADJSONAdapterSchema.maximumDocumentBytes)
         let exactText = String(decoding: exact, as: UTF8.self)
-        #expect(exactText.contains("\"kind\":\"unsupported\""))
-        #expect(exactText.contains("\"reason\":\"analyticSphereUnavailable\""))
+        #expect(exactText.contains("\"kind\":\"automation\""))
+        #expect(exactText.contains("\"kind\":\"sphere\""))
         #expect(isPrivateFree(exactText))
 
         let fileResult = try withTemporaryData(exact) { path in
             try runCADBenchmarkCLI(["evaluate", "--response", path])
         }
-        let fileEvaluation = try CADJSONBoundedCodec.decode(
-            CADJSONEvaluationEnvelope.self,
-            from: fileResult.standardOutputData
-        )
-        #expect(fileResult.terminationStatus == 2)
-        #expect(fileEvaluation.caseID == "SPH-001")
-        #expect(fileEvaluation.result?.outcome == .expectedUnsupported)
-        #expect(fileEvaluation.error == nil)
-        #expect(isPrivateFree(fileResult.standardOutput))
+        try assertRealizedEvaluation(fileResult, caseID: "SPH-001")
 
         let standardInputResult = try runCADBenchmarkCLI(
             ["evaluate", "--response", "-"],
             standardInput: exact
         )
-        let standardInputEvaluation = try CADJSONBoundedCodec.decode(
-            CADJSONEvaluationEnvelope.self,
-            from: standardInputResult.standardOutputData
-        )
-        #expect(standardInputResult.terminationStatus == 2)
-        #expect(standardInputEvaluation.caseID == "SPH-001")
-        #expect(standardInputEvaluation.result?.outcome == .expectedUnsupported)
-        #expect(standardInputEvaluation.error == nil)
-        #expect(isPrivateFree(standardInputResult.standardOutput))
+        try assertRealizedEvaluation(standardInputResult, caseID: "SPH-001")
 
         let substitute = try responseData(
             for: "SPH-001",
@@ -1349,7 +1332,7 @@ struct CADBenchmarkCLIProcessTests {
 
     @Test(.timeLimit(.minutes(2)))
     @MainActor
-    func sph002UsesTranslatedUnavailableRequestAndTypedUnsupportedProductionRoutes() throws {
+    func sph002UsesTranslatedSemanticActionProductionRoutes() throws {
         let requestResult = try runCADBenchmarkCLI(["request", "SPH-002"])
         #expect(requestResult.terminationStatus == 0)
         #expect(requestResult.standardOutputData.count <= CADJSONAdapterSchema.maximumDocumentBytes)
@@ -1365,51 +1348,34 @@ struct CADBenchmarkCLIProcessTests {
         #expect(request.context.capabilities.statuses.count == 1)
         #expect(status.id == request.context.challenge.requiredCapability.id)
         #expect(status.version == request.context.challenge.requiredCapability.version)
-        #expect(status.available == false)
-        #expect(status.reasonCode == "not-exposed")
+        #expect(status.available)
+        #expect(status.reasonCode == nil)
         #expect(isPrivateFree(requestResult.standardOutput))
 
         let exact = try responseData(
             for: "SPH-002",
-            contextFingerprint: request.contextFingerprint,
-            decision: .unsupported(CADUnsupportedDeclaration(
-                capabilityID: request.context.challenge.requiredCapability.id,
-                capabilityVersion: request.context.challenge.requiredCapability.version,
-                reason: .analyticSphereUnavailable
-            ))
+            action: sphereAction(
+                name: "SPH-002",
+                center: CADPoint3D(x: 50, y: -25, z: 10, unit: .millimeter),
+                radius: CADLength(value: 25, unit: .millimeter)
+            )
         )
         #expect(exact.count <= CADJSONAdapterSchema.maximumDocumentBytes)
         let exactText = String(decoding: exact, as: UTF8.self)
-        #expect(exactText.contains("\"kind\":\"unsupported\""))
-        #expect(exactText.contains("\"reason\":\"analyticSphereUnavailable\""))
+        #expect(exactText.contains("\"kind\":\"automation\""))
+        #expect(exactText.contains("\"kind\":\"sphere\""))
         #expect(isPrivateFree(exactText))
 
         let fileResult = try withTemporaryData(exact) { path in
             try runCADBenchmarkCLI(["evaluate", "--response", path])
         }
-        let fileEvaluation = try CADJSONBoundedCodec.decode(
-            CADJSONEvaluationEnvelope.self,
-            from: fileResult.standardOutputData
-        )
-        #expect(fileResult.terminationStatus == 2)
-        #expect(fileEvaluation.caseID == "SPH-002")
-        #expect(fileEvaluation.result?.outcome == .expectedUnsupported)
-        #expect(fileEvaluation.error == nil)
-        #expect(isPrivateFree(fileResult.standardOutput))
+        try assertRealizedEvaluation(fileResult, caseID: "SPH-002")
 
         let standardInputResult = try runCADBenchmarkCLI(
             ["evaluate", "--response", "-"],
             standardInput: exact
         )
-        let standardInputEvaluation = try CADJSONBoundedCodec.decode(
-            CADJSONEvaluationEnvelope.self,
-            from: standardInputResult.standardOutputData
-        )
-        #expect(standardInputResult.terminationStatus == 2)
-        #expect(standardInputEvaluation.caseID == "SPH-002")
-        #expect(standardInputEvaluation.result?.outcome == .expectedUnsupported)
-        #expect(standardInputEvaluation.error == nil)
-        #expect(isPrivateFree(standardInputResult.standardOutput))
+        try assertRealizedEvaluation(standardInputResult, caseID: "SPH-002")
 
         let substitute = try responseData(
             for: "SPH-002",
@@ -1456,7 +1422,7 @@ struct CADBenchmarkCLIProcessTests {
 
     @Test(.timeLimit(.minutes(2)))
     @MainActor
-    func sph003UsesMeterScaleUnavailableRequestAndTypedUnsupportedProductionRoutes() throws {
+    func sph003UsesMeterScaleSemanticActionProductionRoutes() throws {
         let requestResult = try runCADBenchmarkCLI(["request", "SPH-003"])
         #expect(requestResult.terminationStatus == 0)
         #expect(requestResult.standardOutputData.count <= CADJSONAdapterSchema.maximumDocumentBytes)
@@ -1472,51 +1438,34 @@ struct CADBenchmarkCLIProcessTests {
         #expect(request.context.capabilities.statuses.count == 1)
         #expect(status.id == request.context.challenge.requiredCapability.id)
         #expect(status.version == request.context.challenge.requiredCapability.version)
-        #expect(status.available == false)
-        #expect(status.reasonCode == "not-exposed")
+        #expect(status.available)
+        #expect(status.reasonCode == nil)
         #expect(isPrivateFree(requestResult.standardOutput))
 
         let exact = try responseData(
             for: "SPH-003",
-            contextFingerprint: request.contextFingerprint,
-            decision: .unsupported(CADUnsupportedDeclaration(
-                capabilityID: request.context.challenge.requiredCapability.id,
-                capabilityVersion: request.context.challenge.requiredCapability.version,
-                reason: .analyticSphereUnavailable
-            ))
+            action: sphereAction(
+                name: "SPH-003",
+                center: CADPoint3D(x: 0, y: 0, z: 0.1, unit: .meter),
+                radius: CADLength(value: 0.1, unit: .meter)
+            )
         )
         #expect(exact.count <= CADJSONAdapterSchema.maximumDocumentBytes)
         let exactText = String(decoding: exact, as: UTF8.self)
-        #expect(exactText.contains("\"kind\":\"unsupported\""))
-        #expect(exactText.contains("\"reason\":\"analyticSphereUnavailable\""))
+        #expect(exactText.contains("\"kind\":\"automation\""))
+        #expect(exactText.contains("\"kind\":\"sphere\""))
         #expect(isPrivateFree(exactText))
 
         let fileResult = try withTemporaryData(exact) { path in
             try runCADBenchmarkCLI(["evaluate", "--response", path])
         }
-        let fileEvaluation = try CADJSONBoundedCodec.decode(
-            CADJSONEvaluationEnvelope.self,
-            from: fileResult.standardOutputData
-        )
-        #expect(fileResult.terminationStatus == 2)
-        #expect(fileEvaluation.caseID == "SPH-003")
-        #expect(fileEvaluation.result?.outcome == .expectedUnsupported)
-        #expect(fileEvaluation.error == nil)
-        #expect(isPrivateFree(fileResult.standardOutput))
+        try assertRealizedEvaluation(fileResult, caseID: "SPH-003")
 
         let standardInputResult = try runCADBenchmarkCLI(
             ["evaluate", "--response", "-"],
             standardInput: exact
         )
-        let standardInputEvaluation = try CADJSONBoundedCodec.decode(
-            CADJSONEvaluationEnvelope.self,
-            from: standardInputResult.standardOutputData
-        )
-        #expect(standardInputResult.terminationStatus == 2)
-        #expect(standardInputEvaluation.caseID == "SPH-003")
-        #expect(standardInputEvaluation.result?.outcome == .expectedUnsupported)
-        #expect(standardInputEvaluation.error == nil)
-        #expect(isPrivateFree(standardInputResult.standardOutput))
+        try assertRealizedEvaluation(standardInputResult, caseID: "SPH-003")
 
         let substitute = try responseData(
             for: "SPH-003",
@@ -1563,7 +1512,7 @@ struct CADBenchmarkCLIProcessTests {
 
     @Test(.timeLimit(.minutes(2)))
     @MainActor
-    func sph004UsesImperialUnavailableRequestAndTypedUnsupportedProductionRoutes() throws {
+    func sph004UsesImperialSemanticActionProductionRoutes() throws {
         let requestResult = try runCADBenchmarkCLI(["request", "SPH-004"])
         #expect(requestResult.terminationStatus == 0)
         #expect(requestResult.standardOutputData.count <= CADJSONAdapterSchema.maximumDocumentBytes)
@@ -1579,51 +1528,34 @@ struct CADBenchmarkCLIProcessTests {
         #expect(request.context.capabilities.statuses.count == 1)
         #expect(status.id == request.context.challenge.requiredCapability.id)
         #expect(status.version == request.context.challenge.requiredCapability.version)
-        #expect(status.available == false)
-        #expect(status.reasonCode == "not-exposed")
+        #expect(status.available)
+        #expect(status.reasonCode == nil)
         #expect(isPrivateFree(requestResult.standardOutput))
 
         let exact = try responseData(
             for: "SPH-004",
-            contextFingerprint: request.contextFingerprint,
-            decision: .unsupported(CADUnsupportedDeclaration(
-                capabilityID: request.context.challenge.requiredCapability.id,
-                capabilityVersion: request.context.challenge.requiredCapability.version,
-                reason: .analyticSphereUnavailable
-            ))
+            action: sphereAction(
+                name: "SPH-004",
+                center: CADPoint3D(x: -2, y: 3, z: 1, unit: .inch),
+                radius: CADLength(value: 2, unit: .inch)
+            )
         )
         #expect(exact.count <= CADJSONAdapterSchema.maximumDocumentBytes)
         let exactText = String(decoding: exact, as: UTF8.self)
-        #expect(exactText.contains("\"kind\":\"unsupported\""))
-        #expect(exactText.contains("\"reason\":\"analyticSphereUnavailable\""))
+        #expect(exactText.contains("\"kind\":\"automation\""))
+        #expect(exactText.contains("\"kind\":\"sphere\""))
         #expect(isPrivateFree(exactText))
 
         let fileResult = try withTemporaryData(exact) { path in
             try runCADBenchmarkCLI(["evaluate", "--response", path])
         }
-        let fileEvaluation = try CADJSONBoundedCodec.decode(
-            CADJSONEvaluationEnvelope.self,
-            from: fileResult.standardOutputData
-        )
-        #expect(fileResult.terminationStatus == 2)
-        #expect(fileEvaluation.caseID == "SPH-004")
-        #expect(fileEvaluation.result?.outcome == .expectedUnsupported)
-        #expect(fileEvaluation.error == nil)
-        #expect(isPrivateFree(fileResult.standardOutput))
+        try assertRealizedEvaluation(fileResult, caseID: "SPH-004")
 
         let standardInputResult = try runCADBenchmarkCLI(
             ["evaluate", "--response", "-"],
             standardInput: exact
         )
-        let standardInputEvaluation = try CADJSONBoundedCodec.decode(
-            CADJSONEvaluationEnvelope.self,
-            from: standardInputResult.standardOutputData
-        )
-        #expect(standardInputResult.terminationStatus == 2)
-        #expect(standardInputEvaluation.caseID == "SPH-004")
-        #expect(standardInputEvaluation.result?.outcome == .expectedUnsupported)
-        #expect(standardInputEvaluation.error == nil)
-        #expect(isPrivateFree(standardInputResult.standardOutput))
+        try assertRealizedEvaluation(standardInputResult, caseID: "SPH-004")
 
         let substitute = try responseData(
             for: "SPH-004",
@@ -1670,7 +1602,7 @@ struct CADBenchmarkCLIProcessTests {
 
     @Test(.timeLimit(.minutes(2)))
     @MainActor
-    func sph005UsesLargeTranslatedUnavailableRequestAndTypedUnsupportedProductionRoutes() throws {
+    func sph005UsesLargeTranslatedSemanticActionProductionRoutes() throws {
         let requestResult = try runCADBenchmarkCLI(["request", "SPH-005"])
         #expect(requestResult.terminationStatus == 0)
         #expect(requestResult.standardOutputData.count <= CADJSONAdapterSchema.maximumDocumentBytes)
@@ -1686,51 +1618,34 @@ struct CADBenchmarkCLIProcessTests {
         #expect(request.context.capabilities.statuses.count == 1)
         #expect(status.id == request.context.challenge.requiredCapability.id)
         #expect(status.version == request.context.challenge.requiredCapability.version)
-        #expect(status.available == false)
-        #expect(status.reasonCode == "not-exposed")
+        #expect(status.available)
+        #expect(status.reasonCode == nil)
         #expect(isPrivateFree(requestResult.standardOutput))
 
         let exact = try responseData(
             for: "SPH-005",
-            contextFingerprint: request.contextFingerprint,
-            decision: .unsupported(CADUnsupportedDeclaration(
-                capabilityID: request.context.challenge.requiredCapability.id,
-                capabilityVersion: request.context.challenge.requiredCapability.version,
-                reason: .analyticSphereUnavailable
-            ))
+            action: sphereAction(
+                name: "SPH-005",
+                center: CADPoint3D(x: -100, y: 100, z: -50, unit: .millimeter),
+                radius: CADLength(value: 100, unit: .millimeter)
+            )
         )
         #expect(exact.count <= CADJSONAdapterSchema.maximumDocumentBytes)
         let exactText = String(decoding: exact, as: UTF8.self)
-        #expect(exactText.contains("\"kind\":\"unsupported\""))
-        #expect(exactText.contains("\"reason\":\"analyticSphereUnavailable\""))
+        #expect(exactText.contains("\"kind\":\"automation\""))
+        #expect(exactText.contains("\"kind\":\"sphere\""))
         #expect(isPrivateFree(exactText))
 
         let fileResult = try withTemporaryData(exact) { path in
             try runCADBenchmarkCLI(["evaluate", "--response", path])
         }
-        let fileEvaluation = try CADJSONBoundedCodec.decode(
-            CADJSONEvaluationEnvelope.self,
-            from: fileResult.standardOutputData
-        )
-        #expect(fileResult.terminationStatus == 2)
-        #expect(fileEvaluation.caseID == "SPH-005")
-        #expect(fileEvaluation.result?.outcome == .expectedUnsupported)
-        #expect(fileEvaluation.error == nil)
-        #expect(isPrivateFree(fileResult.standardOutput))
+        try assertRealizedEvaluation(fileResult, caseID: "SPH-005")
 
         let standardInputResult = try runCADBenchmarkCLI(
             ["evaluate", "--response", "-"],
             standardInput: exact
         )
-        let standardInputEvaluation = try CADJSONBoundedCodec.decode(
-            CADJSONEvaluationEnvelope.self,
-            from: standardInputResult.standardOutputData
-        )
-        #expect(standardInputResult.terminationStatus == 2)
-        #expect(standardInputEvaluation.caseID == "SPH-005")
-        #expect(standardInputEvaluation.result?.outcome == .expectedUnsupported)
-        #expect(standardInputEvaluation.error == nil)
-        #expect(isPrivateFree(standardInputResult.standardOutput))
+        try assertRealizedEvaluation(standardInputResult, caseID: "SPH-005")
 
         let substitute = try responseData(
             for: "SPH-005",
@@ -3405,11 +3320,79 @@ struct CADBenchmarkCLIProcessTests {
     }
 }
 
+private func transformSource(_ caseID: String) -> CADTransformSourceAction {
+    switch caseID {
+    case "TRN-001":
+        .sketch(.line(
+            name: "TRN-001.source",
+            plane: .xy,
+            start: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
+            end: CADPoint3D(x: 100, y: 0, z: 0, unit: .millimeter)
+        ))
+    case "TRN-002":
+        .sketch(.rectangle(
+            name: "TRN-002.source",
+            plane: .xy,
+            center: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
+            width: CADLength(value: 40, unit: .millimeter),
+            height: CADLength(value: 20, unit: .millimeter)
+        ))
+    case "TRN-003":
+        .sketch(.circle(
+            name: "TRN-003.source",
+            plane: .xy,
+            center: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
+            radius: CADLength(value: 10, unit: .millimeter)
+        ))
+    case "TRN-004":
+        .solid(.box(
+            name: "TRN-004.source",
+            origin: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
+            width: CADLength(value: 20, unit: .millimeter),
+            depth: CADLength(value: 30, unit: .millimeter),
+            height: CADLength(value: 40, unit: .millimeter)
+        ))
+    case "TRN-005":
+        .solid(.cylinder(
+            name: "TRN-005.source",
+            baseCenter: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
+            axis: CADDirection3D(x: 0, y: 0, z: 1),
+            radius: CADLength(value: 8, unit: .millimeter),
+            depth: CADLength(value: 40, unit: .millimeter)
+        ))
+    case "TRN-006":
+        .sketch(.line(
+            name: "TRN-006.source",
+            plane: .xy,
+            start: CADPoint3D(x: -30, y: -30, z: 0, unit: .millimeter),
+            end: CADPoint3D(x: 30, y: 30, z: 0, unit: .millimeter)
+        ))
+    case "TRN-007":
+        .sketch(.rectangle(
+            name: "TRN-007.source",
+            plane: .yz,
+            center: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
+            width: CADLength(value: 100, unit: .millimeter),
+            height: CADLength(value: 50, unit: .millimeter)
+        ))
+    case "TRN-008":
+        .sketch(.circle(
+            name: "TRN-008.source",
+            plane: .xy,
+            center: CADPoint3D(x: 25, y: -25, z: 0, unit: .millimeter),
+            radius: CADLength(value: 50, unit: .millimeter)
+        ))
+    default:
+        preconditionFailure("Unknown transform case: \(caseID)")
+    }
+}
+
 private func transform001Action(
     translationX: Double = 25,
     axis: CADDirection3D = CADDirection3D(x: 0, y: 0, z: 1)
 ) -> CADCandidateAction {
     .automation(.transform(CADTransformAction(
+        source: transformSource("TRN-001"),
         translation: CADPoint3D(x: translationX, y: 0, z: 0, unit: .millimeter),
         axisPoint: CADPoint3D(x: 50, y: 0, z: 0, unit: .millimeter),
         rotationAxis: axis,
@@ -3423,6 +3406,7 @@ private func transform002Action(
     axis: CADDirection3D = CADDirection3D(x: 0, y: 0, z: 1)
 ) -> CADCandidateAction {
     .automation(.transform(CADTransformAction(
+        source: transformSource("TRN-002"),
         translation: CADPoint3D(
             x: translationX,
             y: translationY,
@@ -3441,6 +3425,7 @@ private func transform003Action(
     axis: CADDirection3D = CADDirection3D(x: 1, y: 0, z: 0)
 ) -> CADCandidateAction {
     .automation(.transform(CADTransformAction(
+        source: transformSource("TRN-003"),
         translation: CADPoint3D(
             x: 0,
             y: translationY,
@@ -3459,6 +3444,7 @@ private func transform004Action(
     axis: CADDirection3D = CADDirection3D(x: 0, y: 0, z: 1)
 ) -> CADCandidateAction {
     .automation(.transform(CADTransformAction(
+        source: transformSource("TRN-004"),
         translation: CADPoint3D(
             x: translationX,
             y: translationY,
@@ -3477,6 +3463,7 @@ private func transform005Action(
     axis: CADDirection3D = CADDirection3D(x: 0, y: 1, z: 0)
 ) -> CADCandidateAction {
     .automation(.transform(CADTransformAction(
+        source: transformSource("TRN-005"),
         translation: CADPoint3D(
             x: translationX,
             y: 50,
@@ -3493,6 +3480,7 @@ private func transform006Action(
     axis: CADDirection3D = CADDirection3D(x: 1, y: 0, z: 0)
 ) -> CADCandidateAction {
     .automation(.transform(CADTransformAction(
+        source: transformSource("TRN-006"),
         translation: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
         axisPoint: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
         rotationAxis: axis,
@@ -3505,6 +3493,7 @@ private func transform007Action(
     axis: CADDirection3D = CADDirection3D(x: 0, y: 0, z: 1)
 ) -> CADCandidateAction {
     .automation(.transform(CADTransformAction(
+        source: transformSource("TRN-007"),
         translation: CADPoint3D(x: 0, y: 0, z: -100, unit: .millimeter),
         axisPoint: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
         rotationAxis: axis,
@@ -3523,6 +3512,7 @@ private func transform008Action(
     )
 ) -> CADCandidateAction {
     .automation(.transform(CADTransformAction(
+        source: transformSource("TRN-008"),
         translation: CADPoint3D(
             x: translationX,
             y: translationY,
@@ -4648,6 +4638,14 @@ private func rec012RectangleAction(name: String) -> CADCandidateAction {
 
 private func replacing(_ data: Data, from: String, to: String) -> Data {
     Data(String(decoding: data, as: UTF8.self).replacingOccurrences(of: from, with: to).utf8)
+}
+
+private func sphereAction(
+    name: String,
+    center: CADPoint3D,
+    radius: CADLength
+) -> CADCandidateAction {
+    .automation(.solid(.sphere(name: name, center: center, radius: radius)))
 }
 
 private func isSingleJSONObject(_ data: Data) -> Bool {

@@ -69,12 +69,11 @@ catalog manifest lexical IDs
   rewrites the supplied baseline; every mismatch is typed run-level drift.
 - Canonical results are projected from regression records with no duration,
   generated identity, or diagnostic. A report is emitted only for a complete
-  valid run and uses fixed denominators: 100 total, 95 supported and realized,
-  five expected unsupported, and 100 correct capability decisions.
+  valid run and uses fixed denominators: 100 total, supported, realized, and
+  correct capability decisions, with zero unsupported outcomes.
 - Canonical JSON uses sorted keys without escaped slashes. Serial and bounded
   execution of the same evidence must therefore produce identical bytes.
-- Current reference execution produces 95 realized cases and five honest
-  expected-unsupported sphere cases.
+- Current reference execution produces 100 realized cases.
 - The scheduler admits only one or two cases and restores completion results to
   manifest lexical order. It uses structured child tasks and drains every
   admitted child after cancellation or the first fatal failure.
@@ -143,7 +142,7 @@ implicit migration or update.
 ## Verification and Change Impact
 
 `CADBenchmarkSerialIntegrationTests` proves lexical 100-case production replay,
-95/5 outcomes, complete cleanup, deterministic record validation, direct
+100 realized outcomes, complete cleanup, deterministic record validation, direct
 single-case projection equality, and typed incomplete/invalid failure. Changes
 to category result fields, activation, manifest order, lifecycle cleanup,
 capability observation, or public result projection require this component and

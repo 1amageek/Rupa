@@ -81,6 +81,9 @@ func packageSourceImportsRespectArchitectureBoundaries() throws {
             "RupaCLI",
             "RupaUI",
         ],
+        "RupaAgentCADBenchmark": [
+            "RupaAutomation",
+        ],
         "RupaAgentTransport": [
             "RupaCore",
             "RupaAutomation",
@@ -116,6 +119,16 @@ func packageSourceImportsRespectArchitectureBoundaries() throws {
     }
 
     #expect(violations.isEmpty, Comment(rawValue: violations.joined(separator: "\n")))
+}
+
+@Test(.timeLimit(.minutes(1)))
+func agentCADBenchmarkDoesNotDependDirectlyOnAutomationLowering() throws {
+    let dependencies = try packageManifestProductionTargetDependencies()[
+        "RupaAgentCADBenchmark",
+        default: []
+    ]
+
+    #expect(!dependencies.contains("RupaAutomation"))
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -185,6 +198,7 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
         ],
         "RupaAgentUI": [
             "RupaKit",
+            "RupaAgentProtocol",
             "RupaAgentRuntime",
             "RupaAgentTransport",
             "RupaCore",
@@ -239,6 +253,7 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
             "RupaAutomation",
             "RupaCapabilities",
             "RupaDomainFoundation",
+            "RupaGeometry",
             "RupaAgentProtocol",
             "RupaProject",
             "RupaProjectModel",
@@ -247,6 +262,27 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
             "RupaCoreTypes",
             "RupaAgentProtocol",
         ],
+        "RupaCADDomain": [
+            "RupaAutomation",
+            "RupaCapabilities",
+            "RupaCore",
+            "RupaDomainFoundation",
+        ],
+        "RupaProjectAccess": [
+            "RupaAgentProtocol",
+            "RupaCoreTypes",
+        ],
+        "RupaProjectAccessPlatform": [
+            "RupaAgentTransport",
+            "RupaProjectAccess",
+        ],
+        "RupaProjectAccessComposition": [
+            "RupaAgentProtocol",
+            "RupaAgentTransport",
+            "RupaCoreTypes",
+            "RupaProjectAccess",
+            "RupaProjectAccessPlatform",
+        ],
         "RupaAgent": [
             "RupaAgentProtocol",
             "RupaAgentRuntime",
@@ -254,21 +290,39 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
         ],
         "RupaCLIKit": [
             "RupaCore",
+            "RupaCoreTypes",
             "RupaAutomation",
             "RupaDomainFoundation",
             "RupaAgentProtocol",
-            "RupaAgentRuntime",
-            "RupaAgentTransport",
+            "RupaProjectAccess",
         ],
-        "RupaCLI": [
+        "RupaCLIComposition": [
             "RupaCLIKit",
+            "RupaProjectAccessComposition",
+            "RupaProjectAccessPlatform",
         ],
-        "RupaPerformanceBenchmark": [
-            "RupaKit",
-            "RupaCore",
-            "RupaAutomation",
+        "RupaAgentCADBenchmark": [
             "RupaAgentProtocol",
             "RupaAgentRuntime",
+            "RupaCADDomain",
+            "RupaCore",
+            "RupaCoreTypes",
+            "RupaDomainFoundation",
+            "RupaGeometry",
+            "RupaKit",
+            "RupaProject",
+        ],
+        "RupaAgentCADBenchmarkJSONAdapter": [
+            "RupaAgentCADBenchmark",
+            "RupaCoreTypes",
+        ],
+        "RupaAgentCADBenchmarkCLI": [
+            "RupaAgentCADBenchmark",
+            "RupaAgentCADBenchmarkJSONAdapter",
+        ],
+        "RupaPerformanceBenchmark": [
+            "RupaCore",
+            "RupaAutomation",
         ],
         "RupaGeometryBufferBenchmark": [
             "RupaGeometry",

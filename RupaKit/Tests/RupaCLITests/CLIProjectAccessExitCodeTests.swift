@@ -15,7 +15,7 @@ func projectAccessErrorsMapToStableCLIExitCategories() {
     let outcome = AgentCommittedMutationOutcome(
         stage: .viewProjection,
         mutation: .source,
-        requestMethod: "command.apply",
+        requestMethod: "parameter.setExpression",
         projectID: ProjectID(rawValue: "project.exit-code"),
         documentGeneration: DocumentGeneration(3),
         transactionRevision: DocumentTransactionRevision(3),

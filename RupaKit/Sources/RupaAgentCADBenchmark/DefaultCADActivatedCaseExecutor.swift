@@ -27,7 +27,6 @@ public struct DefaultCADActivatedCaseExecutor: CADActivatedCaseExecuting, Sendab
         let controller = try CADBenchmarkControllerFactory.make(name: caseID.rawValue)
         return CADActivatedCaseContextFactory.make(
             challenge: challenge,
-            operationName: operationName(for: caseID),
             controller: controller
         )
     }
@@ -173,37 +172,6 @@ public struct DefaultCADActivatedCaseExecutor: CADActivatedCaseExecuting, Sendab
         } catch {
             throw CADActivatedCaseExecutorError.catalogFailure(caseID)
         }
-    }
-
-    private func operationName(for caseID: CADBenchmarkCaseID) -> String {
-        if CADActivatedLineCase.allCases.contains(where: { $0.caseID == caseID }) {
-            return "createLineSketch"
-        }
-        if CADActivatedCircleCase.allCases.contains(where: { $0.caseID == caseID }) {
-            return "createCircleSketch"
-        }
-        if CADActivatedAngleCase.allCases.contains(where: { $0.caseID == caseID }) {
-            return "createLineSketch"
-        }
-        if CADActivatedBoxCase.allCases.contains(where: { $0.caseID == caseID }) {
-            return "createExtrudedRectangle"
-        }
-        if CADActivatedCylinderCase.allCases.contains(where: { $0.caseID == caseID }) {
-            return "createExtrudedCircle"
-        }
-        if CADActivatedConstraintCase.allCases.contains(where: { $0.caseID == caseID }) {
-            return "createSketch"
-        }
-        if CADActivatedTransformCase.allCases.contains(where: { $0.caseID == caseID }) {
-            return "setSceneNodeTransform"
-        }
-        if CADActivatedCompoundCase.allCases.contains(where: { $0.caseID == caseID }) {
-            return ""
-        }
-        if CADActivatedSphereCase.allCases.contains(where: { $0.caseID == caseID }) {
-            return ""
-        }
-        return "createRectangleSketch"
     }
 
     private func publicResult(

@@ -1,9 +1,8 @@
 import Foundation
 import RupaAgentProtocol
-import RupaAutomation
+import RupaCADDomain
 import RupaCore
 import RupaKit
-import SwiftCAD
 
 /// Projects the shared lifecycle into one circle-category result.
 @MainActor
@@ -35,82 +34,26 @@ struct CADCircleCaseRunner {
     func run(candidate: any CADCandidateProtocol) async throws -> CADCircleCaseResult {
         let totalStart = now()
         let entry = try activatedCase.catalogEntry
-        let record = try await harness(challenge: entry.challenge).runReference(candidate: candidate)
+        let record = try await harness(entry: entry).runReference(candidate: candidate)
         return await project(record, entry: entry, totalStart: totalStart)
     }
 
     func run(action: CADCandidateAction) async throws -> CADCircleCaseResult {
         let totalStart = now()
         let entry = try activatedCase.catalogEntry
-        let record = try await harness(challenge: entry.challenge).run(action: action)
+        let record = try await harness(entry: entry).run(action: action)
         return await project(record, entry: entry, totalStart: totalStart)
     }
 
-    private func harness(challenge: CADChallenge) -> CADCaseLifecycleHarness {
+    private func harness(entry: CADCatalogEntry) -> CADCaseLifecycleHarness {
         CADCaseLifecycleHarness(
             caseID: caseID,
-            challenge: challenge,
-            routing: CADCaseActionRouting(
-                operationName: Self.operationName,
-                commandBuilder: { [self] action, challenge, tolerance in
-                    try makeCommand(
-                        from: action,
-                        challenge: challenge,
-                        modelingTolerance: tolerance
-                    )
-                }
-            ),
+            challenge: entry.challenge,
+            programPlanner: { action in
+                try DefaultCADSemanticProgramPlanner().plan(for: entry, action: action)
+            },
             timeoutWallNanoseconds: timeoutWallNanoseconds,
             preRouteDelayNanoseconds: preRouteDelayNanoseconds
-        )
-    }
-
-    private func makeCommand(
-        from action: CADCandidateAction,
-        challenge: CADChallenge,
-        modelingTolerance: ModelingTolerance
-    ) throws -> AutomationCommand {
-        let projection = try CADCircleChallengeProjection.decode(challenge)
-        guard case .automation(
-            .sketch(.circle(let name, let plane, let center, let radius))
-        ) = action,
-        name.isEmpty == false,
-        plane == projection.orientation else {
-            throw CADBenchmarkError.invalidInput(
-                caseID: caseID.rawValue,
-                reason: "The circle action must use the challenge orientation."
-            )
-        }
-        try radius.validate(caseID: caseID, field: "action.radius")
-        let tolerance = try CADBenchmarkTolerancePolicy(modelingTolerance: modelingTolerance)
-        guard tolerance.isNonDegenerate(radius.meters) else {
-            throw CADBenchmarkError.invalidInput(
-                caseID: caseID.rawValue,
-                reason: "The submitted circle radius is degenerate."
-            )
-        }
-        let sourcePlane = try CADCircleGeometryMapping.sourcePlane(
-            orientation: projection.orientation,
-            targetCenter: projection.center,
-            submittedCenter: center,
-            modelingTolerance: modelingTolerance,
-            caseID: caseID
-        )
-        let projectedCenter = try CADCircleGeometryMapping.localPoint(
-            from: center,
-            sourcePlane: sourcePlane,
-            modelingTolerance: modelingTolerance,
-            caseID: caseID
-        )
-        let localCenter = SketchPoint(
-            x: .constant(.length(projectedCenter.x, unit: .meter)),
-            y: .constant(.length(projectedCenter.y, unit: .meter))
-        )
-        return .createCircleSketch(
-            name: name,
-            plane: SketchPlaneReference(sketchPlane: sourcePlane),
-            center: localCenter,
-            radius: .constant(.length(radius.meters, unit: .meter))
         )
     }
 
@@ -148,10 +91,19 @@ struct CADCircleCaseRunner {
         totalStart: UInt64
     ) async -> CADCircleCaseResult {
         guard let finalView = record.finalView,
-              let automationResult = commandResult(from: record.response) else {
+              let semanticReceipt = CADSemanticExecutionEvidence.committedReceipt(from: record.response) else {
             return finish(result(.infrastructureFailure, record, evidence), totalStart: totalStart)
         }
-        let (stepResult, bindings) = publishedEvidence(from: automationResult)
+        let semanticEvidence = CADSemanticExecutionEvidence(receipt: semanticReceipt)
+        let stepResult = semanticEvidence.stepResult(
+            node: "circle",
+            operation: RupaCADSemanticOperationID.sketchCircle.rawValue,
+            index: 0,
+            primaryOutputs: ["profile"]
+        )
+        let bindings = CADOutputRoleBindings(bindings: [
+            CADOutputRoleBinding(role: "circle", stepIndex: 0, selector: .primary),
+        ])
         let oracleStart = now()
         do {
             guard case .circle(let expected) = entry.expected else {
@@ -264,10 +216,19 @@ struct CADCircleCaseRunner {
         evidence: CADCircleRouteEvidence,
         outcome: CADCaseOutcome
     ) -> CADCircleCaseResult {
-        guard let automationResult = commandResult(from: record.response) else {
+        guard let semanticReceipt = CADSemanticExecutionEvidence.committedReceipt(from: record.response) else {
             return result(.infrastructureFailure, record, evidence)
         }
-        let (stepResult, bindings) = publishedEvidence(from: automationResult)
+        let semanticEvidence = CADSemanticExecutionEvidence(receipt: semanticReceipt)
+        let stepResult = semanticEvidence.stepResult(
+            node: "circle",
+            operation: RupaCADSemanticOperationID.sketchCircle.rawValue,
+            index: 0,
+            primaryOutputs: ["profile"]
+        )
+        let bindings = CADOutputRoleBindings(bindings: [
+            CADOutputRoleBinding(role: "circle", stepIndex: 0, selector: .primary),
+        ])
         return result(
             outcome,
             record,
@@ -277,29 +238,6 @@ struct CADCircleCaseRunner {
         )
     }
 
-    private func commandResult(from response: AgentResponse?) -> AutomationResult? {
-        guard case .command(let result) = response else { return nil }
-        return result
-    }
-
-    private func publishedEvidence(
-        from result: AutomationResult
-    ) -> (CADCandidateStepResult, CADOutputRoleBindings) {
-        let step = CADCandidateStepResult(
-            stepIndex: 0,
-            operation: Self.operationName,
-            status: result.didMutate ? .published : .unchanged,
-            primaryFeatureID: result.primaryFeatureID?.description,
-            createdFeatureIDs: result.createdFeatureIDs.map(\.description),
-            diagnostics: result.diagnostics.map(\.message)
-        )
-        return (
-            step,
-            CADOutputRoleBindings(bindings: [
-                CADOutputRoleBinding(role: "circle", stepIndex: 0, selector: .primary),
-            ])
-        )
-    }
 
     private func result(
         _ outcome: CADCaseOutcome,

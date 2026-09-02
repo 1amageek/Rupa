@@ -1,5 +1,6 @@
 import ArgumentParser
 import Foundation
+import RupaAgentProtocol
 import RupaCore
 
 public struct DimensionSetSelectionCommand: AsyncParsableCommand {
@@ -33,35 +34,42 @@ public struct DimensionSetSelectionCommand: AsyncParsableCommand {
             dimensionID,
             valueName: "SelectionDimensionID"
         )
+        let sessionID = try document.resolvedSessionID()
 
-        try await CLIAutomationCommandRunner.run(document: document) { sessionID in
+        try await CLIExitCode.run {
             let targetExpression = try await expression(sessionID: sessionID)
-            return .setSelectionDimensionTarget(
-                id: id,
-                target: targetExpression
-            )
+            let response = try await CLIService().executeTypedMutationRequest(
+                target: document.target(sessionID: sessionID)
+            ) { sessionID in
+                .setSelectionDimensionTargetExpression(
+                    sessionID: sessionID,
+                    id: id,
+                    expression: targetExpression,
+                    defaults: nil,
+                    expectedGeneration: document.generation()
+                )
+            }
+            try CLIOutput.write(response: response, asJSON: document.json)
         }
     }
 
-    private func expression(sessionID: UUID?) async throws -> CADExpression {
+    private func expression(sessionID: UUID?) async throws -> String {
+        guard targetValue.isFinite else {
+            throw ValidationError("Selection dimension target value must be finite.")
+        }
         switch kind {
         case .distance:
-            let resolvedLengthUnit = try await CLILengthUnitResolver.resolve(
+            let unit = try await CLILengthUnitResolver.resolve(
                 unit: lengthUnit,
                 document: document,
                 sessionID: sessionID
             )
-            return try CLIExpressionParser.length(
-                value: targetValue,
-                unit: resolvedLengthUnit,
-                valueName: "Selection dimension target value"
-            )
+            return "\(targetValue) \(unit.rawValue)"
         case .angle:
-            return try CLIExpressionParser.angle(
-                value: targetValue,
-                unitName: angleUnit,
-                valueName: "Selection dimension target value"
-            )
+            guard let unit = AngleUnit(rawValue: angleUnit) else {
+                throw ValidationError("Angle unit must be degree or radian.")
+            }
+            return "\(targetValue) \(unit.rawValue)"
         }
     }
 }

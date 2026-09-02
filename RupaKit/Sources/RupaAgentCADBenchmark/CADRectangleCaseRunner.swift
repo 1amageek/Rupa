@@ -1,9 +1,8 @@
 import Foundation
 import RupaAgentProtocol
-import RupaAutomation
+import RupaCADDomain
 import RupaCore
 import RupaKit
-import SwiftCAD
 
 /// Projects the shared lifecycle into one rectangle-category result.
 @MainActor
@@ -35,7 +34,7 @@ struct CADRectangleCaseRunner {
     func run(candidate: any CADCandidateProtocol) async throws -> CADRectangleCaseResult {
         let totalStart = now()
         let entry = try activatedCase.catalogEntry
-        let record = try await harness(challenge: entry.challenge).runReference(
+        let record = try await harness(entry: entry).runReference(
             candidate: candidate
         )
         return await project(record, entry: entry, totalStart: totalStart)
@@ -44,67 +43,19 @@ struct CADRectangleCaseRunner {
     func run(action: CADCandidateAction) async throws -> CADRectangleCaseResult {
         let totalStart = now()
         let entry = try activatedCase.catalogEntry
-        let record = try await harness(challenge: entry.challenge).run(action: action)
+        let record = try await harness(entry: entry).run(action: action)
         return await project(record, entry: entry, totalStart: totalStart)
     }
 
-    private func harness(challenge: CADChallenge) -> CADCaseLifecycleHarness {
+    private func harness(entry: CADCatalogEntry) -> CADCaseLifecycleHarness {
         CADCaseLifecycleHarness(
             caseID: caseID,
-            challenge: challenge,
-            routing: CADCaseActionRouting(
-                operationName: Self.operationName,
-                commandBuilder: { [self] action, challenge, tolerance in
-                    try makeCommand(
-                        from: action,
-                        challenge: challenge,
-                        modelingTolerance: tolerance
-                    )
-                }
-            ),
+            challenge: entry.challenge,
+            programPlanner: { action in
+                try DefaultCADSemanticProgramPlanner().plan(for: entry, action: action)
+            },
             timeoutWallNanoseconds: timeoutWallNanoseconds,
             preRouteDelayNanoseconds: preRouteDelayNanoseconds
-        )
-    }
-
-    private func makeCommand(
-        from action: CADCandidateAction,
-        challenge: CADChallenge,
-        modelingTolerance: ModelingTolerance
-    ) throws -> AutomationCommand {
-        let projection = try CADRectangleChallengeProjection.decode(challenge)
-        guard case .automation(
-            .sketch(.rectangle(let name, let plane, let center, let width, let height))
-        ) = action,
-        name.isEmpty == false,
-        plane == projection.orientation else {
-            throw CADBenchmarkError.invalidInput(
-                caseID: caseID.rawValue,
-                reason: "The rectangle action must use the challenge orientation."
-            )
-        }
-        try width.validate(caseID: caseID, field: "action.width")
-        try height.validate(caseID: caseID, field: "action.height")
-        let tolerance = try CADBenchmarkTolerancePolicy(modelingTolerance: modelingTolerance)
-        guard tolerance.isNonDegenerate(width.meters),
-              tolerance.isNonDegenerate(height.meters) else {
-            throw CADBenchmarkError.invalidInput(
-                caseID: caseID.rawValue,
-                reason: "The submitted rectangle dimensions are degenerate."
-            )
-        }
-        let sourcePlane = try CADRectangleGeometryMapping.sourcePlane(
-            orientation: projection.orientation,
-            targetCenter: projection.center,
-            submittedCenter: center,
-            modelingTolerance: modelingTolerance,
-            caseID: caseID
-        )
-        return .createRectangleSketch(
-            name: name,
-            plane: SketchPlaneReference(sketchPlane: sourcePlane),
-            width: .constant(.length(width.meters, unit: .meter)),
-            height: .constant(.length(height.meters, unit: .meter))
         )
     }
 
@@ -147,10 +98,19 @@ struct CADRectangleCaseRunner {
         totalStart: UInt64
     ) async -> CADRectangleCaseResult {
         guard let finalView = record.finalView,
-              let automationResult = commandResult(from: record.response) else {
+              let semanticReceipt = CADSemanticExecutionEvidence.committedReceipt(from: record.response) else {
             return finish(result(.infrastructureFailure, record, evidence), totalStart: totalStart)
         }
-        let (stepResult, bindings) = publishedEvidence(from: automationResult)
+        let semanticEvidence = CADSemanticExecutionEvidence(receipt: semanticReceipt)
+        let stepResult = semanticEvidence.stepResult(
+            node: "rectangle",
+            operation: RupaCADSemanticOperationID.sketchRectangle.rawValue,
+            index: 0,
+            primaryOutputs: ["profile"]
+        )
+        let bindings = CADOutputRoleBindings(bindings: [
+            CADOutputRoleBinding(role: "rectangle", stepIndex: 0, selector: .primary),
+        ])
         let oracleStart = now()
         do {
             guard case .rectangle(let expected) = entry.expected else {
@@ -264,10 +224,19 @@ struct CADRectangleCaseRunner {
         evidence: CADRectangleRouteEvidence,
         outcome: CADCaseOutcome
     ) -> CADRectangleCaseResult {
-        guard let automationResult = commandResult(from: record.response) else {
+        guard let semanticReceipt = CADSemanticExecutionEvidence.committedReceipt(from: record.response) else {
             return result(.infrastructureFailure, record, evidence)
         }
-        let (stepResult, bindings) = publishedEvidence(from: automationResult)
+        let semanticEvidence = CADSemanticExecutionEvidence(receipt: semanticReceipt)
+        let stepResult = semanticEvidence.stepResult(
+            node: "rectangle",
+            operation: RupaCADSemanticOperationID.sketchRectangle.rawValue,
+            index: 0,
+            primaryOutputs: ["profile"]
+        )
+        let bindings = CADOutputRoleBindings(bindings: [
+            CADOutputRoleBinding(role: "rectangle", stepIndex: 0, selector: .primary),
+        ])
         return result(
             outcome,
             record,
@@ -277,29 +246,6 @@ struct CADRectangleCaseRunner {
         )
     }
 
-    private func commandResult(from response: AgentResponse?) -> AutomationResult? {
-        guard case .command(let result) = response else { return nil }
-        return result
-    }
-
-    private func publishedEvidence(
-        from result: AutomationResult
-    ) -> (CADCandidateStepResult, CADOutputRoleBindings) {
-        let step = CADCandidateStepResult(
-            stepIndex: 0,
-            operation: Self.operationName,
-            status: result.didMutate ? .published : .unchanged,
-            primaryFeatureID: result.primaryFeatureID?.description,
-            createdFeatureIDs: result.createdFeatureIDs.map(\.description),
-            diagnostics: result.diagnostics.map(\.message)
-        )
-        return (
-            step,
-            CADOutputRoleBindings(bindings: [
-                CADOutputRoleBinding(role: "rectangle", stepIndex: 0, selector: .primary),
-            ])
-        )
-    }
 
     private func result(
         _ outcome: CADCaseOutcome,

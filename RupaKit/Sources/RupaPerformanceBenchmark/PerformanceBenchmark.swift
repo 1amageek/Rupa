@@ -1,11 +1,6 @@
 import Foundation
-import RupaAgentProtocol
-import RupaAgentRuntime
 import RupaAutomation
-import RupaCADDomain
 import RupaCore
-import RupaDomainFoundation
-import RupaKit
 import SwiftCAD
 
 @main
@@ -30,7 +25,6 @@ struct PerformanceBenchmark {
             evaluator: evaluator
         )
         let coreEditBenchmark = try CoreEditBenchmark(transaction: transaction)
-        let agentEditBenchmark = try await AgentEditBenchmark(transaction: transaction)
         let availableTelemetryWorkloads: [(
             name: String,
             measure: () async throws -> TimedTelemetry
@@ -48,10 +42,6 @@ struct PerformanceBenchmark {
                 { try measureCoreCreate(transaction: transaction) }
             ),
             (
-                "create_bodies",
-                { try await measureCreate(transaction: transaction) }
-            ),
-            (
                 "kernel_edit_one_body",
                 { try kernelEditBenchmark.measure() }
             ),
@@ -59,25 +49,17 @@ struct PerformanceBenchmark {
                 "core_edit_one_body",
                 { try coreEditBenchmark.measure() }
             ),
-            (
-                "edit_one_body",
-                { try await agentEditBenchmark.measure() }
-            ),
         ]
         let telemetryWorkloads = availableTelemetryWorkloads.filter {
             options.includes(workload: $0.name)
         }
-        let measuresEncoding = options.includes(workload: "encode_create_request")
-        guard !telemetryWorkloads.isEmpty || measuresEncoding else {
+        guard !telemetryWorkloads.isEmpty else {
             throw BenchmarkError.invalidArguments
         }
 
         for _ in 0..<options.warmupCount {
             for workload in telemetryWorkloads {
                 _ = try await workload.measure()
-            }
-            if measuresEncoding {
-                _ = try measureEncoding(transaction: transaction)
             }
         }
 
@@ -87,21 +69,11 @@ struct PerformanceBenchmark {
             samplesByWorkload[workload.name] = []
             samplesByWorkload[workload.name]?.reserveCapacity(options.iterationCount)
         }
-        var encodingSamples: [Double] = []
-        var encodedByteCount = 0
-        encodingSamples.reserveCapacity(options.iterationCount)
-
         for _ in 0..<options.iterationCount {
             for workload in telemetryWorkloads {
                 let measurement = try await workload.measure()
                 samplesByWorkload[workload.name, default: []].append(measurement.seconds)
                 telemetryByWorkload[workload.name] = measurement.telemetry
-            }
-
-            if measuresEncoding {
-                let encoding = try measureEncoding(transaction: transaction)
-                encodingSamples.append(encoding.seconds)
-                encodedByteCount = encoding.byteCount
             }
         }
 
@@ -119,13 +91,7 @@ struct PerformanceBenchmark {
                     ),
                     telemetry: telemetryByWorkload[workload.name]
                 )
-            } + (measuresEncoding ? [
-                BenchmarkWorkload(
-                    name: "encode_create_request",
-                    statistics: BenchmarkStatistics(samples: encodingSamples),
-                    encodedByteCount: encodedByteCount
-                ),
-            ] : [])
+            }
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -194,99 +160,6 @@ struct PerformanceBenchmark {
                     - initialHistoryCount
             )
         )
-    }
-
-    @MainActor
-    private static func measureCreate(
-        transaction: FeatureGraphTransaction
-    ) async throws -> TimedTelemetry {
-        let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
-        _ = try await workspace.evaluate()
-        let controller = try makeAgentController()
-        let sessionID = try await controller.register(workspace: workspace)
-        let generation = try requiredView(workspace).documentGeneration
-        let start = ContinuousClock.now
-        let response = try await ordinaryResponse(
-            from: controller.handle(
-                AgentRequestEnvelope(
-                    id: UUID().uuidString,
-                    params: .execute(
-                        sessionID: sessionID,
-                        command: .appendFeatureGraph(transaction),
-                        expectedGeneration: generation
-                    )
-                )
-            )
-        )
-        let duration = start.duration(to: ContinuousClock.now)
-        let result = try commandResult(from: response)
-        guard try requiredView(workspace).evaluationSnapshot.bodyCount
-            == transaction.presentations.lazy.filter({ presentation in
-            if case .body = presentation.kind {
-                return true
-            }
-            return false
-        }).count else {
-            throw BenchmarkError.unexpectedBodyCount
-        }
-        return TimedTelemetry(
-            seconds: duration.seconds,
-            telemetry: result.executionMetrics.map(BenchmarkTelemetry.init)
-        )
-    }
-
-    @MainActor
-    private static func requiredView(
-        _ workspace: ProjectWorkspace
-    ) throws -> ProjectViewSnapshot {
-        guard let view = workspace.view else {
-            throw BenchmarkError.unexpectedAgentResponse
-        }
-        return view
-    }
-
-    private static func measureEncoding(
-        transaction: FeatureGraphTransaction
-    ) throws -> TimedEncoding {
-        let codec = AgentMessageCodec()
-        let request = AgentRequest.execute(
-            sessionID: UUID(),
-            command: .appendFeatureGraph(transaction),
-            expectedGeneration: DocumentGeneration()
-        )
-        let start = ContinuousClock.now
-        let data = try codec.encode(request, id: "benchmark")
-        let duration = start.duration(to: ContinuousClock.now)
-        return TimedEncoding(seconds: duration.seconds, byteCount: data.count)
-    }
-
-    private static func commandResult(from response: AgentResponse) throws -> AutomationResult {
-        switch response {
-        case .command(let result):
-            return result
-        case .failure(let error):
-            throw error
-        default:
-            throw BenchmarkError.unexpectedAgentResponse
-        }
-    }
-
-    @MainActor
-    private static func makeAgentController() throws -> ProjectAgentCommandController {
-        ProjectAgentCommandController(
-            semanticProgramCompiler: DefaultSemanticProgramCompiler(
-                registry: try RupaCADDomain.registry()
-            )
-        )
-    }
-
-    private static func ordinaryResponse(
-        from handled: AgentHandledResponse
-    ) throws -> AgentResponse {
-        guard case .ordinary(let response) = handled else {
-            throw BenchmarkError.unexpectedAgentResponse
-        }
-        return response
     }
 
     private static func makeBoxTransaction(bodyCount: Int) -> FeatureGraphTransaction {
@@ -437,100 +310,6 @@ private final class CoreEditBenchmark {
     }
 }
 
-@MainActor
-private final class AgentEditBenchmark {
-    private let controller: ProjectAgentCommandController
-    private let workspace: ProjectWorkspace
-    private let sessionID: UUID
-    private let featureID: FeatureID
-    private var usesExpandedDistance = false
-
-    init(transaction: FeatureGraphTransaction) async throws {
-        guard let featureID = transaction.primaryFeatureID else {
-            throw BenchmarkError.missingPrimaryFeature
-        }
-        let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
-        _ = try await workspace.evaluate()
-        let controller = ProjectAgentCommandController(
-            semanticProgramCompiler: DefaultSemanticProgramCompiler(
-                registry: try RupaCADDomain.registry()
-            )
-        )
-        let sessionID = try await controller.register(workspace: workspace)
-        guard let initialView = workspace.view else {
-            throw BenchmarkError.unexpectedAgentResponse
-        }
-        _ = try Self.commandResult(
-            from: try Self.ordinaryResponse(
-                from: await controller.handle(
-                    AgentRequestEnvelope(
-                        id: UUID().uuidString,
-                        params: .execute(
-                            sessionID: sessionID,
-                            command: .appendFeatureGraph(transaction),
-                            expectedGeneration: initialView.documentGeneration
-                        )
-                    )
-                )
-            )
-        )
-        self.controller = controller
-        self.workspace = workspace
-        self.sessionID = sessionID
-        self.featureID = featureID
-    }
-
-    func measure() async throws -> TimedTelemetry {
-        guard let view = workspace.view else {
-            throw BenchmarkError.unexpectedAgentResponse
-        }
-        let distance = usesExpandedDistance ? 10.0 : 12.0
-        let start = ContinuousClock.now
-        let response = try Self.ordinaryResponse(
-            from: await controller.handle(
-                AgentRequestEnvelope(
-                    id: UUID().uuidString,
-                    params: .execute(
-                        sessionID: sessionID,
-                        command: .setExtrudeDistance(
-                            featureID: featureID,
-                            distance: .length(distance, .millimeter)
-                        ),
-                        expectedGeneration: view.documentGeneration
-                    )
-                )
-            )
-        )
-        let duration = start.duration(to: ContinuousClock.now)
-        let result = try Self.commandResult(from: response)
-        usesExpandedDistance.toggle()
-        return TimedTelemetry(
-            seconds: duration.seconds,
-            telemetry: result.executionMetrics.map(BenchmarkTelemetry.init)
-        )
-    }
-
-    private static func commandResult(from response: AgentResponse) throws -> AutomationResult {
-        switch response {
-        case .command(let result):
-            return result
-        case .failure(let error):
-            throw error
-        default:
-            throw BenchmarkError.unexpectedAgentResponse
-        }
-    }
-
-    private static func ordinaryResponse(
-        from handled: AgentHandledResponse
-    ) throws -> AgentResponse {
-        guard case .ordinary(let response) = handled else {
-            throw BenchmarkError.unexpectedAgentResponse
-        }
-        return response
-    }
-}
-
 private struct BenchmarkOptions {
     var bodyCount = 100
     var iterationCount = 7
@@ -587,18 +366,15 @@ private struct BenchmarkWorkload: Codable {
     var name: String
     var statistics: BenchmarkStatistics
     var telemetry: BenchmarkTelemetry?
-    var encodedByteCount: Int?
 
     init(
         name: String,
         statistics: BenchmarkStatistics,
-        telemetry: BenchmarkTelemetry? = nil,
-        encodedByteCount: Int? = nil
+        telemetry: BenchmarkTelemetry? = nil
     ) {
         self.name = name
         self.statistics = statistics
         self.telemetry = telemetry
-        self.encodedByteCount = encodedByteCount
     }
 }
 
@@ -696,16 +472,10 @@ private struct TimedTelemetry {
     var telemetry: BenchmarkTelemetry?
 }
 
-private struct TimedEncoding {
-    var seconds: Double
-    var byteCount: Int
-}
-
 private enum BenchmarkError: Error {
     case invalidArguments
     case missingPrimaryFeature
     case outputEncodingFailed
-    case unexpectedAgentResponse
     case unexpectedBodyCount
     case unexpectedIncrementalEvaluation
 }

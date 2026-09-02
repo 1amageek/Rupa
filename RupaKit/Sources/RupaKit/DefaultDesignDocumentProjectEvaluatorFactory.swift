@@ -5,13 +5,7 @@ import RupaEvaluation
 /// The product composition that connects built-in mesh and Swift-CAD providers.
 public struct DefaultDesignDocumentProjectEvaluatorFactory:
     DesignDocumentProjectEvaluatorFactory {
-    private let cadEvaluationCache: CADDocumentEvaluationCache
-
-    public init(
-        cadEvaluationCache: CADDocumentEvaluationCache = CADDocumentEvaluationCache()
-    ) {
-        self.cadEvaluationCache = cadEvaluationCache
-    }
+    public init() {}
 
     public func makeEvaluator(
         for document: DesignDocument,
@@ -31,6 +25,7 @@ public struct DefaultDesignDocumentProjectEvaluatorFactory:
             tolerance: document.modelingSettings.tolerance,
             tessellationOptions: document.modelingSettings.tessellationOptions
         )
+        let cadEvaluationCache = CADDocumentEvaluationCache()
         let registry = try GeometrySourceEvaluationProviderRegistry(
             providers: [
                 MeshSourceEvaluationProvider(),

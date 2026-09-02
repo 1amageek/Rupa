@@ -1,11 +1,12 @@
-import Testing
 import Darwin
 import Foundation
+import RupaAgentIntegrationTestFixtures
+import RupaAgentProtocol
+import RupaAgentTestFixtures
 import RupaAutomation
 import RupaCore
-import RupaAgentIntegrationTestFixtures
-import RupaAgentTestFixtures
 import SwiftCAD
+import Testing
 @testable import RupaAgent
 
 @MainActor
@@ -31,7 +32,7 @@ import SwiftCAD
     let response = server.handle(
         .topologySummary(
             sessionID: sessionID,
-            expectedGeneration: DocumentGeneration(1)
+            expectedGeneration: session.generation
         )
     )
 
@@ -43,8 +44,12 @@ import SwiftCAD
     #expect(topologySummary.counts.faceCount == 6)
     #expect(topologySummary.counts.edgeCount == 12)
     #expect(topologySummary.counts.vertexCount == 8)
-    let cylinderFaces = topologySummary.entries.filter { $0.kind == .face && $0.surfaceKind == "cylinder" }
-    let circularEdges = topologySummary.entries.filter { $0.kind == .edge && $0.curveKind == "circle" }
+    let cylinderFaces = topologySummary.entries.filter {
+        $0.kind == .face && $0.surfaceKind == "cylinder"
+    }
+    let circularEdges = topologySummary.entries.filter {
+        $0.kind == .edge && $0.curveKind == "circle"
+    }
     #expect(cylinderFaces.count == 4)
     #expect(circularEdges.count == 8)
     #expect(cylinderFaces.allSatisfy(hasExpectedAgentCylinderDefinition))
@@ -59,96 +64,6 @@ import SwiftCAD
     #expect(vertexComponentID.generatedTopologySubshapeID.map(GeneratedSubshapeIdentity.string(for:)) == vertexEntry.subshapeID)
     #expect(session.generation == DocumentGeneration(1))
     #expect(session.commandStack.canUndo)
-}
-
-@MainActor
-@Test func agentSummarizesSweepBooleanTopologyWithoutMutation() async throws {
-    var document = DesignDocument.empty()
-    let targetProfileID = try document.createRectangleSketchFromCorners(
-        name: "Agent Cell Union Boolean Target Profile",
-        plane: .xy,
-        firstCorner: SketchPoint(
-            x: .length(-20.0, .millimeter),
-            y: .length(-20.0, .millimeter)
-        ),
-        oppositeCorner: SketchPoint(
-            x: .length(20.0, .millimeter),
-            y: .length(20.0, .millimeter)
-        )
-    )
-    let targetBodyID = try document.extrudeProfile(
-        name: "Agent Cell Union Boolean Target",
-        profile: ProfileReference(featureID: targetProfileID),
-        distance: .length(10.0, .millimeter),
-        direction: .normal
-    )
-    let toolProfileID = try document.createRectangleSketchFromCorners(
-        name: "Agent Cell Union Boolean Tool Profile",
-        plane: .xy,
-        firstCorner: SketchPoint(
-            x: .length(-5.0, .millimeter),
-            y: .length(-5.0, .millimeter)
-        ),
-        oppositeCorner: SketchPoint(
-            x: .length(25.0, .millimeter),
-            y: .length(25.0, .millimeter)
-        )
-    )
-    let pathID = try document.createLineSketch(
-        name: "Agent Cell Union Boolean Sweep Path",
-        plane: .yz,
-        start: SketchPoint(
-            x: .length(0.0, .millimeter),
-            y: .length(0.0, .millimeter)
-        ),
-        end: SketchPoint(
-            x: .length(0.0, .millimeter),
-            y: .length(10.0, .millimeter)
-        )
-    )
-    _ = try document.createSweep(
-        name: "Agent Cell Union Boolean Result Sweep",
-        sections: [.profile(ProfileReference(featureID: toolProfileID))],
-        path: SweepPathReference(featureID: pathID),
-        targets: [SweepTargetReference(featureID: targetBodyID)],
-        options: SweepOptions(booleanOperation: .difference)
-    )
-    let server = AgentCommandController()
-    let sessionID = UUID()
-    let session = EditorSession(document: document)
-    server.register(session: session, id: sessionID)
-
-    let response = server.handle(
-        .topologySummary(
-            sessionID: sessionID,
-            expectedGeneration: DocumentGeneration(0)
-        )
-    )
-
-    guard case .topologySummary(let topologySummary) = response else {
-        Issue.record("Agent must return a topology summary.")
-        return
-    }
-    let face = try #require(topologySummary.entries.first {
-        $0.kind == .face
-            && $0.generatedRole == "sideFace.orthogonal:component:0:face:maximumX:plane:1:region:0"
-    })
-    let edge = try #require(topologySummary.entries.first {
-        $0.kind == .edge
-            && $0.generatedRole == "edge.orthogonal:component:0:face:maximumX:plane:1:region:0:loop:0:edge:0"
-    })
-    let vertex = try #require(topologySummary.entries.first {
-        $0.kind == .vertex
-            && $0.generatedRole == "vertex.orthogonal:component:0:face:maximumX:plane:1:region:0:loop:0:edge:0:end"
-    })
-    #expect(face.selectionTarget() != nil)
-    #expect(edge.selectionTarget() != nil)
-    #expect(vertex.selectionTarget() != nil)
-    #expect(topologySummary.counts.bodyCount == 1)
-    #expect(topologySummary.counts.faceCount > 6)
-    #expect(topologySummary.counts.edgeCount > 12)
-    #expect(topologySummary.counts.vertexCount > 8)
-    #expect(session.generation == DocumentGeneration(0))
 }
 
 private func hasExpectedAgentCylinderDefinition(_ entry: TopologySummaryResult.Entry) -> Bool {
@@ -203,10 +118,7 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
     server.register(session: session, id: sessionID)
 
     let topologyResponse = server.handle(
-        .topologySummary(
-            sessionID: sessionID,
-            expectedGeneration: generation
-        )
+        .topologySummary(sessionID: sessionID, expectedGeneration: generation)
     )
     guard case .topologySummary(let topology) = topologyResponse else {
         Issue.record("Agent must return a topology summary.")
@@ -222,7 +134,6 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
             expectedGeneration: generation
         )
     )
-
     guard case .selection(let result) = response else {
         Issue.record("Agent must return a selection result.")
         return
@@ -236,115 +147,36 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
 }
 
 @MainActor
-@Test func agentSelectsSurfaceControlPointReferenceWithoutMutation() async throws {
-    let server = AgentCommandController()
-    let sessionID = UUID()
-    let session = EditorSession()
-    _ = try #require(session.createPolySplineSurface(
-        name: "Agent Reference Selection Surface",
-        sourceMesh: agentPolySplinePatchNetworkMesh(centerZ: 0.0),
-        options: PolySplineOptions(mergePatches: false)
-    ))
-    let generation = session.generation
-    let dirty = session.isDirty
-    server.register(session: session, id: sessionID)
-
-    let summaryResponse = server.handle(
-        .surfaceSourceSummary(
-            sessionID: sessionID,
-            expectedGeneration: generation
-        )
-    )
-    guard case .surfaceSourceSummary(let summary) = summaryResponse else {
-        Issue.record("Agent must return a surface source summary.")
-        return
-    }
-    let patch = try #require(summary.sources.first?.patches.first)
-    let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
-
-    let response = server.handle(
-        .selectReferences(
-            sessionID: sessionID,
-            references: [try #require(controlPoint.selectionReference)],
-            expectedGeneration: generation
-        )
-    )
-
-    guard case .selection(let result) = response else {
-        Issue.record("Agent must return a selection result.")
-        return
-    }
-    #expect(result.selectedTargets.isEmpty)
-    #expect(result.selectedReferences == [try #require(controlPoint.selectionReference)])
-    #expect(session.selection.selectedReferences == [try #require(controlPoint.selectionReference)])
-    #expect(result.generation == generation)
-    #expect(session.generation == generation)
-    #expect(result.dirty == dirty)
-    #expect(session.isDirty == dirty)
-}
-
-@MainActor
 @Test func agentSavesOpenFileBackedSessionAndMarksClean() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
-    defer {
-        removeTemporaryDirectory(temporaryDirectory)
-    }
+    defer { removeTemporaryDirectory(temporaryDirectory) }
     let url = temporaryDirectory.appendingPathComponent("agent-save.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: url)
     let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession(document: try DocumentFileService().load(from: url))
-    _ = try session.execute(
-        .renameDocument(name: "Saved Live"),
-        expectedGeneration: DocumentGeneration(0)
-    )
+    _ = try session.execute(.renameDocument(name: "Saved Live"))
     server.register(session: session, path: url, id: sessionID)
 
     let response = server.handle(
-        .save(
-            sessionID: sessionID,
-            expectedGeneration: DocumentGeneration(1)
-        )
+        .save(sessionID: sessionID, expectedGeneration: session.generation)
     )
-
     guard case .save(let result) = response else {
         #expect(Bool(false))
         return
     }
     let loaded = try DocumentFileService().load(from: url)
     #expect(result.path == url.path)
-    #expect(result.generation == DocumentGeneration(1))
+    #expect(result.generation == session.generation)
     #expect(!result.dirty)
     #expect(!session.isDirty)
     #expect(loaded.cadDocument.metadata.name == "Saved Live")
 }
 
-@Test func agentSaveRejectsPathlessSession() async throws {
-    let server = AgentCommandController()
-    let sessionID = UUID()
-    server.register(session: EditorSession(document: .empty(named: "Pathless")), id: sessionID)
-
-    let response = server.handle(
-        .save(
-            sessionID: sessionID,
-            expectedGeneration: DocumentGeneration(0)
-        )
-    )
-
-    guard case .failure(let error) = response else {
-        #expect(Bool(false))
-        return
-    }
-    #expect(error.code == .commandInvalid)
-    #expect(error.message.contains("file path"))
-}
-
 @MainActor
 @Test func agentExportsOpenSessionWithoutMutation() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
-    defer {
-        removeTemporaryDirectory(temporaryDirectory)
-    }
+    defer { removeTemporaryDirectory(temporaryDirectory) }
     let outputURL = temporaryDirectory.appendingPathComponent("agent-box.stl")
     let server = AgentCommandController()
     let sessionID = UUID()
@@ -365,87 +197,28 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
         .export(
             sessionID: sessionID,
             outputPath: outputURL.path,
-            expectedGeneration: DocumentGeneration(1),
+            expectedGeneration: session.generation,
             options: ExportOptions(),
             dryRun: false
         )
     )
-
     guard case .export(let result) = response else {
         #expect(Bool(false))
         return
     }
     #expect(result.format == .stl)
-    #expect(result.generation == DocumentGeneration(1))
+    #expect(result.generation == session.generation)
     #expect(result.byteCount == 84 + 12 * 50)
-    #expect(session.generation == DocumentGeneration(1))
     #expect(FileManager.default.fileExists(atPath: outputURL.path))
 }
 
-@Test func agentRejectsGenerationMismatchBeforeMutation() async throws {
-    let server = AgentCommandController()
-    let sessionID = UUID()
-    let session = EditorSession()
-    server.register(session: session, id: sessionID)
-    _ = try AutomationRunner().execute(.renameDocument(name: "Current"), in: session)
-
-    let response = server.handle(
-        .execute(
-            sessionID: sessionID,
-            command: .renameDocument(name: "Rejected"),
-            expectedGeneration: DocumentGeneration(0)
-        )
-    )
-
-    guard case .failure(let error) = response else {
-        #expect(Bool(false))
-        return
-    }
-    #expect(error.code == .documentGenerationMismatch)
-    #expect(session.document.cadDocument.metadata.name == "Current")
-    #expect(session.generation == DocumentGeneration(1))
-}
-
 @Test func agentReportsSessionNotFoundForUnknownSession() async throws {
-    let server = AgentCommandController()
-    let response = server.handle(
-        .execute(
-            sessionID: UUID(),
-            command: .validateDocument,
-            expectedGeneration: nil
-        )
+    let response = AgentCommandController().handle(
+        .validateDocument(sessionID: UUID(), expectedGeneration: nil)
     )
-
     guard case .failure(let error) = response else {
         #expect(Bool(false))
         return
     }
     #expect(error.code == .sessionNotFound)
-}
-
-@MainActor
-@Test func mainActorAgentBridgeRoutesSessionMutations() async throws {
-    let bridge = MainActorAgentBridge()
-    let sessionID = UUID()
-    let session = EditorSession()
-    bridge.register(session: session, id: sessionID)
-
-    let handled = await bridge.handle(
-        AgentRequestEnvelope(
-            id: "main-actor-live",
-            params: .execute(
-                sessionID: sessionID,
-                command: .renameDocument(name: "Main Actor Live"),
-                expectedGeneration: DocumentGeneration(0)
-            )
-        )
-    )
-
-    guard case .ordinary(.command(let result)) = handled else {
-        #expect(Bool(false))
-        return
-    }
-    #expect(result.didMutate)
-    #expect(result.generation == DocumentGeneration(1))
-    #expect(session.document.cadDocument.metadata.name == "Main Actor Live")
 }

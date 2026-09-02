@@ -46,11 +46,12 @@ func projectAgentDiscoveryProjectsItsCompilerRegistryExactly() throws {
     let encoded = try codec.encode(AgentResponse.capabilities(discovered))
     #expect(try codec.decodeResponse(from: encoded) == .capabilities(discovered))
 
-    let legacyRegistry = try controller.capabilityRegistry()
+    let universalRegistry = try controller.capabilityRegistry()
     #expect(
-        legacyRegistry.sortedDescriptors().allSatisfy {
-            !$0.id.rawValue.hasPrefix("agent.cad.")
-        }
+        universalRegistry.sortedDescriptors()
+            .map(\.id.rawValue)
+            .filter { $0.hasPrefix("agent.cad.") }
+            .isEmpty
     )
 }
 
@@ -78,21 +79,6 @@ func projectAgentAndUIShareOneWorkspaceAuthority() async throws {
         return
     }
     #expect(summaries.first?.displayName == "UI Source")
-
-    let uiCommitted = try #require(workspace.view)
-    let agentResponse = await controller.projectAgentHandle(
-        .execute(
-            sessionID: sessionID,
-            command: .renameDocument(name: "Agent Source"),
-            expectedGeneration: uiCommitted.documentGeneration
-        )
-    )
-    guard case .command(let agentResult) = agentResponse else {
-        Issue.record("Expected the Agent source mutation to commit.")
-        return
-    }
-    #expect(agentResult.didMutate)
-    #expect(workspace.view?.projectName == "Agent Source")
 
     _ = try await workspace.applyWorkspace(.setDisplayUnit(.centimeter))
     let workspaceCommitted = try #require(workspace.view)
@@ -166,91 +152,6 @@ func projectAgentSceneGraphReadUsesPublishedWorkspaceAndRejectsStaleGeneration()
     #expect(error.code == .documentGenerationMismatch)
     #expect(workspace.view?.documentGeneration == published.documentGeneration)
     #expect(workspace.view?.publicationSequence == published.publicationSequence)
-}
-
-@MainActor
-@Test(.timeLimit(.minutes(1)))
-func staleAgentMutationLosesToUICommitWithoutPartialPublication() async throws {
-    let (project, workspace) = try await makeProjectWorkspace(
-        document: .empty(named: "Initial")
-    )
-    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
-    let sessionID = try await controller.register(workspace: workspace)
-    let sharedBase = try #require(workspace.view)
-
-    let uiAction = try DefaultProjectWorkspaceActionPlanner().source(
-        name: "ui.wins",
-        commands: [.renameDocument(name: "UI Winner")],
-        from: sharedBase
-    )
-    _ = try await workspace.perform(uiAction)
-    let committed = try await project.currentState()
-
-    let staleResponse = await controller.projectAgentHandle(
-        .execute(
-            sessionID: sessionID,
-            command: .renameDocument(name: "Agent Loser"),
-            expectedGeneration: sharedBase.documentGeneration
-        )
-    )
-    guard case .failure(let error) = staleResponse else {
-        Issue.record("Expected the stale Agent mutation to fail.")
-        return
-    }
-    #expect(error.code == .documentGenerationMismatch)
-
-    let afterFailure = try await project.currentState()
-    #expect(afterFailure.document.cadDocument.metadata.name == "UI Winner")
-    #expect(afterFailure.documentGeneration == committed.documentGeneration)
-    #expect(afterFailure.transactionRevision == committed.transactionRevision)
-    #expect(afterFailure.publicationSequence == committed.publicationSequence)
-    #expect(afterFailure.package.productSource == committed.package.productSource)
-    #expect(afterFailure.package.cadSource == committed.package.cadSource)
-    #expect(afterFailure.evaluationSnapshot == committed.evaluationSnapshot)
-}
-
-@MainActor
-@Test(.timeLimit(.minutes(1)))
-func staleAgentBatchTransactionRevisionIsNotRebasedOntoCurrentProject() async throws {
-    let (project, workspace) = try await makeProjectWorkspace(
-        document: .empty(named: "Initial")
-    )
-    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
-    let sessionID = try await controller.register(workspace: workspace)
-    let stale = try #require(workspace.view)
-
-    let uiAction = try DefaultProjectWorkspaceActionPlanner().source(
-        name: "ui.advancesTransaction",
-        commands: [.renameDocument(name: "UI Winner")],
-        from: stale
-    )
-    _ = try await workspace.perform(uiAction)
-    let committed = try await project.currentState()
-    #expect(committed.transactionRevision != stale.transactionRevision)
-
-    let response = await controller.projectAgentHandle(
-        .executeBatch(
-            sessionID: sessionID,
-            batch: AutomationBatch(
-                commands: [.renameDocument(name: "Stale Batch")],
-                expectedGeneration: committed.documentGeneration,
-                expectedTransactionRevision: stale.transactionRevision
-            )
-        )
-    )
-    guard case .failure(let error) = response else {
-        Issue.record("Expected a stale batch transaction revision to fail.")
-        return
-    }
-    #expect(error.code == .documentTransactionRevisionMismatch)
-
-    let afterFailure = try await project.currentState()
-    #expect(afterFailure.document.cadDocument.metadata.name == "UI Winner")
-    #expect(afterFailure.transactionRevision == committed.transactionRevision)
-    #expect(afterFailure.publicationSequence == committed.publicationSequence)
-    #expect(afterFailure.package.productSource == committed.package.productSource)
-    #expect(afterFailure.package.cadSource == committed.package.cadSource)
-    #expect(afterFailure.evaluationSnapshot == committed.evaluationSnapshot)
 }
 
 @MainActor
@@ -340,15 +241,14 @@ func registryRejectsDuplicateLoadedAuthorityUntilTheChangedSessionIsUnregistered
     }
     #expect(conflictError.code == .documentOpenInApp)
 
-    let rejectedMutation = await controller.projectAgentHandle(
-        .execute(
+    let rejectedRead = await controller.projectAgentHandle(
+        .parameters(
             sessionID: changedSessionID,
-            command: .renameDocument(name: "Must Not Mutate"),
             expectedGeneration: loadedState.documentGeneration
         )
     )
-    guard case .failure(let rejectedError) = rejectedMutation else {
-        Issue.record("Expected the invalidated session mutation to be rejected.")
+    guard case .failure(let rejectedError) = rejectedRead else {
+        Issue.record("Expected the invalidated session read to be rejected.")
         return
     }
     #expect(rejectedError.code == .documentOpenInApp)
@@ -776,15 +676,14 @@ func projectAgentReadOnlyAutomationObservesProjectWithoutPublishing() async thro
     let beforeState = try await project.currentState()
 
     let response = await controller.projectAgentHandle(
-        .execute(
+        .describeDocument(
             sessionID: sessionID,
-            command: .describeDocument,
             expectedGeneration: before.documentGeneration
         )
     )
 
-    guard case .command(let result) = response else {
-        Issue.record("Expected the read-only command to use the project snapshot.")
+    guard case .documentDescription(let result) = response else {
+        Issue.record("Expected the read-only document description to use the project snapshot.")
         return
     }
     #expect(!result.didMutate)
@@ -987,64 +886,6 @@ func projectAgentRejectsMeshOnlyAndMixedAuthorityWithoutSideEffects() async thro
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
-func projectAgentReportsCommittedMutationReceiptWhenViewProjectionFails() async throws {
-    let project = try ProjectController(
-        document: .empty(named: "Before Receipt"),
-        evaluatorPreparer: DefaultDesignDocumentProjectEvaluatorFactory(),
-        projector: DesignDocumentProjectBridge()
-    )
-    let workspace = ProjectWorkspace(
-        project: project,
-        viewBuilder: ProjectAgentNthFailingViewBuilder(failingBuildNumber: 2)
-    )
-    _ = try await workspace.evaluate()
-    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
-    let sessionID = try await controller.register(workspace: workspace)
-    let before = try #require(workspace.view)
-
-    let response = await controller.projectAgentHandle(
-        .execute(
-            sessionID: sessionID,
-            command: .renameDocument(name: "Committed Source"),
-            expectedGeneration: before.documentGeneration
-        )
-    )
-    guard case .committedMutation(let outcome) = response else {
-        Issue.record("Expected a committed mutation receipt instead of a retryable failure.")
-        return
-    }
-    let state = try await project.currentState()
-    #expect(outcome.stage == .viewProjection)
-    #expect(outcome.mutation == .source)
-    #expect(outcome.retryDisposition == .mustNotRetry)
-    #expect(outcome.projectID == state.document.projectID)
-    #expect(outcome.transactionRevision == state.transactionRevision)
-    #expect(outcome.publicationSequence == state.publicationSequence)
-    #expect(state.document.cadDocument.metadata.name == "Committed Source")
-    #expect(workspace.view?.projectName == "Committed Source")
-    #expect(workspace.view?.publicationSequence == outcome.publicationSequence)
-    guard case .sessions(let summaries) = await controller.projectAgentHandle(.sessions) else {
-        Issue.record("Expected recovered session summary after committed receipt.")
-        return
-    }
-    #expect(summaries.first?.displayName == "Committed Source")
-    let nextResponse = await controller.projectAgentHandle(
-        .execute(
-            sessionID: sessionID,
-            command: .renameDocument(name: "After Recovery"),
-            expectedGeneration: outcome.documentGeneration
-        )
-    )
-    guard case .command(let nextResult) = nextResponse else {
-        Issue.record("Expected exactly one next mutation after automatic recovery.")
-        return
-    }
-    #expect(nextResult.generation.value == outcome.documentGeneration.value + 1)
-    #expect(workspace.view?.projectName == "After Recovery")
-}
-
-@MainActor
-@Test(.timeLimit(.minutes(1)))
 func projectAgentReportsCommittedUndoReceiptWithoutMovingHistoryTwice() async throws {
     let project = try ProjectController(
         document: .empty(named: "Undo Base"),
@@ -1059,16 +900,12 @@ func projectAgentReportsCommittedUndoReceiptWithoutMovingHistoryTwice() async th
     let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
     let initial = try #require(workspace.view)
-    guard case .command = await controller.projectAgentHandle(
-        .execute(
-            sessionID: sessionID,
-            command: .renameDocument(name: "Undo Candidate"),
-            expectedGeneration: initial.documentGeneration
-        )
-    ) else {
-        Issue.record("Expected the history fixture source mutation to commit.")
-        return
-    }
+    let sourceAction = try DefaultProjectWorkspaceActionPlanner().source(
+        name: "history.fixture",
+        commands: [.renameDocument(name: "Undo Candidate")],
+        from: initial
+    )
+    _ = try await workspace.perform(sourceAction)
     let renamed = try #require(workspace.view)
 
     let response = await controller.projectAgentHandle(
@@ -1151,16 +988,12 @@ func agentUndoReturnsItsExactCommittedViewWhenANewerInteractionPublishesFirst() 
     let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
     let sessionID = try await controller.register(workspace: workspace)
     let initial = try #require(workspace.view)
-    guard case .command = await controller.projectAgentHandle(
-        .execute(
-            sessionID: sessionID,
-            command: .renameDocument(name: "Exact Undo Candidate"),
-            expectedGeneration: initial.documentGeneration
-        )
-    ) else {
-        Issue.record("Expected the history fixture mutation to commit.")
-        return
-    }
+    let sourceAction = try DefaultProjectWorkspaceActionPlanner().source(
+        name: "history.fixture",
+        commands: [.renameDocument(name: "Exact Undo Candidate")],
+        from: initial
+    )
+    _ = try await workspace.perform(sourceAction)
     let renamed = try #require(workspace.view)
 
     let undoTask = Task {
@@ -1193,77 +1026,6 @@ func agentUndoReturnsItsExactCommittedViewWhenANewerInteractionPublishesFirst() 
     #expect(undoResult.session.authority.workspaceRevision != newerView.workspaceState.revision)
     #expect(workspace.view?.publicationSequence == newerView.publicationSequence)
     #expect(workspace.view?.workspaceState.displayUnit == .centimeter)
-}
-
-@MainActor
-@Test(.timeLimit(.minutes(1)))
-func unregisterWaitsForAnAlreadyLeasedAgentMutationBeforeReplacement() async throws {
-    let gate = ProjectAgentBlockingEvaluationGate(blockedSourceName: "Agent Blocked")
-    defer { gate.release() }
-    let project = try ProjectController(
-        document: .empty(named: "Old Project"),
-        evaluatorPreparer: ProjectAgentStaticEvaluatorPreparer(
-            evaluator: ProjectAgentBlockingEvaluator(gate: gate)
-        ),
-        projector: DesignDocumentProjectBridge()
-    )
-    let workspace = ProjectWorkspace(project: project)
-    _ = try await workspace.evaluate()
-    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
-    let sessionID = UUID()
-    try await controller.register(workspace: workspace, id: sessionID)
-    let before = try #require(workspace.view)
-    let inFlight = Task {
-        await controller.projectAgentHandle(
-            .execute(
-                sessionID: sessionID,
-                command: .renameDocument(name: "Agent Blocked"),
-                expectedGeneration: before.documentGeneration
-            )
-        )
-    }
-    while !gate.didStart {
-        try await Task.sleep(for: .milliseconds(1))
-    }
-    let unregisterTask = Task {
-        await controller.unregister(id: sessionID)
-    }
-    var didBeginUnregister = false
-    for _ in 0..<1_000 {
-        let duringUnregister = await controller.projectAgentHandle(
-            .parameters(sessionID: sessionID, expectedGeneration: before.documentGeneration)
-        )
-        if case .failure(let error) = duringUnregister,
-           error.code == .sessionNotFound {
-            didBeginUnregister = true
-            break
-        }
-        await Task.yield()
-    }
-    #expect(didBeginUnregister)
-
-    let replacement = try DefaultProjectWorkspaceFactory().makeWorkspace(
-        document: .empty(named: "Replacement")
-    )
-    _ = try await replacement.evaluate()
-    await #expect(throws: EditorError.self) {
-        try await controller.register(workspace: replacement, id: sessionID)
-    }
-    gate.release()
-
-    guard case .command(let committed) = await inFlight.value else {
-        Issue.record("Expected the operation leased before unregister to finish first.")
-        return
-    }
-    #expect(committed.didMutate)
-    await unregisterTask.value
-    try await controller.register(workspace: replacement, id: sessionID)
-
-    let retained = try await project.currentState()
-    #expect(retained.document.cadDocument.metadata.name == "Agent Blocked")
-    #expect(retained.transactionRevision.value == before.transactionRevision.value + 1)
-    #expect(retained.publicationSequence > before.publicationSequence)
-    #expect(replacement.view?.projectName == "Replacement")
 }
 
 @MainActor
@@ -1391,18 +1153,6 @@ func agentRejectsWorkspaceOnlyPublicationGapWithExactTypedError() async throws {
     }
     #expect(readError.code == .projectPublicationMismatch)
 
-    let mutationResponse = await controller.projectAgentHandle(
-        .execute(
-            sessionID: sessionID,
-            command: .renameDocument(name: "Must Not Commit"),
-            expectedGeneration: oldView.documentGeneration
-        )
-    )
-    guard case .failure(let mutationError) = mutationResponse else {
-        Issue.record("Expected the stale publication mutation to fail.")
-        return
-    }
-    #expect(mutationError.code == .projectPublicationMismatch)
     #expect(try await project.currentState().document.cadDocument.metadata.name == "Publication Gap")
 
     gate.release()
@@ -2021,66 +1771,6 @@ private func projectAgentDomainRegistry(
             ProjectAgentDomainRenameLowering(capabilityID: capabilityID),
         ]
     )
-}
-
-private final class ProjectAgentBlockingEvaluationGate: Sendable {
-    private struct State {
-        var didStart = false
-        var canFinish = false
-    }
-
-    private let state = Mutex(State())
-    private let blockedSourceName: String
-
-    init(blockedSourceName: String) {
-        self.blockedSourceName = blockedSourceName
-    }
-
-    var didStart: Bool {
-        state.withLock { $0.didStart }
-    }
-
-    func waitIfNeeded(sourceName: String) {
-        guard sourceName == blockedSourceName else {
-            return
-        }
-        state.withLock { $0.didStart = true }
-        while !state.withLock({ $0.canFinish }) {
-            Thread.sleep(forTimeInterval: 0.001)
-        }
-    }
-
-    func release() {
-        state.withLock { $0.canFinish = true }
-    }
-}
-
-private struct ProjectAgentBlockingEvaluator: ProjectEvaluating {
-    let gate: ProjectAgentBlockingEvaluationGate
-
-    func evaluate(
-        project: ProjectSourceModel,
-        purpose: GeometryRepresentationPurpose,
-        revision: DocumentTransactionRevision
-    ) throws -> EvaluatedProjectSnapshot {
-        gate.waitIfNeeded(sourceName: project.name)
-        return try ProjectEvaluationEngine().evaluate(
-            project: project,
-            purpose: purpose,
-            revision: revision
-        )
-    }
-}
-
-private struct ProjectAgentStaticEvaluatorPreparer: ProjectEvaluatorPreparing {
-    let evaluator: any ProjectEvaluating
-
-    func makeEvaluator(
-        for _: DesignDocument,
-        reusing _: DocumentEvaluationContext?
-    ) throws -> any ProjectEvaluating {
-        evaluator
-    }
 }
 
 private final class ProjectAgentNthFailingViewBuilder:

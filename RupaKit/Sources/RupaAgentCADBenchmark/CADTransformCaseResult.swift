@@ -31,11 +31,11 @@ struct CADTransformCaseResult: Equatable, Sendable {
         guard routeEvidence.didPublish,
               routeEvidence.finalPublicationSequence == routeEvidence.initialPublicationSequence + 1,
               routeEvidence.finalDocumentGeneration.value
-                == routeEvidence.initialDocumentGeneration.value + 1,
+                == routeEvidence.initialDocumentGeneration.value + 2,
               routeEvidence.finalTransactionRevision.value
                 == routeEvidence.initialTransactionRevision.value + 1,
               telemetry.actionCount == 1,
-              telemetry.commandCount == 1,
+              telemetry.commandCount == 2,
               telemetry.readCount == expectedReadCount,
               telemetry.featureCount > 0,
               telemetry.sceneNodeCount > 0 else {

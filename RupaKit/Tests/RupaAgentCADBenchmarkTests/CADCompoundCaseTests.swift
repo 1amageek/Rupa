@@ -50,54 +50,6 @@ struct CADCompoundCaseTests {
         #expect(String(decoding: encoded, as: UTF8.self).contains("compound"))
     }
 
-    @Test
-    func requiredPrimitiveOperationsAreStableAndDeduplicated() throws {
-        let challenge = try Self.activatedCase.catalogEntry.challenge
-        let reference = try CADCompoundReferenceCandidate.members(for: challenge)
-        #expect(CADCompoundGeometryMapping.requiredOperationNames(for: reference) == [
-            "createExtrudedRectangle", "createExtrudedCircle",
-        ])
-        #expect(CADCompoundGeometryMapping.requiredOperationNames(for: [
-            reference[1], reference[0], reference[1],
-        ]) == ["createExtrudedCircle", "createExtrudedRectangle"])
-
-        let secondChallenge = try Self.secondActivatedCase.catalogEntry.challenge
-        let secondReference = try CADCompoundReferenceCandidate.members(for: secondChallenge)
-        #expect(CADCompoundGeometryMapping.requiredOperationNames(for: secondReference) == [
-            "createExtrudedRectangle",
-        ])
-
-        let thirdChallenge = try Self.thirdActivatedCase.catalogEntry.challenge
-        let thirdReference = try CADCompoundReferenceCandidate.members(for: thirdChallenge)
-        #expect(CADCompoundGeometryMapping.requiredOperationNames(for: thirdReference) == [
-            "createExtrudedCircle",
-        ])
-
-        let fourthChallenge = try Self.fourthActivatedCase.catalogEntry.challenge
-        let fourthReference = try CADCompoundReferenceCandidate.members(for: fourthChallenge)
-        #expect(CADCompoundGeometryMapping.requiredOperationNames(for: fourthReference) == [
-            "createExtrudedRectangle", "createExtrudedCircle",
-        ])
-
-        let fifthChallenge = try Self.fifthActivatedCase.catalogEntry.challenge
-        let fifthReference = try CADCompoundReferenceCandidate.members(for: fifthChallenge)
-        #expect(CADCompoundGeometryMapping.requiredOperationNames(for: fifthReference) == [
-            "createExtrudedRectangle",
-        ])
-
-        let sixthChallenge = try Self.sixthActivatedCase.catalogEntry.challenge
-        let sixthReference = try CADCompoundReferenceCandidate.members(for: sixthChallenge)
-        #expect(CADCompoundGeometryMapping.requiredOperationNames(for: sixthReference) == [
-            "createExtrudedCircle", "createExtrudedRectangle",
-        ])
-
-        let seventhChallenge = try Self.seventhActivatedCase.catalogEntry.challenge
-        let seventhReference = try CADCompoundReferenceCandidate.members(for: seventhChallenge)
-        #expect(CADCompoundGeometryMapping.requiredOperationNames(for: seventhReference) == [
-            "createExtrudedRectangle", "createExtrudedCircle",
-        ])
-    }
-
     @MainActor
     @Test(.timeLimit(.minutes(2)))
     func compound001PublishesOneAtomicBatchWithExactSourceAndTopology() async throws {

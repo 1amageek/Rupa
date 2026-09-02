@@ -11,7 +11,6 @@ public final class AgentCommandController: AgentClientProtocol {
     private let registry: WorkspaceRegistry
     private let runner: AutomationRunner
     private let exportService: DocumentExportService
-    private let fileService: DocumentFileService
     private let domainRegistry: DomainRegistry
 
     public init(
@@ -19,14 +18,12 @@ public final class AgentCommandController: AgentClientProtocol {
         registry: WorkspaceRegistry = WorkspaceRegistry(),
         runner: AutomationRunner = AutomationRunner(),
         exportService: DocumentExportService = DocumentExportService(),
-        fileService: DocumentFileService = DocumentFileService(),
         domainRegistry: DomainRegistry = DomainRegistry()
     ) {
         self.name = name
         self.registry = registry
         self.runner = runner
         self.exportService = exportService
-        self.fileService = fileService
         self.domainRegistry = domainRegistry
     }
 
@@ -54,9 +51,7 @@ public final class AgentCommandController: AgentClientProtocol {
     }
 
     public func capabilityRegistry() throws -> CapabilityRegistry {
-        try AgentCapabilityCatalog.capabilityRegistry(
-            domainRegistry: domainRegistry
-        )
+        try AgentCapabilityCatalog.capabilityRegistry(domainRegistry: domainRegistry)
     }
 
     @discardableResult
@@ -104,115 +99,13 @@ public final class AgentCommandController: AgentClientProtocol {
                     return .sessions(registry.summaries())
                 }
                 return try run()
-            case .createDocument:
-                func run() throws -> AgentResponse {
-                    guard case let .createDocument(name, outputPath) = request else {
-                        throw EditorError(
-                            code: .commandInvalid,
-                            message: "Agent request dispatch expected a different request payload."
-                        )
-                    }
-                    let documentName = try normalizedDocumentName(name)
-                    let outputURL = try outputPath.map(documentURL(for:))
-                    if let outputURL {
-                        try requireAvailableDocumentURL(outputURL, rejectsExistingFile: true)
-                    }
-                    let session = EditorSession(document: .empty(named: documentName))
-                    if let outputURL {
-                        try fileService.create(session.document, at: outputURL)
-                        session.markClean()
-                    }
-                    let sessionID = try registry.registerNew(session: session, path: outputURL)
-                    return .sessionOperation(
-                        try sessionOperationResult(
-                            operation: .create,
-                            sessionID: sessionID,
-                            session: session
-                        )
+            case .createDocument, .openDocument, .closeDocument, .resetDocument, .save:
+                return .failure(
+                    EditorError(
+                        code: .commandUnsupported,
+                        message: "Application-owned file and window lifecycle is outside the Agent project route."
                     )
-                }
-                return try run()
-            case .openDocument:
-                func run() throws -> AgentResponse {
-                    guard case let .openDocument(path) = request else {
-                        throw EditorError(
-                            code: .commandInvalid,
-                            message: "Agent request dispatch expected a different request payload."
-                        )
-                    }
-                    let url = try documentURL(for: path)
-                    try requireAvailableDocumentURL(url, rejectsExistingFile: false)
-                    let session = EditorSession(document: try fileService.load(from: url))
-                    session.markClean()
-                    let sessionID = try registry.registerNew(session: session, path: url)
-                    return .sessionOperation(
-                        try sessionOperationResult(
-                            operation: .open,
-                            sessionID: sessionID,
-                            session: session
-                        )
-                    )
-                }
-                return try run()
-            case .closeDocument:
-                func run() throws -> AgentResponse {
-                    guard case let .closeDocument(sessionID, expectedGeneration, discardUnsavedChanges) = request else {
-                        throw EditorError(
-                            code: .commandInvalid,
-                            message: "Agent request dispatch expected a different request payload."
-                        )
-                    }
-                    let session = try registry.session(id: sessionID)
-                    try requireExpectedGeneration(
-                        expectedGeneration,
-                        operation: "Document close",
-                        session: session
-                    )
-                    guard !session.isDirty || discardUnsavedChanges else {
-                        throw EditorError(
-                            code: .commandInvalid,
-                            message: "Document close requires discardUnsavedChanges for a dirty session."
-                        )
-                    }
-                    let result = try sessionOperationResult(
-                        operation: .close,
-                        sessionID: sessionID,
-                        session: session
-                    )
-                    registry.unregister(id: sessionID)
-                    return .sessionOperation(result)
-                }
-                return try run()
-            case .resetDocument:
-                func run() throws -> AgentResponse {
-                    guard case let .resetDocument(sessionID, name, expectedGeneration) = request else {
-                        throw EditorError(
-                            code: .commandInvalid,
-                            message: "Agent request dispatch expected a different request payload."
-                        )
-                    }
-                    let session = try registry.session(id: sessionID)
-                    let generation = try requireExpectedGeneration(
-                        expectedGeneration,
-                        operation: "Document reset",
-                        session: session
-                    )
-                    let commandResult = try session.execute(
-                        .resetDocument(name: try normalizedDocumentName(name)),
-                        expectedGeneration: generation
-                    )
-                    session.activateTool(.select)
-                    session.clearSelection()
-                    return .sessionOperation(
-                        try sessionOperationResult(
-                            operation: .reset,
-                            sessionID: sessionID,
-                            session: session,
-                            commandName: commandResult.commandName
-                        )
-                    )
-                }
-                return try run()
+                )
             case .undo:
                 func run() throws -> AgentResponse {
                     guard case let .undo(sessionID, expectedGeneration) = request else {
@@ -270,66 +163,6 @@ public final class AgentCommandController: AgentClientProtocol {
                     )
                 }
                 return try run()
-            case .execute:
-                func run() throws -> AgentResponse {
-                    guard case let .execute(sessionID, command, expectedGeneration, expectedWorkspaceRevision) = request else {
-                        throw EditorError(
-                            code: .commandInvalid,
-                            message: "Agent request dispatch expected a different request payload."
-                        )
-                    }
-                    let session = try registry.session(id: sessionID)
-                    try requireCommandPreconditions(
-                        command: command,
-                        expectedGeneration: expectedGeneration,
-                        expectedWorkspaceRevision: expectedWorkspaceRevision,
-                        session: session
-                    )
-                    let execution = try runner.executeBatchTransaction(
-                        AutomationBatch(
-                            commands: [command],
-                            expectedGeneration: expectedGeneration,
-                            expectedWorkspaceRevision: expectedWorkspaceRevision
-                        ),
-                        in: session,
-                        commits: true
-                    )
-                    guard var commandResult = execution.results.first else {
-                        throw EditorError(
-                            code: .commandFailed,
-                            message: "Agent command produced no result."
-                        )
-                    }
-                    commandResult.executionMetrics = execution.metrics
-                    return .command(commandResult)
-                }
-                return try run()
-            case .executeBatch:
-                func run() throws -> AgentResponse {
-                    guard case let .executeBatch(sessionID, batch) = request else {
-                        throw EditorError(
-                            code: .commandInvalid,
-                            message: "Agent request dispatch expected a different request payload."
-                        )
-                    }
-                    let session = try registry.session(id: sessionID)
-                    try requireBatchPreconditions(batch, session: session)
-                    let execution = try runner.executeBatchTransaction(
-                        batch,
-                        in: session,
-                        commits: true
-                    )
-                    return .batch(
-                        AgentBatchResult(
-                            results: execution.results,
-                            generation: session.generation,
-                            workspaceRevision: session.workspaceState.revision,
-                            dirty: session.isDirty,
-                            metrics: execution.metrics
-                        )
-                    )
-                }
-                return try run()
             case .executeDomain:
                 func run() throws -> AgentResponse {
                     guard case let .executeDomain(sessionID, request) = request else {
@@ -344,6 +177,36 @@ public final class AgentCommandController: AgentClientProtocol {
                         automationRunner: runner
                     ).execute(request, in: session)
                     return .domainExecution(result)
+                }
+                return try run()
+            case .describeDocument:
+                func run() throws -> AgentResponse {
+                    guard case let .describeDocument(sessionID, expectedGeneration) = request else {
+                        throw EditorError(
+                            code: .commandInvalid,
+                            message: "Agent request dispatch expected a different request payload."
+                        )
+                    }
+                    let session = try registry.session(id: sessionID)
+                    try session.store.requireGeneration(expectedGeneration)
+                    return .documentDescription(
+                        try runner.execute(.describeDocument, in: session)
+                    )
+                }
+                return try run()
+            case .validateDocument:
+                func run() throws -> AgentResponse {
+                    guard case let .validateDocument(sessionID, expectedGeneration) = request else {
+                        throw EditorError(
+                            code: .commandInvalid,
+                            message: "Agent request dispatch expected a different request payload."
+                        )
+                    }
+                    let session = try registry.session(id: sessionID)
+                    try session.store.requireGeneration(expectedGeneration)
+                    return .documentValidation(
+                        try runner.execute(.validateDocument, in: session)
+                    )
                 }
                 return try run()
             // FIXME(INCOMPLETE_IMPLEMENTATION): The test integration handler mirrors the production fail-closed capability.invoke route without mutating its EditorSession. Remove this marker only when the fixture delegates to the completed ProjectWorkspace and ProjectController semantic path.
@@ -411,7 +274,7 @@ public final class AgentCommandController: AgentClientProtocol {
                         ),
                         in: session
                     )
-                    return .command(result)
+                    return .parameterExpression(result)
                 }
                 return try run()
             case .setObjectDimensionExpression:
@@ -438,7 +301,7 @@ public final class AgentCommandController: AgentClientProtocol {
                         ),
                         in: session
                     )
-                    return .command(result)
+                    return .objectDimensionExpression(result)
                 }
                 return try run()
             case .setSketchEntityDimensionExpression:
@@ -465,7 +328,7 @@ public final class AgentCommandController: AgentClientProtocol {
                         ),
                         in: session
                     )
-                    return .command(result)
+                    return .sketchEntityDimensionExpression(result)
                 }
                 return try run()
             case .setSelectionDimensionTargetExpression:
@@ -492,7 +355,7 @@ public final class AgentCommandController: AgentClientProtocol {
                         ),
                         in: session
                     )
-                    return .command(result)
+                    return .selectionDimensionTargetExpression(result)
                 }
                 return try run()
             case .setSurfaceFrameDisplay:
@@ -512,7 +375,7 @@ public final class AgentCommandController: AgentClientProtocol {
                         ),
                         in: session
                     )
-                    return .command(result)
+                    return .surfaceFrameDisplay(result)
                 }
                 return try run()
             case .movePolySplineSurfaceVertex:
@@ -534,7 +397,7 @@ public final class AgentCommandController: AgentClientProtocol {
                         ),
                         in: session
                     )
-                    return .command(result)
+                    return .polySplineSurfaceVertex(result)
                 }
                 return try run()
             case .evaluate:
@@ -1096,30 +959,6 @@ public final class AgentCommandController: AgentClientProtocol {
                     )
                 }
                 return try run()
-            case .save:
-                func run() throws -> AgentResponse {
-                    guard case let .save(sessionID, expectedGeneration) = request else {
-                        throw EditorError(
-                            code: .commandInvalid,
-                            message: "Agent request dispatch expected a different request payload."
-                        )
-                    }
-                    let session = try registry.session(id: sessionID)
-                    try session.store.requireGeneration(expectedGeneration)
-                    let url = try registry.documentURL(id: sessionID)
-                    try fileService.save(session.document, to: url)
-                    session.markClean()
-                    return .save(
-                        SaveResult(
-                            message: "Document saved to \(url.path).",
-                            path: url.path,
-                            generation: session.generation,
-                            dirty: session.isDirty,
-                            diagnostics: session.diagnostics
-                        )
-                    )
-                }
-                return try run()
             case .export:
                 func run() throws -> AgentResponse {
                     guard case let .export(sessionID, outputPath, expectedGeneration, options, dryRun) = request else {
@@ -1154,31 +993,6 @@ public final class AgentCommandController: AgentClientProtocol {
         }
     }
 
-    private func requireCommandPreconditions(
-        command: AutomationCommand,
-        expectedGeneration: DocumentGeneration?,
-        expectedWorkspaceRevision: WorkspaceRevision?,
-        session: EditorSession
-    ) throws {
-        guard let expectedGeneration else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Agent command execution requires an expected source generation."
-            )
-        }
-        try session.store.requireGeneration(expectedGeneration)
-
-        if command.effect == .workspaceMutation {
-            guard let expectedWorkspaceRevision else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Workspace mutation commands require an expected workspace revision."
-                )
-            }
-            try session.workspaceState.requireRevision(expectedWorkspaceRevision)
-        }
-    }
-
     @discardableResult
     private func requireExpectedGeneration(
         _ expectedGeneration: DocumentGeneration?,
@@ -1195,47 +1009,6 @@ public final class AgentCommandController: AgentClientProtocol {
         return expectedGeneration
     }
 
-    private func normalizedDocumentName(_ name: String) throws -> String {
-        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalizedName.isEmpty else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Document name must not be empty."
-            )
-        }
-        return normalizedName
-    }
-
-    private func documentURL(for path: String) throws -> URL {
-        let normalizedPath = path.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalizedPath.isEmpty else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Document path must not be empty."
-            )
-        }
-        let expandedPath = (normalizedPath as NSString).expandingTildeInPath
-        return URL(fileURLWithPath: expandedPath).standardizedFileURL
-    }
-
-    private func requireAvailableDocumentURL(
-        _ url: URL,
-        rejectsExistingFile: Bool
-    ) throws {
-        if let existingID = registry.registeredSessionID(for: url) {
-            throw EditorError(
-                code: .documentOpenInApp,
-                message: "Document \(url.path) is already open in session \(existingID.uuidString)."
-            )
-        }
-        guard !rejectsExistingFile || !FileManager.default.fileExists(atPath: url.path) else {
-            throw EditorError(
-                code: .documentSaveFailed,
-                message: "Document create will not overwrite the existing path \(url.path)."
-            )
-        }
-    }
-
     private func sessionOperationResult(
         operation: AgentSessionOperationResult.Operation,
         sessionID: UUID,
@@ -1249,25 +1022,6 @@ public final class AgentCommandController: AgentClientProtocol {
             canUndo: session.commandStack.canUndo,
             canRedo: session.commandStack.canRedo
         )
-    }
-
-    private func requireBatchPreconditions(
-        _ batch: AutomationBatch,
-        session: EditorSession
-    ) throws {
-        guard batch.expectedGeneration != nil else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Agent batch execution requires an expected source generation."
-            )
-        }
-        let effect = try batch.validatedEffect()
-        if effect == .workspaceMutation, batch.expectedWorkspaceRevision == nil {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Workspace mutation batches require an expected workspace revision."
-            )
-        }
     }
 
     private func parseDimensionExpression(

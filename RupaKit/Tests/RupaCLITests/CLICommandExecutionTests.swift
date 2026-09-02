@@ -9,71 +9,6 @@ import Testing
 @testable import RupaCLIKit
 
 @Test(.timeLimit(.minutes(1)))
-func lineCommandParsesImplicitUnitAndRunsThroughLiveAuthority() async throws {
-    let inputURL = URL(fileURLWithPath: "/tmp/line-input.rupa")
-    let session = StubProjectAccessSession(
-        steps: [
-            .response(.command(stubAutomationResult(
-                message: "Described.",
-                effect: .readOnly,
-                generation: DocumentGeneration(3),
-                sourceDirty: false,
-                didMutate: false,
-                workspaceScale: stubWorkspaceScale(displayUnit: .millimeter)
-            ))),
-            .response(.command(stubAutomationResult(
-                message: "Line created.",
-                generation: DocumentGeneration(4)
-            ))),
-        ]
-    )
-    let opener = StubProjectAccessOpener(session: session)
-    let observer = await makeStubProjectAccessObserver()
-    let command = try LineSketchCommand.parse([
-        inputURL.path,
-        "--expected-generation", "3",
-        "--name", "API Line",
-        "--start-x", "1",
-        "--start-y", "2",
-        "--end-x", "3",
-        "--end-y", "4",
-        "--json",
-    ])
-
-    try await withStubProjectAccess(opener: opener, observer: observer) {
-        try await command.run()
-    }
-
-    #expect(await opener.recordedTargets() == [.liveProject(inputURL)])
-    #expect(await session.recordedSaveGenerations().isEmpty)
-    #expect(await session.recordedFinishCount() == 1)
-    let requests = await session.recordedRequests()
-    #expect(requests.count == 2)
-    guard case .execute(_, .describeDocument, let describedGeneration, _) = requests[0] else {
-        Issue.record("The line command must resolve its implicit unit from the project state.")
-        return
-    }
-    #expect(describedGeneration == DocumentGeneration(3))
-    guard case .execute(_, let projectedCommand, let mutationGeneration, _) = requests[1] else {
-        Issue.record("The line command must emit one source mutation request.")
-        return
-    }
-    #expect(mutationGeneration == DocumentGeneration(3))
-    #expect(projectedCommand == .createLineSketch(
-        name: "API Line",
-        plane: nil,
-        start: SketchPoint(
-            x: .constant(.length(1, unit: .millimeter)),
-            y: .constant(.length(2, unit: .millimeter))
-        ),
-        end: SketchPoint(
-            x: .constant(.length(3, unit: .millimeter)),
-            y: .constant(.length(4, unit: .millimeter))
-        )
-    ))
-}
-
-@Test(.timeLimit(.minutes(1)))
 func parameterListCommandParsesAndProjectsOneReadRequest() async throws {
     let projectURL = URL(fileURLWithPath: "/tmp/read.rupa")
     let generation = DocumentGeneration(7)
@@ -85,7 +20,7 @@ func parameterListCommandParsesAndProjectsOneReadRequest() async throws {
                 dirty: false,
                 parameters: [],
                 diagnostics: []
-            ))),
+            )))
         ]
     )
     let opener = StubProjectAccessOpener(session: session)
@@ -109,115 +44,6 @@ func parameterListCommandParsesAndProjectsOneReadRequest() async throws {
         return
     }
     #expect(expectedGeneration == generation)
-}
-
-@Test(.timeLimit(.minutes(1)))
-func displayUnitCommandParsesAndProjectsOneWorkspaceMutation() async throws {
-    let projectURL = URL(fileURLWithPath: "/tmp/workspace.rupa")
-    let generation = DocumentGeneration(3)
-    let workspaceRevision = WorkspaceRevision(4)
-    let session = StubProjectAccessSession(
-        steps: [
-            .response(.command(stubAutomationResult(
-                message: "Display unit updated.",
-                effect: .workspaceMutation,
-                generation: generation,
-                sourceDirty: false,
-                workspaceRevision: WorkspaceRevision(5),
-                workspaceScale: stubWorkspaceScale(displayUnit: .centimeter)
-            ))),
-        ]
-    )
-    let opener = StubProjectAccessOpener(session: session)
-    let observer = await makeStubProjectAccessObserver()
-    let command = try SetDisplayUnitCommand.parse([
-        projectURL.path,
-        "centimeter",
-        "--expected-generation", String(generation.value),
-        "--expected-workspace-revision", String(workspaceRevision.value),
-        "--json",
-    ])
-
-    try await withStubProjectAccess(opener: opener, observer: observer) {
-        try await command.run()
-    }
-
-    #expect(await opener.recordedTargets() == [.liveProject(projectURL)])
-    #expect(await session.recordedSaveGenerations().isEmpty)
-    let requests = await session.recordedRequests()
-    #expect(requests.count == 1)
-    guard case .execute(
-        _,
-        .setDisplayUnit(.centimeter),
-        let expectedGeneration,
-        let expectedWorkspaceRevision
-    ) = requests[0] else {
-        Issue.record("The display unit command must emit one workspace mutation.")
-        return
-    }
-    #expect(expectedGeneration == generation)
-    #expect(expectedWorkspaceRevision == workspaceRevision)
-}
-
-@Test(.timeLimit(.minutes(1)))
-func batchCommandParsesJSONAndRunsOneAtomicLiveRequest() async throws {
-    let projectURL = URL(fileURLWithPath: "/tmp/command-batch.rupa")
-    let fixtureDirectory = FileManager.default.temporaryDirectory
-        .appendingPathComponent("rupa-cli-batch-\(UUID().uuidString)", isDirectory: true)
-    try FileManager.default.createDirectory(
-        at: fixtureDirectory,
-        withIntermediateDirectories: true
-    )
-    defer {
-        do {
-            try FileManager.default.removeItem(at: fixtureDirectory)
-        } catch {
-            Issue.record("Failed to remove CLI batch fixture: \(error)")
-        }
-    }
-    let batchURL = fixtureDirectory.appendingPathComponent("batch.json")
-    let batch = AutomationBatch(
-        commands: [.renameDocument(name: "Batch")],
-        expectedGeneration: DocumentGeneration(5)
-    )
-    try JSONEncoder().encode(batch).write(to: batchURL)
-
-    let result = stubAutomationResult(
-        message: "Batch complete.",
-        generation: DocumentGeneration(6)
-    )
-    let session = StubProjectAccessSession(
-        steps: [
-            .response(.batch(AgentBatchResult(
-                results: [result],
-                generation: result.generation,
-                workspaceRevision: result.workspaceRevision,
-                dirty: true,
-                metrics: .empty
-            ))),
-        ]
-    )
-    let opener = StubProjectAccessOpener(session: session)
-    let observer = await makeStubProjectAccessObserver()
-    let command = try BatchCommand.parse([
-        projectURL.path,
-        "--input", batchURL.path,
-        "--json",
-    ])
-
-    try await withStubProjectAccess(opener: opener, observer: observer) {
-        try await command.run()
-    }
-
-    #expect(await opener.recordedTargets() == [.liveProject(projectURL)])
-    #expect(await session.recordedSaveGenerations().isEmpty)
-    let requests = await session.recordedRequests()
-    #expect(requests.count == 1)
-    guard case .executeBatch(_, let projectedBatch) = requests[0] else {
-        Issue.record("The batch command must emit one atomic batch request.")
-        return
-    }
-    #expect(projectedBatch == batch)
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -259,13 +85,13 @@ func exportCommandParsesAndProjectsExportWithoutProjectSave() async throws {
                 presetName: "Mesh",
                 diagnostics: []
             ))),
-            .response(.command(stubAutomationResult(
+            .response(.documentDescription(stubAutomationResult(
                 message: "Described.",
                 effect: .readOnly,
                 generation: generation,
                 sourceDirty: true,
                 didMutate: false
-            ))),
+            )))
         ]
     )
     let opener = StubProjectAccessOpener(session: session)
@@ -295,29 +121,29 @@ func exportCommandParsesAndProjectsExportWithoutProjectSave() async throws {
     #expect(expectedGeneration == generation)
     #expect(options.presetName == "Mesh")
     #expect(options.destinationPolicy == .overwrite)
+    guard case .describeDocument(_, let describedGeneration) = requests[1] else {
+        Issue.record("The export command must read the resulting project state through the same session.")
+        return
+    }
+    #expect(describedGeneration == generation)
 }
 
 @Test(.timeLimit(.minutes(1)))
-func projectMutationCommandsRejectRemovedFileAuthorityOptions() {
-    let requiredLineArguments = [
-        "--start-x", "0",
-        "--start-y", "0",
-        "--end-x", "1",
-        "--end-y", "1",
-    ]
-    for removedOption in [
-        ["--mode", "file"],
-        ["--output", "/tmp/output.rupa"],
-        ["--in-place"],
-        ["--dry-run"],
+func removedRawCommandsAreNotRegistered() throws {
+    for arguments in [
+        ["batch"],
+        ["command", "apply"],
+        ["model"],
+        ["sketch"],
+        ["feature"],
+        ["plane"],
+        ["view"],
     ] {
         do {
-            _ = try LineSketchCommand.parse(
-                ["/tmp/input.rupa"] + requiredLineArguments + removedOption
-            )
-            Issue.record("Removed project mutation option was still accepted: \(removedOption)")
+            _ = try CLICommand.parseAsRoot(arguments)
+            Issue.record("Removed raw command was still registered: \(arguments.joined(separator: " "))")
         } catch {
-            // Rejection is part of the live-only public syntax contract.
+            // Rejection is part of the typed-only public syntax contract.
         }
     }
 }

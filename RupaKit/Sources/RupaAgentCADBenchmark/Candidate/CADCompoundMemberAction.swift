@@ -50,12 +50,14 @@ public struct CADCompoundMemberAction: Codable, Equatable, Hashable, Sendable {
         )
     }
 
-    var primitive: CADPrimitiveKind {
+    var primitive: CADPrimitiveKind? {
         switch solid {
         case .box:
             .box
         case .cylinder:
             .cylinder
+        case .sphere:
+            nil
         }
     }
 }

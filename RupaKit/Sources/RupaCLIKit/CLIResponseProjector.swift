@@ -2,13 +2,19 @@ import RupaAgentProtocol
 import RupaCore
 
 enum CLIResponseProjector {
-    static func command(_ envelope: CLIReadEnvelope) throws -> CLIResponse {
-        guard case .command(let result) = envelope.response else {
-            throw unexpected("Command inspection returned an unexpected response.")
+    static func documentValidation(_ response: AgentResponse) throws -> CLIResponse {
+        guard case .documentValidation(let result) = response else {
+            if case .failure(let error) = response {
+                throw error
+            }
+            if case .committedMutation(let outcome) = response {
+                throw CLICommittedMutationError(outcome: outcome)
+            }
+            throw unexpected("Document validation returned an unexpected response.")
         }
         return CLIResponse(
             result: result,
-            dirty: envelope.state.sourceDirty,
+            dirty: result.sourceDirty,
             saved: false
         )
     }

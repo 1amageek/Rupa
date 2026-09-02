@@ -28,10 +28,10 @@ struct CADBenchmarkBaselineReportTests {
         #expect(established.report.status == .valid)
         #expect(established.report.baselineDrifts.isEmpty)
         #expect(established.report.score.totalCases == 100)
-        #expect(established.report.score.realizedCases == 95)
-        #expect(established.report.score.expectedUnsupportedCases == 5)
-        #expect(established.report.score.supportedCases == 95)
-        #expect(established.report.score.supportedRealizedCases == 95)
+        #expect(established.report.score.realizedCases == 100)
+        #expect(established.report.score.expectedUnsupportedCases == 0)
+        #expect(established.report.score.supportedCases == 100)
+        #expect(established.report.score.supportedRealizedCases == 100)
         #expect(established.report.score.capabilityDecisionTotal == 100)
         #expect(established.report.score.capabilityDecisionsCorrect == 100)
         #expect(established.report.results.allSatisfy {
@@ -207,7 +207,6 @@ struct CADBenchmarkBaselineReportTests {
         _ challenge: CADChallenge,
         snapshotVersion: String = "agent-capabilities.v1"
     ) -> CADCandidateContext {
-        let available = challenge.category != .sphere
         return CADCandidateContext(
             challenge: challenge,
             capabilities: CADCapabilitySnapshot(
@@ -215,8 +214,7 @@ struct CADBenchmarkBaselineReportTests {
                 statuses: [CADCapabilityStatus(
                     id: challenge.requiredCapability.id,
                     version: challenge.requiredCapability.version,
-                    available: available,
-                    reasonCode: available ? nil : "not-exposed"
+                    available: true
                 )]
             ),
             remainingRounds: challenge.budget.maximumRounds,

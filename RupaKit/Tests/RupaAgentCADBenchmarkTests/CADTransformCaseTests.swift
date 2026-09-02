@@ -10,6 +10,7 @@ struct CADTransformCaseTests {
         let challenge = try CADTransformPreparedCase.transform001.catalogEntry.challenge
         let projection = try CADTransformChallengeProjection.decode(challenge)
         let action = CADCandidateAction.automation(.transform(CADTransformAction(
+            source: try Self.referenceSource(for: challenge),
             translation: projection.translation,
             axisPoint: projection.axisPoint,
             rotationAxis: projection.rotationAxis,
@@ -44,7 +45,7 @@ struct CADTransformCaseTests {
             try result.validate()
             #expect(result.routeEvidence.didPublish)
             #expect(result.telemetry.actionCount == 1)
-            #expect(result.telemetry.commandCount == 1)
+            #expect(result.telemetry.commandCount == 2)
             #expect(result.telemetry.readCount == expectedReadCount(for: preparedCase))
         }
     }
@@ -61,7 +62,7 @@ struct CADTransformCaseTests {
         #expect(result.routeEvidence.finalPublicationSequence
             == result.routeEvidence.initialPublicationSequence + 1)
         #expect(result.telemetry.actionCount == 1)
-        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.commandCount == 2)
         try result.validate()
     }
 
@@ -77,7 +78,7 @@ struct CADTransformCaseTests {
         #expect(result.routeEvidence.finalPublicationSequence
             == result.routeEvidence.initialPublicationSequence + 1)
         #expect(result.telemetry.actionCount == 1)
-        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.commandCount == 2)
         #expect(result.telemetry.readCount == 2)
         #expect(result.telemetry.featureCount == 1)
         #expect(result.telemetry.sceneNodeCount == 1)
@@ -91,6 +92,7 @@ struct CADTransformCaseTests {
         let challenge = try CADTransformPreparedCase.transform002.catalogEntry.challenge
         let valid = try CADTransformReferenceCandidate().submission(for: challenge)
         let wrong = CADTransformAction(
+            source: try Self.referenceSource(for: challenge),
             translation: CADPoint3D(
                 x: -17.67766952966369,
                 y: 17.67766952966369,
@@ -110,7 +112,7 @@ struct CADTransformCaseTests {
         #expect(result.routeEvidence.finalPublicationSequence
             == result.routeEvidence.initialPublicationSequence + 1)
         #expect(result.telemetry.actionCount == 1)
-        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.commandCount == 2)
         #expect(result.routeEvidence.cleanupCompleted)
         try result.validate()
     }
@@ -121,6 +123,7 @@ struct CADTransformCaseTests {
         let challenge = try CADTransformPreparedCase.transform002.catalogEntry.challenge
         let valid = try CADTransformReferenceCandidate().submission(for: challenge)
         let invalid = CADTransformAction(
+            source: try Self.referenceSource(for: challenge),
             translation: valid.translation,
             axisPoint: valid.axisPoint,
             rotationAxis: CADDirection3D(x: 0, y: 0, z: 0),
@@ -177,7 +180,7 @@ struct CADTransformCaseTests {
         #expect(result.routeEvidence.finalPublicationSequence
             == result.routeEvidence.initialPublicationSequence + 1)
         #expect(result.telemetry.actionCount == 1)
-        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.commandCount == 2)
         #expect(result.telemetry.readCount == 2)
         #expect(result.telemetry.featureCount == 1)
         #expect(result.telemetry.sceneNodeCount == 1)
@@ -191,6 +194,7 @@ struct CADTransformCaseTests {
         let challenge = try CADTransformPreparedCase.transform003.catalogEntry.challenge
         let valid = try CADTransformReferenceCandidate().submission(for: challenge)
         let wrongOrder = CADTransformAction(
+            source: try Self.referenceSource(for: challenge),
             translation: CADPoint3D(
                 x: 0,
                 y: -50,
@@ -210,7 +214,7 @@ struct CADTransformCaseTests {
         #expect(result.routeEvidence.finalPublicationSequence
             == result.routeEvidence.initialPublicationSequence + 1)
         #expect(result.telemetry.actionCount == 1)
-        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.commandCount == 2)
         #expect(result.routeEvidence.cleanupCompleted)
         try result.validate()
     }
@@ -221,6 +225,7 @@ struct CADTransformCaseTests {
         let challenge = try CADTransformPreparedCase.transform003.catalogEntry.challenge
         let valid = try CADTransformReferenceCandidate().submission(for: challenge)
         let invalid = CADTransformAction(
+            source: try Self.referenceSource(for: challenge),
             translation: valid.translation,
             axisPoint: valid.axisPoint,
             rotationAxis: CADDirection3D(x: 0, y: 0, z: 0),
@@ -276,7 +281,7 @@ struct CADTransformCaseTests {
         #expect(result.routeEvidence.finalPublicationSequence
             == result.routeEvidence.initialPublicationSequence + 1)
         #expect(result.telemetry.actionCount == 1)
-        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.commandCount == 2)
         #expect(result.telemetry.readCount == 3)
         #expect(result.telemetry.featureCount == 2)
         #expect(result.telemetry.sceneNodeCount == 2)
@@ -290,6 +295,7 @@ struct CADTransformCaseTests {
         let challenge = try CADTransformPreparedCase.transform004.catalogEntry.challenge
         let valid = try CADTransformReferenceCandidate().submission(for: challenge)
         let wrongOrder = CADTransformAction(
+            source: try Self.referenceSource(for: challenge),
             translation: CADPoint3D(
                 x: 109.53353488403286,
                 y: -22.41438680420134,
@@ -309,7 +315,7 @@ struct CADTransformCaseTests {
         #expect(result.routeEvidence.finalPublicationSequence
             == result.routeEvidence.initialPublicationSequence + 1)
         #expect(result.telemetry.actionCount == 1)
-        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.commandCount == 2)
         #expect(result.routeEvidence.cleanupCompleted)
         try result.validate()
     }
@@ -320,6 +326,7 @@ struct CADTransformCaseTests {
         let challenge = try CADTransformPreparedCase.transform004.catalogEntry.challenge
         let valid = try CADTransformReferenceCandidate().submission(for: challenge)
         let invalid = CADTransformAction(
+            source: try Self.referenceSource(for: challenge),
             translation: valid.translation,
             axisPoint: valid.axisPoint,
             rotationAxis: CADDirection3D(x: 0, y: 0, z: 0),
@@ -375,7 +382,7 @@ struct CADTransformCaseTests {
         #expect(result.routeEvidence.finalPublicationSequence
             == result.routeEvidence.initialPublicationSequence + 1)
         #expect(result.telemetry.actionCount == 1)
-        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.commandCount == 2)
         #expect(result.telemetry.readCount == 3)
         #expect(result.telemetry.featureCount == 2)
         #expect(result.telemetry.sceneNodeCount == 2)
@@ -389,6 +396,7 @@ struct CADTransformCaseTests {
         let challenge = try CADTransformPreparedCase.transform005.catalogEntry.challenge
         let valid = try CADTransformReferenceCandidate().submission(for: challenge)
         let wrongOrder = CADTransformAction(
+            source: try Self.referenceSource(for: challenge),
             translation: CADPoint3D(
                 x: 15.849364905389024,
                 y: 50.0,
@@ -408,7 +416,7 @@ struct CADTransformCaseTests {
         #expect(result.routeEvidence.finalPublicationSequence
             == result.routeEvidence.initialPublicationSequence + 1)
         #expect(result.telemetry.actionCount == 1)
-        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.commandCount == 2)
         #expect(result.routeEvidence.cleanupCompleted)
         try result.validate()
     }
@@ -419,6 +427,7 @@ struct CADTransformCaseTests {
         let challenge = try CADTransformPreparedCase.transform005.catalogEntry.challenge
         let valid = try CADTransformReferenceCandidate().submission(for: challenge)
         let invalid = CADTransformAction(
+            source: try Self.referenceSource(for: challenge),
             translation: valid.translation,
             axisPoint: valid.axisPoint,
             rotationAxis: CADDirection3D(x: 0, y: 0, z: 0),
@@ -475,7 +484,7 @@ struct CADTransformCaseTests {
         #expect(result.routeEvidence.finalPublicationSequence
             == result.routeEvidence.initialPublicationSequence + 1)
         #expect(result.telemetry.actionCount == 1)
-        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.commandCount == 2)
         #expect(result.telemetry.readCount == 2)
         #expect(result.telemetry.featureCount == 1)
         #expect(result.telemetry.sceneNodeCount == 1)
@@ -489,6 +498,7 @@ struct CADTransformCaseTests {
         let challenge = try CADTransformPreparedCase.transform006.catalogEntry.challenge
         let valid = try CADTransformReferenceCandidate().submission(for: challenge)
         let wrongAxis = CADTransformAction(
+            source: try Self.referenceSource(for: challenge),
             translation: valid.translation,
             axisPoint: valid.axisPoint,
             rotationAxis: CADDirection3D(x: -1, y: 0, z: 0),
@@ -503,7 +513,7 @@ struct CADTransformCaseTests {
         #expect(result.routeEvidence.finalPublicationSequence
             == result.routeEvidence.initialPublicationSequence + 1)
         #expect(result.telemetry.actionCount == 1)
-        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.commandCount == 2)
         #expect(result.routeEvidence.cleanupCompleted)
         try result.validate()
     }
@@ -514,6 +524,7 @@ struct CADTransformCaseTests {
         let challenge = try CADTransformPreparedCase.transform006.catalogEntry.challenge
         let valid = try CADTransformReferenceCandidate().submission(for: challenge)
         let invalid = CADTransformAction(
+            source: try Self.referenceSource(for: challenge),
             translation: valid.translation,
             axisPoint: valid.axisPoint,
             rotationAxis: CADDirection3D(x: 0, y: 0, z: 0),
@@ -570,7 +581,7 @@ struct CADTransformCaseTests {
         #expect(result.routeEvidence.finalPublicationSequence
             == result.routeEvidence.initialPublicationSequence + 1)
         #expect(result.telemetry.actionCount == 1)
-        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.commandCount == 2)
         #expect(result.telemetry.readCount == 2)
         #expect(result.telemetry.featureCount == 1)
         #expect(result.telemetry.sceneNodeCount == 1)
@@ -584,6 +595,7 @@ struct CADTransformCaseTests {
         let challenge = try CADTransformPreparedCase.transform007.catalogEntry.challenge
         let valid = try CADTransformReferenceCandidate().submission(for: challenge)
         let wrongRotation = CADTransformAction(
+            source: try Self.referenceSource(for: challenge),
             translation: valid.translation,
             axisPoint: valid.axisPoint,
             rotationAxis: valid.rotationAxis,
@@ -598,7 +610,7 @@ struct CADTransformCaseTests {
         #expect(result.routeEvidence.finalPublicationSequence
             == result.routeEvidence.initialPublicationSequence + 1)
         #expect(result.telemetry.actionCount == 1)
-        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.commandCount == 2)
         #expect(result.routeEvidence.cleanupCompleted)
         try result.validate()
     }
@@ -609,6 +621,7 @@ struct CADTransformCaseTests {
         let challenge = try CADTransformPreparedCase.transform007.catalogEntry.challenge
         let valid = try CADTransformReferenceCandidate().submission(for: challenge)
         let invalid = CADTransformAction(
+            source: try Self.referenceSource(for: challenge),
             translation: valid.translation,
             axisPoint: valid.axisPoint,
             rotationAxis: CADDirection3D(x: 0, y: 0, z: 0),
@@ -665,7 +678,7 @@ struct CADTransformCaseTests {
         #expect(result.routeEvidence.finalPublicationSequence
             == result.routeEvidence.initialPublicationSequence + 1)
         #expect(result.telemetry.actionCount == 1)
-        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.commandCount == 2)
         #expect(result.telemetry.readCount == 2)
         #expect(result.telemetry.featureCount == 1)
         #expect(result.telemetry.sceneNodeCount == 1)
@@ -679,6 +692,7 @@ struct CADTransformCaseTests {
         let challenge = try CADTransformPreparedCase.transform008.catalogEntry.challenge
         let valid = try CADTransformReferenceCandidate().submission(for: challenge)
         let wrongOrder = CADTransformAction(
+            source: try Self.referenceSource(for: challenge),
             translation: CADPoint3D(
                 x: 125.00000000000003,
                 y: 249.99999999999997,
@@ -698,7 +712,7 @@ struct CADTransformCaseTests {
         #expect(result.routeEvidence.finalPublicationSequence
             == result.routeEvidence.initialPublicationSequence + 1)
         #expect(result.telemetry.actionCount == 1)
-        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.commandCount == 2)
         #expect(result.routeEvidence.cleanupCompleted)
         try result.validate()
     }
@@ -709,6 +723,7 @@ struct CADTransformCaseTests {
         let challenge = try CADTransformPreparedCase.transform008.catalogEntry.challenge
         let valid = try CADTransformReferenceCandidate().submission(for: challenge)
         let invalid = CADTransformAction(
+            source: try Self.referenceSource(for: challenge),
             translation: valid.translation,
             axisPoint: valid.axisPoint,
             rotationAxis: CADDirection3D(x: 0, y: 0, z: 0),
@@ -759,6 +774,7 @@ struct CADTransformCaseTests {
         let challenge = try CADTransformPreparedCase.transform001.catalogEntry.challenge
         let valid = try CADTransformReferenceCandidate().submission(for: challenge)
         let wrong = CADTransformAction(
+            source: try Self.referenceSource(for: challenge),
             translation: CADPoint3D(
                 x: valid.translation.x + 1,
                 y: valid.translation.y,
@@ -778,7 +794,7 @@ struct CADTransformCaseTests {
         #expect(result.routeEvidence.finalPublicationSequence
             == result.routeEvidence.initialPublicationSequence + 1)
         #expect(result.telemetry.actionCount == 1)
-        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.commandCount == 2)
         #expect(result.routeEvidence.cleanupCompleted)
         try result.validate()
     }
@@ -789,6 +805,7 @@ struct CADTransformCaseTests {
         let challenge = try CADTransformPreparedCase.transform001.catalogEntry.challenge
         let valid = try CADTransformReferenceCandidate().submission(for: challenge)
         let invalid = CADTransformAction(
+            source: try Self.referenceSource(for: challenge),
             translation: valid.translation,
             axisPoint: valid.axisPoint,
             rotationAxis: CADDirection3D(x: 0, y: 0, z: 0),
@@ -923,7 +940,7 @@ struct CADTransformCaseTests {
         #expect(result.routeEvidence.didPublish)
         #expect(result.routeEvidence.finalPublicationSequence
             == result.routeEvidence.initialPublicationSequence + 1)
-        #expect(result.telemetry.commandCount == 1)
+        #expect(result.telemetry.commandCount == 2)
         #expect(result.routeEvidence.cleanupCompleted)
     }
 
@@ -1003,6 +1020,20 @@ struct CADTransformCaseTests {
             #expect(text.contains("sceneNode") == false)
             #expect(text.contains("source") == false)
         }
+    }
+
+    private static func referenceSource(
+        for challenge: CADChallenge
+    ) throws -> CADTransformSourceAction {
+        guard case .automation(.transform(let action)) = try CADTransformReferenceCandidate.action(
+            for: challenge
+        ) else {
+            throw CADBenchmarkError.invalidInput(
+                caseID: challenge.id.rawValue,
+                reason: "The transform reference candidate did not provide a transform action."
+            )
+        }
+        return action.source
     }
 
     private func expectedReadCount(for preparedCase: CADTransformPreparedCase) -> Int {

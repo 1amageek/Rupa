@@ -9,55 +9,6 @@ import Testing
 @testable import RupaCLIKit
 
 @Test(.timeLimit(.minutes(1)))
-func batchRequestUsesOneLiveTransactionAndDoesNotSaveImplicitly() async throws {
-    let projectURL = URL(fileURLWithPath: "/tmp/batch.rupa")
-    let batch = AutomationBatch(
-        commands: [
-            .renameDocument(name: "Batch Result"),
-        ],
-        expectedGeneration: DocumentGeneration(5)
-    )
-    let result = stubAutomationResult(
-        message: "Renamed.",
-        generation: DocumentGeneration(6)
-    )
-    let session = StubProjectAccessSession(
-        steps: [
-            .response(.batch(AgentBatchResult(
-                results: [result],
-                generation: result.generation,
-                workspaceRevision: result.workspaceRevision,
-                dirty: true,
-                metrics: .empty
-            ))),
-        ]
-    )
-    let opener = StubProjectAccessOpener(session: session)
-    let observer = await makeStubProjectAccessObserver()
-
-    try await withStubProjectAccess(opener: opener, observer: observer) {
-        let response = try await CLIService().runBatch(
-            target: CLIDocumentTarget(fileURL: projectURL),
-            batch: batch
-        )
-        #expect(!response.saved)
-        #expect(response.dirty)
-        #expect(response.generation == 6)
-        #expect(response.results == [result])
-    }
-
-    #expect(await opener.recordedTargets() == [.liveProject(projectURL)])
-    #expect(await session.recordedSaveGenerations().isEmpty)
-    let requests = await session.recordedRequests()
-    #expect(requests.count == 1)
-    guard case .executeBatch(_, let projectedBatch) = requests[0] else {
-        Issue.record("Batch execution must be projected as one Agent batch request.")
-        return
-    }
-    #expect(projectedBatch == batch)
-}
-
-@Test(.timeLimit(.minutes(1)))
 func domainRequestPreservesTypedPayloadWithoutImplicitSave() async throws {
     let projectURL = URL(fileURLWithPath: "/tmp/domain.rupa")
     let request = DomainCommandRequest(
@@ -174,7 +125,7 @@ func exportRequestUsesProjectAccessAndNeverInvokesProjectSave() async throws {
                 presetName: "Mesh",
                 diagnostics: []
             ))),
-            .response(.command(stubAutomationResult(
+            .response(.documentDescription(stubAutomationResult(
                 message: "Described.",
                 effect: .readOnly,
                 generation: generation,
@@ -209,7 +160,7 @@ func exportRequestUsesProjectAccessAndNeverInvokesProjectSave() async throws {
     #expect(path == outputURL.path)
     #expect(expected == generation)
     #expect(projectedOptions == options)
-    guard case .execute(_, .describeDocument, generation, _) = requests[1] else {
+    guard case .describeDocument(_, generation) = requests[1] else {
         Issue.record("Export response must read the resulting project state through the same session.")
         return
     }

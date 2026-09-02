@@ -21,7 +21,6 @@ public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
 
     public enum Access: String, Codable, Equatable, Sendable {
         case agentRequest
-        case automationCommand
         case domainCapability
     }
 

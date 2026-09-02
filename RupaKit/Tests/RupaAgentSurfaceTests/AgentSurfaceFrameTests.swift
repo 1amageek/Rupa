@@ -8,105 +8,24 @@ import SwiftCAD
 @testable import RupaAgent
 
 @MainActor
-@Test func agentTogglesSurfaceControlPointDisplayThroughSurfaceSourceReference() async throws {
-    let server = AgentCommandController()
-    let sessionID = UUID()
-    let session = EditorSession()
-    server.register(session: session, id: sessionID)
-
-    let createResponse = server.handle(
-        .execute(
-            sessionID: sessionID,
-            command: .createPolySplineSurface(
-                name: "Agent Surface CV Display",
-                sourceMesh: agentPolySplineQuadMesh(),
-                options: PolySplineOptions()
-            ),
-            expectedGeneration: DocumentGeneration(0)
-        )
-    )
-    guard case .command(let createResult) = createResponse else {
-        Issue.record("Agent must create a PolySpline surface.")
-        return
-    }
-    #expect(createResult.didMutate)
-
-    let summaryResponse = server.handle(
-        .surfaceSourceSummary(
-            sessionID: sessionID,
-            expectedGeneration: DocumentGeneration(1)
-        )
-    )
-    guard case .surfaceSourceSummary(let summary) = summaryResponse else {
-        Issue.record("Agent must return a surface source summary.")
-        return
-    }
-    let patch = try #require(summary.sources.first?.patches.first)
-    let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
-
-    let displayResponse = server.handle(
-        .execute(
-            sessionID: sessionID,
-            command: .setSurfaceControlPointDisplay(
-                target: try #require(controlPoint.selectionReference),
-                isVisible: true
-            ),
-            expectedGeneration: DocumentGeneration(1),
-            expectedWorkspaceRevision: WorkspaceRevision(0)
-        )
-    )
-
-    guard case .command(let displayResult) = displayResponse else {
-        Issue.record("Agent must set a surface control point display state.")
-        return
-    }
-    #expect(displayResult.commandName == "setSurfaceControlPointDisplay")
-    #expect(displayResult.didMutate)
-    #expect(displayResult.generation == DocumentGeneration(1))
-
-    let visibleSummaryResponse = server.handle(
-        .surfaceSourceSummary(
-            sessionID: sessionID,
-            expectedGeneration: DocumentGeneration(1)
-        )
-    )
-    guard case .surfaceSourceSummary(let visibleSummary) = visibleSummaryResponse else {
-        Issue.record("Agent must return an updated surface source summary.")
-        return
-    }
-    let visiblePatch = try #require(visibleSummary.sources.first?.patches.first)
-    let visibleControlPoint = try #require(visiblePatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
-    #expect(visibleControlPoint.isPointDisplayVisible)
-}
-
-@MainActor
 @Test func agentTogglesSurfaceFrameDisplayThroughSurfaceSourceReference() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
 
-    let createResponse = server.handle(
-        .execute(
-            sessionID: sessionID,
-            command: .createPolySplineSurface(
-                name: "Agent Surface Frame Display",
-                sourceMesh: agentPolySplineQuadMesh(),
-                options: PolySplineOptions()
-            ),
-            expectedGeneration: DocumentGeneration(0)
+    _ = try session.execute(
+        .createPolySplineSurface(
+            name: "Agent Surface Frame Display",
+            sourceMesh: agentPolySplineQuadMesh(),
+            options: PolySplineOptions()
         )
     )
-    guard case .command(let createResult) = createResponse else {
-        Issue.record("Agent must create a PolySpline surface.")
-        return
-    }
-    #expect(createResult.didMutate)
 
     let summaryResponse = server.handle(
         .surfaceSourceSummary(
             sessionID: sessionID,
-            expectedGeneration: DocumentGeneration(1)
+            expectedGeneration: session.generation
         )
     )
     guard case .surfaceSourceSummary(let summary) = summaryResponse else {
@@ -118,18 +37,15 @@ import SwiftCAD
     let query = SurfaceFrameQuery(selectionReference: controlPoint.selectionReference)
 
     let displayResponse = server.handle(
-        .execute(
+        .setSurfaceFrameDisplay(
             sessionID: sessionID,
-            command: .setSurfaceFrameDisplay(
-                query: query,
-                isVisible: true
-            ),
-            expectedGeneration: DocumentGeneration(1),
-            expectedWorkspaceRevision: WorkspaceRevision(0)
+            query: query,
+            isVisible: true,
+            expectedGeneration: session.generation
         )
     )
 
-    guard case .command(let displayResult) = displayResponse else {
+    guard case .surfaceFrameDisplay(let displayResult) = displayResponse else {
         Issue.record("Agent must set a surface frame display state.")
         return
     }
@@ -144,7 +60,7 @@ import SwiftCAD
         .surfaceFrames(
             sessionID: sessionID,
             queries: [query],
-            expectedGeneration: DocumentGeneration(1)
+            expectedGeneration: session.generation
         )
     )
     guard case .surfaceFrames(let frames) = frameResponse else {
@@ -163,26 +79,17 @@ import SwiftCAD
     let session = EditorSession()
     server.register(session: session, id: sessionID)
 
-    let createResponse = server.handle(
-        .execute(
-            sessionID: sessionID,
-            command: .createBSplineSurface(
-                name: "Agent Trim Frame Surface",
-                surface: agentDirectBSplineSurfaceWithInteriorKnots()
-            ),
-            expectedGeneration: DocumentGeneration(0)
+    _ = try session.execute(
+        .createBSplineSurface(
+            name: "Agent Trim Frame Surface",
+            surface: agentDirectBSplineSurfaceWithInteriorKnots()
         )
     )
-    guard case .command(let createResult) = createResponse else {
-        Issue.record("Agent must create a direct B-spline surface.")
-        return
-    }
-    #expect(createResult.didMutate)
 
     let initialSummaryResponse = server.handle(
         .surfaceSourceSummary(
             sessionID: sessionID,
-            expectedGeneration: DocumentGeneration(1)
+            expectedGeneration: session.generation
         )
     )
     guard case .surfaceSourceSummary(let initialSummary) = initialSummaryResponse else {
@@ -190,21 +97,12 @@ import SwiftCAD
         return
     }
     let faceReference = try #require(initialSummary.sources.first?.patches.first?.faceSelectionReference)
-    let trimResponse = server.handle(
-        .execute(
-            sessionID: sessionID,
-            command: .setSurfaceTrimLoops(
-                target: faceReference,
-                trimLoops: [agentAuthoredSurfaceTrimLoop()]
-            ),
-            expectedGeneration: DocumentGeneration(1)
+    _ = try session.execute(
+        .setSurfaceTrimLoops(
+            target: faceReference,
+            trimLoops: [agentAuthoredSurfaceTrimLoop()]
         )
     )
-    guard case .command(let trimResult) = trimResponse else {
-        Issue.record("Agent must set authored trim loops.")
-        return
-    }
-    #expect(trimResult.didMutate)
 
     let generation = session.generation
     let dirty = session.isDirty
@@ -247,14 +145,14 @@ import SwiftCAD
     #expect(session.isDirty == dirty)
 
     let displayResponse = server.handle(
-        .execute(
+        .setSurfaceFrameDisplay(
             sessionID: sessionID,
-            command: .setSurfaceFrameDisplay(query: spanQuery, isVisible: true),
-            expectedGeneration: generation,
-            expectedWorkspaceRevision: WorkspaceRevision(0)
+            query: spanQuery,
+            isVisible: true,
+            expectedGeneration: generation
         )
     )
-    guard case .command(let displayResult) = displayResponse else {
+    guard case .surfaceFrameDisplay(let displayResult) = displayResponse else {
         Issue.record("Agent must persist a trim p-curve frame display.")
         return
     }
@@ -271,22 +169,13 @@ import SwiftCAD
     let session = EditorSession()
     server.register(session: session, id: sessionID)
 
-    let createResponse = server.handle(
-        .execute(
-            sessionID: sessionID,
-            command: .createPolySplineSurface(
-                name: "Agent Surface Frame",
-                sourceMesh: agentPolySplinePatchNetworkMesh(centerZ: 0.0),
-                options: PolySplineOptions(mergePatches: false)
-            ),
-            expectedGeneration: DocumentGeneration(0)
+    _ = try session.execute(
+        .createPolySplineSurface(
+            name: "Agent Surface Frame",
+            sourceMesh: agentPolySplinePatchNetworkMesh(centerZ: 0.0),
+            options: PolySplineOptions(mergePatches: false)
         )
     )
-    guard case .command(let createResult) = createResponse else {
-        Issue.record("Agent must create a planar PolySpline patch network.")
-        return
-    }
-    #expect(createResult.didMutate)
     let generation = session.generation
     let dirty = session.isDirty
 

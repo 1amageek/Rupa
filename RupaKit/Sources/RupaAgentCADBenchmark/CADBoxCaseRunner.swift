@@ -1,9 +1,8 @@
 import Foundation
 import RupaAgentProtocol
-import RupaAutomation
+import RupaCADDomain
 import RupaCore
 import RupaKit
-import SwiftCAD
 
 /// Projects the shared lifecycle into one box-category result.
 @MainActor
@@ -50,7 +49,7 @@ struct CADBoxCaseRunner {
     func run(candidate: any CADCandidateProtocol) async throws -> CADBoxCaseResult {
         let totalStart = now()
         let entry = try activatedCase.catalogEntry
-        let record = try await harness(challenge: entry.challenge).runReference(
+        let record = try await harness(entry: entry).runReference(
             candidate: candidate
         )
         return await project(record, entry: entry, totalStart: totalStart)
@@ -59,70 +58,19 @@ struct CADBoxCaseRunner {
     func run(action: CADCandidateAction) async throws -> CADBoxCaseResult {
         let totalStart = now()
         let entry = try activatedCase.catalogEntry
-        let record = try await harness(challenge: entry.challenge).run(action: action)
+        let record = try await harness(entry: entry).run(action: action)
         return await project(record, entry: entry, totalStart: totalStart)
     }
 
-    private func harness(challenge: CADChallenge) -> CADCaseLifecycleHarness {
+    private func harness(entry: CADCatalogEntry) -> CADCaseLifecycleHarness {
         CADCaseLifecycleHarness(
             caseID: caseID,
-            challenge: challenge,
-            routing: CADCaseActionRouting(
-                operationName: Self.operationName,
-                commandBuilder: { [self] action, challenge, tolerance in
-                    try makeCommand(
-                        from: action,
-                        challenge: challenge,
-                        modelingTolerance: tolerance
-                    )
-                }
-            ),
+            challenge: entry.challenge,
+            programPlanner: { action in
+                try DefaultCADSemanticProgramPlanner().plan(for: entry, action: action)
+            },
             timeoutWallNanoseconds: timeoutWallNanoseconds,
             preRouteDelayNanoseconds: preRouteDelayNanoseconds
-        )
-    }
-
-    private func makeCommand(
-        from action: CADCandidateAction,
-        challenge: CADChallenge,
-        modelingTolerance: ModelingTolerance
-    ) throws -> AutomationCommand {
-        _ = try CADBoxChallengeProjection.decode(challenge)
-        guard case .automation(
-            .solid(.box(let name, let origin, let width, let depth, let height))
-        ) = action,
-        name.isEmpty == false else {
-            throw CADBenchmarkError.invalidInput(
-                caseID: caseID.rawValue,
-                reason: "The box action must contain one named solid box."
-            )
-        }
-        try origin.validate(caseID: caseID, field: "action.origin")
-        try width.validate(caseID: caseID, field: "action.width")
-        try depth.validate(caseID: caseID, field: "action.depth")
-        try height.validate(caseID: caseID, field: "action.height")
-        let tolerance = try CADBenchmarkTolerancePolicy(modelingTolerance: modelingTolerance)
-        guard tolerance.isNonDegenerate(width.meters),
-              tolerance.isNonDegenerate(depth.meters),
-              tolerance.isNonDegenerate(height.meters) else {
-            throw CADBenchmarkError.invalidInput(
-                caseID: caseID.rawValue,
-                reason: "The submitted box dimensions are degenerate."
-            )
-        }
-        let sourcePlane = try CADBoxGeometryMapping.sourcePlane(
-            submittedOrigin: origin,
-            submittedWidth: width,
-            submittedDepth: depth,
-            caseID: caseID
-        )
-        return .createExtrudedRectangle(
-            name: name,
-            plane: SketchPlaneReference(sketchPlane: sourcePlane),
-            width: .constant(.length(width.meters, unit: .meter)),
-            height: .constant(.length(depth.meters, unit: .meter)),
-            depth: .constant(.length(height.meters, unit: .meter)),
-            direction: .normal
         )
     }
 
@@ -165,10 +113,19 @@ struct CADBoxCaseRunner {
         totalStart: UInt64
     ) async -> CADBoxCaseResult {
         guard let finalView = record.finalView,
-              let automationResult = commandResult(from: record.response) else {
+              let semanticReceipt = CADSemanticExecutionEvidence.committedReceipt(from: record.response) else {
             return finish(result(.infrastructureFailure, record, evidence), totalStart: totalStart)
         }
-        let (stepResult, bindings) = publishedEvidence(from: automationResult)
+        let semanticEvidence = CADSemanticExecutionEvidence(receipt: semanticReceipt)
+        let stepResult = semanticEvidence.stepResult(
+            node: "box",
+            operation: RupaCADSemanticOperationID.solidBox.rawValue,
+            index: 0,
+            primaryOutputs: ["body"]
+        )
+        let bindings = CADOutputRoleBindings(bindings: [
+            CADOutputRoleBinding(role: "solid", stepIndex: 0, selector: .primary),
+        ])
         let oracleStart = now()
         do {
             guard case .box(let expected) = entry.expected else {
@@ -288,10 +245,19 @@ struct CADBoxCaseRunner {
         evidence: CADBoxRouteEvidence,
         outcome: CADCaseOutcome
     ) -> CADBoxCaseResult {
-        guard let automationResult = commandResult(from: record.response) else {
+        guard let semanticReceipt = CADSemanticExecutionEvidence.committedReceipt(from: record.response) else {
             return result(.infrastructureFailure, record, evidence)
         }
-        let (stepResult, bindings) = publishedEvidence(from: automationResult)
+        let semanticEvidence = CADSemanticExecutionEvidence(receipt: semanticReceipt)
+        let stepResult = semanticEvidence.stepResult(
+            node: "box",
+            operation: RupaCADSemanticOperationID.solidBox.rawValue,
+            index: 0,
+            primaryOutputs: ["body"]
+        )
+        let bindings = CADOutputRoleBindings(bindings: [
+            CADOutputRoleBinding(role: "solid", stepIndex: 0, selector: .primary),
+        ])
         return result(
             outcome,
             record,
@@ -301,29 +267,6 @@ struct CADBoxCaseRunner {
         )
     }
 
-    private func commandResult(from response: AgentResponse?) -> AutomationResult? {
-        guard case .command(let result) = response else { return nil }
-        return result
-    }
-
-    private func publishedEvidence(
-        from result: AutomationResult
-    ) -> (CADCandidateStepResult, CADOutputRoleBindings) {
-        let step = CADCandidateStepResult(
-            stepIndex: 0,
-            operation: Self.operationName,
-            status: result.didMutate ? .published : .unchanged,
-            primaryFeatureID: result.primaryFeatureID?.description,
-            createdFeatureIDs: result.createdFeatureIDs.map(\.description),
-            diagnostics: result.diagnostics.map(\.message)
-        )
-        return (
-            step,
-            CADOutputRoleBindings(bindings: [
-                CADOutputRoleBinding(role: "solid", stepIndex: 0, selector: .primary),
-            ])
-        )
-    }
 
     private func result(
         _ outcome: CADCaseOutcome,

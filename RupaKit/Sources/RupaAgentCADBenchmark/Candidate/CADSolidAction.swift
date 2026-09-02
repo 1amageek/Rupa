@@ -16,6 +16,11 @@ public enum CADSolidAction: Codable, Equatable, Hashable, Sendable {
         radius: CADLength,
         depth: CADLength
     )
+    case sphere(
+        name: String,
+        center: CADPoint3D,
+        radius: CADLength
+    )
 
     private enum CodingKeys: String, CodingKey {
         case kind
@@ -27,6 +32,7 @@ public enum CADSolidAction: Codable, Equatable, Hashable, Sendable {
         case baseCenter
         case axis
         case radius
+        case center
     }
 
     public init(from decoder: Decoder) throws {
@@ -48,6 +54,12 @@ public enum CADSolidAction: Codable, Equatable, Hashable, Sendable {
                 axis: try container.decode(CADDirection3D.self, forKey: .axis),
                 radius: try container.decode(CADLength.self, forKey: .radius),
                 depth: try container.decode(CADLength.self, forKey: .depth)
+            )
+        case "sphere":
+            self = .sphere(
+                name: try container.decode(String.self, forKey: .name),
+                center: try container.decode(CADPoint3D.self, forKey: .center),
+                radius: try container.decode(CADLength.self, forKey: .radius)
             )
         default:
             throw DecodingError.dataCorruptedError(
@@ -75,6 +87,11 @@ public enum CADSolidAction: Codable, Equatable, Hashable, Sendable {
             try container.encode(axis, forKey: .axis)
             try container.encode(radius, forKey: .radius)
             try container.encode(depth, forKey: .depth)
+        case let .sphere(name, center, radius):
+            try container.encode("sphere", forKey: .kind)
+            try container.encode(name, forKey: .name)
+            try container.encode(center, forKey: .center)
+            try container.encode(radius, forKey: .radius)
         }
     }
 }

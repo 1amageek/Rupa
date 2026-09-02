@@ -101,11 +101,7 @@ struct CADBenchmarkScheduler {
                                 await mainActorProbe.observeEntry()
                                 let execution = try await runner.executeReference(caseID: caseID)
                                 await probe.completed()
-                                let expectedOutcome: CADCaseOutcome =
-                                    execution.publicResult.category == .sphere
-                                        ? .expectedUnsupported
-                                        : .realized
-                                guard execution.publicResult.outcome == expectedOutcome,
+                                guard execution.publicResult.outcome == .realized,
                                       execution.regressionRecord.capabilityDecisionCorrect else {
                                     throw CADBenchmarkChildFailure(
                                         caseID: caseID,

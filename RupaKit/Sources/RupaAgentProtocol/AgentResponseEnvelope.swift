@@ -131,6 +131,12 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
                 message: "Unsupported agent protocol version: \(jsonrpc)."
             )
         }
+        if let method, method == "command.apply" || method == "command.applyBatch" {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Legacy raw command response is not supported: \(method)."
+            )
+        }
         let hasResult = result != nil
         let hasError = error != nil
         guard hasResult != hasError else {
@@ -186,9 +192,14 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             try container.encode(value, forKey: .result)
         case .cadInteractionQualityAssessment(let value):
             try container.encode(value, forKey: .result)
-        case .command(let value):
-            try container.encode(value, forKey: .result)
-        case .batch(let value):
+        case .documentDescription(let value),
+             .documentValidation(let value),
+             .parameterExpression(let value),
+             .objectDimensionExpression(let value),
+             .sketchEntityDimensionExpression(let value),
+             .selectionDimensionTargetExpression(let value),
+             .surfaceFrameDisplay(let value),
+             .polySplineSurfaceVertex(let value):
             try container.encode(value, forKey: .result)
         case .domainExecution(let value):
             try container.encode(value, forKey: .result)
@@ -309,13 +320,43 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             return .cadInteractionQualityAssessment(
                 try container.decode(CADInteractionQualityAssessmentResult.self, forKey: .result)
             )
-        case "command.apply",
-             "parameter.setExpression",
-             "document.setSurfaceFrameDisplay",
-             "document.movePolySplineSurfaceVertex":
-            return .command(try container.decode(AutomationResult.self, forKey: .result))
-        case "command.applyBatch":
-            return .batch(try container.decode(AgentBatchResult.self, forKey: .result))
+        case "command.apply", "command.applyBatch":
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Legacy raw command response is not supported: \(method)."
+            )
+        case "document.describe":
+            return .documentDescription(
+                try container.decode(AutomationResult.self, forKey: .result)
+            )
+        case "document.validate":
+            return .documentValidation(
+                try container.decode(AutomationResult.self, forKey: .result)
+            )
+        case "parameter.setExpression":
+            return .parameterExpression(
+                try container.decode(AutomationResult.self, forKey: .result)
+            )
+        case "objectDimension.setExpression":
+            return .objectDimensionExpression(
+                try container.decode(AutomationResult.self, forKey: .result)
+            )
+        case "sketchEntityDimension.setExpression":
+            return .sketchEntityDimensionExpression(
+                try container.decode(AutomationResult.self, forKey: .result)
+            )
+        case "selectionDimension.setTargetExpression":
+            return .selectionDimensionTargetExpression(
+                try container.decode(AutomationResult.self, forKey: .result)
+            )
+        case "document.setSurfaceFrameDisplay":
+            return .surfaceFrameDisplay(
+                try container.decode(AutomationResult.self, forKey: .result)
+            )
+        case "document.movePolySplineSurfaceVertex":
+            return .polySplineSurfaceVertex(
+                try container.decode(AutomationResult.self, forKey: .result)
+            )
         case "domain.execute":
             return .domainExecution(
                 try container.decode(DomainExecutionResult.self, forKey: .result)
@@ -463,10 +504,22 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             sessionOperationMethodName(for: value.operation)
         case .cadInteractionQualityAssessment:
             "agent.cadInteractionQualityAssessment"
-        case .command:
-            "command.apply"
-        case .batch:
-            "command.applyBatch"
+        case .documentDescription:
+            "document.describe"
+        case .documentValidation:
+            "document.validate"
+        case .parameterExpression:
+            "parameter.setExpression"
+        case .objectDimensionExpression:
+            "objectDimension.setExpression"
+        case .sketchEntityDimensionExpression:
+            "sketchEntityDimension.setExpression"
+        case .selectionDimensionTargetExpression:
+            "selectionDimension.setTargetExpression"
+        case .surfaceFrameDisplay:
+            "document.setSurfaceFrameDisplay"
+        case .polySplineSurfaceVertex:
+            "document.movePolySplineSurfaceVertex"
         case .domainExecution:
             "domain.execute"
         case .capabilityExecution:
@@ -558,14 +611,17 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
              ("agent.status", .status),
              ("sessions.list", .sessions),
              ("agent.cadInteractionQualityAssessment", .cadInteractionQualityAssessment),
-             ("command.apply", .command),
-             ("command.applyBatch", .batch),
              ("domain.execute", .domainExecution),
              ("capability.invoke", .capabilityExecution),
              ("program.execute", .programExecution),
-             ("parameter.setExpression", .command),
-             ("document.setSurfaceFrameDisplay", .command),
-             ("document.movePolySplineSurfaceVertex", .command),
+             ("document.describe", .documentDescription),
+             ("document.validate", .documentValidation),
+             ("parameter.setExpression", .parameterExpression),
+             ("objectDimension.setExpression", .objectDimensionExpression),
+             ("sketchEntityDimension.setExpression", .sketchEntityDimensionExpression),
+             ("selectionDimension.setTargetExpression", .selectionDimensionTargetExpression),
+             ("document.setSurfaceFrameDisplay", .surfaceFrameDisplay),
+             ("document.movePolySplineSurfaceVertex", .polySplineSurfaceVertex),
              ("document.parameters", .parameters),
              ("document.evaluate", .evaluation),
              ("document.measure", .measurement),

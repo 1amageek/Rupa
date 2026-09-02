@@ -1,14 +1,12 @@
 import Foundation
 import RupaAgentProtocol
-import RupaAutomation
+import RupaCADDomain
 import RupaCore
 import RupaKit
-import SwiftCAD
 
-/// Runs activated constraint cases through one production createSketch route.
+/// Runs activated constraint cases through the production semantic-program route.
 @MainActor
 struct CADConstraintCaseRunner {
-    private static let operationName = "createSketch"
     private static let defaultTimeoutWallNanoseconds: UInt64 = 10_000_000_000
 
     private let activatedCase: CADActivatedConstraintCase
@@ -37,14 +35,14 @@ struct CADConstraintCaseRunner {
     func run(candidate: any CADCandidateProtocol) async throws -> CADConstraintCaseResult {
         let start = now()
         let entry = try activatedCase.catalogEntry
-        let record = try await harness(challenge: entry.challenge).runReference(candidate: candidate)
+        let record = try await harness(entry: entry).runReference(candidate: candidate)
         return await project(record, entry: entry, totalStart: start)
     }
 
     func run(action: CADCandidateAction) async throws -> CADConstraintCaseResult {
         let start = now()
         let entry = try activatedCase.catalogEntry
-        let record = try await harness(challenge: entry.challenge).run(action: action)
+        let record = try await harness(entry: entry).run(action: action)
         return await project(record, entry: entry, totalStart: start)
     }
 
@@ -52,45 +50,24 @@ struct CADConstraintCaseRunner {
         let start = now()
         let entry = try activatedCase.catalogEntry
         let action = try CADConstraintReferenceCandidate.action(for: entry.challenge)
-        let record = try await harness(challenge: entry.challenge).runStale(action: action)
+        let record = try await harness(entry: entry).runStale(action: action)
         return await project(record, entry: entry, totalStart: start)
     }
 
-    private func harness(challenge: CADChallenge) -> CADCaseLifecycleHarness {
+    private func harness(entry: CADCatalogEntry) -> CADCaseLifecycleHarness {
         CADCaseLifecycleHarness(
             caseID: caseID,
-            challenge: challenge,
-            routing: CADCaseActionRouting(
-                operationName: Self.operationName,
-                commandBuilder: { [self] action, challenge, tolerance in
-                    try command(from: action, challenge: challenge, tolerance: tolerance)
-                }
-            ),
+            challenge: entry.challenge,
+            programPlanner: { action in
+                try DefaultCADSemanticProgramPlanner().plan(
+                    for: entry,
+                    action: action
+                )
+            },
             timeoutWallNanoseconds: timeoutWallNanoseconds,
             preRouteDelayNanoseconds: preRouteDelayNanoseconds,
             postRegistrationDelayNanoseconds: postRegistrationDelayNanoseconds
         )
-    }
-
-    private func command(
-        from action: CADCandidateAction,
-        challenge: CADChallenge,
-        tolerance: ModelingTolerance
-    ) throws -> AutomationCommand {
-        let projection = try CADConstraintChallengeProjection.decode(challenge)
-        guard case .automation(.sketch(.constraint(let submitted))) = action,
-              submitted.plane == projection.plane else {
-            throw CADBenchmarkError.invalidInput(
-                caseID: caseID.rawValue,
-                reason: "The activated constraint action must use the public challenge plane."
-            )
-        }
-        let sketch = try CADConstraintGeometryMapping.sketch(
-            from: submitted,
-            modelingTolerance: tolerance,
-            caseID: caseID
-        )
-        return .createSketch(name: submitted.name, sketch: sketch, geometryRole: .curve)
     }
 
     private func project(
@@ -105,7 +82,9 @@ struct CADConstraintCaseRunner {
             return result(
                 outcome: .cancellation,
                 record: record,
-                evidence: mutationEvidence(from: record.response),
+                evidence: semanticEvidence(from: record.response).map {
+                    mutationEvidence(from: $0)
+                },
                 totalStart: totalStart
             )
         case .invalidSubmission:
@@ -127,13 +106,16 @@ struct CADConstraintCaseRunner {
         totalStart: UInt64
     ) async -> CADConstraintCaseResult {
         guard let finalView = record.finalView,
-              let evidence = mutationEvidence(from: record.response) else {
+              let semanticEvidence = semanticEvidence(from: record.response),
+              semanticEvidence.receipt.telemetry.execution.stepCount == 1,
+              semanticEvidence.commandCount == 1 else {
             return result(
                 outcome: .infrastructureFailure,
                 record: record,
                 totalStart: totalStart
             )
         }
+        let evidence = mutationEvidence(from: semanticEvidence)
         let oracleStart = now()
         do {
             guard case .constraint(let expected) = entry.expected else {
@@ -170,16 +152,29 @@ struct CADConstraintCaseRunner {
                 readCount: 1,
                 featureCount: finalView.document.document.cadDocument.designGraph.nodes.count,
                 bodyCount: finalView.evaluationSnapshot.bodyCount,
-                diagnostics: ["\(caseID.rawValue) oracle exceeded its shared deadline after publication; no retry was attempted."],
+                diagnostics: [
+                    "\(caseID.rawValue) constraint oracle exceeded its shared deadline after publication; no retry was attempted."
+                ],
                 totalStart: totalStart
             )
         } catch let error as CADConstraintOracleError {
-            let entityCount: Int
             do {
-                entityCount = try SketchEntitySnapshotService().snapshot(
+                let entityCount = try SketchEntitySnapshotService().snapshot(
                     document: finalView.document.document,
                     objectRegistry: finalView.objectRegistry
                 ).counts.entityCount
+                return result(
+                    outcome: .invalidSubmission,
+                    record: record,
+                    evidence: evidence,
+                    oracleWallNanoseconds: elapsed(since: oracleStart),
+                    readCount: 2,
+                    entityCount: entityCount,
+                    featureCount: finalView.document.document.cadDocument.designGraph.nodes.count,
+                    bodyCount: finalView.evaluationSnapshot.bodyCount,
+                    diagnostics: [error.description],
+                    totalStart: totalStart
+                )
             } catch {
                 return result(
                     outcome: .oracleFailure,
@@ -189,22 +184,12 @@ struct CADConstraintCaseRunner {
                     readCount: 2,
                     featureCount: finalView.document.document.cadDocument.designGraph.nodes.count,
                     bodyCount: finalView.evaluationSnapshot.bodyCount,
-                    diagnostics: ["\(caseID.rawValue) failure telemetry read failed: \(message(error))"],
+                    diagnostics: [
+                        "\(caseID.rawValue) constraint failure telemetry read failed: \(message(error))"
+                    ],
                     totalStart: totalStart
                 )
             }
-            return result(
-                outcome: .invalidSubmission,
-                record: record,
-                evidence: evidence,
-                oracleWallNanoseconds: elapsed(since: oracleStart),
-                readCount: 2,
-                entityCount: entityCount,
-                featureCount: finalView.document.document.cadDocument.designGraph.nodes.count,
-                bodyCount: finalView.evaluationSnapshot.bodyCount,
-                diagnostics: [error.description],
-                totalStart: totalStart
-            )
         } catch {
             return result(
                 outcome: .oracleFailure,
@@ -214,7 +199,7 @@ struct CADConstraintCaseRunner {
                 readCount: 1,
                 featureCount: finalView.document.document.cadDocument.designGraph.nodes.count,
                 bodyCount: finalView.evaluationSnapshot.bodyCount,
-                diagnostics: ["\(caseID.rawValue) oracle failed: \(message(error))"],
+                diagnostics: ["\(caseID.rawValue) constraint oracle failed: \(message(error))"],
                 totalStart: totalStart
             )
         }
@@ -225,18 +210,23 @@ struct CADConstraintCaseRunner {
         bindings: CADOutputRoleBindings
     )
 
-    private func mutationEvidence(from response: AgentResponse?) -> MutationEvidence? {
-        guard case .command(let automation)? = response else { return nil }
-        let step = CADCandidateStepResult(
-            stepIndex: 0,
-            operation: Self.operationName,
-            status: automation.didMutate ? .published : .unchanged,
-            primaryFeatureID: automation.primaryFeatureID?.description,
-            createdFeatureIDs: automation.createdFeatureIDs.map(\.description),
-            diagnostics: automation.diagnostics.map(\.message)
-        )
-        return (
-            step,
+    private func semanticEvidence(from response: AgentResponse?) -> CADSemanticExecutionEvidence? {
+        guard let receipt = CADSemanticExecutionEvidence.committedReceipt(from: response) else {
+            return nil
+        }
+        return CADSemanticExecutionEvidence(receipt: receipt)
+    }
+
+    private func mutationEvidence(
+        from semanticEvidence: CADSemanticExecutionEvidence
+    ) -> MutationEvidence {
+        (
+            semanticEvidence.stepResult(
+                node: "constraint",
+                operation: RupaCADSemanticOperationID.sketchConstrained.rawValue,
+                index: 0,
+                primaryOutputs: ["sketch"]
+            ),
             CADOutputRoleBindings(bindings: [
                 CADOutputRoleBinding(role: "relation", stepIndex: 0, selector: .primary),
             ])

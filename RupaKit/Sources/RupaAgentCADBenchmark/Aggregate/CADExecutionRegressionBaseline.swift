@@ -58,14 +58,9 @@ struct CADExecutionRegressionBaseline: Codable, Equatable, Sendable {
         }
         for record in records {
             try record.validate()
-            let expectedOutcome: CADCaseOutcome = record.category == .sphere
-                ? .expectedUnsupported
-                : .realized
-            let expectedDisposition: CADCaseRegressionRecord.OracleDisposition =
-                record.category == .sphere ? .expectedUnsupported : .accepted
-            guard record.outcome == expectedOutcome,
+            guard record.outcome == .realized,
                   record.capabilityDecisionCorrect,
-                  record.oracleDisposition == expectedDisposition else {
+                  record.oracleDisposition == .accepted else {
                 throw CADBenchmarkBaselineError.invalidExecutionBaseline
             }
         }

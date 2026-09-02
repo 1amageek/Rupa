@@ -30,22 +30,20 @@ public enum AgentRequest: Codable, Equatable, Sendable {
         expectedGeneration: DocumentGeneration?
     )
     case cadInteractionQualityAssessment
-    case execute(
-        sessionID: UUID,
-        command: AutomationCommand,
-        expectedGeneration: DocumentGeneration?,
-        expectedWorkspaceRevision: WorkspaceRevision? = nil
-    )
-    case executeBatch(
-        sessionID: UUID,
-        batch: AutomationBatch
-    )
     case executeDomain(
         sessionID: UUID,
         request: DomainCommandRequest
     )
     case invokeCapability(AgentSemanticDirectExecutionRequest)
     case executeProgram(AgentSemanticProgramExecutionRequest)
+    case describeDocument(
+        sessionID: UUID,
+        expectedGeneration: DocumentGeneration?
+    )
+    case validateDocument(
+        sessionID: UUID,
+        expectedGeneration: DocumentGeneration?
+    )
     case parameters(
         sessionID: UUID,
         expectedGeneration: DocumentGeneration?
@@ -247,8 +245,14 @@ public enum AgentResponse: Codable, Equatable, Sendable {
     case sessions([WorkspaceSessionSummary])
     case sessionOperation(AgentSessionOperationResult)
     case cadInteractionQualityAssessment(CADInteractionQualityAssessmentResult)
-    case command(AutomationResult)
-    case batch(AgentBatchResult)
+    case documentDescription(AutomationResult)
+    case documentValidation(AutomationResult)
+    case parameterExpression(AutomationResult)
+    case objectDimensionExpression(AutomationResult)
+    case sketchEntityDimensionExpression(AutomationResult)
+    case selectionDimensionTargetExpression(AutomationResult)
+    case surfaceFrameDisplay(AutomationResult)
+    case polySplineSurfaceVertex(AutomationResult)
     case domainExecution(DomainExecutionResult)
     case capabilityExecution(AgentSemanticExecutionResult)
     case programExecution(AgentSemanticExecutionResult)
@@ -315,16 +319,16 @@ public extension AgentRequest {
             "history.redo"
         case .cadInteractionQualityAssessment:
             "agent.cadInteractionQualityAssessment"
-        case .execute:
-            "command.apply"
-        case .executeBatch:
-            "command.applyBatch"
         case .executeDomain:
             "domain.execute"
         case .invokeCapability:
             "capability.invoke"
         case .executeProgram:
             "program.execute"
+        case .describeDocument:
+            "document.describe"
+        case .validateDocument:
+            "document.validate"
         case .parameters:
             "document.parameters"
         case .setParameterExpression:

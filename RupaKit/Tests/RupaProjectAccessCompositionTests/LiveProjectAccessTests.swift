@@ -450,9 +450,8 @@ func liveSessionMismatchAndUnknownOutcomeAreTerminalBeforeRetry() async throws {
 
     do {
         _ = try await session.send(
-            .execute(
+            .describeDocument(
                 sessionID: UUID(),
-                command: .renameDocument(name: "wrong"),
                 expectedGeneration: nil
             )
         )

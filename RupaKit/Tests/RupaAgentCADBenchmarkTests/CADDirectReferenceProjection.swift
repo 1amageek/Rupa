@@ -176,21 +176,16 @@ struct CADDirectReferenceProjection: Equatable {
             )
         case .sphere(let result):
             route = try Self.route(result.routeEvidence, caseID: result.caseID)
-            counts = CADCaseRegressionRecord.Counts(
+            counts = Self.solidCounts(
                 action: result.telemetry.actionCount,
                 command: result.telemetry.commandCount,
                 read: result.telemetry.readCount,
-                entity: result.telemetry.entityCount,
+                entity: 0,
                 feature: result.telemetry.featureCount,
-                sceneNode: nil,
                 body: result.telemetry.bodyCount,
-                face: nil,
-                edge: nil,
-                vertex: nil,
-                evaluationPass: nil,
-                historyEntry: nil,
-                capabilityRequest: result.telemetry.capabilityRequestCount,
-                sourceMutation: result.telemetry.sourceMutationCount
+                face: result.telemetry.faceCount,
+                edge: result.telemetry.edgeCount,
+                vertex: result.telemetry.vertexCount
             )
         }
     }

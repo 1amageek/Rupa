@@ -1,6 +1,5 @@
 import Foundation
 import RupaCapabilities
-import RupaAutomation
 import RupaCore
 import RupaCoreTypes
 import RupaDomainFoundation
@@ -119,24 +118,6 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                 ),
                 forKey: .params
             )
-        case let .execute(sessionID, command, expectedGeneration, expectedWorkspaceRevision):
-            try container.encode(
-                ExecuteParams(
-                    sessionID: sessionID,
-                    command: command,
-                    expectedGeneration: expectedGeneration,
-                    expectedWorkspaceRevision: expectedWorkspaceRevision
-                ),
-                forKey: .params
-            )
-        case let .executeBatch(sessionID, batch):
-            try container.encode(
-                ExecuteBatchParams(
-                    sessionID: sessionID,
-                    batch: batch
-                ),
-                forKey: .params
-            )
         case let .executeDomain(sessionID, request):
             try container.encode(
                 DomainExecuteParams(
@@ -146,6 +127,15 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                     payload: request.payload,
                     expectedGeneration: request.expectedGeneration,
                     dryRun: request.dryRun
+                ),
+                forKey: .params
+            )
+        case let .describeDocument(sessionID, expectedGeneration),
+             let .validateDocument(sessionID, expectedGeneration):
+            try container.encode(
+                SessionGenerationParams(
+                    sessionID: sessionID,
+                    expectedGeneration: expectedGeneration
                 ),
                 forKey: .params
             )
@@ -498,19 +488,10 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
         case "agent.cadInteractionQualityAssessment":
             try decodeEmptyParams(from: container, method: method)
             return .cadInteractionQualityAssessment
-        case "command.apply":
-            let payload = try decodeParams(ExecuteParams.self, from: container, method: method)
-            return .execute(
-                sessionID: payload.sessionID,
-                command: payload.command,
-                expectedGeneration: payload.expectedGeneration,
-                expectedWorkspaceRevision: payload.expectedWorkspaceRevision
-            )
-        case "command.applyBatch":
-            let payload = try decodeParams(ExecuteBatchParams.self, from: container, method: method)
-            return .executeBatch(
-                sessionID: payload.sessionID,
-                batch: payload.batch
+        case "command.apply", "command.applyBatch":
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Legacy raw command transport is not supported: \(method)."
             )
         case "domain.execute":
             let payload = try decodeParams(DomainExecuteParams.self, from: container, method: method)
@@ -543,6 +524,18 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                     dryRun: payload.dryRun,
                     program: payload.program
                 )
+            )
+        case "document.describe":
+            let payload = try decodeParams(SessionGenerationParams.self, from: container, method: method)
+            return .describeDocument(
+                sessionID: payload.sessionID,
+                expectedGeneration: payload.expectedGeneration
+            )
+        case "document.validate":
+            let payload = try decodeParams(SessionGenerationParams.self, from: container, method: method)
+            return .validateDocument(
+                sessionID: payload.sessionID,
+                expectedGeneration: payload.expectedGeneration
             )
         case "document.parameters":
             let payload = try decodeParams(SessionGenerationParams.self, from: container, method: method)
@@ -969,27 +962,6 @@ private struct ResetDocumentParams: AgentRequestParameterPayload, Equatable {
     var sessionID: UUID
     var name: String
     var expectedGeneration: DocumentGeneration?
-}
-
-private struct ExecuteParams: AgentRequestParameterPayload, Equatable {
-    static let allowedKeys: Set<String> = [
-        "sessionID",
-        "command",
-        "expectedGeneration",
-        "expectedWorkspaceRevision",
-    ]
-
-    var sessionID: UUID
-    var command: AutomationCommand
-    var expectedGeneration: DocumentGeneration?
-    var expectedWorkspaceRevision: WorkspaceRevision?
-}
-
-private struct ExecuteBatchParams: AgentRequestParameterPayload, Equatable {
-    static let allowedKeys: Set<String> = ["sessionID", "batch"]
-
-    var sessionID: UUID
-    var batch: AutomationBatch
 }
 
 private struct DomainExecuteParams: AgentRequestParameterPayload, Equatable {

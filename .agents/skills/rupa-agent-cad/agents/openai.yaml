@@ -1,0 +1,4 @@
+interface:
+  display_name: "Rupa Agent CAD"
+  short_description: "Operate and verify Rupa CAD through the Agent API"
+  default_prompt: "Use $rupa-agent-cad to operate and verify a Rupa CAD project through its Agent API."

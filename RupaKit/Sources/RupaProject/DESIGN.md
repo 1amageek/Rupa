@@ -97,7 +97,10 @@ the isolated source staging path and returns an immutable result to Core/Project
    asynchronous prevalidation, and immediately before publication or preview
    return. Existing non-semantic transactions retain their owning guards.
 2. Preview stages the full source/package/projection/evaluation path but never
-   publishes source, package, evaluation, history, or view state.
+   publishes source, package, evaluation, history, or view state. Every staged
+   evaluation uses a transaction-local cache seeded only from the immutable
+   published evaluation, so preview and abandoned candidates cannot affect a
+   later transaction at the same proposed revision.
 3. Commit revalidates the generic project coordinates and executes one source
    transaction containing the already-lowered source command. It does not
    promote a preview result by identity alone.
@@ -167,6 +170,8 @@ sequenceDiagram
   projection, evaluation, history, and publication sequence.
 - An isolated EditorSession/source stage owns the candidate document only for
   the transaction lifetime.
+- The source stage owns its CAD evaluation cache for the same transaction
+  lifetime. Only the immutable published evaluation may seed a new stage.
 - `ProjectSourceTransaction` is an immutable generic request coordinate and
   ordered source mutation description. A prepared-program transaction carries
   one complete `ProjectAuthorityCoordinate` and one generic staged-result
@@ -193,7 +198,8 @@ evaluation failure, cancellation, and stale publication. Mesh-specific source,
 plan, and handle failures are typed by RupaKit/Core before or during the source
 command stage; no failure is converted to a successful current-state fallback.
 
-A package/source staging failure before publication rolls back the staged edit.
+A package/source staging failure before publication rolls back the staged edit
+and discards its evaluation cache.
 A save failure after a source edit has already committed does not roll back that
 edit: the committed publication and dirty state remain intact.
 

@@ -1,9 +1,10 @@
-import Testing
 import Darwin
 import Foundation
-import RupaCore
 import RupaAgentIntegrationTestFixtures
+import RupaAgentProtocol
+import RupaCore
 import SwiftCAD
+import Testing
 @testable import RupaAgent
 
 @MainActor
@@ -12,14 +13,8 @@ import SwiftCAD
     let lineFeatureID = try document.createLineSketch(
         name: "Agent Site Line",
         plane: .xy,
-        start: SketchPoint(
-            x: .length(0.0, .meter),
-            y: .length(0.0, .meter)
-        ),
-        end: SketchPoint(
-            x: .length(10.0, .meter),
-            y: .length(0.0, .meter)
-        )
+        start: SketchPoint(x: .length(0.0, .meter), y: .length(0.0, .meter)),
+        end: SketchPoint(x: .length(10.0, .meter), y: .length(0.0, .meter))
     )
     let server = AgentCommandController()
     let sessionID = UUID()
@@ -29,26 +24,17 @@ import SwiftCAD
             ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
         )
     )
-    server.register(session: session, id: sessionID)
-
-    let createBodyResponse = server.handle(
-        .execute(
-            sessionID: sessionID,
-            command: .createExtrudedRectangle(
-                name: "Agent Site Box",
-                plane: .xy,
-                width: .length(1.0, .meter),
-                height: .length(1.0, .meter),
-                depth: .length(1.0, .meter),
-                direction: .normal
-            ),
-            expectedGeneration: session.generation
+    _ = try session.execute(
+        .createExtrudedRectangle(
+            name: "Agent Site Box",
+            plane: .xy,
+            width: .length(1.0, .meter),
+            height: .length(1.0, .meter),
+            depth: .length(1.0, .meter),
+            direction: .normal
         )
     )
-    guard case .command = createBodyResponse else {
-        Issue.record("Agent must create a body before editing object dimensions.")
-        return
-    }
+    server.register(session: session, id: sessionID)
     let bodyNode = try #require(session.document.productMetadata.sceneNodes.values.first {
         $0.reference?.kind == .body
     })
@@ -63,7 +49,7 @@ import SwiftCAD
             expectedGeneration: session.generation
         )
     )
-    guard case .command = parameterResponse else {
+    guard case .parameterExpression(let parameterResult) = parameterResponse else {
         Issue.record("Agent must accept omitted expression defaults.")
         return
     }
@@ -84,7 +70,7 @@ import SwiftCAD
             expectedGeneration: session.generation
         )
     )
-    guard case .command(let objectDimensionResult) = objectDimensionResponse else {
+    guard case .objectDimensionExpression(let objectDimensionResult) = objectDimensionResponse else {
         Issue.record("Agent must edit object dimensions with omitted defaults.")
         return
     }
@@ -107,7 +93,7 @@ import SwiftCAD
             expectedGeneration: session.generation
         )
     )
-    guard case .command(let sketchDimensionResult) = sketchDimensionResponse else {
+    guard case .sketchEntityDimensionExpression(let sketchDimensionResult) = sketchDimensionResponse else {
         Issue.record("Agent must edit sketch dimensions with omitted defaults.")
         return
     }
@@ -120,24 +106,16 @@ import SwiftCAD
     #expect(abs(resolvedLineLength - 4_000.0) <= 1.0e-9)
 
     let endpointTargets = try agentLineEndpointTargets(in: session.document, featureID: lineFeatureID)
-    let addDimensionResponse = server.handle(
-        .execute(
-            sessionID: sessionID,
-            command: .addSelectionDimension(
-                name: "Agent Site Span",
-                kind: .distance,
-                first: endpointTargets.start,
-                second: endpointTargets.end,
-                target: .length(4.0, .meter)
-            ),
-            expectedGeneration: session.generation
+    _ = try session.execute(
+        .addSelectionDimension(
+            name: "Agent Site Span",
+            kind: .distance,
+            first: endpointTargets.start,
+            second: endpointTargets.end,
+            target: .length(4.0, .meter)
         )
     )
-    guard case .command(let addDimensionResult) = addDimensionResponse,
-          let dimensionID = addDimensionResult.addedSelectionDimensionID else {
-        Issue.record("Agent must create a selection dimension.")
-        return
-    }
+    let dimensionID = try #require(session.document.cadDocument.selectionDimensions.last?.id)
 
     let targetResponse = server.handle(
         .setSelectionDimensionTargetExpression(
@@ -148,7 +126,7 @@ import SwiftCAD
             expectedGeneration: session.generation
         )
     )
-    guard case .command(let targetResult) = targetResponse else {
+    guard case .selectionDimensionTargetExpression(let targetResult) = targetResponse else {
         Issue.record("Agent must edit selection dimensions with omitted defaults.")
         return
     }
@@ -166,26 +144,17 @@ import SwiftCAD
     let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
-    server.register(session: session, id: sessionID)
-
-    let createResponse = server.handle(
-        .execute(
-            sessionID: sessionID,
-            command: .createExtrudedRectangle(
-                name: "Agent Expression Box",
-                plane: .xy,
-                width: .length(24.0, .millimeter),
-                height: .length(12.0, .millimeter),
-                depth: .length(6.0, .millimeter),
-                direction: .normal
-            ),
-            expectedGeneration: session.generation
+    _ = try session.execute(
+        .createExtrudedRectangle(
+            name: "Agent Expression Box",
+            plane: .xy,
+            width: .length(24.0, .millimeter),
+            height: .length(12.0, .millimeter),
+            depth: .length(6.0, .millimeter),
+            direction: .normal
         )
     )
-    guard case .command = createResponse else {
-        Issue.record("Agent must create a box before editing dimensions.")
-        return
-    }
+    server.register(session: session, id: sessionID)
 
     let parameterResponse = server.handle(
         .setParameterExpression(
@@ -197,14 +166,13 @@ import SwiftCAD
             expectedGeneration: session.generation
         )
     )
-    guard case .command = parameterResponse else {
+    guard case .parameterExpression = parameterResponse else {
         Issue.record("Agent must accept kilometer parameter expressions.")
         return
     }
     let bodyNode = try #require(session.document.productMetadata.sceneNodes.values.first {
         $0.reference?.kind == .body
     })
-
     let dimensionResponse = server.handle(
         .setObjectDimensionExpression(
             sessionID: sessionID,
@@ -215,9 +183,8 @@ import SwiftCAD
             expectedGeneration: session.generation
         )
     )
-
-    guard case .command(let result) = dimensionResponse else {
-        Issue.record("Agent must return a command result.")
+    guard case .objectDimensionExpression(let result) = dimensionResponse else {
+        Issue.record("Agent must return an object dimension result.")
         return
     }
     #expect(result.commandName == "setObjectDimension")
@@ -236,14 +203,8 @@ import SwiftCAD
     let featureID = try document.createLineSketch(
         name: "Agent Expression Line",
         plane: .xy,
-        start: SketchPoint(
-            x: .length(0.0, .millimeter),
-            y: .length(0.0, .millimeter)
-        ),
-        end: SketchPoint(
-            x: .length(10.0, .millimeter),
-            y: .length(0.0, .millimeter)
-        )
+        start: SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+        end: SketchPoint(x: .length(10.0, .millimeter), y: .length(0.0, .millimeter))
     )
     let server = AgentCommandController()
     let sessionID = UUID()
@@ -261,8 +222,8 @@ import SwiftCAD
             expectedGeneration: session.generation
         )
     )
-    guard case .command(let lengthResult) = lengthResponse else {
-        Issue.record("Agent must return a command result.")
+    guard case .sketchEntityDimensionExpression(let lengthResult) = lengthResponse else {
+        Issue.record("Agent must return a sketch dimension result.")
         return
     }
     #expect(lengthResult.commandName == "setSketchEntityDimension")
@@ -285,8 +246,8 @@ import SwiftCAD
             expectedGeneration: session.generation
         )
     )
-    guard case .command(let angleResult) = angleResponse else {
-        Issue.record("Agent must return a command result.")
+    guard case .sketchEntityDimensionExpression(let angleResult) = angleResponse else {
+        Issue.record("Agent must return a sketch angle result.")
         return
     }
     #expect(angleResult.commandName == "setSketchEntityDimension")
@@ -300,39 +261,24 @@ import SwiftCAD
     let featureID = try document.createLineSketch(
         name: "Agent Dimension Line",
         plane: .xy,
-        start: SketchPoint(
-            x: .length(0.0, .millimeter),
-            y: .length(0.0, .millimeter)
-        ),
-        end: SketchPoint(
-            x: .length(16.0, .millimeter),
-            y: .length(0.0, .millimeter)
-        )
+        start: SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+        end: SketchPoint(x: .length(16.0, .millimeter), y: .length(0.0, .millimeter))
     )
     let targets = try agentLineEndpointTargets(in: document, featureID: featureID)
     let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession(document: document)
-    server.register(session: session, id: sessionID)
-
-    let addResponse = server.handle(
-        .execute(
-            sessionID: sessionID,
-            command: .addSelectionDimension(
-                name: "Agent Target",
-                kind: .distance,
-                first: targets.start,
-                second: targets.end,
-                target: .length(16.0, .millimeter)
-            ),
-            expectedGeneration: session.generation
+    _ = try session.execute(
+        .addSelectionDimension(
+            name: "Agent Target",
+            kind: .distance,
+            first: targets.start,
+            second: targets.end,
+            target: .length(16.0, .millimeter)
         )
     )
-    guard case .command(let addResult) = addResponse,
-          let dimensionID = addResult.addedSelectionDimensionID else {
-        Issue.record("Agent must create a selection dimension.")
-        return
-    }
+    server.register(session: session, id: sessionID)
+    let dimensionID = try #require(session.document.cadDocument.selectionDimensions.last?.id)
 
     let setResponse = server.handle(
         .setSelectionDimensionTargetExpression(
@@ -343,9 +289,8 @@ import SwiftCAD
             expectedGeneration: session.generation
         )
     )
-
-    guard case .command(let result) = setResponse else {
-        Issue.record("Agent must return a command result.")
+    guard case .selectionDimensionTargetExpression(let result) = setResponse else {
+        Issue.record("Agent must return a selection dimension result.")
         return
     }
     #expect(result.commandName == "setSelectionDimensionTarget")

@@ -133,10 +133,6 @@ let package = Package(
             targets: ["RupaCLIKit"]
         ),
         .executable(
-            name: "rupa-performance-benchmark",
-            targets: ["RupaPerformanceBenchmark"]
-        ),
-        .executable(
             name: "rupa-geometry-buffer-benchmark",
             targets: ["RupaGeometryBufferBenchmark"]
         ),
@@ -295,6 +291,7 @@ let package = Package(
             name: "RupaAgentUI",
             dependencies: [
                 "RupaKit",
+                "RupaAgentProtocol",
                 "RupaAgentRuntime",
                 "RupaAgentTransport",
                 "RupaCore",
@@ -420,16 +417,16 @@ let package = Package(
             dependencies: [
                 "RupaAgentRuntime",
                 "RupaAgentProtocol",
-                "RupaAutomation",
                 "RupaKit",
                 "RupaProject",
                 "RupaCore",
                 "RupaCoreTypes",
+                "RupaGeometry",
                 "RupaCADDomain",
                 "RupaDomainFoundation",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
             ],
-            exclude: ["DESIGN.md", "Aggregate/DESIGN.md"]
+            exclude: ["DESIGN.md", "Aggregate/DESIGN.md", "Semantic/DESIGN.md"]
         ),
         .target(
             name: "RupaAgentCADBenchmarkJSONAdapter",
@@ -439,6 +436,7 @@ let package = Package(
         .executableTarget(
             name: "RupaAgentCADBenchmarkCLI",
             dependencies: [
+                "RupaAgentCADBenchmark",
                 "RupaAgentCADBenchmarkJSONAdapter",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ],
@@ -449,6 +447,7 @@ let package = Package(
             dependencies: [
                 "RupaProjectAccess",
                 "RupaCore",
+                "RupaCoreTypes",
                 "RupaAutomation",
                 "RupaDomainFoundation",
                 "RupaAgentProtocol",
@@ -470,13 +469,8 @@ let package = Package(
         .executableTarget(
             name: "RupaPerformanceBenchmark",
             dependencies: [
-                "RupaKit",
-                "RupaCADDomain",
-                "RupaAgentProtocol",
-                "RupaAgentRuntime",
                 "RupaAutomation",
                 "RupaCore",
-                "RupaDomainFoundation",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
             ]
         ),
@@ -628,17 +622,6 @@ let package = Package(
                 "RupaManufacturing",
                 "RupaDomainFoundation",
                 "RupaCore",
-            ]
-        ),
-        .testTarget(
-            name: "RupaAgentTests",
-            dependencies: [
-                "RupaAgent",
-                "RupaAgentProtocol",
-                "RupaAgentRuntime",
-                "RupaAgentTransport",
-                "RupaAgentTestFixtures",
-                "RupaAgentIntegrationTestFixtures",
             ]
         ),
         .testTarget(

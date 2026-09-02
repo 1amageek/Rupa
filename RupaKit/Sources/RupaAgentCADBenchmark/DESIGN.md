@@ -42,6 +42,40 @@ workspace, and its sole `ProjectController`. Later historical sections that
 describe unavailable sphere behavior or direct benchmark-controller harnesses
 document the prior T12 baseline and provide no compatibility or fallback.
 
+### X.2A current semantic-program authority
+
+The active X.2A route supersedes the historical raw-command route described in
+later sections of this document. The production-owned semantic planner is the
+[CAD Semantic Program Planning component](Semantic/DESIGN.md). Every active
+category facade obtains one fully typed `CADCandidateAction`, asks that planner
+for an `AgentSemanticProgramRequest`, and sends exactly one `.executeProgram`
+request through the shared lifecycle harness.
+
+```mermaid
+flowchart LR
+    Action["Typed candidate action"] --> Planner["Semantic planner"]
+    Planner --> Program["AgentSemanticProgramRequest"]
+    Program --> Harness["Fresh lifecycle harness"]
+    Harness --> Runtime["Registered Agent runtime"]
+    Runtime --> Receipt["Committed semantic receipt"]
+    Receipt --> Oracle["Immutable category oracle"]
+```
+
+The planner is the sole benchmark recipe owner. Catalog input selects the
+accepted action family only; submitted geometry, dimensions, relations, and
+placement always come from the typed action. Program references are local to
+declared outputs of the same request. Transform programs create their typed
+source in an earlier node and apply placement to that local scene output, so
+source preservation and placement remain independently testable. Unavailable
+operation IDs or versions fail before publication after the harness compares
+every plan step with the live semantic descriptor registry. The deleted
+`CADCaseActionPlan`, `CADCaseActionRouting`, seed-provider, and transform-seed
+boundaries are not compatibility APIs.
+
+The current semantic boundary includes all 100 cases. X.2B added the same
+planner-owned analytic-sphere program used by the other primitive categories;
+the historical 95-realized baseline is not an acceptance fallback.
+
 ## Responsibilities and Boundaries
 
 The module owns:
@@ -91,21 +125,19 @@ The benchmark's dependency direction is one-way:
 flowchart TD
     Types["RupaCoreTypes\nIDs and coordinates"] --> Core["RupaCore\nimmutable source/B-Rep readers"]
     Core --> Project["RupaProject\nProjectController authority"]
-    Core --> Automation["RupaAutomation\nAutomationCommand / Batch"]
     Project --> Kit["RupaKit\nProjectWorkspace / exact view"]
-    Automation --> Protocol["RupaAgentProtocol\ntyped Agent requests/results"]
+    Core --> Protocol["RupaAgentProtocol\ntyped Agent requests/results"]
     Kit --> Runtime["RupaAgentRuntime\nregistered ProjectAgentCommandController"]
     Protocol --> Runtime
     Runtime --> Benchmark["RupaAgentCADBenchmark\nrunner + catalog + oracle + score"]
     Core --> Benchmark
     Project --> Benchmark
-    Automation --> Benchmark
     Kit --> Benchmark
     Benchmark --> External["Public activated-case executor\nconsumed by external adapters"]
 ```
 
 The SwiftPM target depends on `RupaAgentRuntime`,
-`RupaAgentProtocol`, `RupaAutomation`, `RupaKit`, `RupaProject`, `RupaCore`,
+`RupaAgentProtocol`, `RupaKit`, `RupaProject`, `RupaCore`,
 `RupaCoreTypes`, and the source-model types required by the read-only oracle.
 No existing production authority target may depend on this benchmark module.
 
@@ -129,22 +161,16 @@ tests, not in the future benchmark API:
 | Observed boundary | Current behavior | Evidence |
 |---|---|---|
 | Agent entry | `ProjectAgentCommandController.handle` acquires a registered workspace lease, captures the current view, binds/checks coordinates, and maps typed errors. | [`ProjectAgentCommandController.swift`](../RupaAgentRuntime/ProjectAgentCommandController.swift), [`ProjectAgentCommandControllerTests.swift`](../../Tests/RupaUIPackageTests/ProjectAgentCommandControllerTests.swift) |
-| CAD action route | `.execute`/`.executeBatch` are lowered to `AutomationBatch` and sent to `ProjectWorkspace.executeAutomation`. | [`ProjectAgentCommandController.swift`](../RupaAgentRuntime/ProjectAgentCommandController.swift), [`ProjectWorkspace.swift`](../RupaKit/ProjectWorkspace.swift) |
+| CAD action route | The active X.2A route sends one `.executeProgram` request containing an `AgentSemanticProgramRequest`; the runtime validates and lowers each semantic node in order. | [`ProjectAgentCommandController.swift`](../RupaAgentRuntime/ProjectAgentCommandController.swift), [`AgentRequest+ProjectSession.swift`](../RupaAgentProtocol/AgentRequest+ProjectSession.swift), [semantic planner design](Semantic/DESIGN.md) |
 | Project authority | Source mutation is staged, validated against project/generation/transaction/publication coordinates, and published by the existing `ProjectController` actor. | [`ProjectController.swift`](../RupaProject/ProjectController.swift), [`ProjectSourceTransaction.swift`](../RupaProject/ProjectSourceTransaction.swift) |
-| Batch isolation | `AutomationRunner` uses isolated source/workspace/read transactions and returns typed execution context/results. | [`AutomationRunner+Batch.swift`](../RupaAutomation/AutomationRunner+Batch.swift), [`AutomationStagedBatchExecutor.swift`](../RupaAutomation/AutomationStagedBatchExecutor.swift) |
-| Result identity | `AutomationResult` defaults `primaryFeatureID` to `createdFeatureIDs.first`, so a successful creation response may intentionally expose the same FeatureID through both primary and created selectors. | [`AutomationResult.swift`](../RupaAutomation/AutomationResult.swift) |
-| Rectangle mutation | `AutomationCommand.createRectangleSketch` reaches `EditorCommand.createRectangleSketch`; `SketchBuilder.rectangle` creates four constrained lines centred on the selected source-plane origin. The command has width, height, and plane inputs but no separate centre input. | [`AutomationCommand.swift`](../RupaAutomation/AutomationCommand.swift), [`AutomationRunner.swift`](../RupaAutomation/AutomationRunner.swift), [`DesignDocument+SketchCreation.swift`](../RupaCore/DesignDocument+SketchCreation.swift) |
+| Semantic lowering isolation | `RupaCADDomain` owns operation descriptors and lowering into the internal automation transaction; benchmark code sees only typed semantic receipts and immutable final views. | [`RupaCADDomain.swift`](../RupaCADDomain/RupaCADDomain.swift), [`ProjectAgentCommandController.swift`](../RupaAgentRuntime/ProjectAgentCommandController.swift) |
+| Result identity | Semantic output bindings are resolved from the committed receipt by declared node/output references; benchmark code does not infer identity from a raw command result or prior session. | [semantic evidence](Semantic/CADSemanticExecutionEvidence.swift), [`ProjectAgentSemanticResultProjector.swift`](../RupaAgentRuntime/ProjectAgentSemanticResultProjector.swift) |
+| Rectangle mutation | The semantic rectangle operation validates the typed centre, dimensions, and plane, then lowers to the existing constrained four-line profile primitive. | [`SketchRectangleLowerer.swift`](../RupaCADDomain/SketchRectangleLowerer.swift), [`DesignDocument+SketchCreation.swift`](../RupaCore/DesignDocument+SketchCreation.swift) |
 | Rectangle observation | `SketchEntitySnapshotService` exposes the stored sketch plane, exact line endpoints and entity counts, and closed profile-region data needed by a read-only rectangle oracle. | [`SketchEntitySnapshotService.swift`](../RupaCore/SketchEntitySnapshotService.swift) |
-| Circle mutation | `AutomationCommand.createCircleSketch` resolves the selected plane and reaches `EditorCommand.createCircleSketch`; `DesignDocument.createCircleSketch` validates a positive resolved radius and stores one analytic `SketchEntity.circle` profile. | [`AutomationCommand.swift`](../RupaAutomation/AutomationCommand.swift), [`AutomationRunner.swift`](../RupaAutomation/AutomationRunner.swift), [`DesignDocument+SketchCreation.swift`](../RupaCore/DesignDocument+SketchCreation.swift) |
+| Circle mutation | The semantic circle operation validates a positive typed radius and lowers to one analytic `SketchEntity.circle` profile on the requested plane. | [`SketchCircleLowerer.swift`](../RupaCADDomain/SketchCircleLowerer.swift), [`DesignDocument+SketchCreation.swift`](../RupaCore/DesignDocument+SketchCreation.swift) |
 | Circle observation | `SketchEntitySnapshotService` exposes the stored sketch plane plus analytic entity kind, resolved centre, and radius; it does not require tessellated display geometry. | [`SketchEntitySnapshotService.swift`](../RupaCore/SketchEntitySnapshotService.swift) |
 | Immutable observation | Sketch summaries and exact topology snapshots read source/evaluation values without providing mutation authority. | [`SketchEntitySnapshotService.swift`](../RupaCore/SketchEntitySnapshotService.swift), [`TopologySnapshotService.swift`](../RupaCore/TopologySnapshotService.swift), [`ProjectViewSnapshot.swift`](../RupaKit/ProjectViewSnapshot.swift) |
 | Failure/rollback | Stale Agent mutations are rejected and existing state remains unchanged; registered-session and cancellation/no-retry behavior are typed. | [`ProjectAgentCommandControllerTests.swift`](../../Tests/RupaUIPackageTests/ProjectAgentCommandControllerTests.swift) |
-
-The existing [`AgentBicycleArtifactTests.swift`](../../Tests/RupaUIPackageTests/AgentBicycleArtifactTests.swift)
-is retained as T10 production-route evidence only. Its fixture creates
-extruded circles and rectangles, so its rendered body count or PNG must not be
-treated as CAD-basic geometry oracle evidence. T12's oracle must inspect
-source entities and exact B-Rep properties through the immutable final view.
 
 ## Related Designs
 
@@ -221,17 +247,18 @@ implementation permission to add a parallel authority.
 | `CADActivatedBoxCase` | Internal; the reviewed box IDs that may enter behavioral execution | Begins with BOX-001 and advances one reviewed case per commit; catalog presence never activates a box |
 | `CADActivatedTransformCase` | Internal; the reviewed transform IDs that may enter behavioral execution | Contains the complete reviewed TRN-001...008 category in catalog order; no TRN-009 exists |
 | `CADActivatedCompoundCase` | Internal; the reviewed compound IDs that may enter behavioral execution | Contains the complete reviewed CMP-001...CMP-007 category in catalog order; no CMP-008 exists |
-| `CADCaseActionPlan` / `CADCaseActionRouting` | Internal; converts an activated category action plus public challenge context into either one command or one bounded atomic batch | Has no session/coordinate/workspace/source authority and cannot read a private expectation; completed single-command facades keep their existing branch |
-| `CADCaseLifecycleHarness` | Internal; owns the shared fresh controller/workspace, category-neutral initial-document provider, pre-owned registration UUID, exact coordinate binding, deadline, production dispatch, final immutable view capture, and unconditional cleanup | The only shared mutable lifecycle owner; every execution entry checks cancellation before invoking the provider or any later lifecycle stage, its default provider preserves the existing named-empty document, and an injected provider may seed only a bounded immutable challenge source before registration; it does not select cases, map target geometry, run an oracle, or project a category result |
+| `CADSemanticProgramPlan` / `CADSemanticProgramPlanning` / `DefaultCADSemanticProgramPlanner` | Internal; converts one activated category and one fully typed candidate action into one portable semantic program plus ordered output metadata | Sole benchmark recipe owner; emits only typed semantic nodes and same-program local references, never a private expectation, live identity, raw command, or fallback recipe |
+| `CADSemanticExecutionEvidence` | Internal; resolves committed semantic receipt bindings into category-neutral step evidence | Reads only the receipt from the same program; it does not infer identity from challenge text, fixture state, or a prior session |
+| `CADCaseLifecycleHarness` | Internal; owns the fresh controller/workspace, registration UUID, exact coordinate binding, deadline, one semantic-program dispatch, final immutable view capture, and unconditional cleanup | The only shared mutable lifecycle owner; every execution entry checks cancellation before the planner or any later lifecycle stage, validates every plan step against the live semantic descriptor/version, and never selects geometry, runs an oracle, or projects a category result |
 | `CADCaseLifecycleRecord` | Internal immutable output from the harness | Preserves initial/final coordinates, typed response, publication/no-retry state, cleanup state, and common count/timing telemetry without geometry assertions |
 | `CADLineCaseRunner` | Internal thin line facade | Owns line activation, public projection, line routing/mapping, private expectation-to-line-oracle handoff, and line result projection; delegates lifecycle only |
 | `CADLineOracle` | Internal line-category extraction beginning at LIN-002; exact finite-line source verification and zero-body evaluation check | Read-only immutable input plus the selected activated line's internal expectation |
 | `CADRectangleCaseRunner` / `CADRectangleOracle` | Internal thin REC-001 facade and exact rectangle oracle | Own rectangle projection/routing/mapping, private rectangle expectation, four-line/profile checks, and rectangle result projection; delegate lifecycle only |
 | `CADCircleCaseRunner` / `CADCircleOracle` | Internal thin CIR-001 facade and exact analytic-circle oracle | Own circle projection/routing/mapping, private circle expectation, analytic entity/centre/radius/profile checks, and circle-local result projection; delegate lifecycle only |
-| `CADAngleCaseRunner` / `CADAngleOracle` | Internal thin ANG-001 facade and exact two-line source oracle | Own angle projection, affine intersection mapping, ordered two-command batch, private angle expectation, role/intersection/length/unsigned-angle checks, and angle-local result projection; delegate lifecycle only |
-| `CADBoxCaseRunner` / `CADBoxOracle` | Internal thin BOX facade and exact closed-box source/B-Rep oracle | Own box projection, lower-corner-to-profile mapping, one-command solid routing, private box expectation, source profile/extrude/body/topology checks, and box-local result projection; delegate lifecycle only |
-| `CADCylinderCaseRunner` / `CADCylinderOracle` | Internal thin CYL facade and exact analytic-cylinder source/B-Rep oracle introduced by CYL-001 | Own public cylinder projection, submitted base-centre/axis mapping, one-command solid routing, private cylinder expectation, source circle/extrude/body/topology checks, and cylinder-local result projection; delegate lifecycle only |
-| `CADTransformCaseRunner` / `CADTransformOracle` | Internal thin TRN facade and exact source-identity/placement oracle introduced by TRN-001 | Own public transform projection, seeded source, one-command `setSceneNodeTransform` routing, private placement expectation, immutable initial/final identity checks, and transform-local result projection; delegate lifecycle only |
+| `CADAngleCaseRunner` / `CADAngleOracle` | Internal thin ANG facade and exact two-line source oracle | Own angle projection, affine intersection mapping, ordered semantic line steps, private angle expectation, role/intersection/length/unsigned-angle checks, and angle-local result projection; delegate lifecycle only |
+| `CADBoxCaseRunner` / `CADBoxOracle` | Internal thin BOX facade and exact closed-box source/B-Rep oracle | Own box projection, typed lower-corner mapping, semantic solid step, private box expectation, source profile/extrude/body/topology checks, and box-local result projection; delegate lifecycle only |
+| `CADCylinderCaseRunner` / `CADCylinderOracle` | Internal thin CYL facade and exact analytic-cylinder source/B-Rep oracle introduced by CYL-001 | Own public cylinder projection, typed base-centre/axis mapping, semantic solid step, private cylinder expectation, source circle/extrude/body/topology checks, and cylinder-local result projection; delegate lifecycle only |
+| `CADTransformCaseRunner` / `CADTransformOracle` | Internal thin TRN facade and exact self-contained source-identity/placement oracle introduced by TRN-001 | Own public transform projection, typed source creation, local scene placement step, private placement expectation, immutable source/final identity checks, and transform-local result projection; delegate lifecycle only |
 | `CADCompoundAction` / `CADCompoundMemberAction` | Public; one ordered compound action envelope containing only role and primitive solid values | Immutable candidate intent; no plan store, source IDs, expectation, tolerance, or route coordinates |
 | `CADCompoundCaseRunner` / `CADCompoundOracle` | Internal thin CMP facade and exact ordered member/source/B-Rep oracle introduced by CMP-001 and extended through CMP-007 | Lowers every member only after all public members are validated, dispatches one atomic batch, and reads private expectation only after final publication |
 | `CADCaseOutcome` / score | Public result projection; failure taxonomy and binary scoring | No fallback success |
@@ -885,18 +912,17 @@ line/rectangle prefix and CIR-001 was inactive. The completed circle gate added
 category-local `CADCircleChallengeProjection`, `CADCircleGeometryMapping`,
 `CADCircleReferenceCandidate`, `CADActivatedCircleCase`, `CADCircleCaseRunner`,
 `CADCircleCaseResult`, route evidence, telemetry, and `CADCircleOracle`. It
-reuses `CADCaseActionRouting` and `CADCaseLifecycleHarness` unchanged and does
-not refactor the completed line/rectangle facades or create a generic
-all-category runner.
+uses the shared semantic planner and `CADCaseLifecycleHarness`; it does not
+create a category-specific recipe or a generic all-category runner.
 
 The public projection decodes only CIR-001's candidate-visible instruction:
 radius 5 mm, XY, world centre (0, 0, 0). The mapping constructs the canonical
 source plane from the target centre, projects the submitted world centre into
 that plane using the fresh document's `ModelingTolerance`, and rejects normal
-distance beyond that tolerance before dispatch. The route emits exactly one
-`AutomationCommand.createCircleSketch` with a local centre and SI radius through
-the registered production controller. An in-plane centre remains publishable
-so the oracle—not action validation—owns exact placement.
+distance beyond that tolerance before dispatch. The semantic planner emits one
+typed circle node with a local plane and SI radius; the registered production
+controller owns lowering and publication. An in-plane centre remains
+publishable so the oracle—not action validation—owns exact placement.
 
 The oracle resolves the bound `circle` role to the sole published feature in
 the immutable final view. It requires one unsuppressed profile sketch on the
@@ -1162,18 +1188,14 @@ normal and projects all four submitted endpoints through
 `SketchPlaneCoordinateSystem`; any normal distance beyond the fresh modeling
 tolerance fails before dispatch.
 
-One angle action is lowered to exactly two ordered
-`AutomationCommand.createLineSketch` values. A new internal
-`CADCaseActionPlan` lets `CADCaseActionRouting` select either the existing
-single-command path or one bounded batch; existing line, rectangle, and circle
-facades remain on their current `.execute` path. ANG-001 selects a two-command
-`AutomationBatch` and the lifecycle harness sends one `.executeBatch` request
-with the fresh generation, transaction revision, and workspace revision.
-`ProjectAgentCommandController` and `ProjectWorkspace.executeAutomation` remain
-the only mutation authority. The batch must yield two ordered command results,
-one project transaction/publication, one history entry and evaluation pass,
-two source-generation increments, and no partial state if the second command
-fails. Telemetry records one candidate action and two Automation commands.
+One angle action becomes one semantic program with two ordered line nodes. The
+lifecycle harness sends one `.executeProgram` request with the fresh generation,
+transaction revision, publication sequence, and workspace revision.
+`ProjectAgentCommandController` and the RupaCAD domain lowerers remain the only
+mutation authority. The program must yield two ordered step results, one project
+transaction/publication, one history entry and evaluation pass, and no partial
+state if the second node fails. Telemetry records one candidate action and two
+semantic program steps.
 Both request generation and live execution derive the angle capability's
 availability from the exposed `createLineSketch` primitive; the synthetic
 two-line operation name is not a production capability.
@@ -2241,27 +2263,19 @@ and focused-test files that consume this contract; the CMP patchset similarly
 owns only new `CADCompound*` consumers of the public member axis. Shared
 action/wire and authority changes remain owned by the later serial integrations.
 
-The transform route has one additional shared lifecycle prerequisite. A newly
-created scene node cannot be transformed in the same concrete
-`CADCaseActionPlan`: `setSceneNodeTransform` requires its `SceneNodeID` before
-dispatch, while a create command returns that ID only after execution. The
-shared harness also currently fixes every initial document to named-empty, so
-a transform facade cannot supply an existing challenge source without either
-duplicating lifecycle ownership or bypassing the production Agent mutation
-route.
+The transform route has one additional semantic-program prerequisite. A newly
+created scene node cannot be transformed by a later node unless the program
+declares the source node's scene output. The planner therefore creates the
+typed source node first and makes the transform node reference that output with
+`.local`; no existing session identity or initial-document seed is used.
+`SceneTransformLowerer` resolves that local slot inside the same program before
+building the internal placement mutation.
 
-Before the three category preparations branch, the harness therefore accepts
-one internal, category-neutral initial-document provider. The default provider
-must remain the existing named-empty document so all completed cases retain
-identical behavior. A non-default provider is synchronous, in-memory, invoked
-once per fresh attempt that passes preflight cancellation, and returns a value
-`DesignDocument`; the harness still alone constructs and evaluates
-`ProjectWorkspace`, registers the pre-owned
+The shared harness always starts a fresh named-empty workspace for X.2A. It
+alone constructs and evaluates `ProjectWorkspace`, registers the pre-owned
 UUID, binds coordinates, dispatches through `ProjectAgentCommandController`,
-captures the immutable final view, and cleans up. Provider failure is a typed
-prepublication infrastructure failure with zero registration, command, and
-publication. No live workspace/controller injection or private expected target
-is permitted.
+captures the immutable final view, and cleans up. There is no benchmark seed
+provider or alternate source authority.
 
 The common `perform` entry checks `Task.isCancelled` before invoking that
 provider. This single gate applies equally to direct `run(action:)`, direct
@@ -2956,8 +2970,8 @@ stateDiagram-v2
     UUIDPreowned --> Registered
     Registered --> CapabilityObserved
     CapabilityObserved --> CandidatePlanning
-    CandidatePlanning --> CategoryRouting
-    CategoryRouting --> ActionDispatch
+    CandidatePlanning --> SemanticPlanning
+    SemanticPlanning --> ActionDispatch
     ActionDispatch --> CandidatePlanning: typed response and bounded continuation
     ActionDispatch --> FinalView: terminal action published or no-publication outcome
     FinalView --> LifecycleRecord
@@ -2975,13 +2989,14 @@ stateDiagram-v2
 and applies one shared attempt deadline to setup, registration, candidate
 planning, category routing, controller dispatch, and immutable-view capture.
 At the common execution entry it terminates a pre-cancelled attempt before
-initial-document creation, routing, workspace construction, or registration.
+semantic planning, workspace construction, or registration.
 Cleanup remains unconditional after deadline/cancellation and is bounded by the
 focused safety ceiling rather than skipped by an expired attempt deadline. The
 harness unregisters its UUID on every terminal path even when registration
-returns late. `CADCaseActionRouting` supplies only the category-specific typed request.
-The resulting `CADCaseLifecycleRecord` is immutable and contains route facts,
-not an oracle verdict or private expected geometry.
+returns late. The semantic planner supplies only the typed program request;
+the harness supplies session and coordinate authority.
+The resulting `CADCaseLifecycleRecord` is immutable and contains semantic
+receipt/route facts, not an oracle verdict or private expected geometry.
 
 The production route itself linearizes coordinates. The harness binds the
 current exact view immediately before each Agent request, but never rebases a

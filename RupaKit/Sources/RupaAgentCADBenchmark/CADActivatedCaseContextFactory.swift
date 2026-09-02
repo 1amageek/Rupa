@@ -5,39 +5,18 @@ import RupaAgentRuntime
 struct CADActivatedCaseContextFactory {
     static func make(
         challenge: CADChallenge,
-        operationName: String,
         controller: ProjectAgentCommandController
     ) -> CADCandidateContext {
-        let requiredOperationNames: [String]
-        if challenge.category == .compound {
-            requiredOperationNames = CADCompoundGeometryMapping.requiredOperationNames(
-                for: challenge
-            )
-        } else {
-            requiredOperationNames = operationName.isEmpty ? [] : [operationName]
-        }
         let descriptors = controller.capabilityDescriptors()
-        let descriptorNames = descriptors.map(\.name)
-        let status: CADCapabilityStatus
-        if challenge.category == .sphere {
-            // Sphere capability availability is owned by the same pure
-            // descriptor classifier used by CADSphereCapabilityObservation.
-            status = CADSphereCapabilityObservation.capabilityStatus(
-                for: challenge,
-                descriptorNames: descriptorNames
-            )
-        } else {
-            let available = requiredOperationNames.isEmpty == false
-                && requiredOperationNames.allSatisfy { operation in
-                    descriptorNames.contains(operation)
-                }
-            status = CADCapabilityStatus(
-                id: challenge.requiredCapability.id,
-                version: challenge.requiredCapability.version,
-                available: available,
-                reasonCode: available ? nil : "not-exposed"
-            )
+        let hasSemanticProgramRoute = descriptors.contains {
+            $0.access == .agentRequest && $0.semanticOperation != nil
         }
+        let status = CADCapabilityStatus(
+            id: challenge.requiredCapability.id,
+            version: challenge.requiredCapability.version,
+            available: hasSemanticProgramRoute,
+            reasonCode: hasSemanticProgramRoute ? nil : "semantic-program-unavailable"
+        )
         return CADCandidateContext(
             challenge: challenge,
             capabilities: CADCapabilitySnapshot(

@@ -51,10 +51,7 @@ struct CADBenchmarkReferenceRunAttempt: Equatable, Sendable {
         }
         for execution in executions {
             try execution.validate()
-            let expectedOutcome: CADCaseOutcome = execution.publicResult.category == .sphere
-                ? .expectedUnsupported
-                : .realized
-            guard execution.publicResult.outcome == expectedOutcome,
+            guard execution.publicResult.outcome == .realized,
                   execution.regressionRecord.capabilityDecisionCorrect else {
                 throw CADBenchmarkReferenceRunError.invalidOutcome(execution.publicResult.id)
             }

@@ -68,6 +68,11 @@ flowchart LR
    program document. Each command opens one target, takes the session's exact
    `initialAuthority`, sends exactly one semantic request, and never performs a
    coordinate pre-read, request split, automatic retry, or implicit save.
+8. The public CLI has no generic raw-command or raw-batch surface. Model,
+   sketch, feature, plane, surface, view, and workspace mutations use only
+   their dedicated typed requests or the shared semantic operation/program
+   vocabulary; removed syntax is rejected during parsing rather than lowered
+   through a compatibility path.
 
 ## Runtime Flows
 

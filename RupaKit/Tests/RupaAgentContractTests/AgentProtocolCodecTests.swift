@@ -1,10 +1,138 @@
 import Foundation
 import RupaAgentIntegrationTestFixtures
 import RupaAgentProtocol
+import RupaAutomation
 import RupaCore
 import RupaCoreTypes
 import RupaDomainFoundation
 import Testing
+
+@Test(.timeLimit(.minutes(1)))
+func legacyRawCommandMethodsAreRejectedBeforeDispatch() throws {
+    let codec = AgentMessageCodec()
+    let payloads = [
+        """
+        {"jsonrpc":"2.0","id":"legacy-request","method":"command.apply","params":{}}
+        """,
+        """
+        {"jsonrpc":"2.0","id":"legacy-batch","method":"command.applyBatch","params":{}}
+        """,
+    ]
+
+    for payload in payloads {
+        do {
+            _ = try codec.decodeRequest(from: Data(payload.utf8))
+            Issue.record("A legacy raw command request reached protocol dispatch.")
+        } catch let error as EditorError {
+            #expect(error.code == .commandInvalid)
+        }
+    }
+
+    let responsePayloads = [
+        """
+        {"jsonrpc":"2.0","id":"legacy-result","method":"command.apply","result":{}}
+        """,
+        """
+        {"jsonrpc":"2.0","id":"legacy-error","method":"command.applyBatch","error":{"code":"command.invalid","message":"rejected"}}
+        """,
+    ]
+    for payload in responsePayloads {
+        do {
+            _ = try codec.decodeResponse(from: Data(payload.utf8))
+            Issue.record("A legacy raw command response reached protocol dispatch.")
+        } catch let error as EditorError {
+            #expect(error.code == .commandInvalid)
+        }
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func documentDescriptionAndValidationRoundTripAsDedicatedMethods() throws {
+    let codec = AgentMessageCodec()
+    let requests: [(AgentRequest, String)] = [
+        (
+            .describeDocument(
+                sessionID: SelfTestFixtures.sessionID,
+                expectedGeneration: DocumentGeneration(4)
+            ),
+            "document.describe"
+        ),
+        (
+            .validateDocument(
+                sessionID: SelfTestFixtures.sessionID,
+                expectedGeneration: DocumentGeneration(4)
+            ),
+            "document.validate"
+        ),
+    ]
+
+    for (request, method) in requests {
+        let data = try codec.encode(request, id: method)
+        let envelope = try codec.decodeRequestEnvelope(from: data)
+        #expect(envelope.method == method)
+        #expect(envelope.params == request)
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func documentDescriptionAndValidationDoNotMutateTheSession() throws {
+    let controller = AgentCommandController()
+    let session = EditorSession(document: .empty(named: "Typed Reads"))
+    let sessionID = UUID()
+    _ = controller.register(session: session, id: sessionID)
+    let initialGeneration = session.generation
+    let initialRevision = session.transactionRevision
+
+    let responses = [
+        controller.handle(.describeDocument(
+            sessionID: sessionID,
+            expectedGeneration: initialGeneration
+        )),
+        controller.handle(.validateDocument(
+            sessionID: sessionID,
+            expectedGeneration: initialGeneration
+        )),
+    ]
+
+    guard case .documentDescription(let description) = responses[0],
+          case .documentValidation(let validation) = responses[1] else {
+        Issue.record("Dedicated document reads returned the wrong response type.")
+        return
+    }
+    #expect(description.effect == .readOnly)
+    #expect(validation.effect == .readOnly)
+    #expect(!description.didMutate)
+    #expect(!validation.didMutate)
+    #expect(session.generation == initialGeneration)
+    #expect(session.transactionRevision == initialRevision)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func retainedAutomationLoweringsRoundTripAsMethodSpecificResponses() throws {
+    let codec = AgentMessageCodec()
+    let result = AutomationResult(message: "typed result")
+    let responses: [(AgentResponse, String)] = [
+        (.documentDescription(result), "document.describe"),
+        (.documentValidation(result), "document.validate"),
+        (.parameterExpression(result), "parameter.setExpression"),
+        (.objectDimensionExpression(result), "objectDimension.setExpression"),
+        (.sketchEntityDimensionExpression(result), "sketchEntityDimension.setExpression"),
+        (.selectionDimensionTargetExpression(result), "selectionDimension.setTargetExpression"),
+        (.surfaceFrameDisplay(result), "document.setSurfaceFrameDisplay"),
+        (.polySplineSurfaceVertex(result), "document.movePolySplineSurfaceVertex"),
+    ]
+
+    for (response, method) in responses {
+        let data = try codec.encode(response, id: method, method: method)
+        #expect(
+            try codec.decodeResponse(
+                from: data,
+                expectedID: method,
+                expectedMethod: method
+            ) == response
+        )
+    }
+}
 
 @Test(.timeLimit(.minutes(1)))
 func semanticDirectRequestRoundTripsWithExplicitVersionsAndOutputs() throws {

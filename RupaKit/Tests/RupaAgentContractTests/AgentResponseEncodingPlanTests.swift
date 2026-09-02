@@ -62,7 +62,7 @@ func agentProtocolRejectsResponseAtOneByteAboveTheConfiguredCeiling() throws {
     let responseData = try unrestricted.encode(
         response,
         id: "response-boundary",
-        method: "command.apply"
+        method: "agent.status"
     )
     let exact = AgentMessageCodec(
         limits: AgentProtocolEncodingLimits(
@@ -77,14 +77,14 @@ func agentProtocolRejectsResponseAtOneByteAboveTheConfiguredCeiling() throws {
         let exactData = try exact.encode(
             response,
             id: "response-boundary",
-            method: "command.apply"
+            method: "agent.status"
         )
         #expect(exactData.count == responseData.count)
         #expect(
             try exact.decodeResponse(
                 from: exactData,
                 expectedID: "response-boundary",
-                expectedMethod: "command.apply"
+                expectedMethod: "agent.status"
             ) == response
         )
     } catch {
@@ -94,7 +94,7 @@ func agentProtocolRejectsResponseAtOneByteAboveTheConfiguredCeiling() throws {
         try exact.decodeResponse(
             from: responseData,
             expectedID: "response-boundary",
-            expectedMethod: "command.apply"
+            expectedMethod: "agent.status"
         ) == response
     )
 
@@ -591,7 +591,7 @@ func agentResponseCorrelationRejectsMismatchedIDAndMethodForErrors() throws {
     let data = try codec.encode(
         response,
         id: "actual-request",
-        method: "command.apply"
+        method: "agent.status"
     )
 
     do {
@@ -609,7 +609,7 @@ func agentResponseCorrelationRejectsMismatchedIDAndMethodForErrors() throws {
         _ = try codec.decodeResponse(
             from: data,
             expectedID: "actual-request",
-            expectedMethod: "agent.status"
+            expectedMethod: "sessions.list"
         )
         Issue.record("An error response with a mismatched method was accepted.")
     } catch let error as EditorError {

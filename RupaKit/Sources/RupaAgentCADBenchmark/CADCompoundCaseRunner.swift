@@ -1,17 +1,10 @@
 import Foundation
 import RupaAgentProtocol
-import RupaAgentRuntime
-import RupaAutomation
+import RupaCADDomain
 import RupaCore
 import RupaKit
-import SwiftCAD
 
 /// Projects the category-neutral lifecycle into one ordered compound result.
-///
-/// Candidate decisions cross the public CADCandidateProtocol and
-/// CADCandidateAction contracts. A public compound action is lowered to one
-/// ordered batch of primitive commands, while the production controller owns
-/// validation, staging, commit, evaluation, and history publication.
 @MainActor
 struct CADCompoundCaseRunner {
     struct SourceCounts: Equatable, Sendable {
@@ -58,16 +51,15 @@ struct CADCompoundCaseRunner {
     func run(candidate: any CADCandidateProtocol) async throws -> CADCompoundCaseResult {
         let totalStart = now()
         let entry = try activatedCase.catalogEntry
-        let record = try await harness(challenge: entry.challenge).runReference(candidate: candidate)
+        let record = try await harness(entry: entry).runReference(candidate: candidate)
         return await project(record, entry: entry, totalStart: totalStart)
     }
 
-    /// Runs one public compound action through one production batch.
     func run(actions: [CADCompoundMemberAction]) async throws -> CADCompoundCaseResult {
         let totalStart = now()
         let entry = try activatedCase.catalogEntry
         let action = CADCandidateAction.compound(CADCompoundAction(members: actions))
-        let record = try await harness(challenge: entry.challenge).run(action: action)
+        let record = try await harness(entry: entry).run(action: action)
         return await project(record, entry: entry, totalStart: totalStart)
     }
 
@@ -81,65 +73,24 @@ struct CADCompoundCaseRunner {
         let totalStart = now()
         let entry = try activatedCase.catalogEntry
         let action = CADCandidateAction.compound(CADCompoundAction(members: actions))
-        let record = try await harness(challenge: entry.challenge).runStale(action: action)
+        let record = try await harness(entry: entry).runStale(action: action)
         return await project(record, entry: entry, totalStart: totalStart)
     }
 
-    private func harness(
-        challenge: CADChallenge
-    ) -> CADCaseLifecycleHarness {
+    private func harness(entry: CADCatalogEntry) -> CADCaseLifecycleHarness {
         CADCaseLifecycleHarness(
             caseID: caseID,
-            challenge: challenge,
-            routing: CADCaseActionRouting(
-                operationName: "",
-                planBuilder: { [self] action, challenge, tolerance in
-                    return try makePlan(
-                        from: action,
-                        challenge: challenge,
-                        modelingTolerance: tolerance
-                    )
-                }
-            ),
+            challenge: entry.challenge,
+            programPlanner: { action in
+                try DefaultCADSemanticProgramPlanner().plan(
+                    for: entry,
+                    action: action
+                )
+            },
             timeoutWallNanoseconds: timeoutWallNanoseconds,
             preRouteDelayNanoseconds: preRouteDelayNanoseconds,
             postRegistrationDelayNanoseconds: postRegistrationDelayNanoseconds
         )
-    }
-
-    private func makePlan(
-        from action: CADCandidateAction,
-        challenge: CADChallenge,
-        modelingTolerance: ModelingTolerance
-    ) throws -> CADCaseActionPlan {
-        guard case .compound(let compound) = action else {
-            throw CADBenchmarkError.invalidInput(
-                caseID: caseID.rawValue,
-                reason: "A compound case requires one public compound action."
-            )
-        }
-        let projection = try CADCompoundChallengeProjection.decode(challenge)
-        guard compound.members.count == projection.members.count else {
-            throw CADBenchmarkError.invalidInput(
-                caseID: caseID.rawValue,
-                reason: "A compound candidate must provide exactly one member for every declared role."
-            )
-        }
-
-        var commands: [AutomationCommand] = []
-        commands.reserveCapacity(compound.members.count)
-        for (index, submitted) in compound.members.enumerated() {
-            let expected = projection.members[index]
-            commands.append(
-                try CADCompoundGeometryMapping.command(
-                    for: submitted,
-                    expected: expected,
-                    modelingTolerance: modelingTolerance,
-                    caseID: caseID
-                )
-            )
-        }
-        return .batch(commands)
     }
 
     private func project(
@@ -147,11 +98,7 @@ struct CADCompoundCaseRunner {
         entry: CADCatalogEntry,
         totalStart: UInt64
     ) async -> CADCompoundCaseResult {
-        let expectedMemberCount = expectedMembers(in: entry)
-        let evidence = routeEvidence(
-            from: record,
-            expectedMemberCount: expectedMemberCount
-        )
+        let evidence = routeEvidence(from: record, expectedMemberCount: expectedMembers(in: entry))
         switch record.outcome {
         case .published:
             return await projectPublished(
@@ -189,23 +136,19 @@ struct CADCompoundCaseRunner {
         evidence: CADCompoundRouteEvidence,
         totalStart: UInt64
     ) async -> CADCompoundCaseResult {
-        guard let initialView = record.initialView,
-              let finalView = record.finalView,
-              let batch = batchResult(from: record.response),
-              batch.results.count == entry.challenge.outputRoles.count,
-              initialView.documentGeneration.value
-                  <= UInt64.max - UInt64(batch.results.count),
-              batch.results.enumerated().allSatisfy({ index, result in
-                  result.didMutate
-                      && result.generation.value
-                          == initialView.documentGeneration.value + UInt64(index + 1)
-              }) else {
+        guard let finalView = record.finalView,
+              let semanticEvidence = semanticEvidence(from: record.response),
+              semanticEvidence.receipt.telemetry.execution.stepCount == expectedMembers(in: entry),
+              semanticEvidence.commandCount == expectedMembers(in: entry) else {
             return finish(result(.infrastructureFailure, record, evidence), totalStart: totalStart)
         }
         let (steps, bindings) = publishedEvidence(
-            from: batch.results,
+            from: semanticEvidence,
             challenge: entry.challenge
         )
+        guard steps.count == expectedMembers(in: entry) else {
+            return finish(result(.infrastructureFailure, record, evidence), totalStart: totalStart)
+        }
         let oracleStart = now()
         do {
             guard case .compound(let expected) = entry.expected else {
@@ -293,14 +236,16 @@ struct CADCompoundCaseRunner {
         evidence: CADCompoundRouteEvidence,
         outcome: CADCaseOutcome
     ) -> CADCompoundCaseResult {
-        guard let batch = batchResult(from: record.response),
-              batch.results.count == entry.challenge.outputRoles.count else {
+        guard let semanticEvidence = semanticEvidence(from: record.response) else {
             return result(.infrastructureFailure, record, evidence)
         }
         let (steps, bindings) = publishedEvidence(
-            from: batch.results,
+            from: semanticEvidence,
             challenge: entry.challenge
         )
+        guard steps.count == expectedMembers(in: entry) else {
+            return result(.infrastructureFailure, record, evidence)
+        }
         return result(
             outcome,
             record,
@@ -407,15 +352,15 @@ struct CADCompoundCaseRunner {
         expectedMemberCount: Int
     ) -> CADCompoundRouteEvidence {
         guard record.routeEvidence.didPublish,
-              let batch = batchResult(from: record.response) else {
+              let semanticEvidence = semanticEvidence(from: record.response) else {
             return CADCompoundRouteEvidence(from: record.routeEvidence)
         }
         return CADCompoundRouteEvidence(
             from: record.routeEvidence,
             memberCount: expectedMemberCount,
-            commandCount: batch.metrics.commandCount,
-            evaluationPassCount: batch.metrics.evaluationPassCount,
-            historyEntryCount: batch.metrics.historyEntryCount
+            commandCount: semanticEvidence.commandCount,
+            evaluationPassCount: 1,
+            historyEntryCount: 1
         )
     }
 
@@ -424,13 +369,15 @@ struct CADCompoundCaseRunner {
         return expected.members.count
     }
 
-    private func batchResult(from response: AgentResponse?) -> AgentBatchResult? {
-        guard case .batch(let result) = response else { return nil }
-        return result
+    private func semanticEvidence(from response: AgentResponse?) -> CADSemanticExecutionEvidence? {
+        guard let receipt = CADSemanticExecutionEvidence.committedReceipt(from: response) else {
+            return nil
+        }
+        return CADSemanticExecutionEvidence(receipt: receipt)
     }
 
     private func publishedEvidence(
-        from results: [AutomationResult],
+        from semanticEvidence: CADSemanticExecutionEvidence,
         challenge: CADChallenge
     ) -> ([CADCandidateStepResult], CADOutputRoleBindings) {
         let roles = challenge.outputRoles.map(\.name)
@@ -440,23 +387,21 @@ struct CADCompoundCaseRunner {
         } catch {
             projection = nil
         }
-        let steps = results.enumerated().map { index, result in
-            let primitiveName: String
+        let nodes = semanticEvidence.nodeNamesInOrder()
+        let steps = nodes.enumerated().map { index, node in
+            let operation: String
             if let member = projection?.members[safe: index] {
-                primitiveName = member.primitive == .box
-                    ? "createExtrudedRectangle"
-                    : "createExtrudedCircle"
+                operation = member.primitive == .box
+                    ? RupaCADSemanticOperationID.solidBox.rawValue
+                    : RupaCADSemanticOperationID.solidCylinder.rawValue
             } else {
-                primitiveName = "compound"
+                operation = "compound.member"
             }
-            let role = roles[safe: index] ?? "member-\(index)"
-            return CADCandidateStepResult(
-                stepIndex: index,
-                operation: "\(primitiveName).\(role)",
-                status: result.didMutate ? .published : .unchanged,
-                primaryFeatureID: result.primaryFeatureID?.description,
-                createdFeatureIDs: result.createdFeatureIDs.map(\.description),
-                diagnostics: result.diagnostics.map(\.message)
+            return semanticEvidence.stepResult(
+                node: node,
+                operation: operation,
+                index: index,
+                primaryOutputs: ["body"]
             )
         }
         return (

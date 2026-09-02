@@ -216,7 +216,10 @@ flowchart LR
     visibility and preserves the complete occurrence-to-scene navigation index.
 17. A CADAPI-D action accepts only a fully validated, source-only compiled plan
     from the shared semantic compiler. It never accepts a wire DTO, raw
-    `FeatureGraphTransaction`, or caller-owned persistent identifiers.
+    `FeatureGraphTransaction`, or caller-owned persistent identifiers. Each
+    project evaluation uses a transaction-local CAD cache seeded from the exact
+    immutable published evaluation; staged preview or rejected candidates are
+    never visible to a later evaluation.
 18. The complete compiled plan is one workspace action and at most one
     `ProjectSourceTransaction`, exact evaluation, undo entry, workspace
     revision, and publication. Nodes are never individually published.

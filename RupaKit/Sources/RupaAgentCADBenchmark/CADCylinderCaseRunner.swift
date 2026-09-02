@@ -1,9 +1,8 @@
 import Foundation
 import RupaAgentProtocol
-import RupaAutomation
+import RupaCADDomain
 import RupaCore
 import RupaKit
-import SwiftCAD
 
 /// Projects the shared lifecycle into one cylinder-category result.
 @MainActor
@@ -50,75 +49,26 @@ struct CADCylinderCaseRunner {
     func run(candidate: any CADCandidateProtocol) async throws -> CADCylinderCaseResult {
         let totalStart = now()
         let entry = try activatedCase.catalogEntry
-        let record = try await harness(challenge: entry.challenge).runReference(candidate: candidate)
+        let record = try await harness(entry: entry).runReference(candidate: candidate)
         return await project(record, entry: entry, totalStart: totalStart)
     }
 
     func run(action: CADCandidateAction) async throws -> CADCylinderCaseResult {
         let totalStart = now()
         let entry = try activatedCase.catalogEntry
-        let record = try await harness(challenge: entry.challenge).run(action: action)
+        let record = try await harness(entry: entry).run(action: action)
         return await project(record, entry: entry, totalStart: totalStart)
     }
 
-    private func harness(challenge: CADChallenge) -> CADCaseLifecycleHarness {
+    private func harness(entry: CADCatalogEntry) -> CADCaseLifecycleHarness {
         CADCaseLifecycleHarness(
             caseID: caseID,
-            challenge: challenge,
-            routing: CADCaseActionRouting(
-                operationName: Self.operationName,
-                commandBuilder: { [self] action, challenge, tolerance in
-                    try makeCommand(
-                        from: action,
-                        challenge: challenge,
-                        modelingTolerance: tolerance
-                    )
-                }
-            ),
+            challenge: entry.challenge,
+            programPlanner: { action in
+                try DefaultCADSemanticProgramPlanner().plan(for: entry, action: action)
+            },
             timeoutWallNanoseconds: timeoutWallNanoseconds,
             preRouteDelayNanoseconds: preRouteDelayNanoseconds
-        )
-    }
-
-    private func makeCommand(
-        from action: CADCandidateAction,
-        challenge: CADChallenge,
-        modelingTolerance: ModelingTolerance
-    ) throws -> AutomationCommand {
-        _ = try CADCylinderChallengeProjection.decode(challenge)
-        guard case .automation(.solid(.cylinder(
-            let name, let baseCenter, let axis, let radius, let depth
-        ))) = action,
-        name.isEmpty == false else {
-            throw CADBenchmarkError.invalidInput(
-                caseID: caseID.rawValue,
-                reason: "The cylinder action must contain one named solid cylinder."
-            )
-        }
-        try baseCenter.validate(caseID: caseID, field: "action.baseCenter")
-        try axis.validate(caseID: caseID, field: "action.axis")
-        try radius.validate(caseID: caseID, field: "action.radius")
-        try depth.validate(caseID: caseID, field: "action.depth")
-        let tolerance = try CADBenchmarkTolerancePolicy(modelingTolerance: modelingTolerance)
-        guard tolerance.isNonDegenerate(radius.meters),
-              tolerance.isNonDegenerate(depth.meters) else {
-            throw CADBenchmarkError.invalidInput(
-                caseID: caseID.rawValue,
-                reason: "The submitted cylinder dimensions are degenerate."
-            )
-        }
-        let geometry = try CADCylinderGeometryMapping.commandGeometry(
-            baseCenter: baseCenter,
-            axis: axis,
-            caseID: caseID
-        )
-        return .createExtrudedCircle(
-            name: name,
-            plane: SketchPlaneReference(sketchPlane: geometry.plane),
-            center: geometry.localCenter,
-            radius: .constant(.length(radius.meters, unit: .meter)),
-            depth: .constant(.length(depth.meters, unit: .meter)),
-            direction: .normal
         )
     }
 
@@ -161,10 +111,19 @@ struct CADCylinderCaseRunner {
         totalStart: UInt64
     ) async -> CADCylinderCaseResult {
         guard let finalView = record.finalView,
-              let automationResult = commandResult(from: record.response) else {
+              let semanticReceipt = CADSemanticExecutionEvidence.committedReceipt(from: record.response) else {
             return finish(result(.infrastructureFailure, record, evidence), totalStart: totalStart)
         }
-        let (stepResult, bindings) = publishedEvidence(from: automationResult)
+        let semanticEvidence = CADSemanticExecutionEvidence(receipt: semanticReceipt)
+        let stepResult = semanticEvidence.stepResult(
+            node: "cylinder",
+            operation: RupaCADSemanticOperationID.solidCylinder.rawValue,
+            index: 0,
+            primaryOutputs: ["body"]
+        )
+        let bindings = CADOutputRoleBindings(bindings: [
+            CADOutputRoleBinding(role: "solid", stepIndex: 0, selector: .primary),
+        ])
         let oracleStart = now()
         do {
             guard case .cylinder(let expected) = entry.expected else {
@@ -282,10 +241,19 @@ struct CADCylinderCaseRunner {
         evidence: CADCylinderRouteEvidence,
         outcome: CADCaseOutcome
     ) -> CADCylinderCaseResult {
-        guard let automationResult = commandResult(from: record.response) else {
+        guard let semanticReceipt = CADSemanticExecutionEvidence.committedReceipt(from: record.response) else {
             return result(.infrastructureFailure, record, evidence)
         }
-        let (stepResult, bindings) = publishedEvidence(from: automationResult)
+        let semanticEvidence = CADSemanticExecutionEvidence(receipt: semanticReceipt)
+        let stepResult = semanticEvidence.stepResult(
+            node: "cylinder",
+            operation: RupaCADSemanticOperationID.solidCylinder.rawValue,
+            index: 0,
+            primaryOutputs: ["body"]
+        )
+        let bindings = CADOutputRoleBindings(bindings: [
+            CADOutputRoleBinding(role: "solid", stepIndex: 0, selector: .primary),
+        ])
         return result(
             outcome,
             record,
@@ -295,29 +263,6 @@ struct CADCylinderCaseRunner {
         )
     }
 
-    private func commandResult(from response: AgentResponse?) -> AutomationResult? {
-        guard case .command(let result) = response else { return nil }
-        return result
-    }
-
-    private func publishedEvidence(
-        from result: AutomationResult
-    ) -> (CADCandidateStepResult, CADOutputRoleBindings) {
-        let step = CADCandidateStepResult(
-            stepIndex: 0,
-            operation: Self.operationName,
-            status: result.didMutate ? .published : .unchanged,
-            primaryFeatureID: result.primaryFeatureID?.description,
-            createdFeatureIDs: result.createdFeatureIDs.map(\.description),
-            diagnostics: result.diagnostics.map(\.message)
-        )
-        return (
-            step,
-            CADOutputRoleBindings(bindings: [
-                CADOutputRoleBinding(role: "solid", stepIndex: 0, selector: .primary),
-            ])
-        )
-    }
 
     private func result(
         _ outcome: CADCaseOutcome,

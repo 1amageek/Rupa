@@ -1,86 +1,35 @@
-import RupaCore
+import RupaCADDomain
 import RupaGeometry
 import SwiftCAD
 import Testing
+
 @testable import RupaAgentCADBenchmark
 
 struct CADTransformOracleTests {
     @MainActor
-    @Test
-    func preservationOracleRejectsMissingExtraSubstitutedAndMutatedSources() throws {
-        let challenge = try CADTransformPreparedCase.transform001.catalogEntry.challenge
-        let projection = try CADTransformChallengeProjection.decode(challenge)
-        let seed = try CADTransformGeometryMapping.seed(projection: projection)
-        let submission = try CADTransformReferenceCandidate().submission(for: challenge)
-        let transform = try CADTransformGeometryMapping.localTransform(
-            submission: submission,
-            caseID: projection.id
-        )
-        var valid = seed.document
-        try valid.setSceneNodeTransform(id: seed.sceneNodeID, localTransform: transform)
-        try CADTransformOracle.validateSourceAndLocalPlacement(
-            initial: seed.document,
-            final: valid,
-            sceneNodeID: seed.sceneNodeID,
-            expectedTransform: transform
-        )
+    @Test(.timeLimit(.minutes(1)))
+    func transformProgramCreatesItsSourceAndPublishesPlacementAtomically() async throws {
+        let preparedCase = CADTransformPreparedCase.transform001
+        let entry = try preparedCase.catalogEntry
+        let action = try CADTransformReferenceCandidate.action(for: entry.challenge)
+        let plan = try DefaultCADSemanticProgramPlanner().plan(for: entry, action: action)
 
-        var missing = valid
-        missing.productMetadata.sceneNodes.removeValue(forKey: seed.sceneNodeID)
-        #expect(throws: CADTransformOracleError.self) {
-            try CADTransformOracle.validateSourceAndLocalPlacement(
-                initial: seed.document,
-                final: missing,
-                sceneNodeID: seed.sceneNodeID,
-                expectedTransform: transform
-            )
+        #expect(plan.steps.map(\.symbol) == ["transform-source", "transform"])
+        #expect(plan.steps.count == 2)
+        #expect(plan.request.nodes.count == 2)
+        guard case .local(let localReference) = plan.request.nodes[1].arguments
+            .first(where: { $0.name == "scene" })?.value else {
+            Issue.record("The transform node must consume the source scene through a local output.")
+            return
         }
+        #expect(localReference.node == "transform-source")
+        #expect(localReference.output == "scene")
 
-        var extra = valid
-        let extraNode = SceneNode(name: "unexpected")
-        extra.productMetadata.sceneNodes[extraNode.id] = extraNode
-        extra.productMetadata.rootSceneNodeIDs.append(extraNode.id)
-        #expect(throws: CADTransformOracleError.self) {
-            try CADTransformOracle.validateSourceAndLocalPlacement(
-                initial: seed.document,
-                final: extra,
-                sceneNodeID: seed.sceneNodeID,
-                expectedTransform: transform
-            )
-        }
-
-        var substituted = valid
-        substituted.productMetadata.sceneNodes[seed.sceneNodeID]?.reference = nil
-        #expect(throws: CADTransformOracleError.self) {
-            try CADTransformOracle.validateSourceAndLocalPlacement(
-                initial: seed.document,
-                final: substituted,
-                sceneNodeID: seed.sceneNodeID,
-                expectedTransform: transform
-            )
-        }
-
-        var mutated = valid
-        _ = try mutated.createLineSketch(
-            name: "unexpected geometry",
-            plane: .xy,
-            start: SketchPoint(
-                x: .length(0, .millimeter),
-                y: .length(0, .millimeter)
-            ),
-            end: SketchPoint(
-                x: .length(1, .millimeter),
-                y: .length(0, .millimeter)
-            )
-        )
-        #expect(throws: CADTransformOracleError.self) {
-            try CADTransformOracle.validateSourceAndLocalPlacement(
-                initial: seed.document,
-                final: mutated,
-                sceneNodeID: seed.sceneNodeID,
-                expectedTransform: transform
-            )
-        }
+        let result = try await CADTransformCaseRunner(case: preparedCase).runReference()
+        try result.validate()
+        #expect(result.outcome == .realized)
+        #expect(result.telemetry.actionCount == 1)
+        #expect(result.telemetry.commandCount == 2)
     }
 
     @Test

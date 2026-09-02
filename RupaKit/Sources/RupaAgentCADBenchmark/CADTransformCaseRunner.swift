@@ -1,12 +1,11 @@
 import Foundation
-import RupaAutomation
 import RupaCore
 import RupaKit
 
-/// Executes the prepared transform route without claiming shared activation authority.
+/// Executes one self-contained transform program through the production agent
+/// route and projects only immutable lifecycle evidence.
 @MainActor
 struct CADTransformCaseRunner {
-    private static let operationName = "setSceneNodeTransform"
     private static let defaultTimeoutWallNanoseconds: UInt64 = 10_000_000_000
 
     private let preparedCase: CADTransformPreparedCase
@@ -25,48 +24,39 @@ struct CADTransformCaseRunner {
 
     func runReference() async throws -> CADTransformCaseResult {
         let entry = try preparedCase.catalogEntry
-        let submission = try CADTransformReferenceCandidate().submission(
-            for: entry.challenge
-        )
-        return try await run(submission: submission)
-    }
-
-    /// Executes one candidate decision through the same lifecycle used by the
-    /// production Agent route.
-    func run(candidate: any CADCandidateProtocol) async throws -> CADTransformCaseResult {
+        let action = try CADTransformReferenceCandidate.action(for: entry.challenge)
+        let submission = try CADTransformReferenceCandidate().submission(for: entry.challenge)
         let totalStart = now()
-        let entry = try preparedCase.catalogEntry
-        let projection = try CADTransformChallengeProjection.decode(entry.challenge)
-        let seed = try CADTransformGeometryMapping.seed(projection: projection)
-        let record = try await makeCandidateHarness(
-            entry: entry,
-            projection: projection,
-            seed: seed
-        ).runReference(candidate: candidate)
+        let record = try await makeHarness(entry: entry).run(action: action)
         return project(
             record,
             entry: entry,
-            seed: seed,
+            submission: submission,
+            totalStart: totalStart
+        )
+    }
+
+    /// Executes a supplied candidate decision through the production route.
+    func run(candidate: any CADCandidateProtocol) async throws -> CADTransformCaseResult {
+        let entry = try preparedCase.catalogEntry
+        let totalStart = now()
+        let record = try await makeHarness(entry: entry).runReference(candidate: candidate)
+        return project(
+            record,
+            entry: entry,
             submission: nil,
             totalStart: totalStart
         )
     }
 
-    /// Executes a supplied public action for adversarial route tests.
+    /// Executes a supplied typed action for adversarial route tests.
     func run(action: CADCandidateAction) async throws -> CADTransformCaseResult {
-        let totalStart = now()
         let entry = try preparedCase.catalogEntry
-        let projection = try CADTransformChallengeProjection.decode(entry.challenge)
-        let seed = try CADTransformGeometryMapping.seed(projection: projection)
-        let record = try await makeCandidateHarness(
-            entry: entry,
-            projection: projection,
-            seed: seed
-        ).run(action: action)
+        let totalStart = now()
+        let record = try await makeHarness(entry: entry).run(action: action)
         return project(
             record,
             entry: entry,
-            seed: seed,
             submission: nil,
             totalStart: totalStart
         )
@@ -84,107 +74,93 @@ struct CADTransformCaseRunner {
         submission: CADTransformSubmission,
         stale: Bool
     ) async throws -> CADTransformCaseResult {
-        let totalStart = now()
         let entry = try preparedCase.catalogEntry
-        let projection = try CADTransformChallengeProjection.decode(entry.challenge)
-        let seed = try CADTransformGeometryMapping.seed(projection: projection)
-        let expectedSourceAction = seed.sourceAction
-        let harness = CADCaseLifecycleHarness(
-            caseID: preparedCase.caseID,
-            challenge: entry.challenge,
-            routing: CADCaseActionRouting(
-                operationName: Self.operationName,
-                planBuilder: { action, _, _ in
-                    guard action == expectedSourceAction else {
-                        throw CADBenchmarkError.invalidInput(
-                            caseID: projection.id.rawValue,
-                            reason: "The prepared transform route received a substituted source declaration."
-                        )
-                    }
-                    return .command(.setSceneNodeTransform(
-                        id: seed.sceneNodeID,
-                        localTransform: try CADTransformGeometryMapping.localTransform(
-                            submission: submission,
-                            caseID: projection.id
-                        )
-                    ))
-                }
-            ),
-            timeoutWallNanoseconds: timeoutWallNanoseconds,
-            preRouteDelayNanoseconds: preRouteDelayNanoseconds,
-            initialDocumentProvider: { seed.document }
+        let action = try Self.action(
+            for: submission,
+            challenge: entry.challenge
         )
+        let totalStart = now()
+        let harness = makeHarness(entry: entry)
         let record = stale
-            ? try await harness.runStale(action: expectedSourceAction)
-            : try await harness.run(action: expectedSourceAction)
+            ? try await harness.runStale(action: action)
+            : try await harness.run(action: action)
         return project(
             record,
             entry: entry,
-            seed: seed,
             submission: submission,
             totalStart: totalStart
         )
     }
 
-    private func makeCandidateHarness(
-        entry: CADCatalogEntry,
-        projection: CADTransformChallengeProjection,
-        seed: CADTransformGeometryMapping.Seed
-    ) -> CADCaseLifecycleHarness {
-        let routing = CADCaseActionRouting(
-            operationName: Self.operationName,
-            planBuilder: { action, _, _ in
-                guard case .automation(.transform(let transform)) = action else {
-                    throw CADBenchmarkError.invalidInput(
-                        caseID: projection.id.rawValue,
-                        reason: "The transform route requires one transform automation action."
-                    )
-                }
-                let submission = CADTransformSubmission(
-                    translation: transform.translation,
-                    axisPoint: transform.axisPoint,
-                    rotationAxis: transform.rotationAxis,
-                    rotation: transform.rotation
-                )
-                let localTransform = try CADTransformGeometryMapping.localTransform(
-                    submission: submission,
-                    caseID: projection.id
-                )
-                return .command(.setSceneNodeTransform(
-                    id: seed.sceneNodeID,
-                    localTransform: localTransform
-                ))
-            }
-        )
-        return CADCaseLifecycleHarness(
+    private func makeHarness(entry: CADCatalogEntry) -> CADCaseLifecycleHarness {
+        CADCaseLifecycleHarness(
             caseID: preparedCase.caseID,
             challenge: entry.challenge,
-            routing: routing,
+            programPlanner: { action in
+                try DefaultCADSemanticProgramPlanner().plan(
+                    for: entry,
+                    action: action
+                )
+            },
             timeoutWallNanoseconds: timeoutWallNanoseconds,
-            preRouteDelayNanoseconds: preRouteDelayNanoseconds,
-            initialDocumentProvider: { seed.document }
+            preRouteDelayNanoseconds: preRouteDelayNanoseconds
         )
+    }
+
+    private static func action(
+        for submission: CADTransformSubmission,
+        challenge: CADChallenge
+    ) throws -> CADCandidateAction {
+        let reference = try CADTransformReferenceCandidate.action(for: challenge)
+        guard case .automation(.transform(let transform)) = reference else {
+            throw CADBenchmarkError.invalidInput(
+                caseID: challenge.id.rawValue,
+                reason: "The transform challenge did not produce a typed transform action."
+            )
+        }
+        return .automation(.transform(CADTransformAction(
+            source: transform.source,
+            translation: submission.translation,
+            axisPoint: submission.axisPoint,
+            rotationAxis: submission.rotationAxis,
+            rotation: submission.rotation
+        )))
     }
 
     private func project(
         _ record: CADCaseLifecycleRecord,
         entry: CADCatalogEntry,
-        seed: CADTransformGeometryMapping.Seed,
         submission: CADTransformSubmission?,
         totalStart: UInt64
     ) -> CADTransformCaseResult {
         let evidence = CADTransformRouteEvidence(from: record.routeEvidence)
         switch record.outcome {
         case .published:
-            guard let initial = record.initialView,
-                  let final = record.finalView,
-                  case .transform(let expected) = entry.expected else {
+            guard let final = record.finalView,
+                  case .transform(let expected) = entry.expected,
+                  let receipt = CADSemanticExecutionEvidence.committedReceipt(
+                      from: record.response
+                  ) else {
                 return result(
                     outcome: .infrastructureFailure,
                     record: record,
                     evidence: evidence,
                     totalStart: totalStart,
                     diagnostics: ["\(preparedCase.rawValue) published incomplete transform evidence."]
+                )
+            }
+            let semanticEvidence = CADSemanticExecutionEvidence(receipt: receipt)
+            guard let sceneNodeID = semanticEvidence.typedSceneNodeID(
+                forNode: "transform-source",
+                preferredOutputs: ["bodyScene", "scene"]
+            ) else {
+                return result(
+                    outcome: .infrastructureFailure,
+                    record: record,
+                    evidence: evidence,
+                    totalStart: totalStart,
+                    fallbackView: final,
+                    diagnostics: ["\(preparedCase.rawValue) semantic receipt omitted the transform source scene node."]
                 )
             }
             let oracleStart = now()
@@ -197,19 +173,18 @@ struct CADTransformCaseRunner {
                     )
                 } else {
                     guard let finalNode = final.document.document.productMetadata
-                        .sceneNodes[seed.sceneNodeID] else {
+                        .sceneNodes[sceneNodeID] else {
                         throw CADTransformOracleError.mismatch(
                             "The published transform source node is missing."
                         )
                     }
                     transform = finalNode.localTransform
                 }
-                let observation = try CADTransformOracle.evaluate(
+                let observation = try CADTransformOracle.evaluateSelfContained(
                     expected: expected,
                     challenge: entry.challenge,
-                    sceneNodeID: seed.sceneNodeID,
+                    sceneNodeID: sceneNodeID,
                     expectedTransform: transform,
-                    initial: initial,
                     final: final
                 )
                 return result(

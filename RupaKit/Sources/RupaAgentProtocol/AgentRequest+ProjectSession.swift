@@ -13,7 +13,8 @@ public extension AgentRequest {
             nil
         case .closeDocument(let id, _, _),
              .resetDocument(let id, _, _),
-             .execute(let id, _, _, _),
+             .describeDocument(let id, _),
+             .validateDocument(let id, _),
              .setParameterExpression(let id, _, _, _, _, _),
              .setObjectDimensionExpression(let id, _, _, _, _, _),
              .setSketchEntityDimensionExpression(let id, _, _, _, _, _),
@@ -51,7 +52,6 @@ public extension AgentRequest {
             request.sessionID
         case .undo(let id, _),
              .redo(let id, _),
-             .executeBatch(let id, _),
              .executeDomain(let id, _),
              .parameters(let id, _),
              .evaluate(let id, _),

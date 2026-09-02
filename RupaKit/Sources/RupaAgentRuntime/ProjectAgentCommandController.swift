@@ -423,6 +423,38 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
                 message: "Application-owned file and window lifecycle is outside the Agent project route."
             )
 
+        case .describeDocument(
+            let sessionID,
+            let expectedGeneration
+        ):
+            let lease = try await registry.lease(id: sessionID)
+            let workspace = lease.workspace
+            let snapshot = try currentView(workspace)
+            try requireGeneration(expectedGeneration, snapshot: snapshot)
+            return try await executeDedicatedAutomation(
+                .describeDocument,
+                expectedGeneration: expectedGeneration,
+                workspace: workspace,
+                snapshot: snapshot,
+                operationGuard: lease.operationGuard
+            )
+
+        case .validateDocument(
+            let sessionID,
+            let expectedGeneration
+        ):
+            let lease = try await registry.lease(id: sessionID)
+            let workspace = lease.workspace
+            let snapshot = try currentView(workspace)
+            try requireGeneration(expectedGeneration, snapshot: snapshot)
+            return try await executeDedicatedAutomation(
+                .validateDocument,
+                expectedGeneration: expectedGeneration,
+                workspace: workspace,
+                snapshot: snapshot,
+                operationGuard: lease.operationGuard
+            )
+
         case .parameters,
              .measure,
              .selectionMeasurement,
@@ -463,82 +495,6 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
 
         case .makeEditable(let request):
             return try await executeMakeEditable(request)
-
-        case .execute(
-            let sessionID,
-            let command,
-            let expectedGeneration,
-            let expectedWorkspaceRevision
-        ):
-            let lease = try await registry.lease(id: sessionID)
-            let workspace = lease.workspace
-            let snapshot = try currentView(workspace)
-            try requireMutationGeneration(
-                expectedGeneration,
-                operation: "Agent command",
-                snapshot: snapshot
-            )
-            if command.effect == .workspaceMutation {
-                try requireWorkspaceRevision(
-                    expectedWorkspaceRevision,
-                    operation: "Workspace mutation",
-                    snapshot: snapshot
-                )
-            }
-            let result = try await workspace.executeAutomation(
-                AutomationBatch(
-                    commands: [command],
-                    expectedGeneration: expectedGeneration,
-                    expectedTransactionRevision: snapshot.transactionRevision,
-                    expectedWorkspaceRevision: expectedWorkspaceRevision
-                ),
-                from: snapshot,
-                operationGuard: lease.operationGuard
-            )
-            guard var commandResult = result.execution.results.first else {
-                throw EditorError(
-                    code: .commandFailed,
-                    message: "Agent command produced no result."
-                )
-            }
-            commandResult.executionMetrics = result.execution.metrics
-            return .command(commandResult)
-
-        case .executeBatch(let sessionID, let batch):
-            let lease = try await registry.lease(id: sessionID)
-            let workspace = lease.workspace
-            let snapshot = try currentView(workspace)
-            try requireMutationGeneration(
-                batch.expectedGeneration,
-                operation: "Agent batch",
-                snapshot: snapshot
-            )
-            let effect = try batch.validatedEffect()
-            if effect == .workspaceMutation {
-                try requireWorkspaceRevision(
-                    batch.expectedWorkspaceRevision,
-                    operation: "Workspace mutation batch",
-                    snapshot: snapshot
-                )
-            }
-            var coordinatedBatch = batch
-            if coordinatedBatch.expectedTransactionRevision == nil {
-                coordinatedBatch.expectedTransactionRevision = snapshot.transactionRevision
-            }
-            let result = try await workspace.executeAutomation(
-                coordinatedBatch,
-                from: snapshot,
-                operationGuard: lease.operationGuard
-            )
-            return .batch(
-                AgentBatchResult(
-                    results: result.execution.results,
-                    generation: result.view.documentGeneration,
-                    workspaceRevision: result.view.workspaceState.revision,
-                    dirty: result.view.isDirty,
-                    metrics: result.execution.metrics
-                )
-            )
 
         case .executeDomain(let sessionID, let request):
             let lease = try await registry.lease(id: sessionID)
@@ -588,8 +544,8 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
                 targetKind: kind,
                 defaults: expressionDefaults(defaults, snapshot: snapshot)
             )
-            return try await executeSingleCommand(
-                .upsertParameter(name: name, expression: parsed, kind: kind),
+            return try await executeDedicatedAutomation(
+                .setParameterExpression(name: name, expression: parsed, kind: kind),
                 expectedGeneration: expectedGeneration,
                 workspace: workspace,
                 snapshot: snapshot,
@@ -618,8 +574,8 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
                 defaults: defaults,
                 snapshot: snapshot
             )
-            return try await executeSingleCommand(
-                .setObjectDimension(target: target, kind: kind, value: parsed),
+            return try await executeDedicatedAutomation(
+                .setObjectDimensionExpression(target: target, kind: kind, value: parsed),
                 expectedGeneration: expectedGeneration,
                 workspace: workspace,
                 snapshot: snapshot,
@@ -648,8 +604,8 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
                 defaults: defaults,
                 snapshot: snapshot
             )
-            return try await executeSingleCommand(
-                .setSketchEntityDimension(target: target, kind: kind, value: parsed),
+            return try await executeDedicatedAutomation(
+                .setSketchEntityDimensionExpression(target: target, kind: kind, value: parsed),
                 expectedGeneration: expectedGeneration,
                 workspace: workspace,
                 snapshot: snapshot,
@@ -684,8 +640,8 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
                 defaults: defaults,
                 snapshot: snapshot
             )
-            return try await executeSingleCommand(
-                .setSelectionDimensionTarget(id: id, target: parsed),
+            return try await executeDedicatedAutomation(
+                .setSelectionDimensionTargetExpression(id: id, target: parsed),
                 expectedGeneration: expectedGeneration,
                 workspace: workspace,
                 snapshot: snapshot,
@@ -708,7 +664,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
                 operation: "Poly-spline surface vertex move",
                 snapshot: snapshot
             )
-            return try await executeSingleCommand(
+            return try await executeDedicatedAutomation(
                 .movePolySplineSurfaceVertex(
                     target: target,
                     deltaX: deltaX,
@@ -735,7 +691,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
                 operation: "Surface frame display",
                 snapshot: snapshot
             )
-            return try await executeSingleCommand(
+            return try await executeDedicatedAutomation(
                 .setSurfaceFrameDisplay(query: query, isVisible: isVisible),
                 expectedGeneration: expectedGeneration,
                 expectedWorkspaceRevision: snapshot.workspaceState.revision,
@@ -1050,8 +1006,8 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
         }
     }
 
-    private func executeSingleCommand(
-        _ command: AutomationCommand,
+    private func executeDedicatedAutomation(
+        _ invocation: DedicatedAutomationInvocation,
         expectedGeneration: DocumentGeneration?,
         expectedWorkspaceRevision: WorkspaceRevision? = nil,
         workspace: ProjectWorkspace,
@@ -1060,7 +1016,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
     ) async throws -> AgentResponse {
         let result = try await workspace.executeAutomation(
             AutomationBatch(
-                commands: [command],
+                commands: [invocation.command],
                 expectedGeneration: expectedGeneration,
                 expectedTransactionRevision: snapshot.transactionRevision,
                 expectedWorkspaceRevision: expectedWorkspaceRevision
@@ -1071,11 +1027,11 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
         guard var commandResult = result.execution.results.first else {
             throw EditorError(
                 code: .commandFailed,
-                message: "Agent command produced no result."
+                message: "Agent capability \(invocation.capabilityID.rawValue) produced no result."
             )
         }
         commandResult.executionMetrics = result.execution.metrics
-        return .command(commandResult)
+        return invocation.response(commandResult)
     }
 
     private func replaceSelection(
@@ -1311,6 +1267,82 @@ private enum ProjectAgentSemanticInvocation: Sendable {
     }
 }
 
+
+private enum DedicatedAutomationInvocation {
+    case describeDocument
+    case validateDocument
+    case setParameterExpression(name: String, expression: CADExpression, kind: QuantityKind)
+    case setObjectDimensionExpression(
+        target: SelectionTarget,
+        kind: ObjectDimensionKind,
+        value: CADExpression
+    )
+    case setSketchEntityDimensionExpression(
+        target: SelectionTarget,
+        kind: SketchEntityDimensionKind,
+        value: CADExpression
+    )
+    case setSelectionDimensionTargetExpression(id: SelectionDimensionID, target: CADExpression)
+    case movePolySplineSurfaceVertex(
+        target: SelectionTarget,
+        deltaX: CADExpression,
+        deltaY: CADExpression,
+        deltaZ: CADExpression
+    )
+    case setSurfaceFrameDisplay(query: SurfaceFrameQuery, isVisible: Bool?)
+
+    var capabilityID: AgentCapabilityCatalog.DedicatedAutomationCapabilityID {
+        switch self {
+        case .describeDocument: .describeDocument
+        case .validateDocument: .validateDocument
+        case .setParameterExpression: .setParameterExpression
+        case .setObjectDimensionExpression: .setObjectDimensionExpression
+        case .setSketchEntityDimensionExpression: .setSketchEntityDimensionExpression
+        case .setSelectionDimensionTargetExpression: .setSelectionDimensionTargetExpression
+        case .movePolySplineSurfaceVertex: .movePolySplineSurfaceVertex
+        case .setSurfaceFrameDisplay: .setSurfaceFrameDisplay
+        }
+    }
+
+    var command: AutomationCommand {
+        switch self {
+        case .describeDocument:
+            .describeDocument
+        case .validateDocument:
+            .validateDocument
+        case .setParameterExpression(let name, let expression, let kind):
+            .upsertParameter(name: name, expression: expression, kind: kind)
+        case .setObjectDimensionExpression(let target, let kind, let value):
+            .setObjectDimension(target: target, kind: kind, value: value)
+        case .setSketchEntityDimensionExpression(let target, let kind, let value):
+            .setSketchEntityDimension(target: target, kind: kind, value: value)
+        case .setSelectionDimensionTargetExpression(let id, let target):
+            .setSelectionDimensionTarget(id: id, target: target)
+        case .movePolySplineSurfaceVertex(let target, let deltaX, let deltaY, let deltaZ):
+            .movePolySplineSurfaceVertex(
+                target: target,
+                deltaX: deltaX,
+                deltaY: deltaY,
+                deltaZ: deltaZ
+            )
+        case .setSurfaceFrameDisplay(let query, let isVisible):
+            .setSurfaceFrameDisplay(query: query, isVisible: isVisible)
+        }
+    }
+
+    func response(_ result: AutomationResult) -> AgentResponse {
+        switch self {
+        case .describeDocument: .documentDescription(result)
+        case .validateDocument: .documentValidation(result)
+        case .setParameterExpression: .parameterExpression(result)
+        case .setObjectDimensionExpression: .objectDimensionExpression(result)
+        case .setSketchEntityDimensionExpression: .sketchEntityDimensionExpression(result)
+        case .setSelectionDimensionTargetExpression: .selectionDimensionTargetExpression(result)
+        case .movePolySplineSurfaceVertex: .polySplineSurfaceVertex(result)
+        case .setSurfaceFrameDisplay: .surfaceFrameDisplay(result)
+        }
+    }
+}
 
 private extension SketchEntityDimensionKind {
     var quantityKind: QuantityKind {

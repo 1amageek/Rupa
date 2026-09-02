@@ -1,10 +1,10 @@
 # RupaAgentCADBenchmarkCLI
 
-> CADAPI-100 supersession: this dedicated executable records the historical T12
-> process boundary and is not the production `rupa` modeling client. Its
-> unsupported-sphere behavior is not accepted by CADAPI-100 and is not retained
-> as compatibility. Current proof must use the signed `rupa` executable and
-> realize all 100 cases through `RupaProjectAccess` and App-owned authority.
+> CADAPI-100 status: this dedicated executable is a test-only process boundary,
+> not the production `rupa` modeling client. It now exercises the same semantic
+> operation programs for all 100 cases, including analytic spheres. Signed-App
+> acceptance remains separately owned by the production `rupa` path.
+> Frozen T12 checkpoint sections below are historical provenance only.
 
 ## Purpose and Scope
 
@@ -137,10 +137,10 @@ Process-level tests build and invoke the actual executable and prove:
   millimetre/XY case, the complete CIR-001...012 category, ANG-001...016, and
   BOX-001...012, `CYL-001...008`, `CON-001...008`, `TRN-001...008`, and
   `CMP-001...007`, and `SPH-001...005`, covering the full 100-case catalog;
-- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008, CON-001...008, TRN-001...008 transform, and CMP-001...007 compound responses traverse the adapter, production
-  controller, and exact category oracle and exit `0` with `realized`; the exact
-  SPH-001...005 unsupported declarations traverse the same executor and exit `2`
-  with `expectedUnsupported` because no analytic-sphere action is exposed;
+- JSON line, rectangle, circle, angle, BOX-001...012, CYL-001...008,
+  CON-001...008, TRN-001...008 transform, CMP-001...007 compound, and
+  SPH-001...005 analytic-sphere actions traverse the adapter, semantic program
+  executor, and exact category oracle and exit `0` with `realized`;
 - a REC-009 JSON response preserves its public inch/XZ/centre values, traverses
   the unchanged rectangle production controller and exact oracle, and exits `0`;
 - a REC-010 JSON response preserves its public metre/XY/centre values, traverses
@@ -155,9 +155,9 @@ Process-level tests build and invoke the actual executable and prove:
   non-realized envelope, and exits `2`;
 - malformed, oversize, unknown-schema, mismatched-fingerprint, and inactive
   responses exit `64` without publication;
-- SPH-001...005 exact `analyticSphereUnavailable` decisions exit `2` with
-  `expectedUnsupported`; substitute actions, generic unsupported declarations,
-  and `finish` exit `2` with typed `invalidSubmission` and no fallback action;
+- SPH-001...005 exact sphere actions exit `0` with `realized`; substitute
+  geometry, unsupported declarations, and `finish` exit `2` with typed
+  `invalidSubmission` and no fallback action;
 - all emitted evaluation/error JSON is bounded and private-data free.
 
 For `T12-REC-010`, the twenty-one-case command boundary remained the confirmed
@@ -1020,9 +1020,9 @@ frozen 98-request aggregate remains
 appending the actual `SPH-004` request freezes the 99-request aggregate as
 `c3002db14457157163c12c6db9e2e3794ba330476984ec1321c0212b45d02a78`.
 
-### SPH-005 current full-catalog process boundary
+### SPH-005 historical T12 full-catalog process boundary
 
-The current executable authority appends `SPH-005` as the 100th and final
+The historical executable authority appended `SPH-005` as the 100th and final
 catalog case. `request SPH-005` emits one bounded private-free context for a
 radius-100 mm analytic sphere centered at `(-100, 100, -50)` mm. Its public
 capability snapshot reports `cad.solid.analytic-sphere@1` as unavailable with

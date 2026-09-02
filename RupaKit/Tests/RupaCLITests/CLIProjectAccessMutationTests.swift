@@ -8,74 +8,66 @@ import Testing
 @testable import RupaCLIKit
 
 @Test(.timeLimit(.minutes(1)))
-func implicitUnitAndLiveMutationShareOneSessionWithoutSaving() async throws {
-    let inputURL = URL(fileURLWithPath: "/tmp/source.rupa")
+func typedMutationUsesOneSessionWithoutSaving() async throws {
+    let projectURL = URL(fileURLWithPath: "/tmp/source.rupa")
     let generation = DocumentGeneration(3)
     let changedGeneration = DocumentGeneration(4)
     let session = StubProjectAccessSession(
         steps: [
-            .response(.command(stubAutomationResult(
-                message: "Described.",
-                effect: .readOnly,
-                generation: generation,
-                sourceDirty: false,
-                didMutate: false,
-                workspaceScale: stubWorkspaceScale(displayUnit: .millimeter)
-            ))),
-            .response(.command(stubAutomationResult(
-                message: "Renamed.",
+            .response(.parameterExpression(stubAutomationResult(
+                message: "Parameter updated.",
                 generation: changedGeneration
-            ))),
+            )))
         ]
     )
     let opener = StubProjectAccessOpener(session: session)
-    let observer = await MainActor.run { StubProjectAccessObserver() }
-    let options = try CLIWriteDocumentOptions.parse([
-        inputURL.path,
-        "--expected-generation", String(generation.value),
-    ])
+    let observer = await makeStubProjectAccessObserver()
 
-    _ = try await withStubProjectAccess(opener: opener, observer: observer) {
-        try await CLIProjectAccessRunner.withCommandScope {
-            let unit = try await CLILengthUnitResolver.resolve(
-                unitName: nil,
-                document: options,
-                sessionID: nil
+    try await withStubProjectAccess(opener: opener, observer: observer) {
+        let response = try await CLIService().executeTypedMutationRequest(
+            target: CLIDocumentTarget(fileURL: projectURL)
+        ) { sessionID in
+            .setParameterExpression(
+                sessionID: sessionID,
+                name: "Result",
+                expression: "10 mm",
+                kind: .length,
+                defaults: nil,
+                expectedGeneration: generation
             )
-            #expect(unit == .millimeter)
-
-            let response = try await CLIService().applyAutomationCommand(
-                target: options.target(sessionID: nil),
-                command: .renameDocument(name: "Result"),
-                expectedGeneration: options.generation()
-            )
-            #expect(!response.saved)
-            #expect(response.dirty)
-            #expect(response.generation == changedGeneration.value)
         }
+        #expect(!response.saved)
+        #expect(response.dirty)
+        #expect(response.generation == changedGeneration.value)
     }
 
-    #expect(await opener.recordedTargets() == [.liveProject(inputURL)])
+    #expect(await opener.recordedTargets() == [.liveProject(projectURL)])
     #expect(await opener.recordedDeadlines().count == 1)
     #expect(await session.recordedSaveGenerations().isEmpty)
     #expect(await session.recordedFinishCount() == 1)
 
     let requests = await session.recordedRequests()
-    #expect(requests.count == 2)
-    guard case .execute(_, .describeDocument, generation, _) = requests[0] else {
-        Issue.record("Implicit unit resolution must describe the document first.")
+    #expect(requests.count == 1)
+    guard case .setParameterExpression(
+        _,
+        let name,
+        let expression,
+        let kind,
+        let defaults,
+        let expectedGeneration
+    ) = requests[0] else {
+        Issue.record("The mutation request was not projected through the typed Agent API.")
         return
     }
-    #expect(generation == DocumentGeneration(3))
-    guard case .execute(_, .renameDocument(name: "Result"), generation, _) = requests[1] else {
-        Issue.record("The mutation request was not projected through the shared access session.")
-        return
-    }
-    #expect(generation == DocumentGeneration(3))
+    #expect(name == "Result")
+    #expect(expression == "10 mm")
+    #expect(kind == .length)
+    #expect(defaults == nil)
+    #expect(expectedGeneration == generation)
 }
 
 @Test(.timeLimit(.minutes(1)))
-func liveCommandFailureNeverSavesOrFallsBack() async throws {
+func typedMutationFailureNeverSavesOrFallsBack() async throws {
     let projectURL = URL(fileURLWithPath: "/tmp/no-save.rupa")
     let commandFailure = EditorError(
         code: .commandFailed,
@@ -83,19 +75,22 @@ func liveCommandFailureNeverSavesOrFallsBack() async throws {
     )
     let session = StubProjectAccessSession(
         steps: [
-            .response(.failure(commandFailure)),
+            .response(.failure(commandFailure))
         ]
     )
     let opener = StubProjectAccessOpener(session: session)
-    let observer = await MainActor.run { StubProjectAccessObserver() }
+    let observer = await makeStubProjectAccessObserver()
     let target = CLIDocumentTarget(fileURL: projectURL)
 
-    try await withStubProjectAccess(opener: opener, observer: observer) {
-        try await CLIProjectAccessRunner.withCommandScope {
-            await #expect(throws: EditorError.self) {
-                _ = try await CLIService().applyAutomationCommand(
-                    target: target,
-                    command: .renameDocument(name: "Failure"),
+    _ = await withStubProjectAccess(opener: opener, observer: observer) {
+        await #expect(throws: EditorError.self) {
+            _ = try await CLIService().executeTypedMutationRequest(target: target) { sessionID in
+                .setParameterExpression(
+                    sessionID: sessionID,
+                    name: "Failure",
+                    expression: "1 mm",
+                    kind: .length,
+                    defaults: nil,
                     expectedGeneration: DocumentGeneration(2)
                 )
             }
@@ -109,15 +104,15 @@ func liveCommandFailureNeverSavesOrFallsBack() async throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
-func liveMutationDoesNotSaveUntilExplicitSave() async throws {
+func typedMutationDoesNotSaveUntilExplicitSave() async throws {
     let projectURL = URL(fileURLWithPath: "/tmp/live-save.rupa")
     let generation = DocumentGeneration(9)
     let session = StubProjectAccessSession(
         steps: [
-            .response(.command(stubAutomationResult(
+            .response(.parameterExpression(stubAutomationResult(
                 message: "Changed in memory.",
                 generation: generation
-            ))),
+            )))
         ]
     )
     let mutationOpener = StubProjectAccessOpener(session: session)
@@ -125,11 +120,16 @@ func liveMutationDoesNotSaveUntilExplicitSave() async throws {
     let target = CLIDocumentTarget(fileURL: projectURL)
 
     try await withStubProjectAccess(opener: mutationOpener, observer: observer) {
-        let mutation = try await CLIService().applyAutomationCommand(
-            target: target,
-            command: .renameDocument(name: "Live"),
-            expectedGeneration: DocumentGeneration(8)
-        )
+        let mutation = try await CLIService().executeTypedMutationRequest(target: target) { sessionID in
+            .setParameterExpression(
+                sessionID: sessionID,
+                name: "Live",
+                expression: "2 mm",
+                kind: .length,
+                defaults: nil,
+                expectedGeneration: DocumentGeneration(8)
+            )
+        }
         #expect(!mutation.saved)
         #expect(mutation.dirty)
         #expect(await session.recordedSaveGenerations().isEmpty)
@@ -152,7 +152,7 @@ func liveMutationDoesNotSaveUntilExplicitSave() async throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
-func unknownAndCommittedMutationOutcomesAreNeverRetried() async throws {
+func unknownAndCommittedTypedMutationOutcomesAreNeverRetried() async throws {
     let projectURL = URL(fileURLWithPath: "/tmp/no-retry.rupa")
     let requestID = UUID()
     let unknownSession = StubProjectAccessSession(
@@ -163,11 +163,18 @@ func unknownAndCommittedMutationOutcomesAreNeverRetried() async throws {
 
     await #expect(throws: ProjectAccessError.outcomeUnknown(requestID: requestID)) {
         try await withStubProjectAccess(opener: unknownOpener, observer: observer) {
-            _ = try await CLIService().applyAutomationCommand(
-                target: CLIDocumentTarget(fileURL: projectURL),
-                command: .renameDocument(name: "Unknown"),
-                expectedGeneration: DocumentGeneration(1)
-            )
+            _ = try await CLIService().executeTypedMutationRequest(
+                target: CLIDocumentTarget(fileURL: projectURL)
+            ) { sessionID in
+                .setParameterExpression(
+                    sessionID: sessionID,
+                    name: "Unknown",
+                    expression: "1 mm",
+                    kind: .length,
+                    defaults: nil,
+                    expectedGeneration: DocumentGeneration(1)
+                )
+            }
         }
     }
     #expect(await unknownOpener.recordedTargets() == [.liveProject(projectURL)])
@@ -177,7 +184,7 @@ func unknownAndCommittedMutationOutcomesAreNeverRetried() async throws {
     let outcome = AgentCommittedMutationOutcome(
         stage: .viewProjection,
         mutation: .source,
-        requestMethod: "command.apply",
+        requestMethod: "parameter.setExpression",
         projectID: ProjectID(rawValue: "project.no-retry"),
         documentGeneration: DocumentGeneration(2),
         transactionRevision: DocumentTransactionRevision(2),
@@ -192,11 +199,18 @@ func unknownAndCommittedMutationOutcomesAreNeverRetried() async throws {
 
     await #expect(throws: CLICommittedMutationError.self) {
         try await withStubProjectAccess(opener: committedOpener, observer: observer) {
-            _ = try await CLIService().applyAutomationCommand(
-                target: CLIDocumentTarget(fileURL: projectURL),
-                command: .renameDocument(name: "Committed"),
-                expectedGeneration: DocumentGeneration(1)
-            )
+            _ = try await CLIService().executeTypedMutationRequest(
+                target: CLIDocumentTarget(fileURL: projectURL)
+            ) { sessionID in
+                .setParameterExpression(
+                    sessionID: sessionID,
+                    name: "Committed",
+                    expression: "1 mm",
+                    kind: .length,
+                    defaults: nil,
+                    expectedGeneration: DocumentGeneration(1)
+                )
+            }
         }
     }
     #expect(await committedOpener.recordedTargets() == [.liveProject(projectURL)])

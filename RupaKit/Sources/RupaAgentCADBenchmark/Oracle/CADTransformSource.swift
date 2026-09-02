@@ -5,6 +5,13 @@ enum CADTransformSource: Codable, Equatable, Hashable, Sendable {
     case box(CADBoxChallengeInput)
     case cylinder(CADCylinderChallengeInput)
 
+    var isSolid: Bool {
+        switch self {
+        case .box, .cylinder: true
+        case .line, .rectangle, .circle: false
+        }
+    }
+
     func validate(caseID: CADBenchmarkCaseID) throws {
         switch self {
         case let .line(input):

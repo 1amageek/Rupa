@@ -27,19 +27,5 @@ public struct CADUnsupportedDeclaration: Codable, Equatable, Hashable, Sendable 
                 reason: "The declared capability is available in the observed snapshot."
             )
         }
-        if challenge.category == .sphere && reason != .analyticSphereUnavailable {
-            throw CADBenchmarkError.unsupportedCapabilityMismatch(
-                caseID: challenge.id.rawValue,
-                capabilityID: capabilityID,
-                reason: "Sphere absence must use the analyticSphereUnavailable reason."
-            )
-        }
-        if challenge.category != .sphere && reason == .analyticSphereUnavailable {
-            throw CADBenchmarkError.unsupportedCapabilityMismatch(
-                caseID: challenge.id.rawValue,
-                capabilityID: capabilityID,
-                reason: "The analyticSphereUnavailable reason is reserved for sphere challenges."
-            )
-        }
     }
 }

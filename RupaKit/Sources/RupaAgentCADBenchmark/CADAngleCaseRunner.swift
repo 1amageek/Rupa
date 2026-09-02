@@ -1,14 +1,12 @@
 import Foundation
 import RupaAgentProtocol
-import RupaAutomation
 import RupaCore
+import RupaCADDomain
 import RupaKit
-import SwiftCAD
 
 /// Projects the shared lifecycle into one angle-category result.
 @MainActor
 struct CADAngleCaseRunner {
-    private static let operationName = "createLineSketch"
     private static let defaultTimeoutWallNanoseconds: UInt64 = 10_000_000_000
 
     private let activatedCase: CADActivatedAngleCase
@@ -44,14 +42,14 @@ struct CADAngleCaseRunner {
     func run(candidate: any CADCandidateProtocol) async throws -> CADAngleCaseResult {
         let totalStart = now()
         let entry = try activatedCase.catalogEntry
-        let record = try await harness(challenge: entry.challenge).runReference(candidate: candidate)
+        let record = try await harness(entry: entry).runReference(candidate: candidate)
         return await project(record, entry: entry, totalStart: totalStart)
     }
 
     func run(action: CADCandidateAction) async throws -> CADAngleCaseResult {
         let totalStart = now()
         let entry = try activatedCase.catalogEntry
-        let record = try await harness(challenge: entry.challenge).run(action: action)
+        let record = try await harness(entry: entry).run(action: action)
         return await project(record, entry: entry, totalStart: totalStart)
     }
 
@@ -59,100 +57,22 @@ struct CADAngleCaseRunner {
         let totalStart = now()
         let entry = try activatedCase.catalogEntry
         let action = try CADAngleReferenceCandidate.action(for: entry.challenge)
-        let record = try await harness(challenge: entry.challenge).runStale(action: action)
+        let record = try await harness(entry: entry).runStale(action: action)
         return await project(record, entry: entry, totalStart: totalStart)
     }
 
-    private func harness(challenge: CADChallenge) -> CADCaseLifecycleHarness {
+    private func harness(entry: CADCatalogEntry) -> CADCaseLifecycleHarness {
         CADCaseLifecycleHarness(
             caseID: caseID,
-            challenge: challenge,
-            routing: CADCaseActionRouting(
-                operationName: Self.operationName,
-                planBuilder: { [self] action, challenge, tolerance in
-                    try makePlan(
-                        from: action,
-                        challenge: challenge,
-                        modelingTolerance: tolerance
-                    )
-                }
-            ),
+            challenge: entry.challenge,
+            programPlanner: { action in
+                try DefaultCADSemanticProgramPlanner().plan(
+                    for: entry,
+                    action: action
+                )
+            },
             timeoutWallNanoseconds: timeoutWallNanoseconds,
             preRouteDelayNanoseconds: preRouteDelayNanoseconds
-        )
-    }
-
-    private func makePlan(
-        from action: CADCandidateAction,
-        challenge: CADChallenge,
-        modelingTolerance: ModelingTolerance
-    ) throws -> CADCaseActionPlan {
-        let projection = try CADAngleChallengeProjection.decode(challenge)
-        guard case .automation(
-            .sketch(
-                .angle(
-                    let name,
-                    let plane,
-                    let firstStart,
-                    let firstEnd,
-                    let secondStart,
-                    let secondEnd
-                )
-            )
-        ) = action,
-        name.isEmpty == false,
-        plane == projection.orientation else {
-            throw CADBenchmarkError.invalidInput(
-                caseID: caseID.rawValue,
-                reason: "The angle action must use the challenge orientation."
-            )
-        }
-        let tolerance = try CADBenchmarkTolerancePolicy(modelingTolerance: modelingTolerance)
-        let sourcePlane = try CADAngleGeometryMapping.sourcePlane(
-            orientation: projection.orientation,
-            intersection: projection.intersection,
-            modelingTolerance: modelingTolerance,
-            caseID: caseID
-        )
-        let submitted = [firstStart, firstEnd, secondStart, secondEnd]
-        let fields = ["firstStart", "firstEnd", "secondStart", "secondEnd"]
-        let local = try zip(submitted, fields).map { point, field in
-            try CADAngleGeometryMapping.localPoint(
-                from: point,
-                sourcePlane: sourcePlane,
-                modelingTolerance: modelingTolerance,
-                caseID: caseID,
-                field: "action.\(field)"
-            )
-        }
-        guard tolerance.isNonDegenerate(hypot(local[1].x - local[0].x, local[1].y - local[0].y)),
-              tolerance.isNonDegenerate(hypot(local[3].x - local[2].x, local[3].y - local[2].y)) else {
-            throw CADBenchmarkError.invalidInput(
-                caseID: caseID.rawValue,
-                reason: "The submitted angle contains a degenerate segment."
-            )
-        }
-        let planeReference = SketchPlaneReference(sketchPlane: sourcePlane)
-        return .batch([
-            .createLineSketch(
-                name: "\(name).first-line",
-                plane: planeReference,
-                start: sketchPoint(local[0]),
-                end: sketchPoint(local[1])
-            ),
-            .createLineSketch(
-                name: "\(name).second-line",
-                plane: planeReference,
-                start: sketchPoint(local[2]),
-                end: sketchPoint(local[3])
-            ),
-        ])
-    }
-
-    private func sketchPoint(_ point: Point2D) -> SketchPoint {
-        SketchPoint(
-            x: .constant(.length(point.x, unit: .meter)),
-            y: .constant(.length(point.y, unit: .meter))
         )
     }
 
@@ -164,7 +84,12 @@ struct CADAngleCaseRunner {
         let evidence = CADAngleRouteEvidence(from: record.routeEvidence)
         switch record.outcome {
         case .published:
-            return await projectPublished(record, entry: entry, evidence: evidence, totalStart: totalStart)
+            return await projectPublished(
+                record,
+                entry: entry,
+                evidence: evidence,
+                totalStart: totalStart
+            )
         case .cancelledAfterPublication:
             return finish(
                 publishedMutation(record, evidence: evidence, outcome: .cancellation),
@@ -190,17 +115,15 @@ struct CADAngleCaseRunner {
         totalStart: UInt64
     ) async -> CADAngleCaseResult {
         guard let finalView = record.finalView,
-              let batch = batchResult(from: record.response),
-              batch.results.count == 2,
-              batch.metrics.commandCount == 2,
-              batch.metrics.evaluationPassCount == 1,
-              batch.metrics.historyEntryCount == 1,
-              batch.results.allSatisfy(\.didMutate),
-              batch.results[0].generation.value < UInt64.max,
-              batch.results[1].generation.value == batch.results[0].generation.value + 1 else {
+              let semanticEvidence = semanticEvidence(from: record.response),
+              semanticEvidence.receipt.telemetry.execution.stepCount == 2,
+              semanticEvidence.commandCount == 2 else {
             return finish(result(.infrastructureFailure, record, evidence), totalStart: totalStart)
         }
-        let (steps, bindings) = publishedEvidence(from: batch.results)
+        let (steps, bindings) = publishedEvidence(from: semanticEvidence)
+        guard steps.count == 2 else {
+            return finish(result(.infrastructureFailure, record, evidence), totalStart: totalStart)
+        }
         let oracleStart = now()
         do {
             guard case .angle(let expected) = entry.expected else {
@@ -242,7 +165,11 @@ struct CADAngleCaseRunner {
                     evidence,
                     candidateResults: steps,
                     roleBindings: bindings,
-                    telemetry: failureTelemetry(record, view: finalView, oracleStart: oracleStart),
+                    telemetry: failureTelemetry(
+                        record,
+                        view: finalView,
+                        oracleStart: oracleStart
+                    ),
                     diagnostics: [
                         "\(caseID.rawValue) angle oracle exceeded its shared deadline after publication; no retry was attempted."
                     ]
@@ -250,9 +177,26 @@ struct CADAngleCaseRunner {
                 totalStart: totalStart
             )
         } catch let error as CADAngleOracleError {
-            let counts: (readCount: Int, entityCount: Int)
             do {
-                counts = try sourceCounts(in: finalView)
+                let counts = try sourceCounts(in: finalView)
+                return finish(
+                    result(
+                        .invalidSubmission,
+                        record,
+                        evidence,
+                        candidateResults: steps,
+                        roleBindings: bindings,
+                        telemetry: telemetry(from: record).replacing(
+                            oracleWallNanoseconds: elapsed(since: oracleStart),
+                            readCount: counts.readCount,
+                            entityCount: counts.entityCount,
+                            featureCount: finalView.document.document.cadDocument.designGraph.nodes.count,
+                            bodyCount: finalView.evaluationSnapshot.bodyCount
+                        ),
+                        diagnostics: [error.description]
+                    ),
+                    totalStart: totalStart
+                )
             } catch {
                 return finish(
                     result(
@@ -274,24 +218,6 @@ struct CADAngleCaseRunner {
                     totalStart: totalStart
                 )
             }
-            return finish(
-                result(
-                    .invalidSubmission,
-                    record,
-                    evidence,
-                    candidateResults: steps,
-                    roleBindings: bindings,
-                    telemetry: telemetry(from: record).replacing(
-                        oracleWallNanoseconds: elapsed(since: oracleStart),
-                        readCount: counts.readCount,
-                        entityCount: counts.entityCount,
-                        featureCount: finalView.document.document.cadDocument.designGraph.nodes.count,
-                        bodyCount: finalView.evaluationSnapshot.bodyCount
-                    ),
-                    diagnostics: [error.description]
-                ),
-                totalStart: totalStart
-            )
         } catch {
             return finish(
                 result(
@@ -300,7 +226,11 @@ struct CADAngleCaseRunner {
                     evidence,
                     candidateResults: steps,
                     roleBindings: bindings,
-                    telemetry: failureTelemetry(record, view: finalView, oracleStart: oracleStart),
+                    telemetry: failureTelemetry(
+                        record,
+                        view: finalView,
+                        oracleStart: oracleStart
+                    ),
                     diagnostics: ["\(caseID.rawValue) angle oracle failed: \(message(error))"]
                 ),
                 totalStart: totalStart
@@ -313,10 +243,13 @@ struct CADAngleCaseRunner {
         evidence: CADAngleRouteEvidence,
         outcome: CADCaseOutcome
     ) -> CADAngleCaseResult {
-        guard let batch = batchResult(from: record.response), batch.results.count == 2 else {
+        guard let semanticEvidence = semanticEvidence(from: record.response) else {
             return result(.infrastructureFailure, record, evidence)
         }
-        let (steps, bindings) = publishedEvidence(from: batch.results)
+        let (steps, bindings) = publishedEvidence(from: semanticEvidence)
+        guard steps.count == 2 else {
+            return result(.infrastructureFailure, record, evidence)
+        }
         return result(
             outcome,
             record,
@@ -326,22 +259,23 @@ struct CADAngleCaseRunner {
         )
     }
 
-    private func batchResult(from response: AgentResponse?) -> AgentBatchResult? {
-        guard case .batch(let result) = response else { return nil }
-        return result
+    private func semanticEvidence(from response: AgentResponse?) -> CADSemanticExecutionEvidence? {
+        guard let receipt = CADSemanticExecutionEvidence.committedReceipt(from: response) else {
+            return nil
+        }
+        return CADSemanticExecutionEvidence(receipt: receipt)
     }
 
     private func publishedEvidence(
-        from results: [AutomationResult]
+        from semanticEvidence: CADSemanticExecutionEvidence
     ) -> ([CADCandidateStepResult], CADOutputRoleBindings) {
-        let steps = results.enumerated().map { index, result in
-            CADCandidateStepResult(
-                stepIndex: index,
-                operation: index == 0 ? "createLineSketch.first-line" : "createLineSketch.second-line",
-                status: result.didMutate ? .published : .unchanged,
-                primaryFeatureID: result.primaryFeatureID?.description,
-                createdFeatureIDs: result.createdFeatureIDs.map(\.description),
-                diagnostics: result.diagnostics.map(\.message)
+        let nodes = semanticEvidence.nodeNamesInOrder()
+        let steps = nodes.enumerated().map { index, node in
+            semanticEvidence.stepResult(
+                node: node,
+                operation: RupaCADSemanticOperationID.sketchLine.rawValue,
+                index: index,
+                primaryOutputs: ["curve"]
             )
         }
         return (
@@ -396,7 +330,7 @@ struct CADAngleCaseRunner {
         view: ProjectViewSnapshot,
         oracleStart: UInt64
     ) -> CADAngleTelemetry {
-        return telemetry(from: record).replacing(
+        telemetry(from: record).replacing(
             oracleWallNanoseconds: elapsed(since: oracleStart),
             readCount: 1,
             featureCount: view.document.document.cadDocument.designGraph.nodes.count,

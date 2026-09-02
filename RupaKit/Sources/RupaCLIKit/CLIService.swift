@@ -14,17 +14,6 @@ public struct CLIReadEnvelope: Sendable {
         self.state = state
     }
 }
-
-public struct CLIAutomationMutationExecution: Sendable {
-    public let result: AutomationResult
-    public let dirty: Bool
-    public let saved: Bool
-
-    public var response: CLIResponse {
-        CLIResponse(result: result, dirty: dirty, saved: saved)
-    }
-}
-
 public struct CLIService {
     public init() {}
 
@@ -132,63 +121,15 @@ public struct CLIService {
         return scale
     }
 
-    public func applyAutomationCommand(
+    public func executeTypedMutationRequest(
         target: CLIDocumentTarget,
-        command: AutomationCommand,
-        expectedGeneration: DocumentGeneration? = nil,
-        expectedWorkspaceRevision: WorkspaceRevision? = nil
-    ) async throws -> CLIResponse {
-        try await executeAutomationMutationCommand(
-            command,
-            target: target,
-            expectedGeneration: expectedGeneration,
-            expectedWorkspaceRevision: expectedWorkspaceRevision
-        ).response
-    }
-
-    public func executeAutomationMutationCommand(
-        _ command: AutomationCommand,
-        target: CLIDocumentTarget,
-        expectedGeneration: DocumentGeneration?,
-        expectedWorkspaceRevision: WorkspaceRevision? = nil
-    ) async throws -> CLIAutomationMutationExecution {
-        return try await CLIProjectAccessRunner.withSession(target: target) { session in
-            let preconditions = try await commandPreconditions(
-                command: command,
-                session: session,
-                expectedGeneration: expectedGeneration,
-                expectedWorkspaceRevision: expectedWorkspaceRevision
-            )
-            let response = try await session.send(
-                .execute(
-                    sessionID: session.sessionID,
-                    command: command,
-                    expectedGeneration: preconditions.generation,
-                    expectedWorkspaceRevision: preconditions.workspaceRevision
-                )
-            )
-            let result = try Self.commandResult(from: response)
-            return CLIAutomationMutationExecution(
-                result: result,
-                dirty: result.sourceDirty,
-                saved: false
-            )
-        }
-    }
-
-    public func executeCommandMutationRequest(
-        target: CLIDocumentTarget,
-        expectedGeneration: DocumentGeneration?,
         request: @escaping (UUID) -> AgentRequest
     ) async throws -> CLIResponse {
-        return try await CLIProjectAccessRunner.withSession(target: target) { session in
-            let response = try await session.send(request(session.sessionID))
-            let result = try Self.commandResult(from: response)
-            return CLIResponse(
-                result: result,
-                dirty: result.sourceDirty,
-                saved: false
+        try await CLIProjectAccessRunner.withSession(target: target) { session in
+            let result = try Self.typedMutationResult(
+                from: try await session.send(request(session.sessionID))
             )
+            return CLIResponse(result: result, dirty: result.sourceDirty, saved: false)
         }
     }
 
@@ -205,27 +146,6 @@ public struct CLIService {
                 result: result,
                 dirty: result.didMutate,
                 saved: false
-            )
-        }
-    }
-
-    public func runBatch(
-        target: CLIDocumentTarget,
-        batch: AutomationBatch
-    ) async throws -> CLIBatchResponse {
-        return try await CLIProjectAccessRunner.withSession(target: target) { session in
-            let effectiveBatch = try await batchWithPreconditions(batch, session: session)
-            let response = try await session.send(
-                .executeBatch(sessionID: session.sessionID, batch: effectiveBatch)
-            )
-            let result = try Self.batchResult(from: response)
-            return CLIBatchResponse(
-                results: result.results,
-                generation: result.generation,
-                workspaceRevision: result.workspaceRevision,
-                dirty: result.dirty,
-                saved: false,
-                metrics: result.metrics
             )
         }
     }
@@ -289,59 +209,43 @@ public struct CLIService {
         expectedGeneration: DocumentGeneration?
     ) async throws -> AutomationResult {
         let response = try await session.send(
-            .execute(
+            .describeDocument(
                 sessionID: session.sessionID,
-                command: .describeDocument,
                 expectedGeneration: expectedGeneration
             )
         )
-        return try Self.commandResult(from: response)
+        return try Self.documentDescriptionResult(from: response)
     }
 
-    private func commandPreconditions(
-        command: AutomationCommand,
-        session: any ProjectAccessSession,
-        expectedGeneration: DocumentGeneration?,
-        expectedWorkspaceRevision: WorkspaceRevision?
-    ) async throws -> (generation: DocumentGeneration, workspaceRevision: WorkspaceRevision?) {
-        let requiresWorkspaceRevision = command.effect == .workspaceMutation
-        if let expectedGeneration,
-           !requiresWorkspaceRevision || expectedWorkspaceRevision != nil {
-            return (expectedGeneration, expectedWorkspaceRevision)
+    private static func documentDescriptionResult(from response: AgentResponse) throws -> AutomationResult {
+        switch response {
+        case .documentDescription(let result):
+            result
+        case .failure(let error):
+            throw error
+        case .committedMutation(let outcome):
+            throw CLICommittedMutationError(outcome: outcome)
+        default:
+            throw unexpectedResponse("Document description returned an unexpected response.")
         }
-        let state = try await documentState(
-            session: session,
-            expectedGeneration: expectedGeneration
-        )
-        return (
-            expectedGeneration ?? state.generation,
-            requiresWorkspaceRevision
-                ? expectedWorkspaceRevision ?? state.workspaceRevision
-                : expectedWorkspaceRevision
-        )
     }
 
-    private func batchWithPreconditions(
-        _ batch: AutomationBatch,
-        session: any ProjectAccessSession
-    ) async throws -> AutomationBatch {
-        let effect = try batch.validatedEffect()
-        let requiresWorkspaceRevision = effect == .workspaceMutation
-        if batch.expectedGeneration != nil,
-           !requiresWorkspaceRevision || batch.expectedWorkspaceRevision != nil {
-            return batch
+    private static func typedMutationResult(from response: AgentResponse) throws -> AutomationResult {
+        switch response {
+        case .parameterExpression(let result),
+             .objectDimensionExpression(let result),
+             .sketchEntityDimensionExpression(let result),
+             .selectionDimensionTargetExpression(let result),
+             .surfaceFrameDisplay(let result),
+             .polySplineSurfaceVertex(let result):
+            result
+        case .failure(let error):
+            throw error
+        case .committedMutation(let outcome):
+            throw CLICommittedMutationError(outcome: outcome)
+        default:
+            throw unexpectedResponse("Typed mutation request returned an unexpected response.")
         }
-        let state = try await documentState(
-            session: session,
-            expectedGeneration: batch.expectedGeneration
-        )
-        return AutomationBatch(
-            commands: batch.commands,
-            expectedGeneration: batch.expectedGeneration ?? state.generation,
-            expectedWorkspaceRevision: requiresWorkspaceRevision
-                ? batch.expectedWorkspaceRevision ?? state.workspaceRevision
-                : batch.expectedWorkspaceRevision
-        )
     }
 
     private static func throwIfFailure(_ response: AgentResponse) throws {
@@ -352,32 +256,6 @@ public struct CLIService {
             throw CLICommittedMutationError(outcome: outcome)
         default:
             return
-        }
-    }
-
-    private static func commandResult(from response: AgentResponse) throws -> AutomationResult {
-        switch response {
-        case .command(let result):
-            result
-        case .failure(let error):
-            throw error
-        case .committedMutation(let outcome):
-            throw CLICommittedMutationError(outcome: outcome)
-        default:
-            throw unexpectedResponse("Command request returned an unexpected response.")
-        }
-    }
-
-    private static func batchResult(from response: AgentResponse) throws -> AgentBatchResult {
-        switch response {
-        case .batch(let result):
-            result
-        case .failure(let error):
-            throw error
-        case .committedMutation(let outcome):
-            throw CLICommittedMutationError(outcome: outcome)
-        default:
-            throw unexpectedResponse("Batch request returned an unexpected response.")
         }
     }
 

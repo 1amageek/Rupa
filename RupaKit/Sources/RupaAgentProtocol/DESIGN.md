@@ -12,7 +12,9 @@ runtime, project access, transport, and CLI modules. Children: none.
 The module owns method names, envelopes, typed payloads, capability
 descriptors, malformed-message rejection, and the transport-neutral handler
 result that distinguishes ordinary responses from single-use planned semantic
-responses. It does not resolve discovery, parse HTTP, authenticate credentials,
+responses. Dedicated request/response cases carry retained inspection and
+parameter operations; the protocol has no universal raw command or batch
+transport. It does not resolve discovery, parse HTTP, authenticate credentials,
 resolve sessions, read a workspace, mutate CAD/Mesh, save packages, or render
 previews.
 
@@ -44,6 +46,7 @@ flowchart LR
     Runtime --> Project["ProjectWorkspace → ProjectController"]
     Runtime --> Discovery["typed semantic descriptors"]
     Discovery --> Caller
+    Legacy["raw command.apply / command.applyBatch"] -.->|typed command.invalid rejection| Response
 ```
 
 ## Contracts and Invariants
@@ -108,6 +111,12 @@ flowchart LR
     registered operation descriptor. Its typed schema and invocation forms are
     present only for registry-backed operations; an Agent-side string schema or
     copied CAD operation list is invalid.
+13. The public Agent transport contains no `AgentRequest.execute` or
+    `executeBatch`, no `AgentResponse.command` or `batch`, and no
+    `AgentBatchResult`. Dedicated method-specific requests and responses are
+    one-to-one with their retained routes. A legacy `command.apply` or
+    `command.applyBatch` envelope is rejected by the protocol with typed
+    `EditorError.commandInvalid` before it can reach Runtime.
 
 ## Runtime Flows
 
@@ -132,11 +141,11 @@ controller, package, credential, connection, or persistent source ID.
 
 ## Failure, Concurrency, and Constraints
 
-Malformed JSON, unsupported discriminator, encoded-payload byte excess, invalid
-typed-value or coordinate encoding shape, missing fields, and response-plan
-errors before staging are explicit typed failures. Semantic value validity and
-coordinate freshness are not codec decisions. The codec never converts an
-error into an empty success value.
+Malformed JSON, unsupported discriminator, legacy raw command/batch method,
+encoded-payload byte excess, invalid typed-value or coordinate encoding shape,
+missing fields, and response-plan errors before staging are explicit typed
+failures. Semantic value validity and coordinate freshness are not codec
+decisions. The codec never converts an error into an empty success value.
 
 ## Verification and Change Impact
 
@@ -144,9 +153,10 @@ Protocol tests prove deterministic envelope coding, explicit semantic schema
 version and requested-output round trips for both forms, all supported server
 semantic responses, malformed and encoded-byte-boundary rejection,
 coordinate-shape preservation, committed/no-retry receipts, rejection of any
-server `outcomeUnknown` discriminator, and absence of transport discovery
-fields. HTTP frame/body and client-local response-loss classification remain
-Transport/ProjectAccess-owned. Response-plan tests prove exact boundary and
-boundary-plus-one behavior before staging, the fixed committed alternative is
-always below the ceiling, and each selected plan is encoded once without a
-postpublication fallback attempt.
+server `outcomeUnknown` discriminator, rejection of legacy raw command/batch
+methods before Runtime, dedicated method-specific response round trips, and
+absence of transport discovery fields. HTTP frame/body and client-local
+response-loss classification remain Transport/ProjectAccess-owned.
+Response-plan tests prove exact boundary and boundary-plus-one behavior before
+staging, the fixed committed alternative is always below the ceiling, and each
+selected plan is encoded once without a postpublication fallback attempt.

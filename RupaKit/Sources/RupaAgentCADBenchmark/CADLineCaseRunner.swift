@@ -1,9 +1,8 @@
 import Foundation
 import RupaAgentProtocol
-import RupaAutomation
+import RupaCADDomain
 import RupaCore
 import RupaKit
-import SwiftCAD
 
 struct CADLineRecorder: Equatable, Sendable {
     fileprivate init() {}
@@ -48,7 +47,7 @@ struct CADLineCaseRunner {
     func run(candidate: any CADCandidateProtocol) async throws -> CADLineCaseResult {
         let totalStart = now()
         let entry = try catalogEntry()
-        let record = try await makeHarness(challenge: entry.challenge)
+        let record = try await makeHarness(entry: entry)
             .runReference(candidate: candidate)
         return await project(record, entry: entry, totalStart: totalStart)
     }
@@ -56,7 +55,7 @@ struct CADLineCaseRunner {
     func run(action: CADCandidateAction) async throws -> CADLineCaseResult {
         let totalStart = now()
         let entry = try catalogEntry()
-        let record = try await makeHarness(challenge: entry.challenge)
+        let record = try await makeHarness(entry: entry)
             .run(action: action)
         return await project(record, entry: entry, totalStart: totalStart)
     }
@@ -65,77 +64,21 @@ struct CADLineCaseRunner {
         let totalStart = now()
         let entry = try catalogEntry()
         let action = try CADLineReferenceCandidate.action(for: entry.challenge)
-        let record = try await makeHarness(challenge: entry.challenge)
+        let record = try await makeHarness(entry: entry)
             .runStale(action: action)
         return await project(record, entry: entry, totalStart: totalStart)
     }
 
-    private func makeHarness(challenge: CADChallenge) -> CADCaseLifecycleHarness {
-        let routing = CADCaseActionRouting(
-            operationName: Self.operationName,
-            commandBuilder: { [self] action, challenge, modelingTolerance in
-                try self.makeCommand(
-                    from: action,
-                    challenge: challenge,
-                    modelingTolerance: modelingTolerance
-                )
-            }
-        )
+    private func makeHarness(entry: CADCatalogEntry) -> CADCaseLifecycleHarness {
         return CADCaseLifecycleHarness(
             caseID: caseID,
-            challenge: challenge,
-            routing: routing,
+            challenge: entry.challenge,
+            programPlanner: { action in
+                try DefaultCADSemanticProgramPlanner().plan(for: entry, action: action)
+            },
             timeoutWallNanoseconds: timeoutWallNanoseconds,
             preRouteDelayNanoseconds: preRouteDelayNanoseconds,
             postRegistrationDelayNanoseconds: postRegistrationDelayNanoseconds
-        )
-    }
-
-    private func makeCommand(
-        from action: CADCandidateAction,
-        challenge: CADChallenge,
-        modelingTolerance: ModelingTolerance
-    ) throws -> AutomationCommand {
-        let projection = try CADLineChallengeProjection.decode(challenge)
-        guard case .automation(.sketch(.line(let name, let plane, let start, let end))) = action,
-              !name.isEmpty,
-              plane == projection.orientation else {
-            throw CADBenchmarkError.invalidInput(
-                caseID: caseID.rawValue,
-                reason: "The activated line action must use the public challenge orientation."
-            )
-        }
-        let sourcePlane = try CADLineGeometryMapping.sourcePlane(
-            orientation: projection.orientation,
-            anchor: projection.anchor,
-            modelingTolerance: modelingTolerance,
-            caseID: caseID
-        )
-        let startProjection = try CADLineGeometryMapping.projection(
-            of: start,
-            sourcePlane: sourcePlane,
-            modelingTolerance: modelingTolerance,
-            caseID: caseID,
-            field: "action.start"
-        )
-        let endProjection = try CADLineGeometryMapping.projection(
-            of: end,
-            sourcePlane: sourcePlane,
-            modelingTolerance: modelingTolerance,
-            caseID: caseID,
-            field: "action.end"
-        )
-        return .createLineSketch(
-            name: name,
-            plane: SketchPlaneReference(sketchPlane: sourcePlane),
-            start: SketchPoint(
-                x: .constant(.length(startProjection.point.x, unit: .meter)),
-                y: .constant(.length(startProjection.point.y, unit: .meter))
-            ),
-            end: SketchPoint(
-                x: .constant(.length(endProjection.point.x, unit: .meter)),
-                y: .constant(.length(endProjection.point.y, unit: .meter))
-            )
         )
     }
 
@@ -217,7 +160,7 @@ struct CADLineCaseRunner {
         totalStart: UInt64
     ) async -> CADLineCaseResult {
         guard let finalView = record.finalView,
-              let automationResult = commandResult(from: record.response) else {
+              let semanticReceipt = CADSemanticExecutionEvidence.committedReceipt(from: record.response) else {
             return finish(
                 result(
                     outcome: .infrastructureFailure,
@@ -227,7 +170,16 @@ struct CADLineCaseRunner {
                 totalStart: totalStart
             )
         }
-        let (stepResult, bindings) = publishedMutationEvidence(from: automationResult)
+        let semanticEvidence = CADSemanticExecutionEvidence(receipt: semanticReceipt)
+        let stepResult = semanticEvidence.stepResult(
+            node: "line",
+            operation: RupaCADSemanticOperationID.sketchLine.rawValue,
+            index: 0,
+            primaryOutputs: ["curve"]
+        )
+        let bindings = CADOutputRoleBindings(bindings: [
+            CADOutputRoleBinding(role: "segment", stepIndex: 0, selector: .primary),
+        ])
         let oracleStart = now()
         do {
             guard case .line(let expected) = entry.expected else {
@@ -362,14 +314,23 @@ struct CADLineCaseRunner {
         routeEvidence: CADLineRouteEvidence,
         outcome: CADCaseOutcome
     ) -> CADLineCaseResult {
-        guard let automationResult = commandResult(from: record.response) else {
+        guard let semanticReceipt = CADSemanticExecutionEvidence.committedReceipt(from: record.response) else {
             return result(
                 outcome: .infrastructureFailure,
                 record: record,
                 routeEvidence: routeEvidence
             )
         }
-        let (stepResult, bindings) = publishedMutationEvidence(from: automationResult)
+        let semanticEvidence = CADSemanticExecutionEvidence(receipt: semanticReceipt)
+        let stepResult = semanticEvidence.stepResult(
+            node: "line",
+            operation: RupaCADSemanticOperationID.sketchLine.rawValue,
+            index: 0,
+            primaryOutputs: ["curve"]
+        )
+        let bindings = CADOutputRoleBindings(bindings: [
+            CADOutputRoleBinding(role: "segment", stepIndex: 0, selector: .primary),
+        ])
         return result(
             outcome: outcome,
             record: record,
@@ -380,29 +341,6 @@ struct CADLineCaseRunner {
         )
     }
 
-    private func commandResult(from response: AgentResponse?) -> AutomationResult? {
-        guard case .command(let automationResult) = response else {
-            return nil
-        }
-        return automationResult
-    }
-
-    private func publishedMutationEvidence(
-        from automationResult: AutomationResult
-    ) -> (CADCandidateStepResult, CADOutputRoleBindings) {
-        let stepResult = CADCandidateStepResult(
-            stepIndex: 0,
-            operation: Self.operationName,
-            status: automationResult.didMutate ? .published : .unchanged,
-            primaryFeatureID: automationResult.primaryFeatureID?.description,
-            createdFeatureIDs: automationResult.createdFeatureIDs.map(\.description),
-            diagnostics: automationResult.diagnostics.map(\.message)
-        )
-        let bindings = CADOutputRoleBindings(bindings: [
-            CADOutputRoleBinding(role: "segment", stepIndex: 0, selector: .primary),
-        ])
-        return (stepResult, bindings)
-    }
 
     private func result(
         outcome: CADCaseOutcome,

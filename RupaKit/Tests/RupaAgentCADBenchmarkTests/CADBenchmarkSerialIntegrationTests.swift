@@ -12,15 +12,12 @@ struct CADBenchmarkSerialIntegrationTests {
         try attempt.validate()
         #expect(attempt.executions.count == 100)
         #expect(attempt.publicResults.map(\.id) == attempt.manifest.orderedCaseIDs)
-        #expect(attempt.publicResults.filter { $0.outcome == .realized }.count == 95)
-        #expect(attempt.publicResults.filter { $0.outcome == .expectedUnsupported }.count == 5)
+        #expect(attempt.publicResults.allSatisfy { $0.outcome == .realized })
         #expect(attempt.publicResults.allSatisfy { $0.durationMilliseconds != nil })
         #expect(attempt.regressionRecords.allSatisfy { $0.capabilityDecisionCorrect })
         #expect(attempt.regressionRecords.allSatisfy { $0.route.cleanupCompleted })
         #expect(attempt.regressionRecords.allSatisfy { $0.route.remainingRegistrationCount == 0 })
-        #expect(attempt.regressionRecords.filter {
-            $0.oracleDisposition == .expectedUnsupported
-        }.map(\.caseID) == ["SPH-001", "SPH-002", "SPH-003", "SPH-004", "SPH-005"])
+        #expect(attempt.regressionRecords.allSatisfy { $0.oracleDisposition == .accepted })
 
         for (caseID, record) in zip(
             attempt.manifest.orderedCaseIDs,

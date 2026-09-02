@@ -123,6 +123,38 @@ func semanticDryRunReturnsNoPersistentOrEvaluatedIdentity() async throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
+func semanticDryRunDoesNotContaminateTheFollowingCommitCADEvaluation() async throws {
+    let compilation = try semanticBoxCompilation()
+    let controller = try makeSemanticProjectController(
+        document: .empty(named: "Semantic Dry Run Then Commit")
+    )
+    let workspace = await ProjectWorkspace(project: controller)
+    let base = await controller.currentAuthorityCoordinate()
+
+    _ = try await workspace.executeSemanticProgram(
+        ProjectSemanticProgramRequest(
+            compilation: compilation,
+            authority: base,
+            dryRun: true,
+            resultBudget: semanticResultBudget()
+        )
+    )
+    let result = try await workspace.executeSemanticProgram(
+        ProjectSemanticProgramRequest(
+            compilation: compilation,
+            authority: base,
+            dryRun: false,
+            resultBudget: semanticResultBudget()
+        )
+    )
+    let commit = try requireSemanticCommit(result)
+
+    #expect(commit.authority.transactionRevision == DocumentTransactionRevision(1))
+    #expect(commit.authority.publicationSequence == 1)
+    #expect(await controller.currentDocument().cadDocument.designGraph.nodes.isEmpty == false)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func semanticResultBudgetRejectsCompilerChargeBeforeProjectStaging() async throws {
     let compilation = try semanticBoxCompiler().compile(
         SemanticDirectRequest(

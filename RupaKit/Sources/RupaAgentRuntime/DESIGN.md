@@ -10,10 +10,13 @@ source-program path. It is a child of the
 [RupaAgentProtocol](../RupaAgentProtocol/DESIGN.md), and uses the
 [RupaKit use-case contract](../RupaKit/DESIGN.md). It has no child design.
 
-CADAPI-D is a target contract, not a statement about the current runtime. The
-current capability catalog/executor still exposes raw `AutomationCommand` and
-`appendFeatureGraph`; removing that legacy path is a required later
-implementation gate.
+CADAPI-D is a target contract for the semantic runtime. The Agent boundary has
+no universal raw `AutomationCommand` or `AutomationBatch` transport; retained
+inspection and parameter operations are dispatched through dedicated typed
+requests and method-specific responses. Their internal Automation lowering is
+an exhaustive eight-case adapter shared with capability registration and cannot
+represent feature-graph construction, an arbitrary command, or a batch.
+`RupaAutomation` remains an internal lowering substrate only.
 
 ## Responsibilities and Boundaries
 
@@ -58,6 +61,8 @@ files, own HTTP I/O or endpoint state, or define CAD commands.
 flowchart LR
     Direct["capability.invoke"] --> Request["Decoded Agent request"]
     Program["program.execute"] --> Request
+    Dedicated["Dedicated typed requests"] --> Request
+    Legacy["command.apply / command.applyBatch"] -.->|command.invalid before handler| Request
     CompilerRegistry["compiler registry"] --> Discovery["capability projection"]
     Request --> Lease["Registry operation lease"]
     Lease --> View["Current complete ProjectViewSnapshot"]
@@ -162,6 +167,14 @@ flowchart LR
     injected compiler and deterministically projects every registered semantic
     descriptor. Runtime accepts no second, optional, empty, or copied semantic
     registry, so compilation/discovery divergence is not representable.
+19. The Agent runtime never receives `AgentRequest.execute` or
+    `executeBatch`, and never emits generic `AgentResponse.command` or
+    `batch`. Retained ergonomic routes use one of the eight registered,
+    exhaustively typed internal adapters and a method-specific response case;
+    they cannot accept an arbitrary Automation command. Legacy raw
+    command/batch envelopes are
+    rejected at Protocol decode with `command.invalid`; no Runtime handler or
+    workspace operation can observe them.
 
 ## Runtime Flows
 
@@ -231,8 +244,12 @@ occurrence lists, and one complex program creates at most one source
 transaction/evaluation/publication. They must reject mixed effects, cycles,
 invalid bindings, stale coordinates, cancellation, and every resource ceiling
 without publication, prove unrequested identities are not projected, prove
-Runtime has no outcome-unknown response case, and prove raw graph/Automation
-payloads are absent or rejected. Response-planning tests must also prove
+ Runtime has no outcome-unknown response case, and prove raw graph/Automation
+ payloads are absent or rejected. Legacy `command.apply` and
+ `command.applyBatch` fixtures must fail before handler invocation, while
+ dedicated inspection and parameter requests round-trip with their declared
+ read-only, source-mutation, or workspace-mutation effect.
+ Response-planning tests must also prove
 over-limit result shape fails before workspace staging, exact-limit success
 encodes once, and an injected postpublication projection failure uses the
 preplanned small committed envelope with exact coordinates and

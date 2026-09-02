@@ -368,17 +368,17 @@ struct CADActivatedCaseExecution: Equatable, Sendable {
                 action: telemetry.actionCount,
                 command: telemetry.commandCount,
                 read: telemetry.readCount,
-                entity: telemetry.entityCount,
+                entity: 0,
                 feature: telemetry.featureCount,
                 sceneNode: nil,
                 body: telemetry.bodyCount,
-                face: nil,
-                edge: nil,
-                vertex: nil,
+                face: telemetry.faceCount,
+                edge: telemetry.edgeCount,
+                vertex: telemetry.vertexCount,
                 evaluationPass: nil,
                 historyEntry: nil,
-                capabilityRequest: telemetry.capabilityRequestCount,
-                sourceMutation: telemetry.sourceMutationCount
+                capabilityRequest: nil,
+                sourceMutation: nil
             )
         }
     }

@@ -2675,7 +2675,7 @@ struct CADJSONAdapterTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func sphere001UsesUnavailableContextAndTypedUnsupportedResponseRoute() async throws {
+    func sphere001UsesSemanticActionResponseRoute() async throws {
         let adapter = CADJSONAdapter()
         let request = try adapter.makeRequest(for: "SPH-001")
         #expect(request.context.challenge.category == .sphere)
@@ -2686,16 +2686,16 @@ struct CADJSONAdapterTests {
         #expect(request.context.capabilities.statuses.count == 1)
         #expect(status.id == request.context.challenge.requiredCapability.id)
         #expect(status.version == request.context.challenge.requiredCapability.version)
-        #expect(status.available == false)
-        #expect(status.reasonCode == "not-exposed")
+        #expect(status.available)
+        #expect(status.reasonCode == nil)
 
         let exactResponse = try CADJSONCandidateResponseEnvelope(
             caseID: request.caseID,
             context: request.context,
-            decision: .unsupported(CADUnsupportedDeclaration(
-                capabilityID: request.context.challenge.requiredCapability.id,
-                capabilityVersion: request.context.challenge.requiredCapability.version,
-                reason: .analyticSphereUnavailable
+            decision: .action(sphereAction(
+                name: "SPH-001",
+                center: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
+                radius: CADLength(value: 5, unit: .millimeter)
             ))
         )
         let exactData = try CADJSONBoundedCodec.encode(exactResponse)
@@ -2703,8 +2703,8 @@ struct CADJSONAdapterTests {
         let responseText = String(decoding: exactData, as: UTF8.self)
         #expect(exactData.count < 16_384)
         #expect(responseText.contains("\"schema\":\"rupa.agent-cad-benchmark.candidate-response.v8\""))
-        #expect(responseText.contains("\"kind\":\"unsupported\""))
-        #expect(responseText.contains("\"reason\":\"analyticSphereUnavailable\""))
+        #expect(responseText.contains("\"kind\":\"automation\""))
+        #expect(responseText.contains("\"kind\":\"sphere\""))
         for forbidden in ["expectation", "oracle", "sourceTopology", "telemetry", "workspace", "FeatureID"] {
             #expect(requestText.contains(forbidden) == false)
             #expect(responseText.contains(forbidden) == false)
@@ -2716,7 +2716,7 @@ struct CADJSONAdapterTests {
 
         let exactEvaluation = try await adapter.evaluate(responseData: exactData)
         #expect(exactEvaluation.caseID == "SPH-001")
-        #expect(exactEvaluation.result?.outcome == .expectedUnsupported)
+        #expect(exactEvaluation.result?.outcome == .realized)
         #expect(exactEvaluation.error == nil)
 
         let substituteResponse = try CADJSONCandidateResponseEnvelope(
@@ -2751,7 +2751,7 @@ struct CADJSONAdapterTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func sphere002UsesTranslatedUnavailableContextAndTypedUnsupportedResponseRoute() async throws {
+    func sphere002UsesTranslatedSemanticActionResponseRoute() async throws {
         let adapter = CADJSONAdapter()
         let request = try adapter.makeRequest(for: "SPH-002")
         #expect(request.context.challenge.category == .sphere)
@@ -2762,16 +2762,16 @@ struct CADJSONAdapterTests {
         #expect(request.context.capabilities.statuses.count == 1)
         #expect(status.id == request.context.challenge.requiredCapability.id)
         #expect(status.version == request.context.challenge.requiredCapability.version)
-        #expect(status.available == false)
-        #expect(status.reasonCode == "not-exposed")
+        #expect(status.available)
+        #expect(status.reasonCode == nil)
 
         let exactResponse = try CADJSONCandidateResponseEnvelope(
             caseID: request.caseID,
             context: request.context,
-            decision: .unsupported(CADUnsupportedDeclaration(
-                capabilityID: request.context.challenge.requiredCapability.id,
-                capabilityVersion: request.context.challenge.requiredCapability.version,
-                reason: .analyticSphereUnavailable
+            decision: .action(sphereAction(
+                name: "SPH-002",
+                center: CADPoint3D(x: 50, y: -25, z: 10, unit: .millimeter),
+                radius: CADLength(value: 25, unit: .millimeter)
             ))
         )
         let exactData = try CADJSONBoundedCodec.encode(exactResponse)
@@ -2779,8 +2779,8 @@ struct CADJSONAdapterTests {
         let responseText = String(decoding: exactData, as: UTF8.self)
         #expect(exactData.count < 16_384)
         #expect(responseText.contains("\"schema\":\"rupa.agent-cad-benchmark.candidate-response.v8\""))
-        #expect(responseText.contains("\"kind\":\"unsupported\""))
-        #expect(responseText.contains("\"reason\":\"analyticSphereUnavailable\""))
+        #expect(responseText.contains("\"kind\":\"automation\""))
+        #expect(responseText.contains("\"kind\":\"sphere\""))
         for forbidden in ["expectation", "oracle", "sourceTopology", "telemetry", "workspace", "FeatureID"] {
             #expect(requestText.contains(forbidden) == false)
             #expect(responseText.contains(forbidden) == false)
@@ -2792,7 +2792,7 @@ struct CADJSONAdapterTests {
 
         let exactEvaluation = try await adapter.evaluate(responseData: exactData)
         #expect(exactEvaluation.caseID == "SPH-002")
-        #expect(exactEvaluation.result?.outcome == .expectedUnsupported)
+        #expect(exactEvaluation.result?.outcome == .realized)
         #expect(exactEvaluation.error == nil)
 
         let substituteResponse = try CADJSONCandidateResponseEnvelope(
@@ -2827,7 +2827,7 @@ struct CADJSONAdapterTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func sphere003UsesMeterScaleUnavailableContextAndTypedUnsupportedResponseRoute() async throws {
+    func sphere003UsesMeterScaleSemanticActionResponseRoute() async throws {
         let adapter = CADJSONAdapter()
         let request = try adapter.makeRequest(for: "SPH-003")
         #expect(request.context.challenge.category == .sphere)
@@ -2838,16 +2838,16 @@ struct CADJSONAdapterTests {
         #expect(request.context.capabilities.statuses.count == 1)
         #expect(status.id == request.context.challenge.requiredCapability.id)
         #expect(status.version == request.context.challenge.requiredCapability.version)
-        #expect(status.available == false)
-        #expect(status.reasonCode == "not-exposed")
+        #expect(status.available)
+        #expect(status.reasonCode == nil)
 
         let exactResponse = try CADJSONCandidateResponseEnvelope(
             caseID: request.caseID,
             context: request.context,
-            decision: .unsupported(CADUnsupportedDeclaration(
-                capabilityID: request.context.challenge.requiredCapability.id,
-                capabilityVersion: request.context.challenge.requiredCapability.version,
-                reason: .analyticSphereUnavailable
+            decision: .action(sphereAction(
+                name: "SPH-003",
+                center: CADPoint3D(x: 0, y: 0, z: 0.1, unit: .meter),
+                radius: CADLength(value: 0.1, unit: .meter)
             ))
         )
         let exactData = try CADJSONBoundedCodec.encode(exactResponse)
@@ -2855,8 +2855,8 @@ struct CADJSONAdapterTests {
         let responseText = String(decoding: exactData, as: UTF8.self)
         #expect(exactData.count < 16_384)
         #expect(responseText.contains("\"schema\":\"rupa.agent-cad-benchmark.candidate-response.v8\""))
-        #expect(responseText.contains("\"kind\":\"unsupported\""))
-        #expect(responseText.contains("\"reason\":\"analyticSphereUnavailable\""))
+        #expect(responseText.contains("\"kind\":\"automation\""))
+        #expect(responseText.contains("\"kind\":\"sphere\""))
         for forbidden in ["expectation", "oracle", "sourceTopology", "telemetry", "workspace", "FeatureID"] {
             #expect(requestText.contains(forbidden) == false)
             #expect(responseText.contains(forbidden) == false)
@@ -2868,7 +2868,7 @@ struct CADJSONAdapterTests {
 
         let exactEvaluation = try await adapter.evaluate(responseData: exactData)
         #expect(exactEvaluation.caseID == "SPH-003")
-        #expect(exactEvaluation.result?.outcome == .expectedUnsupported)
+        #expect(exactEvaluation.result?.outcome == .realized)
         #expect(exactEvaluation.error == nil)
 
         let substituteResponse = try CADJSONCandidateResponseEnvelope(
@@ -2903,7 +2903,7 @@ struct CADJSONAdapterTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func sphere004UsesImperialUnavailableContextAndTypedUnsupportedResponseRoute() async throws {
+    func sphere004UsesImperialSemanticActionResponseRoute() async throws {
         let adapter = CADJSONAdapter()
         let request = try adapter.makeRequest(for: "SPH-004")
         #expect(request.context.challenge.category == .sphere)
@@ -2914,16 +2914,16 @@ struct CADJSONAdapterTests {
         #expect(request.context.capabilities.statuses.count == 1)
         #expect(status.id == request.context.challenge.requiredCapability.id)
         #expect(status.version == request.context.challenge.requiredCapability.version)
-        #expect(status.available == false)
-        #expect(status.reasonCode == "not-exposed")
+        #expect(status.available)
+        #expect(status.reasonCode == nil)
 
         let exactResponse = try CADJSONCandidateResponseEnvelope(
             caseID: request.caseID,
             context: request.context,
-            decision: .unsupported(CADUnsupportedDeclaration(
-                capabilityID: request.context.challenge.requiredCapability.id,
-                capabilityVersion: request.context.challenge.requiredCapability.version,
-                reason: .analyticSphereUnavailable
+            decision: .action(sphereAction(
+                name: "SPH-004",
+                center: CADPoint3D(x: -2, y: 3, z: 1, unit: .inch),
+                radius: CADLength(value: 2, unit: .inch)
             ))
         )
         let exactData = try CADJSONBoundedCodec.encode(exactResponse)
@@ -2931,8 +2931,8 @@ struct CADJSONAdapterTests {
         let responseText = String(decoding: exactData, as: UTF8.self)
         #expect(exactData.count < 16_384)
         #expect(responseText.contains("\"schema\":\"rupa.agent-cad-benchmark.candidate-response.v8\""))
-        #expect(responseText.contains("\"kind\":\"unsupported\""))
-        #expect(responseText.contains("\"reason\":\"analyticSphereUnavailable\""))
+        #expect(responseText.contains("\"kind\":\"automation\""))
+        #expect(responseText.contains("\"kind\":\"sphere\""))
         for forbidden in ["expectation", "oracle", "sourceTopology", "telemetry", "workspace", "FeatureID"] {
             #expect(requestText.contains(forbidden) == false)
             #expect(responseText.contains(forbidden) == false)
@@ -2944,7 +2944,7 @@ struct CADJSONAdapterTests {
 
         let exactEvaluation = try await adapter.evaluate(responseData: exactData)
         #expect(exactEvaluation.caseID == "SPH-004")
-        #expect(exactEvaluation.result?.outcome == .expectedUnsupported)
+        #expect(exactEvaluation.result?.outcome == .realized)
         #expect(exactEvaluation.error == nil)
 
         let substituteResponse = try CADJSONCandidateResponseEnvelope(
@@ -2979,7 +2979,7 @@ struct CADJSONAdapterTests {
 
     @MainActor
     @Test(.timeLimit(.minutes(1)))
-    func sphere005UsesLargeTranslatedUnavailableContextAndTypedUnsupportedResponseRoute() async throws {
+    func sphere005UsesLargeTranslatedSemanticActionResponseRoute() async throws {
         let adapter = CADJSONAdapter()
         let request = try adapter.makeRequest(for: "SPH-005")
         #expect(request.context.challenge.category == .sphere)
@@ -2990,16 +2990,16 @@ struct CADJSONAdapterTests {
         #expect(request.context.capabilities.statuses.count == 1)
         #expect(status.id == request.context.challenge.requiredCapability.id)
         #expect(status.version == request.context.challenge.requiredCapability.version)
-        #expect(status.available == false)
-        #expect(status.reasonCode == "not-exposed")
+        #expect(status.available)
+        #expect(status.reasonCode == nil)
 
         let exactResponse = try CADJSONCandidateResponseEnvelope(
             caseID: request.caseID,
             context: request.context,
-            decision: .unsupported(CADUnsupportedDeclaration(
-                capabilityID: request.context.challenge.requiredCapability.id,
-                capabilityVersion: request.context.challenge.requiredCapability.version,
-                reason: .analyticSphereUnavailable
+            decision: .action(sphereAction(
+                name: "SPH-005",
+                center: CADPoint3D(x: -100, y: 100, z: -50, unit: .millimeter),
+                radius: CADLength(value: 100, unit: .millimeter)
             ))
         )
         let exactData = try CADJSONBoundedCodec.encode(exactResponse)
@@ -3007,8 +3007,8 @@ struct CADJSONAdapterTests {
         let responseText = String(decoding: exactData, as: UTF8.self)
         #expect(exactData.count < 16_384)
         #expect(responseText.contains("\"schema\":\"rupa.agent-cad-benchmark.candidate-response.v8\""))
-        #expect(responseText.contains("\"kind\":\"unsupported\""))
-        #expect(responseText.contains("\"reason\":\"analyticSphereUnavailable\""))
+        #expect(responseText.contains("\"kind\":\"automation\""))
+        #expect(responseText.contains("\"kind\":\"sphere\""))
         for forbidden in ["expectation", "oracle", "sourceTopology", "telemetry", "workspace", "FeatureID"] {
             #expect(requestText.contains(forbidden) == false)
             #expect(responseText.contains(forbidden) == false)
@@ -3020,7 +3020,7 @@ struct CADJSONAdapterTests {
 
         let exactEvaluation = try await adapter.evaluate(responseData: exactData)
         #expect(exactEvaluation.caseID == "SPH-005")
-        #expect(exactEvaluation.result?.outcome == .expectedUnsupported)
+        #expect(exactEvaluation.result?.outcome == .realized)
         #expect(exactEvaluation.error == nil)
 
         let substituteResponse = try CADJSONCandidateResponseEnvelope(
@@ -3197,16 +3197,8 @@ struct CADJSONAdapterTests {
                 action = compound006Action()
             } else if caseID.rawValue == "CMP-007" {
                 action = compound007Action()
-            } else if caseID.rawValue == "SPH-001" {
-                action = box001Action(name: "SPH-001.substitute")
-            } else if caseID.rawValue == "SPH-002" {
-                action = box001Action(name: "SPH-002.substitute")
-            } else if caseID.rawValue == "SPH-003" {
-                action = box001Action(name: "SPH-003.substitute")
-            } else if caseID.rawValue == "SPH-004" {
-                action = box001Action(name: "SPH-004.substitute")
-            } else if caseID.rawValue == "SPH-005" {
-                action = box001Action(name: "SPH-005.substitute")
+            } else if caseID.category == .sphere {
+                action = try sphereAction(for: request.context.challenge)
             } else if caseID.category == .constraint {
                 action = constraint001Action(name: caseID.rawValue)
             } else {
@@ -3778,35 +3770,35 @@ struct CADJSONAdapterTests {
         appendLengthPrefixed(Data(sphere001ID.rawValue.utf8), to: &currentAggregate)
         appendLengthPrefixed(bigEndianBytes(UInt64(sphere001Request.count)), to: &currentAggregate)
         appendLengthPrefixed(Data(SHA256.hash(data: sphere001Request)), to: &currentAggregate)
-        #expect(sha256Hex(currentAggregate) == "2fef808b9d545a3867364ca1bd724029e5fc7fd9065d34b9933991fb8b91b0c4")
+        #expect(sha256Hex(currentAggregate) == "25666d039e18d67402cfdc10acc3b10faf51c87770b190c429b33ea562d70f17")
 
         let sphere002ID: CADBenchmarkCaseID = "SPH-002"
         let sphere002Request = try adapter.encodeRequest(for: sphere002ID)
         appendLengthPrefixed(Data(sphere002ID.rawValue.utf8), to: &currentAggregate)
         appendLengthPrefixed(bigEndianBytes(UInt64(sphere002Request.count)), to: &currentAggregate)
         appendLengthPrefixed(Data(SHA256.hash(data: sphere002Request)), to: &currentAggregate)
-        #expect(sha256Hex(currentAggregate) == "c92d00ee7d48e3be11aa0d3880bb21f4998b8c037d35a838f0c1a1a691eea66c")
+        #expect(sha256Hex(currentAggregate) == "6f5f2f0ddc01d4700010a1a1c8755b76f6147b4539136559fa13e19c2714f24f")
 
         let sphere003ID: CADBenchmarkCaseID = "SPH-003"
         let sphere003Request = try adapter.encodeRequest(for: sphere003ID)
         appendLengthPrefixed(Data(sphere003ID.rawValue.utf8), to: &currentAggregate)
         appendLengthPrefixed(bigEndianBytes(UInt64(sphere003Request.count)), to: &currentAggregate)
         appendLengthPrefixed(Data(SHA256.hash(data: sphere003Request)), to: &currentAggregate)
-        #expect(sha256Hex(currentAggregate) == "4e7b748413486562399baecf01d4076bd3c90df281174c0bd7226bd0f9f1e552")
+        #expect(sha256Hex(currentAggregate) == "74e876a344075c8e32b1c7597755db7e02788eaef9926ee5a90ed1f1242f5e93")
 
         let sphere004ID: CADBenchmarkCaseID = "SPH-004"
         let sphere004Request = try adapter.encodeRequest(for: sphere004ID)
         appendLengthPrefixed(Data(sphere004ID.rawValue.utf8), to: &currentAggregate)
         appendLengthPrefixed(bigEndianBytes(UInt64(sphere004Request.count)), to: &currentAggregate)
         appendLengthPrefixed(Data(SHA256.hash(data: sphere004Request)), to: &currentAggregate)
-        #expect(sha256Hex(currentAggregate) == "c3002db14457157163c12c6db9e2e3794ba330476984ec1321c0212b45d02a78")
+        #expect(sha256Hex(currentAggregate) == "ad11eaf7d19c5329b735bd2d33f685a9213cba841d4ee42a20885c89db886517")
 
         let sphere005ID: CADBenchmarkCaseID = "SPH-005"
         let sphere005Request = try adapter.encodeRequest(for: sphere005ID)
         appendLengthPrefixed(Data(sphere005ID.rawValue.utf8), to: &currentAggregate)
         appendLengthPrefixed(bigEndianBytes(UInt64(sphere005Request.count)), to: &currentAggregate)
         appendLengthPrefixed(Data(SHA256.hash(data: sphere005Request)), to: &currentAggregate)
-        #expect(sha256Hex(currentAggregate) == "e7dac9bbeeec1b6f5198d9a89c4a8254eabba74df39389576fc2fdc4956b2767")
+        #expect(sha256Hex(currentAggregate) == "9d2021542fece0cce8ad881293ebc303ecef8e074ec2f77e8f273dda98617036")
     }
 
     @MainActor
@@ -4502,11 +4494,79 @@ private final class RecordingCADActivatedCaseExecutor: CADActivatedCaseExecuting
     }
 }
 
+private func transformSource(_ caseID: String) -> CADTransformSourceAction {
+    switch caseID {
+    case "TRN-001":
+        .sketch(.line(
+            name: "TRN-001.source",
+            plane: .xy,
+            start: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
+            end: CADPoint3D(x: 100, y: 0, z: 0, unit: .millimeter)
+        ))
+    case "TRN-002":
+        .sketch(.rectangle(
+            name: "TRN-002.source",
+            plane: .xy,
+            center: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
+            width: CADLength(value: 40, unit: .millimeter),
+            height: CADLength(value: 20, unit: .millimeter)
+        ))
+    case "TRN-003":
+        .sketch(.circle(
+            name: "TRN-003.source",
+            plane: .xy,
+            center: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
+            radius: CADLength(value: 10, unit: .millimeter)
+        ))
+    case "TRN-004":
+        .solid(.box(
+            name: "TRN-004.source",
+            origin: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
+            width: CADLength(value: 20, unit: .millimeter),
+            depth: CADLength(value: 30, unit: .millimeter),
+            height: CADLength(value: 40, unit: .millimeter)
+        ))
+    case "TRN-005":
+        .solid(.cylinder(
+            name: "TRN-005.source",
+            baseCenter: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
+            axis: CADDirection3D(x: 0, y: 0, z: 1),
+            radius: CADLength(value: 8, unit: .millimeter),
+            depth: CADLength(value: 40, unit: .millimeter)
+        ))
+    case "TRN-006":
+        .sketch(.line(
+            name: "TRN-006.source",
+            plane: .xy,
+            start: CADPoint3D(x: -30, y: -30, z: 0, unit: .millimeter),
+            end: CADPoint3D(x: 30, y: 30, z: 0, unit: .millimeter)
+        ))
+    case "TRN-007":
+        .sketch(.rectangle(
+            name: "TRN-007.source",
+            plane: .yz,
+            center: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
+            width: CADLength(value: 100, unit: .millimeter),
+            height: CADLength(value: 50, unit: .millimeter)
+        ))
+    case "TRN-008":
+        .sketch(.circle(
+            name: "TRN-008.source",
+            plane: .xy,
+            center: CADPoint3D(x: 25, y: -25, z: 0, unit: .millimeter),
+            radius: CADLength(value: 50, unit: .millimeter)
+        ))
+    default:
+        preconditionFailure("Unknown transform case: \(caseID)")
+    }
+}
+
 private func transform001Action(
     translationX: Double = 25,
     axis: CADDirection3D = CADDirection3D(x: 0, y: 0, z: 1)
 ) -> CADCandidateAction {
     .automation(.transform(CADTransformAction(
+        source: transformSource("TRN-001"),
         translation: CADPoint3D(x: translationX, y: 0, z: 0, unit: .millimeter),
         axisPoint: CADPoint3D(x: 50, y: 0, z: 0, unit: .millimeter),
         rotationAxis: axis,
@@ -4520,6 +4580,7 @@ private func transform002Action(
     axis: CADDirection3D = CADDirection3D(x: 0, y: 0, z: 1)
 ) -> CADCandidateAction {
     .automation(.transform(CADTransformAction(
+        source: transformSource("TRN-002"),
         translation: CADPoint3D(
             x: translationX,
             y: translationY,
@@ -4538,6 +4599,7 @@ private func transform003Action(
     axis: CADDirection3D = CADDirection3D(x: 1, y: 0, z: 0)
 ) -> CADCandidateAction {
     .automation(.transform(CADTransformAction(
+        source: transformSource("TRN-003"),
         translation: CADPoint3D(
             x: 0,
             y: translationY,
@@ -4556,6 +4618,7 @@ private func transform004Action(
     axis: CADDirection3D = CADDirection3D(x: 0, y: 0, z: 1)
 ) -> CADCandidateAction {
     .automation(.transform(CADTransformAction(
+        source: transformSource("TRN-004"),
         translation: CADPoint3D(
             x: translationX,
             y: translationY,
@@ -4574,6 +4637,7 @@ private func transform005Action(
     axis: CADDirection3D = CADDirection3D(x: 0, y: 1, z: 0)
 ) -> CADCandidateAction {
     .automation(.transform(CADTransformAction(
+        source: transformSource("TRN-005"),
         translation: CADPoint3D(
             x: translationX,
             y: 50,
@@ -4590,6 +4654,7 @@ private func transform006Action(
     axis: CADDirection3D = CADDirection3D(x: 1, y: 0, z: 0)
 ) -> CADCandidateAction {
     .automation(.transform(CADTransformAction(
+        source: transformSource("TRN-006"),
         translation: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
         axisPoint: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
         rotationAxis: axis,
@@ -4602,6 +4667,7 @@ private func transform007Action(
     axis: CADDirection3D = CADDirection3D(x: 0, y: 0, z: 1)
 ) -> CADCandidateAction {
     .automation(.transform(CADTransformAction(
+        source: transformSource("TRN-007"),
         translation: CADPoint3D(x: 0, y: 0, z: -100, unit: .millimeter),
         axisPoint: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
         rotationAxis: axis,
@@ -4620,6 +4686,7 @@ private func transform008Action(
     )
 ) -> CADCandidateAction {
     .automation(.transform(CADTransformAction(
+        source: transformSource("TRN-008"),
         translation: CADPoint3D(
             x: translationX,
             y: translationY,
@@ -5769,6 +5836,51 @@ private func replacing(_ data: Data, from old: String, to new: String) -> Data {
         return data
     }
     return Data(text.replacingOccurrences(of: old, with: new).utf8)
+}
+
+private func sphereAction(
+    name: String,
+    center: CADPoint3D,
+    radius: CADLength
+) -> CADCandidateAction {
+    .automation(.solid(.sphere(name: name, center: center, radius: radius)))
+}
+
+private func sphereAction(for challenge: CADChallenge) throws -> CADCandidateAction {
+    switch challenge.id.rawValue {
+    case "SPH-001":
+        sphereAction(
+            name: challenge.id.rawValue,
+            center: CADPoint3D(x: 0, y: 0, z: 0, unit: .millimeter),
+            radius: CADLength(value: 5, unit: .millimeter)
+        )
+    case "SPH-002":
+        sphereAction(
+            name: challenge.id.rawValue,
+            center: CADPoint3D(x: 50, y: -25, z: 10, unit: .millimeter),
+            radius: CADLength(value: 25, unit: .millimeter)
+        )
+    case "SPH-003":
+        sphereAction(
+            name: challenge.id.rawValue,
+            center: CADPoint3D(x: 0, y: 0, z: 0.1, unit: .meter),
+            radius: CADLength(value: 0.1, unit: .meter)
+        )
+    case "SPH-004":
+        sphereAction(
+            name: challenge.id.rawValue,
+            center: CADPoint3D(x: -2, y: 3, z: 1, unit: .inch),
+            radius: CADLength(value: 2, unit: .inch)
+        )
+    case "SPH-005":
+        sphereAction(
+            name: challenge.id.rawValue,
+            center: CADPoint3D(x: -100, y: 100, z: -50, unit: .millimeter),
+            radius: CADLength(value: 100, unit: .millimeter)
+        )
+    default:
+        throw CADBenchmarkError.invalidCaseID(challenge.id.rawValue)
+    }
 }
 
 private func appendLengthPrefixed(_ value: Data, to data: inout Data) {

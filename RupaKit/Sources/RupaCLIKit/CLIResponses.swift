@@ -6,7 +6,7 @@ import RupaDomainFoundation
 
 public struct CLIResponse: Codable, Equatable, Sendable {
     public var message: String
-    public var effect: AutomationCommandEffect?
+    public var effect: String?
     public var generation: UInt64
     public var dirty: Bool
     public var saved: Bool
@@ -35,7 +35,7 @@ public struct CLIResponse: Codable, Equatable, Sendable {
 
     public init(
         message: String,
-        effect: AutomationCommandEffect? = nil,
+        effect: String? = nil,
         generation: UInt64,
         dirty: Bool,
         saved: Bool = false,

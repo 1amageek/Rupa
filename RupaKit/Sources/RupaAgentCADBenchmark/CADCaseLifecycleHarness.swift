@@ -1,7 +1,7 @@
 import Foundation
 import RupaAgentProtocol
 import RupaAgentRuntime
-import RupaAutomation
+import RupaCADDomain
 import RupaCore
 import RupaKit
 
@@ -10,8 +10,6 @@ import RupaKit
 /// geometry expectations and category oracles remain outside this harness.
 @MainActor
 struct CADCaseLifecycleHarness {
-    typealias InitialDocumentProvider = @MainActor () throws -> DesignDocument
-
     enum Mode {
         case normal
         case stale
@@ -20,30 +18,25 @@ struct CADCaseLifecycleHarness {
     private static let defaultPlanningWallNanoseconds: UInt64 = 1
     private let caseID: CADBenchmarkCaseID
     private let challenge: CADChallenge
-    private let routing: CADCaseActionRouting
+    private let programPlanner: @MainActor (CADCandidateAction) throws -> CADSemanticProgramPlan
     private let timeoutWallNanoseconds: UInt64
     private let preRouteDelayNanoseconds: UInt64
     private let postRegistrationDelayNanoseconds: UInt64
-    private let initialDocumentProvider: InitialDocumentProvider
 
     init(
         caseID: CADBenchmarkCaseID,
         challenge: CADChallenge,
-        routing: CADCaseActionRouting,
+        programPlanner: @escaping @MainActor (CADCandidateAction) throws -> CADSemanticProgramPlan,
         timeoutWallNanoseconds: UInt64,
         preRouteDelayNanoseconds: UInt64 = 0,
         postRegistrationDelayNanoseconds: UInt64 = 0,
-        initialDocumentProvider: InitialDocumentProvider? = nil
     ) {
         self.caseID = caseID
         self.challenge = challenge
-        self.routing = routing
+        self.programPlanner = programPlanner
         self.timeoutWallNanoseconds = max(1, timeoutWallNanoseconds)
         self.preRouteDelayNanoseconds = preRouteDelayNanoseconds
         self.postRegistrationDelayNanoseconds = postRegistrationDelayNanoseconds
-        self.initialDocumentProvider = initialDocumentProvider ?? {
-            .empty(named: caseID.rawValue)
-        }
     }
 
     func runReference(
@@ -153,26 +146,10 @@ struct CADCaseLifecycleHarness {
             )
         }
 
-        let initialDocument: DesignDocument
-        do {
-            initialDocument = try initialDocumentProvider()
-        } catch {
-            return await preflightResult(
-                outcome: .infrastructureFailure,
-                controller: controller,
-                deadline: deadline,
-                totalStart: totalStart,
-                planningWallNanoseconds: planningWallNanoseconds,
-                diagnostics: [
-                    "\(caseID.rawValue) initial document provider failed: \(message(error))"
-                ]
-            )
-        }
-
         let workspace: ProjectWorkspace
         do {
             workspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
-                document: initialDocument
+                document: .empty(named: caseID.rawValue)
             )
             _ = try await deadline.run { @MainActor in
                 try await workspace.evaluate()
@@ -207,13 +184,7 @@ struct CADCaseLifecycleHarness {
                 diagnostics: ["\(caseID.rawValue) fresh workspace published no initial view."]
             )
         }
-        let planResult = Result {
-            try routing.makePlan(
-                from: action,
-                challenge: challenge,
-                modelingTolerance: initialView.document.document.modelingSettings.tolerance
-            )
-        }
+        let planResult = Result { try programPlanner(action) }
 
         let sessionID = UUID()
         do {
@@ -297,7 +268,7 @@ struct CADCaseLifecycleHarness {
     }
 
     private func execute(
-        plan: CADCaseActionPlan,
+        plan: CADSemanticProgramPlan,
         controller: ProjectAgentCommandController,
         workspace: ProjectWorkspace,
         sessionID: UUID,
@@ -337,6 +308,24 @@ struct CADCaseLifecycleHarness {
                     cancellationCheckpointCount: 3
                 ),
                 diagnostics: ["\(caseID.rawValue) exceeded its wall-time budget before publication."]
+            )
+        }
+
+        if let unavailable = unavailableOperation(in: plan, controller: controller) {
+            return record(
+                outcome: .invalidSubmission,
+                initialView: initialView,
+                finalView: workspace.view ?? initialView,
+                routeEvidence: routeEvidence(from: initialView, to: workspace.view ?? initialView),
+                deadline: deadline,
+                telemetry: telemetry(
+                    planningWallNanoseconds: planningWallNanoseconds,
+                    totalStart: totalStart,
+                    actionCount: 1,
+                    commandCount: plan.commandCount,
+                    cancellationCheckpointCount: 3
+                ),
+                diagnostics: ["\(caseID.rawValue) semantic operation \(unavailable) is unavailable in the live registry."]
             )
         }
 
@@ -511,7 +500,7 @@ struct CADCaseLifecycleHarness {
     }
 
     private func executeStale(
-        plan: CADCaseActionPlan,
+        plan: CADSemanticProgramPlan,
         controller: ProjectAgentCommandController,
         workspace: ProjectWorkspace,
         sessionID: UUID,
@@ -632,7 +621,7 @@ struct CADCaseLifecycleHarness {
         }
         let routeWall = elapsed(since: routeStart)
         let after = workspace.view ?? retained
-        guard case .failure = staleResponse else {
+        guard case .programExecution(.prepublicationFailure) = staleResponse else {
             return record(
                 outcome: .infrastructureFailure,
                 initialView: retained,
@@ -675,57 +664,62 @@ struct CADCaseLifecycleHarness {
     ) -> CADCandidateContext {
         CADActivatedCaseContextFactory.make(
             challenge: challenge,
-            operationName: routing.operationName,
             controller: controller
         )
     }
 
+    private func unavailableOperation(
+        in plan: CADSemanticProgramPlan,
+        controller: ProjectAgentCommandController
+    ) -> String? {
+        let descriptors = controller.capabilityDescriptors()
+        for step in plan.steps {
+            let available = descriptors.contains { descriptor in
+                descriptor.name == step.operationID.rawValue
+                    && descriptor.semanticOperation?.invocationForms.contains(.program) == true
+                    && descriptor.semanticOperation?.version == RupaCADDomain.operationVersion
+            }
+            if !available {
+                return step.operationID.rawValue
+            }
+        }
+        return nil
+    }
+
     private func request(
-        plan: CADCaseActionPlan,
+        plan: CADSemanticProgramPlan,
         sessionID: UUID,
         coordinates: ProjectViewSnapshot
     ) -> AgentRequest {
-        switch plan {
-        case .command(let command):
-            .execute(
+        .executeProgram(
+            AgentSemanticProgramExecutionRequest(
                 sessionID: sessionID,
-                command: command,
-                expectedGeneration: coordinates.documentGeneration,
-                expectedWorkspaceRevision: coordinates.workspaceState.revision
+                authority: AgentProjectAuthorityCoordinate(
+                    projectID: coordinates.projectID,
+                    documentGeneration: coordinates.documentGeneration,
+                    transactionRevision: coordinates.transactionRevision,
+                    publicationSequence: coordinates.publicationSequence,
+                    workspaceRevision: coordinates.workspaceState.revision
+                ),
+                dryRun: false,
+                program: plan.request
             )
-        case .batch(let commands):
-            .executeBatch(
-                sessionID: sessionID,
-                batch: AutomationBatch(
-                    commands: commands,
-                    expectedGeneration: coordinates.documentGeneration,
-                    expectedTransactionRevision: coordinates.transactionRevision,
-                    expectedWorkspaceRevision: coordinates.workspaceState.revision
-                )
-            )
-        }
+        )
     }
 
     private func mutationEvidence(
         from response: AgentResponse,
-        for plan: CADCaseActionPlan
+        for plan: CADSemanticProgramPlan
     ) -> (didMutate: Bool, commandCount: Int)? {
-        switch (plan, response) {
-        case let (.command, .command(result)):
-            return (
-                result.didMutate,
-                result.executionMetrics?.commandCount ?? 1
-            )
-        case let (.batch(commands), .batch(result)):
-            guard result.results.count == commands.count,
-                  result.metrics.evaluationPassCount == 1,
-                  result.metrics.historyEntryCount == 1 else {
-                return nil
-            }
-            return (result.didMutate, result.metrics.commandCount)
-        default:
+        guard case .programExecution(.success(.committed(let receipt))) = response else {
             return nil
         }
+        let execution = receipt.telemetry.execution
+        guard execution.stepCount == plan.steps.count,
+              execution.commandCount > 0 else {
+            return nil
+        }
+        return (true, execution.commandCount)
     }
 
     private func deadlineResponse(
@@ -744,8 +738,9 @@ struct CADCaseLifecycleHarness {
             id: "\(caseID.rawValue).\(request.methodName)"
         )
         return try await deadline.run { @MainActor in
-            try CADBenchmarkControllerFactory.ordinaryResponse(
-                from: await controller.handle(envelope)
+            try CADBenchmarkControllerFactory.semanticResponse(
+                from: await controller.handle(envelope),
+                for: envelope
             )
         }
     }
@@ -881,8 +876,11 @@ struct CADCaseLifecycleHarness {
     }
 
     private func responseMessage(_ response: AgentResponse) -> String {
-        if case .failure(let error) = response {
-            return "\(caseID.rawValue) production route rejected the command: \(error.message)"
+        if case .programExecution(.prepublicationFailure(let failure)) = response {
+            return "\(caseID.rawValue) production semantic program was rejected before publication: \(failure.code.rawValue)"
+        }
+        if case .programExecution(.committedFailure(let failure)) = response {
+            return "\(caseID.rawValue) production semantic program failed after publication: \(failure.code.rawValue)"
         }
         return "\(caseID.rawValue) production route returned an unexpected response: \(response)"
     }

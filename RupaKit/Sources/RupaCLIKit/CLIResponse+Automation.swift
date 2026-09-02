@@ -8,7 +8,7 @@ extension CLIResponse {
     ) {
         self.init(
             message: result.message,
-            effect: result.effect,
+            effect: result.effect.rawValue,
             generation: result.generation.value,
             dirty: dirty,
             saved: saved,

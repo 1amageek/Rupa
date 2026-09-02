@@ -95,6 +95,78 @@ enum CADTransformOracle {
         )
     }
 
+    /// Proves a self-contained transform program without relying on a seeded
+    /// document from an earlier session. The final snapshot must contain the
+    /// typed source authored by the same program and exactly one placement
+    /// mutation for that source.
+    static func evaluateSelfContained(
+        expected: CADTransformChallengeInput,
+        challenge: CADChallenge,
+        sceneNodeID: SceneNodeID,
+        expectedTransform: Transform3D,
+        final: ProjectViewSnapshot
+    ) throws -> CADTransformOracleObservation {
+        let projection = try CADTransformChallengeProjection.decode(challenge)
+        guard matches(projection, expected: expected) else {
+            throw CADTransformOracleError.mismatch(
+                "The candidate-visible challenge and private transform expectation disagree."
+            )
+        }
+        let oracleTransform = try CADTransformGeometryMapping.localTransform(
+            submission: CADTransformSubmission(
+                translation: expected.translation,
+                axisPoint: expected.axisPoint,
+                rotationAxis: expected.rotationAxis,
+                rotation: expected.rotation
+            ),
+            caseID: challenge.id
+        )
+        guard expectedTransform == oracleTransform else {
+            throw CADTransformOracleError.mismatch(
+                "The published local transform differs from the private target."
+            )
+        }
+
+        let finalDocument = final.document.document
+        let sourceObservation = try CADTransformInitialSourceOracle.evaluate(
+            expected: expected.source,
+            caseID: challenge.id,
+            sceneNodeID: sceneNodeID,
+            snapshot: final
+        )
+        try validateSelfContainedSourceAndLocalPlacement(
+            document: finalDocument,
+            source: expected.source,
+            sceneNodeID: sceneNodeID,
+            expectedTransform: oracleTransform
+        )
+
+        let expectedWorld = try worldTransform(
+            for: sceneNodeID,
+            in: finalDocument.productMetadata,
+            localTransform: oracleTransform
+        )
+        let occurrenceID = SceneOccurrenceID(rawValue: "scene.\(sceneNodeID.description)")
+        if let evaluated = final.viewport.items.first(where: { $0.id == occurrenceID }) {
+            guard evaluated.worldTransform == expectedWorld else {
+                throw CADTransformOracleError.mismatch(
+                    "World placement does not equal parent-times-local composition."
+                )
+            }
+        } else if expected.source.isSolid {
+            throw CADTransformOracleError.mismatch(
+                "The transformed body has no evaluated world occurrence."
+            )
+        }
+
+        return CADTransformOracleObservation(
+            readCount: sourceObservation.readCount,
+            featureCount: finalDocument.cadDocument.designGraph.nodes.count,
+            sceneNodeCount: authoredSceneNodeCount(in: finalDocument.productMetadata),
+            bodyCount: final.evaluationSnapshot.bodyCount
+        )
+    }
+
     /// Counts authored scene nodes while excluding the document's structural roots.
     /// Root nodes are runtime scaffolding and are not candidate-authored geometry.
     static func authoredSceneNodeCount(in metadata: ProductMetadata) -> Int {
@@ -132,6 +204,56 @@ enum CADTransformOracle {
             throw CADTransformOracleError.mismatch(
                 "The transform added, removed, or modified unrelated product metadata."
             )
+        }
+    }
+
+    private static func validateSelfContainedSourceAndLocalPlacement(
+        document: DesignDocument,
+        source: CADTransformSource,
+        sceneNodeID: SceneNodeID,
+        expectedTransform: Transform3D
+    ) throws {
+        let authoredNodes = document.productMetadata.sceneNodes.values.filter {
+            !document.productMetadata.rootSceneNodeIDs.contains($0.id)
+        }
+        let expectedAuthoredNodeCount = source.isSolid ? 2 : 1
+        guard authoredNodes.count == expectedAuthoredNodeCount else {
+            throw CADTransformOracleError.mismatch(
+                "The transform program authored an unexpected number of scene nodes."
+            )
+        }
+        guard let selected = document.productMetadata.sceneNodes[sceneNodeID],
+              selected.localTransform == expectedTransform,
+              selected.reference?.kind == (source.isSolid ? .body : .sketch) else {
+            throw CADTransformOracleError.mismatch(
+                "The typed transform source scene node is missing or incorrectly placed."
+            )
+        }
+        guard authoredNodes.allSatisfy({ node in
+            node.id == sceneNodeID || node.localTransform == .identity
+        }) else {
+            throw CADTransformOracleError.mismatch(
+                "The transform changed more than the selected source placement."
+            )
+        }
+        let selectedReference = selected.reference
+        guard authoredNodes.filter({ $0.reference?.kind == .sketch }).count == 1 else {
+            throw CADTransformOracleError.mismatch(
+                "The transform source does not preserve exactly one authored sketch node."
+            )
+        }
+        if source.isSolid {
+            guard authoredNodes.filter({ $0.reference?.kind == .body }).count == 1 else {
+                throw CADTransformOracleError.mismatch(
+                    "The transform solid source does not preserve exactly one authored body node."
+                )
+            }
+        } else {
+            guard selectedReference?.kind == .sketch else {
+                throw CADTransformOracleError.mismatch(
+                    "The transform sketch source is bound to the wrong scene reference."
+                )
+            }
         }
     }
 

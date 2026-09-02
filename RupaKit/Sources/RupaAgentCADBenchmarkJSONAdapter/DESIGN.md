@@ -1,10 +1,10 @@
 # RupaAgentCADBenchmarkJSONAdapter
 
-> CADAPI-100 supersession: this adapter records the historical T12 candidate
-> exchange and its five unavailable-sphere outcomes. It is not a current
-> production modeling API or a compatibility route. CADAPI-X removes it from
-> current 100-case execution; new acceptance requires 100 realized outcomes
-> through the semantic API and signed Rupa App path.
+> CADAPI-100 status: this adapter is a test-only candidate exchange, not a
+> production modeling API or compatibility route. It now carries semantic
+> actions for all 100 cases, including analytic spheres. Signed-App acceptance
+> remains separately owned by the production `rupa` path.
+> Frozen T12 checkpoint sections below are historical provenance only.
 
 ## Purpose and Scope
 
@@ -131,12 +131,11 @@ evaluation and candidate construction remain module-internal test/composition
 seams, so a caller cannot construct a large in-memory response and bypass the
 JSON input authority.
 
-The activated ninety-six cases accept one bounded decision. Geometry actions
-retain their existing execution contracts. `SPH-001` instead accepts the exact
-`analyticSphereUnavailable` declaration as `expectedUnsupported`; a substitute
-action, a wrong unsupported reason, or `finish` remains `invalidSubmission`
-without publication. Multi-round continuation is not added here, and the
-adapter never substitutes a reference action.
+All 100 activated cases accept one bounded decision. Geometry actions retain
+their existing execution contracts, and SPH-001...005 accept explicit
+`solid/sphere` actions. Substitute geometry, unsupported declarations, or
+`finish` remain `invalidSubmission`. Multi-round continuation is not added
+here, and the adapter never substitutes a reference action.
 
 ### Public-context fingerprint
 
@@ -1280,9 +1279,9 @@ not change. The frozen 98-request aggregate remains
 appending the actual bounded `SPH-004` request freezes the 99-request aggregate
 as `c3002db14457157163c12c6db9e2e3794ba330476984ec1321c0212b45d02a78`.
 
-### SPH-005 current full-catalog external authority contract
+### SPH-005 historical T12 full-catalog external authority contract
 
-The current adapter authority appends `SPH-005` as the 100th and final catalog
+The historical adapter authority appended `SPH-005` as the 100th and final catalog
 case. Its public challenge requests one analytic sphere of radius 100 mm
 centered at `(-100, 100, -50)` mm. The public capability snapshot reports
 `cad.solid.analytic-sphere@1` as unavailable with reason `not-exposed`; the
@@ -1350,13 +1349,13 @@ classification and are projected only to stable non-private codes.
 
 | Invariant | Behavioral evidence |
 |---|---|
-| Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON includes BOX-001...012 `solid/box`, CYL-001...008 `solid/cylinder`, CON-001...008 `sketch/constraint`, TRN-001...008 `transform`, CMP-001...007 ordered role-bearing `compound`, and SPH-001...005 `unsupported`; candidate-response v8 carries the explicit discriminators, v1 through v7 and unknown current-schema discriminators are rejected, and every direct and nested case ID is the same scalar string. |
+| Explicit vendor-neutral wire shape | Golden request/response/evaluation JSON includes BOX-001...012 `solid/box`, CYL-001...008 `solid/cylinder`, CON-001...008 `sketch/constraint`, TRN-001...008 `transform`, CMP-001...007 ordered role-bearing `compound`, and SPH-001...005 `solid/sphere`; candidate-response v8 carries the explicit discriminators, v1 through v7 and unknown current-schema discriminators are rejected, and every direct and nested case ID is the same scalar string. |
 | Exact public-context binding | The request fingerprint equals the live executor context; changed schema, case, context byte, capability, budget, or fingerprint is rejected before publication. |
-| Current activation boundary | The executor category-ordered authority has count 100, ends in SPH-001...005, and has exact set equality with all catalog IDs; the catalog retains its independent lexical order and there is no inactive successor. The frozen 99-request aggregate is `c3002db14457157163c12c6db9e2e3794ba330476984ec1321c0212b45d02a78`; SPH-005 produces the 100-request aggregate `e7dac9bbeeec1b6f5198d9a89c4a8254eabba74df39389576fc2fdc4956b2767`, while all earlier literal checkpoints remain unchanged. |
+| Current activation boundary | The executor category-ordered authority has count 100, ends in SPH-001...005, and has exact set equality with all catalog IDs; the catalog retains its independent lexical order and there is no inactive successor. With all sphere capabilities available, SPH-004 produces aggregate `ad11eaf7d19c5329b735bd2d33f685a9213cba841d4ee42a20885c89db886517`; SPH-005 produces aggregate `9d2021542fece0cce8ad881293ebc303ecef8e074ec2f77e8f273dda98617036`. |
 | Bounded I/O | Exact-limit input succeeds, `limit + 1` fails before decode and leaves executor evaluation count zero, chunked stdin and file paths behave identically, no public typed-response execution bypass exists, encoded output cannot exceed the same bound, and the guaranteed infrastructure document is byte-equal to normal encoding, bounded, and decodable. |
 | Candidate/oracle separation | Static dependency and source scans prove the adapter imports only public benchmark contracts; encoded fixtures contain no expectation/oracle/source snapshot fields or values. |
-| Same production route | JSON candidates for activated line, rectangle, circle, angle, box, cylinder, constraint, TRN-001...008 transform, and CMP-001...007 compound cases realize through the public executor; SPH-001...005 traverse the same executor, observe the unavailable production capability, and return `expectedUnsupported` without synthesizing geometry. Wrong geometry publishes once then the category's exact oracle rejects without retry, while invalid transform and compound inputs fail before publication. |
-| Non-action honesty | SPH-001...005 exact `analyticSphereUnavailable` declarations produce `expectedUnsupported`; substitute actions, generic unsupported declarations, and `finish` produce `invalidSubmission` with no fallback reference action. |
+| Same production route | JSON candidates for line, rectangle, circle, angle, box, cylinder, constraint, TRN-001...008 transform, CMP-001...007 compound, and SPH-001...005 analytic-sphere cases realize through the public semantic executor. Wrong geometry publishes once then the category's exact oracle rejects without retry, while invalid inputs fail before publication. |
+| Non-action honesty | Unsupported declarations and `finish` produce `invalidSubmission` for the available sphere capability; no fallback reference action is constructed. |
 
 Changes to public candidate Codable shapes, public context fields, capability
 snapshot generation, activation boundary, fingerprint algorithm, byte bound,

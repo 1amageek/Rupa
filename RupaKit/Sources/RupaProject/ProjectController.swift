@@ -1748,9 +1748,9 @@ public actor ProjectController: ProjectOperating {
 
     /// Re-evaluates the current modeling projection so a caller-provided
     /// command cannot promote an arbitrary Mesh payload under valid-looking
-    /// snapshot and CAD identities. The shared CAD cache keeps this validation
-    /// zero-copy after command preparation while the exact payload comparison
-    /// remains independent from cache-storage identity.
+    /// snapshot and CAD identities. The evaluator seeds its transaction-local
+    /// CAD cache from the current immutable evaluation while the exact payload
+    /// comparison remains independent from cache-storage identity.
     private func validateMakeEditableEvaluationBindings(
         in transaction: ProjectSourceTransaction
     ) async throws {
