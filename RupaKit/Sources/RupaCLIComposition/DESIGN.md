@@ -28,7 +28,7 @@ project operations go through `RupaProjectAccess` to the App-owned
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [RupaKit package](../../DESIGN.md) | parent | target graph and single authority | Indexes this executable composition. | Do not duplicate access policy. |
-| [RupaCLIKit](../RupaCLIKit/DESIGN.md) | depends on | async command tree and access ports | Parses intent and projects results. | It never constructs a transport. |
+| [RupaCLIKit](../RupaCLIKit/DESIGN.md) | depends on | async command tree and access ports | Parses CLI intent and starts the MCP adapter. | Project traffic still uses only access ports. |
 | [RupaProjectAccess](../RupaProjectAccess/DESIGN.md) | depends on | live opening, observation, session, save | Defines the external API boundary. | Composition only wires dependencies. |
 | [RupaProjectAccessComposition](../RupaProjectAccessComposition/DESIGN.md) | depends on | live opener and session | Forwards API calls to the App. | No local project fallback exists. |
 | [RupaProjectAccessPlatform](../RupaProjectAccessPlatform/DESIGN.md) | depends on | Keychain discovery reader | Resolves current App endpoint and credential. | CLI is a reader, never a writer. |
@@ -53,9 +53,10 @@ flowchart LR
 2. The CLI resolves only a Keychain record and an authenticated loopback
    endpoint. No endpoint/path override, filesystem discovery, or alternate
    transport is accepted.
-3. One CLI command opens at most one access session and uses one monotonic
-   deadline. Product composition injects the same 120-second request budget
-   used by the App listener. Session finish releases client resources only.
+3. One ordinary CLI command, or one MCP tool call in the long-lived `rupa mcp`
+   process, opens at most one access session and uses one monotonic deadline.
+   Product composition injects the same 120-second request budget used by the
+   App listener. Session finish releases client resources only.
 4. Status, sessions, and capabilities observe the App and never start a
    project or create local state.
 5. Mutation and evaluation use the App-owned workspace/controller. Save is a

@@ -36,7 +36,7 @@ and persistence through the App-owned workspace/controller.
 flowchart LR
     UI["Rupa UI"] --> Workspace["App-owned ProjectWorkspace"]
     CLI["rupa CLI"] --> API["RupaProjectAccess"]
-    MCP["Future MCP"] -.-> API
+    MCP["signed rupa stdio MCP"] --> API
     API --> Session["Live ProjectAccessSession"]
     Session --> HTTP["Authenticated loopback HTTP adapter"]
     HTTP --> Workspace

@@ -14,8 +14,8 @@ operations use the public `RupaProjectAccess` API and the App-owned
 
 ## Responsibilities and Boundaries
 
-The target owns only bundle packaging, embedded provisioning, and product
-signing. It does not
+The target owns only bundle packaging, embedded provisioning, product signing,
+and preservation of stdio for `rupa mcp`. It does not
 own project state, a listener, Keychain writes, package persistence, command
 semantics, or a local controller.
 
@@ -35,6 +35,7 @@ semantics, or a local controller.
 flowchart LR
     Bundle["RupaCLI.app\nnon-UI signed bundle"] --> CLI["Contents/MacOS/rupa"]
     CLI --> Composition["RupaCLIComposition"]
+    MCP["MCP client"] -->|stdio| CLI
     Composition --> Keychain["Keychain discovery reader"]
     Composition --> API["RupaProjectAccess"]
     API --> HTTP["Authenticated loopback HTTP"]
@@ -59,6 +60,9 @@ flowchart LR
 4. Mutation and evaluation run in the App-owned workspace/controller. Save is
    explicit, and response-loss after dispatch is outcome-unknown with no
    retry.
+5. `rupa mcp` exposes a fixed, bounded tool catalog over stdio. It keeps no
+   project state; every tool reaches the same access API and save remains an
+   explicit tool.
 
 ## Runtime Flows
 

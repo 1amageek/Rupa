@@ -8,10 +8,11 @@
 
 ## Responsibilities and Boundaries
 
-The module owns CLI arguments, JSON/text output, and translation of intent to
-an injected access API. It does not own project mutation, evaluation,
-semantic operation schemas, program compilation, package persistence,
-application lifecycle, discovery, or transport framing.
+The module owns CLI arguments, JSON/text output, translation of intent to the
+project access API, and the thin `rupa mcp` composition command. It does not own
+MCP schemas or framing, project mutation, evaluation, semantic operation
+schemas, program compilation, package persistence, application lifecycle, or
+discovery.
 
 CAD direct invocation and declarative programs remain one semantic vocabulary;
 CLI syntax carries intent and request-local symbols only. The App allocates
@@ -25,6 +26,7 @@ geometry buffers.
 |---|---|---|---|---|
 | [RupaKit package](../../DESIGN.md) | parent | module boundary | Keeps parsing above project authority. | Do not import project internals. |
 | [RupaProjectAccess](../RupaProjectAccess/DESIGN.md) | depends on | observe/open/send/save/finish | Is the only production project port. | All requests reach the App. |
+| [RupaMCP](../RupaMCP/DESIGN.md) | depends on | stdio server and access adapter contract | Hosts the six bounded MCP tools. | CLI supplies access only. |
 | [RupaAgentProtocol](../RupaAgentProtocol/DESIGN.md) | depends on | typed intent/result values | Supplies semantic payloads. | Discovery is not protocol state. |
 | [RupaAgentRuntime](../RupaAgentRuntime/DESIGN.md) | reached through access | semantic dispatch | Executes requests in the App workspace. | CLI does not duplicate dispatch. |
 | [RupaDomainFoundation](../RupaDomainFoundation/DESIGN.md) | represented through protocol | bounded program semantics | Defines operation and program values. | CLI performs syntax validation only. |
@@ -34,6 +36,8 @@ geometry buffers.
 ```mermaid
 flowchart LR
     Args["CLI arguments"] --> Intent["Semantic intent"]
+    Args --> MCP["rupa mcp"]
+    MCP --> Intent
     Intent --> Access["RupaProjectAccess"]
     Access --> Session["One live access session"]
     Session --> App["Rupa App ProjectController"]

@@ -25,6 +25,7 @@ Parent: [system design](../DESIGN.md). Direct children used by T10/T12 are:
 - [RupaProjectAccess](Sources/RupaProjectAccess/DESIGN.md)
 - [RupaProjectAccessPlatform](Sources/RupaProjectAccessPlatform/DESIGN.md)
 - [RupaProjectAccessComposition](Sources/RupaProjectAccessComposition/DESIGN.md)
+- [RupaMCP](Sources/RupaMCP/DESIGN.md)
 - [RupaCLIComposition](Sources/RupaCLIComposition/DESIGN.md)
 - [RupaUI](Sources/RupaUI/DESIGN.md)
 - [RupaAgentUI](Sources/RupaAgentUI/DESIGN.md)
@@ -58,7 +59,7 @@ The package design owns:
 - the boundary between role-specific package source codecs and the project
   publication/lifecycle owners;
 - the direct UI-to-`ProjectWorkspace` route and the project-access contract
-  through which CLI and future adapters submit typed intent without acquiring
+  through which CLI and MCP adapters submit typed intent without acquiring
   source or package authority;
 - package-wide API and verification boundaries for T10 and T12.
 - the CADAPI-D dependency rule that one registered semantic CAD operation
@@ -67,7 +68,7 @@ The package design owns:
   concrete semantic CAD vocabulary to the generic compiler.
 
 It does not own Mesh topology algorithms, concrete CAD operation semantics, source asset mutation,
-archive encoding, HTTP framing, MCP, general CLI behavior, LLM reasoning, or a bicycle-specific or
+archive encoding, HTTP framing, MCP framing, general CLI behavior, LLM reasoning, or a bicycle-specific or
 benchmark-specific CAD command. Those are delegated to child designs or
 existing normative contracts. T12's runner, catalog, source/B-Rep oracle, and
 score values are owned by its child design; they do not become another project
@@ -115,8 +116,10 @@ flowchart LR
     Benchmark --> JSONAdapter["RupaAgentCADBenchmarkJSONAdapter\nversioned bounded JSON"]
     JSONAdapter --> BenchmarkCLI["RupaAgentCADBenchmarkCLI\ndedicated executable"]
     AgentProtocol --> Access["RupaProjectAccess\ntransport-neutral intent"]
+    AgentProtocol --> MCP["RupaMCP\nfixed stdio tools"]
     CLIProduct["signed Xcode RupaCLI product"] --> CLIComposition["RupaCLIComposition\nexecutable composition"]
     CLIComposition --> CLIKit["RupaCLIKit\nparsing + projection"]
+    CLIKit --> MCP
     CLIComposition --> Access
 ```
 
@@ -141,6 +144,7 @@ flowchart LR
 | [RupaUI design](Sources/RupaUI/DESIGN.md) | child | snapshot-owned project title and direct workspace UI route | Presents immutable workspace state without becoming project authority. | Visible project identity comes from `ProjectViewSnapshot`. |
 | [RupaAgentUI design](Sources/RupaAgentUI/DESIGN.md) | child | process-lifetime host and injected handler contract | Owns Agent listener lifecycle and registration bridge for the App-owned workspace. | The App composes one controller/router; host never creates a shadow workspace or saves a package. |
 | [RupaAgentProtocol design](Sources/RupaAgentProtocol/DESIGN.md) | child | Codable Agent Mesh, Make Editable, and geometry-buffer-free viewport summary messages | Reuses RupaKit value contracts without duplicating geometry meaning. | It must not import runtime or transport or expose a second view/source authority. |
+| [RupaMCP design](Sources/RupaMCP/DESIGN.md) | child | fixed tool catalog, bounded schemas, dual-era stdio server | Adapts MCP calls to the existing project-access path without owning project state. | Mutation and explicit save remain separate calls. |
 | [RupaAgentRuntime design](Sources/RupaAgentRuntime/DESIGN.md) | child | Registered-workspace request routing | Binds wire values to the exact current full project view. | It never creates a session or saves a package. |
 | [RupaAgentCADBenchmark design](Sources/RupaAgentCADBenchmark/DESIGN.md) | child | Exactly-100 per-case and aggregate verification contract | Composes all reviewed registered-Agent routes and immutable source/B-Rep oracles into measured scheduling, baselines, and a canonical report. | Catalog presence is not implementation evidence; production authority modules must not depend on it. |
 | [Benchmark JSON adapter](Sources/RupaAgentCADBenchmarkJSONAdapter/DESIGN.md) | child | versioned envelopes, context fingerprint, bounded decode, JSON candidate | Binds one external decision to the exact public context of one activated case. | It cannot import private expectations or accept a catalog-only case. |
@@ -164,6 +168,7 @@ flowchart TD
     P --> K["RupaKit\nworkspace use cases"]
     P --> E["evaluation + package\nexisting boundaries"]
     K --> R["RupaAgentRuntime\nregistered route"]
+    K --> M["RupaMCP\nbounded stdio adapter"]
     R --> B["RupaAgentCADBenchmark\nrunner / oracle / report"]
     C --> B
     A --> B
@@ -193,6 +198,7 @@ records are owned by the four child designs:
 | `RupaAutomation` owns the binding-aware internal source-plan execution substrate; `FeatureGraphTransaction` and `appendFeatureGraph` are internal lowering details, not public Agent operations. | [RupaAutomation design](Sources/RupaAutomation/DESIGN.md) |
 | `RupaCADDomain` owns concrete versioned CAD operation descriptors, typed output declarations, lowerers, and conservative operation/result estimates without owning source IDs or publication. | [RupaCADDomain design](Sources/RupaCADDomain/DESIGN.md) |
 | `RupaProjectAccess` is the transport-neutral access contract; it owns no workspace, package, or command state. | [RupaProjectAccess design](Sources/RupaProjectAccess/DESIGN.md) |
+| `RupaMCP` owns only the fixed MCP catalog, bounded validation, and result projection; the CLI adapter sends every operation through `RupaProjectAccess`. | [RupaMCP design](Sources/RupaMCP/DESIGN.md) |
 | `RupaProjectAccessPlatform` owns the Team Keychain discovery record and its generation-guarded reader/writer contract without owning project state. | [RupaProjectAccessPlatform design](Sources/RupaProjectAccessPlatform/DESIGN.md) |
 | `RupaProjectAccessComposition` owns the concrete live-project session adapter by composing discovery, authenticated HTTP, `RupaAgentRuntime`, and the public `RupaKit` workspace APIs. | [RupaProjectAccessComposition design](Sources/RupaProjectAccessComposition/DESIGN.md) |
 | `RupaCLIComposition` is the sole executable composition for `rupa`; the signed Xcode product entry is a thin async launcher over it. | [RupaCLIComposition design](Sources/RupaCLIComposition/DESIGN.md) |

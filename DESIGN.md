@@ -48,7 +48,7 @@ pass their exact source/B-Rep oracles through the signed `rupa` ->
 The system owns the cross-module rule that one registered `ProjectWorkspace`
 serves CAD automation, Make Editable, Authored Mesh reads and edits, history,
 presentation evaluation, and application-owned persistence. UI, CLI, and
-future adapters submit typed intent through the project-access boundary; the
+MCP adapters submit typed intent through the project-access boundary; the
 workspace and its `ProjectController` remain the only Product/CAD/Mesh
 mutation, evaluation, and save authority.
 
@@ -58,7 +58,7 @@ composition: `capability.invoke` makes a simple operation simple, while
 Neither form transfers persistent-ID, presentation-graph, feature-graph,
 package, or publication authority to the caller.
 
-It does not add an MCP server, general-purpose CLI command, bicycle-specific
+It does not add a second project server, general-purpose raw CLI command, bicycle-specific
 command, new Mesh kernel operation, renderer, Agent file-lifecycle authority,
 benchmark-specific CAD command, or LLM integration. The dedicated
 `rupa-agent-cad-benchmark` executable only exchanges one activated case through
@@ -93,7 +93,8 @@ flowchart LR
     subgraph Access["RUPA-ACCESS authority boundary"]
         UIAccess["UI"] --> WorkspaceAuthority["ProjectWorkspace"]
         CLIAccess["signed rupa CLI"] --> AccessAPI
-        MCPAccess["Future MCP"] -.-> AccessAPI
+        MCPClient["MCP client"] --> MCPAccess["signed rupa stdio MCP"]
+        MCPAccess --> AccessAPI
         AccessAPI["RupaProjectAccess"] --> LiveAdapter["authenticated loopback HTTP"]
         LiveAdapter --> AppHost["Rupa App Agent host"]
         AppHost --> WorkspaceRegistry["ProjectWorkspaceRegistry"]
