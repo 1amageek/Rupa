@@ -65,6 +65,10 @@ let package = Package(
             targets: ["RupaCLIComposition"]
         ),
         .library(
+            name: "RupaMCP",
+            targets: ["RupaMCP"]
+        ),
+        .library(
             name: "RupaUI",
             targets: ["RupaUI"]
         ),
@@ -142,6 +146,7 @@ let package = Package(
         .package(url: "https://github.com/1amageek/mac-component", branch: "main"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
         .package(url: "https://github.com/apple/swift-collections", from: "1.1.0"),
+        .package(url: "https://github.com/1amageek/swift-sdk", from: "0.13.0"),
     ],
     targets: [
         .target(
@@ -445,6 +450,7 @@ let package = Package(
         .target(
             name: "RupaCLIKit",
             dependencies: [
+                "RupaMCP",
                 "RupaProjectAccess",
                 "RupaCore",
                 "RupaCoreTypes",
@@ -453,6 +459,15 @@ let package = Package(
                 "RupaAgentProtocol",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "SwiftCAD", package: "swift-CAD"),
+            ],
+            exclude: ["DESIGN.md"]
+        ),
+        .target(
+            name: "RupaMCP",
+            dependencies: [
+                "RupaAgentProtocol",
+                "RupaCoreTypes",
+                .product(name: "MCP", package: "swift-sdk"),
             ],
             exclude: ["DESIGN.md"]
         ),
@@ -791,6 +806,15 @@ let package = Package(
                 "RupaAutomation",
                 "RupaDomainFoundation",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ]
+        ),
+        .testTarget(
+            name: "RupaMCPTests",
+            dependencies: [
+                "RupaAgentProtocol",
+                "RupaCoreTypes",
+                "RupaMCP",
+                .product(name: "MCP", package: "swift-sdk"),
             ]
         ),
         .testTarget(

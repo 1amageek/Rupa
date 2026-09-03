@@ -48,6 +48,7 @@ func packageSourceImportsRespectArchitectureBoundaries() throws {
             "RupaAgentRuntime",
             "RupaAgentTransport",
             "RupaCLIKit",
+            "RupaMCP",
             "RupaCLI",
         ],
         "RupaAutomation": [
@@ -58,6 +59,7 @@ func packageSourceImportsRespectArchitectureBoundaries() throws {
             "RupaAgentRuntime",
             "RupaAgentTransport",
             "RupaCLIKit",
+            "RupaMCP",
             "RupaCLI",
         ],
         "RupaDomainFoundation": [
@@ -67,17 +69,20 @@ func packageSourceImportsRespectArchitectureBoundaries() throws {
             "RupaAgentRuntime",
             "RupaAgentTransport",
             "RupaCLIKit",
+            "RupaMCP",
             "RupaCLI",
         ],
         "RupaAgentProtocol": [
             "RupaAgentRuntime",
             "RupaAgentTransport",
             "RupaCLIKit",
+            "RupaMCP",
             "RupaCLI",
             "RupaUI",
         ],
         "RupaAgentRuntime": [
             "RupaCLIKit",
+            "RupaMCP",
             "RupaCLI",
             "RupaUI",
         ],
@@ -91,10 +96,18 @@ func packageSourceImportsRespectArchitectureBoundaries() throws {
             "RupaCapabilities",
             "RupaAgentRuntime",
             "RupaCLIKit",
+            "RupaMCP",
             "RupaCLI",
             "RupaUI",
         ],
         "RupaCLIKit": [
+            "RupaUI",
+        ],
+        "RupaMCP": [
+            "RupaAgentRuntime",
+            "RupaAgentTransport",
+            "RupaCLIKit",
+            "RupaProjectAccess",
             "RupaUI",
         ],
     ]
@@ -288,12 +301,17 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
             "RupaAgentRuntime",
             "RupaAgentTransport",
         ],
+        "RupaMCP": [
+            "RupaAgentProtocol",
+            "RupaCoreTypes",
+        ],
         "RupaCLIKit": [
             "RupaCore",
             "RupaCoreTypes",
             "RupaAutomation",
             "RupaDomainFoundation",
             "RupaAgentProtocol",
+            "RupaMCP",
             "RupaProjectAccess",
         ],
         "RupaCLIComposition": [

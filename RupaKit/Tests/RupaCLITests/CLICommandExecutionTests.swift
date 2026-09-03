@@ -147,3 +147,8 @@ func removedRawCommandsAreNotRegistered() throws {
         }
     }
 }
+
+@Test
+func mcpCommandIsRegistered() throws {
+    _ = try CLICommand.parseAsRoot(["mcp"])
+}

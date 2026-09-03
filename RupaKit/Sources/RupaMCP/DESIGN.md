@@ -41,8 +41,9 @@ flowchart LR
 2. A project target contains exactly one canonical project path or live session
    UUID. Authority coordinates come only from the opened access session.
 3. Mutation never implies save, request splitting, fallback, or retry.
-4. Inputs and outputs are bounded by `AgentProtocolEncodingLimits`; capability
-   discovery is paged with a maximum of 50 descriptors.
+4. Decoded tool arguments and projected results are bounded by
+   `AgentProtocolEncodingLimits`; capability discovery is paged with a maximum
+   of 50 descriptors. Raw stdio framing remains owned by the Swift MCP SDK.
 5. Tool failures use MCP error results with structured details and never become
    empty success values.
 6. Both legacy MCP and MCP 2026-07-28 calls use the same catalog and dispatcher.

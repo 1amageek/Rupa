@@ -18,6 +18,7 @@ public struct CLICommand: AsyncParsableCommand {
             InspectCommand.self,
             MeasureDocument.self,
             MeshDocument.self,
+            MCPCommand.self,
             ParameterCommand.self,
             SaveDocument.self,
             SelectionCommand.self,
