@@ -86,6 +86,14 @@ directions share the same immutable lookup result.
 9. A scene item may reference only a Mesh admitted by the owning evaluation.
    Scene projection cannot truncate, silently omit required geometry, or
    retessellate an over-budget source.
+10. Each build selects one explicit evaluation policy. Under `.suppliedOnly`
+    the builder projects only the evaluation the caller supplied and never
+    evaluates a document itself; under `.evaluateOnDemand` it may evaluate on
+    the caller's thread when the caller supplied no matching evaluation. A
+    caller that owns evaluation lifetime outside `MainActor` selects
+    `.suppliedOnly`, so kernel evaluation can never re-enter that caller's
+    thread through scene construction. `.evaluateOnDemand` remains the default
+    for callers that hold no evaluation authority.
 
 ## Runtime Flows
 
@@ -142,6 +150,7 @@ scene item is never dropped to make projection appear successful.
 | No optional topology metrics | Core metric-policy test plus scene-build regression prove face-area and edge-length evaluators are not entered. |
 | Geometry and stable references remain unchanged | Existing B-spline knot/span exact tests and scene snapshot identity checks remain green. |
 | Bounded input authority | Boundary tests prove only evaluation-admitted Mesh enters the scene and that projection never retessellates, truncates, or selects fidelity. |
+| Explicit evaluation policy | A `.suppliedOnly` build with no matching supplied evaluation performs zero evaluations; the same input under `.evaluateOnDemand` evaluates, proving the policy is observable rather than declarative. |
 | Agent responsiveness | Focused test timing and the restored signed-App `sessions`/`attach`/viewport read path provide runtime evidence. |
 
 Changes to source/evaluation identity or overlay reference contracts require

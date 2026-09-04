@@ -15,6 +15,16 @@ removes that duplicated work and MainActor-bound preparation without replacing
 the existing Canvas renderer or creating another scene, source, or project
 authority.
 
+The viewport also owns transient documents that are never published to project
+authority, such as the edge-treatment drag preview it builds from the current
+selection. Because these documents have no published generation, no project
+authority can supply their evaluation, and no other module owns their lifetime.
+This module therefore owns the *lifetime* of one transient preview evaluation
+per viewport and delegates the *evaluation itself* to the existing
+`RupaCore` `EvaluationScheduler`, off `MainActor`. It does not introduce a
+second evaluator, a second source authority, or an unpublished document into
+project state.
+
 ## Responsibilities and Boundaries
 
 The module owns:
@@ -27,7 +37,9 @@ The module owns:
   exact picking provenance, and bounded visual-state batch metadata;
 - construction-time validation, typed all-or-nothing failure, telemetry, and
   snapshot-identity matching;
-- state-driven viewport invalidation only while a real transition is active.
+- state-driven viewport invalidation only while a real transition is active;
+- the cancellable lifetime of one transient, never-published preview evaluation
+  per viewport, prepared off `MainActor` through the existing evaluator.
 
 It does not select Product representations, tessellate CAD, mutate
 `MeshSource`, publish project state, perform package I/O, handle Agent requests,
@@ -40,6 +52,7 @@ protocol is introduced by this correction.
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [package design](../../DESIGN.md) | parent | Package dependency direction | Places rendering above immutable scene and Geometry values. | A derived plan is never source or project authority. |
+| [RupaCore](../RupaCore/DESIGN.md) | depends on | `EvaluationScheduler`, `EvaluatedDocumentCache`, and typed evaluation status | Evaluates a transient preview document and returns either one reusable evaluation cache or one explicit failure status. | This module never publishes a transient document or its evaluation as project state. |
 | [RupaGeometry](../RupaGeometry/DESIGN.md) | depends on | Source-bound index and bounded face triangulation | Supplies Mesh topology traversal. | Do not duplicate ID lookup or polygon algorithms. |
 | [RupaViewportScene](../RupaViewportScene/DESIGN.md) | depends on | Immutable scene and snapshot identity | Supplies selected bounded presentation results and transforms. | Rendering cannot reevaluate or select LOD. |
 | [RupaUI](../RupaUI/DESIGN.md) | used by | MainActor publication and Canvas consumption | Displays only a plan matching the current snapshot. | UI must not perform plan construction. |
@@ -102,6 +115,25 @@ not copied into another source mesh.
 11. Viewport teardown cancels the owned build task, clears matching derived
     data, enters `idle`, and makes every later completion stale. No task or plan
     outlives its cache owner.
+12. The transient preview evaluation is `idle` while no preview document exists.
+    While one exists it is exactly one of `preparing`, `ready`, or `failed` for
+    exactly one preview revision, and only a `ready` state whose revision equals
+    the current preview revision may supply an evaluation to scene construction.
+13. Preview evaluation runs outside `MainActor` through the existing
+    `EvaluationScheduler`, reusing the published evaluation as its incremental
+    base. The evaluator is synchronous and does not observe cancellation, so
+    advancing the preview revision, clearing the preview, and viewport teardown
+    abandon a running evaluation rather than stopping it: every completion whose
+    revision no longer matches is discarded without reaching state. At most one
+    preview evaluation is in flight per viewport, and a revision requested while
+    one is running replaces any earlier waiting request and starts when the
+    running one completes, so one drag cannot launch one kernel evaluation per
+    input event.
+14. Until preview evaluation is `ready`, the viewport projects the published
+    document with its published evaluation. The preview document is never
+    projected without its own evaluation, and a failed preview evaluation is an
+    explicit `failed` state rather than an empty successful scene, a stale
+    evaluation, or an on-demand evaluation on `MainActor`.
 
 ## Runtime Flows
 
@@ -146,6 +178,14 @@ nonfinite transform, integer overflow, budget exhaustion, and cancellation are
 typed failures. They are never converted to an empty scene, a stale plan, a
 coarser mesh, or a legacy rendering path.
 
+A failed preview evaluation is recorded as an explicit `failed` state and is
+kept out of rendering: the viewport keeps projecting the published document and
+its published evaluation. No production consumer presents that message today, so
+on screen a preview that cannot evaluate is currently indistinguishable from one
+that is still preparing. Presenting it is a UI responsibility this module does
+not own and has not been given; the state exists so that failure is never
+converted into an empty successful scene.
+
 Only cache-state publication and SwiftUI/Canvas calls are MainActor-isolated.
 Plan construction and validation are not. Screen projection and Canvas context
 work remain MainActor-bound but are capped by the admitted plan and operate per
@@ -185,6 +225,9 @@ instead of weakening the policy.
 | Single preparation pass | Instrumentation proves one triangulation/transform/validation pass, no duplicate full traversal, and one transformed value per retained occurrence vertex. |
 | Batched consumption | Canvas instrumentation proves bounded path/fill/stroke calls by visual-state batch rather than triangle count. |
 | MainActor progress | Signposts reject publication/Canvas intervals above the performance table while a progress probe advances during preparation. |
+| Transient preview ownership | Preparing a preview evaluation performs zero evaluations on `MainActor`, and the scene builder receives a matching supplied evaluation for every preview revision it projects. |
+| Preview staleness and coalescing | Advancing the revision or clearing the preview discards the earlier completion; a late completion never replaces current state, and repeated requests during one drag leave at most one evaluation in flight and start only the newest waiting revision. |
+| Preview failure is explicit | A preview document that fails to evaluate reaches the `failed` state, and the viewport keeps projecting the published document instead of an empty successful scene. |
 | Memory and application behavior | Telemetry reports retained plan bytes, and the actual signed App multi-body run remains interactive with visible geometry and bounded memory. |
 
 Changes to Geometry triangulation, scene identity, Canvas interaction state, or

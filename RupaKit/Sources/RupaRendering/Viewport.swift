@@ -42,6 +42,7 @@ public struct Viewport: View {
     @State private var identityHitResolver = ViewportIdentityHitResolver(
         renderBudget: .deviceCalibrated()
     )
+    @State private var previewEvaluationCache = ViewportPreviewEvaluationCache()
     @State private var presentationPlanCache = MeshSourcePresentationPlanCache()
     @State private var presentationSectionGeometryCache = MeshSourcePresentationSectionGeometryCache()
     @State private var baseSceneSnapshotCache = ViewportSceneSnapshotCache()
@@ -488,6 +489,9 @@ public struct Viewport: View {
     }
 
     public var body: some View {
+        // Read in `body` itself so the transient preview evaluation reaching
+        // `ready` invalidates this view even when no other state changes.
+        let sceneKey = sceneSnapshotKey(usesDragPreviewDocument: true)
         GeometryReader { proxy in
             let timelinePolicy = ViewportTimelineSchedulePolicy(
                 projectionTransition: projectionTransition
@@ -495,7 +499,6 @@ public struct Viewport: View {
             TimelineView(.animation(minimumInterval: nil, paused: timelinePolicy.isPaused)) { timeline in
                 let basis = projectionBasis(at: timeline.date)
                 let fittingChromeLayout = makeFittingChromeLayout(size: proxy.size)
-                let sceneKey = sceneSnapshotKey(usesDragPreviewDocument: true)
                 let sceneContext = makeSceneContext(
                     size: proxy.size,
                     camera: camera,
@@ -678,6 +681,9 @@ public struct Viewport: View {
                 clearDragPreviewDocument()
                 refreshSnapOverlayResolution(size: proxy.size)
                 refreshPlacementHighlight(size: proxy.size)
+            }
+            .onDisappear {
+                previewEvaluationCache.clear()
             }
             .onAppear {
                 if let projectionRequest {
@@ -1046,30 +1052,52 @@ public struct Viewport: View {
         publishCameraFrame(size: size, basis: request.basis)
     }
 
-    private var renderingDocument: DesignDocument {
-        dragPreviewDocument ?? document
+    /// A preview document is projected only together with its own evaluation.
+    /// While that evaluation is preparing or has failed, the viewport keeps
+    /// projecting the published document and its published evaluation.
+    private var rendersDragPreviewDocument: Bool {
+        dragPreviewDocument != nil
+            && documentGeneration != nil
+            && previewEvaluationCache.isReady(for: dragPreviewRevision)
     }
 
-    private var renderingDocumentGeneration: DocumentGeneration? {
-        dragPreviewDocument == nil ? documentGeneration : nil
+    private var publishedEvaluatedDocument: EvaluatedDocument? {
+        currentEvaluation?.evaluatedDocument ?? evaluationCache?.evaluatedDocument
+    }
+
+    private var renderingDocument: DesignDocument {
+        rendersDragPreviewDocument ? (dragPreviewDocument ?? document) : document
     }
 
     private var renderingCurrentEvaluation: DocumentEvaluationContext? {
-        dragPreviewDocument == nil ? currentEvaluation : nil
+        rendersDragPreviewDocument ? nil : currentEvaluation
     }
 
     private var renderingEvaluationCache: EvaluatedDocumentCache? {
-        dragPreviewDocument == nil ? evaluationCache : nil
+        guard rendersDragPreviewDocument else {
+            return evaluationCache
+        }
+        return previewEvaluationCache.readyCache(for: dragPreviewRevision)
+    }
+
+    /// Scene construction may evaluate on this thread only for the published
+    /// document, which already carries a published evaluation. A projected
+    /// preview supplies its own evaluation and never evaluates here.
+    private func sceneEvaluationPolicy(
+        usesDragPreviewDocument: Bool
+    ) -> ViewportSceneEvaluationPolicy {
+        usesDragPreviewDocument && rendersDragPreviewDocument ? .suppliedOnly : .evaluateOnDemand
     }
 
     private func sceneDocument(usesDragPreviewDocument: Bool) -> DesignDocument {
         usesDragPreviewDocument ? renderingDocument : document
     }
 
-    private func sceneDocumentGeneration(
-        usesDragPreviewDocument: Bool
-    ) -> DocumentGeneration? {
-        usesDragPreviewDocument ? renderingDocumentGeneration : documentGeneration
+    /// A preview document is derived from the published document and evaluated
+    /// under the published generation, so both scenes carry that one generation.
+    /// This is what lets a supplied preview evaluation match its document.
+    private var sceneDocumentGeneration: DocumentGeneration? {
+        documentGeneration
     }
 
     private func sceneCurrentEvaluation(
@@ -1145,8 +1173,9 @@ public struct Viewport: View {
                 ruler: workspaceRuler,
                 overlayState: sceneOverlayState,
                 currentEvaluation: sceneCurrentEvaluation(usesDragPreviewDocument: usesDragPreviewDocument),
-                documentGeneration: sceneDocumentGeneration(usesDragPreviewDocument: usesDragPreviewDocument),
-                evaluationCache: sceneEvaluationCache(usesDragPreviewDocument: usesDragPreviewDocument)
+                documentGeneration: sceneDocumentGeneration,
+                evaluationCache: sceneEvaluationCache(usesDragPreviewDocument: usesDragPreviewDocument),
+                evaluationPolicy: sceneEvaluationPolicy(usesDragPreviewDocument: usesDragPreviewDocument)
             )
         }
     }
@@ -1156,14 +1185,12 @@ public struct Viewport: View {
     ) -> ViewportSceneSnapshotKey? {
         let source: ViewportSceneSnapshotKey.Source
         if usesDragPreviewDocument,
-           dragPreviewDocument != nil {
+           rendersDragPreviewDocument {
             source = .dragPreview(
                 documentID: sceneDocument(usesDragPreviewDocument: true).id,
                 revision: dragPreviewRevision
             )
-        } else if let generation = sceneDocumentGeneration(
-            usesDragPreviewDocument: usesDragPreviewDocument
-        ) {
+        } else if let generation = sceneDocumentGeneration {
             source = .document(
                 id: sceneDocument(usesDragPreviewDocument: usesDragPreviewDocument).id,
                 generation: generation
@@ -10091,12 +10118,24 @@ public struct Viewport: View {
         if dragPreviewDocument != nil {
             dragPreviewDocument = nil
             advanceDragPreviewRevision()
+            previewEvaluationCache.clear()
         }
     }
 
-    private func setDragPreviewDocument(_ document: DesignDocument) {
-        dragPreviewDocument = document
+    private func setDragPreviewDocument(_ previewDocument: DesignDocument) {
+        dragPreviewDocument = previewDocument
         advanceDragPreviewRevision()
+        guard let documentGeneration else {
+            previewEvaluationCache.clear()
+            return
+        }
+        previewEvaluationCache.prepare(
+            document: previewDocument,
+            generation: documentGeneration,
+            revision: dragPreviewRevision,
+            reusing: publishedEvaluatedDocument,
+            objectRegistry: objectRegistry
+        )
     }
 
     private func advanceDragPreviewRevision() {

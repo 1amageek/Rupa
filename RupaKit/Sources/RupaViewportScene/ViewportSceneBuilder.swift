@@ -15,7 +15,8 @@ public struct ViewportSceneBuilder {
         overlayState: ViewportSceneOverlayState = .empty,
         currentEvaluation: DocumentEvaluationContext? = nil,
         documentGeneration: DocumentGeneration? = nil,
-        evaluationCache: EvaluatedDocumentCache? = nil
+        evaluationCache: EvaluatedDocumentCache? = nil,
+        evaluationPolicy: ViewportSceneEvaluationPolicy = .evaluateOnDemand
     ) -> ViewportScene {
         let graph = document.cadDocument.designGraph
         let designDisplaySnapshot = DesignDisplaySnapshotService().snapshot(
@@ -26,7 +27,8 @@ public struct ViewportSceneBuilder {
             for: document,
             currentEvaluation: currentEvaluation,
             documentGeneration: documentGeneration,
-            evaluationCache: evaluationCache
+            evaluationCache: evaluationCache,
+            evaluationPolicy: evaluationPolicy
         )
         let bodyDisplaySnapshots = evaluatedDocument.map {
             BodyDisplaySnapshotService().snapshots(evaluatedDocument: $0)
@@ -1641,7 +1643,8 @@ public struct ViewportSceneBuilder {
         for document: DesignDocument,
         currentEvaluation: DocumentEvaluationContext?,
         documentGeneration: DocumentGeneration?,
-        evaluationCache: EvaluatedDocumentCache?
+        evaluationCache: EvaluatedDocumentCache?,
+        evaluationPolicy: ViewportSceneEvaluationPolicy
     ) -> EvaluatedDocument? {
         if let current = currentEvaluatedDocument(
             for: document,
@@ -1650,6 +1653,9 @@ public struct ViewportSceneBuilder {
             evaluationCache: evaluationCache
         ) {
             return current
+        }
+        guard evaluationPolicy == .evaluateOnDemand else {
+            return nil
         }
         do {
             return try DocumentEvaluationContextResolver().evaluatedDocument(
