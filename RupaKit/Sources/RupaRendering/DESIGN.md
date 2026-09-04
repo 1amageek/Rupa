@@ -219,7 +219,10 @@ behavioural change. `ViewportResponsivenessSignposts` owns the identities.
 
 The offline harness measures only the presentation portion of a Canvas pass, so
 its Canvas figure is a lower bound of the signposted interval: a harness
-rejection stays valid for the application, a harness acceptance does not.
+rejection stays valid for the application, a harness acceptance does not. The
+same asymmetry applies to the two byte rows, whose sampled footprint deltas are
+lower bounds of the plan's bytes. Those three rows are owned by the signed
+application run; the harness can only reject them.
 
 The standard presentation fidelity is the finest deterministic profile that
 passes every row for the fixed multi-body fixture suite. Count/byte defaults

@@ -422,12 +422,29 @@ public struct ResponsivenessBaselineRunner {
                     """
             )
         }
+        // The delta is taken after a warm-up that already built and released an
+        // identical plan, so the allocator can satisfy the new allocation from
+        // pages it already holds. The delta is therefore a lower bound on the
+        // plan's bytes: it can exceed the ceiling and reject, but it cannot
+        // establish that the plan stays under it.
+        let exceeds = Double(deltaBytes) > ceiling
         return ResponsivenessRowResult(
             row: row,
-            verdict: Double(deltaBytes) > ceiling ? .rejects : .accepts,
+            verdict: exceeds ? .rejects : .notMeasured,
             measured: megabytes(Double(deltaBytes)),
             threshold: megabytes(ceiling),
-            detail: detail
+            detail: exceeds
+                ? """
+                    \(detail) The delta is a lower bound and the row rejects on \
+                    the lower bound alone.
+                    """
+                : """
+                    \(detail) The warm-up already built and released an identical \
+                    plan, so the allocator can satisfy this allocation from pages it \
+                    already holds and the delta is a lower bound. A lower bound below \
+                    the ceiling cannot establish acceptance; the signed-application \
+                    footprint run owns this row.
+                    """
         )
     }
 

@@ -81,7 +81,11 @@ It never reimplements plan construction, traversal, or projection.
    The report states this exclusion.
 5. Footprint values are sampled `phys_footprint` deltas taken around plan
    construction while the plan is retained. They are labelled as sampled
-   proxies. A failed sample is a typed failure, never a zero.
+   proxies. A failed sample is a typed failure, never a zero. The delta is taken
+   after a warm-up that already built and released an identical plan, so the
+   allocator can satisfy the measured allocation from pages it already holds:
+   the delta is a lower bound on the plan's bytes, and a byte row therefore
+   rejects on the lower bound but never accepts from it.
 6. Acceptance-table environment inputs are either supplied by the caller or
    derived by the stated selection rule recorded with the report. A derived
    value is always reported together with its rule.
@@ -158,6 +162,7 @@ dependent and are never asserted.
 | Attributable duplicate pass | Every sample reports a non-zero validation-traversal duration separate from `makePlan`, and preparation equals their sum. |
 | Honest exclusion | The Canvas row's reason names the excluded fill and stroke submissions, and the counted values equal the triangle count. |
 | No invented values | Every acceptance row carries a verdict, a measured value, a threshold, and a non-empty reason; the two rows the table defines over ten runs cannot accept from a shorter series, and the two it defines over one publication are decided by any run. |
+| Lower-bound rows never accept | The Canvas row and both byte rows report `rejects` or `notMeasured`, never `accepts`, because each is measured as a lower bound. |
 | Typed failures | An invalid environment input and an invalid measurement request each throw `ResponsivenessBaselineError` instead of producing a report. |
 | Unmodified report | The report round-trips through JSON to an equal value. |
 

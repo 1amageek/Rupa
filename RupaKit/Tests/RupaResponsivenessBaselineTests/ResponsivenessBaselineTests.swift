@@ -136,6 +136,21 @@ struct ResponsivenessBaselineTests {
         }
     }
 
+    @Test("A lower-bound row never accepts")
+    @MainActor
+    func lowerBoundRowsNeverAccept() async throws {
+        let report = try await Self.makeReport(iterationCount: 2)
+        let lowerBoundRows: [ResponsivenessAcceptanceRow] = [
+            .canvasConsumption,
+            .planRetainedBytes,
+            .planWorkingBytes,
+        ]
+        for row in lowerBoundRows {
+            let result = try #require(report.rows.first { $0.row == row })
+            #expect(result.verdict != .accepts)
+        }
+    }
+
     @Test("The report round-trips through JSON unchanged")
     @MainActor
     func reportRoundTrip() async throws {
