@@ -6,6 +6,15 @@
 to the App-owned `ProjectWorkspace`. It is a child of the
 [RupaKit package design](../../DESIGN.md) and has no child designs.
 
+The current implementation does not satisfy invariants 5, 6, and 7. The
+viewport body still asks a synchronous cache for a render plan while SwiftUI
+evaluates that body, so Mesh validation, world transformation, triangle-plan
+construction, and one `Path` per triangle still run inside one `MainActor`
+view update, and no cancellable build task exists to release at teardown. The
+invariants below are the target the
+[RupaRendering design](../RupaRendering/DESIGN.md) is being corrected toward;
+they are not a claim about the shipped application.
+
 ## Responsibilities and Boundaries
 
 The module owns workspace presentation, viewport/UI interaction, visible

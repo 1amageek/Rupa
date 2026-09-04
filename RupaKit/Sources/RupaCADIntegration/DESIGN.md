@@ -25,7 +25,7 @@ publish a project, render a viewport, or handle Agent requests.
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [RupaKit package](../../DESIGN.md) | parent | module graph and authority direction | Places this adapter below product composition and provider-neutral evaluation. | This module is not project authority. |
-| [RupaEvaluation](../RupaEvaluation/DESIGN.md) | used by | bounded provider request/result | Supplies exact references and remaining aggregate allowance. | Return exactly the requested results or fail. |
+| [RupaEvaluation](../RupaEvaluation/DESIGN.md) | depends on | bounded provider request/result | Declares the provider contract this adapter implements, with exact references and remaining aggregate allowance. | Return exactly the requested results or fail; the contract owner never imports this adapter. |
 | [RupaKit integration](../RupaKit/DESIGN.md) | used by | purpose-selected CAD configuration | Selects modeling or presentation policy before constructing the provider. | The adapter must not infer purpose. |
 | [Swift-CAD](../../../swift-CAD/DESIGN.md) | depends on | exact evaluation and bounded tessellation | Supplies exact B-Rep and generic Mesh limits. | Swift-CAD never receives Rupa UI policy. |
 

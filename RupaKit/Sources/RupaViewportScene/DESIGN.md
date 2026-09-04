@@ -37,6 +37,7 @@ overlay face. Measurement and inspection APIs own metric requests.
 | [RupaEvaluation design](../RupaEvaluation/DESIGN.md) | depends on | Complete purpose-selected bounded evaluation | Supplies immutable admitted presentation results. | Scene projection cannot widen limits or select a different fidelity. |
 | [RupaRendering design](../RupaRendering/DESIGN.md) | used by | Immutable `ViewportScene` and snapshot identity | Consumes scene items for render-plan construction. | Rendering must not make overlay lookup a metric path. |
 | [RupaGeometry design](../RupaGeometry/DESIGN.md) | coordinates with | Bounded source-order Mesh traversal | Owns render-time geometry triangulation. | Do not duplicate its topology or buffer-index logic here. |
+| [Swift-CAD package](../../../swift-CAD/DESIGN.md) | depends on | Exact CAD document, topology reference, and evaluated value types | Supplies the CAD value types this module reads directly through its declared `SwiftCAD` dependency. | Scene projection never tessellates, evaluates, or selects kernel limits. |
 | [RupaViewportScene tests](../../Tests/RupaViewportSceneTests) | verification owner | Scene projection and overlay behavior | Proves exact overlay references and build responsiveness. | Type existence is not runtime evidence. |
 
 ## Architecture

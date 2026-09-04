@@ -40,9 +40,9 @@ Swift-CAD owns geometry-aware tessellation admission and emission.
 | [RupaKit package](../../DESIGN.md) | parent | evaluation dependency and authority direction | Places evaluation between project staging and immutable scene projection. | This module never publishes project state. |
 | [RupaProject](../RupaProject/DESIGN.md) | used by | purpose-bound evaluator preparation and staged evaluation | Supplies one immutable source and revision. | A failed evaluation leaves the project transaction unpublished. |
 | [RupaKit integration](../RupaKit/DESIGN.md) | used by | product-selected presentation policy | Selects modeling versus presentation fidelity at the existing preparation seam. | No new coordinator or evaluator authority is introduced. |
-| [RupaCADIntegration](../RupaCADIntegration/DESIGN.md) | depends on | purpose-specific CAD configuration and cache separation | Adapts provider requests to exact Swift-CAD state. | Exact B-rep reuse is independent of Mesh fidelity. |
+| [RupaCADIntegration](../RupaCADIntegration/DESIGN.md) | used by | purpose-specific CAD configuration and cache separation | Implements this module's provider contract and adapts it to exact Swift-CAD state. | This module declares the provider contract and never imports the adapter. |
 | [RupaViewportScene](../RupaViewportScene/DESIGN.md) | used by | immutable evaluated occurrence snapshot | Consumes the completed evaluation for scene construction. | Scene construction does not re-evaluate geometry. |
-| [Swift-CAD package](../../../swift-CAD/DESIGN.md) | depends on through provider | exact B-rep and generic tessellation limits | Provides exact topology and bounded derived Mesh. | Kernel does not know Rupa purpose or viewport policy. |
+| [Swift-CAD package](../../../swift-CAD/DESIGN.md) | coordinates with | exact B-rep and generic tessellation limits | Reached only through the provider contract that `RupaCADIntegration` implements. | This module has no Swift-CAD package dependency; the kernel does not know Rupa purpose or viewport policy. |
 
 ## Architecture
 

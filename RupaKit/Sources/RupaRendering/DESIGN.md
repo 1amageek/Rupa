@@ -43,6 +43,7 @@ protocol is introduced by this correction.
 | [RupaGeometry](../RupaGeometry/DESIGN.md) | depends on | Source-bound index and bounded face triangulation | Supplies Mesh topology traversal. | Do not duplicate ID lookup or polygon algorithms. |
 | [RupaViewportScene](../RupaViewportScene/DESIGN.md) | depends on | Immutable scene and snapshot identity | Supplies selected bounded presentation results and transforms. | Rendering cannot reevaluate or select LOD. |
 | [RupaUI](../RupaUI/DESIGN.md) | used by | MainActor publication and Canvas consumption | Displays only a plan matching the current snapshot. | UI must not perform plan construction. |
+| [Swift-CAD package](../../../swift-CAD/DESIGN.md) | depends on | Exact CAD document and evaluated value types | Supplies the CAD value types this module reads directly through its declared `SwiftCAD` dependency. | Rendering never tessellates CAD, evaluates a document, or selects kernel limits. |
 | [RupaRendering tests](../../Tests/RupaRenderingTests) | verification owner | Plan, limit, cancellation, stale-result, and batching behavior | Proves the actual derived-data path. | Type/build checks are not behavior evidence. |
 
 ## Architecture
