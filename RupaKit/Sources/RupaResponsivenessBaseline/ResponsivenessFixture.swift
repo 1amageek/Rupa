@@ -110,12 +110,29 @@ public struct ResponsivenessFixture: Sendable {
         }
     }
 
+    /// One fixture body, in the order the fixture places them.
+    ///
+    /// The body carries the authored mesh asset a project document persists and
+    /// the world placement the fixture gives it, so a consumer that writes the
+    /// fixture into a document writes the same geometry the scene was built
+    /// from rather than a second construction of it.
+    public struct Body: Sendable {
+        public let asset: AuthoredMeshAsset
+        public let worldTransform: GeometryTransform3D
+
+        init(asset: AuthoredMeshAsset, worldTransform: GeometryTransform3D) {
+            self.asset = asset
+            self.worldTransform = worldTransform
+        }
+    }
+
     public let parameters: Parameters
     public let scene: UniversalViewportScene
     /// SHA-256 over the materialized positions and face corner references.
     public let contentDigest: String
     public let vertexCount: Int
     public let faceCount: Int
+    public let bodies: [Body]
 
     public static func build(_ parameters: Parameters = .standard) throws -> ResponsivenessFixture {
         try parameters.validate()
@@ -133,6 +150,7 @@ public struct ResponsivenessFixture: Sendable {
         var evaluatedOccurrences: [SceneOccurrenceID: EvaluatedOccurrenceSnapshot] = [:]
         var authoredMeshAssets: [GeometrySourceID: AuthoredMeshAsset] = [:]
         var rootOccurrenceIDs: [SceneOccurrenceID] = []
+        var bodies: [Body] = []
 
         for bodyIndex in 0..<parameters.bodyCount {
             let sourceID = GeometrySourceID(
@@ -196,10 +214,12 @@ public struct ResponsivenessFixture: Sendable {
                     worldTransform: transform,
                     worldBounds: try mesh.bounds().transformed(by: transform)
                 )
-                authoredMeshAssets[sourceID] = try AuthoredMeshAsset(
+                let asset = try AuthoredMeshAsset(
                     source: mesh,
                     provenance: .created
                 )
+                authoredMeshAssets[sourceID] = asset
+                bodies.append(Body(asset: asset, worldTransform: transform))
             } catch let error as ResponsivenessBaselineError {
                 throw error
             } catch {
@@ -248,7 +268,8 @@ public struct ResponsivenessFixture: Sendable {
             scene: scene,
             contentDigest: hasher.hexDigest(),
             vertexCount: totalVertexCount,
-            faceCount: totalFaceCount
+            faceCount: totalFaceCount,
+            bodies: bodies
         )
     }
 

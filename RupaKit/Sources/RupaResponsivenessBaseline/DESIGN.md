@@ -63,10 +63,18 @@ It never reimplements plan construction, traversal, or projection.
 
 ## Contracts and Invariants
 
-1. The fixture is a pure function of its versioned parameters. Building it twice
-   in one process or across processes yields the same digest, and the digest
-   covers the materialized vertex positions and face corner references, not the
-   parameters alone.
+1. The fixture is a pure function of its versioned parameters and of the
+   optimization level it was compiled at. Building it twice in one process or
+   across processes at the same optimization level yields the same digest, and
+   the digest covers the materialized vertex positions and face corner
+   references, not the parameters alone. Because it covers materialized
+   positions it also covers the floating-point results of the lateral `cos` and
+   `sin` evaluations, and this toolchain evaluates them differently under
+   `-Onone` and `-O`: an isolated reproduction of the lateral loop at the
+   standard segment count showed ten of 6284 sampled values differing by one
+   unit in the last place. A digest recorded from a Release build is therefore
+   reproduced only by a Release build, and a digest is comparable only between
+   runs of the same build configuration.
 2. Every fixture body is admitted by the module hard ceilings it is measured
    under. A fixture that cannot be built or cannot be planned is a typed
    failure, never a smaller fixture that happens to succeed.

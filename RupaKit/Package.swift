@@ -137,6 +137,14 @@ let package = Package(
             targets: ["RupaResponsivenessBaselineCLI"]
         ),
         .library(
+            name: "RupaResponsivenessFixtureDocument",
+            targets: ["RupaResponsivenessFixtureDocument"]
+        ),
+        .executable(
+            name: "rupa-responsiveness-fixture-document",
+            targets: ["RupaResponsivenessFixtureDocumentCLI"]
+        ),
+        .library(
             name: "RupaAgent",
             targets: ["RupaAgent"]
         ),
@@ -480,6 +488,39 @@ let package = Package(
             name: "RupaResponsivenessBaselineTests",
             dependencies: [
                 "RupaResponsivenessBaseline",
+            ]
+        ),
+        .target(
+            name: "RupaResponsivenessFixtureDocument",
+            dependencies: [
+                "RupaResponsivenessBaseline",
+                "RupaCore",
+                "RupaCoreTypes",
+                "RupaGeometry",
+                "RupaProject",
+                "RupaProjectModel",
+                "RupaProjectPackage",
+                .product(name: "SwiftCAD", package: "swift-CAD"),
+            ],
+            exclude: ["DESIGN.md"]
+        ),
+        .executableTarget(
+            name: "RupaResponsivenessFixtureDocumentCLI",
+            dependencies: [
+                "RupaResponsivenessBaseline",
+                "RupaResponsivenessFixtureDocument",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
+            exclude: ["DESIGN.md"]
+        ),
+        .testTarget(
+            name: "RupaResponsivenessFixtureDocumentTests",
+            dependencies: [
+                "RupaResponsivenessBaseline",
+                "RupaResponsivenessFixtureDocument",
+                "RupaCore",
+                "RupaProject",
+                "RupaProjectPackage",
             ]
         ),
         .target(

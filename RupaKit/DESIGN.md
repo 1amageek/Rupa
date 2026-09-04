@@ -38,6 +38,8 @@ Parent: [system design](../DESIGN.md). Direct children used by T10/T12 are:
 - [RupaAgentCADBenchmarkCLI](Sources/RupaAgentCADBenchmarkCLI/DESIGN.md)
 - [RupaResponsivenessBaseline](Sources/RupaResponsivenessBaseline/DESIGN.md)
 - [RupaResponsivenessBaselineCLI](Sources/RupaResponsivenessBaselineCLI/DESIGN.md)
+- [RupaResponsivenessFixtureDocument](Sources/RupaResponsivenessFixtureDocument/DESIGN.md)
+- [RupaResponsivenessFixtureDocumentCLI](Sources/RupaResponsivenessFixtureDocumentCLI/DESIGN.md)
 
 Package dependencies are the local targets and external packages declared by
 [`Package.swift`](Package.swift), notably `swift-CAD`, Swift Collections, and
@@ -171,6 +173,8 @@ flowchart LR
 | [Benchmark CLI](Sources/RupaAgentCADBenchmarkCLI/DESIGN.md) | child | dedicated request/evaluate process contract | Exposes the JSON adapter as `rupa-agent-cad-benchmark` without changing `rupa`. | It owns no envelope meaning, network transport, or project state. |
 | [RupaResponsivenessBaseline design](Sources/RupaResponsivenessBaseline/DESIGN.md) | child | Versioned fixture, production-path measurement, and one verdict per acceptance row | Records the responsiveness baseline the RupaRendering acceptance table is judged against, using only public production contracts. | It owns no production behaviour and never relaxes a threshold or invents a value for an unobservable measure. |
 | [Responsiveness baseline CLI design](Sources/RupaResponsivenessBaselineCLI/DESIGN.md) | child | dedicated measurement process contract | Exposes the baseline as `rupa-responsiveness-baseline` without changing `rupa`. | Its exit code is non-zero when measurement fails, when any acceptance row rejects, and when any row was not measured, with a distinct code per outcome. |
+| [RupaResponsivenessFixtureDocument design](Sources/RupaResponsivenessFixtureDocument/DESIGN.md) | child | Fixture-to-project-package projection with reload verification | Materializes the measured fixture as a `.rupa` package so a signed application can be measured against the content the harness measured. | It is a separate target so `rupa-responsiveness-baseline` does not link the project and package stack, which would change the footprint its recorded baseline was taken against. |
+| [Responsiveness fixture document CLI design](Sources/RupaResponsivenessFixtureDocumentCLI/DESIGN.md) | child | dedicated export process contract | Exposes the export as `rupa-responsiveness-fixture-document` without changing `rupa`. | It exits non-zero unless the writer reported a verified write, and prints the written document's identity so a later measurement can be attributed to it. |
 
 ## Architecture
 
