@@ -208,6 +208,19 @@ acceptance evidence.
 | Plan retained bytes | Ready-plan retained bytes exceed 2.5% of `minimumMemory`. |
 | Plan working bytes | Peak builder scratch plus in-flight plan bytes exceed 2.5% of `minimumMemory`. |
 
+Both `MainActor` intervals in the table are emitted as signposts from the
+production path so the signed application reports the same measures without a
+behavioural change. `ViewportResponsivenessSignposts` owns the identities.
+
+| Interval | Signpost | Covers |
+|---|---|---|
+| MainActor state publication | `RupaRendering` / `Responsiveness` / `PresentationPlanPublication` | The plan publication the view body performs before the Canvas is created. |
+| Canvas consumption | `RupaRendering` / `Responsiveness` / `ViewportCanvasConsumption` | One full Canvas renderer invocation, of which the presentation draw is a part. |
+
+The offline harness measures only the presentation portion of a Canvas pass, so
+its Canvas figure is a lower bound of the signposted interval: a harness
+rejection stays valid for the application, a harness acceptance does not.
+
 The standard presentation fidelity is the finest deterministic profile that
 passes every row for the fixed multi-body fixture suite. Count/byte defaults
 are the smallest versioned ceilings that admit the measured successful maxima

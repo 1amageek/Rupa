@@ -36,6 +36,8 @@ Parent: [system design](../DESIGN.md). Direct children used by T10/T12 are:
 - [RupaAgentCADBenchmark](Sources/RupaAgentCADBenchmark/DESIGN.md)
 - [RupaAgentCADBenchmarkJSONAdapter](Sources/RupaAgentCADBenchmarkJSONAdapter/DESIGN.md)
 - [RupaAgentCADBenchmarkCLI](Sources/RupaAgentCADBenchmarkCLI/DESIGN.md)
+- [RupaResponsivenessBaseline](Sources/RupaResponsivenessBaseline/DESIGN.md)
+- [RupaResponsivenessBaselineCLI](Sources/RupaResponsivenessBaselineCLI/DESIGN.md)
 
 Package dependencies are the local targets and external packages declared by
 [`Package.swift`](Package.swift), notably `swift-CAD`, Swift Collections, and
@@ -167,6 +169,8 @@ flowchart LR
 | [RupaAgentCADBenchmark design](Sources/RupaAgentCADBenchmark/DESIGN.md) | child | Exactly-100 per-case and aggregate verification contract | Composes all reviewed registered-Agent routes and immutable source/B-Rep oracles into measured scheduling, baselines, and a canonical report. | Catalog presence is not implementation evidence; production authority modules must not depend on it. |
 | [Benchmark JSON adapter](Sources/RupaAgentCADBenchmarkJSONAdapter/DESIGN.md) | child | versioned envelopes, context fingerprint, bounded decode, JSON candidate | Binds one external decision to the exact public context of one activated case. | It cannot import private expectations or accept a catalog-only case. |
 | [Benchmark CLI](Sources/RupaAgentCADBenchmarkCLI/DESIGN.md) | child | dedicated request/evaluate process contract | Exposes the JSON adapter as `rupa-agent-cad-benchmark` without changing `rupa`. | It owns no envelope meaning, network transport, or project state. |
+| [RupaResponsivenessBaseline design](Sources/RupaResponsivenessBaseline/DESIGN.md) | child | Versioned fixture, production-path measurement, and one verdict per acceptance row | Records the responsiveness baseline the RupaRendering acceptance table is judged against, using only public production contracts. | It owns no production behaviour and never relaxes a threshold or invents a value for an unobservable measure. |
+| [Responsiveness baseline CLI design](Sources/RupaResponsivenessBaselineCLI/DESIGN.md) | child | dedicated measurement process contract | Exposes the baseline as `rupa-responsiveness-baseline` without changing `rupa`. | Its exit code is non-zero when measurement fails, when any acceptance row rejects, and when any row was not measured, with a distinct code per outcome. |
 
 ## Architecture
 

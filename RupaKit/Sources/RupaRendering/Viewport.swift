@@ -520,14 +520,18 @@ public struct Viewport: View {
                         scaleReadout: projectedGrid.scaleReadout
                     )
                 )
-                let presentationPlanResult = presentationScene.map {
-                    presentationPlanCache.result(for: $0)
+                let presentationPlanResult = presentationScene.map { scene in
+                    ViewportResponsivenessSignposts.withPlanPublicationInterval {
+                        presentationPlanCache.result(for: scene)
+                    }
                 }
                 let presentationSectionGeometryResolver = presentationSectionGeometryResolver(
                     sceneKey: sceneKey
                 )
 
                 Canvas { context, size in
+                    let canvasInterval = ViewportResponsivenessSignposts.beginCanvasConsumption()
+                    defer { ViewportResponsivenessSignposts.endCanvasConsumption(canvasInterval) }
                     ViewportGridRenderer.draw(projectedGrid, chromeLayout: chromeLayout, in: &context)
                     drawAxes(in: &context, size: size, camera: camera, basis: basis)
                     drawPresentation(

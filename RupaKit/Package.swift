@@ -129,6 +129,14 @@ let package = Package(
             targets: ["RupaAgentCADBenchmarkCLI"]
         ),
         .library(
+            name: "RupaResponsivenessBaseline",
+            targets: ["RupaResponsivenessBaseline"]
+        ),
+        .executable(
+            name: "rupa-responsiveness-baseline",
+            targets: ["RupaResponsivenessBaselineCLI"]
+        ),
+        .library(
             name: "RupaAgent",
             targets: ["RupaAgent"]
         ),
@@ -446,6 +454,33 @@ let package = Package(
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ],
             exclude: ["DESIGN.md"]
+        ),
+        .target(
+            name: "RupaResponsivenessBaseline",
+            dependencies: [
+                "RupaRendering",
+                "RupaViewportScene",
+                "RupaEvaluation",
+                "RupaGeometry",
+                "RupaProjectModel",
+                "RupaCoreTypes",
+                .product(name: "SwiftCAD", package: "swift-CAD"),
+            ],
+            exclude: ["DESIGN.md"]
+        ),
+        .executableTarget(
+            name: "RupaResponsivenessBaselineCLI",
+            dependencies: [
+                "RupaResponsivenessBaseline",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
+            exclude: ["DESIGN.md"]
+        ),
+        .testTarget(
+            name: "RupaResponsivenessBaselineTests",
+            dependencies: [
+                "RupaResponsivenessBaseline",
+            ]
         ),
         .target(
             name: "RupaCLIKit",
