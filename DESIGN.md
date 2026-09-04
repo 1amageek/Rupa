@@ -16,6 +16,13 @@ route. The separately authorized T12 external-Agent adapter adds one bounded nat
 JSON CLI above the benchmark without changing that project route or adding a
 general transport/LLM integration.
 
+RUPA-RESP-D is the target design for correcting the current rainbow-spinner
+failure: valid multi-body CAD can generate excessive presentation Mesh, render
+preparation and duplicate validation currently execute synchronously from
+MainActor-bound UI state, Canvas draws per triangle, and the Agent controller
+is globally MainActor-isolated. This phase changes design contracts only; it
+does not claim the production implementation or live App has been fixed.
+
 This document has no parent. Its direct children are the
 [RupaKit package design](RupaKit/DESIGN.md), which indexes the changed module
 designs; the [Rupa application design](Rupa/DESIGN.md), which owns product
@@ -52,6 +59,11 @@ MCP adapters submit typed intent through the project-access boundary; the
 workspace and its `ProjectController` remain the only Product/CAD/Mesh
 mutation, evaluation, and save authority.
 
+The system also owns the separation between exact CAD/source authority,
+purpose-selected bounded presentation evaluation, postpublication derived
+render data, MainActor UI publication, and Agent control-plane orchestration.
+Crossing one boundary never transfers another boundary's authority.
+
 For CAD source mutation, the system additionally owns one-vocabulary/two-form
 composition: `capability.invoke` makes a simple operation simple, while
 `program.execute` composes those exact operations into one bounded atomic DAG.
@@ -85,6 +97,9 @@ the final immutable source/B-Rep snapshot.
 | [RupaDomainFoundation](RupaKit/Sources/RupaDomainFoundation/DESIGN.md) | descendant | generic operation/value/reference/program compiler contract | Defines the single semantic operation model shared by both forms. | It owns neither concrete CAD vocabulary nor project publication. |
 | [RupaCADDomain](RupaKit/Sources/RupaCADDomain/DESIGN.md) | descendant | concrete versioned CAD descriptor/lowerer contract | Supplies the twelve universal CAD operations used by both forms and all 100 exact benchmark realizations. | It owns neither caller IDs nor project/publication/transport authority. |
 | [RupaAutomation](RupaKit/Sources/RupaAutomation/DESIGN.md) | descendant | binding-aware prepared source execution | Keeps raw feature-graph transactions as an internal lowering substrate. | Its current externally reachable raw commands are an implementation gap. |
+| [RupaEvaluation](RupaKit/Sources/RupaEvaluation/DESIGN.md) | descendant | Purpose selection and provider-neutral cumulative limits | Produces one complete bounded immutable evaluation. | It neither chooses product fidelity nor publishes project state. |
+| [RupaRendering](RupaKit/Sources/RupaRendering/DESIGN.md) | descendant | Cancellable snapshot-matched derived plan | Prepares bounded display data outside MainActor. | It cannot mutate source, evaluation, or publication. |
+| [RupaAgentRuntime](RupaKit/Sources/RupaAgentRuntime/DESIGN.md) | descendant | Non-MainActor control plane and narrow workspace access | Keeps status/capability/read progress independent from rendering. | It cannot call CAD, Mesh, renderer, package writer, or persistence directly. |
 
 ## Architecture
 
@@ -140,6 +155,13 @@ flowchart LR
         V8Thermal --> V8Mechanical["Cranktrain and subsystem design"]
         V8Mechanical --> V8CAD["Semantic CAD reference"]
         V8CAD --> V8Evidence["Reload, Mesh, calculation, and claim gates"]
+    end
+    subgraph Responsive["Responsive authority separation target"]
+        Exact["Exact CAD / source\nProjectController authority"] --> Bounded["Purpose-selected bounded\npresentation evaluation"]
+        Bounded --> Published["Atomic published scene"]
+        Published --> Derived["Cancellable off-main\nderived render plan"]
+        Derived --> Main["Matching MainActor state\nand batched Canvas"]
+        Control["Agent control plane"] -->|short exact workspace hop only| WorkspaceAuthority
     end
     Runtime -. "observed by T11-R" .-> Sources
     Runtime -. "route observed by T12-0" .-> AgentRoute
@@ -241,6 +263,23 @@ flowchart LR
     Agent API values. The current `appendFeatureGraph` catalog/protocol route is
     legacy implementation inventory and must be removed or rejected before
     CADAPI-D can be called implemented.
+20. Exact B-rep/source topology and modeling tolerance remain authoritative.
+    Presentation Mesh fidelity is selected by RupaKit product composition;
+    Swift-CAD owns only generic checked tessellation limits and RupaEvaluation
+    owns cumulative provider-neutral admission. Limit, overflow, cancellation,
+    or malformed-result failure publishes no partial evaluation.
+21. Render-plan preparation begins only after project publication and is a
+    cancellable derived read. It may retain bounded transformed positions,
+    indices, provenance, and batch metadata, but owns no source, project,
+    representation-selection, or rollback authority.
+22. Only snapshot-matching render state and Canvas calls run on MainActor.
+    Construction validates and transforms once off-main; consumption performs
+    no duplicate full traversal and no fill/stroke per triangle.
+23. Agent capability/status, lease, semantic compilation, immutable projection,
+    and encoding run on a control plane independent of rendering. Runtime uses
+    only the existing registered workspace/application ports for exact reads,
+    mutation, and explicit save, preserving the five-part coordinate,
+    cancellation, deadline, and no-retry contracts.
 
 T10's bicycle workflow is a capability fixture for the Agent route, authority
 transition, application-owned save/load, and renderer traversal. Its
@@ -280,6 +319,27 @@ sequenceDiagram
     W->>P: atomic package save
     P->>V: presentation evaluation -> scene -> real triangles
     V-->>V: deterministic acceptance PNG
+```
+
+Responsive presentation and Agent progress compose without shared authority:
+
+```mermaid
+sequenceDiagram
+    participant P as ProjectController
+    participant E as Bounded evaluation
+    participant C as Render-plan cache
+    participant M as MainActor UI
+    participant A as Agent control plane
+    P->>E: stage purpose-selected complete evaluation
+    E-->>P: admitted snapshot or typed failure
+    P-->>C: publish immutable scene
+    C->>C: cancellable off-main prepare once
+    par UI progress
+        M->>M: interaction and run-loop progress
+    and Agent progress
+        A->>A: capability/status/immutable projection
+    end
+    C-->>M: matching ready/failed atomic state
 ```
 
 T12 composes a separate bounded flow over the Agent route:
@@ -324,6 +384,11 @@ CADAPI-D parameters, node symbols, local references, compilation graph, and
 prepared-plan bindings are invocation-local. Persistent source identities begin
 only inside staged project authority and are returned through a typed committed
 receipt; a dry run never returns persistent identity claims.
+Presentation evaluation budgets are invocation-local and become one immutable
+published snapshot only on success. The viewport cache owns one derived task
+and matching bounded plan; Agent Runtime owns only control-plane configuration,
+registration leases, and request-local immutable values. None is an additional
+project view or source owner.
 
 ## Failure, Concurrency, and Constraints
 
@@ -335,7 +400,10 @@ the maximum accepted through Agent decoding. T12 adds per-case planning/route/
 oracle/total-wall timing and action/command/read/entity bounds selected from
 measured serial reference runs; it does not guess success counts or concurrency
 speedup. Activation remains at concurrency 1 until all 100 gates pass.
-MainActor/project-actor serialization is recorded as an observed constraint. A capability or
+Historical MainActor/project-actor serialization is recorded as an observed
+constraint, not the target isolation contract. Render preparation and Agent
+control-plane work must be independent; exact workspace UI publication and
+project-actor ordering remain intact. A capability or
 environment mismatch is an explicit baseline drift; an oracle or infrastructure
 failure invalidates the run without updating the execution-regression baseline.
 The external adapter executes one activated case per process, reads at most one
@@ -361,6 +429,10 @@ typed at their respective owners and never select raw graph or file fallback.
 | Wire contract | Agent request/response codec and fixture tests for all typed Mesh and Make Editable routes, malformed limits/plans, and no fallback decoder. |
 | Make Editable authority | Project/RupaKit tests for exact snapshot, CAD/modeling retention, presentation switch, provenance, zero-copy handoff, stale/cancel rollback, and one history entry. |
 | Agent routing | Runtime tests proving each request reaches the registered workspace use case and preserves typed stale/cancel/no-retry failures. |
+| Presentation limits | Swift-CAD/RupaEvaluation/RupaKit tests prove checked budget-before-allocation, purpose selection, exact-B-rep preservation, aggregate provider limits, cancellation, and no partial publication. |
+| Derived rendering | Rendering/UI tests prove one off-main preparation/validation pass, stale cancellation, retained-byte bounds, matching render/picking, batched Canvas calls, and MainActor progress. |
+| Agent liveness and authority | Runtime/AgentUI/App tests prove capability/status and immutable reads progress during render preparation, while mutation/save still use the registered workspace/controller and no direct CAD/Mesh/render/package/persistence dependency exists. |
+| Actual responsiveness | The signed Rupa App multi-body run proves visible matching geometry, interactive UI/run loop, bounded memory, live API response, exact source coordinates, and no fallback. |
 | CADAPI-D simple form | Later codec/runtime/actual-CLI evidence must prove one primitive is one `capability.invoke`, with no program wrapper, caller UUID, or presentation payload. |
 | CADAPI-D complex form | Later compiler and production-route evidence must prove a repeated multi-part assembly uses typed local bindings and native patterns, stays proportional to distinct intent, and publishes as one transaction/evaluation/undo/publication. |
 | Shared vocabulary and cutover | Equivalent direct and one-node-program requests use the same descriptor/lowerer; catalog, protocol, codec, runtime, and CLI reject raw feature graphs and public Automation mutation payloads. |

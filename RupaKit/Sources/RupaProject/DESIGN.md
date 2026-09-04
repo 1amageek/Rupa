@@ -48,6 +48,7 @@ flowchart LR
     Sources --> Projection["New immutable projection"]
     Projection --> Evaluation["Presentation evaluation"]
     Evaluation --> Publish["Atomic ProjectStateSnapshot publication"]
+    Publish --> Derived["Postpublication render-plan read\nnot transaction authority"]
 ```
 
 ### Current baseline and T09 delta
@@ -56,8 +57,11 @@ flowchart LR
 orders CAD and Geometry source commands and carries project/revision/publication
 coordinates. [`ProjectController.swift`](ProjectController.swift) already
 stages source, package, projection, and presentation evaluation before
-publication. T09-B supplies a plan-bearing Geometry command to this existing
-route; T09-C exposes exact-snapshot Mesh preview/commit over it.
+publication. Its evaluator preparer does not yet receive the requested
+`GeometryRepresentationPurpose`; the target change passes purpose through that
+existing seam before provider composition. T09-B supplies a plan-bearing
+Geometry command to this existing route; T09-C exposes exact-snapshot Mesh
+preview/commit over it.
 
 ## Related Designs
 
@@ -66,6 +70,8 @@ route; T09-C exposes exact-snapshot Mesh preview/commit over it.
 | [package design](../../DESIGN.md) | parent package | Package one-source flow | Places Project above Core and below RupaKit. | Do not put Mesh algorithms here. |
 | [system design](../../../DESIGN.md) | system parent | Atomic inspect/preview/commit flow | Defines the external behavior. | Project remains the only publication owner. |
 | [RupaCore design](../RupaCore/DESIGN.md) | depends on | Staged source authority result | Supplies changed DesignDocument and Mesh receipt. | Core result is not public until Project commit succeeds. |
+| [RupaEvaluation design](../RupaEvaluation/DESIGN.md) | depends on | Purpose-bound bounded evaluation | Produces one complete admitted snapshot or typed failure. | Project selects purpose but not provider fidelity or limits. |
+| [RupaRendering design](../RupaRendering/DESIGN.md) | used downstream | Postpublication derived plan | Consumes the published viewport scene asynchronously. | A render-plan result cannot commit or roll back Project state. |
 | [State and project contract](../../../Rupa/STATE_AND_PROJECT_CONTRACT.md) | depends on | Revision, actor, history, cancellation, exact view | Defines project lifecycle and rollback. | A post-commit view projection failure follows the existing no-retry contract. |
 | [CAD/Mesh responsibility](../../../Rupa/CAD_MESH_RESPONSIBILITY_CONTRACT.md) | depends on | Separated source owners and derived projection role | Defines package/evaluation authority. | Never persist `ProjectSourceModel` as source. |
 | [RupaProject tests](../../Tests/RupaProjectTests) | verification owner | Controller transaction tests | Owns exact coordinate and rollback proof. | Focused tests must exercise the controller path, not only value construction. |
@@ -134,6 +140,18 @@ the isolated source staging path and returns an immutable result to Core/Project
     `withSourceCommandGroup` used by other source mutations, retains its exact
     immutable receipt, and never recompiles, splits, or publishes individual
     steps.
+11. The requested `GeometryRepresentationPurpose` is supplied to the existing
+    `ProjectEvaluatorPreparing` seam before provider construction. Project does
+    not infer or overwrite the purpose-specific configuration returned by
+    RupaKit composition.
+12. Source, separated package sources, immutable projection, and the complete
+    purpose-selected bounded evaluation are all staged before publication. An
+    over-budget, malformed, cancelled, or failed evaluation publishes none of
+    them and returns typed failure.
+13. Render-plan construction starts only from the published immutable viewport
+    scene. It is a postpublication derived read owned downstream; its failure or
+    cancellation cannot mutate, roll back, republish, or dirty exact project
+    source/package/evaluation state.
 
 ## Runtime Flows
 
@@ -152,7 +170,7 @@ sequenceDiagram
     S->>C: apply commands or execute one complete prepared program
     C-->>S: staged document + exact execution receipt
     S->>K: encode separated sources
-    S->>E: build projection and presentation evaluation
+    S->>E: prepare requested purpose and build bounded evaluation
     alt preview
         P-->>W: staged result, no publication
     else commit and all guards pass
@@ -162,6 +180,7 @@ sequenceDiagram
         P->>P: discard staged values
         P-->>W: typed failure
     end
+    Note over P,E: render-plan preparation is not part of this transaction
 ```
 
 ## State, Ownership, and Lifecycle
@@ -181,6 +200,8 @@ sequenceDiagram
   to a package-free exact view and owns observable replacement.
 - Preview candidates are discarded after response and are never source
   authority.
+- Render-plan tasks and their derived buffers are never retained by
+  `ProjectController`; the viewport cache owns them after publication.
 
 ## Failure, Concurrency, and Constraints
 
@@ -194,9 +215,11 @@ workspace revision after asynchronous prevalidation and immediately before
 preview return or publication.
 
 Typed failures include generic coordinate mismatch, package/integrity failure,
-evaluation failure, cancellation, and stale publication. Mesh-specific source,
-plan, and handle failures are typed by RupaKit/Core before or during the source
-command stage; no failure is converted to a successful current-state fallback.
+purpose/configuration mismatch, evaluation limit/overflow, malformed provider
+result, evaluation failure, cancellation, and stale publication. Mesh-specific
+source, plan, and handle failures are typed by RupaKit/Core before or during the
+source command stage; no failure is converted to a successful current-state
+fallback.
 
 A package/source staging failure before publication rolls back the staged edit
 and discards its evaluation cache.
@@ -229,6 +252,8 @@ T09-C and T09-IV own the project proof:
 | Prepared program | The complete program executes inside one source-command group, yields one exact immutable receipt, and a request-scoped diagnostic/telemetry ceiling failure publishes nothing. |
 | Preview | Preview leaves source, package, evaluation, history, and visible view unchanged. |
 | Atomic commit | Prepublication Core/package/projection/evaluation failures leave every published value unchanged. |
+| Purpose and resource policy | Modeling/presentation requests reach evaluator preparation unchanged; aggregate boundary-plus-one, overflow, and cancellation publish nothing. |
+| Derived render isolation | Render-plan failure/cancellation after publication leaves exact source, package, evaluation, coordinates, history, and dirty state unchanged. |
 | Save failure | A post-commit save failure leaves the committed edit and publication intact and preserves dirty state. |
 | History | One revision and one undo entry; undo/redo returns exact views. |
 | Source independence | CAD/Product/selection/provenance invariance and shared-source visibility. |

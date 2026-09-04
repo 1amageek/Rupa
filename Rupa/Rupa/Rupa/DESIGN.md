@@ -11,9 +11,10 @@ window composition, and the single live API host. It is a child of the
 The component owns one App process authority, one `ProjectWorkspace`, one
 `ProjectController` path, one HTTP listener, one discovery generation, the
 single composition of the twelve-operation CAD semantic registry/compiler,
-and the UI projection of the published workspace. It does not own semantic CAD
-or Mesh definitions, HTTP parsing, CLI syntax, Keychain implementation, or a
-second project writer.
+and the UI projection of the published workspace. It composes, but does not
+own, one bounded derived render-plan cache. It does not own semantic CAD or Mesh
+definitions, tessellation, render data, HTTP parsing, CLI syntax, Keychain
+implementation, or a second project writer.
 
 ## Related Designs
 
@@ -25,6 +26,7 @@ second project writer.
 | [RupaProjectAccessPlatform](../../../RupaKit/Sources/RupaProjectAccessPlatform/DESIGN.md) | depends on | discovery-record writer | Publishes port, HMAC key, and generation after readiness. | Only this App writes the record. |
 | [RupaAgentRuntime](../../../RupaKit/Sources/RupaAgentRuntime/DESIGN.md) | uses | registered-workspace semantic dispatch | Executes requests against the App workspace. | Runtime does not open projects. |
 | [Rupa UI](../../../RupaKit/Sources/RupaUI/DESIGN.md) | uses | immutable project view | Shows the same publication as API reads. | UI is not an authority. |
+| [RupaRendering](../../../RupaKit/Sources/RupaRendering/DESIGN.md) | uses | cancellable snapshot-matched derived plan | Prepares bounded render data outside MainActor. | Plan failure never changes project publication. |
 | [Rupa CLI Product](../RupaCLI/DESIGN.md) | coordinates with | Keychain reader and API session | Reads discovery and sends API requests. | CLI never writes discovery. |
 
 ## Architecture
@@ -44,10 +46,14 @@ flowchart LR
     Coordinator --> Workspace["ProjectWorkspace"]
     Workspace --> Controller["ProjectController"]
     Host --> Router["ApplicationAgentRequestRouter"]
-    Router --> Controller
+    Router --> Runtime["ProjectAgentCommandController\ncontrol plane"]
+    Runtime --> Workspace
     Host --> Writer["Keychain discovery writer"]
     Writer --> Discovery["port + HMAC key + generation"]
     UI["Rupa UI"] --> Workspace
+    Workspace --> Scene["Published viewport scene"]
+    Scene --> Cache["Existing render-plan cache\noff-main build"]
+    Cache --> UI
 ```
 
 ## Contracts and Invariants
@@ -90,6 +96,15 @@ flowchart LR
     so a concurrent API save does not observe a false busy state. The execution
     boundary repeats the same check because current project identity may change
     after submission.
+12. `ProjectAgentCommandController`, `ProjectWorkspaceRegistry`, and ordinary
+    application-router dispatch are not globally MainActor-isolated.
+    Capability/status, lease, compiler, immutable projection, and encoding work
+    remain on the control plane; exact workspace access and explicit save are
+    short suspensions into their existing owners.
+13. A published viewport scene starts at most one cache-owned cancellable plan
+    build outside MainActor. Only a matching ready/failed state is atomically
+    published to UI; stale results are discarded and plan failure cannot roll
+    back or republish project state.
 
 ## Runtime Flows
 
@@ -114,7 +129,8 @@ sequenceDiagram
     participant A as API client
     A->>K: read discovery
     A->>L: challenge then authenticated POST /v1/rpc
-    L->>W: route semantic request
+    L->>L: control-plane decode and dispatch
+    L->>W: short exact workspace operation only
     W-->>A: immutable response
     OS->>L: drain and stop
     OS->>K: remove(ifGeneration: own)
@@ -127,8 +143,10 @@ owns launch, pre-launch URL buffering, Agent-host startup, and process
 shutdown ordering. `ApplicationProjectCoordinator` owns current URL and
 project lifecycle. `ProjectWorkspace` and
 `ProjectController` own project state and publication. `AgentHost` owns the
-listener lifetime. The discovery writer owns only the current record and is
-never used as project storage.
+listener lifetime; accepted requests execute on transport/control-plane tasks.
+The viewport cache owns one derived build task and matching bounded result. The
+discovery writer owns only the current record and is never used as project
+storage.
 
 ## Failure, Concurrency, and Constraints
 
@@ -145,6 +163,28 @@ bodies, 32 connections,
 bounded headers, one same-connection challenge/RPC exchange, and a monotonic
 deadline. Production uses the product-owned 120-second request budget. A
 complete request with a lost response is outcome-unknown and is not replayed.
+Render-plan work is independently cancellable and cannot occupy the MainActor
+control path for listener progress. Render failure remains visible UI state and
+does not select an empty/stale fallback or affect exact project state.
+
+### Integrated responsiveness acceptance
+
+Release evidence pins the lowest-performance and lowest-memory supported Mac,
+display refresh rate, macOS/build, app commit, presentation-policy version, and
+the source digest/counts of the Agent-created multi-body fixture. The current
+development reference is Mac16,6 (M4 Max, 36 GB) on macOS 27.0 build 26A5388g;
+passing only that machine is development evidence, not the release gate.
+
+After exactly one excluded warm-up run, the next ten consecutive signed-App
+runs are recorded and every run must satisfy the
+owning [rendering limits](../../../RupaKit/Sources/RupaRendering/DESIGN.md#performance-acceptance)
+and [Agent limits](../../../RupaKit/Sources/RupaAgentRuntime/DESIGN.md#control-plane-performance-acceptance).
+In addition, incremental presentation-pipeline peak bytes (evaluated Mesh,
+scene, builder scratch, and ready plan above the exact loaded-source baseline)
+must not exceed 10% of the lowest-memory supported Mac; steady incremental bytes
+after readiness must not exceed 5%. Any memory-pressure event, rainbow spinner,
+missed input event, stale/mismatched geometry, fallback, or typed failure hidden
+as success rejects the run.
 
 ## Verification and Change Impact
 
@@ -153,6 +193,9 @@ launch and exact registration precede discovery publication, and one cold
 activation performs exactly one registration. They also prove
 process-lifetime host startup, conditional discovery removal, session routing,
 mutation/readback, explicit save, restart recovery, rollback, cancellation,
-and no fallback. Project-default
+and no fallback. Responsiveness tests must additionally run a large admitted
+multi-body plan while proving UI/run-loop progress and capability/status plus
+immutable-read completion, then verify visible matching geometry, retained
+memory bounds, and unchanged project coordinates on plan failure. Project-default
 Xcode validation must inspect sandbox, network-server, and Keychain
 entitlements and exercise the actual CLI against the same App workspace.

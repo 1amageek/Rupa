@@ -12,6 +12,8 @@ separate implementation task passes the gates defined below.
 Parent: [system design](../DESIGN.md). Direct children used by T10/T12 are:
 
 - [RupaGeometry](Sources/RupaGeometry/DESIGN.md)
+- [RupaEvaluation](Sources/RupaEvaluation/DESIGN.md)
+- [RupaCADIntegration](Sources/RupaCADIntegration/DESIGN.md)
 - [RupaRendering](Sources/RupaRendering/DESIGN.md)
 - [RupaViewportScene](Sources/RupaViewportScene/DESIGN.md)
 - [RupaCore](Sources/RupaCore/DESIGN.md)
@@ -40,9 +42,9 @@ Package dependencies are the local targets and external packages declared by
 Argument Parser. Package users are the system root, application targets, and
 existing UI/Agent/CLI adapters through their declared target dependencies.
 
-The package also contains existing targets such as `RupaEvaluation`,
-`RupaProjectModel`, `RupaProjectPackage`, UI, rendering, and transport adapters.
-Their current ownership remains indexed by [ARCHITECTURE.md](ARCHITECTURE.md).
+The package also contains existing targets such as `RupaProjectModel`, UI, and
+transport adapters not changed by this design. Their current ownership remains
+indexed by [ARCHITECTURE.md](ARCHITECTURE.md).
 
 The package design is the parent of the changed and reused module designs. It is
 not a replacement for the system source-authority or state contracts linked
@@ -66,6 +68,12 @@ The package design owns:
   vocabulary serves both direct invocation and declarative program execution;
 - the dependency boundary through which the child `RupaCADDomain` supplies the
   concrete semantic CAD vocabulary to the generic compiler.
+- the cross-module separation of exact CAD evaluation, product-selected
+  presentation fidelity, generic resource admission, postpublication derived
+  rendering data, and MainActor UI publication;
+- the rule that Agent control-plane work remains independent of viewport
+  preparation and enters the existing workspace/project owners only through
+  explicit short suspensions.
 
 It does not own Mesh topology algorithms, concrete CAD operation semantics, source asset mutation,
 archive encoding, HTTP framing, MCP framing, general CLI behavior, LLM reasoning, or a bicycle-specific or
@@ -85,14 +93,22 @@ flowchart LR
     CoreTypes --> Core[RupaCore]
     Geometry --> Core
     ProjectModel[RupaProjectModel] --> Core
+    SwiftCAD[swift-CAD] --> CADIntegration[RupaCADIntegration]
+    Evaluation[RupaEvaluation] --> CADIntegration
+    CADIntegration --> Kit
     Core --> Project[RupaProject]
-    Evaluation[RupaEvaluation] --> Project
+    Evaluation --> Project
     Package[RupaProjectPackage] --> Project
     Geometry --> Evaluation
     Project --> Kit[RupaKit target]
     Core --> Kit
     Geometry --> Kit
     ProjectModel --> Kit
+    Evaluation --> Kit
+    Evaluation --> ViewportScene[RupaViewportScene]
+    Kit --> ViewportScene
+    ViewportScene --> Rendering[RupaRendering]
+    Rendering --> UI
     Kit --> UI["RupaUI"]
     Kit --> AgentProtocol[RupaAgentProtocol]
     Geometry --> AgentProtocol
@@ -132,7 +148,9 @@ flowchart LR
 | [State and project contract](../Rupa/STATE_AND_PROJECT_CONTRACT.md) | depends on | Project actor, revision, history, cancellation, and publication | Defines the lifecycle used by `RupaProject`. | Do not introduce a parallel session or publication sequence. |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | coordinates with | Existing package graph and application route | Records existing targets and shared workspace composition. | Task-specific contracts remain in this hierarchy. |
 | [RupaGeometry design](Sources/RupaGeometry/DESIGN.md) | child | Plan/executor/buffer contract | Owns Mesh operation and performance semantics. | Package consumers use its public contracts only. |
-| [RupaRendering design](Sources/RupaRendering/DESIGN.md) | child | Snapshot-owned presentation plan and viewport scheduling contract | Owns MeshSource presentation traversal and render invalidation policy. | It consumes immutable snapshots and never becomes a geometry or project authority. |
+| [RupaEvaluation design](Sources/RupaEvaluation/DESIGN.md) | child | Purpose selection and provider-neutral aggregate admission | Produces one complete bounded immutable evaluation. | It neither selects product fidelity nor publishes project state. |
+| [RupaCADIntegration design](Sources/RupaCADIntegration/DESIGN.md) | child | Purpose-configured Swift-CAD adapter and cache separation | Reuses exact B-rep independently from derived Mesh artifacts. | It applies policy but never chooses Product purpose or fidelity. |
+| [RupaRendering design](Sources/RupaRendering/DESIGN.md) | child | Cancellable bounded plan and viewport scheduling contract | Owns one off-main preparation pass, snapshot-matched cache state, and batched Canvas data. | It consumes immutable snapshots and never becomes a geometry or project authority. |
 | [RupaViewportScene design](Sources/RupaViewportScene/DESIGN.md) | child | Immutable scene projection and metric-free B-spline overlay reference contract | Builds viewport scene values from validated source/evaluation snapshots. | B-spline reference lookup must not become an implicit topology-metric path. |
 | [RupaCore design](Sources/RupaCore/DESIGN.md) | child | Source identity and asset mutation contract | Owns Product/Authored Mesh source authority. | Scene references are navigation context, not authority. |
 | [RupaProjectPackage design](Sources/RupaProjectPackage/DESIGN.md) | child | Schema-v3 source/archive and atomic replacement contract | Owns bounded package I/O, source-byte integrity, reuse, and destination replacement staging. | It never owns project publication, current URL, or Agent save routing. |
@@ -145,7 +163,7 @@ flowchart LR
 | [RupaAgentUI design](Sources/RupaAgentUI/DESIGN.md) | child | process-lifetime host and injected handler contract | Owns Agent listener lifecycle and registration bridge for the App-owned workspace. | The App composes one controller/router; host never creates a shadow workspace or saves a package. |
 | [RupaAgentProtocol design](Sources/RupaAgentProtocol/DESIGN.md) | child | Codable Agent Mesh, Make Editable, and geometry-buffer-free viewport summary messages | Reuses RupaKit value contracts without duplicating geometry meaning. | It must not import runtime or transport or expose a second view/source authority. |
 | [RupaMCP design](Sources/RupaMCP/DESIGN.md) | child | fixed tool catalog, bounded schemas, dual-era stdio server | Adapts MCP calls to the existing project-access path without owning project state. | Mutation and explicit save remain separate calls. |
-| [RupaAgentRuntime design](Sources/RupaAgentRuntime/DESIGN.md) | child | Registered-workspace request routing | Binds wire values to the exact current full project view. | It never creates a session or saves a package. |
+| [RupaAgentRuntime design](Sources/RupaAgentRuntime/DESIGN.md) | child | Control-plane registered-workspace request routing | Binds wire values to the exact current full project view without global MainActor isolation. | It never creates a session, calls CAD/Mesh/rendering directly, or saves a package. |
 | [RupaAgentCADBenchmark design](Sources/RupaAgentCADBenchmark/DESIGN.md) | child | Exactly-100 per-case and aggregate verification contract | Composes all reviewed registered-Agent routes and immutable source/B-Rep oracles into measured scheduling, baselines, and a canonical report. | Catalog presence is not implementation evidence; production authority modules must not depend on it. |
 | [Benchmark JSON adapter](Sources/RupaAgentCADBenchmarkJSONAdapter/DESIGN.md) | child | versioned envelopes, context fingerprint, bounded decode, JSON candidate | Binds one external decision to the exact public context of one activated case. | It cannot import private expectations or accept a catalog-only case. |
 | [Benchmark CLI](Sources/RupaAgentCADBenchmarkCLI/DESIGN.md) | child | dedicated request/evaluate process contract | Exposes the JSON adapter as `rupa-agent-cad-benchmark` without changing `rupa`. | It owns no envelope meaning, network transport, or project state. |
@@ -159,6 +177,9 @@ flowchart TD
     Types["RupaCoreTypes\nIDs + identities"] --> G["RupaGeometry\nplan / executor / buffer"]
     Types --> C["RupaCore\nsource authority"]
     G --> C
+    SwiftCAD["swift-CAD\nexact B-rep + generic tessellation limits"] --> CI["RupaCADIntegration\npurpose configuration adapter"]
+    E["RupaEvaluation\naggregate bounded evaluation"] --> CI
+    CI --> K
     C --> P["RupaProject\ntransaction staging"]
     C --> A["RupaAutomation\nprepared source execution"]
     A --> D["RupaDomainFoundation\ngeneric operation + program compiler"]
@@ -166,7 +187,10 @@ flowchart TD
     A --> CAD
     C --> CAD
     P --> K["RupaKit\nworkspace use cases"]
-    P --> E["evaluation + package\nexisting boundaries"]
+    E --> P
+    K --> Scene["RupaViewportScene\nimmutable projection"]
+    Scene --> Rendering["RupaRendering\noff-main bounded plan"]
+    Rendering --> UI["RupaUI\nMainActor publish + Canvas"]
     K --> R["RupaAgentRuntime\nregistered route"]
     K --> M["RupaMCP\nbounded stdio adapter"]
     R --> B["RupaAgentCADBenchmark\nrunner / oracle / report"]
@@ -191,6 +215,8 @@ records are owned by the four child designs:
 |---|---|
 | `RupaCoreTypes` is the dependency floor. | Existing package graph. |
 | `RupaGeometry` does not depend upward on Core, Project, UI, or transport. | [RupaGeometry design](Sources/RupaGeometry/DESIGN.md) |
+| `RupaEvaluation` owns provider-neutral aggregate admission; product fidelity is selected by RupaKit and Swift-CAD owns only exact evaluation plus generic tessellation limits. | [RupaEvaluation](Sources/RupaEvaluation/DESIGN.md), [RupaCADIntegration](Sources/RupaCADIntegration/DESIGN.md), [swift-CAD](../swift-CAD/DESIGN.md) |
+| Render-plan preparation is a bounded postpublication derived read; only matching cache state and Canvas calls enter MainActor. | [RupaRendering design](Sources/RupaRendering/DESIGN.md), [RupaUI design](Sources/RupaUI/DESIGN.md) |
 | `RupaCore` is the source-authority boundary; `RupaProject` is the publication boundary. | [RupaCore design](Sources/RupaCore/DESIGN.md), [RupaProject design](Sources/RupaProject/DESIGN.md) |
 | `RupaProjectPackage` owns schema-v3 archive I/O, staged validation, and atomic destination replacement, but not project or application lifecycle. | [RupaProjectPackage design](Sources/RupaProjectPackage/DESIGN.md) |
 | `RupaKit` is the application use-case boundary over existing Project authority. | [RupaKit integration design](Sources/RupaKit/DESIGN.md) |
@@ -204,6 +230,7 @@ records are owned by the four child designs:
 | `RupaCLIComposition` is the sole executable composition for `rupa`; the signed Xcode product entry is a thin async launcher over it. | [RupaCLIComposition design](Sources/RupaCLIComposition/DESIGN.md) |
 | `RupaAgentTransport` carries protocol values over authenticated loopback HTTP and never defines project semantics. | [RupaAgentTransport design](Sources/RupaAgentTransport/DESIGN.md) |
 | `RupaAgentUI` owns the process-lifetime Agent host and registration bridge; the App composes one controller/router over the same workspace. | [RupaAgentUI design](Sources/RupaAgentUI/DESIGN.md) |
+| Agent capability/status, lease, compilation, immutable projection, and encoding are control-plane work; Runtime reaches UI/project ownership only through the existing workspace/application ports. | [RupaAgentRuntime design](Sources/RupaAgentRuntime/DESIGN.md) |
 | Existing CAD/Mesh and state contracts remain authoritative for their domains. | [CAD/Mesh responsibility](../Rupa/CAD_MESH_RESPONSIBILITY_CONTRACT.md), [state/project contract](../Rupa/STATE_AND_PROJECT_CONTRACT.md) |
 | `RupaAgentCADBenchmark` is a bounded verification composition above the production Agent route: all 100 targets retain individual reviewed evidence, while aggregate execution composes fresh isolated `ProjectAgentCommandController` runs into measured scheduling, immutable baselines, and one canonical report. | [RupaAgentCADBenchmark design](Sources/RupaAgentCADBenchmark/DESIGN.md) |
 | The external benchmark path is one-way: `RupaAgentCADBenchmark` -> JSON adapter -> dedicated CLI. It accepts only activated cases, fingerprints candidate-visible context, and never makes transport or candidate data authoritative. | [JSON adapter](Sources/RupaAgentCADBenchmarkJSONAdapter/DESIGN.md), [benchmark CLI](Sources/RupaAgentCADBenchmarkCLI/DESIGN.md) |
@@ -256,10 +283,13 @@ root. The package itself owns no request state and adds no alternate flow.
 
 See the [system runtime flow](../DESIGN.md#runtime-flows), then the local flows
 in [RupaGeometry](Sources/RupaGeometry/DESIGN.md#runtime-flows),
+[RupaEvaluation](Sources/RupaEvaluation/DESIGN.md#runtime-flows),
+[RupaCADIntegration](Sources/RupaCADIntegration/DESIGN.md#runtime-flows),
 [RupaCore](Sources/RupaCore/DESIGN.md#runtime-flows),
 [RupaProjectPackage](Sources/RupaProjectPackage/DESIGN.md#runtime-flows),
 [RupaProject](Sources/RupaProject/DESIGN.md#runtime-flows), and
-[RupaKit](Sources/RupaKit/DESIGN.md#runtime-flows), then the
+[RupaKit](Sources/RupaKit/DESIGN.md#runtime-flows),
+[RupaRendering](Sources/RupaRendering/DESIGN.md#runtime-flows), then the
 [RupaDomainFoundation](Sources/RupaDomainFoundation/DESIGN.md#runtime-flows),
 [RupaAutomation](Sources/RupaAutomation/DESIGN.md#runtime-flows),
 [Agent host](Sources/RupaAgentUI/DESIGN.md#runtime-flows),
@@ -272,9 +302,11 @@ and [benchmark CLI](Sources/RupaAgentCADBenchmarkCLI/DESIGN.md#runtime-flows).
 The package owns no shared mutable T10/T12 or access-session state. State and
 lifetime are delegated to the child owners: Mesh buffers to `RupaGeometry`,
 source assets to `RupaCore`, package archive I/O to `RupaProjectPackage`,
-project publication to `RupaProject`, observable workspace view to `RupaKit`,
-request routing to `RupaAgentRuntime`, Agent listener/registration lifetime to
-`RupaAgentUI`, and benchmark catalog,
+evaluation budgets/results to `RupaEvaluation`, exact/derived CAD cache state
+to `RupaCADIntegration`, project publication to `RupaProject`, observable
+workspace view to `RupaKit`, derived plan task/data to `RupaRendering`, UI state
+to `RupaUI`, request routing/registration leases to the Agent control plane,
+Agent listener lifetime to `RupaAgentUI`, and benchmark catalog,
 capability-availability/execution-regression baseline evidence, case/oracle,
 and report values to `RupaAgentCADBenchmark`. External request/response buffers
 and fingerprints are invocation-local values owned by the JSON adapter and CLI.
@@ -295,10 +327,16 @@ The package preserves the native target dependency graph and does not weaken
 the isolation contracts owned by its children. Child failures remain typed and
 are not converted at the package boundary. Concurrency, resource, and
 zero-copy constraints are defined and verified by the owning module designs.
+An intentional bounded transformed-position render buffer is presentation data,
+not a source clone, and replaces repeated per-frame transformation work. Exact
+CAD/source/package authority remains unchanged.
 Application Agent save is a one-way route through the typed coordinator port;
 the package and Agent host cannot mutate archive bytes independently. Package
 staging failures and application prepublication failures preserve their
 respective existing destinations and project publications.
+Evaluator and render-plan ceilings are correctness contracts checked before
+allocation/growth. Only matching cache publication and Canvas calls are
+MainActor-isolated; plan preparation and Agent control-plane work are not.
 The T12 benchmark used per-case fresh authorities and fixed serial concurrency
 one during activation. Its completed post-100 integration proved bounded-one
 and bounded-two evidence equivalence, observed MainActor serialization, and
@@ -330,19 +368,23 @@ contracts rather than duplicating their behavioral cases:
 | Stage | Verification owner | Evidence |
 |---|---|---|
 | Geometry contract | `RupaGeometry` | T09-A tests for plan, topology, IDs, limits, rollback, and copy telemetry. |
+| CAD tessellation | Swift-CAD / `RupaCADIntegration` | Fidelity/resource separation, checked preallocation admission, cancellation, exact-state reuse, and artifact-cache tests. |
+| Evaluation contract | `RupaEvaluation` | Purpose selection, provider-neutral cumulative limits, malformed result, and all-or-nothing tests. |
 | Source authority | `RupaCore` | T09-B tests for source identity, shared references, and invariance. |
 | Project integration | `RupaProject` | T09-C and T09-IV tests for exact coordinates and atomic publication. |
 | Package persistence | `RupaProjectPackage` | Schema-v3 round trips, staged validation, resource/integrity limits, byte reuse, cleanup, and destination-preserving atomic failure tests. |
 | Application use case | `RupaKit` target | T09-C tests for bounded read/preview/commit. |
+| Rendering and UI | `RupaRendering` / `RupaUI` | Off-main preparation, stale cancellation, retained-byte telemetry, single validation pass, batched Canvas calls, and MainActor progress probes. |
 | Full package | Integration | T09-IV build/test and actual save/load path. |
 | Agent wire and dispatch | `RupaAgentProtocol` / `RupaAgentRuntime` | T10-B codec, malformed-input, registered-workspace, stale/cancel, and no-retry tests. |
+| Agent liveness | `RupaAgentRuntime` / `RupaAgentUI` / App | Capability/status and immutable reads complete during render preparation; only exact workspace/save operations enter their existing owners. |
 | CAD semantic program | `RupaDomainFoundation` / `RupaCADDomain` | Later implementation must prove direct/program compile equivalence, typed local bindings, graph ordering and cycle rejection, native finite patterns, source-only route validation, decoded-semantic/result preflight limits, the exact twelve-operation registry, and 100-case expressibility without claiming publication. |
 | CAD prepared execution | `RupaAutomation` / `RupaKit` | Later implementation must prove one program produces at most one source transaction, evaluation, undo entry, and publication; all prepublication failures roll back and postpublication failures are no-retry. |
 | Public cutover | `RupaAgentProtocol` / `RupaAgentRuntime` / `RupaCLIKit` | Later codec, catalog, runtime, and actual-CLI tests must prove one primitive is one direct call, a repeated assembly stays compact relative to distinct intent, both forms use the same compiler, and raw graph/Automation mutation payloads are absent or rejected. |
 | Application Agent host | `RupaAgentUI` / Rupa App | ACCESS-O focused same-workspace registration, router delegation, explicit save port, process-lifetime host, and typed failure preservation. |
 | Agent CAD benchmark | `RupaAgentCADBenchmark` | The historical 95-realized/5-unsupported report remains provenance. CADAPI-100 reuses the exact 100 targets and oracles but requires 100 realized results through the semantic direct/program API, followed by actual signed App/CLI save/reload evidence. Reference-plan results are control-path evidence only. |
 | External benchmark JSON | JSON adapter / dedicated CLI | Explicit discriminator golden JSON, context fingerprint drift, bounded stdin/file decode, inactive-case/privacy rejection, direct protocol integration, and actual process exit/JSON behavior. |
-| Actual rendered workflow | T10 integration | Agent CAD bicycle assembly, Make Editable for every generated body, one representative Mesh edit, application save/load, all-Authored-Mesh presentation evaluation, renderer triangles, and deterministic PNG. |
+| Actual rendered workflow | Signed-App integration | One real multi-body Agent mutation, purpose-selected bounded presentation evaluation, visible matching render data, interactive UI/run loop, bounded retained memory, concurrent Agent response, explicit save/reload, and no fallback. |
 
 Any public contract or dependency change requires rechecking the system root,
 the affected child design, and the existing architecture/normative links.

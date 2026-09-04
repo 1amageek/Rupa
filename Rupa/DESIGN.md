@@ -11,8 +11,8 @@ direct child of the [system design](../DESIGN.md) and has two children:
 The package composes UI, `ProjectWorkspace`, `ProjectController`, the Agent
 runtime, the loopback HTTP adapter, and the Team Keychain discovery boundary.
 It owns product document identity and executable packaging, but not CAD/Mesh
-semantics or transport framing. The App is the only live project authority;
-the CLI is an API client.
+semantics, tessellation, render preparation, or transport framing. The App is
+the only live project authority; the CLI is an API client.
 
 ## Related Designs
 
@@ -33,6 +33,9 @@ flowchart LR
     Access --> Host
     Host --> Workspace["App-owned ProjectWorkspace"]
     Workspace --> Controller["ProjectController"]
+    Controller --> Scene["Published viewport scene"]
+    Scene --> Plan["Off-main bounded render plan"]
+    Plan --> UI
     Controller --> Package["schema-v3 .rupa"]
     App --> Keychain["Team Keychain discovery writer"]
     CLI --> KeychainRead["Team Keychain discovery reader"]
@@ -58,6 +61,11 @@ flowchart LR
    access-group capability.
 6. Explicit save is the only persistence trigger. Failures preserve the last
    published project and package bytes.
+7. Viewport render-plan preparation is cancellable derived work outside
+   MainActor. Agent capability/status, lease, compilation, immutable projection,
+   and response encoding remain on a separate control plane. Neither becomes
+   project authority, and only exact workspace/save operations enter the
+   existing MainActor owners.
 
 ## Runtime Flows
 
@@ -81,7 +89,9 @@ sequenceDiagram
 
 The App owns listener, discovery generation, workspace, controller, current
 project URL, and UI state for the process lifetime. The CLI owns only API
-request state. The Keychain record is replaced per generation and removed
+request state. The viewport cache owns one derived plan task/result and the
+Agent runtime owns only control-plane leases and immutable request values. The
+Keychain record is replaced per generation and removed
 conditionally during App shutdown after bounded drain.
 
 ## Failure, Concurrency, and Constraints
@@ -89,12 +99,16 @@ conditionally during App shutdown after bounded drain.
 Duplicate App authority, unavailable discovery, invalid credentials, stale
 generation, dirty replacement, semantic failure, deadline, cancellation,
 save failure, and response loss are typed. No alternate writer, local
-controller, or transport fallback is selected.
+controller, renderer, or transport fallback is selected. Render preparation
+cannot prevent listener accept or capability/status progress.
 
 ## Verification and Change Impact
 
 ACCESS-IV verifies design consistency, transport limits, Keychain record
 lifecycle, signed App/CLI entitlements, stopped-App launch, attach,
 mutation/readback, explicit save, restart recovery, rollback, and no fallback.
+The actual signed-App multi-body gate additionally verifies visible matching
+geometry, UI/run-loop progress, bounded retained plan memory, and Agent
+capability/status plus immutable-read progress during render preparation.
 Changes require rechecking both child designs and the `RupaKit` access
 composition.

@@ -7,10 +7,11 @@
 the [RupaKit package design](../../DESIGN.md) and has no child component
 designs.
 
-The module projects an already validated `DesignDocument` and its evaluation
-into viewport items, bounds, transforms, and optional surface overlays. It does
-not own CAD or Mesh source authority, project publication, package I/O, or
-render-plan triangulation.
+The module projects an already validated `DesignDocument` and its complete,
+resource-admitted evaluation into viewport items, bounds, transforms, and
+optional surface overlays. It does not own CAD or Mesh source authority,
+project publication, package I/O, render-plan triangulation, presentation
+fidelity, or render-task lifecycle.
 
 ## Responsibilities and Boundaries
 
@@ -19,7 +20,8 @@ The module owns:
 - immutable viewport scene values and identity-bearing scene items;
 - source/evaluation-aware scene construction and overlay projection;
 - stable B-spline patch-face references used by knot and span overlays;
-- bounded, synchronous scene-build work suitable for the Agent read deadline.
+- bounded, synchronous scene projection without retessellation or render-plan
+  preparation.
 
 The module consumes validated Core source and evaluation contracts. It delegates
 Mesh triangulation to `RupaGeometry` through the downstream render plan and
@@ -32,6 +34,7 @@ overlay face. Measurement and inspection APIs own metric requests.
 |---|---|---|---|---|
 | [package design](../../DESIGN.md) | parent | Package dependency direction | Places scene projection between project evaluation and rendering. | This module is not a source or project authority. |
 | [RupaCore design](../RupaCore/DESIGN.md) | depends on | Validated `DesignDocument`, Product metadata, and source identity | Supplies CAD source and retained scene navigation. | Scene references remain navigation/presentation values. |
+| [RupaEvaluation design](../RupaEvaluation/DESIGN.md) | depends on | Complete purpose-selected bounded evaluation | Supplies immutable admitted presentation results. | Scene projection cannot widen limits or select a different fidelity. |
 | [RupaRendering design](../RupaRendering/DESIGN.md) | used by | Immutable `ViewportScene` and snapshot identity | Consumes scene items for render-plan construction. | Rendering must not make overlay lookup a metric path. |
 | [RupaGeometry design](../RupaGeometry/DESIGN.md) | coordinates with | Bounded source-order Mesh traversal | Owns render-time geometry triangulation. | Do not duplicate its topology or buffer-index logic here. |
 | [RupaViewportScene tests](../../Tests/RupaViewportSceneTests) | verification owner | Scene projection and overlay behavior | Proves exact overlay references and build responsiveness. | Type existence is not runtime evidence. |
@@ -41,7 +44,7 @@ overlay face. Measurement and inspection APIs own metric requests.
 ```mermaid
 flowchart LR
     Source["Validated DesignDocument"] --> Builder["ViewportSceneBuilder"]
-    Evaluation["Current evaluation context"] --> Builder
+    Evaluation["Complete bounded evaluation"] --> Builder
     Builder --> Scene["Immutable ViewportScene"]
     Builder --> Overlay["Knot/span surface overlays"]
     Overlay --> Identity["One identity-only topology snapshot\nonly for B-spline surfaces"]
@@ -76,6 +79,12 @@ directions share the same immutable lookup result.
    the viewport path.
 7. `ViewportSceneBuilder` is a value type with no retained mutable cache. Source
    and evaluation ownership remain with their existing owners.
+8. The scene is a single immutable projection of the published source and
+   evaluation coordinates. It contains no LOD decision, render-preparation
+   task, cache state, or second copy of project authority.
+9. A scene item may reference only a Mesh admitted by the owning evaluation.
+   Scene projection cannot truncate, silently omit required geometry, or
+   retessellate an over-budget source.
 
 ## Runtime Flows
 
@@ -99,7 +108,7 @@ sequenceDiagram
 
 The builder then resolves evaluated body snapshots and normal scene items using
 the existing generation/evaluation inputs. The downstream renderer consumes the
-finished immutable scene and owns Mesh triangulation.
+finished immutable scene and owns cancellable render-plan preparation.
 
 ## State, Ownership, and Lifecycle
 
@@ -117,11 +126,11 @@ and current snapshots resolve consistently. Overlay references are omitted by
 this builder according to the existing optional-overlay policy; source and
 evaluation authority remains unchanged.
 
-The responsiveness budget for the affected workflow is the existing Agent
-viewport-read deadline. Identity-only overlay lookup is required to avoid
-turning a torus or other high-edge-count body into a synchronous face-area or
-edge-length measurement operation. Resource and cancellation limits remain
-owned by the evaluation and Agent request layers.
+Identity-only overlay lookup is required to avoid turning a torus or other
+high-edge-count body into a synchronous face-area or edge-length measurement
+operation. Evaluation resource limits remain owned by `RupaEvaluation`; render
+preparation limits and cancellation remain owned by `RupaRendering`. A required
+scene item is never dropped to make projection appear successful.
 
 ## Verification and Change Impact
 
@@ -131,6 +140,7 @@ owned by the evaluation and Agent request layers.
 | One shared identity-only lookup with B-spline features | Knot/span overlay tests compare exact stable references and use metric-free snapshot behavior. |
 | No optional topology metrics | Core metric-policy test plus scene-build regression prove face-area and edge-length evaluators are not entered. |
 | Geometry and stable references remain unchanged | Existing B-spline knot/span exact tests and scene snapshot identity checks remain green. |
+| Bounded input authority | Boundary tests prove only evaluation-admitted Mesh enters the scene and that projection never retessellates, truncates, or selects fidelity. |
 | Agent responsiveness | Focused test timing and the restored signed-App `sessions`/`attach`/viewport read path provide runtime evidence. |
 
 Changes to source/evaluation identity or overlay reference contracts require

@@ -43,11 +43,17 @@ Parent: [RupaKit package design](../../DESIGN.md). Children: none.
 - adaptation of one fully validated semantic CAD invocation/program to one
   `ProjectSourceTransaction`, preserving exact planning coordinates and the
   `RupaAutomation` typed result bindings.
+- product composition of modeling and presentation evaluation policies through
+  the existing `ProjectEvaluatorPreparing` seam;
+- bounded transport-neutral projection of an immutable published viewport for
+  Agent inspection, without exposing source Mesh buffers.
 
 It does not own Mesh topology algorithms, source asset replacement, project
 actor state, package encoding, Agent protocol envelopes, CLI parsing, MCP
 transport, semantic CAD operation definitions, program graph compilation,
 project-level generic staging rules, or a shadow project/session authority.
+It also does not own Swift-CAD tessellation formulas, rendering tasks, Canvas
+drawing, or Agent DTO encoding.
 
 The read records are transport-neutral values owned by this module:
 
@@ -96,6 +102,12 @@ Mesh-specific read/preview/commit use cases on that route. Existing
 `meshSummary`/presentation data remains evaluated output; it is not treated as
 the Authored Mesh source catalog.
 
+For RUPA-RESP-D, the current product factory still applies document modeling
+tessellation options to every purpose, and Agent viewport summary work still
+lives in Runtime. The target moves purpose choice into the existing preparer
+call and bounded viewport projection into the existing workspace use-case
+boundary; it does not add another factory, coordinator, or workspace.
+
 ## Related Designs
 
 | Design | Relationship | Contract Used | Summary | Cautions |
@@ -103,6 +115,9 @@ the Authored Mesh source catalog.
 | [package design](../../DESIGN.md) | parent package | Package boundaries and no transport change | Places RupaKit above Project. | Do not move source authority into this module. |
 | [system design](../../../DESIGN.md) | system parent | Inspect/preview/commit flow | Defines exact source and view behavior. | A returned view must be the exact operation result. |
 | [RupaProject design](../RupaProject/DESIGN.md) | depends on | Project staging and publication | Provides the actor-backed authority port. | Use existing `ProjectOperating`; no second controller. |
+| [RupaEvaluation design](../RupaEvaluation/DESIGN.md) | composes | Purpose-bound aggregate evaluation limits | Receives product policy through the existing preparer seam. | Product policy cannot widen provider or kernel hard limits. |
+| [RupaCADIntegration design](../RupaCADIntegration/DESIGN.md) | composes | Purpose-selected CAD provider configuration | Maps the selected policy into bounded Swift-CAD evaluation. | Exact B-rep reuse remains separate from Mesh artifact reuse. |
+| [RupaRendering design](../RupaRendering/DESIGN.md) | used downstream | Postpublication derived render plan | Consumes the immutable viewport scene. | Render failure cannot change project publication. |
 | [RupaProjectAccess](../RupaProjectAccess/DESIGN.md) | used by | transport-neutral live target/session intent | Composes live access above the App-owned workspace. | Access adapters cannot call Core or edit package entries directly. |
 | [RupaCore design](../RupaCore/DESIGN.md) | used through Project | Source ID/content identity and shared asset rules | Defines what a Mesh handle targets. | Scene/representation context is navigation only. |
 | [RupaGeometry design](../RupaGeometry/DESIGN.md) | used through Core | Plan/executor/budget/receipt | Defines request semantics without transport knowledge. | Do not expose internal mutable buffers. |
@@ -143,6 +158,20 @@ flowchart LR
     Action --> Project["ProjectController staging + evaluation"]
     Project --> Publish["one exact publication"]
     Publish --> Receipt["symbol outputs + committed coordinates"]
+```
+
+Purpose-specific evaluation uses the same existing product composition:
+
+```mermaid
+flowchart LR
+    Purpose["modeling / presentation"] --> Factory["Existing evaluator factory"]
+    Modeling["Document modeling settings"] --> Factory
+    Product["Deterministic bounded product presentation policy"] --> Factory
+    Factory --> Preparer["ProjectEvaluatorPreparing"]
+    Preparer --> Evaluation["RupaEvaluation"]
+    Evaluation --> Project["ProjectController staged publication"]
+    Project --> Scene["Immutable published viewport"]
+    Scene --> ViewRead["Bounded workspace viewport read"]
 ```
 
 ## Contracts and Invariants
@@ -249,6 +278,22 @@ flowchart LR
     unbounded diagnostic or ask Protocol to retry encoding another value.
 23. CADAPI-D mutation and explicit save are separate application actions. This
     use case never saves implicitly or edits package bytes.
+24. The existing evaluator factory receives `GeometryRepresentationPurpose`
+    before provider construction. `.modeling` derives fidelity from document
+    modeling settings; `.presentation` derives fidelity from one deterministic
+    product policy. Both purposes receive explicit product-owned aggregate
+    limits no wider than lower-layer hard ceilings. Export continues through
+    its existing independent policy.
+25. Product policy may lower RupaEvaluation and Swift-CAD hard limits but never
+    widens them. It changes only derived Mesh fidelity/resource admission, not
+    exact source, B-rep topology, modeling tolerance, representation selection,
+    project coordinates, or save behavior.
+26. A bounded viewport read accepts one exact immutable view, validates its
+    five-coordinate authority before and after detached work, resolves the
+    published navigation index, and performs source-order Geometry inspection
+    under cumulative item/source-element/triangle/summary-record limits. It
+    returns only transport-neutral summary values or typed failure; no source
+    buffer, renderer plan, or partial result crosses the boundary.
 
 ## Runtime Flows
 
@@ -289,6 +334,12 @@ uses the binding-aware Automation executor, evaluates the completed staged
 document once, and publishes only the final state. Failure before publication
 discards all staged bindings and source changes.
 
+For project evaluation, the caller supplies purpose to the existing preparer;
+the factory binds the matching product configuration before the Project layer
+stages the complete evaluation. A viewport summary read starts only from an
+already published immutable view, runs its bounded Geometry work outside
+MainActor, and revalidates the exact view before returning.
+
 ## State, Ownership, and Lifecycle
 
 - `ProjectViewSnapshot` is the caller's immutable observation anchor.
@@ -298,6 +349,8 @@ discards all staged bindings and source changes.
 - `ProjectWorkspace` owns observable view replacement on MainActor.
 - `ProjectController` owns source publication, history, package, evaluation,
   and revision state.
+- Modeling and presentation policies are immutable product configuration, not
+  retained authorities or mutable caches.
 - Bounded read response records are materialized at the read boundary and do
   not expose Geometry buffer pointers or leases beyond their lifetime.
 - Compiled programs, prepared bindings, and projected receipts are
@@ -314,7 +367,8 @@ revalidation failure retains the exact commit and communicates no-retry
 semantics. The module does not return empty or current-state fallback data for
 an unsupported or stale request.
 
-The MainActor adapter never holds a Geometry mutable buffer. Heavy scans use
+The MainActor adapter never holds a Geometry mutable buffer. Heavy evaluation
+and viewport-summary scans use
 immutable values outside the actor and revalidate the full snapshot before and
 after returning. Transport processes and external callbacks are outside this
 module's ownership.
@@ -345,6 +399,8 @@ T09-C owns the following behavioral proof:
 | CADAPI-D atomic action | Equivalent direct/one-node and multi-node compiled plans use one workspace action; a late command/evaluation failure publishes no source, history, or view. |
 | CADAPI-D result | Typed Feature/Body/Scene/Component/Instance/Pattern bindings and exact committed coordinates survive result projection; postcommit projection failure is must-not-retry. |
 | CADAPI-D bounds | Actual staged command and expansion telemetry cannot exceed the compiler-accepted policy. |
+| Purpose selection | Factory tests prove modeling and presentation choose their explicit policies through `ProjectEvaluatorPreparing`; export behavior and exact B-rep/source remain unchanged. |
+| Viewport summary ownership | Registered-workspace tests prove bounded off-main projection, exact pre/post authority checks, typed limit/cancellation failure, and no Mesh/renderer dependency in Runtime. |
 | Scope | Exactly two public CAD mutation forms; no third command vocabulary, CLI/MCP authority, or direct package/session route. |
 
 Changes to the use-case request shape, compiled-plan adaptation, snapshot
