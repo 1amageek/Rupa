@@ -79,9 +79,11 @@ It never reimplements plan construction, traversal, or projection.
    under. A fixture that cannot be built or cannot be planned is a typed
    failure, never a smaller fixture that happens to succeed.
 3. Plan preparation is measured exactly as the current production cache performs
-   it: one `makePlan` followed by the same full validation traversal the cache
-   discards. Both halves are reported separately so the duplicate pass is
-   attributable.
+   it: one `makePlan`. Construction validates every range, transform, and index
+   while it transforms each source vertex once, so publication contains no
+   second traversal to attribute. Each sample also records the plan's retained
+   position count and charged byte count, so a regression that reintroduces a
+   per-corner transform is visible in the report rather than only in a timing.
 4. Draw work is measured as the production Canvas closure performs it per
    triangle: three world positions projected through `ViewportLayout`, one
    `Path` built, one fill and one stroke charged. Fill and stroke are counted,
@@ -125,8 +127,7 @@ sequenceDiagram
         Runner->>Renderer: makePlan + traversal
     end
     loop measured iterations (timing only)
-        Runner->>Renderer: makePlan
-        Runner->>Renderer: validation traversal (duplicate pass)
+        Runner->>Renderer: makePlan (single validating pass)
         Runner->>Renderer: traversal for draw work
         Renderer-->>Runner: triangle
         Runner->>Layout: project x3
@@ -134,7 +135,7 @@ sequenceDiagram
     end
     Runner->>Runner: sample baseline footprint
     Runner->>Sampler: start peak sampling off the main actor
-    Runner->>Renderer: makePlan + validation traversal
+    Runner->>Renderer: makePlan
     Runner->>Sampler: stop, read peak or typed failure
     Runner->>Runner: sample footprint with the plan retained
     Runner-->>CLI: report with per-row verdicts
@@ -167,7 +168,7 @@ dependent and are never asserted.
 |---|---|
 | Deterministic fixture | Building the small fixture twice, and the standard fixture twice, yields identical digests, vertex counts, and face counts. |
 | Fixture admission | The fixture builds and plans without a typed failure, and the plan's triangle count matches the value the fixture parameters predict. |
-| Attributable duplicate pass | Every sample reports a non-zero validation-traversal duration separate from `makePlan`, and preparation equals their sum. |
+| Single publishing pass | Every sample reports a non-zero preparation duration that is the `makePlan` interval alone, never exceeds the blocked interval it belongs to, and carries a retained position count below three times the triangle count together with a non-zero charged byte count. |
 | Honest exclusion | The Canvas row's reason names the excluded fill and stroke submissions, and the counted values equal the triangle count. |
 | No invented values | Every acceptance row carries a verdict, a measured value, a threshold, and a non-empty reason; the two rows the table defines over ten runs cannot accept from a shorter series, and the two it defines over one publication are decided by any run. |
 | Lower-bound rows never accept | The Canvas row and both byte rows report `rejects` or `notMeasured`, never `accepts`, because each is measured as a lower bound. |

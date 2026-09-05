@@ -6,8 +6,9 @@ import Testing
 /// Verifies the contracts the module design owns. The measured durations are
 /// host dependent and are therefore never asserted; what is asserted is that
 /// the fixture is deterministic, that the plan admits the whole fixture, that
-/// the duplicate preparation pass is attributable, and that a measure the
-/// implementation cannot establish is reported as `notMeasured` with a reason.
+/// publication is the single construction that transforms each source vertex
+/// once, and that a measure the implementation cannot establish is reported as
+/// `notMeasured` with a reason.
 @Suite("Responsiveness baseline contracts")
 struct ResponsivenessBaselineTests {
     /// A fixture small enough to measure inside a test while exercising the
@@ -74,16 +75,22 @@ struct ResponsivenessBaselineTests {
         #expect(report.planTriangleCount > 0)
     }
 
-    @Test("The duplicate validation pass is reported separately from plan construction")
+    @Test("Publication is one construction that transforms each source vertex once")
     @MainActor
-    func attributableDuplicatePass() async throws {
+    func publicationIsASingleTransformingPass() async throws {
         let report = try await Self.makeReport(iterationCount: 2)
         #expect(report.samples.count == 2)
         for sample in report.samples {
-            #expect(sample.planConstructionSeconds > 0.0)
-            #expect(sample.validationTraversalSeconds > 0.0)
-            let parts = sample.planConstructionSeconds + sample.validationTraversalSeconds
-            #expect(abs(sample.preparationSeconds - parts) < 1e-9)
+            #expect(sample.preparationSeconds > 0.0)
+            // A second traversal would be measured inside publication, so the
+            // reported interval can only be the construction itself.
+            #expect(sample.preparationSeconds <= sample.mainActorBlockedSeconds)
+            // The fixture shares vertices between triangles, so transforming
+            // each source vertex once retains fewer positions than a plan that
+            // transforms every triangle corner would.
+            #expect(sample.positionCount > 0)
+            #expect(sample.positionCount < 3 * sample.triangleCount)
+            #expect(sample.retainedByteCount > 0)
         }
     }
 

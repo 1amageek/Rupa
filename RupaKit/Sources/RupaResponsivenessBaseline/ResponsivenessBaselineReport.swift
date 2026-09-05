@@ -3,15 +3,19 @@ import Foundation
 /// One measured iteration of the production preparation and draw work.
 public struct ResponsivenessIterationSample: Equatable, Sendable, Codable {
     public let index: Int
-    /// Time spent in `MeshSourcePresentationRenderPlan(scene:)`, the first half
-    /// of what the production cache performs synchronously on the MainActor.
-    public let planConstructionSeconds: Double
-    /// Time spent in the discarded validation traversal, the second half of the
-    /// same synchronous cache call. Reported separately so the duplicate full
-    /// traversal is attributable rather than folded into one number.
-    public let validationTraversalSeconds: Double
-    /// The synchronous MainActor cost of publishing one plan.
+    /// The cost of publishing one plan, measured as the single
+    /// `MeshSourcePresentationRenderPlan(scene:)` construction the cache
+    /// performs. Construction validates every range, transform, and index
+    /// exactly once, so publication no longer contains a second traversal to
+    /// attribute separately.
     public let preparationSeconds: Double
+    /// World-transformed positions the published plan retains. Construction
+    /// transforms each source vertex once, so this stays far below three times
+    /// `triangleCount` whenever a vertex is shared between triangles.
+    public let positionCount: Int
+    /// Derived bytes the published plan retains, as charged against
+    /// `MeshSourcePresentationPlanLimits` during construction.
+    public let retainedByteCount: Int
     /// Time spent reproducing the Canvas closure's per-triangle work.
     public let drawWorkSeconds: Double
     /// The total uninterruptible MainActor interval one scene change causes.

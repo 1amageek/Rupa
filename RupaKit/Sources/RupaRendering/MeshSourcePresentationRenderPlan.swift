@@ -3,228 +3,378 @@ import RupaGeometry
 import RupaProjectModel
 import RupaViewportScene
 
-/// A snapshot-owned traversal plan for MeshSource presentation rendering.
+/// A snapshot-owned, indexed traversal plan for MeshSource presentation.
 ///
-/// Construct one plan when a UniversalViewportScene snapshot changes and retain
-/// it for the render owner's lifetime. The plan stores only bounded vertex-ID
-/// indexes, ear-clipped triangle topology metadata, and immutable MeshSource
-/// values; it does not duplicate GeometryBuffer storage or retain derived
-/// position payloads.
+/// Construction world-transforms every vertex of an occurrence exactly once
+/// into a derived position buffer and records the occurrence's triangles as
+/// checked indices into it, so no consumer re-transforms a corner and no
+/// second validating traversal is required. The immutable source buffers are
+/// never copied: the plan retains the source vertex-ID buffer for picking
+/// provenance and allocates only the transformed positions, the triangle
+/// indices, and the per-triangle face identity. That derived cost is charged
+/// against `MeshSourcePresentationPlanLimits` before any storage is reserved
+/// or grown.
 public struct MeshSourcePresentationRenderPlan: Sendable {
+    /// Vertices transformed between two cancellation checks. A cancelled build
+    /// stops within one range instead of transforming a whole occurrence.
+    private static let vertexCancellationStride = 4_096
+
     public let snapshotID: EvaluationSnapshotID
     public let projectID: ProjectID
     public let itemCount: Int
+    public let positionCount: Int
     public let triangleCount: Int
+    /// Bytes of derived storage the plan holds, as charged during construction.
+    public let retainedByteCount: Int
     public let telemetry: MeshSourcePresentationRenderTelemetry
-    private let entries: [Entry]
+    let occurrences: [Occurrence]
 
-    private struct Entry: Sendable {
+    /// One occurrence's derived presentation geometry.
+    ///
+    /// `positions` is index-aligned with `vertexIDs`, so one triangle index
+    /// selects both the world position a draw pass projects and the source
+    /// vertex identity picking reports.
+    struct Occurrence: Sendable {
         let occurrenceID: SceneOccurrenceID
         let definitionID: ObjectDefinitionID
         let representationID: GeometryRepresentationID
         let sourceReference: GeometrySourceReference
-        let mesh: MeshSource
-        let worldTransform: GeometryTransform3D
-        let triangulationIndex: MeshSourceTriangulationIndex
-        let triangles: [MeshTriangle]
-        let triangleCount: Int
-        let triangulationTelemetry: MeshTriangulationTelemetry
+        let vertexIDs: GeometryBuffer<MeshVertexID>
+        let positions: [GeometryPoint3D]
+        let faceIDs: [MeshFaceID]
+        let vertexIndices: [UInt32]
 
-        init(
-            item: UniversalViewportSceneItem,
-            tolerance: Double,
-            limits: MeshTriangulationLimits
-        ) throws {
-            do {
-                try item.validate()
-            } catch let error as UniversalViewportSceneError {
-                throw MeshSourcePresentationRenderPlan.sceneItemError(error)
-            }
-
-            guard item.worldTransform.values.count == 16,
-                  item.worldTransform.values.allSatisfy(\.isFinite) else {
-                throw MeshSourcePresentationRenderError(
-                    code: .invalidTransform,
-                    message: "Presentation item \(item.occurrenceID.rawValue) has an invalid world transform."
-                )
-            }
-
-            let mesh = item.mesh
-            guard mesh.vertexIDs.count == mesh.vertexPositions.count else {
-                throw MeshSourcePresentationRenderError(
-                    code: .invalidVertexReference,
-                    message: "Presentation MeshSource vertex IDs and positions have different counts."
-                )
-            }
-            guard mesh.faceIDs.count == mesh.faceCornerRanges.count else {
-                throw MeshSourcePresentationRenderError(
-                    code: .invalidFaceRange,
-                    message: "Presentation MeshSource face IDs and corner ranges have different counts."
-                )
-            }
-            guard mesh.cornerIDs.count == mesh.cornerVertexIDs.count else {
-                throw MeshSourcePresentationRenderError(
-                    code: .invalidCornerReference,
-                    message: "Presentation MeshSource corner IDs and vertex references have different counts."
-                )
-            }
-
-            let triangulationIndex: MeshSourceTriangulationIndex
-            do {
-                triangulationIndex = try mesh.makeTriangulationIndex()
-            } catch let error as MeshTriangulationError {
-                throw MeshSourcePresentationRenderPlan.triangulationError(error)
-            }
-
-            var triangles: [MeshTriangle] = []
-            var triangulationTelemetry = MeshTriangulationTelemetry()
-            for faceIndex in mesh.faceCornerRanges.indices {
-                let faceTriangles: [MeshTriangle]
-                do {
-                    faceTriangles = try mesh.triangulate(
-                        faceIndex: faceIndex,
-                        using: triangulationIndex,
-                        tolerance: tolerance,
-                        limits: limits,
-                        telemetry: &triangulationTelemetry
-                    )
-                } catch let error as MeshTriangulationError {
-                    throw MeshSourcePresentationRenderPlan.triangulationError(error)
-                } catch {
-                    throw MeshSourcePresentationRenderError(
-                        code: .failed,
-                        message: String(describing: error)
-                    )
-                }
-                let addition = triangles.count.addingReportingOverflow(faceTriangles.count)
-                guard !addition.overflow else {
-                    throw MeshSourcePresentationRenderError(
-                        code: .sizeOverflow,
-                        message: "Presentation MeshSource triangle count exceeds the supported range."
-                    )
-                }
-                triangles.append(contentsOf: faceTriangles)
-            }
-
-            self.occurrenceID = item.occurrenceID
-            self.definitionID = item.definitionID
-            self.representationID = item.representationID
-            self.sourceReference = item.sourceReference
-            self.mesh = mesh
-            self.worldTransform = item.worldTransform
-            self.triangulationIndex = triangulationIndex
-            self.triangles = triangles
-            self.triangleCount = triangles.count
-            self.triangulationTelemetry = triangulationTelemetry
+        var triangleCount: Int {
+            faceIDs.count
         }
 
-        func forEachTriangle(
-            _ visit: (MeshSourcePresentationTriangle) throws -> Void
-        ) throws {
-            for triangle in triangles {
-                let firstVertexID = triangle.vertexIDs.0
-                let secondVertexID = triangle.vertexIDs.1
-                let thirdVertexID = triangle.vertexIDs.2
-                let firstPositionIndex = try positionIndex(for: firstVertexID)
-                let firstPosition = try transformed(mesh.vertexPositions[firstPositionIndex])
-                let secondPosition = try transformed(
-                    mesh.vertexPositions[try positionIndex(for: secondVertexID)]
-                )
-                let thirdPosition = try transformed(
-                    mesh.vertexPositions[try positionIndex(for: thirdVertexID)]
-                )
-                try visit(
-                    MeshSourcePresentationTriangle(
-                        occurrenceID: occurrenceID,
-                        definitionID: definitionID,
-                        representationID: representationID,
-                        sourceReference: sourceReference,
-                        faceID: triangle.faceID,
-                        firstVertexID: firstVertexID,
-                        secondVertexID: secondVertexID,
-                        thirdVertexID: thirdVertexID,
-                        firstPosition: firstPosition,
-                        secondPosition: secondPosition,
-                        thirdPosition: thirdPosition
-                    )
+        func triangle(at index: Int) -> MeshSourcePresentationTriangle {
+            let base = index * 3
+            let first = Int(vertexIndices[base])
+            let second = Int(vertexIndices[base + 1])
+            let third = Int(vertexIndices[base + 2])
+            return MeshSourcePresentationTriangle(
+                occurrenceID: occurrenceID,
+                definitionID: definitionID,
+                representationID: representationID,
+                sourceReference: sourceReference,
+                faceID: faceIDs[index],
+                firstVertexID: vertexIDs[first],
+                secondVertexID: vertexIDs[second],
+                thirdVertexID: vertexIDs[third],
+                firstPosition: positions[first],
+                secondPosition: positions[second],
+                thirdPosition: positions[third]
+            )
+        }
+    }
+
+    /// Cumulative derived-resource accounting for one construction.
+    private struct Charge {
+        private static let indexStride = MemoryLayout<UInt32>.stride
+        private static let faceIDStride = MemoryLayout<MeshFaceID>.stride
+        private static let positionStride = MemoryLayout<GeometryPoint3D>.stride
+
+        let limits: MeshSourcePresentationPlanLimits
+        private(set) var itemCount = 0
+        private(set) var positionCount = 0
+        private(set) var triangleCount = 0
+        private(set) var byteCount = 0
+
+        mutating func chargeItems(_ count: Int) throws {
+            itemCount = try Self.sum(itemCount, count)
+            try Self.admit(itemCount, limits.maxItemCount, named: "item")
+        }
+
+        mutating func chargePositions(_ count: Int) throws {
+            positionCount = try Self.sum(positionCount, count)
+            try Self.admit(
+                positionCount,
+                limits.maxPositionCount,
+                named: "transformed position"
+            )
+            try chargeBytes(try Self.product(count, Self.positionStride))
+        }
+
+        mutating func chargeTriangles(_ count: Int) throws {
+            triangleCount = try Self.sum(triangleCount, count)
+            try Self.admit(triangleCount, limits.maxTriangleCount, named: "triangle")
+            let indexBytes = try Self.product(
+                try Self.product(count, 3),
+                Self.indexStride
+            )
+            let faceBytes = try Self.product(count, Self.faceIDStride)
+            try chargeBytes(try Self.sum(indexBytes, faceBytes))
+        }
+
+        private mutating func chargeBytes(_ count: Int) throws {
+            byteCount = try Self.sum(byteCount, count)
+            try Self.admit(byteCount, limits.maxRetainedByteCount, named: "retained byte")
+        }
+
+        private static func admit(_ used: Int, _ limit: Int, named name: String) throws {
+            guard used <= limit else {
+                throw MeshSourcePresentationRenderError(
+                    code: .resourceExhausted,
+                    message: """
+                        Presentation plan \(name) count \(used) exceeds its limit \(limit).
+                        """
                 )
             }
         }
 
-        private func positionIndex(for vertexID: MeshVertexID) throws -> Int {
-            guard let index = triangulationIndex.positionIndex(for: vertexID),
-                  index >= mesh.vertexPositions.startIndex,
-                  index < mesh.vertexPositions.endIndex else {
+        private static func sum(_ lhs: Int, _ rhs: Int) throws -> Int {
+            let result = lhs.addingReportingOverflow(rhs)
+            guard !result.overflow else {
                 throw MeshSourcePresentationRenderError(
-                    code: .invalidVertexReference,
-                    message: "Presentation MeshSource vertex reference is outside its position buffer."
+                    code: .sizeOverflow,
+                    message: "Presentation plan resource count exceeds the supported range."
                 )
             }
-            return index
+            return result.partialValue
         }
 
-        private func transformed(_ point: GeometryPoint3D) throws -> GeometryPoint3D {
-            do {
-                return try worldTransform.applying(to: point)
-            } catch let error as MeshSourceError {
+        private static func product(_ lhs: Int, _ rhs: Int) throws -> Int {
+            let result = lhs.multipliedReportingOverflow(by: rhs)
+            guard !result.overflow else {
                 throw MeshSourcePresentationRenderError(
-                    code: .transformFailure,
-                    message: error.message
-                )
-            } catch {
-                throw MeshSourcePresentationRenderError(
-                    code: .transformFailure,
-                    message: String(describing: error)
+                    code: .sizeOverflow,
+                    message: "Presentation plan resource count exceeds the supported range."
                 )
             }
+            return result.partialValue
         }
+    }
+
+    private struct BuiltOccurrence {
+        let occurrence: Occurrence
+        let telemetry: MeshTriangulationTelemetry
     }
 
     public init(
         scene: UniversalViewportScene,
         tolerance: Double = 1e-9,
-        limits: MeshTriangulationLimits = .standard
+        limits: MeshTriangulationLimits = .standard,
+        planLimits: MeshSourcePresentationPlanLimits = .standard
     ) throws {
-        var entries: [Entry] = []
-        entries.reserveCapacity(scene.items.count)
-        var triangleCount = 0
+        try planLimits.validate()
+        var charge = Charge(limits: planLimits)
+        try charge.chargeItems(scene.items.count)
+        var occurrences: [Occurrence] = []
+        occurrences.reserveCapacity(scene.items.count)
         var telemetry = MeshSourcePresentationRenderTelemetry()
         for item in scene.items {
-            let entry = try Entry(
+            try Task.checkCancellation()
+            let built = try Self.makeOccurrence(
                 item: item,
                 tolerance: tolerance,
-                limits: limits
+                limits: limits,
+                charge: &charge
             )
-            let addition = triangleCount.addingReportingOverflow(entry.triangleCount)
-            guard !addition.overflow else {
-                throw MeshSourcePresentationRenderError(
-                    code: .sizeOverflow,
-                    message: "Presentation scene triangle count exceeds the supported range."
-                )
-            }
-            triangleCount = addition.partialValue
-            let telemetryAddition = try telemetry.adding(
-                MeshSourcePresentationRenderTelemetry(entry.triangulationTelemetry)
+            telemetry = try telemetry.adding(
+                MeshSourcePresentationRenderTelemetry(built.telemetry)
             )
-            telemetry = telemetryAddition
-            entries.append(entry)
+            occurrences.append(built.occurrence)
         }
         self.snapshotID = scene.snapshotID
         self.projectID = scene.projectID
-        self.itemCount = entries.count
-        self.triangleCount = triangleCount
+        self.itemCount = occurrences.count
+        self.positionCount = charge.positionCount
+        self.triangleCount = charge.triangleCount
+        self.retainedByteCount = charge.byteCount
         self.telemetry = telemetry
-        self.entries = entries
+        self.occurrences = occurrences
     }
 
-    /// Traverses ear-clipped world-space triangles without retaining derived
-    /// position payloads. The supplied consumer owns any output it chooses to
-    /// retain.
+    /// Traverses the plan's world-space triangles.
+    ///
+    /// Construction validated every source range, transform, position, and
+    /// index, so traversal cannot fail; this rethrows only what the consumer's
+    /// own closure throws.
     public func forEachTriangle(
         _ visit: (MeshSourcePresentationTriangle) throws -> Void
-    ) throws {
-        for entry in entries {
-            try entry.forEachTriangle(visit)
+    ) rethrows {
+        for occurrence in occurrences {
+            for index in 0..<occurrence.triangleCount {
+                try visit(occurrence.triangle(at: index))
+            }
+        }
+    }
+
+    private static func makeOccurrence(
+        item: UniversalViewportSceneItem,
+        tolerance: Double,
+        limits: MeshTriangulationLimits,
+        charge: inout Charge
+    ) throws -> BuiltOccurrence {
+        do {
+            try item.validate()
+        } catch let error as UniversalViewportSceneError {
+            throw sceneItemError(error)
+        }
+
+        guard item.worldTransform.values.count == 16,
+              item.worldTransform.values.allSatisfy(\.isFinite) else {
+            throw MeshSourcePresentationRenderError(
+                code: .invalidTransform,
+                message: "Presentation item \(item.occurrenceID.rawValue) has an invalid world transform."
+            )
+        }
+
+        let mesh = item.mesh
+        guard mesh.vertexIDs.count == mesh.vertexPositions.count else {
+            throw MeshSourcePresentationRenderError(
+                code: .invalidVertexReference,
+                message: "Presentation MeshSource vertex IDs and positions have different counts."
+            )
+        }
+        guard mesh.faceIDs.count == mesh.faceCornerRanges.count else {
+            throw MeshSourcePresentationRenderError(
+                code: .invalidFaceRange,
+                message: "Presentation MeshSource face IDs and corner ranges have different counts."
+            )
+        }
+        guard mesh.cornerIDs.count == mesh.cornerVertexIDs.count else {
+            throw MeshSourcePresentationRenderError(
+                code: .invalidCornerReference,
+                message: "Presentation MeshSource corner IDs and vertex references have different counts."
+            )
+        }
+
+        let triangulationIndex: MeshSourceTriangulationIndex
+        do {
+            triangulationIndex = try mesh.makeTriangulationIndex()
+        } catch let error as MeshTriangulationError {
+            throw triangulationError(error)
+        }
+
+        let vertexCount = mesh.vertexIDs.count
+        try charge.chargePositions(vertexCount)
+        let positions = try transformedPositions(
+            of: mesh,
+            by: item.worldTransform,
+            vertexCount: vertexCount
+        )
+
+        var faceIDs: [MeshFaceID] = []
+        var vertexIndices: [UInt32] = []
+        var triangulationTelemetry = MeshTriangulationTelemetry()
+        for faceIndex in mesh.faceCornerRanges.indices {
+            try Task.checkCancellation()
+            let faceTriangles: [MeshTriangle]
+            do {
+                faceTriangles = try mesh.triangulate(
+                    faceIndex: faceIndex,
+                    using: triangulationIndex,
+                    tolerance: tolerance,
+                    limits: limits,
+                    telemetry: &triangulationTelemetry
+                )
+            } catch let error as MeshTriangulationError {
+                throw triangulationError(error)
+            } catch {
+                throw MeshSourcePresentationRenderError(
+                    code: .failed,
+                    message: String(describing: error)
+                )
+            }
+            try charge.chargeTriangles(faceTriangles.count)
+            for triangle in faceTriangles {
+                faceIDs.append(triangle.faceID)
+                vertexIndices.append(
+                    try positionIndex(
+                        for: triangle.vertexIDs.0,
+                        in: triangulationIndex,
+                        vertexCount: vertexCount
+                    )
+                )
+                vertexIndices.append(
+                    try positionIndex(
+                        for: triangle.vertexIDs.1,
+                        in: triangulationIndex,
+                        vertexCount: vertexCount
+                    )
+                )
+                vertexIndices.append(
+                    try positionIndex(
+                        for: triangle.vertexIDs.2,
+                        in: triangulationIndex,
+                        vertexCount: vertexCount
+                    )
+                )
+            }
+        }
+
+        let occurrence = Occurrence(
+            occurrenceID: item.occurrenceID,
+            definitionID: item.definitionID,
+            representationID: item.representationID,
+            sourceReference: item.sourceReference,
+            vertexIDs: mesh.vertexIDs,
+            positions: positions,
+            faceIDs: faceIDs,
+            vertexIndices: vertexIndices
+        )
+        return BuiltOccurrence(
+            occurrence: occurrence,
+            telemetry: triangulationTelemetry
+        )
+    }
+
+    private static func transformedPositions(
+        of mesh: MeshSource,
+        by worldTransform: GeometryTransform3D,
+        vertexCount: Int
+    ) throws -> [GeometryPoint3D] {
+        var positions: [GeometryPoint3D] = []
+        positions.reserveCapacity(vertexCount)
+        var rangeStart = 0
+        while rangeStart < vertexCount {
+            try Task.checkCancellation()
+            let rangeEnd = min(rangeStart + vertexCancellationStride, vertexCount)
+            for index in rangeStart..<rangeEnd {
+                positions.append(
+                    try transformed(mesh.vertexPositions[index], by: worldTransform)
+                )
+            }
+            rangeStart = rangeEnd
+        }
+        return positions
+    }
+
+    private static func positionIndex(
+        for vertexID: MeshVertexID,
+        in triangulationIndex: MeshSourceTriangulationIndex,
+        vertexCount: Int
+    ) throws -> UInt32 {
+        guard let index = triangulationIndex.positionIndex(for: vertexID),
+              index >= 0,
+              index < vertexCount,
+              index <= Int(UInt32.max) else {
+            throw MeshSourcePresentationRenderError(
+                code: .invalidVertexReference,
+                message: "Presentation MeshSource vertex reference is outside its position buffer."
+            )
+        }
+        return UInt32(index)
+    }
+
+    private static func transformed(
+        _ point: GeometryPoint3D,
+        by worldTransform: GeometryTransform3D
+    ) throws -> GeometryPoint3D {
+        do {
+            return try worldTransform.applying(to: point)
+        } catch let error as MeshSourceError {
+            throw MeshSourcePresentationRenderError(
+                code: .transformFailure,
+                message: error.message
+            )
+        } catch {
+            throw MeshSourcePresentationRenderError(
+                code: .transformFailure,
+                message: String(describing: error)
+            )
         }
     }
 

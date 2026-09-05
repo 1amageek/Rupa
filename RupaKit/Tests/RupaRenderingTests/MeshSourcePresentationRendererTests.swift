@@ -324,7 +324,7 @@ func meshSourcePresentationRendererMapsFaceRangeArithmeticOverflow() throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
-func meshSourcePresentationRendererReportsTransformFailureDuringConsumption() throws {
+func meshSourcePresentationRendererReportsTransformFailureDuringConstruction() throws {
     let sourceReference = GeometrySourceReference.authoredMesh(
         GeometrySourceID(rawValue: "mesh.presentation")
     )
@@ -355,12 +355,12 @@ func meshSourcePresentationRendererReportsTransformFailureDuringConsumption() th
         items: [invalidTransformItem],
         copyTelemetry: scene.copyTelemetry
     )
-    let renderer = MeshSourcePresentationRenderer()
-    let plan = try renderer.makePlan(for: invalidTransformScene)
-
+    // The plan transforms every vertex exactly once while it is built, so a
+    // transform that cannot produce a finite point is refused at construction
+    // and no partially transformed plan is ever published.
     var error: MeshSourcePresentationRenderError?
     do {
-        try renderer.render(plan: plan) { _ in }
+        _ = try MeshSourcePresentationRenderer().makePlan(for: invalidTransformScene)
     } catch let caught as MeshSourcePresentationRenderError {
         error = caught
     }
@@ -429,6 +429,158 @@ func meshSourcePresentationRenderPlanReportsConcaveBudgetFailureWithoutPartialPl
     }
 
     #expect(error?.code == .budgetExceeded)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func meshSourcePresentationRenderPlanTransformsEachSourceVertexExactlyOnce() throws {
+    let firstReference = GeometrySourceReference.cad(
+        sourceID: "cad.presentation.first",
+        outputID: "cad.output"
+    )
+    let secondReference = GeometrySourceReference.cad(
+        sourceID: "cad.presentation.second",
+        outputID: "cad.output"
+    )
+    let translation = try translationTransform(x: 10, y: 20, z: 30)
+    let (scene, source) = try presentationScene(
+        references: [firstReference, secondReference],
+        transforms: [.identity, translation]
+    )
+    let plan = try MeshSourcePresentationRenderer().makePlan(for: scene)
+
+    // One transformed position per source vertex per occurrence, not one per
+    // triangle corner: a shared corner is transformed once and then indexed.
+    #expect(plan.itemCount == 2)
+    #expect(plan.triangleCount == 4)
+    #expect(plan.positionCount == 2 * source.vertexIDs.count)
+    #expect(plan.positionCount < 3 * plan.triangleCount)
+    #expect(plan.retainedByteCount > 0)
+    #expect(plan.retainedByteCount <= MeshSourcePresentationPlanLimits.standard.maxRetainedByteCount)
+
+    // The indexed positions still carry the same world geometry the previous
+    // per-corner traversal produced.
+    var expectedPositions: Set<String> = []
+    for index in source.vertexPositions.indices {
+        let point = source.vertexPositions[index]
+        expectedPositions.insert("\(point.x),\(point.y),\(point.z)")
+        let translated = try translation.applying(to: point)
+        expectedPositions.insert("\(translated.x),\(translated.y),\(translated.z)")
+    }
+    var emittedCount = 0
+    plan.forEachTriangle { triangle in
+        emittedCount += 1
+        for point in [triangle.firstPosition, triangle.secondPosition, triangle.thirdPosition] {
+            #expect(expectedPositions.contains("\(point.x),\(point.y),\(point.z)"))
+        }
+    }
+    #expect(emittedCount == 4)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func meshSourcePresentationRenderPlanRefusesEachDerivedResourceAboveItsLimit() throws {
+    let firstReference = GeometrySourceReference.cad(
+        sourceID: "cad.presentation.first",
+        outputID: "cad.output"
+    )
+    let secondReference = GeometrySourceReference.cad(
+        sourceID: "cad.presentation.second",
+        outputID: "cad.output"
+    )
+    let (scene, _) = try presentationScene(
+        references: [firstReference, secondReference],
+        transforms: [.identity, .identity]
+    )
+    let hardMaximum = MeshSourcePresentationPlanLimits.hardMaximum
+    let lowered: [(String, MeshSourcePresentationPlanLimits)] = [
+        ("item", MeshSourcePresentationPlanLimits(
+            maxItemCount: 1,
+            maxPositionCount: hardMaximum.maxPositionCount,
+            maxTriangleCount: hardMaximum.maxTriangleCount,
+            maxRetainedByteCount: hardMaximum.maxRetainedByteCount
+        )),
+        ("position", MeshSourcePresentationPlanLimits(
+            maxItemCount: hardMaximum.maxItemCount,
+            maxPositionCount: 3,
+            maxTriangleCount: hardMaximum.maxTriangleCount,
+            maxRetainedByteCount: hardMaximum.maxRetainedByteCount
+        )),
+        ("triangle", MeshSourcePresentationPlanLimits(
+            maxItemCount: hardMaximum.maxItemCount,
+            maxPositionCount: hardMaximum.maxPositionCount,
+            maxTriangleCount: 1,
+            maxRetainedByteCount: hardMaximum.maxRetainedByteCount
+        )),
+        ("retained byte", MeshSourcePresentationPlanLimits(
+            maxItemCount: hardMaximum.maxItemCount,
+            maxPositionCount: hardMaximum.maxPositionCount,
+            maxTriangleCount: hardMaximum.maxTriangleCount,
+            maxRetainedByteCount: 1
+        )),
+    ]
+
+    for (dimension, planLimits) in lowered {
+        var error: MeshSourcePresentationRenderError?
+        do {
+            _ = try MeshSourcePresentationRenderPlan(scene: scene, planLimits: planLimits)
+        } catch let caught as MeshSourcePresentationRenderError {
+            error = caught
+        }
+        #expect(error?.code == .resourceExhausted, "\(dimension) limit was not enforced")
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func meshSourcePresentationRenderPlanRefusesACallerThatWidensTheModuleCeiling() throws {
+    let reference = GeometrySourceReference.cad(
+        sourceID: "cad.presentation",
+        outputID: "cad.output"
+    )
+    let (scene, _) = try presentationScene(
+        references: [reference],
+        transforms: [.identity]
+    )
+    let hardMaximum = MeshSourcePresentationPlanLimits.hardMaximum
+    let widened = MeshSourcePresentationPlanLimits(
+        maxItemCount: hardMaximum.maxItemCount,
+        maxPositionCount: hardMaximum.maxPositionCount,
+        maxTriangleCount: hardMaximum.maxTriangleCount + 1,
+        maxRetainedByteCount: hardMaximum.maxRetainedByteCount
+    )
+
+    var error: MeshSourcePresentationRenderError?
+    do {
+        _ = try MeshSourcePresentationRenderPlan(scene: scene, planLimits: widened)
+    } catch let caught as MeshSourcePresentationRenderError {
+        error = caught
+    }
+    #expect(error?.code == .invalidLimit)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func meshSourcePresentationRenderPlanStopsWhenItsTaskIsCancelled() async throws {
+    let reference = GeometrySourceReference.cad(
+        sourceID: "cad.presentation",
+        outputID: "cad.output"
+    )
+    let (scene, _) = try presentationScene(
+        references: [reference],
+        transforms: [.identity]
+    )
+    // The gate keeps the build from starting until cancellation has been
+    // requested, so the test observes cooperative cancellation rather than a
+    // race between cancel and completion.
+    let gate = AsyncStream<Void>.makeStream()
+    let task = Task { () throws -> MeshSourcePresentationRenderPlan in
+        var iterator = gate.stream.makeAsyncIterator()
+        _ = await iterator.next()
+        return try MeshSourcePresentationRenderPlan(scene: scene)
+    }
+    task.cancel()
+    gate.continuation.finish()
+
+    await #expect(throws: CancellationError.self) {
+        _ = try await task.value
+    }
 }
 
 private func presentationHighSegmentCylinderSource(segmentCount: Int) throws -> MeshSource {

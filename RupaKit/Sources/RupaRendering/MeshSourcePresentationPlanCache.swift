@@ -15,10 +15,9 @@ final class MeshSourcePresentationPlanCache {
         }
         let result: Result<MeshSourcePresentationRenderPlan, MeshSourcePresentationRenderError>
         do {
-            let renderer = MeshSourcePresentationRenderer()
-            let plan = try renderer.makePlan(for: scene)
-            try renderer.render(plan: plan) { _ in }
-            result = .success(plan)
+            // Construction already validated every range, transform, and index,
+            // so publishing the plan does not traverse it a second time.
+            result = .success(try MeshSourcePresentationRenderer().makePlan(for: scene))
         } catch let error as MeshSourcePresentationRenderError {
             result = .failure(error)
         } catch {

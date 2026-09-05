@@ -102,26 +102,23 @@ public struct ResponsivenessBaselineRunner {
         samples.reserveCapacity(configuration.iterationCount)
         for index in 0..<configuration.iterationCount {
             let clock = ContinuousClock()
+            // Publication is exactly one construction. Construction validates
+            // every range, transform, and index while it transforms each source
+            // vertex once, so the cache publishes the result without a second
+            // traversal to measure.
             let constructionStart = clock.now
             let plan = try MeshSourcePresentationRenderPlan(scene: fixture.scene)
             let constructionEnd = clock.now
-            // The production cache performs a second full traversal and discards
-            // its output. It is timed separately so the duplicate pass stays
-            // attributable to the cache rather than to plan construction.
-            try MeshSourcePresentationRenderer().render(plan: plan) { _ in }
-            let validationEnd = clock.now
             let draw = try measureDrawWork(plan: plan, layout: layout)
 
-            let planConstruction = seconds(constructionStart.duration(to: constructionEnd))
-            let validation = seconds(constructionEnd.duration(to: validationEnd))
-            let preparation = planConstruction + validation
+            let preparation = seconds(constructionStart.duration(to: constructionEnd))
             planTriangleCount = plan.triangleCount
             samples.append(
                 ResponsivenessIterationSample(
                     index: index,
-                    planConstructionSeconds: planConstruction,
-                    validationTraversalSeconds: validation,
                     preparationSeconds: preparation,
+                    positionCount: plan.positionCount,
+                    retainedByteCount: plan.retainedByteCount,
                     drawWorkSeconds: draw.seconds,
                     mainActorBlockedSeconds: preparation + draw.seconds,
                     triangleCount: plan.triangleCount,
@@ -162,9 +159,7 @@ public struct ResponsivenessBaselineRunner {
     private func preparePlan(
         scene: UniversalViewportScene
     ) throws -> MeshSourcePresentationRenderPlan {
-        let plan = try MeshSourcePresentationRenderPlan(scene: scene)
-        try MeshSourcePresentationRenderer().render(plan: plan) { _ in }
-        return plan
+        try MeshSourcePresentationRenderPlan(scene: scene)
     }
 
     private struct DrawWorkMeasurement {
@@ -293,10 +288,9 @@ public struct ResponsivenessBaselineRunner {
                 threshold: Self.milliseconds(frameInterval / 2.0),
                 detail: """
                     Worst of \(samples.count) measured iterations. Publication is the \
-                    synchronous plan construction plus the discarded validation \
-                    traversal the cache performs before it returns a result. The row \
-                    is defined over one uninterrupted publication, so a single \
-                    measured iteration decides it.
+                    single synchronous plan construction the cache performs before \
+                    it returns a result. The row is defined over one uninterrupted \
+                    publication, so a single measured iteration decides it.
                     """
             )
         )

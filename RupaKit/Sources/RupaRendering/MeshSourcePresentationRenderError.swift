@@ -14,6 +14,8 @@ public struct MeshSourcePresentationRenderError: Error, Equatable, LocalizedErro
         case nonPlanar
         case degenerate
         case budgetExceeded
+        case invalidLimit
+        case resourceExhausted
         case failed
         case transformFailure
         case sizeOverflow

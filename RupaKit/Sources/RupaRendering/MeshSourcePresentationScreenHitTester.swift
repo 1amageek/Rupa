@@ -10,11 +10,11 @@ struct MeshSourcePresentationScreenHitTester {
         in plan: MeshSourcePresentationRenderPlan,
         layout: ViewportLayout,
         sectionGeometryResolver: MeshSourcePresentationSectionGeometryResolver? = nil
-    ) throws -> SceneOccurrenceID? {
+    ) -> SceneOccurrenceID? {
         var bestOccurrenceID: SceneOccurrenceID?
         var bestDepth: Double?
 
-        try plan.forEachTriangle { triangle in
+        plan.forEachTriangle { triangle in
             let polygon: ViewportTrianglePolygon
             if let sectionGeometryResolver {
                 guard let resolvedPolygon = sectionGeometryResolver.polygon(for: triangle) else {
@@ -48,14 +48,14 @@ struct MeshSourcePresentationScreenHitTester {
         in plan: MeshSourcePresentationRenderPlan,
         layout: ViewportLayout,
         sectionGeometryResolver: MeshSourcePresentationSectionGeometryResolver? = nil
-    ) throws -> [SceneOccurrenceID] {
+    ) -> [SceneOccurrenceID] {
         let normalizedRect = rect.standardized
         guard normalizedRect.isEmpty == false else {
             return []
         }
         var occurrenceIDs: [SceneOccurrenceID] = []
         var seen: Set<SceneOccurrenceID> = []
-        try plan.forEachTriangle { triangle in
+        plan.forEachTriangle { triangle in
             guard seen.contains(triangle.occurrenceID) == false else {
                 return
             }

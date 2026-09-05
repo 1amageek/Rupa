@@ -1348,54 +1348,49 @@ public struct Viewport: View {
         guard case let .success(plan) = result else {
             return
         }
-        do {
-            try MeshSourcePresentationRenderer().render(plan: plan) { triangle in
-                let interactionState = presentationInteractionStateResolver.state(
-                    for: triangle.occurrenceID
-                )
-                let color: Color
-                switch interactionState {
-                case .normal:
-                    color = ViewportTheme.bodySurface
-                case .hovered:
-                    color = ViewportTheme.hover
-                case .selected:
-                    color = ViewportTheme.selection
+        plan.forEachTriangle { triangle in
+            let interactionState = presentationInteractionStateResolver.state(
+                for: triangle.occurrenceID
+            )
+            let color: Color
+            switch interactionState {
+            case .normal:
+                color = ViewportTheme.bodySurface
+            case .hovered:
+                color = ViewportTheme.hover
+            case .selected:
+                color = ViewportTheme.selection
+            }
+            let polygon: ViewportTrianglePolygon
+            if let sectionGeometryResolver {
+                guard let resolvedPolygon = sectionGeometryResolver.polygon(for: triangle) else {
+                    return
                 }
-                let polygon: ViewportTrianglePolygon
-                if let sectionGeometryResolver {
-                    guard let resolvedPolygon = sectionGeometryResolver.polygon(for: triangle) else {
-                        return
-                    }
-                    polygon = resolvedPolygon
-                } else {
-                    polygon = ViewportTrianglePolygon(
-                        first: point3D(triangle.firstPosition),
-                        second: point3D(triangle.secondPosition),
-                        third: point3D(triangle.thirdPosition)
-                    )
-                }
-                var path = Path()
-                path.move(to: layout.project(polygon.first))
-                path.addLine(to: layout.project(polygon.second))
-                path.addLine(to: layout.project(polygon.third))
-                if let fourth = polygon.fourth {
-                    path.addLine(to: layout.project(fourth))
-                }
-                path.closeSubpath()
-                context.fill(
-                    path,
-                    with: .color(color.opacity(interactionState == .normal ? 0.24 : 0.34))
-                )
-                context.stroke(
-                    path,
-                    with: .color(color.opacity(interactionState == .normal ? 0.30 : 0.74)),
-                    lineWidth: interactionState == .normal ? 0.7 : 1.1
+                polygon = resolvedPolygon
+            } else {
+                polygon = ViewportTrianglePolygon(
+                    first: point3D(triangle.firstPosition),
+                    second: point3D(triangle.secondPosition),
+                    third: point3D(triangle.thirdPosition)
                 )
             }
-        } catch {
-            // The cache validates the complete immutable traversal before publication.
-            assertionFailure("A validated presentation render plan failed: \(error)")
+            var path = Path()
+            path.move(to: layout.project(polygon.first))
+            path.addLine(to: layout.project(polygon.second))
+            path.addLine(to: layout.project(polygon.third))
+            if let fourth = polygon.fourth {
+                path.addLine(to: layout.project(fourth))
+            }
+            path.closeSubpath()
+            context.fill(
+                path,
+                with: .color(color.opacity(interactionState == .normal ? 0.24 : 0.34))
+            )
+            context.stroke(
+                path,
+                with: .color(color.opacity(interactionState == .normal ? 0.30 : 0.74)),
+                lineWidth: interactionState == .normal ? 0.7 : 1.1
+            )
         }
     }
 
@@ -1435,17 +1430,12 @@ public struct Viewport: View {
         guard case let .success(plan) = presentationPlanCache.result(for: presentationScene) else {
             return nil
         }
-        do {
-            return try MeshSourcePresentationScreenHitTester().occurrenceID(
-                at: point,
-                in: plan,
-                layout: layout,
-                sectionGeometryResolver: presentationSectionGeometryResolver()
-            )
-        } catch {
-            assertionFailure("A validated presentation pick plan failed: \(error)")
-            return nil
-        }
+        return MeshSourcePresentationScreenHitTester().occurrenceID(
+            at: point,
+            in: plan,
+            layout: layout,
+            sectionGeometryResolver: presentationSectionGeometryResolver()
+        )
     }
 
     private func presentationOccurrenceIDs(
@@ -1458,17 +1448,12 @@ public struct Viewport: View {
         guard case let .success(plan) = presentationPlanCache.result(for: presentationScene) else {
             return []
         }
-        do {
-            return try MeshSourcePresentationScreenHitTester().occurrenceIDs(
-                intersecting: rect,
-                in: plan,
-                layout: layout,
-                sectionGeometryResolver: presentationSectionGeometryResolver()
-            )
-        } catch {
-            assertionFailure("A validated presentation rectangle-pick plan failed: \(error)")
-            return []
-        }
+        return MeshSourcePresentationScreenHitTester().occurrenceIDs(
+            intersecting: rect,
+            in: plan,
+            layout: layout,
+            sectionGeometryResolver: presentationSectionGeometryResolver()
+        )
     }
 
     private func presentationFilteredLegacyHit(
@@ -12970,20 +12955,15 @@ public struct Viewport: View {
         if let presentationScene {
             switch presentationPlanCache.result(for: presentationScene) {
             case .success(let plan):
-                do {
-                    presentationOccurrenceID = try MeshSourcePresentationScreenHitTester().occurrenceID(
-                        at: point,
-                        in: plan,
-                        layout: sceneContext.layout,
-                        sectionGeometryResolver: presentationSectionGeometryResolver()
-                    )
-                    if let occurrenceID = presentationOccurrenceID,
-                       let onPresentationOccurrencePick {
-                        onPresentationOccurrencePick(occurrenceID, selectionIntent)
-                        return
-                    }
-                } catch {
-                    assertionFailure("A validated presentation pick plan failed: \(error)")
+                presentationOccurrenceID = MeshSourcePresentationScreenHitTester().occurrenceID(
+                    at: point,
+                    in: plan,
+                    layout: sceneContext.layout,
+                    sectionGeometryResolver: presentationSectionGeometryResolver()
+                )
+                if let occurrenceID = presentationOccurrenceID,
+                   let onPresentationOccurrencePick {
+                    onPresentationOccurrencePick(occurrenceID, selectionIntent)
                     return
                 }
             case .failure:

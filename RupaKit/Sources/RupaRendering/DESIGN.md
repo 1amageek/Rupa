@@ -7,13 +7,17 @@ published `RupaViewportScene` snapshot and consumed by the existing Rupa
 viewport. It is a child of the [RupaKit package design](../../DESIGN.md) and has
 no child designs.
 
-The current implementation builds and validates
-`MeshSourcePresentationRenderPlan` synchronously from SwiftUI state, retains
-source meshes, traverses all triangles again for validation, and lets the
-Canvas construct and draw one `Path` per triangle. The target contract below
-removes that duplicated work and MainActor-bound preparation without replacing
-the existing Canvas renderer or creating another scene, source, or project
-authority.
+`MeshSourcePresentationRenderPlan` now realizes the indexed, once-transformed,
+resource-bounded contract below: it transforms each source vertex exactly once
+into a derived position buffer, references it by checked indices, charges a
+`MeshSourcePresentationPlanLimits` ceiling before it reserves storage, and
+validates every range, transform, and index during that single pass, so it
+retains neither the source meshes nor a triangulation index and no second
+validating traversal exists to publish. The remaining gaps against the target
+contract are that the cache still builds the plan synchronously from SwiftUI
+state on `MainActor`, and that the Canvas still constructs and draws one `Path`
+per triangle. Closing them replaces neither the existing Canvas renderer nor
+any scene, source, or project authority.
 
 The viewport also owns transient documents that are never published to project
 authority, such as the edge-treatment drag preview it builds from the current

@@ -51,7 +51,7 @@ func meshSourcePresentationScreenHitTesterSelectsNearestOverlappingOccurrenceWit
     )
     let sample = layout.project(Point3D(x: 0.25, y: 0, z: 0.25))
 
-    let occurrenceID = try MeshSourcePresentationScreenHitTester().occurrenceID(
+    let occurrenceID = MeshSourcePresentationScreenHitTester().occurrenceID(
         at: sample,
         in: plan,
         layout: layout
@@ -102,7 +102,7 @@ func meshSourcePresentationScreenHitTesterMatchesHiddenAndClippedSectionGeometry
         )
     )
 
-    #expect(try MeshSourcePresentationScreenHitTester().occurrenceID(
+    #expect(MeshSourcePresentationScreenHitTester().occurrenceID(
         at: layout.project(Point3D(x: 0.25, y: 0, z: 0.25)),
         in: plan,
         layout: layout,
@@ -121,13 +121,13 @@ func meshSourcePresentationScreenHitTesterMatchesHiddenAndClippedSectionGeometry
     let clippedResolver = screenHitSectionResolver(
         plane: clippingPlane
     )
-    #expect(try MeshSourcePresentationScreenHitTester().occurrenceID(
+    #expect(MeshSourcePresentationScreenHitTester().occurrenceID(
         at: layout.project(Point3D(x: 0.25, y: 0, z: 0.25)),
         in: plan,
         layout: layout,
         sectionGeometryResolver: clippedResolver
     ) == nil)
-    #expect(try MeshSourcePresentationScreenHitTester().occurrenceID(
+    #expect(MeshSourcePresentationScreenHitTester().occurrenceID(
         at: layout.project(Point3D(x: 0.75, y: 0, z: 0.10)),
         in: plan,
         layout: layout,
@@ -166,7 +166,7 @@ func meshSourcePresentationScreenHitTesterFindsRectangleOccurrencesWithoutCopies
     let sample = layout.project(Point3D(x: 0.25, y: 0, z: 0.25))
     let initialChunkIdentities = screenHitChunkIdentities(source)
 
-    let occurrenceIDs = try MeshSourcePresentationScreenHitTester().occurrenceIDs(
+    let occurrenceIDs = MeshSourcePresentationScreenHitTester().occurrenceIDs(
         intersecting: CGRect(x: sample.x - 8, y: sample.y - 8, width: 16, height: 16),
         in: plan,
         layout: layout
@@ -222,7 +222,7 @@ func meshSourcePresentationScreenHitTesterRejectsRectangleInsideTriangleBoundsBu
     ]
     let hitTester = MeshSourcePresentationScreenHitTester()
     let outsidePoint = try #require(candidates.first { point in
-        try hitTester.occurrenceID(at: point, in: plan, layout: layout) == nil
+        hitTester.occurrenceID(at: point, in: plan, layout: layout) == nil
     })
     let probe = CGRect(
         x: outsidePoint.x - 0.25,
@@ -238,7 +238,7 @@ func meshSourcePresentationScreenHitTesterRejectsRectangleInsideTriangleBoundsBu
     )
 
     #expect(projectedBounds.intersects(probe))
-    #expect(try hitTester.occurrenceIDs(
+    #expect(hitTester.occurrenceIDs(
         intersecting: probe,
         in: plan,
         layout: layout
