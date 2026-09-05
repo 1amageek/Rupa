@@ -7,17 +7,27 @@ published `RupaViewportScene` snapshot and consumed by the existing Rupa
 viewport. It is a child of the [RupaKit package design](../../DESIGN.md) and has
 no child designs.
 
-`MeshSourcePresentationRenderPlan` now realizes the indexed, once-transformed,
+`MeshSourcePresentationRenderPlan` realizes the indexed, once-transformed,
 resource-bounded contract below: it transforms each source vertex exactly once
 into a derived position buffer, references it by checked indices, charges a
 `MeshSourcePresentationPlanLimits` ceiling before it reserves storage, and
 validates every range, transform, and index during that single pass, so it
 retains neither the source meshes nor a triangulation index and no second
-validating traversal exists to publish. The remaining gaps against the target
-contract are that the cache still builds the plan synchronously from SwiftUI
-state on `MainActor`, and that the Canvas still constructs and draws one `Path`
-per triangle. Closing them replaces neither the existing Canvas renderer nor
-any scene, source, or project authority.
+validating traversal exists to publish.
+
+`MeshSourcePresentationPlanCache` realizes the asynchronous lifecycle contract
+below: the viewport starts one preparation per scene identity from a
+scene-identity task rather than from its `body`, construction runs in a detached
+task off `MainActor`, a scene change cancels the build in flight, and a
+completion is published on `MainActor` only while the state is still `preparing`
+the same `EvaluationSnapshotID`, so a stale success and a stale failure are
+discarded by one rule. Only a matching `ready` exposes a plan to rendering or
+picking; a `preparing` scene renders and picks nothing rather than blocking, and
+a matching `failed` is the only state the on-screen failure overlay shows.
+
+The remaining gap against the target contract is that the Canvas still
+constructs and draws one `Path` per triangle. Closing it replaces neither the
+existing Canvas renderer nor any scene, source, or project authority.
 
 The viewport also owns transient documents that are never published to project
 authority, such as the edge-treatment drag preview it builds from the current
@@ -218,7 +228,7 @@ behavioural change. `ViewportResponsivenessSignposts` owns the identities.
 
 | Interval | Signpost | Covers |
 |---|---|---|
-| MainActor state publication | `RupaRendering` / `Responsiveness` / `PresentationPlanPublication` | The plan publication the view body performs before the Canvas is created. |
+| MainActor state publication | `RupaRendering` / `Responsiveness` / `PresentationPlanPublication` | The `MainActor` state assignment that publishes one completed preparation. Construction is not inside it, because construction runs off `MainActor`. |
 | Canvas consumption | `RupaRendering` / `Responsiveness` / `ViewportCanvasConsumption` | One full Canvas renderer invocation, of which the presentation draw is a part. |
 
 The offline harness measures only the presentation portion of a Canvas pass, so

@@ -520,10 +520,14 @@ public struct Viewport: View {
                         scaleReadout: projectedGrid.scaleReadout
                     )
                 )
-                let presentationPlanResult = presentationScene.map { scene in
-                    ViewportResponsivenessSignposts.withPlanPublicationInterval {
-                        presentationPlanCache.result(for: scene)
-                    }
+                // The body only reads the published state. Preparation is
+                // started from the scene-identity task below, because starting
+                // it here would mutate observable state during a view update.
+                let presentationPlan = presentationScene.flatMap { scene in
+                    presentationPlanCache.plan(for: scene)
+                }
+                let presentationFailure = presentationScene.flatMap { scene in
+                    presentationPlanCache.failure(for: scene)
                 }
                 let presentationSectionGeometryResolver = presentationSectionGeometryResolver(
                     sceneKey: sceneKey
@@ -535,7 +539,7 @@ public struct Viewport: View {
                     ViewportGridRenderer.draw(projectedGrid, chromeLayout: chromeLayout, in: &context)
                     drawAxes(in: &context, size: size, camera: camera, basis: basis)
                     drawPresentation(
-                        result: presentationPlanResult,
+                        plan: presentationPlan,
                         in: &context,
                         layout: sceneContext.layout,
                         sectionGeometryResolver: presentationSectionGeometryResolver
@@ -561,7 +565,7 @@ public struct Viewport: View {
                     )
                 }
                 .overlay(alignment: .topTrailing) {
-                    presentationFailureOverlay(result: presentationPlanResult)
+                    presentationFailureOverlay(error: presentationFailure)
                 }
                 .overlay {
                     canvasDragPlaceholderOverlay(basis: basis)
@@ -686,8 +690,16 @@ public struct Viewport: View {
                 refreshSnapOverlayResolution(size: proxy.size)
                 refreshPlacementHighlight(size: proxy.size)
             }
+            .task(id: presentationScene?.snapshotID) {
+                guard let presentationScene else {
+                    presentationPlanCache.teardown()
+                    return
+                }
+                presentationPlanCache.prepare(for: presentationScene)
+            }
             .onDisappear {
                 previewEvaluationCache.clear()
+                presentationPlanCache.teardown()
             }
             .onAppear {
                 if let projectionRequest {
@@ -1340,12 +1352,12 @@ public struct Viewport: View {
     }
 
     private func drawPresentation(
-        result: Result<MeshSourcePresentationRenderPlan, MeshSourcePresentationRenderError>?,
+        plan: MeshSourcePresentationRenderPlan?,
         in context: inout GraphicsContext,
         layout: ViewportLayout,
         sectionGeometryResolver: MeshSourcePresentationSectionGeometryResolver?
     ) {
-        guard case let .success(plan) = result else {
+        guard let plan else {
             return
         }
         plan.forEachTriangle { triangle in
@@ -1427,7 +1439,7 @@ public struct Viewport: View {
         guard let presentationScene else {
             return nil
         }
-        guard case let .success(plan) = presentationPlanCache.result(for: presentationScene) else {
+        guard let plan = presentationPlanCache.plan(for: presentationScene) else {
             return nil
         }
         return MeshSourcePresentationScreenHitTester().occurrenceID(
@@ -1445,7 +1457,7 @@ public struct Viewport: View {
         guard let presentationScene else {
             return []
         }
-        guard case let .success(plan) = presentationPlanCache.result(for: presentationScene) else {
+        guard let plan = presentationPlanCache.plan(for: presentationScene) else {
             return []
         }
         return MeshSourcePresentationScreenHitTester().occurrenceIDs(
@@ -1473,9 +1485,9 @@ public struct Viewport: View {
 
     @ViewBuilder
     private func presentationFailureOverlay(
-        result: Result<MeshSourcePresentationRenderPlan, MeshSourcePresentationRenderError>?
+        error: MeshSourcePresentationRenderError?
     ) -> some View {
-        if case let .failure(error) = result {
+        if let error {
             Text(error.localizedDescription)
                 .font(.caption)
                 .foregroundStyle(Color.red)
@@ -12953,20 +12965,20 @@ public struct Viewport: View {
         )
         var presentationOccurrenceID: SceneOccurrenceID?
         if let presentationScene {
-            switch presentationPlanCache.result(for: presentationScene) {
-            case .success(let plan):
-                presentationOccurrenceID = MeshSourcePresentationScreenHitTester().occurrenceID(
-                    at: point,
-                    in: plan,
-                    layout: sceneContext.layout,
-                    sectionGeometryResolver: presentationSectionGeometryResolver()
-                )
-                if let occurrenceID = presentationOccurrenceID,
-                   let onPresentationOccurrencePick {
-                    onPresentationOccurrencePick(occurrenceID, selectionIntent)
-                    return
-                }
-            case .failure:
+            guard let plan = presentationPlanCache.plan(for: presentationScene) else {
+                // A scene that is still preparing, or one whose plan failed,
+                // picks nothing rather than blocking on a synchronous build.
+                return
+            }
+            presentationOccurrenceID = MeshSourcePresentationScreenHitTester().occurrenceID(
+                at: point,
+                in: plan,
+                layout: sceneContext.layout,
+                sectionGeometryResolver: presentationSectionGeometryResolver()
+            )
+            if let occurrenceID = presentationOccurrenceID,
+               let onPresentationOccurrencePick {
+                onPresentationOccurrencePick(occurrenceID, selectionIntent)
                 return
             }
         }
