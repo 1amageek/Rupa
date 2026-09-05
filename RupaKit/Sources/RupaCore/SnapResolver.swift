@@ -914,7 +914,9 @@ public struct SnapResolver: Sendable {
         in document: DesignDocument,
         searchRadiusMeters: Double
     ) throws -> TopologySnapshot? {
-        guard searchRadiusMeters > 0.0 || measurementsRequireTopology(in: document) else {
+        guard measurementsRequireTopology(in: document)
+            || (searchRadiusMeters > 0.0
+                && document.cadDocument.hasActiveRenderableTopologyFeatures) else {
             return nil
         }
         return try TopologySnapshotService().snapshot(

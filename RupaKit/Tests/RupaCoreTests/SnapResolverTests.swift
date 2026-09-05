@@ -1,7 +1,100 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
+import RupaProjectModel
 import Testing
 @testable import RupaCore
+
+@Test(.timeLimit(.minutes(1)))
+func snapResolverSkipsTopologyValidationForAuthoredMeshOnlyPositiveRadius() async throws {
+    let document = try snapResolverAuthoredMeshOnlyCanary()
+
+    let result = try SnapResolver().resolve(
+        point: Point2D(x: 0.0014, y: 0.0026),
+        in: document,
+        ruler: .standard(for: .millimeter),
+        options: SnapResolutionOptions(
+            usesGrid: true,
+            usesObjects: true,
+            gridIntervalMeters: 0.001,
+            objectSearchRadiusMeters: 0.001,
+            maximumCandidateCount: 4
+        )
+    )
+
+    #expect(result.selectedCandidate?.kind == .grid)
+    #expect(result.candidates.map(\.kind) == [.grid])
+}
+
+@Test(.timeLimit(.minutes(1)))
+func snapResolverTopologyReferenceMeasurementPreservesValidationFailure() async throws {
+    let document = try snapResolverAuthoredMeshOnlyCanary(
+        measurementAnchor: .topologyReference(
+            sceneNodeID: SceneNodeID(),
+            component: .face(SelectionComponentID(rawValue: "missing-face")),
+            kind: .face,
+            subshapeID: "missing-face",
+            referenceID: "missing-reference"
+        )
+    )
+
+    var caught: EditorError?
+    do {
+        _ = try SnapResolver().resolve(
+            point: Point2D(x: 0.0014, y: 0.0026),
+            in: document,
+            ruler: .standard(for: .millimeter),
+            options: SnapResolutionOptions(
+                usesGrid: true,
+                usesObjects: true,
+                gridIntervalMeters: 0.001,
+                objectSearchRadiusMeters: 0.001,
+                maximumCandidateCount: 4
+            )
+        )
+    } catch let error as EditorError {
+        caught = error
+    } catch {
+        Issue.record("Unexpected snap resolver error: \(error)")
+    }
+
+    #expect(caught?.code == .evaluationFailed)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func snapResolverTopologyEdgeParameterMeasurementPreservesValidationFailure() async throws {
+    let document = try snapResolverAuthoredMeshOnlyCanary(
+        measurementAnchor: .topologyEdgeParameter(
+            sceneNodeID: SceneNodeID(),
+            component: .edge(SelectionComponentID(rawValue: "missing-edge")),
+            subshapeID: "missing-edge",
+            referenceID: "missing-reference",
+            parameter: 0.5
+        )
+    )
+
+    var caught: EditorError?
+    do {
+        _ = try SnapResolver().resolve(
+            point: Point2D(x: 0.0014, y: 0.0026),
+            in: document,
+            ruler: .standard(for: .millimeter),
+            options: SnapResolutionOptions(
+                usesGrid: true,
+                usesObjects: true,
+                gridIntervalMeters: 0.001,
+                objectSearchRadiusMeters: 0.001,
+                maximumCandidateCount: 4
+            )
+        )
+    } catch let error as EditorError {
+        caught = error
+    } catch {
+        Issue.record("Unexpected snap resolver error: \(error)")
+    }
+
+    #expect(caught?.code == .evaluationFailed)
+}
 
 @Test func snapResolverReturnsGridCandidateForEmptyDocument() async throws {
     let document = DesignDocument.empty()
@@ -1741,6 +1834,47 @@ private func snapResolverSketchSceneNodeID(
         )
     }
     return entry.key
+}
+
+private func snapResolverAuthoredMeshOnlyCanary(
+    measurementAnchor: MeasurementAnchor? = nil
+) throws -> DesignDocument {
+    let sourceID: GeometrySourceID = "mesh.missing"
+    let representationID: GeometryRepresentationID = "representation.missing-mesh"
+    let representation = GeometryRepresentation(
+        id: representationID,
+        source: .authoredMesh(sourceID)
+    )
+    let representations = GeometryRepresentationSet(
+        representations: [representationID: representation],
+        selection: GeometryRepresentationSelection(
+            modeling: representationID,
+            presentation: representationID
+        )
+    )
+    var document = DesignDocument.empty(named: "Snap Authored Mesh Canary")
+    _ = try document.productMetadata.appendSceneNodeToFirstRoot(
+        name: "Missing Authored Mesh",
+        reference: .authoredMesh(sourceID),
+        object: ObjectDescriptor(
+            category: .body,
+            geometryRole: .mesh,
+            geometryRepresentations: representations
+        )
+    )
+    if let measurementAnchor {
+        _ = try document.addMeasurementAnnotation(
+            MeasurementAnnotation(
+                name: "Missing Topology Measurement",
+                kind: .distance,
+                anchors: [
+                    measurementAnchor,
+                    .worldPoint(Point3D(x: 0.0, y: 0.0, z: 0.0), role: .start),
+                ]
+            )
+        )
+    }
+    return document
 }
 
 private func snapResolverPolySplineQuadMesh() -> Mesh {

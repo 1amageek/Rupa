@@ -223,6 +223,28 @@ single history entry remain owned by `withSourceCommandGroup`.
     and navigation identities; presentation consumers omit them without deleting
     CAD features, representations, or Authored Mesh assets.
 
+### Snap topology demand contract
+
+`SnapResolver` owns the decision to request a topology summary while resolving
+object candidates. It requests the existing `TopologySnapshotService.snapshot` with
+`metricPolicy: .omit` exactly when:
+
+```text
+measurementsRequireTopology(in: document)
+|| (searchRadiusMeters > 0
+    && document.cadDocument.hasActiveRenderableTopologyFeatures)
+```
+
+The positive-radius branch is limited to active renderable CAD topology. An
+authored-mesh-only or sketch-only document therefore continues through grid,
+sketch, region, and other non-topology candidates without entering whole
+document topology validation. While resolving object candidates, a measurement anchor of kind
+`topologyReference` or `topologyEdgeParameter` forces the existing topology
+service, even when the search radius is zero or the document has no active
+renderable CAD topology. `TopologySnapshotService` remains the validation and
+CAD/measurement failure authority; SnapResolver does not add a cache, context,
+alternate topology path, or failure conversion.
+
 ### Evaluated primitive measurement contract
 
 Every solid `PrimitiveDefinition` uses the same output-driven
@@ -337,6 +359,7 @@ T09-B owns the following behavioral proof:
 | Error handling | Typed failures do not publish a partial document. |
 | Product visibility | Root, hidden-parent, visible-sibling, and hidden-descendant cases prove one effective-visibility result without source deletion. |
 | Evaluated primitives | Box, cylinder, cone, sphere, and torus all produce evaluated-body solids with exact B-rep volume and Mesh-only area/bounds through one cached evaluation path; unavailable outputs remain diagnostics. |
+| Snap topology demand | Positive-radius authored-mesh-only object resolution skips whole-document topology validation and still returns grid/non-topology candidates; topology measurement anchors force the existing validation failure during object resolution; existing CAD snap and measurement cases remain green. |
 
 CADAPI-C must additionally prove:
 
