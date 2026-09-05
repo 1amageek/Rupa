@@ -22,4 +22,17 @@ public struct MeshTriangulationLimits: Equatable, Sendable {
         self.maxFaceCornerCount = maxFaceCornerCount
         self.maxNonConvexWorkUnits = maxNonConvexWorkUnits
     }
+
+    /// Validates admission before a package consumer allocates derived storage.
+    package func validate() throws(MeshTriangulationError) {
+        guard maxFaceCornerCount >= 3,
+              maxFaceCornerCount <= Self.hardMaximum.maxFaceCornerCount,
+              maxNonConvexWorkUnits >= 0,
+              maxNonConvexWorkUnits <= Self.hardMaximum.maxNonConvexWorkUnits else {
+            throw MeshTriangulationError(
+                code: .invalidLimits,
+                message: "Mesh triangulation limits are invalid."
+            )
+        }
+    }
 }

@@ -7,27 +7,24 @@ import Foundation
 /// storage is reserved rather than discovered after it has grown. A caller may
 /// lower any dimension; no caller may widen `hardMaximum`.
 ///
-/// The ceilings are versioned values derived from the measured
-/// `multi-body-cylinder-assembly` v1 fixture, which is 12 items, 150,840
-/// transformed positions, 301,632 triangles, and 9.65 MB of derived storage.
-/// Each dimension is that measurement multiplied by 32 and rounded up, so a
-/// scene an order of magnitude larger than the measured worst case is still
-/// admitted while an unbounded one is refused. Relaxing a value requires new
-/// boundary, retained-byte, and signed-application responsiveness evidence; a
-/// value is never raised merely to admit one scene.
+/// Native Release measurements use the 12-body/6,284-segment dense fixture
+/// and the 512-body/16-segment fixture. Each ceiling is the successful maximum
+/// for that dimension plus 25%: 512 items, 150,840 positions, 301,632 triangles,
+/// and 17,978,528 working bytes before headroom. The byte ceiling also remains
+/// below 2.5% of the supported 8-GiB memory floor. These are admission bounds,
+/// not a claim that offscreen measurements prove whole-application acceptance.
+/// Raising a ceiling requires new boundary and signed-App performance evidence.
 public struct MeshSourcePresentationPlanLimits: Equatable, Sendable {
     /// The module ceiling. No caller may exceed any of these values.
     public static let hardMaximum = MeshSourcePresentationPlanLimits(
-        maxItemCount: 512,
-        maxPositionCount: 5_000_000,
-        maxTriangleCount: 10_000_000,
-        maxRetainedByteCount: 320 * 1024 * 1024
+        maxItemCount: 640,
+        maxPositionCount: 188_550,
+        maxTriangleCount: 377_040,
+        maxRetainedByteCount: 22_473_160
     )
 
-    /// The default a viewport uses. Evaluation admission has already bounded
-    /// the mesh that reaches a plan, so the plan ceiling is the last gate
-    /// against a derived copy the process cannot hold rather than a second,
-    /// tighter fidelity policy.
+    /// The default viewport admission. Exceeding it is an explicit failure;
+    /// this layer never changes source fidelity to make geometry fit.
     public static let standard = hardMaximum
 
     public let maxItemCount: Int

@@ -6,15 +6,15 @@ import OSLog
 ///
 /// The table charges two `MainActor` intervals to a frame: the presentation
 /// plan publication the cache performs when a completed plan reaches its
-/// observable state, and the Canvas consumption SwiftUI drives. Plan
+/// observable state, and grid/overlay Canvas and native surface encoding. Plan
 /// construction is not one of them, because it runs off `MainActor`. Both are
 /// emitted under one subsystem and category so a single `xctrace` or
 /// Instruments filter selects them together.
 ///
 /// The offline harness in `RupaResponsivenessBaseline` measures neither
 /// interval as the application pays it: its publication figure excludes the
-/// observation invalidation a live SwiftUI scope adds, and its Canvas figure
-/// excludes the fill and stroke submissions a live `GraphicsContext` performs.
+/// observation invalidation a live SwiftUI scope adds, and its native surface figure
+/// excludes the grid/overlay submissions a live `GraphicsContext` performs.
 /// Both are therefore lower bounds of the intervals recorded here. A harness
 /// rejection stays valid for the application, while a harness acceptance does
 /// not.

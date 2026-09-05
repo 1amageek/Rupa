@@ -1,3 +1,4 @@
+import Foundation
 import Observation
 import RupaCoreTypes
 import RupaViewportScene
@@ -6,11 +7,10 @@ import RupaViewportScene
 /// and publishes the outcome back on `MainActor` as an observable state.
 ///
 /// The cache owns exactly one build at a time. Preparing a different scene
-/// cancels the build in flight before it starts the next one, so an abandoned
-/// build stops at its next cancellation boundary instead of running to
-/// completion. A completion is published only while the state is still
-/// `preparing` the same `EvaluationSnapshotID`, which discards a stale success
-/// and a stale failure by the same rule.
+/// cancels the actual worker and retains only the newest pending request until
+/// the worker exits. Cancellation therefore cannot accumulate overlapping GPU
+/// allocations. Publication requires both snapshot and request identity, which
+/// also rejects a late failure after restarting the same snapshot.
 @Observable
 @MainActor
 final class MeshSourcePresentationPlanCache {
@@ -22,6 +22,8 @@ final class MeshSourcePresentationPlanCache {
 
     @ObservationIgnored private let builder: Builder
     @ObservationIgnored private var buildTask: Task<Void, Never>?
+    @ObservationIgnored private var requestID: UUID?
+    @ObservationIgnored private var pendingRequest: (scene: UniversalViewportScene, id: UUID)?
 
     init(
         builder: @escaping Builder = { scene in
@@ -31,14 +33,22 @@ final class MeshSourcePresentationPlanCache {
         self.builder = builder
     }
 
+    deinit { buildTask?.cancel() }
+
     /// The plan for `scene`, or `nil` while the cache is idle, preparing, or
     /// holding a result that belongs to a different scene identity.
     func plan(for scene: UniversalViewportScene) -> MeshSourcePresentationRenderPlan? {
-        guard case let .ready(snapshotID, plan) = state,
+        guard case let .ready(snapshotID, plan, _) = state,
               snapshotID == scene.snapshotID else {
             return nil
         }
         return plan
+    }
+
+    func surface(for scene: UniversalViewportScene) -> ViewportSurfaceRenderer? {
+        guard case let .ready(snapshotID, _, surface) = state,
+              snapshotID == scene.snapshotID else { return nil }
+        return surface
     }
 
     /// The failure recorded for `scene`, or `nil` when the current state is not
@@ -69,19 +79,34 @@ final class MeshSourcePresentationPlanCache {
             return
         }
         buildTask?.cancel()
+        let requestID = UUID()
+        self.requestID = requestID
         state = .preparing(snapshotID: snapshotID)
+        if buildTask != nil {
+            pendingRequest = (scene, requestID)
+        } else {
+            start(scene, requestID: requestID)
+        }
+    }
+
+    private func start(_ scene: UniversalViewportScene, requestID: UUID) {
+        let snapshotID = scene.snapshotID
         let builder = self.builder
         // The construction runs inside this detached task, so cancelling the
         // stored handle is what the plan's own cancellation checks observe.
         buildTask = Task.detached(priority: .userInitiated) { [weak self] in
-            let result: Result<MeshSourcePresentationRenderPlan, MeshSourcePresentationRenderError>
+            let result: Result<Prepared, MeshSourcePresentationRenderError>?
             do {
-                result = .success(try await builder(scene))
+                let plan = try await builder(scene)
+                try Task.checkCancellation()
+                let surface = try ViewportSurfaceRenderer(plan: plan)
+                try Task.checkCancellation()
+                result = .success(Prepared(plan: plan, surface: surface))
             } catch is CancellationError {
                 // A cancelled build publishes nothing at all. Identity would
                 // discard it anyway, but a cancellation is not a failure and is
                 // never recorded as one.
-                return
+                result = nil
             } catch let error as MeshSourcePresentationRenderError {
                 result = .failure(error)
             } catch {
@@ -92,7 +117,7 @@ final class MeshSourcePresentationPlanCache {
                     )
                 )
             }
-            await self?.finish(result: result, snapshotID: snapshotID)
+            await self?.finish(result: result, snapshotID: snapshotID, requestID: requestID)
         }
     }
 
@@ -100,29 +125,40 @@ final class MeshSourcePresentationPlanCache {
     /// later completion stale.
     func teardown() {
         buildTask?.cancel()
-        buildTask = nil
+        pendingRequest = nil
+        requestID = nil
         state = .idle
     }
 
+    private struct Prepared: Sendable {
+        let plan: MeshSourcePresentationRenderPlan
+        let surface: ViewportSurfaceRenderer
+    }
+
     private func finish(
-        result: Result<MeshSourcePresentationRenderPlan, MeshSourcePresentationRenderError>,
-        snapshotID: EvaluationSnapshotID
+        result: Result<Prepared, MeshSourcePresentationRenderError>?,
+        snapshotID: EvaluationSnapshotID,
+        requestID: UUID
     ) {
-        guard case let .preparing(current) = state,
-              current == snapshotID else {
-            return
+        buildTask = nil
+        defer {
+            if let next = pendingRequest {
+                pendingRequest = nil
+                start(next.scene, requestID: next.id)
+            }
         }
+        guard let result, case let .preparing(current) = state,
+              current == snapshotID, self.requestID == requestID else { return }
         // Publication is now only this state assignment. Construction already
         // ran off `MainActor`, so the interval the acceptance table charges to
         // a frame is measured here and nowhere else.
         ViewportResponsivenessSignposts.withPlanPublicationInterval {
             switch result {
-            case let .success(plan):
-                state = .ready(snapshotID: snapshotID, plan: plan)
+            case let .success(prepared):
+                state = .ready(snapshotID: snapshotID, plan: prepared.plan, surface: prepared.surface)
             case let .failure(error):
                 state = .failed(snapshotID: snapshotID, error: error)
             }
         }
-        buildTask = nil
     }
 }

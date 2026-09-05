@@ -144,7 +144,10 @@ shutdown ordering. `ApplicationProjectCoordinator` owns current URL and
 project lifecycle. `ProjectWorkspace` and
 `ProjectController` own project state and publication. `AgentHost` owns the
 listener lifetime; accepted requests execute on transport/control-plane tasks.
-The viewport cache owns one derived build task and matching bounded result. The
+The viewport cache owns one derived build task and matching bounded CPU/GPU
+result. The native surface adapter draws depth-tested, lit geometry while
+Canvas retains grids, dimensions, and interaction overlays; their resource
+and cancellation contracts belong to RupaRendering. The
 discovery writer owns only the current record and is never used as project
 storage.
 

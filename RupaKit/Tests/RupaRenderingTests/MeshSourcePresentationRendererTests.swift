@@ -1,4 +1,8 @@
 import Foundation
+import CoreGraphics
+import Metal
+import Synchronization
+import RupaCore
 import RupaCoreTypes
 import RupaEvaluation
 import RupaProjectModel
@@ -6,6 +10,210 @@ import RupaViewportScene
 import Testing
 @testable import RupaRendering
 @testable import RupaGeometry
+
+@Test(.timeLimit(.minutes(1)))
+func presentationPlanMemoryCeilingIncludesScratchAndGPUStorage() throws {
+    #expect(MeshSourcePresentationPlanLimits.hardMaximum.maxRetainedByteCount <= (8 * 1024 * 1024 * 1024) / 40)
+    let (scene, _) = try presentationScene(
+        references: [.authoredMesh(GeometrySourceID(rawValue: "mesh.presentation"))], transforms: [.identity]
+    )
+    let plan = try MeshSourcePresentationRenderPlan(scene: scene)
+    #expect(plan.workingByteCount > plan.retainedByteCount)
+    let limits = MeshSourcePresentationPlanLimits(
+        maxItemCount: 1, maxPositionCount: 4, maxTriangleCount: 2,
+        maxRetainedByteCount: plan.workingByteCount - 1
+    )
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try MeshSourcePresentationRenderPlan(scene: scene, planLimits: limits)
+    }
+    #expect(throws: MeshTriangulationError.self) {
+        try MeshSourceTriangulationIndex.storageReservation(vertexCount: Int.max)
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func viewportSurfaceGPUUsesDepthInsteadOfSelectionDrawOrder() async throws {
+    let reference = GeometrySourceReference.authoredMesh(GeometrySourceID(rawValue: "mesh.presentation"))
+    for frontIndex in 0...1 {
+        let transforms = try (0...1).map { index in
+            try translationTransform(x: -0.5, y: -0.5, z: index == frontIndex ? 0.3 : -0.3)
+        }
+        let (scene, _) = try presentationScene(references: [reference, reference], transforms: transforms)
+        let plan = try MeshSourcePresentationRenderPlan(scene: scene)
+        let renderer = try ViewportSurfaceRenderer(plan: plan)
+        let frontID = SceneOccurrenceID(rawValue: "occurrence.presentation-render.\(frontIndex)")
+        let layout = surfaceTestLayout()
+        let pixels = try await surfacePixels(renderer, layout: layout, selected: frontID)
+        let pixel = surfacePixel(pixels, x: 64, y: 64)
+        #expect(pixel.alpha == 255)
+        #expect(Int(pixel.blue) > Int(pixel.red) * 2)
+        #expect(MeshSourcePresentationScreenHitTester().occurrenceID(
+            at: CGPoint(x: 64, y: 64), in: plan, layout: layout
+        ) == frontID)
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func viewportSurfaceGPUKeepsTheFirstOccurrenceAtEqualDepthLikePicking() async throws {
+    let reference = GeometrySourceReference.authoredMesh(GeometrySourceID(rawValue: "mesh.presentation"))
+    let transform = try translationTransform(x: -0.5, y: -0.5, z: 0)
+    let (original, _) = try presentationScene(references: [reference, reference], transforms: [transform, transform])
+    for items in [original.items, Array(original.items.reversed())] {
+        let scene = UniversalViewportScene(
+            snapshotID: original.snapshotID, projectID: original.projectID,
+            items: items, copyTelemetry: original.copyTelemetry
+        )
+        let plan = try MeshSourcePresentationRenderPlan(scene: scene)
+        let layout = surfaceTestLayout()
+        let picked = try #require(MeshSourcePresentationScreenHitTester().occurrenceID(
+            at: CGPoint(x: 64, y: 64), in: plan, layout: layout
+        ))
+        #expect(picked == items[0].id)
+        let pixels = try await surfacePixels(ViewportSurfaceRenderer(plan: plan), layout: layout, selected: picked)
+        let pixel = surfacePixel(pixels, x: 64, y: 64)
+        #expect(Int(pixel.blue) > Int(pixel.red) * 2)
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func viewportSurfaceGPUShowsFaceLightingAndSupportsConcurrentReadOnlyGeometry() async throws {
+    var builder = MeshSourceBuilder(identity: GeometrySourceID(rawValue: "mesh.surface-cube"))
+    let points = [
+        (-0.5, -0.5, -0.5), (0.5, -0.5, -0.5), (0.5, 0.5, -0.5), (-0.5, 0.5, -0.5),
+        (-0.5, -0.5, 0.5), (0.5, -0.5, 0.5), (0.5, 0.5, 0.5), (-0.5, 0.5, 0.5)
+    ]
+    let vertices = try points.map { try builder.addVertex(GeometryPoint3D(x: $0.0, y: $0.1, z: $0.2)) }
+    for face in [[0,3,2,1], [4,5,6,7], [0,1,5,4], [3,7,6,2], [0,4,7,3], [1,2,6,5]] {
+        _ = try builder.addFace(vertexIDs: face.map { vertices[$0] })
+    }
+    let source = try builder.build()
+    let (scene, _) = try presentationScene(source: source, references: [.authoredMesh(source.identity)], transforms: [.identity])
+    let plan = try MeshSourcePresentationRenderPlan(scene: scene)
+    let renderer = try ViewportSurfaceRenderer(plan: plan)
+    async let first = surfacePixels(renderer, layout: surfaceTestLayout(basis: .isometric))
+    async let second = surfacePixels(renderer, layout: surfaceTestLayout(basis: .isometric))
+    let (pixels, repeated) = try await (first, second)
+    #expect(pixels == repeated)
+    var darkest = 255
+    var lightest = 0
+    var filled = 0
+    for offset in stride(from: 0, to: pixels.count, by: 4) where pixels[offset + 3] == 255 {
+        darkest = min(darkest, Int(pixels[offset + 1]))
+        lightest = max(lightest, Int(pixels[offset + 1]))
+        filled += 1
+    }
+    #expect(filled > 1_000)
+    #expect(lightest - darkest > 35)
+    #expect(renderer.allocatedGeometryByteCount <= plan.retainedByteCount)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func viewportSurfaceGPUSectionAgreesWithPicking() async throws {
+    let reference = GeometrySourceReference.authoredMesh(GeometrySourceID(rawValue: "mesh.presentation"))
+    let (scene, _) = try presentationScene(
+        references: [reference], transforms: [translationTransform(x: -0.5, y: -0.5, z: 0)]
+    )
+    let plan = try MeshSourcePresentationRenderPlan(scene: scene)
+    let renderer = try ViewportSurfaceRenderer(plan: plan)
+    let plane = SectionAnalysisResult.Plane(
+        sourceKind: .constructionPlane, sourceID: nil, sourceName: nil,
+        origin: .origin, normal: Vector3D(x: 1, y: 0, z: 0),
+        u: Vector3D(x: 0, y: 1, z: 0), v: Vector3D(x: 0, y: 0, z: 1)
+    )
+    let layout = surfaceTestLayout()
+    let pixels = try await surfacePixels(renderer, layout: layout, section: plane)
+    let resolver = MeshSourcePresentationSectionGeometryResolver(
+        sectionPlan: SectionAnalysisClippingPlan(retainedSide: .front, bodies: []),
+        plane: plane, toleranceMeters: 0
+    )
+    let picker = MeshSourcePresentationScreenHitTester()
+    #expect(surfacePixel(pixels, x: 48, y: 64).alpha == 0)
+    #expect(surfacePixel(pixels, x: 80, y: 64).alpha == 255)
+    #expect(picker.occurrenceID(at: CGPoint(x: 48, y: 64), in: plan, layout: layout, sectionGeometryResolver: resolver) == nil)
+    #expect(picker.occurrenceID(at: CGPoint(x: 80, y: 64), in: plan, layout: layout, sectionGeometryResolver: resolver) != nil)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func viewportSurfaceGPURejectsUnboundedAttachments() throws {
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try ViewportSurfaceRenderer.attachmentByteCount(width: Int.max, height: 2)
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try ViewportSurfaceRenderer.attachmentByteCount(width: 20_000, height: 20_000)
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func viewportSurfaceGPURejectsAnIncompleteRenderPassBeforeEncoding() throws {
+    let (scene, _) = try presentationScene(
+        references: [.authoredMesh(GeometrySourceID(rawValue: "mesh.presentation"))], transforms: [.identity]
+    )
+    let renderer = try ViewportSurfaceRenderer(plan: MeshSourcePresentationRenderPlan(scene: scene))
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try renderer.encode(
+            into: renderer.makeCommandBuffer(), pass: MTLRenderPassDescriptor(), layout: surfaceTestLayout()
+        )
+    }
+}
+
+private func surfaceTestLayout(basis: ViewportProjectionBasis? = nil) -> ViewportLayout {
+    ViewportLayout(
+        modelBounds: CGRect(x: -1, y: -1, width: 2, height: 2),
+        size: CGSize(width: 128, height: 128),
+        basis: basis ?? ViewportProjectionBasis(
+            mode: .orbit, xDirection: CGVector(dx: 1, dy: 0),
+            yDirection: CGVector(dx: 0, dy: -1), zDirection: .zero
+        ),
+        verticalBounds: -1...1
+    )
+}
+
+private func surfacePixels(
+    _ renderer: ViewportSurfaceRenderer, layout: ViewportLayout,
+    selected: SceneOccurrenceID? = nil, section: SectionAnalysisResult.Plane? = nil
+) async throws -> [UInt8] {
+    let colorDescriptor = MTLTextureDescriptor.texture2DDescriptor(
+        pixelFormat: .bgra8Unorm, width: 128, height: 128, mipmapped: false
+    )
+    colorDescriptor.usage = [.renderTarget]
+    colorDescriptor.storageMode = .shared
+    let color = try #require(renderer.device.makeTexture(descriptor: colorDescriptor))
+    let depthDescriptor = MTLTextureDescriptor.texture2DDescriptor(
+        pixelFormat: .depth32Float, width: 128, height: 128, mipmapped: false
+    )
+    depthDescriptor.usage = [.renderTarget]
+    depthDescriptor.storageMode = .private
+    let depth = try #require(renderer.device.makeTexture(descriptor: depthDescriptor))
+    let pass = MTLRenderPassDescriptor()
+    pass.colorAttachments[0].texture = color
+    pass.colorAttachments[0].loadAction = .clear
+    pass.colorAttachments[0].storeAction = .store
+    pass.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0)
+    pass.depthAttachment.texture = depth
+    pass.depthAttachment.loadAction = .clear
+    pass.depthAttachment.storeAction = .dontCare
+    pass.depthAttachment.clearDepth = 1
+    let command = try renderer.makeCommandBuffer()
+    try renderer.encode(
+        into: command, pass: pass, layout: layout,
+        state: { $0 == selected ? .selected : .normal }, sectionPlane: section
+    )
+    await withCheckedContinuation { continuation in
+        command.addCompletedHandler { _ in continuation.resume() }
+        command.commit()
+    }
+    #expect(command.status == .completed, "\(String(describing: command.error))")
+    var pixels = [UInt8](repeating: 0, count: 128 * 128 * 4)
+    pixels.withUnsafeMutableBytes { bytes in
+        color.getBytes(bytes.baseAddress!, bytesPerRow: 128 * 4, from: MTLRegionMake2D(0, 0, 128, 128), mipmapLevel: 0)
+    }
+    return pixels
+}
+
+private func surfacePixel(_ pixels: [UInt8], x: Int, y: Int) -> (blue: UInt8, green: UInt8, red: UInt8, alpha: UInt8) {
+    let offset = (y * 128 + x) * 4
+    return (pixels[offset], pixels[offset + 1], pixels[offset + 2], pixels[offset + 3])
+}
 
 @Test(.timeLimit(.minutes(1)))
 func meshSourcePresentationRendererConsumesCADOnlyThroughTheConcreteProtocolPath() throws {
@@ -365,6 +573,21 @@ func meshSourcePresentationRendererReportsTransformFailureDuringConstruction() t
         error = caught
     }
     #expect(error?.code == .transformFailure)
+
+    // Admission must happen before the first transformed-position allocation.
+    // The deliberately unprojectable transform detects a late limit check.
+    for (limits, expectedCode) in [
+        (MeshTriangulationLimits(maxFaceCornerCount: 3, maxNonConvexWorkUnits: 0), MeshSourcePresentationRenderError.Code.budgetExceeded),
+        (MeshTriangulationLimits(maxFaceCornerCount: 2, maxNonConvexWorkUnits: 0), .failed),
+    ] {
+        var admissionError: MeshSourcePresentationRenderError?
+        do {
+            _ = try MeshSourcePresentationRenderPlan(scene: invalidTransformScene, limits: limits)
+        } catch let caught as MeshSourcePresentationRenderError {
+            admissionError = caught
+        }
+        #expect(admissionError?.code == expectedCode)
+    }
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -581,6 +804,33 @@ func meshSourcePresentationRenderPlanStopsWhenItsTaskIsCancelled() async throws 
     await #expect(throws: CancellationError.self) {
         _ = try await task.value
     }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func presentationPlanCancellationStopsAnInFlightLargeBuild() async throws {
+    let source = try presentationHighSegmentCylinderSource(segmentCount: 6_284)
+    let scene = try presentationScene(
+        source: source,
+        references: Array(repeating: .authoredMesh(source.identity), count: 12),
+        transforms: Array(repeating: .identity, count: 12)
+    ).scene
+    let started = Mutex(false)
+    let finished = Mutex(false)
+    let task = Task.detached {
+        started.withLock { $0 = true }
+        defer { finished.withLock { $0 = true } }
+        return try MeshSourcePresentationRenderPlan(scene: scene)
+    }
+    while !started.withLock({ $0 }) { await Task.yield() }
+    try await Task.sleep(for: .milliseconds(3))
+    #expect(!finished.withLock { $0 }, "The fixture must still be building when cancellation is requested.")
+    let clock = ContinuousClock()
+    let cancelledAt = clock.now
+    task.cancel()
+    await #expect(throws: CancellationError.self) { _ = try await task.value }
+    let latency = cancelledAt.duration(to: clock.now)
+    #expect(finished.withLock { $0 })
+    #expect(latency < .milliseconds(100), "Actual worker exit must meet the cancellation budget: \(latency).")
 }
 
 private func presentationHighSegmentCylinderSource(segmentCount: Int) throws -> MeshSource {

@@ -271,6 +271,41 @@ func planCacheTeardownReturnsToIdleAndDiscardsALaterCompletion() async throws {
 
 // MARK: - Support
 
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func planCacheCoalescesAndRejectsFailureFromARestartedSnapshot() async throws {
+    let scene = try planCacheScene(suffix: "restart")
+    let skipped = try planCacheScene(suffix: "skipped")
+    let gate = PlanBuildGate()
+    let started = Mutex(0)
+    let cache = MeshSourcePresentationPlanCache { scene in
+        let index = started.withLock { count in
+            count += 1
+            return count
+        }
+        await gate.arrive(String(index))
+        if index == 1 {
+            throw MeshSourcePresentationRenderError(code: .failed, message: "Abandoned worker failure.")
+        }
+        return try MeshSourcePresentationRenderPlan(scene: scene)
+    }
+    cache.prepare(for: scene)
+    await gate.waitForArrival("1")
+    cache.teardown()
+    cache.prepare(for: skipped)
+    cache.prepare(for: scene)
+    await gate.open("1")
+    await gate.waitForArrival("2")
+    #expect(cache.isPreparing(scene))
+    #expect(cache.failure(for: scene) == nil)
+    #expect(started.withLock { $0 } == 2)
+    await gate.open("2")
+    try await settlePlanCache(cache)
+    #expect(cache.plan(for: scene) != nil)
+    #expect(cache.surface(for: scene) != nil)
+    #expect(started.withLock { $0 } == 2)
+}
+
 /// Parks each build until the test opens its key, so staleness, cancellation,
 /// and teardown are decided by the test rather than by construction timing.
 private actor PlanBuildGate {

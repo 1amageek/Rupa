@@ -5,6 +5,21 @@ import Testing
 @testable import RupaRendering
 
 @MainActor
+@Test func viewportCanvasGhostIsRestrictedToTheExplicitPreviewOrEdit() {
+    let target = SelectionTarget(sceneNodeID: SceneNodeID(), component: .edge(.bodyEdgeRightTop))
+    let request = ViewportEdgeTreatmentPreviewRequest.chamfer(target: target, distance: 0.001)
+    #expect(request.target == target)
+    #expect(Viewport.drawsTransientBody(
+        sceneNodeID: target.sceneNodeID, previewSceneNodeID: request.target.sceneNodeID, isEdited: false
+    ))
+    #expect(!Viewport.drawsTransientBody(
+        sceneNodeID: SceneNodeID(), previewSceneNodeID: request.target.sceneNodeID, isEdited: false
+    ))
+    #expect(!Viewport.drawsTransientBody(sceneNodeID: nil, previewSceneNodeID: nil, isEdited: false))
+    #expect(Viewport.drawsTransientBody(sceneNodeID: nil, previewSceneNodeID: nil, isEdited: true))
+}
+
+@MainActor
 @Test func viewportEdgeTreatmentPreviewBuilderCreatesChamferPreviewWithoutMutatingSource() throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())

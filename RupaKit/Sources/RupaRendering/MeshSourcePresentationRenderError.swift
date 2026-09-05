@@ -19,6 +19,8 @@ public struct MeshSourcePresentationRenderError: Error, Equatable, LocalizedErro
         case failed
         case transformFailure
         case sizeOverflow
+        case gpuUnavailable
+        case gpuFailure
     }
 
     public let code: Code

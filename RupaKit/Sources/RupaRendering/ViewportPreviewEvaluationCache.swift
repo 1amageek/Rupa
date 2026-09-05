@@ -1,3 +1,4 @@
+import Foundation
 import Observation
 import RupaCore
 import RupaCoreTypes
@@ -24,11 +25,13 @@ enum ViewportPreviewEvaluationState {
 /// and exposes it only while its revision is still current. Scene construction
 /// never evaluates a preview document on the thread that draws it.
 ///
-/// The evaluator is synchronous and does not observe cancellation, so an
-/// abandoned evaluation runs to completion and its result is discarded. To keep
-/// a drag from launching one kernel evaluation per input event, at most one
-/// evaluation is in flight; a revision requested while one is running replaces
-/// any earlier waiting request and starts when the running one completes.
+/// The scheduler call is synchronous inside an owned detached worker, while the
+/// evaluation kernel observes that worker's cancellation at its cooperative
+/// checkpoints. Replacement and teardown cancel that actual worker. At most
+/// one worker is in flight; a revision requested while it is running replaces
+/// any earlier waiting request and starts when the cancelled worker exits. A
+/// request identity is checked in addition to the revision so a clear/restart
+/// with the same revision cannot publish an older completion.
 @Observable
 @MainActor
 final class ViewportPreviewEvaluationCache {
@@ -40,24 +43,61 @@ final class ViewportPreviewEvaluationCache {
     @ObservationIgnored
     private(set) var startedEvaluationCount = 0
 
-    /// The number of started evaluations that have run to completion. Because an
-    /// abandoned evaluation is not stopped, this is how a caller observes that a
-    /// discarded result actually arrived and was rejected.
+    /// The number of started workers that have exited. A worker cancelled before
+    /// entering the scheduler is counted after it exits, but it never produces
+    /// a synthetic preview result.
     @ObservationIgnored
     private(set) var completedEvaluationCount = 0
-
-    @ObservationIgnored
-    private var isEvaluating = false
 
     @ObservationIgnored
     private var pendingRequest: Request?
 
     @ObservationIgnored
-    private let scheduler: EvaluationScheduler
+    private var activeWorker: Task<WorkerResult, Never>?
+
+    @ObservationIgnored
+    private var activeRequestID: UUID?
+
+    @ObservationIgnored
+    private var currentRequestID: UUID?
+
+    @ObservationIgnored
+    private let evaluationOperation: @Sendable (
+        DesignDocument,
+        DocumentGeneration,
+        ObjectTypeRegistry,
+        EvaluatedDocument?
+    ) -> DocumentEvaluationResult
 
     init(scheduler: EvaluationScheduler = EvaluationScheduler()) {
-        self.scheduler = scheduler
+        self.evaluationOperation = { document, generation, objectRegistry, previous in
+            scheduler.evaluateResult(
+                document: document,
+                generation: generation,
+                objectRegistry: objectRegistry,
+                reusing: previous
+            )
+        }
     }
+
+    /// Creates a cache with an injected synchronous evaluation operation.
+    ///
+    /// The production initializer delegates to `EvaluationScheduler`. This
+    /// narrow seam lets lifecycle tests park the actual detached worker and
+    /// return a scheduler-shaped result after cancellation without replacing
+    /// the cache's ownership or publication rules.
+    init(
+        evaluationOperation: @escaping @Sendable (
+            DesignDocument,
+            DocumentGeneration,
+            ObjectTypeRegistry,
+            EvaluatedDocument?
+        ) -> DocumentEvaluationResult
+    ) {
+        self.evaluationOperation = evaluationOperation
+    }
+
+    deinit { activeWorker?.cancel() }
 
     /// The evaluation to supply to scene construction for `revision`, or `nil`
     /// while that revision is not `ready`.
@@ -89,6 +129,8 @@ final class ViewportPreviewEvaluationCache {
 
     /// Requests the evaluation of `document` for `revision`. Repeating the call
     /// for the revision the current state already describes does nothing.
+    /// Replacing an in-flight request cancels its actual worker and retains only
+    /// this newest request until that worker exits.
     func prepare(
         document: DesignDocument,
         generation: DocumentGeneration,
@@ -99,34 +141,57 @@ final class ViewportPreviewEvaluationCache {
         guard describedRevision != revision else {
             return
         }
-        state = .preparing(revision: revision)
         let request = Request(
+            id: UUID(),
             document: document,
             generation: generation,
             revision: revision,
             previous: previous,
             objectRegistry: objectRegistry
         )
-        guard !isEvaluating else {
+        currentRequestID = request.id
+        state = .preparing(revision: revision)
+        guard activeWorker == nil else {
             pendingRequest = request
+            activeWorker?.cancel()
             return
         }
         start(request)
     }
 
-    /// Drops the waiting request and returns to `idle`. A running evaluation is
-    /// abandoned: its result can no longer reach any state.
+    /// Drops the waiting request, cancels the actual worker, and returns to
+    /// `idle`. A late result can no longer reach any state.
     func clear() {
         pendingRequest = nil
+        currentRequestID = nil
+        activeWorker?.cancel()
         state = .idle
     }
 
+    /// Records a preview-construction failure after cancelling any evaluation
+    /// for the same described revision. A failure reported while another
+    /// revision is current is stale and is ignored. When the cache is already
+    /// idle, the caller may record a failure for a newly rejected revision.
+    func fail(revision: UInt64, message: String) {
+        if let describedRevision, describedRevision != revision {
+            return
+        }
+        clear()
+        state = .failed(revision: revision, message: message)
+    }
+
     private struct Request: Sendable {
+        let id: UUID
         let document: DesignDocument
         let generation: DocumentGeneration
         let revision: UInt64
         let previous: EvaluatedDocument?
         let objectRegistry: ObjectTypeRegistry
+    }
+
+    private enum WorkerResult: Sendable {
+        case evaluated(DocumentEvaluationResult)
+        case cancelled
     }
 
     private var describedRevision: UInt64? {
@@ -143,26 +208,53 @@ final class ViewportPreviewEvaluationCache {
     }
 
     private func start(_ request: Request) {
-        isEvaluating = true
         startedEvaluationCount += 1
-        let scheduler = scheduler
-        Task { [weak self] in
-            let result = await Task.detached(priority: .userInitiated) {
-                scheduler.evaluateResult(
-                    document: request.document,
-                    generation: request.generation,
-                    objectRegistry: request.objectRegistry,
-                    reusing: request.previous
-                )
-            }.value
-            self?.finish(result: result, revision: request.revision)
+        activeRequestID = request.id
+        let operation = evaluationOperation
+        let worker = Task.detached(priority: .userInitiated) { () -> WorkerResult in
+            guard !Task.isCancelled else {
+                return .cancelled
+            }
+            let result = operation(
+                request.document,
+                request.generation,
+                request.objectRegistry,
+                request.previous
+            )
+            guard !Task.isCancelled else {
+                return .cancelled
+            }
+            return .evaluated(result)
+        }
+        activeWorker = worker
+        Task { [weak self, worker] in
+            let workerResult = await worker.value
+            let workerWasCancelled = worker.isCancelled || Task.isCancelled
+            self?.finish(
+                workerResult: workerResult,
+                revision: request.revision,
+                requestID: request.id,
+                workerWasCancelled: workerWasCancelled
+            )
         }
     }
 
-    private func finish(result: DocumentEvaluationResult, revision: UInt64) {
-        isEvaluating = false
+    private func finish(
+        workerResult: WorkerResult,
+        revision: UInt64,
+        requestID: UUID,
+        workerWasCancelled: Bool
+    ) {
+        guard activeRequestID == requestID else {
+            return
+        }
+        activeRequestID = nil
+        activeWorker = nil
         completedEvaluationCount += 1
-        if describedRevision == revision {
+        if !workerWasCancelled,
+           currentRequestID == requestID,
+           describedRevision == revision,
+           case .evaluated(let result) = workerResult {
             switch result.snapshot.status {
             case .failed(let message):
                 state = .failed(revision: revision, message: message)

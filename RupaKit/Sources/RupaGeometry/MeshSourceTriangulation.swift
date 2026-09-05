@@ -4,9 +4,11 @@ import RupaCoreTypes
 public extension MeshSource {
     /// Builds the one source-bound index used by repeated presentation reads.
     func makeTriangulationIndex() throws -> MeshSourceTriangulationIndex {
+        try Task.checkCancellation()
         var vertexIndexByID: [MeshVertexID: Int] = [:]
         vertexIndexByID.reserveCapacity(vertexIDs.count)
         for index in vertexIDs.indices {
+            if index.isMultiple(of: 4_096) { try Task.checkCancellation() }
             let vertexID = vertexIDs[index]
             guard vertexIndexByID.updateValue(index, forKey: vertexID) == nil else {
                 throw MeshTriangulationError(
@@ -35,6 +37,7 @@ public extension MeshSource {
         tolerance: Double,
         limits: MeshTriangulationLimits
     ) throws -> [MeshTriangle] {
+        try validateTriangulationInputs(tolerance: tolerance, limits: limits, index: nil)
         var telemetry = MeshTriangulationTelemetry()
         let index = try makeTriangulationIndex()
         return try triangulate(
@@ -383,16 +386,7 @@ public extension MeshSource {
                 message: "Mesh triangulation tolerance must be finite and positive."
             )
         }
-        guard limits.maxFaceCornerCount >= 3,
-              limits.maxFaceCornerCount <= MeshTriangulationLimits.hardMaximum.maxFaceCornerCount,
-              limits.maxNonConvexWorkUnits >= 0,
-              limits.maxNonConvexWorkUnits
-                  <= MeshTriangulationLimits.hardMaximum.maxNonConvexWorkUnits else {
-            throw MeshTriangulationError(
-                code: .invalidLimits,
-                message: "Mesh triangulation limits are invalid."
-            )
-        }
+        try limits.validate()
         if let index, !index.isCompatible(with: self) {
             throw MeshTriangulationError(
                 code: .invalidReference,

@@ -1,6 +1,7 @@
 import CoreGraphics
 import Darwin
 import Foundation
+import Metal
 import RupaRendering
 import RupaViewportScene
 import SwiftCAD
@@ -9,8 +10,8 @@ import SwiftUI
 /// Measures the production presentation path against the RupaRendering
 /// performance acceptance table.
 ///
-/// The runner executes the same public types the production cache and Canvas
-/// closure execute. It never re-implements triangulation, projection, or plan
+/// The runner executes the same public types as the production cache and native
+/// surface encoder. It never re-implements triangulation, projection, or plan
 /// construction, so a measured number describes production work rather than a
 /// model of it.
 @MainActor
@@ -62,7 +63,11 @@ public struct ResponsivenessBaselineRunner {
             )
         }
         guard configuration.viewportSize.width >= 1.0,
-              configuration.viewportSize.height >= 1.0 else {
+              configuration.viewportSize.height >= 1.0,
+              configuration.viewportSize.width.isFinite,
+              configuration.viewportSize.height.isFinite,
+              configuration.viewportSize.width <= 16_384,
+              configuration.viewportSize.height <= 16_384 else {
             throw ResponsivenessBaselineError(
                 code: .invalidMeasurementRequest,
                 message: "The viewport size must be at least one point in each dimension."
@@ -98,7 +103,7 @@ public struct ResponsivenessBaselineRunner {
             // iterations will pay them rather than in a different context.
             let preparation = try await measurePreparation(scene: fixture.scene)
             planTriangleCount = preparation.plan.triangleCount
-            _ = try measureDrawWork(plan: preparation.plan, layout: layout)
+            _ = try await measureDrawWork(surface: preparation.surface, layout: layout)
         }
 
         var samples: [ResponsivenessIterationSample] = []
@@ -109,7 +114,7 @@ public struct ResponsivenessBaselineRunner {
             // only the publication is charged to a frame.
             let preparation = try await measurePreparation(scene: fixture.scene)
             let plan = preparation.plan
-            let draw = try measureDrawWork(plan: plan, layout: layout)
+            let draw = try await measureDrawWork(surface: preparation.surface, layout: layout)
 
             planTriangleCount = plan.triangleCount
             samples.append(
@@ -120,7 +125,9 @@ public struct ResponsivenessBaselineRunner {
                     readinessSeconds: preparation.readinessSeconds,
                     positionCount: plan.positionCount,
                     retainedByteCount: plan.retainedByteCount,
+                    workingByteCount: plan.workingByteCount,
                     drawWorkSeconds: draw.seconds,
+                    gpuCompletionSeconds: draw.gpuCompletionSeconds,
                     mainActorBlockedSeconds: preparation.publicationSeconds + draw.seconds,
                     triangleCount: plan.triangleCount,
                     projectedPointCount: draw.projectedPointCount,
@@ -159,6 +166,7 @@ public struct ResponsivenessBaselineRunner {
 
     private struct PreparationMeasurement {
         var plan: MeshSourcePresentationRenderPlan
+        var surface: ViewportSurfaceRenderer
         var constructionSeconds: Double
         var publicationSeconds: Double
         var readinessSeconds: Double
@@ -171,7 +179,7 @@ public struct ResponsivenessBaselineRunner {
     private final class PublicationTarget {
         enum State {
             case idle
-            case ready(MeshSourcePresentationRenderPlan)
+            case ready(MeshSourcePresentationRenderPlan, ViewportSurfaceRenderer)
         }
 
         var state: State = .idle
@@ -196,9 +204,10 @@ public struct ResponsivenessBaselineRunner {
         let construction = Task.detached(priority: .userInitiated) {
             let start = clock.now
             let plan = try MeshSourcePresentationRenderPlan(scene: scene)
-            return (plan: plan, duration: start.duration(to: clock.now))
+            let surface = try ViewportSurfaceRenderer(plan: plan)
+            return (plan: plan, surface: surface, duration: start.duration(to: clock.now))
         }
-        let constructed: (plan: MeshSourcePresentationRenderPlan, duration: Duration)
+        let constructed: (plan: MeshSourcePresentationRenderPlan, surface: ViewportSurfaceRenderer, duration: Duration)
         do {
             constructed = try await construction.value
         } catch {
@@ -210,9 +219,9 @@ public struct ResponsivenessBaselineRunner {
 
         let target = PublicationTarget()
         let publicationStart = clock.now
-        target.state = .ready(constructed.plan)
+        target.state = .ready(constructed.plan, constructed.surface)
         let publicationEnd = clock.now
-        guard case let .ready(published) = target.state else {
+        guard case let .ready(published, surface) = target.state else {
             throw ResponsivenessBaselineError(
                 code: .planPreparationFailed,
                 message: "The published state did not hold the constructed plan."
@@ -221,6 +230,7 @@ public struct ResponsivenessBaselineRunner {
 
         return PreparationMeasurement(
             plan: published,
+            surface: surface,
             constructionSeconds: seconds(constructed.duration),
             publicationSeconds: seconds(publicationStart.duration(to: publicationEnd)),
             readinessSeconds: seconds(requestStart.duration(to: publicationEnd))
@@ -229,87 +239,74 @@ public struct ResponsivenessBaselineRunner {
 
     private struct DrawWorkMeasurement {
         var seconds: Double
+        var gpuCompletionSeconds: Double
         var projectedPointCount: Int
         var pathCount: Int
         var fillCount: Int
         var strokeCount: Int
     }
 
-    /// Reproduces the Canvas draw pass.
-    ///
-    /// The pass walks the plan one occurrence at a time, projects each retained
-    /// position exactly once, and accumulates every triangle into one path per
-    /// visual state, so it builds one path and charges one fill and one stroke
-    /// per non-empty batch instead of per triangle. It drives the module's own
-    /// `ViewportPresentationBatchAccumulator` rather than a copy of it, because
-    /// a copy would stop bounding the production interval the moment the two
-    /// diverged.
-    ///
-    /// `GraphicsContext` exists only inside a live `Canvas`, so the fill and
-    /// stroke submissions are counted rather than issued. The reported duration
-    /// is therefore a lower bound on the production Canvas interval.
+    /// Executes the production raster pass. GPU completion suspends MainActor.
     private func measureDrawWork(
-        plan: MeshSourcePresentationRenderPlan,
+        surface: ViewportSurfaceRenderer,
         layout: ViewportLayout
-    ) throws -> DrawWorkMeasurement {
-        var accumulator = ViewportPresentationBatchAccumulator()
-        var projectedPointCount = 0
-        // Reused across occurrences and triangles so the pass allocates a
-        // bounded number of buffers rather than one per polygon.
-        var projectedPositions: [CGPoint] = []
-        var polygonPoints: [CGPoint] = []
-        polygonPoints.reserveCapacity(3)
+    ) async throws -> DrawWorkMeasurement {
+        let width = Int(configuration.viewportSize.width.rounded(.up))
+        let height = Int(configuration.viewportSize.height.rounded(.up))
+        _ = try ViewportSurfaceRenderer.attachmentByteCount(width: width, height: height)
+        let colorDescriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .bgra8Unorm, width: width, height: height, mipmapped: false
+        )
+        colorDescriptor.usage = .renderTarget
+        colorDescriptor.storageMode = .private
+        let depthDescriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .depth32Float, width: width, height: height, mipmapped: false
+        )
+        depthDescriptor.usage = .renderTarget
+        depthDescriptor.storageMode = .private
+        guard let color = surface.device.makeTexture(descriptor: colorDescriptor),
+              let depth = surface.device.makeTexture(descriptor: depthDescriptor) else {
+            throw ResponsivenessBaselineError(
+                code: .planConsumptionFailed, message: "Metal could not allocate bounded measurement attachments."
+            )
+        }
+        let pass = MTLRenderPassDescriptor()
+        pass.colorAttachments[0].texture = color
+        pass.colorAttachments[0].loadAction = .clear
+        pass.colorAttachments[0].storeAction = .store
+        pass.depthAttachment.texture = depth
+        pass.depthAttachment.loadAction = .clear
+        pass.depthAttachment.storeAction = .dontCare
+        pass.depthAttachment.clearDepth = 1
         let clock = ContinuousClock()
         let start = clock.now
-        plan.forEachOccurrence { occurrence in
-            // The production pass resolves interaction state once per
-            // occurrence. This fixture carries no selection or hover, so every
-            // occurrence accumulates into the normal batch.
-            projectedPositions.removeAll(keepingCapacity: true)
-            projectedPositions.reserveCapacity(occurrence.positions.count)
-            for position in occurrence.positions {
-                projectedPositions.append(
-                    layout.project(Point3D(x: position.x, y: position.y, z: position.z))
-                )
-            }
-            projectedPointCount += occurrence.positions.count
-            for index in 0..<occurrence.triangleCount {
-                let indices = occurrence.positionIndices(at: index)
-                polygonPoints.removeAll(keepingCapacity: true)
-                polygonPoints.append(projectedPositions[indices.first])
-                polygonPoints.append(projectedPositions[indices.second])
-                polygonPoints.append(projectedPositions[indices.third])
-                accumulator.append(polygonPoints, state: .normal)
-            }
-        }
-
-        var pathCount = 0
+        let buffer = try surface.makeCommandBuffer()
         var fillCount = 0
-        var strokeCount = 0
-        var boundsChecksum = 0.0
-        accumulator.forEachBatch { _, path in
-            pathCount += 1
-            // The production pass submits one fill and one stroke per non-empty
-            // batch. Both are counted here.
+        try surface.encode(into: buffer, pass: pass, layout: layout, state: { _ in
             fillCount += 1
-            strokeCount += 1
-            // Consuming the path keeps its construction observable so it is not
-            // eliminated as dead work.
-            boundsChecksum += path.boundingRect.width
+            return .normal
+        })
+        // Install completion before commit, then record submission time without
+        // charging the suspended wait to the calling actor.
+        let completed = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        buffer.addCompletedHandler { _ in
+            completed.continuation.yield(())
+            completed.continuation.finish()
         }
+        buffer.commit()
+        let encoded = clock.now
+        for await _ in completed.stream { break }
         let end = clock.now
-        guard pathCount > 0, boundsChecksum.isFinite else {
+        guard buffer.status == .completed else {
             throw ResponsivenessBaselineError(
                 code: .planConsumptionFailed,
-                message: "The accumulated presentation batches were empty or not finite."
+                message: buffer.error?.localizedDescription ?? "Native surface GPU execution failed."
             )
         }
         return DrawWorkMeasurement(
-            seconds: seconds(start.duration(to: end)),
-            projectedPointCount: projectedPointCount,
-            pathCount: pathCount,
-            fillCount: fillCount,
-            strokeCount: strokeCount
+            seconds: seconds(start.duration(to: encoded)),
+            gpuCompletionSeconds: seconds(start.duration(to: end)),
+            projectedPointCount: 0, pathCount: 0, fillCount: fillCount, strokeCount: 0
         )
     }
 
@@ -324,11 +321,11 @@ public struct ResponsivenessBaselineRunner {
         // The footprint pass prepares through the same detached path the timed
         // iterations use, so the peak the sampler observes is the peak of the
         // allocation production actually performs. Its timings are discarded.
-        let plan = try await measurePreparation(scene: scene).plan
+        let preparation = try await measurePreparation(scene: scene)
         await sampler.stop()
         let peak = try sampler.peakBytes()
         let retained = try ResponsivenessFootprintProbe.physicalFootprintBytes()
-        withExtendedLifetime(plan) {}
+        withExtendedLifetime(preparation) {}
         return ResponsivenessFootprintSample(
             baselineBytes: baseline,
             planRetainedBytes: retained,
@@ -401,20 +398,12 @@ public struct ResponsivenessBaselineRunner {
                 verdict: drawRejects ? .rejects : .notMeasured,
                 measured: Self.milliseconds(worstDraw),
                 threshold: Self.milliseconds(frameInterval),
-                detail: drawRejects
-                    ? """
-                        Worst of \(samples.count) measured iterations. The measured \
-                        interval excludes the counted fill and stroke submissions, so \
-                        it is a lower bound and the row rejects on the lower bound \
-                        alone.
-                        """
-                    : """
-                        The measured interval excludes the \(samples.last?.fillCount ?? 0) \
-                        fill and \(samples.last?.strokeCount ?? 0) stroke submissions per \
-                        frame, because GraphicsContext exists only inside a live Canvas. \
-                        A lower bound below the threshold cannot establish acceptance; \
-                        the signed-application run owns this row.
-                        """
+                detail: """
+                    Native Metal encoding/submission measured on MainActor; actual GPU
+                    completion is recorded separately in every sample. Canvas grid,
+                    interaction overlay fill/stroke and window presentation are excluded.
+                    The signed-application run owns the complete frame acceptance row.
+                    """
             )
         )
 

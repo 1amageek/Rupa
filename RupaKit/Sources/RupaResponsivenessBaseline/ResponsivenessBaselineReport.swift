@@ -25,10 +25,13 @@ public struct ResponsivenessIterationSample: Equatable, Sendable, Codable {
     /// Derived bytes the published plan retains, as charged against
     /// `MeshSourcePresentationPlanLimits` during construction.
     public let retainedByteCount: Int
-    /// Time spent reproducing the Canvas draw pass, which projects each
-    /// retained position once and accumulates every triangle into one path per
-    /// visual state.
+    /// Peak checked reservation including transient triangulation storage.
+    public let workingByteCount: Int
+    /// MainActor time encoding and submitting the production surface pass.
     public let drawWorkSeconds: Double
+    /// Wall-clock span from encoding through actual GPU completion. Waiting
+    /// suspends the actor; this is not charged as MainActor blocked time.
+    public let gpuCompletionSeconds: Double
     /// The total `MainActor` interval one scene change causes, as the sum of
     /// the publication and the draw pass. These are two separate `MainActor`
     /// turns, not one uninterruptible interval, because construction now

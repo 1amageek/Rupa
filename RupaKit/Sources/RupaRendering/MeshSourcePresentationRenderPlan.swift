@@ -26,6 +26,8 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
     public let triangleCount: Int
     /// Bytes of derived storage the plan holds, as charged during construction.
     public let retainedByteCount: Int
+    /// Upper-bound admission for retained geometry plus temporary index/face work.
+    public let workingByteCount: Int
     public let telemetry: MeshSourcePresentationRenderTelemetry
     let occurrences: [Occurrence]
 
@@ -80,10 +82,15 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
         private(set) var positionCount = 0
         private(set) var triangleCount = 0
         private(set) var byteCount = 0
+        private(set) var workingByteCount = 0
 
         mutating func chargeItems(_ count: Int) throws {
             itemCount = try Self.sum(itemCount, count)
             try Self.admit(itemCount, limits.maxItemCount, named: "item")
+            // Array headers and per-occurrence CPU/GPU draw metadata. The two
+            // combined Metal buffers additionally reserve one native page each.
+            try chargeBytes(try Self.product(count, MemoryLayout<Occurrence>.stride + 128))
+            if count > 0 { try chargeBytes(32 * 1024) }
         }
 
         mutating func chargePositions(_ count: Int) throws {
@@ -93,7 +100,10 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
                 limits.maxPositionCount,
                 named: "transformed position"
             )
-            try chargeBytes(try Self.product(count, Self.positionStride))
+            try chargeBytes(try Self.product(
+                count,
+                Self.positionStride + MemoryLayout<MeshVertexID>.stride + 16
+            ))
         }
 
         mutating func chargeTriangles(_ count: Int) throws {
@@ -104,12 +114,21 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
                 Self.indexStride
             )
             let faceBytes = try Self.product(count, Self.faceIDStride)
-            try chargeBytes(try Self.sum(indexBytes, faceBytes))
+            // The immutable GPU index buffer is a necessary output-boundary
+            // copy; CPU indices and provenance remain the picking authority.
+            try chargeBytes(try Self.sum(try Self.sum(indexBytes, indexBytes), faceBytes))
+        }
+
+        mutating func admitScratch(_ bytes: Int) throws {
+            let total = try Self.sum(byteCount, bytes)
+            try Self.admit(total, limits.maxRetainedByteCount, named: "working byte")
+            workingByteCount = max(workingByteCount, total)
         }
 
         private mutating func chargeBytes(_ count: Int) throws {
             byteCount = try Self.sum(byteCount, count)
             try Self.admit(byteCount, limits.maxRetainedByteCount, named: "retained byte")
+            workingByteCount = max(workingByteCount, byteCount)
         }
 
         private static func admit(_ used: Int, _ limit: Int, named name: String) throws {
@@ -123,7 +142,7 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
             }
         }
 
-        private static func sum(_ lhs: Int, _ rhs: Int) throws -> Int {
+        static func sum(_ lhs: Int, _ rhs: Int) throws -> Int {
             let result = lhs.addingReportingOverflow(rhs)
             guard !result.overflow else {
                 throw MeshSourcePresentationRenderError(
@@ -134,7 +153,7 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
             return result.partialValue
         }
 
-        private static func product(_ lhs: Int, _ rhs: Int) throws -> Int {
+        static func product(_ lhs: Int, _ rhs: Int) throws -> Int {
             let result = lhs.multipliedReportingOverflow(by: rhs)
             guard !result.overflow else {
                 throw MeshSourcePresentationRenderError(
@@ -157,7 +176,13 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
         limits: MeshTriangulationLimits = .standard,
         planLimits: MeshSourcePresentationPlanLimits = .standard
     ) throws {
+        try Task.checkCancellation()
         try planLimits.validate()
+        do {
+            try limits.validate()
+        } catch {
+            throw Self.triangulationError(error)
+        }
         var charge = Charge(limits: planLimits)
         try charge.chargeItems(scene.items.count)
         var occurrences: [Occurrence] = []
@@ -182,8 +207,10 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
         self.positionCount = charge.positionCount
         self.triangleCount = charge.triangleCount
         self.retainedByteCount = charge.byteCount
+        self.workingByteCount = charge.workingByteCount
         self.telemetry = telemetry
         self.occurrences = occurrences
+        try Task.checkCancellation()
     }
 
     /// Traverses the plan's world-space triangles.
@@ -253,15 +280,40 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
             )
         }
 
+        let vertexCount = mesh.vertexIDs.count
+        try charge.chargePositions(vertexCount)
+        var triangleCount = 0
+        var maximumFaceCorners = 0
+        for range in mesh.faceCornerRanges {
+            try Task.checkCancellation()
+            guard range.count >= 3 else {
+                throw MeshSourcePresentationRenderError(
+                    code: .degenerateFace, message: "A face requires at least three corners."
+                )
+            }
+            guard range.count <= limits.maxFaceCornerCount else {
+                throw MeshSourcePresentationRenderError(
+                    code: .budgetExceeded,
+                    message: "Mesh face corner count exceeds the triangulation limit."
+                )
+            }
+            triangleCount = try Charge.sum(triangleCount, range.count - 2)
+            maximumFaceCorners = max(maximumFaceCorners, range.count)
+        }
+        try charge.chargeTriangles(triangleCount)
+
         let triangulationIndex: MeshSourceTriangulationIndex
         do {
+            let indexBytes = try MeshSourceTriangulationIndex.storageReservation(vertexCount: vertexCount)
+            // Face triangulation is bounded by Geometry's corner ceiling. This
+            // reserves its points, IDs, triangles and ear-clipping work arrays.
+            let faceBytes = try Charge.product(maximumFaceCorners, 256)
+            try charge.admitScratch(try Charge.sum(indexBytes, faceBytes))
             triangulationIndex = try mesh.makeTriangulationIndex()
         } catch let error as MeshTriangulationError {
             throw triangulationError(error)
         }
 
-        let vertexCount = mesh.vertexIDs.count
-        try charge.chargePositions(vertexCount)
         let positions = try transformedPositions(
             of: mesh,
             by: item.worldTransform,
@@ -270,6 +322,8 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
 
         var faceIDs: [MeshFaceID] = []
         var vertexIndices: [UInt32] = []
+        faceIDs.reserveCapacity(triangleCount)
+        vertexIndices.reserveCapacity(try Charge.product(triangleCount, 3))
         var triangulationTelemetry = MeshTriangulationTelemetry()
         for faceIndex in mesh.faceCornerRanges.indices {
             try Task.checkCancellation()
@@ -282,6 +336,8 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
                     limits: limits,
                     telemetry: &triangulationTelemetry
                 )
+            } catch is CancellationError {
+                throw CancellationError()
             } catch let error as MeshTriangulationError {
                 throw triangulationError(error)
             } catch {
@@ -290,7 +346,11 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
                     message: String(describing: error)
                 )
             }
-            try charge.chargeTriangles(faceTriangles.count)
+            guard faceTriangles.count == mesh.faceCornerRanges[faceIndex].count - 2 else {
+                throw MeshSourcePresentationRenderError(
+                    code: .failed, message: "Triangulation did not match its admitted triangle count."
+                )
+            }
             for triangle in faceTriangles {
                 faceIDs.append(triangle.faceID)
                 vertexIndices.append(

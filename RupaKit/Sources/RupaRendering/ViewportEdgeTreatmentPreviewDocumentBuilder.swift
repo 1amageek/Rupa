@@ -4,6 +4,12 @@ import RupaCore
 enum ViewportEdgeTreatmentPreviewRequest: Equatable, Sendable {
     case chamfer(target: SelectionTarget, distance: Double)
     case fillet(target: SelectionTarget, radius: Double, segmentCount: Int)
+
+    var target: SelectionTarget {
+        switch self {
+        case .chamfer(let target, _), .fillet(let target, _, _): return target
+        }
+    }
 }
 
 struct ViewportEdgeTreatmentPreviewDocumentBuilder: Sendable {

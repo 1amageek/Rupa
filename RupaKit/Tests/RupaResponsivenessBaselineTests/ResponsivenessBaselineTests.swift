@@ -1,4 +1,7 @@
 import Foundation
+import RupaCoreTypes
+import RupaRendering
+import RupaViewportScene
 import Testing
 
 @testable import RupaResponsivenessBaseline
@@ -7,7 +10,7 @@ import Testing
 /// host dependent and are therefore never asserted; what is asserted is that
 /// the fixture is deterministic, that the plan admits the whole fixture, that
 /// construction is charged to readiness rather than to `MainActor`, that the
-/// draw pass charges one fill and one stroke per visual-state batch, and that a
+/// draw pass submits one indexed draw per occurrence without CPU paths, and that a
 /// measure this process cannot observe is reported as `notMeasured` with a
 /// reason.
 @Suite("Responsiveness baseline contracts")
@@ -67,6 +70,30 @@ struct ResponsivenessBaselineTests {
         #expect(first.faceCount == second.faceCount)
     }
 
+    @Test("Twenty-four copies of the real fixture are refused before plan growth", .timeLimit(.minutes(1)))
+    func repeatedRealFixtureExceedsPlanAdmission() throws {
+        let fixture = try ResponsivenessFixture.build(.standard)
+        var items: [UniversalViewportSceneItem] = []
+        for copy in 0..<24 {
+            for item in fixture.scene.items {
+                items.append(UniversalViewportSceneItem(
+                    id: SceneOccurrenceID(rawValue: "\(item.id.rawValue)-copy-\(copy)"),
+                    definitionID: item.definitionID, displayName: item.displayName,
+                    representationID: item.representationID, reference: item.reference,
+                    mesh: item.mesh, worldTransform: item.worldTransform, worldBounds: item.worldBounds
+                ))
+            }
+        }
+        let scene = UniversalViewportScene(
+            snapshotID: fixture.scene.snapshotID, projectID: fixture.scene.projectID,
+            items: items, copyTelemetry: fixture.scene.copyTelemetry
+        )
+        #expect(items.count == 288)
+        #expect(throws: MeshSourcePresentationRenderError.self) {
+            try MeshSourcePresentationRenderPlan(scene: scene)
+        }
+    }
+
     @Test("The plan admits every triangle the fixture parameters predict")
     @MainActor
     func fixtureAdmission() async throws {
@@ -110,7 +137,7 @@ struct ResponsivenessBaselineTests {
         }
     }
 
-    @Test("The Canvas row states the submissions it excludes and charges them per batch")
+    @Test("The native pass submits one draw per occurrence without CPU paths")
     @MainActor
     func honestExclusion() async throws {
         let report = try await Self.makeReport(iterationCount: 2)
@@ -118,15 +145,12 @@ struct ResponsivenessBaselineTests {
         #expect(canvas.detail.contains("fill"))
         #expect(canvas.detail.contains("stroke"))
         for sample in report.samples {
-            #expect(sample.fillCount == sample.pathCount)
-            #expect(sample.strokeCount == sample.pathCount)
-            // The fixture carries no selection or hover, so every occurrence
-            // accumulates into the one normal batch. A pass that reverted to one
-            // path per triangle would report the triangle count here.
-            #expect(sample.pathCount == 1)
-            #expect(sample.pathCount < sample.triangleCount)
-            // Each retained position is projected once, not once per corner.
-            #expect(sample.projectedPointCount == sample.positionCount)
+            #expect(sample.fillCount == Self.smallFixture.bodyCount)
+            #expect(sample.strokeCount == 0)
+            #expect(sample.pathCount == 0)
+            #expect(sample.projectedPointCount == 0)
+            #expect(sample.gpuCompletionSeconds >= sample.drawWorkSeconds)
+            #expect(sample.workingByteCount >= sample.retainedByteCount)
         }
     }
 

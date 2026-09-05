@@ -1,6 +1,7 @@
 import Foundation
 import RupaCore
 import RupaViewportScene
+import Synchronization
 import SwiftCAD
 import Testing
 @testable import RupaRendering
@@ -154,9 +155,9 @@ func viewportPreviewEvaluationClearReturnsToIdleAndRejectsLateCompletion() async
         return
     }
 
-    // The evaluator does not observe cancellation, so the abandoned evaluation
-    // still completes. Wait for that completion instead of a fixed delay, so the
-    // assertion below rejects a late result rather than outrunning it.
+    // The cancelled worker still returns through its scheduler-shaped result.
+    // Wait for that completion instead of a fixed delay, so the assertion below
+    // rejects a late result rather than outrunning it.
     try await settleCompletion(cache, count: 1)
 
     guard case .idle = cache.state else {
@@ -166,6 +167,204 @@ func viewportPreviewEvaluationClearReturnsToIdleAndRejectsLateCompletion() async
     #expect(cache.isReady(for: 1) == false)
     #expect(cache.readyCache(for: 1) == nil)
     #expect(cache.failureMessage(for: 1) == nil)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func viewportPreviewEvaluationCancellationDoesNotPublishMappedFailure() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let preview = try previewChamferDocument(from: session.document)
+    let cancelledResult = DocumentEvaluationResult(
+        snapshot: EvaluationSnapshot(status: .failed(message: "cancelled by replacement"))
+    )
+    let probe = PreviewEvaluationWorkerProbe(
+        firstResult: cancelledResult,
+        subsequentResult: DocumentEvaluationResult(
+            snapshot: EvaluationSnapshot(status: .valid)
+        )
+    )
+    let cache = ViewportPreviewEvaluationCache(
+        evaluationOperation: { _, _, _, _ in probe.evaluate() }
+    )
+
+    cache.prepare(
+        document: preview,
+        generation: DocumentGeneration(1),
+        revision: 1,
+        reusing: nil,
+        objectRegistry: .builtIn
+    )
+    try await waitUntil { probe.callCount == 1 }
+    cache.clear()
+
+    try await settleCompletion(cache, count: 1)
+    #expect(probe.cancellationObserved)
+    #expect(cache.failureMessage(for: 1) == nil)
+    #expect(cache.isReady(for: 1) == false)
+    guard case .idle = cache.state else {
+        Issue.record("Cancellation must leave a cleared preview idle.")
+        return
+    }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func viewportPreviewEvaluationCancellationStopsActualSchedulerWorker() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let preview = try previewChamferDocument(from: session.document)
+    let evaluator = BlockingFeatureEvaluator()
+    let scheduler = EvaluationScheduler(
+        evaluator: DocumentEvaluator(
+            featureEvaluator: evaluator,
+            tolerance: preview.modelingSettings.tolerance
+        )
+    )
+    let cache = ViewportPreviewEvaluationCache(scheduler: scheduler)
+
+    cache.prepare(
+        document: preview,
+        generation: DocumentGeneration(1),
+        revision: 1,
+        reusing: nil,
+        objectRegistry: .builtIn
+    )
+    try await waitUntil { evaluator.hasStarted }
+    let clock = ContinuousClock()
+    let cancellationAt = clock.now
+    cache.clear()
+
+    try await settleCompletion(cache, count: 1)
+    let workerExitDuration = clock.now - cancellationAt
+    #expect(workerExitDuration <= .milliseconds(100))
+    #expect(evaluator.cancellationObservedAt != nil)
+    #expect(cache.completedEvaluationCount == 1)
+    #expect(cache.isReady(for: 1) == false)
+    #expect(cache.failureMessage(for: 1) == nil)
+    guard case .idle = cache.state else {
+        Issue.record("Cancelling the in-flight scheduler worker must leave the cache idle.")
+        return
+    }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func viewportPreviewEvaluationFailureCancelsWorkerAndRejectsLateResult() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let preview = try previewChamferDocument(from: session.document)
+    let probe = PreviewEvaluationWorkerProbe(
+        firstResult: DocumentEvaluationResult(
+            snapshot: EvaluationSnapshot(status: .valid)
+        ),
+        subsequentResult: DocumentEvaluationResult(
+            snapshot: EvaluationSnapshot(status: .valid)
+        )
+    )
+    let cache = ViewportPreviewEvaluationCache(
+        evaluationOperation: { _, _, _, _ in probe.evaluate() }
+    )
+
+    cache.prepare(
+        document: preview,
+        generation: DocumentGeneration(1),
+        revision: 1,
+        reusing: nil,
+        objectRegistry: .builtIn
+    )
+    try await waitUntil { probe.callCount == 1 }
+    cache.fail(revision: 1, message: "preview construction failed")
+
+    #expect(cache.failureMessage(for: 1) == "preview construction failed")
+    #expect(cache.isReady(for: 1) == false)
+    try await settleCompletion(cache, count: 1)
+    #expect(probe.cancellationObserved)
+    #expect(cache.failureMessage(for: 1) == "preview construction failed")
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func viewportPreviewEvaluationRejectsSameRevisionABACompletion() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let preview = try previewChamferDocument(from: session.document)
+    let probe = PreviewEvaluationWorkerProbe(
+        firstResult: DocumentEvaluationResult(
+            snapshot: EvaluationSnapshot(status: .failed(message: "stale cancellation"))
+        ),
+        subsequentResult: DocumentEvaluationResult(
+            snapshot: EvaluationSnapshot(status: .valid)
+        )
+    )
+    let cache = ViewportPreviewEvaluationCache(
+        evaluationOperation: { _, _, _, _ in probe.evaluate() }
+    )
+
+    cache.prepare(
+        document: preview,
+        generation: DocumentGeneration(1),
+        revision: 1,
+        reusing: nil,
+        objectRegistry: .builtIn
+    )
+    try await waitUntil { probe.callCount == 1 }
+
+    cache.clear()
+    cache.prepare(
+        document: preview,
+        generation: DocumentGeneration(1),
+        revision: 1,
+        reusing: nil,
+        objectRegistry: .builtIn
+    )
+    try await waitUntil { probe.callCount == 2 }
+
+    // The first cancelled completion has the same revision as the restarted
+    // request. Revision-only matching would publish its failure here.
+    guard case .preparing(let revision) = cache.state else {
+        Issue.record("A same-revision restart must remain preparing until its own worker returns.")
+        return
+    }
+    #expect(revision == 1)
+    #expect(cache.failureMessage(for: 1) == nil)
+
+    probe.releaseSecondWorker()
+    try await settle(cache, revision: 1)
+    #expect(cache.isReady(for: 1))
+    #expect(cache.startedEvaluationCount == 2)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func viewportPreviewEvaluationDeinitCancelsActualWorker() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let preview = try previewChamferDocument(from: session.document)
+    let probe = PreviewEvaluationWorkerProbe(
+        firstResult: DocumentEvaluationResult(
+            snapshot: EvaluationSnapshot(status: .failed(message: "cancelled by teardown"))
+        ),
+        subsequentResult: DocumentEvaluationResult(
+            snapshot: EvaluationSnapshot(status: .valid)
+        )
+    )
+    var cache: ViewportPreviewEvaluationCache? = ViewportPreviewEvaluationCache(
+        evaluationOperation: { _, _, _, _ in probe.evaluate() }
+    )
+
+    cache?.prepare(
+        document: preview,
+        generation: DocumentGeneration(1),
+        revision: 1,
+        reusing: nil,
+        objectRegistry: .builtIn
+    )
+    try await waitUntil { probe.callCount == 1 }
+    cache = nil
+
+    try await waitUntil { probe.cancellationObserved }
+    #expect(probe.cancellationObserved)
 }
 
 @MainActor
@@ -224,6 +423,107 @@ private func settleCompletion(
         try await Task.sleep(for: .milliseconds(20))
     }
     Issue.record("Preview evaluation did not complete \(count) time(s).")
+}
+
+@MainActor
+private func waitUntil(
+    _ condition: () -> Bool
+) async throws {
+    for _ in 0..<2_000 {
+        if condition() {
+            return
+        }
+        try await Task.sleep(for: .milliseconds(1))
+    }
+    Issue.record("Preview evaluation worker did not reach the expected checkpoint.")
+}
+
+private final class PreviewEvaluationWorkerProbe: Sendable {
+    private struct State: Sendable {
+        var callCount = 0
+        var cancellationObserved = false
+        var releaseSecondWorker = false
+    }
+
+    private let state = Mutex(State())
+    private let firstResult: DocumentEvaluationResult
+    private let subsequentResult: DocumentEvaluationResult
+
+    init(
+        firstResult: DocumentEvaluationResult,
+        subsequentResult: DocumentEvaluationResult
+    ) {
+        self.firstResult = firstResult
+        self.subsequentResult = subsequentResult
+    }
+
+    var callCount: Int {
+        state.withLock { $0.callCount }
+    }
+
+    var cancellationObserved: Bool {
+        state.withLock { $0.cancellationObserved }
+    }
+
+    func releaseSecondWorker() {
+        state.withLock { $0.releaseSecondWorker = true }
+    }
+
+    func evaluate() -> DocumentEvaluationResult {
+        let call = state.withLock { state in
+            state.callCount += 1
+            return state.callCount
+        }
+        if call == 1 {
+            let deadline = Date().addingTimeInterval(5)
+            while !Task.isCancelled && Date() < deadline {
+                Thread.sleep(forTimeInterval: 0.001)
+            }
+            if Task.isCancelled {
+                state.withLock { $0.cancellationObserved = true }
+            }
+            return firstResult
+        }
+        let deadline = Date().addingTimeInterval(5)
+        while state.withLock({ $0.releaseSecondWorker }) == false,
+              !Task.isCancelled,
+              Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.001)
+        }
+        return subsequentResult
+    }
+}
+
+private final class BlockingFeatureEvaluator: FeatureEvaluating, Sendable {
+    private struct State: Sendable {
+        var hasStarted = false
+        var cancellationObservedAt: Date?
+    }
+
+    private let state = Mutex(State())
+
+    var hasStarted: Bool {
+        state.withLock { $0.hasStarted }
+    }
+
+    var cancellationObservedAt: Date? {
+        state.withLock { $0.cancellationObservedAt }
+    }
+
+    func evaluate(
+        feature _: FeatureNode,
+        context _: EvaluationContext
+    ) throws -> EvaluationResult {
+        state.withLock { $0.hasStarted = true }
+        let deadline = Date().addingTimeInterval(5)
+        while !Task.isCancelled && Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.001)
+        }
+        if Task.isCancelled {
+            state.withLock { $0.cancellationObservedAt = Date() }
+        }
+        throw CancellationError()
+    }
 }
 
 @MainActor

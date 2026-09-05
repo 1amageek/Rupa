@@ -217,6 +217,16 @@ full-source traversal.
 
 ### Triangulation invariants
 
+Consumers admit `MeshSourceTriangulationIndex.storageReservation(vertexCount:)`
+before building the native index. The reservation covers the native hash table's
+load-factor/power-of-two growth, key/value storage, occupancy and alignment;
+it is a conservative bound, not measured resident memory. Index construction
+checks cancellation before reserve and every 4,096 entries. The rendering owner
+combines this scratch reservation with its retained geometry before allocation.
+`MeshTriangulationLimits.validate()` owns caller-limit validity for package
+consumers. They validate limits and admit each face's corner count before
+allocating derived positions, topology, or the source-bound index.
+
 1. The source-bound index is built once per presentation item and has at most
    one entry per source vertex. It never owns or copies a GeometryBuffer.
 2. Face ranges, corner IDs, corner vertex IDs, and positions are read in source

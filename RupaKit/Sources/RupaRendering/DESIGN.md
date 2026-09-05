@@ -2,288 +2,212 @@
 
 ## Purpose and Scope
 
-`RupaRendering` owns the bounded, immutable presentation data prepared from one
-published `RupaViewportScene` snapshot and consumed by the existing Rupa
-viewport. It is a child of the [RupaKit package design](../../DESIGN.md) and has
-no child designs.
-
-`MeshSourcePresentationRenderPlan` realizes the indexed, once-transformed,
-resource-bounded contract below: it transforms each source vertex exactly once
-into a derived position buffer, references it by checked indices, charges a
-`MeshSourcePresentationPlanLimits` ceiling before it reserves storage, and
-validates every range, transform, and index during that single pass, so it
-retains neither the source meshes nor a triangulation index and no second
-validating traversal exists to publish.
-
-`MeshSourcePresentationPlanCache` realizes the asynchronous lifecycle contract
-below: the viewport starts one preparation per scene identity from a
-scene-identity task rather than from its `body`, construction runs in a detached
-task off `MainActor`, a scene change cancels the build in flight, and a
-completion is published on `MainActor` only while the state is still `preparing`
-the same `EvaluationSnapshotID`, so a stale success and a stale failure are
-discarded by one rule. Only a matching `ready` exposes a plan to rendering or
-picking; a `preparing` scene renders and picks nothing rather than blocking, and
-a matching `failed` is the only state the on-screen failure overlay shows.
-
-`ViewportPresentationBatchAccumulator` realizes the bounded consumption
-contract below: the draw pass walks the plan one occurrence at a time through
-`MeshSourcePresentationOccurrenceView`, resolves interaction state once per
-occurrence, projects each retained position once into a reused scratch buffer,
-and appends every triangle into one `Path` per interaction visual state, so the
-pass issues one fill and one stroke per non-empty state instead of one `Path`,
-one fill, and one stroke per triangle. Each polygon is appended with a positive
-screen winding, because a `nonZero` fill of a merged path would otherwise cancel
-a clockwise subpath against an overlapping counter-clockwise one and punch holes
-where a back face sits under a front face. A section resolver produces clipped
-points the plan does not retain, so that path stays per-triangle in its
-projection while still accumulating into the same bounded set of batches. None
-of this replaces the existing Canvas renderer or any scene, source, or project
-authority.
-
-The accumulator and its batch key `MeshSourcePresentationVisualState` are
-public, because the responsiveness measurement module must reproduce this draw
-pass rather than reimplement it: a harness that built its own batching would
-stop bounding the interval the Canvas actually spends the moment the two
-diverged. Publishing them makes the draw pass one contract with one
-implementation and one owner.
-
-The viewport also owns transient documents that are never published to project
-authority, such as the edge-treatment drag preview it builds from the current
-selection. Because these documents have no published generation, no project
-authority can supply their evaluation, and no other module owns their lifetime.
-This module therefore owns the *lifetime* of one transient preview evaluation
-per viewport and delegates the *evaluation itself* to the existing
-`RupaCore` `EvaluationScheduler`, off `MainActor`. It does not introduce a
-second evaluator, a second source authority, or an unpublished document into
-project state.
+RupaRendering prepares bounded presentation data from an immutable viewport
+snapshot and displays it without changing CAD, MeshSource, or project authority.
+Parent: [RupaKit](../../DESIGN.md). Children: none. The Metal surface renderer
+and native view are Apple-platform adapters within this existing module.
 
 ## Responsibilities and Boundaries
 
-The module owns:
+The existing snapshot cache owns off-main preparation, cancellation, and atomic
+publication of the CPU picking plan with its immutable GPU resources. The plan
+owns indexed, once-transformed geometry and exact picking provenance. The native
+surface adapter owns depth-tested, lit surface drawing. Canvas owns grids,
+curves, dimensions, and interaction overlays. SwiftUI owns camera and selection.
 
-- one asynchronous `MeshSourcePresentationPlanCache` lifecycle per viewport;
-- cancellable, off-main construction from one immutable scene snapshot;
-- checked item, transformed-position, triangle, index/provenance, and
-  retained-byte ceilings before allocation or growth;
-- one transformed position per source vertex per occurrence, indexed triangles,
-  and exact picking provenance;
-- one draw-time accumulation of projected polygons into a fixed set of
-  visual-state batches;
-- construction-time validation, typed all-or-nothing failure, telemetry, and
-  snapshot-identity matching;
-- state-driven viewport invalidation only while a real transition is active;
-- the cancellable lifetime of one transient, never-published preview evaluation
-  per viewport, prepared off `MainActor` through the existing evaluator.
-
-It does not select Product representations, tessellate CAD, mutate
-`MeshSource`, publish project state, perform package I/O, handle Agent requests,
-or own camera/UI interaction state. It reuses `RupaGeometry` triangulation and
-the existing Canvas consumer; no Metal renderer, BVH, second cache, or renderer
-protocol is introduced by this correction.
+The viewport also owns the lifetime of transient preview evaluations, delegating
+evaluation itself to RupaCore's existing EvaluationScheduler. Neither preview
+nor presentation code publishes project state, chooses representations or
+fidelity, tessellates CAD, handles Agent requests, or performs package I/O.
 
 ## Related Designs
 
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
-| [package design](../../DESIGN.md) | parent | Package dependency direction | Places rendering above immutable scene and Geometry values. | A derived plan is never source or project authority. |
-| [RupaCore](../RupaCore/DESIGN.md) | depends on | `EvaluationScheduler`, `EvaluatedDocumentCache`, and typed evaluation status | Evaluates a transient preview document and returns either one reusable evaluation cache or one explicit failure status. | This module never publishes a transient document or its evaluation as project state. |
-| [RupaGeometry](../RupaGeometry/DESIGN.md) | depends on | Source-bound index and bounded face triangulation | Supplies Mesh topology traversal. | Do not duplicate ID lookup or polygon algorithms. |
-| [RupaViewportScene](../RupaViewportScene/DESIGN.md) | depends on | Immutable scene and snapshot identity | Supplies selected bounded presentation results and transforms. | Rendering cannot reevaluate or select LOD. |
-| [RupaUI](../RupaUI/DESIGN.md) | used by | MainActor publication and Canvas consumption | Displays only a plan matching the current snapshot. | UI must not perform plan construction. |
-| [Swift-CAD package](../../../swift-CAD/DESIGN.md) | depends on | Exact CAD document and evaluated value types | Supplies the CAD value types this module reads directly through its declared `SwiftCAD` dependency. | Rendering never tessellates CAD, evaluates a document, or selects kernel limits. |
-| [RupaResponsivenessBaseline](../RupaResponsivenessBaseline/DESIGN.md) | used by | `MeshSourcePresentationRenderPlan.forEachOccurrence`, `MeshSourcePresentationOccurrenceView`, `ViewportPresentationBatchAccumulator`, `MeshSourcePresentationVisualState`, performance acceptance table | Reproduces this module's batched draw pass offline and reports one verdict per acceptance row. | It is a measurement module, never a production dependency; the batching contract it drives must stay the one the Canvas draw pass uses, or its Canvas figure stops bounding the real interval. |
-| [RupaRendering tests](../../Tests/RupaRenderingTests) | verification owner | Plan, limit, cancellation, stale-result, and batching behavior | Proves the actual derived-data path. | Type/build checks are not behavior evidence. |
+| [RupaKit](../../DESIGN.md) | parent | Dependency direction | Composes immutable presentation above source/evaluation. | No reverse dependency on UI. |
+| [RupaGeometry](../RupaGeometry/DESIGN.md) | depends on | Source-bound index and bounded triangulation | Supplies validated geometry traversal. | Reuse its ID lookup and polygon algorithms. |
+| [RupaViewportScene](../RupaViewportScene/DESIGN.md) | depends on | Immutable scene, snapshot identity, projection | Supplies representation/transform and camera conventions. | Larger projected depth is nearer. |
+| [RupaCore](../RupaCore/DESIGN.md) | depends on | EvaluationScheduler and evaluated cache | Evaluates transient preview documents off MainActor. | A preview never becomes project authority. |
+| [Swift-CAD](../../../swift-CAD/DESIGN.md) | depends on | Exact CAD value types and cancellation | Supplies existing legacy scene and preview types. | Rendering does not own kernel policy. |
+| [RupaUI](../RupaUI/DESIGN.md) | used by | Matching ready state and visible failure | Composes the viewport. | No geometry preparation in body. |
+| [Rupa App](../../../Rupa/Rupa/Rupa/DESIGN.md) | used by | Integrated responsiveness | Owns signed-App and device-matrix evidence. | Development hardware is not the minimum-device release gate. |
+| [Responsiveness baseline](../RupaResponsivenessBaseline/DESIGN.md) | used by | Production plan and surface encoder | Measures the implementation used by the viewport. | Offscreen execution does not prove live Canvas or event-loop latency. |
+| [Rendering tests](../../Tests/RupaRenderingTests) | verification owner | Admission, lifecycle, projection, GPU pixels | Rejects invalid preparation and rendering. | Metal behavior requires xcodebuild test on Apple hardware. |
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    Scene["Immutable published scene"] --> Cache["Existing plan cache\nsnapshot + task lifecycle"]
-    Cache -->|detached cancellable build| Build["Validate + triangulate + transform once"]
-    Geometry["RupaGeometry"] --> Build
-    Limits["Plan limits\nitems/positions/triangles/bytes"] --> Build
-    Build --> Plan["Immutable bounded plan\npositions + indices + provenance"]
-    Plan -->|matching completion only| State["MainActor atomic state swap"]
-    State --> Canvas["Existing Canvas\nproject each position once\naccumulate into visual-state batches"]
-    Picking["Picking"] --> Plan
+    Scene["Immutable scene"] --> Cache["Existing snapshot cache"]
+    Cache --> Build["Off-main admission / index / transform / triangulation"]
+    Build --> Plan["CPU plan + exact picking provenance"]
+    Build --> GPU["Immutable Metal vertex / index buffers"]
+    Plan --> Ready["One matching ready publication"]
+    GPU --> Ready
+    Ready --> Picking["Existing picking"]
+    Ready --> Surface["Native Metal surface: depth / light / section"]
+    Camera["Camera + interaction uniforms"] --> Surface
+    Overlay["Grid / dimensions / handles"] --> Canvas["Canvas overlays"]
 ```
 
-The transformed position buffer is an intentional derived presentation copy:
-it removes repeated world transformation and corner-position materialization
-from every Canvas pass. The immutable source buffers remain unchanged and are
-not copied into another source mesh.
+Surface drawing replaces the merged triangle-path pass measured at 35.279 ms.
+It does not reuse the identity-picking compute renderer: that adapter has
+different geometry and synchronous readback semantics. The surface renderer is
+one concrete native adapter shared by the viewport and offscreen verification,
+not a new renderer protocol or scene graph.
 
 ## Contracts and Invariants
 
-1. A cache is `idle` before its first scene and after teardown. For an active
-   scene it is exactly one of `preparing`, `ready`, or `failed` for one
-   `EvaluationSnapshotID`. Only matching `ready` exposes a render/picking plan.
-2. A scene change cancels the current build. Completion publishes one state
-   atomically on `MainActor` only when its snapshot identity still matches;
-   stale success and stale failure are discarded.
-3. Plan construction happens outside `MainActor`, checks cancellation at item,
-   vertex-range, and face boundaries, and returns either one complete immutable
-   plan or one typed failure. No partial plan is visible.
-4. Before reserving or growing storage, checked arithmetic charges cumulative
-   item, transformed-position, triangle, index/provenance, and retained byte
-   counts. Callers may lower limits but cannot widen module hard ceilings. Batch
-   count needs no charge: it is the fixed number of interaction visual states,
-   independent of scene size.
-5. Every source vertex used by one occurrence is world-transformed at most once
-   into the plan. Triangles reference that buffer by checked indices and retain
-   exact occurrence/definition/representation/source/face provenance required
-   by picking.
-6. Construction validates source ranges, triangulation, transforms, finite
-   positions, indices, and provenance once. A ready plan is consumed
-   through nonthrowing bounded access; no second full validation/render
-   traversal is permitted.
-7. Canvas projects each retained position at most once per draw and appends
-   triangles to a bounded number of paths grouped by interaction visual state.
-   It does not allocate, fill, or stroke one `Path` per triangle.
-8. Camera, hover, and selection never mutate the plan or source. They affect
-   screen projection or bounded batch choice only; rendering and picking always
-   use the same matching plan.
-9. Static viewports have no periodic ticks. Projection transitions temporarily
-   enable the existing schedule and stop it when transition state completes.
-10. Hard ceilings and standard defaults are versioned values selected from
-    measured multi-body fixtures. Changing them requires boundary, retained-byte,
-    frame-work, and signed-App responsiveness evidence; values are not relaxed
-    merely to admit one scene.
-11. Viewport teardown cancels the owned build task, clears matching derived
-    data, enters `idle`, and makes every later completion stale. No task or plan
-    outlives its cache owner.
-12. The transient preview evaluation is `idle` while no preview document exists.
-    While one exists it is exactly one of `preparing`, `ready`, or `failed` for
-    exactly one preview revision, and only a `ready` state whose revision equals
-    the current preview revision may supply an evaluation to scene construction.
-13. Preview evaluation runs outside `MainActor` through the existing
-    `EvaluationScheduler`, reusing the published evaluation as its incremental
-    base. The evaluator is synchronous and does not observe cancellation, so
-    advancing the preview revision, clearing the preview, and viewport teardown
-    abandon a running evaluation rather than stopping it: every completion whose
-    revision no longer matches is discarded without reaching state. At most one
-    preview evaluation is in flight per viewport, and a revision requested while
-    one is running replaces any earlier waiting request and starts when the
-    running one completes, so one drag cannot launch one kernel evaluation per
-    input event.
-14. Until preview evaluation is `ready`, the viewport projects the published
-    document with its published evaluation. The preview document is never
-    projected without its own evaluation, and a failed preview evaluation is an
-    explicit `failed` state rather than an empty successful scene, a stale
-    evaluation, or an on-demand evaluation on `MainActor`.
+1. The cache is idle, preparing, ready, or failed for one snapshot. Only matching
+   ready state exposes geometry to rendering and picking. Failure is explicit;
+   no empty, stale, coarser, or alternate-renderer success is substituted.
+2. Preparation runs off MainActor. Replacement and teardown cancel its actual
+   task. Completion requires a matching request identity as well as snapshot
+   identity, including clear/restart with the same snapshot.
+3. Checked count and byte admission precedes reserve, allocation, and growth.
+   It includes retained source-ID backing, positions, triangle indices/face
+   provenance, triangulation-index scratch, and immutable GPU geometry.
+   Caller limits can only narrow module ceilings. Cancellation is checked
+   before work and at bounded item, vertex, face, and buffer-fill intervals.
+4. Each occurrence vertex is world-transformed once. Triangles use checked
+   indices and preserve occurrence, definition, representation, source, face,
+   and vertex identities. Construction validates before publication; rendering
+   does not repeat validation or triangulation.
+5. GPU geometry is one explicit conversion relative to a Double-precision
+   local origin. World-space CPU positions remain the picking authority.
+   Conversion rejects nonfinite/unrepresentable values instead of distorting
+   geometry. Camera changes only update bounded uniforms.
+6. Surface rendering submits at most one indexed draw per admitted occurrence.
+   Projection, two-sided directional lighting, and depth testing run on the GPU.
+   Larger ViewportLayout.projectedDepth is nearer, matching CPU picking.
+   Selection changes surface color, not visibility order. Internal tessellation
+   edges are not painted as a wireframe; shape edges remain readable through
+   lighting and silhouette contrast.
+   Equal-depth fragments keep the first occurrence in source order, matching
+   the CPU picker's strict nearer-than comparison.
+7. Section clipping uses the same plane, retained side, and tolerance as CPU
+   picking. Clipping does not change the plan or source geometry.
+8. The native view submits at most one command buffer at a time. Further draws
+   coalesce to the latest camera and interaction state. No synchronous GPU
+   wait, readback, semaphore, or shutdown runs on MainActor.
+9. GPU frame attachments have checked pixel/byte ceilings separate from the
+   geometry budget and are included in App pipeline-memory measurements.
+   Renderer allocation, shader, encoding, and completion failures remain visible.
+   Preparation failures belong to the snapshot cache. Drawable-size, encoding,
+   and completion failures belong to the viewport's renderer-matched frame state;
+   they retain the immutable ready renderer and retry on a later view update.
+   Matching successful GPU completion clears the frame error. Picking is disabled
+   while that renderer's frame is unavailable, without changing project authority.
+10. Plan preparation retains one worker and the latest pending request. A
+    replacement cancels the worker and starts only after it exits; old and new
+    builders cannot overlap allocations. Static viewports do not tick periodically. Only active transitions or actual
+    invalidation request another frame.
+    Transient Canvas body ghosts are restricted to the edge-treatment request's
+    explicit scene-node target or entries in the viewport's edited-body state;
+    an active preview never sends untouched published bodies back through the
+    per-triangle Canvas path. Ghosts do not acquire published picking authority.
+11. Preview evaluation runs off MainActor through EvaluationScheduler with the
+    published evaluation as an incremental base. The cache owns and cancels
+    the actual worker, retains at most the newest pending revision, and starts
+    it after the previous worker exits a cooperative checkpoint. Teardown also
+    cancels. Matching request identity rejects stale success and failure.
+12. A ready preview supplies its own matching evaluation to scene construction.
+    While preparing or failed, the published document remains visible. Matching
+    failure is displayed explicitly; a preview is never published as project state.
 
 ## Runtime Flows
 
-```mermaid
-sequenceDiagram
-    participant U as Viewport UI
-    participant C as Existing plan cache
-    participant B as Off-main builder
-    participant M as MainActor state
-    participant V as Canvas/picking
-    U->>C: published scene identity
-    C->>B: start immutable bounded build
-    loop item / vertex range / face
-        B->>B: check cancellation and budget before growth
-    end
-    alt matching complete plan
-        B-->>M: ready(snapshotID, plan)
-        M-->>V: nonthrowing matching plan
-    else matching typed failure
-        B-->>M: failed(snapshotID, error)
-    else scene changed
-        C->>B: cancel
-        B-->>C: stale completion discarded
-    end
+```text
+snapshot change -> cancel old task -> prepare CPU plan and GPU buffers
+  -> matching completion -> publish ready -> encode surface + Canvas overlays
+  -> invalid input/resource/GPU failure -> visible failed state
+camera/hover change -> small uniforms -> one coalesced GPU frame
+preview revision -> cancel worker -> newest pending -> matching preview result
+teardown -> cancel tasks, detach view, release ready state
 ```
 
 ## State, Ownership, and Lifecycle
 
-The existing cache owns the current snapshot identity, one build task, and its
-`idle`/`preparing`/`ready`/`failed` state. The build owns only invocation-local
-triangulation/index scratch. A ready plan owns its bounded transformed positions,
-triangle indices, and provenance; it need not retain duplicate source meshes
-after construction. One draw pass owns its accumulator, its projection scratch
-buffers, and the batch paths built from them, all of which it releases when it
-returns. SwiftUI owns camera and interaction state.
+The snapshot cache retains one current CPU/GPU result. A build owns temporary
+index and face scratch. Metal owns buffer allocation and exactly-once release.
+Initialization binds only the admitted byte range, fills every element, and
+does not retain an unsafe pointer. Buffers are immutable after initialization;
+the command buffer retains them until GPU access ends. No source borrow crosses
+a task boundary.
 
-No Geometry borrow, lock, or source pointer crosses a task boundary or is held
-while calling Canvas, picking, an external callback, or I/O.
+The SDK's mutable MTLBuffer handles are confined to a private immutable owner
+with `@unchecked Sendable` confined to that immutable native boundary. Only its initial
+CPU fill writes memory; subsequent command encoders bind it read-only. No
+handle or writable pointer is publicly exposed. Concurrent offscreen draws
+verify that sharing the owner does not mutate geometry or couple frame state.
+
+Immutable shader/pipeline state may be shared by the native adapter; it has no
+project state. The native view serializes drawable/depth resources and pending
+redraw state on MainActor. Completion returns to that owner without keeping a
+detached viewport alive. Preview workers hold immutable requests, not the cache.
 
 ## Failure, Concurrency, and Constraints
 
-Invalid scene identity/source, invalid range/reference, nonrenderable face,
-nonfinite transform, integer overflow, budget exhaustion, and cancellation are
-typed failures. They are never converted to an empty scene, a stale plan, a
-coarser mesh, or a legacy rendering path.
-
-A failed preview evaluation is recorded as an explicit `failed` state and is
-kept out of rendering: the viewport keeps projecting the published document and
-its published evaluation. No production consumer presents that message today, so
-on screen a preview that cannot evaluate is currently indistinguishable from one
-that is still preparing. Presenting it is a UI responsibility this module does
-not own and has not been given; the state exists so that failure is never
-converted into an empty successful scene.
-
-Only cache-state publication and SwiftUI/Canvas calls are MainActor-isolated.
-Plan construction and validation are not. Screen projection and Canvas context
-work remain MainActor-bound but are capped by the admitted plan and operate per
-retained vertex/batch rather than per triangle corner/draw call.
+Invalid identities/ranges/transforms, integer overflow, resource exhaustion,
+cancellation, and GPU failure never publish a partial result. Cancellation is
+not displayed as successful empty geometry or a preview failure. The existing
+source and project publication survive presentation failure.
 
 ### Performance acceptance
 
-`frameInterval` is derived from the lowest refresh rate supported by the App's
-release device matrix. `minimumMemory` is the physical memory of its
-lowest-memory supported device. The product records those inputs, OS/build,
-app commit, fixture source digest, policy version, and measured values with the
-acceptance evidence.
+The product pins the minimum supported refresh rate and memory, OS/build,
+source commits, policy version, and fixture digest with each measurement.
+The current 60-Hz / 8-GiB reference gives 16.667 ms per frame and 204.8 MiB
+per 2.5%-memory budget.
 
 | Measure | Reject when |
 |---|---|
-| MainActor state publication | One uninterrupted publication occupies more than one half `frameInterval`. |
-| Canvas consumption | One admitted static-scene draw exceeds one `frameInterval` in any of ten consecutive post-warm-up runs. |
-| Plan readiness | One unchanged admitted scene takes more than two seconds to reach matching `ready` in any of ten consecutive post-warm-up runs. |
-| Cancellation | Snapshot replacement or teardown takes more than six `frameInterval` values to stop observable build progress and make completion stale. |
-| Plan retained bytes | Ready-plan retained bytes exceed 2.5% of `minimumMemory`. |
-| Plan working bytes | Peak builder scratch plus in-flight plan bytes exceed 2.5% of `minimumMemory`. |
+| MainActor publication | One uninterrupted publication exceeds half a frame. |
+| Surface and Canvas consumption | Any of ten post-warm-up draws exceeds one frame. |
+| Plan readiness | Any of ten unchanged-scene preparations exceeds two seconds. |
+| Cancellation | Replacement/teardown takes over six frames to stop observable progress and reject stale completion. |
+| Retained geometry | CPU plan plus immutable GPU geometry exceeds 2.5% of minimum memory. |
+| Working geometry | Peak builder scratch plus in-flight CPU/GPU geometry exceeds the same budget. |
 
-Both `MainActor` intervals in the table are emitted as signposts from the
-production path so the signed application reports the same measures without a
-behavioural change. `ViewportResponsivenessSignposts` owns the identities.
+Count/byte defaults use measured successful fixture maxima plus 25% checked
+headroom, still subject to the memory ceilings. They are not multiplied from a
+failed fixture to admit arbitrarily larger scenes. A policy change requires
+boundary tests, measured frame/memory behavior, and signed-App verification.
 
-| Interval | Signpost | Covers |
-|---|---|---|
-| MainActor state publication | `RupaRendering` / `Responsiveness` / `PresentationPlanPublication` | The `MainActor` state assignment that publishes one completed preparation. Construction is not inside it, because construction runs off `MainActor`. |
-| Canvas consumption | `RupaRendering` / `Responsiveness` / `ViewportCanvasConsumption` | One full Canvas renderer invocation, of which the presentation draw is a part. |
+Calibration on Mac16,6 / macOS 27.0 (26A5388g), Swift 6.4 2026-08-14,
+Release, ten post-warmup samples on 2026-09-05:
 
-The offline harness measures only the presentation portion of a Canvas pass, so
-its Canvas figure is a lower bound of the signposted interval: a harness
-rejection stays valid for the application, a harness acceptance does not. The
-same asymmetry applies to the two byte rows, whose sampled footprint deltas are
-lower bounds of the plan's bytes. Those three rows are owned by the signed
-application run; the harness can only reject them.
+| Fixture | CPU encoding maximum | Encode-to-GPU-completion maximum | Charged working bytes |
+|---|---:|---:|---:|
+| 12 bodies / 6,284 segments | 0.092 ms | 5.698 ms | 17,978,528 |
+| 512 bodies / 16 segments | 0.461 ms | 2.218 ms | 2,081,664 |
 
-The standard presentation fidelity is the finest deterministic profile that
-passes every row for the fixed multi-body fixture suite. Count/byte defaults
-are the smallest versioned ceilings that admit the measured successful maxima
-plus 25% checked headroom while still satisfying the memory rows. A limit
-change repeats the same selection; a scene that cannot fit fails explicitly
-instead of weakening the policy.
+The resulting ceilings are 640 items, 188,550 positions, 377,040 triangles,
+and 22,473,160 bytes. These measured scopes exclude live overlays and input;
+they do not complete the signed-App acceptance gate.
+
+The benchmark uses the production surface encoder and waits for actual GPU
+completion off the UI path. It reports measurement scope explicitly: offscreen
+success does not establish full live-Canvas, Observation, or input responsiveness.
+Unmeasured rows remain notMeasured. Production signposts bracket publication,
+Canvas overlays, and surface command encoding; GPU completion supplies execution
+timing. An in-flight cancellation probe measures actual stop, not preparation
+duration or a state reset.
 
 ## Verification and Change Impact
 
-| Invariant | Required evidence |
+| Invariant | Behavioral evidence |
 |---|---|
-| Bounded construction | Boundary-plus-one and checked-overflow tests reject before growth for every declared count and retained bytes. |
-| Cancellation and identity | Item/vertex/face cancellation plus rapid snapshot replacement proves stale success/failure never reaches rendering or picking. |
-| Teardown | Viewport/cache destruction cancels preparation, releases the plan, returns to `idle`, and rejects a late completion. |
-| Single preparation pass | Instrumentation proves one triangulation/transform/validation pass, no duplicate full traversal, and one transformed value per retained occurrence vertex. |
-| Batched consumption | Accumulator tests prove every polygon of one state merges into a single path, that empty states are never visited, that draw order is normal then hovered then selected, and that winding normalization is what makes one non-zero fill cover an overlap the un-normalized merge leaves uncovered; plan traversal tests prove a per-occurrence view exposes fewer positions than triangle corners and that its indices select the same positions as per-triangle traversal, so the draw pass issues path/fill/stroke calls per visual-state batch rather than per triangle. |
-| MainActor progress | Signposts reject publication/Canvas intervals above the performance table while a progress probe advances during preparation. |
-| Transient preview ownership | Preparing a preview evaluation performs zero evaluations on `MainActor`, and the scene builder receives a matching supplied evaluation for every preview revision it projects. |
-| Preview staleness and coalescing | Advancing the revision or clearing the preview discards the earlier completion; a late completion never replaces current state, and repeated requests during one drag leave at most one evaluation in flight and start only the newest waiting revision. |
-| Preview failure is explicit | A preview document that fails to evaluate reaches the `failed` state, and the viewport keeps projecting the published document instead of an empty successful scene. |
-| Memory and application behavior | Telemetry reports retained plan bytes, and the actual signed App multi-body run remains interactive with visible geometry and bounded memory. |
+| Pre-growth admission | Count/byte boundary-plus-one, overflow, oversized repeated occurrences, and scratch/index cancellation tests. |
+| Immutable indexed geometry | CPU triangle/provenance parity, local-origin projection, and zero geometry rebuild on camera changes. |
+| Lifecycle | Replacement, same-snapshot restart, teardown, in-flight cancellation, and stale success/failure tests. |
+| Depth and visibility | GPU pixels for overlapping front/rear surfaces, order reversal, and matching CPU pick. |
+| Readable surfaces | GPU pixels distinguish adjacent face orientations and silhouette; selection preserves depth. |
+| Section | GPU retained/discarded pixels agree with the existing CPU clipping rule. |
+| Preview | Actual worker cancellation, bounded pending work, matching supplied evaluation, visible failure, and published-state preservation. |
+| Responsiveness | Ten-run production encoder measurements, precise memory accounting, and signed-App input/visual checks. |
 
-Changes to Geometry triangulation, scene identity, Canvas interaction state, or
-plan limits require rechecking the owning child design and the signed-App gate.
+Changes to Geometry indexing, projection, section clipping, snapshot identity,
+limits, GPU resource lifetime, or preview cancellation recheck their owning
+contracts and the affected upper App path. Metal tests execute with xcodebuild;
+pure geometry/lifecycle tests use focused SwiftPM tests where no GPU is involved.

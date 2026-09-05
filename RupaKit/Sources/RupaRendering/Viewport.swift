@@ -25,7 +25,9 @@ public struct Viewport: View {
     @State private var camera: ViewportCamera = .identity
     @State private var editedBodies: [FeatureID: ViewportObjectEditState] = [:]
     @State private var dragPreviewDocument: DesignDocument?
+    @State private var dragPreviewSceneNodeID: SceneNodeID?
     @State private var dragPreviewRevision: UInt64 = 0
+    @State private var surfaceFailure: (rendererID: ObjectIdentifier, error: MeshSourcePresentationRenderError)?
     @State private var hoveredInteractionTarget: ViewportInteractionTarget?
     @State private var pendingInteractionTarget: ViewportInteractionTarget?
     @State private var orbitBasis: ViewportProjectionBasis?
@@ -523,35 +525,51 @@ public struct Viewport: View {
                 // The body only reads the published state. Preparation is
                 // started from the scene-identity task below, because starting
                 // it here would mutate observable state during a view update.
-                let presentationPlan = presentationScene.flatMap { scene in
-                    presentationPlanCache.plan(for: scene)
+                let presentationSurface = presentationScene.flatMap { scene in
+                    presentationPlanCache.surface(for: scene)
                 }
                 let presentationFailure = presentationScene.flatMap { scene in
-                    presentationPlanCache.failure(for: scene)
+                    presentationPlanCache.failure(for: scene) ?? presentationFrameFailure(for: scene)
                 }
-                let presentationSectionGeometryResolver = presentationSectionGeometryResolver(
-                    sceneKey: sceneKey
-                )
-
-                Canvas { context, size in
-                    let canvasInterval = ViewportResponsivenessSignposts.beginCanvasConsumption()
-                    defer { ViewportResponsivenessSignposts.endCanvasConsumption(canvasInterval) }
-                    ViewportGridRenderer.draw(projectedGrid, chromeLayout: chromeLayout, in: &context)
-                    drawAxes(in: &context, size: size, camera: camera, basis: basis)
-                    drawPresentation(
-                        plan: presentationPlan,
-                        in: &context,
-                        layout: sceneContext.layout,
-                        sectionGeometryResolver: presentationSectionGeometryResolver
-                    )
-                    drawModel(
-                        in: &context,
-                        sceneContext: sceneContext,
-                        chromeLayout: chromeLayout,
-                        placementCellSideMeters: projectedGrid.minorStepMeters,
-                        drawsLegacyBodies: presentationScene == nil
-                    )
-                    drawReferenceLines(in: &context, size: size, camera: camera, basis: basis)
+                ZStack {
+                    Canvas { context, size in
+                        let interval = ViewportResponsivenessSignposts.signposter.beginInterval(
+                            "ViewportGridConsumption", id: ViewportResponsivenessSignposts.signposter.makeSignpostID()
+                        )
+                        defer {
+                            ViewportResponsivenessSignposts.signposter.endInterval("ViewportGridConsumption", interval)
+                        }
+                        ViewportGridRenderer.draw(projectedGrid, chromeLayout: chromeLayout, in: &context)
+                        drawAxes(in: &context, size: size, camera: camera, basis: basis)
+                    }
+                    if let presentationSurface, let presentationScene {
+                        ViewportSurfaceView(
+                            renderer: presentationSurface,
+                            layout: sceneContext.layout,
+                            interaction: presentationInteractionStateResolver,
+                            sectionPlane: sectionClippingPlan == nil ? nil : sectionAnalysis?.plane,
+                            retainedSide: sectionClippingPlan?.retainedSide ?? .front,
+                            sectionTolerance: sectionAnalysis?.toleranceMeters ?? 0,
+                            onDrawResult: { error in
+                                guard presentationPlanCache.surface(for: presentationScene) === presentationSurface else { return }
+                                surfaceFailure = error.map { (ObjectIdentifier(presentationSurface), $0) }
+                            }
+                        )
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                    }
+                    Canvas { context, size in
+                        let canvasInterval = ViewportResponsivenessSignposts.beginCanvasConsumption()
+                        defer { ViewportResponsivenessSignposts.endCanvasConsumption(canvasInterval) }
+                        drawModel(
+                            in: &context,
+                            sceneContext: sceneContext,
+                            chromeLayout: chromeLayout,
+                            placementCellSideMeters: projectedGrid.minorStepMeters,
+                            drawsLegacyBodies: presentationScene == nil
+                        )
+                        drawReferenceLines(in: &context, size: size, camera: camera, basis: basis)
+                    }
                 }
                 .background(ViewportTheme.background)
                 .id(renderInvalidation)
@@ -565,7 +583,10 @@ public struct Viewport: View {
                     )
                 }
                 .overlay(alignment: .topTrailing) {
-                    presentationFailureOverlay(error: presentationFailure)
+                    presentationFailureOverlay(
+                        error: presentationFailure,
+                        previewFailureMessage: previewEvaluationCache.failureMessage(for: dragPreviewRevision)
+                    )
                 }
                 .overlay {
                     canvasDragPlaceholderOverlay(basis: basis)
@@ -691,6 +712,7 @@ public struct Viewport: View {
                 refreshPlacementHighlight(size: proxy.size)
             }
             .task(id: presentationScene?.snapshotID) {
+                surfaceFailure = nil
                 guard let presentationScene else {
                     presentationPlanCache.teardown()
                     return
@@ -700,6 +722,7 @@ public struct Viewport: View {
             .onDisappear {
                 previewEvaluationCache.clear()
                 presentationPlanCache.teardown()
+                surfaceFailure = nil
             }
             .onAppear {
                 if let projectionRequest {
@@ -1351,88 +1374,6 @@ public struct Viewport: View {
         )
     }
 
-    private func drawPresentation(
-        plan: MeshSourcePresentationRenderPlan?,
-        in context: inout GraphicsContext,
-        layout: ViewportLayout,
-        sectionGeometryResolver: MeshSourcePresentationSectionGeometryResolver?
-    ) {
-        guard let plan else {
-            return
-        }
-        var accumulator = ViewportPresentationBatchAccumulator()
-        // Reused across occurrences and triangles so one draw allocates a
-        // bounded number of buffers rather than one per polygon.
-        var projectedPositions: [CGPoint] = []
-        var polygonPoints: [CGPoint] = []
-        polygonPoints.reserveCapacity(4)
-
-        plan.forEachOccurrence { occurrence in
-            // Interaction state belongs to the occurrence, so it is resolved
-            // once here rather than once per triangle.
-            let interactionState = presentationInteractionStateResolver.state(
-                for: occurrence.occurrenceID
-            )
-            if let sectionGeometryResolver {
-                // Clipping produces points the plan does not retain, so a
-                // clipped draw stays per-triangle. It still accumulates into
-                // the same bounded set of batches.
-                for index in 0..<occurrence.triangleCount {
-                    guard let polygon = sectionGeometryResolver.polygon(
-                        for: occurrence.triangle(at: index)
-                    ) else {
-                        continue
-                    }
-                    polygonPoints.removeAll(keepingCapacity: true)
-                    polygonPoints.append(layout.project(polygon.first))
-                    polygonPoints.append(layout.project(polygon.second))
-                    polygonPoints.append(layout.project(polygon.third))
-                    if let fourth = polygon.fourth {
-                        polygonPoints.append(layout.project(fourth))
-                    }
-                    accumulator.append(polygonPoints, state: interactionState)
-                }
-                return
-            }
-
-            // Each retained position is projected exactly once, then indexed
-            // per triangle, so a shared vertex is not reprojected.
-            projectedPositions.removeAll(keepingCapacity: true)
-            projectedPositions.reserveCapacity(occurrence.positions.count)
-            for position in occurrence.positions {
-                projectedPositions.append(layout.project(point3D(position)))
-            }
-            for index in 0..<occurrence.triangleCount {
-                let indices = occurrence.positionIndices(at: index)
-                polygonPoints.removeAll(keepingCapacity: true)
-                polygonPoints.append(projectedPositions[indices.first])
-                polygonPoints.append(projectedPositions[indices.second])
-                polygonPoints.append(projectedPositions[indices.third])
-                accumulator.append(polygonPoints, state: interactionState)
-            }
-        }
-
-        accumulator.forEachBatch { interactionState, path in
-            let color: Color
-            switch interactionState {
-            case .normal:
-                color = ViewportTheme.bodySurface
-            case .hovered:
-                color = ViewportTheme.hover
-            case .selected:
-                color = ViewportTheme.selection
-            }
-            context.fill(
-                path,
-                with: .color(color.opacity(interactionState == .normal ? 0.24 : 0.34))
-            )
-            context.stroke(
-                path,
-                with: .color(color.opacity(interactionState == .normal ? 0.30 : 0.74)),
-                lineWidth: interactionState == .normal ? 0.7 : 1.1
-            )
-        }
-    }
 
     private func presentationSectionGeometryResolver(
         sceneKey: ViewportSceneSnapshotKey? = nil
@@ -1467,7 +1408,7 @@ public struct Viewport: View {
         guard let presentationScene else {
             return nil
         }
-        guard let plan = presentationPlanCache.plan(for: presentationScene) else {
+        guard let plan = currentPresentationPlan(for: presentationScene) else {
             return nil
         }
         return MeshSourcePresentationScreenHitTester().occurrenceID(
@@ -1485,7 +1426,7 @@ public struct Viewport: View {
         guard let presentationScene else {
             return []
         }
-        guard let plan = presentationPlanCache.plan(for: presentationScene) else {
+        guard let plan = currentPresentationPlan(for: presentationScene) else {
             return []
         }
         return MeshSourcePresentationScreenHitTester().occurrenceIDs(
@@ -1511,20 +1452,32 @@ public struct Viewport: View {
         )
     }
 
+    private func presentationFrameFailure(for scene: UniversalViewportScene) -> MeshSourcePresentationRenderError? {
+        guard let renderer = presentationPlanCache.surface(for: scene),
+              surfaceFailure?.rendererID == ObjectIdentifier(renderer) else { return nil }
+        return surfaceFailure?.error
+    }
+
+    private func currentPresentationPlan(for scene: UniversalViewportScene) -> MeshSourcePresentationRenderPlan? {
+        guard presentationFrameFailure(for: scene) == nil else { return nil }
+        return presentationPlanCache.plan(for: scene)
+    }
+
     @ViewBuilder
     private func presentationFailureOverlay(
-        error: MeshSourcePresentationRenderError?
+        error: MeshSourcePresentationRenderError?,
+        previewFailureMessage: String?
     ) -> some View {
-        if let error {
-            Text(error.localizedDescription)
+        if let message = error?.localizedDescription ?? previewFailureMessage {
+            Text(message)
                 .font(.caption)
                 .foregroundStyle(Color.red)
                 .padding(8.0)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8.0))
                 .padding(12.0)
-                .accessibilityIdentifier("CanvasPresentationFailure")
-                .accessibilityLabel("Presentation geometry unavailable")
-                .accessibilityValue(error.localizedDescription)
+                .accessibilityIdentifier(error == nil ? "CanvasPreviewFailure" : "CanvasPresentationFailure")
+                .accessibilityLabel(error == nil ? "Preview geometry unavailable" : "Presentation geometry unavailable")
+                .accessibilityValue(message)
                 .allowsHitTesting(false)
         }
     }
@@ -1604,9 +1557,14 @@ public struct Viewport: View {
             )
         }
 
-        if drawsLegacyBodies || dragPreviewDocument != nil || editedBodies.isEmpty == false {
+        if drawsLegacyBodies || rendersDragPreviewDocument || editedBodies.isEmpty == false {
             for item in scene.items {
-                if case .body = item.kind {
+                if case .body = item.kind,
+                   drawsLegacyBodies || Self.drawsTransientBody(
+                    sceneNodeID: item.sceneNodeID,
+                    previewSceneNodeID: rendersDragPreviewDocument ? dragPreviewSceneNodeID : nil,
+                    isEdited: editedBodies[item.featureID] != nil
+                   ) {
                     drawBody(
                         item,
                         in: &context,
@@ -4987,6 +4945,14 @@ public struct Viewport: View {
             }
         }
         return path
+    }
+
+    /// Published surfaces belong exclusively to Metal. Only explicit edited
+    /// bodies and the requested preview target may add a transient Canvas ghost.
+    static func drawsTransientBody(
+        sceneNodeID: SceneNodeID?, previewSceneNodeID: SceneNodeID?, isEdited: Bool
+    ) -> Bool {
+        isEdited || (previewSceneNodeID != nil && sceneNodeID == previewSceneNodeID)
     }
 
     private func drawBody(
@@ -10144,15 +10110,17 @@ public struct Viewport: View {
     }
 
     private func clearDragPreviewDocument() {
+        dragPreviewSceneNodeID = nil
         if dragPreviewDocument != nil {
             dragPreviewDocument = nil
             advanceDragPreviewRevision()
-            previewEvaluationCache.clear()
         }
+        previewEvaluationCache.clear()
     }
 
-    private func setDragPreviewDocument(_ previewDocument: DesignDocument) {
+    private func setDragPreviewDocument(_ previewDocument: DesignDocument, target: SelectionTarget) {
         dragPreviewDocument = previewDocument
+        dragPreviewSceneNodeID = target.sceneNodeID
         advanceDragPreviewRevision()
         guard let documentGeneration else {
             previewEvaluationCache.clear()
@@ -12131,10 +12099,12 @@ public struct Viewport: View {
                 ).previewDocument(
                     for: request,
                     in: document
-                )
+                ),
+                target: request.target
             )
         } catch {
             clearDragPreviewDocument()
+            previewEvaluationCache.fail(revision: dragPreviewRevision, message: error.localizedDescription)
         }
     }
 
@@ -12993,7 +12963,7 @@ public struct Viewport: View {
         )
         var presentationOccurrenceID: SceneOccurrenceID?
         if let presentationScene {
-            guard let plan = presentationPlanCache.plan(for: presentationScene) else {
+            guard let plan = currentPresentationPlan(for: presentationScene) else {
                 // A scene that is still preparing, or one whose plan failed,
                 // picks nothing rather than blocking on a synchronous build.
                 return
