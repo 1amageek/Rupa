@@ -7,6 +7,7 @@ public struct ProjectSourcePreviewResult: Sendable {
     public let base: ProjectPreviewBaseCoordinate
     public let proposedTransactionRevision: DocumentTransactionRevision
     public let proposedDocumentGeneration: DocumentGeneration
+    public let renderPayload: ProjectSourcePreviewRenderPayload
     public let wouldMutate: Bool
     public let commandResults: [CommandExecutionResult]
     public let geometrySourceCommandResults: [GeometrySourceCommandResult]
@@ -18,6 +19,7 @@ public struct ProjectSourcePreviewResult: Sendable {
         base: ProjectPreviewBaseCoordinate,
         proposedTransactionRevision: DocumentTransactionRevision,
         proposedDocumentGeneration: DocumentGeneration,
+        renderPayload: ProjectSourcePreviewRenderPayload,
         wouldMutate: Bool,
         commandResults: [CommandExecutionResult],
         geometrySourceCommandResults: [GeometrySourceCommandResult],
@@ -28,6 +30,7 @@ public struct ProjectSourcePreviewResult: Sendable {
         self.base = base
         self.proposedTransactionRevision = proposedTransactionRevision
         self.proposedDocumentGeneration = proposedDocumentGeneration
+        self.renderPayload = renderPayload
         self.wouldMutate = wouldMutate
         self.commandResults = commandResults
         self.geometrySourceCommandResults = geometrySourceCommandResults

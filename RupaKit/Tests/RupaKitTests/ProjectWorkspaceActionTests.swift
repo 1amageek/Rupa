@@ -1,6 +1,8 @@
+import Foundation
 import RupaAutomation
 import RupaCore
 import RupaCoreTypes
+import RupaEvaluation
 import RupaProject
 import Synchronization
 import Testing
@@ -174,6 +176,13 @@ func projectWorkspaceSourcePreviewReturnsProposalWithoutPublishing() async throw
     #expect(preview.base.publicationSequence == snapshot.publicationSequence)
     #expect(preview.proposedTransactionRevision.value == snapshot.transactionRevision.value + 1)
     #expect(preview.proposedDocumentGeneration.value == snapshot.documentGeneration.value + 1)
+    #expect(preview.renderPayload.document.cadDocument.metadata.name == "After")
+    #expect(preview.renderPayload.evaluationSource.id == snapshot.projectID)
+    #expect(
+        preview.renderPayload.evaluation.id.sourceRevision
+            == preview.proposedTransactionRevision
+    )
+    #expect(preview.renderPayload.evaluation.id.purpose == .presentation)
     #expect(preview.wouldMutate)
     #expect(preview.commandResults.count == 1)
     #expect(!preview.diagnostics.isEmpty)
@@ -184,6 +193,208 @@ func projectWorkspaceSourcePreviewReturnsProposalWithoutPublishing() async throw
     #expect(retained.evaluation.id == initial.evaluation.id)
     #expect(published.document.name == "Before")
     #expect(published.publicationSequence == snapshot.publicationSequence)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspaceSourcePreviewRenderPayloadMatchesStagedCandidate() async throws {
+    let controller = try makeActionController(document: .empty(named: "Before"))
+    let workspace = await ProjectWorkspace(project: controller)
+    let initial = try await workspace.evaluate()
+    let transaction = try ProjectSourceTransaction(
+        name: "preview.render.create",
+        commands: [
+            .createExtrudedRectangle(
+                name: "Preview Body",
+                plane: .xy,
+                width: .length(1, .meter),
+                height: .length(1, .meter),
+                depth: .length(1, .meter),
+                direction: .normal
+            ),
+        ],
+        expectedProjectID: initial.projectID,
+        expectedTransactionRevision: initial.transactionRevision,
+        expectedPublicationSequence: initial.publicationSequence
+    )
+
+    let payload = try await workspace.previewRenderPayload(transaction)
+    let item = try #require(payload.presentationScene.items.first)
+    let sceneNodeID = try #require(
+        payload.presentationSceneNodeIDByOccurrenceID[item.id]
+    )
+    let source = try DesignDocumentProjectBridge().sourceModel(for: payload.document)
+    let sourceOccurrence = try #require(source.occurrences[item.id])
+
+    #expect(payload.document.cadDocument.metadata.name == "Before")
+    #expect(payload.presentationScene.items.count == 1)
+    #expect(
+        payload.presentationScene.snapshotID.sourceRevision
+            == DocumentTransactionRevision(initial.transactionRevision.value + 1)
+    )
+    #expect(payload.presentationScene.snapshotID.purpose == .presentation)
+    #expect(source.id == initial.projectID)
+    #expect(sourceOccurrence.definitionID == item.definitionID)
+    let sceneNode = try #require(payload.document.productMetadata.sceneNodes[sceneNodeID])
+    let presentation = try #require(
+        sceneNode.object?.geometryRepresentations.representation(for: .presentation)
+    )
+    #expect(presentation.id == item.representationID)
+    #expect(presentation.source == item.reference)
+
+    let retained = try await controller.currentState()
+    let published = try #require(await workspace.view)
+    #expect(retained.transactionRevision == initial.transactionRevision)
+    #expect(retained.publicationSequence == initial.publicationSequence)
+    #expect(published.transactionRevision == initial.transactionRevision)
+    #expect(published.publicationSequence == initial.publicationSequence)
+    #expect(published.viewport.items.isEmpty)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspaceSourcePreviewRenderPayloadFailureDoesNotPublish() async throws {
+    let controller = try makeActionController(document: .empty(named: "Before"))
+    let workspace = await ProjectWorkspace(
+        project: controller,
+        previewRenderPayloadBuilder: RejectingProjectPreviewRenderPayloadBuilder()
+    )
+    let initial = try await workspace.evaluate()
+    let transaction = try ProjectSourceTransaction(
+        name: "preview.render.failure",
+        commands: [.renameDocument(name: "Candidate")],
+        expectedProjectID: initial.projectID,
+        expectedTransactionRevision: initial.transactionRevision,
+        expectedPublicationSequence: initial.publicationSequence
+    )
+
+    var didThrow = false
+    do {
+        _ = try await workspace.previewRenderPayload(transaction)
+    } catch {
+        didThrow = true
+    }
+
+    let retained = try await controller.currentState()
+    let published = try #require(await workspace.view)
+    #expect(didThrow)
+    #expect(retained.document.cadDocument.metadata.name == "Before")
+    #expect(retained.transactionRevision == initial.transactionRevision)
+    #expect(retained.publicationSequence == initial.publicationSequence)
+    #expect(published.document.name == "Before")
+    #expect(published.publicationSequence == initial.publicationSequence)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspaceSourcePreviewRenderPayloadRejectsStaleReplacement() async throws {
+    let gate = ProjectPreviewRenderPayloadGate()
+    defer { gate.release() }
+    let controller = try makeActionController(document: .empty(named: "Before"))
+    let workspace = await ProjectWorkspace(
+        project: controller,
+        previewRenderPayloadBuilder: BlockingProjectPreviewRenderPayloadBuilder(
+            gate: gate
+        )
+    )
+    let initial = try await workspace.evaluate()
+    let previewTransaction = try ProjectSourceTransaction(
+        name: "preview.render.stale",
+        commands: [.renameDocument(name: "Preview")],
+        expectedProjectID: initial.projectID,
+        expectedTransactionRevision: initial.transactionRevision,
+        expectedPublicationSequence: initial.publicationSequence
+    )
+    let preview = Task {
+        try await workspace.previewRenderPayload(previewTransaction)
+    }
+    while !gate.didStart {
+        try await Task.sleep(for: .milliseconds(1))
+    }
+
+    let committed = try await workspace.commit(
+        ProjectSourceTransaction(
+            name: "preview.render.replacement",
+            commands: [.renameDocument(name: "Committed")],
+            expectedProjectID: initial.projectID,
+            expectedTransactionRevision: initial.transactionRevision,
+            expectedPublicationSequence: initial.publicationSequence
+        )
+    )
+    gate.release()
+
+    var didReject = false
+    do {
+        _ = try await preview.value
+    } catch {
+        didReject = true
+    }
+    #expect(didReject)
+    #expect(committed.document.name == "Committed")
+    #expect(await workspace.view?.document.name == "Committed")
+    #expect(await workspace.view?.publicationSequence == committed.publicationSequence)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspaceSourcePreviewRenderPayloadCancellationDoesNotPublish() async throws {
+    let gate = ProjectPreviewRenderPayloadGate()
+    defer { gate.release() }
+    let controller = try makeActionController(document: .empty(named: "Before"))
+    let workspace = await ProjectWorkspace(
+        project: controller,
+        previewRenderPayloadBuilder: BlockingProjectPreviewRenderPayloadBuilder(
+            gate: gate
+        )
+    )
+    let initial = try await workspace.evaluate()
+    let transaction = try ProjectSourceTransaction(
+        name: "preview.render.cancel",
+        commands: [.renameDocument(name: "Cancelled")],
+        expectedProjectID: initial.projectID,
+        expectedTransactionRevision: initial.transactionRevision,
+        expectedPublicationSequence: initial.publicationSequence
+    )
+    let preview = Task {
+        try await workspace.previewRenderPayload(transaction)
+    }
+    while !gate.didStart {
+        try await Task.sleep(for: .milliseconds(1))
+    }
+    preview.cancel()
+    gate.release()
+
+    var wasCancelled = false
+    do {
+        _ = try await preview.value
+    } catch is CancellationError {
+        wasCancelled = true
+    }
+    #expect(wasCancelled)
+    #expect(await workspace.view?.document.name == "Before")
+    #expect(await workspace.view?.publicationSequence == initial.publicationSequence)
+    #expect(await controller.currentTransactionRevision() == initial.transactionRevision)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspaceSourcePreviewRenderPayloadEvaluatesExactlyOnce() async throws {
+    let probe = ProjectPreviewEvaluationProbe()
+    let controller = try ProjectController(
+        document: .empty(named: "Before"),
+        evaluatorPreparer: CountingProjectPreviewEvaluatorPreparer(probe: probe),
+        projector: DesignDocumentProjectBridge()
+    )
+    let workspace = await ProjectWorkspace(project: controller)
+    let initial = try await workspace.evaluate()
+    let countBeforePreview = probe.evaluationCount
+    let transaction = try ProjectSourceTransaction(
+        name: "preview.render.once",
+        commands: [.renameDocument(name: "Candidate")],
+        expectedProjectID: initial.projectID,
+        expectedTransactionRevision: initial.transactionRevision,
+        expectedPublicationSequence: initial.publicationSequence
+    )
+
+    _ = try await workspace.previewRenderPayload(transaction)
+
+    #expect(probe.evaluationCount == countBeforePreview + 1)
+    #expect(await controller.currentTransactionRevision() == initial.transactionRevision)
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -413,6 +624,106 @@ private final class NthFailingProjectViewSnapshotBuilder: ProjectViewSnapshotBui
     }
 }
 
+private struct RejectingProjectPreviewRenderPayloadBuilder:
+    ProjectPreviewRenderPayloadBuilding,
+    Sendable
+{
+    func build(
+        from _: ProjectSourcePreviewRenderPayload
+    ) throws -> ProjectPreviewRenderPayload {
+        throw ProjectWorkspaceActionTestError.previewRenderProjectionFailed
+    }
+}
+
+private final class ProjectPreviewRenderPayloadGate: Sendable {
+    private struct State {
+        var didStart = false
+        var isReleased = false
+    }
+
+    private let state = Mutex(State())
+
+    var didStart: Bool {
+        state.withLock { $0.didStart }
+    }
+
+    func markStarted() {
+        state.withLock { $0.didStart = true }
+    }
+
+    func waitUntilReleased() {
+        while !state.withLock({ $0.isReleased }) {
+            Thread.sleep(forTimeInterval: 0.001)
+        }
+    }
+
+    func release() {
+        state.withLock { $0.isReleased = true }
+    }
+}
+
+private struct BlockingProjectPreviewRenderPayloadBuilder:
+    ProjectPreviewRenderPayloadBuilding,
+    Sendable
+{
+    let gate: ProjectPreviewRenderPayloadGate
+
+    func build(
+        from payload: ProjectSourcePreviewRenderPayload
+    ) throws -> ProjectPreviewRenderPayload {
+        gate.markStarted()
+        gate.waitUntilReleased()
+        return try ProjectViewSnapshotBuilder().build(from: payload)
+    }
+}
+
+private final class ProjectPreviewEvaluationProbe: Sendable {
+    private let count = Mutex(0)
+
+    var evaluationCount: Int {
+        count.withLock { $0 }
+    }
+
+    func recordEvaluation() {
+        count.withLock { $0 += 1 }
+    }
+}
+
+private struct CountingProjectPreviewEvaluatorPreparer: ProjectEvaluatorPreparing {
+    let probe: ProjectPreviewEvaluationProbe
+    private let base = DefaultDesignDocumentProjectEvaluatorFactory()
+
+    func makeEvaluator(
+        for document: DesignDocument,
+        reusing currentEvaluation: DocumentEvaluationContext?
+    ) throws -> any ProjectEvaluating {
+        let evaluator = try base.makeEvaluator(
+            for: document,
+            reusing: currentEvaluation
+        )
+        return CountingProjectPreviewEvaluator(base: evaluator, probe: probe)
+    }
+}
+
+private struct CountingProjectPreviewEvaluator: ProjectEvaluating {
+    let base: any ProjectEvaluating
+    let probe: ProjectPreviewEvaluationProbe
+
+    func evaluate(
+        project: ProjectSourceModel,
+        purpose: GeometryRepresentationPurpose,
+        revision: DocumentTransactionRevision
+    ) throws -> EvaluatedProjectSnapshot {
+        probe.recordEvaluation()
+        return try base.evaluate(
+            project: project,
+            purpose: purpose,
+            revision: revision
+        )
+    }
+}
+
 private enum ProjectWorkspaceActionTestError: Error {
     case viewProjectionFailed
+    case previewRenderProjectionFailed
 }

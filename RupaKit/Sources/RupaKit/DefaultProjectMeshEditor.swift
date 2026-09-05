@@ -80,6 +80,49 @@ public struct DefaultProjectMeshEditor: ProjectMeshEditing, Sendable {
         }
     }
 
+    /// Stages one Mesh edit and projects its existing candidate evaluation into
+    /// transient render inputs without publishing the edit or a view.
+    public func previewRenderPayload(
+        _ request: ProjectMeshEditRequest,
+        operationGuard: @escaping ProjectOperationGuard = {}
+    ) async throws -> ProjectPreviewRenderPayload {
+        do {
+            try ProjectMeshEditSupport.validate(request)
+            _ = try await workspace.withValidatedAuthority(
+                from: request.snapshot,
+                operationGuard: operationGuard
+            ) {
+                true
+            }
+            let transaction = try ProjectMeshEditSupport.transaction(for: request)
+            let payload = try await workspace.previewRenderPayload(
+                transaction,
+                operationGuard: operationGuard
+            )
+            _ = try await workspace.withValidatedAuthority(
+                from: request.snapshot,
+                operationGuard: operationGuard
+            ) {
+                true
+            }
+            return payload
+        } catch let error as ProjectMeshEditError {
+            throw error
+        } catch is CancellationError {
+            throw ProjectMeshEditError(
+                code: .cancelled,
+                message: "The Mesh render preview was cancelled."
+            )
+        } catch let error as ProjectControllerError {
+            throw ProjectMeshEditSupport.editError(from: error)
+        } catch {
+            throw ProjectMeshEditError(
+                code: .resultMismatch,
+                message: "The Mesh render preview failed: \(error)."
+            )
+        }
+    }
+
     public func commit(
         _ request: ProjectMeshEditRequest,
         operationGuard: @escaping ProjectOperationGuard = {}

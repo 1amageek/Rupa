@@ -29,6 +29,9 @@ Parent: [RupaKit package design](../../DESIGN.md). Children: none.
   isolated Core source-command group;
 - returning exact `ProjectStateSnapshot` and prepared-program receipts for
   workspace projection;
+- returning an immutable, non-authoritative render payload for a successful
+  source preview, using the canonical reconstructed candidate document and the
+  presentation evaluation already produced by that staging operation;
 - exposing `ProjectController` Make Editable preparation through
   `ProjectOperating` so RupaKit can use the same project authority without
   downcasting to the concrete actor.
@@ -71,7 +74,7 @@ preview/commit over it.
 | [system design](../../../DESIGN.md) | system parent | Atomic inspect/preview/commit flow | Defines the external behavior. | Project remains the only publication owner. |
 | [RupaCore design](../RupaCore/DESIGN.md) | depends on | Staged source authority result | Supplies changed DesignDocument and Mesh receipt. | Core result is not public until Project commit succeeds. |
 | [RupaEvaluation design](../RupaEvaluation/DESIGN.md) | depends on | Purpose-bound bounded evaluation | Produces one complete admitted snapshot or typed failure. | Project selects purpose but not provider fidelity or limits. |
-| [RupaRendering design](../RupaRendering/DESIGN.md) | used downstream | Postpublication derived plan | Consumes the published viewport scene asynchronously. | A render-plan result cannot commit or roll back Project state. |
+| [RupaRendering design](../RupaRendering/DESIGN.md) | used downstream | Published and explicitly supplied immutable viewport scenes | Consumes either the published viewport scene or a caller-owned transient preview scene asynchronously. | A render-plan result cannot commit or roll back Project state. |
 | [State and project contract](../../../Rupa/STATE_AND_PROJECT_CONTRACT.md) | depends on | Revision, actor, history, cancellation, exact view | Defines project lifecycle and rollback. | A post-commit view projection failure follows the existing no-retry contract. |
 | [CAD/Mesh responsibility](../../../Rupa/CAD_MESH_RESPONSIBILITY_CONTRACT.md) | depends on | Separated source owners and derived projection role | Defines package/evaluation authority. | Never persist `ProjectSourceModel` as source. |
 | [RupaProject tests](../../Tests/RupaProjectTests) | verification owner | Controller transaction tests | Owns exact coordinate and rollback proof. | Focused tests must exercise the controller path, not only value construction. |
@@ -106,7 +109,12 @@ the isolated source staging path and returns an immutable result to Core/Project
    publishes source, package, evaluation, history, or view state. Every staged
    evaluation uses a transaction-local cache seeded only from the immutable
    published evaluation, so preview and abandoned candidates cannot affect a
-   later transaction at the same proposed revision.
+   later transaction at the same proposed revision. A successful source
+   preview may return one immutable `ProjectSourcePreviewRenderPayload`
+   containing the canonical reconstructed candidate document, its projected
+   source model, and that same presentation evaluation. The payload has no
+   publication sequence, workspace state, package authority, or
+   `ProjectStateSnapshot` identity and is discarded with the preview result.
 3. Commit revalidates the generic project coordinates and executes one source
    transaction containing the already-lowered source command. It does not
    promote a preview result by identity alone.
@@ -149,11 +157,12 @@ the isolated source staging path and returns an immutable result to Core/Project
     purpose-selected bounded evaluation are all staged before publication. An
     over-budget, malformed, cancelled, or failed evaluation publishes none of
     them and returns typed failure.
-13. Render-plan construction starts only from the published immutable viewport
-    scene. It is a postpublication derived read owned downstream; its failure or
-    cancellation cannot mutate, roll back, republish, or dirty exact project
-    source/package/evaluation state.
-
+13. Render-plan construction from a committed operation starts only from the
+    published immutable viewport scene. A source-preview caller may instead
+    supply the preview's immutable candidate document and presentation scene to
+    downstream rendering without promoting either value to project authority.
+    Both paths are derived reads; failure or cancellation cannot mutate, roll
+    back, republish, or dirty exact project source/package/evaluation state.
 14. History source commands, including suppression, dependency-safe feature
     reorder, and parameter edits, enter through `ProjectSourceTransaction` and
     the existing isolated `EditorSession` source group. All commands in one
@@ -187,7 +196,8 @@ sequenceDiagram
     S->>K: encode separated sources
     S->>E: prepare requested purpose and build bounded evaluation
     alt preview
-        P-->>W: staged result, no publication
+        P-->>W: staged result + transient render payload, no publication
+        W-->>W: scene builder projects supplied payload without changing view
     else commit and all guards pass
         P->>P: publish session/package/evaluation together
         P-->>W: exact committed state
@@ -195,7 +205,7 @@ sequenceDiagram
         P->>P: discard staged values
         P-->>W: typed failure
     end
-    Note over W,C: History commands use the same source stage; reorder is admitted only after graph dependency validation
+    Note over W,S: History commands use the same source stage; reorder is admitted only after graph dependency validation
     Note over P,E: render-plan preparation is not part of this transaction
 ```
 
@@ -215,7 +225,9 @@ sequenceDiagram
 - `ProjectStateSnapshot` is an immutable result. `ProjectWorkspace` converts it
   to a package-free exact view and owns observable replacement.
 - Preview candidates are discarded after response and are never source
-  authority.
+  authority. The render payload is the only candidate value crossing the
+  module boundary; it is derived from the already reconstructed/evaluated
+  candidate and never starts a second evaluation or a retained project cache.
 - Render-plan tasks and their derived buffers are never retained by
   `ProjectController`; the viewport cache owns them after publication.
 
@@ -266,7 +278,7 @@ T09-C and T09-IV own the project proof:
 |---|---|
 | Generic coordinates | Prepared programs reject project ID, document generation, transaction revision, publication sequence, and workspace revision mismatches at entry, after asynchronous prevalidation, and before preview return/publication; Mesh handle/view checks belong to RupaKit. |
 | Prepared program | The complete program executes inside one source-command group, yields one exact immutable receipt, and a request-scoped diagnostic/telemetry ceiling failure publishes nothing. |
-| Preview | Preview leaves source, package, evaluation, history, and visible view unchanged. |
+| Preview | Preview leaves source, package, evaluation, history, and visible view unchanged; its render payload matches the staged candidate source/evaluation and is absent on any failed, cancelled, or stale preview. |
 | Atomic commit | Prepublication Core/package/projection/evaluation failures leave every published value unchanged. |
 | Purpose and resource policy | Modeling/presentation requests reach evaluator preparation unchanged; aggregate boundary-plus-one, overflow, and cancellation publish nothing. |
 | Derived render isolation | Render-plan failure/cancellation after publication leaves exact source, package, evaluation, coordinates, history, and dirty state unchanged. |

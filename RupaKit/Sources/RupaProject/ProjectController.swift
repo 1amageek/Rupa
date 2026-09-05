@@ -479,6 +479,11 @@ public actor ProjectController: ProjectOperating {
             ),
             proposedTransactionRevision: staged.source.proposedTransactionRevision,
             proposedDocumentGeneration: staged.source.proposedGeneration,
+            renderPayload: ProjectSourcePreviewRenderPayload(
+                document: staged.document,
+                evaluationSource: staged.evaluationSource,
+                evaluation: staged.evaluation
+            ),
             wouldMutate: staged.source.wouldMutate,
             commandResults: staged.source.value.commandResults,
             geometrySourceCommandResults: staged.source.value.geometrySourceCommandResults,
@@ -693,6 +698,7 @@ public actor ProjectController: ProjectOperating {
             basePublicationSequence: basePublicationSequence,
             source: prepared,
             package: stagedPackage,
+            document: reconstructed.document,
             evaluationSource: reconstructed.evaluationSource,
             evaluation: stagedEvaluation
         )
@@ -2120,6 +2126,7 @@ private struct PreparedProjectSourceMutation: Sendable {
     let basePublicationSequence: UInt64
     let source: PreparedEditorSourceTransaction<StagedCommandResults>
     let package: ProjectPackageDocument
+    let document: DesignDocument
     let evaluationSource: ProjectSourceModel
     let evaluation: EvaluatedProjectSnapshot
 }

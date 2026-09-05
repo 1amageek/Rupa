@@ -1,6 +1,11 @@
 import RupaProject
 
 public protocol ProjectMeshEditing: Sendable {
+    func previewRenderPayload(
+        _ request: ProjectMeshEditRequest,
+        operationGuard: @escaping ProjectOperationGuard
+    ) async throws -> ProjectPreviewRenderPayload
+
     func preview(
         _ request: ProjectMeshEditRequest,
         operationGuard: @escaping ProjectOperationGuard

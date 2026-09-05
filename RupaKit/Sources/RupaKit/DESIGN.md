@@ -31,6 +31,12 @@ Parent: [RupaKit package design](../../DESIGN.md). Children: none.
 - response-wide read budgets charged before output materialization;
 - preview and commit request/result contracts over the existing
   `ProjectController`/`ProjectOperating` path;
+- projection of a successful source preview's immutable candidate render
+  payload through the existing viewport scene builder without replacing the
+  published `ProjectViewSnapshot`;
+- adaptation of a validated `ProjectMeshEditRequest` to that same transient
+  render-preview route, preserving the request's exact handle and snapshot
+  authority before staging and after projection;
 - lowering a Mesh edit request to a Core source command carried by the existing
   `ProjectSourceTransaction`;
 - full `ProjectViewSnapshot` validation before and after reads, plus
@@ -117,7 +123,7 @@ boundary; it does not add another factory, coordinator, or workspace.
 | [RupaProject design](../RupaProject/DESIGN.md) | depends on | Project staging and publication | Provides the actor-backed authority port. | Use existing `ProjectOperating`; no second controller. |
 | [RupaEvaluation design](../RupaEvaluation/DESIGN.md) | composes | Purpose-bound aggregate evaluation limits | Receives product policy through the existing preparer seam. | Product policy cannot widen provider or kernel hard limits. |
 | [RupaCADIntegration design](../RupaCADIntegration/DESIGN.md) | composes | Purpose-selected CAD provider configuration | Maps the selected policy into bounded Swift-CAD evaluation. | Exact B-rep reuse remains separate from Mesh artifact reuse. |
-| [RupaRendering design](../RupaRendering/DESIGN.md) | used downstream | Postpublication derived render plan | Consumes the immutable viewport scene. | Render failure cannot change project publication. |
+| [RupaRendering design](../RupaRendering/DESIGN.md) | used downstream | Published or explicitly supplied immutable viewport scene | Consumes the immutable scene selected by the caller. | Render failure cannot change project publication or publish a preview. |
 | [RupaProjectAccess](../RupaProjectAccess/DESIGN.md) | used by | transport-neutral live target/session intent | Composes live access above the App-owned workspace. | Access adapters cannot call Core or edit package entries directly. |
 | [RupaCore design](../RupaCore/DESIGN.md) | used through Project | Source ID/content identity and shared asset rules | Defines what a Mesh handle targets. | Scene/representation context is navigation only. |
 | [RupaGeometry design](../RupaGeometry/DESIGN.md) | used through Core | Plan/executor/budget/receipt | Defines request semantics without transport knowledge. | Do not expose internal mutable buffers. |
@@ -141,7 +147,8 @@ flowchart TD
     Preview --> Lower["Lower to Core command + ProjectSourceTransaction"]
     Commit --> Lower
     Lower --> Project["Existing ProjectWorkspace.preview/perform"]
-    Project --> Result["No publication + preview receipt"]
+    Project --> Result["No publication + preview receipt/payload"]
+    Result --> PreviewScene["Existing scene builder -> transient render input"]
     Project --> Result2["Atomic commit + exact new view + new handle"]
 ```
 
@@ -218,8 +225,16 @@ flowchart LR
    receives only generic project ID, transaction revision, and publication
    coordinates.
 9. Preview requires the same exact handle and full snapshot coordinates, stages
-   one plan, and returns no publication. Its result cannot be promoted as source
-   authority.
+   one plan, and returns no publication. A source preview also carries one
+   immutable candidate render payload from the staged canonical document and
+   existing presentation evaluation. The workspace scene builder may project
+   that payload into a transient render input, but it never constructs a
+   `ProjectViewSnapshot`, updates `view`, publishes a revision, evaluates again,
+   or promotes the candidate as source authority. The Mesh request overload
+   validates the handle/snapshot pair, lowers the request through
+   `ProjectMeshEditSupport`, validates the exact authority before staging and
+   after projection, and delegates to the same source-preview path; it never
+   creates a second evaluator or Mesh-specific render cache.
 10. Commit requires the same exact handle and full snapshot coordinates,
    revalidates at the ProjectController boundary, and returns the exact
    committed view plus a new source handle.
@@ -239,10 +254,12 @@ flowchart LR
     one `derivedFromCAD` Authored Mesh asset/representation, optionally switches
     presentation, returns a handle bound to the exact committed view, and
     preserves the existing postcommit no-retry contract.
-16. Product visibility affects only the published project viewport. The source
-    projection and presentation evaluation retain hidden occurrences, while the
-    `ProjectViewSnapshot` filters items using Core's hierarchy-aware effective
-    visibility and preserves the complete occurrence-to-scene navigation index.
+16. Product visibility affects the published project viewport and an explicitly
+    supplied source-preview render input in the same way. The source projection
+    and presentation evaluation retain hidden occurrences, while the exact
+    snapshot and preview scene projections filter items using Core's
+    hierarchy-aware effective visibility and preserve the complete
+    occurrence-to-scene navigation index.
 17. A CADAPI-D action accepts only a fully validated, source-only compiled plan
     from the shared semantic compiler. It never accepts a wire DTO, raw
     `FeatureGraphTransaction`, or caller-owned persistent identifiers. Each
@@ -312,9 +329,18 @@ sequenceDiagram
     W->>P: revalidate coordinates/cancellation
     W-->>Caller: read result
     Caller->>W: preview or commit(plan, same handle, same view)
+    opt Mesh render preview
+        W->>W: validate handle/snapshot and lower through Mesh support
+        W->>P: exact authority pre-check
+    end
     W->>P: staged source transaction
     alt preview
         P-->>W: staged result, no publication
+        opt Mesh render preview
+            W->>W: project existing candidate payload
+            W->>P: exact authority post-check
+            W-->>Caller: transient render input only
+        end
     else commit
         P-->>W: committed state
         alt result projection and post-publication validation succeed
@@ -346,7 +372,9 @@ MainActor, and revalidates the exact view before returning.
 - A source handle and cursor are immutable values; they do not retain mutable
   workspace/session state beyond the documented source identity coordinate.
   The full snapshot remains a separate required value for every read and edit.
-- `ProjectWorkspace` owns observable view replacement on MainActor.
+- `ProjectWorkspace` owns observable published-view replacement on MainActor.
+  Its preview render method returns an invocation-local render input and never
+  mutates `view`; the scene builder owns only synchronous immutable projection.
 - `ProjectController` owns source publication, history, package, evaluation,
   and revision state.
 - Modeling and presentation policies are immutable product configuration, not
@@ -392,7 +420,8 @@ T09-C owns the following behavioral proof:
 | Bounded reads | Raw source-ID catalog order, numeric raw element-ID tie breaking including multi-digit IDs, source-buffer pagination, cursor mismatch, neighborhood graph/order, response-wide cumulative depth/scan/output/reference-unit limits, exact three-unit catalog references, and pre-materialization rejection. Multi-source catalog, late-corner page, and large neighborhood fixtures must exercise the declared scan ceiling. |
 | Record integrity | Vertex/edge/face/corner field completeness, empty bounds as `nil`, and no partial record at a limit boundary. |
 | Cancellation | Full project/generation/transaction/publication/workspace pre/post-read checks and cancellation rejection. Post-read stale proof must mutate a real authority coordinate between the two validations and demonstrate rejection by the Project authority, rather than synthesizing the stale error in a test hook. |
-| Preview | No source/package/evaluation/history/view publication. |
+| Preview | No source/package/evaluation/history/view publication; candidate geometry and visibility in the transient render input match the staged source/evaluation, and a failed/cancelled/stale request publishes no payload. |
+| Mesh render preview | A real `ProjectMeshEditRequest` is validated and lowered once; its transient scene reflects the staged Authored Mesh evaluation, exact authority is checked before and after projection, and replacement/cancellation rejects the payload without changing the published view or source. |
 | Commit | Exact-view publication, one revision/undo, new handle, shared-source routing. |
 | Post-commit behavior | View projection and every post-publication result extraction, result/view/asset/handle validation, cancellation, and coordinate revalidation failure report the exact committed coordinates with no-retry semantics; no path can surface a retryable pre-commit error after publication. |
 | Response-safe publication | Requested outputs plus diagnostic/telemetry charges are converted to a bounded projection plan before staging; boundary-plus-one publishes nothing, and every injected postpublication projection failure selects the preplanned fixed committed envelope with exact coordinates and `mustNotRetry`. |

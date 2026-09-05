@@ -17,6 +17,8 @@ public final class ProjectWorkspace: ProjectMakeEditable, ProjectMeshEditing, Pr
     @ObservationIgnored
     private let viewBuilder: any ProjectViewSnapshotBuilding
     @ObservationIgnored
+    private let previewRenderPayloadBuilder: any ProjectPreviewRenderPayloadBuilding
+    @ObservationIgnored
     private let domainResultProjector: any DomainCommandResultProjecting
     @ObservationIgnored
     private let automationBatchPlanner: any AutomationBatchPlanning
@@ -30,6 +32,8 @@ public final class ProjectWorkspace: ProjectMakeEditable, ProjectMeshEditing, Pr
     public init(
         project: any ProjectOperating,
         viewBuilder: any ProjectViewSnapshotBuilding = ProjectViewSnapshotBuilder(),
+        previewRenderPayloadBuilder: any ProjectPreviewRenderPayloadBuilding =
+            ProjectViewSnapshotBuilder(),
         domainResultProjector: any DomainCommandResultProjecting =
             DefaultDomainCommandResultProjector(),
         automationBatchPlanner: any AutomationBatchPlanning = DefaultAutomationBatchPlanner(),
@@ -38,6 +42,7 @@ public final class ProjectWorkspace: ProjectMakeEditable, ProjectMeshEditing, Pr
     ) {
         self.project = project
         self.viewBuilder = viewBuilder
+        self.previewRenderPayloadBuilder = previewRenderPayloadBuilder
         self.domainResultProjector = domainResultProjector
         self.automationBatchPlanner = automationBatchPlanner
         self.semanticResultProjector = semanticResultProjector
@@ -218,6 +223,62 @@ public final class ProjectWorkspace: ProjectMakeEditable, ProjectMeshEditing, Pr
                 )
             )
         }
+    }
+
+    /// Stages one source mutation and projects its existing candidate
+    /// evaluation into transient render inputs without publishing `view`.
+    public func previewRenderPayload(
+        _ transaction: ProjectSourceTransaction,
+        operationGuard: @escaping ProjectOperationGuard = {}
+    ) async throws -> ProjectPreviewRenderPayload {
+        let base = try currentInteractionCoordinates()
+        let preview = try await project.previewSource(
+            transaction,
+            operationGuard: operationGuard
+        )
+        try Task.checkCancellation()
+        let builder = previewRenderPayloadBuilder
+        let renderTask = Task.detached(priority: nil) {
+            try Task.checkCancellation()
+            let payload = try builder.build(from: preview.renderPayload)
+            try Task.checkCancellation()
+            return payload
+        }
+        let payload = try await withTaskCancellationHandler {
+            try await renderTask.value
+        } onCancel: {
+            renderTask.cancel()
+        }
+        try Task.checkCancellation()
+        _ = try await project.withValidatedCoordinates(
+            expectedProjectID: base.projectID,
+            expectedDocumentGeneration: base.documentGeneration,
+            expectedTransactionRevision: base.transactionRevision,
+            expectedPublicationSequence: base.publicationSequence,
+            expectedWorkspaceRevision: base.workspaceState.revision,
+            operationGuard: operationGuard
+        ) {
+            true
+        }
+        return payload
+    }
+
+    /// Projects the source branch of one workspace action into transient
+    /// render inputs. Interaction previews do not contain source geometry.
+    public func previewRenderPayload(
+        _ action: ProjectWorkspaceAction,
+        operationGuard: @escaping ProjectOperationGuard = {}
+    ) async throws -> ProjectPreviewRenderPayload {
+        guard case .source(let transaction) = action else {
+            throw ProjectWorkspaceActionError(
+                code: .actionResultMismatch,
+                message: "Only a source action can provide a candidate render payload."
+            )
+        }
+        return try await previewRenderPayload(
+            transaction,
+            operationGuard: operationGuard
+        )
     }
 
     /// Executes one previously dispatched domain plan through the project authority.

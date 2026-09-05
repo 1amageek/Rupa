@@ -1,8 +1,14 @@
 import RupaCoreTypes
+import RupaEvaluation
 import RupaProject
+import RupaProjectModel
 import RupaViewportScene
 
-public struct ProjectViewSnapshotBuilder: ProjectViewSnapshotBuilding, Sendable {
+public struct ProjectViewSnapshotBuilder:
+    ProjectViewSnapshotBuilding,
+    ProjectPreviewRenderPayloadBuilding,
+    Sendable
+{
     private let bridge: DesignDocumentProjectBridge
     private let viewportBuilder: UniversalViewportSceneBuilder
 
@@ -46,49 +52,10 @@ public struct ProjectViewSnapshotBuilder: ProjectViewSnapshotBuilding, Sendable 
             )
         }
 
-        let evaluatedViewport: UniversalViewportScene
-        do {
-            evaluatedViewport = try viewportBuilder.build(
-                from: state.evaluation,
-                project: state.evaluationSource
-            )
-        } catch let error as UniversalViewportSceneError {
-            throw projectViewError(for: error)
-        }
-        let sceneNodeIDByOccurrenceID = bridge.sceneNodeNavigationIndex(
-            for: state.document
-        )
-        for item in evaluatedViewport.items {
-            guard let sourceOccurrence = state.evaluationSource.occurrences[item.id],
-                  sourceOccurrence.definitionID == item.definitionID,
-                  let definition = state.evaluationSource.objectDefinitions[item.definitionID],
-                  let presentation = definition.representations.representation(for: .presentation),
-                  presentation.id == item.representationID,
-                  presentation.source == item.reference else {
-                throw ProjectViewSnapshotError(
-                    code: .sourceMismatch,
-                    message: "A viewport occurrence does not match its selected presentation authority."
-                )
-            }
-            guard sceneNodeIDByOccurrenceID[item.id] != nil else {
-                throw ProjectViewSnapshotError(
-                    code: .missingNavigation,
-                    message: "A viewport occurrence has no explicit scene-node navigation target."
-                )
-            }
-        }
-        let effectivelyVisibleSceneNodeIDs = state.document.productMetadata
-            .effectivelyVisibleSceneNodeIDs()
-        let viewport = UniversalViewportScene(
-            snapshotID: evaluatedViewport.snapshotID,
-            projectID: evaluatedViewport.projectID,
-            items: evaluatedViewport.items.filter { item in
-                guard let sceneNodeID = sceneNodeIDByOccurrenceID[item.id] else {
-                    return false
-                }
-                return effectivelyVisibleSceneNodeIDs.contains(sceneNodeID)
-            },
-            copyTelemetry: evaluatedViewport.copyTelemetry
+        let previewProjection = try buildPreviewProjection(
+            document: state.document,
+            evaluationSource: state.evaluationSource,
+            evaluation: state.evaluation
         )
         let document = try ProjectReadDocument(
             document: state.document,
@@ -110,10 +77,93 @@ public struct ProjectViewSnapshotBuilder: ProjectViewSnapshotBuilding, Sendable 
             workspaceState: state.workspaceState,
             objectRegistry: state.objectRegistry,
             evaluationSnapshot: state.evaluationSnapshot,
-            viewport: viewport,
+            viewport: previewProjection.scene,
             cadInteraction: state.cadInteraction,
-            sceneNodeIDByOccurrenceID: sceneNodeIDByOccurrenceID
+            sceneNodeIDByOccurrenceID: previewProjection.sceneNodeIDByOccurrenceID
         )
+    }
+
+    public func build(
+        from payload: ProjectSourcePreviewRenderPayload
+    ) throws -> ProjectPreviewRenderPayload {
+        let projection = try buildPreviewProjection(
+            document: payload.document,
+            evaluationSource: payload.evaluationSource,
+            evaluation: payload.evaluation
+        )
+        return ProjectPreviewRenderPayload(
+            document: payload.document,
+            presentationScene: projection.scene,
+            presentationSceneNodeIDByOccurrenceID: projection.sceneNodeIDByOccurrenceID
+        )
+    }
+
+    private func buildPreviewProjection(
+        document: DesignDocument,
+        evaluationSource: ProjectSourceModel,
+        evaluation: EvaluatedProjectSnapshot
+    ) throws -> (
+        scene: UniversalViewportScene,
+        sceneNodeIDByOccurrenceID: [SceneOccurrenceID: SceneNodeID]
+    ) {
+        guard evaluationSource.id == document.projectID,
+              evaluation.projectID == evaluationSource.id,
+              evaluation.id.projectID == evaluationSource.id else {
+            throw ProjectViewSnapshotError(
+                code: .sourceMismatch,
+                message: "The presentation evaluation belongs to a different project source."
+            )
+        }
+        guard evaluation.id.purpose == .presentation else {
+            throw ProjectViewSnapshotError(
+                code: .purposeMismatch,
+                message: "A project preview requires a presentation-purpose evaluation."
+            )
+        }
+
+        let evaluatedViewport: UniversalViewportScene
+        do {
+            evaluatedViewport = try viewportBuilder.build(
+                from: evaluation,
+                project: evaluationSource
+            )
+        } catch let error as UniversalViewportSceneError {
+            throw projectViewError(for: error)
+        }
+        let sceneNodeIDByOccurrenceID = bridge.sceneNodeNavigationIndex(for: document)
+        for item in evaluatedViewport.items {
+            guard let sourceOccurrence = evaluationSource.occurrences[item.id],
+                  sourceOccurrence.definitionID == item.definitionID,
+                  let definition = evaluationSource.objectDefinitions[item.definitionID],
+                  let presentation = definition.representations.representation(for: .presentation),
+                  presentation.id == item.representationID,
+                  presentation.source == item.reference else {
+                throw ProjectViewSnapshotError(
+                    code: .sourceMismatch,
+                    message: "A viewport occurrence does not match its selected presentation authority."
+                )
+            }
+            guard sceneNodeIDByOccurrenceID[item.id] != nil else {
+                throw ProjectViewSnapshotError(
+                    code: .missingNavigation,
+                    message: "A viewport occurrence has no explicit scene-node navigation target."
+                )
+            }
+        }
+        let effectivelyVisibleSceneNodeIDs = document.productMetadata
+            .effectivelyVisibleSceneNodeIDs()
+        let scene = UniversalViewportScene(
+            snapshotID: evaluatedViewport.snapshotID,
+            projectID: evaluatedViewport.projectID,
+            items: evaluatedViewport.items.filter { item in
+                guard let sceneNodeID = sceneNodeIDByOccurrenceID[item.id] else {
+                    return false
+                }
+                return effectivelyVisibleSceneNodeIDs.contains(sceneNodeID)
+            },
+            copyTelemetry: evaluatedViewport.copyTelemetry
+        )
+        return (scene, sceneNodeIDByOccurrenceID)
     }
 
     private func projectViewError(
