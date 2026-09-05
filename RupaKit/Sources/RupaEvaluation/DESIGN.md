@@ -6,14 +6,14 @@
 `ProjectSourceModel` into an `EvaluatedProjectSnapshot`. It is a child of the
 [RupaKit package design](../../DESIGN.md) and has no child designs.
 
-The current implementation already selects the representation for
-`GeometryRepresentationPurpose`, de-duplicates source references, invokes each
-registered provider, validates its result, and derives occurrence transforms
-and bounds. Its evaluation request does not yet carry a provider-neutral
-aggregate resource reservation, and the product factory currently builds the
-CAD evaluator from document modeling tessellation settings for every purpose.
-Those are target changes for the responsiveness correction; they must not
-change exact B-rep/source authority.
+The implementation selects the representation for
+`GeometryRepresentationPurpose`, de-duplicates source references, reserves a
+provider-neutral aggregate resource allowance, invokes each registered
+provider, charges and validates its result, and derives occurrence transforms
+and bounds. The purpose reaches a provider as the ceiling its result is
+admitted under, never as the fidelity it is produced at: fidelity belongs to
+the document's modeling settings and is the same for every purpose, so one
+document evaluates once and both purposes are served from it.
 
 ## Responsibilities and Boundaries
 
@@ -39,8 +39,8 @@ Swift-CAD owns geometry-aware tessellation admission and emission.
 |---|---|---|---|---|
 | [RupaKit package](../../DESIGN.md) | parent | evaluation dependency and authority direction | Places evaluation between project staging and immutable scene projection. | This module never publishes project state. |
 | [RupaProject](../RupaProject/DESIGN.md) | used by | purpose-bound evaluator preparation and staged evaluation | Supplies one immutable source and revision. | A failed evaluation leaves the project transaction unpublished. |
-| [RupaKit integration](../RupaKit/DESIGN.md) | used by | product-selected presentation policy | Selects modeling versus presentation fidelity at the existing preparation seam. | No new coordinator or evaluator authority is introduced. |
-| [RupaCADIntegration](../RupaCADIntegration/DESIGN.md) | used by | purpose-specific CAD configuration and cache separation | Implements this module's provider contract and adapts it to exact Swift-CAD state. | This module declares the provider contract and never imports the adapter. |
+| [RupaKit integration](../RupaKit/DESIGN.md) | used by | product-selected resource policy | Binds the `EvaluationResourcePolicy` at the existing preparation seam; fidelity stays with the document's modeling settings. | No new coordinator or evaluator authority is introduced. |
+| [RupaCADIntegration](../RupaCADIntegration/DESIGN.md) | used by | per-request allowance and CAD evaluation cache | Implements this module's provider contract and adapts it to exact Swift-CAD state. | This module declares the provider contract and never imports the adapter. |
 | [RupaViewportScene](../RupaViewportScene/DESIGN.md) | used by | immutable evaluated occurrence snapshot | Consumes the completed evaluation for scene construction. | Scene construction does not re-evaluate geometry. |
 | [Swift-CAD package](../../../swift-CAD/DESIGN.md) | coordinates with | exact B-rep and generic tessellation limits | Reached only through the provider contract that `RupaCADIntegration` implements. | This module has no Swift-CAD package dependency; the kernel does not know Rupa purpose or viewport policy. |
 
@@ -61,11 +61,10 @@ flowchart LR
     Occurrences --> Snapshot["EvaluatedProjectSnapshot"]
 ```
 
-The evaluator preparation seam binds purpose before provider construction. The
-evaluation engine still receives the purpose so representation selection and
-the prepared policy can be checked for agreement. A presentation policy is a
-deterministic value; it is not an actor, coordinator, or second evaluator
-factory.
+The evaluator preparation seam binds the resource policy before provider
+construction, and the engine receives the purpose so representation selection
+and the ceiling it charges against agree. A resource policy is a deterministic
+value; it is not an actor, coordinator, or second evaluator factory.
 
 ## Contracts and Invariants
 
@@ -87,11 +86,14 @@ factory.
 5. The estimate includes all provider-owned Mesh buffers relevant to the
    result, including index/corner and optional attribute storage in the byte
    charge. Arithmetic is checked at every addition and multiplication.
-6. `GeometryRepresentationPurpose.modeling` uses the document's modeling
-   fidelity and modeling resource policy. `presentation` uses the explicit
-   policy bound by `RupaKit` product composition. A presentation policy never
-   changes exact B-rep topology, source parameters, modeling tolerance, or
-   export policy and never reads a camera or viewport.
+6. The purpose selects the ceiling, not the fidelity. `EvaluationResourcePolicy`
+   states a limit for every `GeometryRepresentationPurpose` and is the only seam
+   through which `RupaKit` product composition narrows an evaluation; every
+   purpose evaluates the same document at the document's own modeling fidelity,
+   so one derived artifact serves them all instead of each purpose paying its
+   own evaluation. A policy never changes exact B-rep topology, source
+   parameters, modeling tolerance, or export policy and never reads a camera or
+   viewport.
 7. Exact B-rep/evaluation reuse and Mesh artifact reuse remain separate. The
    former is governed by exact source/evaluator/modeling compatibility; the
    latter additionally requires full Mesh artifact fidelity configuration and
@@ -125,7 +127,7 @@ sequenceDiagram
     P->>E: source + purpose + revision
     E->>B: create checked aggregate budget
     E->>V: unique references + remaining allowance
-    V->>C: purpose-bound CAD request
+    V->>C: CAD request + remaining allowance
     C->>S: exact source + generic tessellation limits
     S-->>C: complete B-rep/Mesh or typed failure
     C-->>V: immutable bounded result
@@ -163,10 +165,10 @@ successful snapshot.
 
 | Invariant | Evidence |
 |---|---|
-| Purpose binding | Focused evaluator-factory tests prove modeling and presentation bind distinct explicit policies through `ProjectEvaluatorPreparing`; export remains on its existing policy. |
+| Purpose binding | Focused engine tests prove each purpose charges the limit its policy states, and a provider fixture proves a presentation request and a modeling request at one revision are served by a single evaluation. |
 | Exact source/B-rep preservation | Modeling and presentation evaluations compare exact source/B-rep identity and topology while allowing only derived Mesh configuration to differ. |
 | Aggregate budget | Provider fixtures reject source/vertex/face/corner/triangle/byte boundary-plus-one before Mesh materialization; checked overflow and no-partial-result behavior are asserted. |
-| Cache separation | Incremental exact evaluation reuse succeeds without fidelity equality; Mesh reuse requires full artifact configuration and admitted usage. |
+| Cache separation | Incremental exact evaluation reuse succeeds without fidelity equality; Mesh reuse requires full artifact configuration and usage the current allowance admits. |
 | Cancellation | Cancellation at provider, source, and result boundaries returns typed failure and leaves the source/B-rep and published snapshot unchanged. |
 | Projection | Multi-occurrence, alias, transform, bounds, malformed-provider, and deterministic-order tests execute the real engine/provider path. |
 

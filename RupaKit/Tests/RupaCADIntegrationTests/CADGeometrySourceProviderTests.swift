@@ -22,7 +22,9 @@ func cadProviderRejectsNonCADReferencesBeforeEvaluation() throws {
         _ = try provider.evaluate(
             try GeometrySourceEvaluationRequest(
                 references: [.authoredMesh("mesh.source")],
-                sourceRevision: .init()
+                sourceRevision: .init(),
+                purpose: .presentation,
+                allowance: EvaluationAllowance(.standard)
             ),
             in: try ProjectSourceModel(id: "project", name: "Project")
         )
@@ -53,7 +55,9 @@ func cadProviderRejectsReferencesForAnotherDocument() throws {
                         outputID: UUID().uuidString
                     ),
                 ],
-                sourceRevision: .init()
+                sourceRevision: .init(),
+                purpose: .presentation,
+                allowance: EvaluationAllowance(.standard)
             ),
             in: try ProjectSourceModel(id: "project", name: "Project")
         )
@@ -79,7 +83,9 @@ func cadProviderTranslatesForeignResolverFailuresAtItsBoundary() throws {
         _ = try provider.evaluate(
             try GeometrySourceEvaluationRequest(
                 references: [reference],
-                sourceRevision: .init()
+                sourceRevision: .init(),
+                purpose: .presentation,
+                allowance: EvaluationAllowance(.standard)
             ),
             in: try ProjectSourceModel(id: "project", name: "Project")
         )
@@ -114,7 +120,9 @@ func cadProviderConvertsEvaluatedBodyMeshIntoUniversalGeometrySource() throws {
     let results = try provider.evaluate(
         try GeometrySourceEvaluationRequest(
             references: [reference],
-            sourceRevision: .init()
+            sourceRevision: .init(),
+            purpose: .presentation,
+            allowance: EvaluationAllowance(.standard)
         ),
         in: project
     )
@@ -163,7 +171,9 @@ func cadProviderEvaluatesTheDocumentOnceForAnEntireReferenceBatch() throws {
     let results = try provider.evaluate(
         try GeometrySourceEvaluationRequest(
             references: [bodyReference, featureReference],
-            sourceRevision: .init()
+            sourceRevision: .init(),
+            purpose: .presentation,
+            allowance: EvaluationAllowance(.standard)
         ),
         in: try ProjectSourceModel(id: "project.cad-batch", name: "CAD Batch")
     )
@@ -195,7 +205,9 @@ func cadProviderResolvesMultipleDocumentsInOneSourceTransaction() throws {
     let results = try provider.evaluate(
         try GeometrySourceEvaluationRequest(
             references: [first.reference, second.reference],
-            sourceRevision: DocumentTransactionRevision(1)
+            sourceRevision: DocumentTransactionRevision(1),
+            purpose: .presentation,
+            allowance: EvaluationAllowance(.standard)
         ),
         in: first.project
     )
@@ -228,7 +240,9 @@ func cadProviderRejectsInvalidMeshInsteadOfDroppingMalformedAttributes() throws 
         _ = try provider.evaluate(
             try GeometrySourceEvaluationRequest(
                 references: [fixture.reference],
-                sourceRevision: DocumentTransactionRevision(2)
+                sourceRevision: DocumentTransactionRevision(2),
+                purpose: .presentation,
+                allowance: EvaluationAllowance(.standard)
             ),
             in: fixture.project
         )
@@ -260,7 +274,9 @@ func cadProviderPreservesVertexColors() throws {
     let results = try provider.evaluate(
         try GeometrySourceEvaluationRequest(
             references: [fixture.reference],
-            sourceRevision: DocumentTransactionRevision(3)
+            sourceRevision: DocumentTransactionRevision(3),
+            purpose: .presentation,
+            allowance: EvaluationAllowance(.standard)
         ),
         in: fixture.project
     )
@@ -293,7 +309,9 @@ func cadProviderRejectsMaterialLossUntilUniversalMaterialsAreRepresentable() thr
         _ = try provider.evaluate(
             try GeometrySourceEvaluationRequest(
                 references: [fixture.reference],
-                sourceRevision: DocumentTransactionRevision(4)
+                sourceRevision: DocumentTransactionRevision(4),
+                purpose: .presentation,
+                allowance: EvaluationAllowance(.standard)
             ),
             in: fixture.project
         )
@@ -336,7 +354,9 @@ func cadProviderDoesNotPublishPartialCacheStateWhenAnotherSourceFails() throws {
         _ = try provider.evaluate(
             try GeometrySourceEvaluationRequest(
                 references: [first.reference, second.reference],
-                sourceRevision: revision
+                sourceRevision: revision,
+                purpose: .presentation,
+                allowance: EvaluationAllowance(.standard)
             ),
             in: first.project
         )
@@ -350,7 +370,9 @@ func cadProviderDoesNotPublishPartialCacheStateWhenAnotherSourceFails() throws {
     _ = try probeProvider.evaluate(
         try GeometrySourceEvaluationRequest(
             references: [first.reference],
-            sourceRevision: revision
+            sourceRevision: revision,
+            purpose: .presentation,
+            allowance: EvaluationAllowance(.standard)
         ),
         in: first.project
     )
@@ -421,7 +443,9 @@ func cadProviderReturnsAnExactCachedRevisionWithoutReevaluating() throws {
     )
     let request = try GeometrySourceEvaluationRequest(
         references: [fixture.reference],
-        sourceRevision: DocumentTransactionRevision(3)
+        sourceRevision: DocumentTransactionRevision(3),
+        purpose: .presentation,
+        allowance: EvaluationAllowance(.standard)
     )
 
     let firstResults = try firstProvider.evaluate(request, in: fixture.project)
@@ -452,14 +476,18 @@ func cadProviderCarriesThePreviousEvaluationIntoTheNextSourceRevision() throws {
     _ = try firstProvider.evaluate(
         try GeometrySourceEvaluationRequest(
             references: [fixture.reference],
-            sourceRevision: DocumentTransactionRevision(8)
+            sourceRevision: DocumentTransactionRevision(8),
+            purpose: .presentation,
+            allowance: EvaluationAllowance(.standard)
         ),
         in: fixture.project
     )
     _ = try secondProvider.evaluate(
         try GeometrySourceEvaluationRequest(
             references: [fixture.reference],
-            sourceRevision: DocumentTransactionRevision(9)
+            sourceRevision: DocumentTransactionRevision(9),
+            purpose: .presentation,
+            allowance: EvaluationAllowance(.standard)
         ),
         in: fixture.project
     )
@@ -498,7 +526,9 @@ func cadProviderUsesASeededCurrentEvaluationWithoutReevaluating() throws {
     _ = try provider.evaluate(
         try GeometrySourceEvaluationRequest(
             references: [fixture.reference],
-            sourceRevision: revision
+            sourceRevision: revision,
+            purpose: .presentation,
+            allowance: EvaluationAllowance(.standard)
         ),
         in: fixture.project
     )
@@ -518,7 +548,9 @@ func cadProviderRejectsDifferentSourceContentAtTheSameRevision() throws {
     )
     let request = try GeometrySourceEvaluationRequest(
         references: [fixture.reference],
-        sourceRevision: DocumentTransactionRevision(12)
+        sourceRevision: DocumentTransactionRevision(12),
+        purpose: .presentation,
+        allowance: EvaluationAllowance(.standard)
     )
     _ = try initialProvider.evaluate(request, in: fixture.project)
 
@@ -562,7 +594,9 @@ func cadProviderRejectsInvalidEvaluationConfigurationBeforeEvaluation() throws {
         _ = try provider.evaluate(
             try GeometrySourceEvaluationRequest(
                 references: [fixture.reference],
-                sourceRevision: DocumentTransactionRevision(15)
+                sourceRevision: DocumentTransactionRevision(15),
+                purpose: .presentation,
+                allowance: EvaluationAllowance(.standard)
             ),
             in: fixture.project
         )
@@ -589,7 +623,9 @@ func cadProviderRejectsAnEvaluationForDifferentSourceContent() throws {
         _ = try provider.evaluate(
             try GeometrySourceEvaluationRequest(
                 references: [fixture.reference],
-                sourceRevision: DocumentTransactionRevision(16)
+                sourceRevision: DocumentTransactionRevision(16),
+                purpose: .presentation,
+                allowance: EvaluationAllowance(.standard)
             ),
             in: fixture.project
         )
@@ -619,7 +655,9 @@ func cadEvaluationCachePreservesTheNewestRevisionUnderConcurrentPublication() as
                 _ = try provider.evaluate(
                     try GeometrySourceEvaluationRequest(
                         references: [fixture.reference],
-                        sourceRevision: revision
+                        sourceRevision: revision,
+                        purpose: .presentation,
+                        allowance: EvaluationAllowance(.standard)
                     ),
                     in: fixture.project
                 )
@@ -637,7 +675,9 @@ func cadEvaluationCachePreservesTheNewestRevisionUnderConcurrentPublication() as
     _ = try probeProvider.evaluate(
         try GeometrySourceEvaluationRequest(
             references: [fixture.reference],
-            sourceRevision: try #require(revisions.last)
+            sourceRevision: try #require(revisions.last),
+            purpose: .presentation,
+            allowance: EvaluationAllowance(.standard)
         ),
         in: fixture.project
     )
@@ -720,14 +760,252 @@ private func replacingMesh(
     )
 }
 
+@Test(.timeLimit(.minutes(1)))
+func cadProviderServesBothRepresentationPurposesFromOneEvaluation() throws {
+    let fixture = try makeCADProviderFixture()
+    let evaluator = RecordingCADDocumentEvaluator(result: fixture.evaluatedDocument)
+    let cache = CADDocumentEvaluationCache()
+    let provider = CADGeometrySourceProvider(
+        document: fixture.document,
+        evaluator: evaluator,
+        cache: cache
+    )
+    let revision = DocumentTransactionRevision(21)
+
+    _ = try provider.evaluate(
+        try GeometrySourceEvaluationRequest(
+            references: [fixture.reference],
+            sourceRevision: revision,
+            purpose: .presentation,
+            allowance: EvaluationAllowance(.standard)
+        ),
+        in: fixture.project
+    )
+    // Both purposes ask for the same fidelity of the same document, so the
+    // second one must be served the artifact the first produced. Partitioning
+    // the cache by purpose would cost a full kernel evaluation every time the
+    // two alternate, which is what the publication path does on every edit.
+    _ = try provider.evaluate(
+        try GeometrySourceEvaluationRequest(
+            references: [fixture.reference],
+            sourceRevision: revision,
+            purpose: .modeling,
+            allowance: EvaluationAllowance(.standard)
+        ),
+        in: fixture.project
+    )
+
+    #expect(evaluator.evaluationCount() == 1)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func cadProviderLowersTheKernelLimitsToTheRemainingAllowance() throws {
+    let fixture = try makeCADProviderFixture()
+    let evaluator = RecordingCADDocumentEvaluator(result: fixture.evaluatedDocument)
+    let provider = CADGeometrySourceProvider(
+        document: fixture.document,
+        evaluator: evaluator
+    )
+    var allowance = EvaluationAllowance(.standard)
+    allowance.vertexCount = 64
+    allowance.cornerCount = 192
+    allowance.triangleCount = 64
+
+    _ = try provider.evaluate(
+        try GeometrySourceEvaluationRequest(
+            references: [fixture.reference],
+            sourceRevision: DocumentTransactionRevision(22),
+            purpose: .presentation,
+            allowance: allowance
+        ),
+        in: fixture.project
+    )
+
+    let limits = try #require(evaluator.lastLimits())
+    #expect(limits.maximumVertexCount == 64)
+    #expect(limits.maximumIndexCount == 192)
+    #expect(limits.maximumTriangleCount == 64)
+    #expect(
+        limits.maximumByteCount
+            == min(TessellationLimits.standard.maximumByteCount, allowance.byteCount)
+    )
+}
+
+@Test(.timeLimit(.minutes(1)))
+func cadProviderRefusesAnExhaustedAllowanceBeforeEvaluating() throws {
+    let fixture = try makeCADProviderFixture()
+    let evaluator = RecordingCADDocumentEvaluator(result: fixture.evaluatedDocument)
+    let provider = CADGeometrySourceProvider(
+        document: fixture.document,
+        evaluator: evaluator
+    )
+    var error: EvaluationError?
+
+    do {
+        _ = try provider.evaluate(
+            try GeometrySourceEvaluationRequest(
+                references: [fixture.reference],
+                sourceRevision: DocumentTransactionRevision(23),
+                purpose: .presentation,
+                allowance: .exhausted
+            ),
+            in: fixture.project
+        )
+    } catch let caught as EvaluationError {
+        error = caught
+    }
+
+    #expect(error?.code == .resourceExhausted)
+    #expect(evaluator.evaluationCount() == 0)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func cadProviderRefusesAnExactCachedRevisionTheAllowanceNoLongerAdmits() throws {
+    let fixture = try makeCADProviderFixture()
+    let evaluator = RecordingCADDocumentEvaluator(result: fixture.evaluatedDocument)
+    let cache = CADDocumentEvaluationCache()
+    let provider = CADGeometrySourceProvider(
+        document: fixture.document,
+        evaluator: evaluator,
+        cache: cache
+    )
+    let revision = DocumentTransactionRevision(24)
+    _ = try provider.evaluate(
+        try GeometrySourceEvaluationRequest(
+            references: [fixture.reference],
+            sourceRevision: revision,
+            purpose: .presentation,
+            allowance: EvaluationAllowance(.standard)
+        ),
+        in: fixture.project
+    )
+    #expect(evaluator.evaluationCount() == 1)
+
+    var narrowed = EvaluationAllowance(.standard)
+    narrowed.vertexCount = 1
+    narrowed.cornerCount = 1
+    narrowed.triangleCount = 1
+    var error: EvaluationError?
+    do {
+        _ = try provider.evaluate(
+            try GeometrySourceEvaluationRequest(
+                references: [fixture.reference],
+                sourceRevision: revision,
+                purpose: .presentation,
+                allowance: narrowed
+            ),
+            in: fixture.project
+        )
+    } catch let caught as EvaluationError {
+        error = caught
+    }
+
+    // The cached evaluation is returned by the cache, not by the kernel, so the
+    // refusal must come from the provider without a second evaluation.
+    #expect(error?.code == .resourceExhausted)
+    #expect(evaluator.evaluationCount() == 1)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func cadProviderReportsAKernelResourceRefusalAsResourceExhaustion() throws {
+    let fixture = try makeCADProviderFixture()
+    let evaluator = RecordingCADDocumentEvaluator(
+        result: fixture.evaluatedDocument,
+        failure: TessellationError.resourceExhausted(
+            .vertexCount,
+            requested: 4_096,
+            limit: 64
+        )
+    )
+    let provider = CADGeometrySourceProvider(
+        document: fixture.document,
+        evaluator: evaluator
+    )
+    var error: EvaluationError?
+
+    do {
+        _ = try provider.evaluate(
+            try GeometrySourceEvaluationRequest(
+                references: [fixture.reference],
+                sourceRevision: DocumentTransactionRevision(25),
+                purpose: .presentation,
+                allowance: EvaluationAllowance(.standard)
+            ),
+            in: fixture.project
+        )
+    } catch let caught as EvaluationError {
+        error = caught
+    }
+
+    #expect(error?.code == .resourceExhausted)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func cadProviderRethrowsCancellationUnchanged() throws {
+    let fixture = try makeCADProviderFixture()
+    let evaluator = RecordingCADDocumentEvaluator(
+        result: fixture.evaluatedDocument,
+        failure: CancellationError()
+    )
+    let provider = CADGeometrySourceProvider(
+        document: fixture.document,
+        evaluator: evaluator
+    )
+
+    #expect(throws: CancellationError.self) {
+        _ = try provider.evaluate(
+            try GeometrySourceEvaluationRequest(
+                references: [fixture.reference],
+                sourceRevision: DocumentTransactionRevision(26),
+                purpose: .presentation,
+                allowance: EvaluationAllowance(.standard)
+            ),
+            in: fixture.project
+        )
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func cadProviderReportsAnUnrelatedEvaluationFailureAsEvaluationFailed() throws {
+    struct EvaluatorFailure: Error {}
+    let fixture = try makeCADProviderFixture()
+    let evaluator = RecordingCADDocumentEvaluator(
+        result: fixture.evaluatedDocument,
+        failure: EvaluatorFailure()
+    )
+    let provider = CADGeometrySourceProvider(
+        document: fixture.document,
+        evaluator: evaluator
+    )
+    var error: CADIntegrationError?
+
+    do {
+        _ = try provider.evaluate(
+            try GeometrySourceEvaluationRequest(
+                references: [fixture.reference],
+                sourceRevision: DocumentTransactionRevision(27),
+                purpose: .presentation,
+                allowance: EvaluationAllowance(.standard)
+            ),
+            in: fixture.project
+        )
+    } catch let caught as CADIntegrationError {
+        error = caught
+    }
+
+    #expect(error?.code == .evaluationFailed)
+}
+
 private final class RecordingCADDocumentEvaluator: CADDocumentEvaluating, Sendable {
     private struct State {
         var evaluationCount = 0
         var reusedEvaluationCount = 0
+        var lastLimits: TessellationLimits?
     }
 
     let configuration: CADGeometryEvaluationConfiguration
     private let result: EvaluatedDocument
+    private let failure: (any Error)?
     private let state = Mutex(State())
 
     init(
@@ -735,21 +1013,28 @@ private final class RecordingCADDocumentEvaluator: CADDocumentEvaluating, Sendab
         configuration: CADGeometryEvaluationConfiguration =
             CADGeometryEvaluationConfiguration(
                 tolerance: DocumentModelingSettings.standard.tolerance
-            )
+            ),
+        failure: (any Error)? = nil
     ) {
         self.result = result
         self.configuration = configuration
+        self.failure = failure
     }
 
     func evaluate(
         _: ValidatedCADDocument,
-        reusing previous: EvaluatedDocument?
+        reusing previous: EvaluatedDocument?,
+        admitting limits: TessellationLimits
     ) throws -> EvaluatedDocument {
         state.withLock { state in
             state.evaluationCount += 1
             if previous != nil {
                 state.reusedEvaluationCount += 1
             }
+            state.lastLimits = limits
+        }
+        if let failure {
+            throw failure
         }
         return result
     }
@@ -760,6 +1045,10 @@ private final class RecordingCADDocumentEvaluator: CADDocumentEvaluating, Sendab
 
     func reusedEvaluationCount() -> Int {
         state.withLock { $0.reusedEvaluationCount }
+    }
+
+    func lastLimits() -> TessellationLimits? {
+        state.withLock { $0.lastLimits }
     }
 }
 

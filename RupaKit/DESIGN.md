@@ -185,7 +185,7 @@ flowchart TD
     Types["RupaCoreTypes\nIDs + identities"] --> G["RupaGeometry\nplan / executor / buffer"]
     Types --> C["RupaCore\nsource authority"]
     G --> C
-    SwiftCAD["swift-CAD\nexact B-rep + generic tessellation limits"] --> CI["RupaCADIntegration\npurpose configuration adapter"]
+    SwiftCAD["swift-CAD\nexact B-rep + generic tessellation limits"] --> CI["RupaCADIntegration\nbounded CAD evaluation adapter"]
     E["RupaEvaluation\naggregate bounded evaluation"] --> CI
     CI --> K
     C --> P["RupaProject\ntransaction staging"]
@@ -223,7 +223,7 @@ records are owned by the four child designs:
 |---|---|
 | `RupaCoreTypes` is the dependency floor. | Existing package graph. |
 | `RupaGeometry` does not depend upward on Core, Project, UI, or transport. | [RupaGeometry design](Sources/RupaGeometry/DESIGN.md) |
-| `RupaEvaluation` owns provider-neutral aggregate admission; product fidelity is selected by RupaKit and Swift-CAD owns only exact evaluation plus generic tessellation limits. | [RupaEvaluation](Sources/RupaEvaluation/DESIGN.md), [RupaCADIntegration](Sources/RupaCADIntegration/DESIGN.md), [swift-CAD](../swift-CAD/DESIGN.md) |
+| `RupaEvaluation` owns provider-neutral aggregate admission and maps each purpose to its ceiling; fidelity stays with the document's modeling settings so both purposes share one evaluation, and Swift-CAD owns only exact evaluation plus generic tessellation limits. | [RupaEvaluation](Sources/RupaEvaluation/DESIGN.md), [RupaCADIntegration](Sources/RupaCADIntegration/DESIGN.md), [swift-CAD](../swift-CAD/DESIGN.md) |
 | Render-plan preparation is a bounded postpublication derived read; only matching cache state and Canvas calls enter MainActor. | [RupaRendering design](Sources/RupaRendering/DESIGN.md), [RupaUI design](Sources/RupaUI/DESIGN.md) |
 | `RupaCore` is the source-authority boundary; `RupaProject` is the publication boundary. | [RupaCore design](Sources/RupaCore/DESIGN.md), [RupaProject design](Sources/RupaProject/DESIGN.md) |
 | `RupaProjectPackage` owns schema-v3 archive I/O, staged validation, and atomic destination replacement, but not project or application lifecycle. | [RupaProjectPackage design](Sources/RupaProjectPackage/DESIGN.md) |

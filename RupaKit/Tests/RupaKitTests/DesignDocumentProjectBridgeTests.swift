@@ -1,6 +1,7 @@
 import Foundation
 import RupaKit
 import RupaCoreTypes
+import RupaEvaluation
 import RupaGeometry
 import RupaProjectModel
 import SwiftCAD
@@ -121,6 +122,57 @@ func designDocumentBridgeProjectsAllRepresentationsAndAuthoredMeshAssets() throw
     #expect(presented.reference == GeometrySourceReference.authoredMesh(asset.id))
     #expect(presented.mesh == mesh)
     #expect(presentationSnapshot.copyTelemetry.didCopy == false)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func designDocumentEvaluatorFactoryStatesTheProductResourcePolicy() throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bridge = DesignDocumentProjectBridge()
+    let project = try bridge.sourceModel(for: session.document)
+
+    // The product composition is the only seam that narrows an evaluation, so a
+    // policy stated here must reach the engine that charges it. One vertex is
+    // below anything the extruded rectangle can produce, so admitting it would
+    // mean the stated policy never arrived.
+    let narrowed = try EvaluationResourcePolicy(
+        everyPurpose: EvaluationResourceLimits.standard.lowered(
+            to: EvaluationResourceLimits(
+                maximumSourceCount: 1,
+                maximumVertexCount: 1,
+                maximumFaceCount: 1,
+                maximumCornerCount: 1,
+                maximumTriangleCount: 1,
+                maximumByteCount: 1
+            )
+        )
+    )
+    let refusingEvaluator = try DefaultDesignDocumentProjectEvaluatorFactory(
+        resourcePolicy: narrowed
+    ).makeEvaluator(for: session.document, reusing: session.currentEvaluation)
+
+    var refusal: EvaluationError?
+    do {
+        _ = try refusingEvaluator.evaluate(
+            project: project,
+            purpose: .presentation,
+            revision: session.transactionRevision
+        )
+    } catch let error as EvaluationError {
+        refusal = error
+    }
+    #expect(refusal?.code == .resourceExhausted)
+
+    // The same project under the product's stated default is admitted, so the
+    // refusal above is the policy and not the fixture.
+    let admittingEvaluator = try DefaultDesignDocumentProjectEvaluatorFactory()
+        .makeEvaluator(for: session.document, reusing: session.currentEvaluation)
+    let snapshot = try admittingEvaluator.evaluate(
+        project: project,
+        purpose: .presentation,
+        revision: session.transactionRevision
+    )
+    #expect(!snapshot.occurrences.isEmpty)
 }
 
 private func bridgeTriangleMesh() throws -> MeshSource {

@@ -166,7 +166,7 @@ Purpose-specific evaluation uses the same existing product composition:
 flowchart LR
     Purpose["modeling / presentation"] --> Factory["Existing evaluator factory"]
     Modeling["Document modeling settings"] --> Factory
-    Product["Deterministic bounded product presentation policy"] --> Factory
+    Product["Deterministic bounded product resource policy"] --> Factory
     Factory --> Preparer["ProjectEvaluatorPreparing"]
     Preparer --> Evaluation["RupaEvaluation"]
     Evaluation --> Project["ProjectController staged publication"]

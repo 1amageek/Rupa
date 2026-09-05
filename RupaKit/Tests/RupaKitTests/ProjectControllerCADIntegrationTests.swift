@@ -1015,12 +1015,14 @@ private struct ProbedCADDocumentEvaluator: CADDocumentEvaluating {
 
     func evaluate(
         _ document: ValidatedCADDocument,
-        reusing previous: EvaluatedDocument?
+        reusing previous: EvaluatedDocument?,
+        admitting limits: TessellationLimits
     ) throws -> EvaluatedDocument {
         probe.recordEvaluation()
         return try DefaultCADDocumentEvaluator(configuration: configuration).evaluate(
             document,
-            reusing: previous
+            reusing: previous,
+            admitting: limits
         )
     }
 }

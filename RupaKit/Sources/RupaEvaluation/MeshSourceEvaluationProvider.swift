@@ -27,6 +27,25 @@ public struct MeshSourceEvaluationProvider: GeometrySourceEvaluationProvider {
                     message: "Mesh source \(sourceID.rawValue) is not present in the project."
                 )
             }
+            // An authored mesh the allowance cannot admit is refused before the
+            // result is built, so an oversized asset never reaches the caller as
+            // a coarser or partial result. The engine charges the accumulated
+            // total, so this only rejects a single mesh that cannot fit at all.
+            let usage: MeshResourceUsage
+            do {
+                usage = try mesh.resourceUsage()
+            } catch {
+                throw EvaluationError(
+                    code: .invalidResult,
+                    message: "Authored mesh \(sourceID.rawValue) has resource usage that cannot be accounted: \(error)"
+                )
+            }
+            if let resource = request.allowance.firstResourceExceeded(by: usage) {
+                throw EvaluationError(
+                    code: .resourceExhausted,
+                    message: "Authored mesh \(sourceID.rawValue) needs \(usage.amount(for: resource)) \(resource.rawValue) for the \(request.purpose.rawValue) purpose, which exceeds the \(request.allowance.amount(for: resource)) still available."
+                )
+            }
             results[reference] = GeometryEvaluationResult(
                 reference: reference,
                 mesh: mesh,

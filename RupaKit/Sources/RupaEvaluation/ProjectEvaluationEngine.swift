@@ -4,13 +4,18 @@ import RupaProjectModel
 
 public struct ProjectEvaluationEngine: ProjectEvaluating {
     private let registry: GeometrySourceEvaluationProviderRegistry
+    private let policy: EvaluationResourcePolicy
 
     public init() {
-        self.registry = .meshSourceOnly
+        self.init(registry: .meshSourceOnly)
     }
 
-    public init(registry: GeometrySourceEvaluationProviderRegistry) {
+    public init(
+        registry: GeometrySourceEvaluationProviderRegistry,
+        policy: EvaluationResourcePolicy = .standard
+    ) {
         self.registry = registry
+        self.policy = policy
     }
 
     public func evaluate(
@@ -96,6 +101,7 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
         purpose: GeometryRepresentationPurpose,
         sourceRevision: DocumentTransactionRevision
     ) throws -> [GeometrySourceReference: GeometryEvaluationResult] {
+        var budget = try EvaluationBudget(limits: policy.limits(for: purpose))
         var referencesByProvider: [String: [GeometrySourceReference]] = [:]
         var seenReferences: Set<GeometrySourceReference> = []
 
@@ -112,6 +118,10 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
             guard seenReferences.insert(reference).inserted else {
                 continue
             }
+            // Every distinct source is charged before any provider runs, so a
+            // project with more sources than the purpose admits is refused
+            // before the first mesh is produced.
+            try budget.chargeSource()
             referencesByProvider[reference.providerID, default: []].append(reference)
         }
 
@@ -122,9 +132,13 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
                 continue
             }
             let provider = try registry.provider(identifiedBy: providerID)
+            // The allowance is what is still open now, so a later provider sees
+            // what the earlier providers already consumed.
             let request = try GeometrySourceEvaluationRequest(
                 references: references,
-                sourceRevision: sourceRevision
+                sourceRevision: sourceRevision,
+                purpose: purpose,
+                allowance: budget.remaining
             )
             let providerResults = try provider.evaluate(request, in: project)
             try validate(
@@ -132,11 +146,36 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
                 for: request,
                 providerID: providerID
             )
-            for (reference, result) in providerResults {
+            // Charging is the engine's authority, not the provider's: the
+            // request's allowance only lets a provider refuse early, so every
+            // returned mesh is charged here even when the provider ignored it.
+            // Charging follows the request order so exhaustion is deterministic.
+            for reference in request.references {
+                guard let result = providerResults[reference] else {
+                    continue
+                }
+                try charge(result, from: providerID, against: &budget)
                 resultsByReference[reference] = result
             }
         }
         return resultsByReference
+    }
+
+    private func charge(
+        _ result: GeometryEvaluationResult,
+        from providerID: String,
+        against budget: inout EvaluationBudget
+    ) throws {
+        let usage: MeshResourceUsage
+        do {
+            usage = try result.mesh.resourceUsage()
+        } catch {
+            throw EvaluationError(
+                code: .invalidResult,
+                message: "Geometry evaluation provider \(providerID) returned a mesh whose resource usage cannot be accounted: \(error)"
+            )
+        }
+        try budget.charge(usage)
     }
 
     private func selectedRepresentation(

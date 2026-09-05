@@ -211,12 +211,11 @@ func projectEvaluationBatchesSharedGeometryReferencesBeforeOccurrenceProjection(
     #expect(snapshot.occurrences[first.id]?.copyTelemetry == providerTelemetry)
     #expect(snapshot.occurrences[second.id]?.copyTelemetry == providerTelemetry)
     #expect(provider.callCount() == 1)
-    #expect(provider.requests() == [
-        GeometrySourceEvaluationRequestSnapshot(
-            references: [reference],
-            sourceRevision: sourceRevision
-        ),
-    ])
+    let requests = provider.requests()
+    #expect(requests.count == 1)
+    #expect(requests.first?.references == [reference])
+    #expect(requests.first?.sourceRevision == sourceRevision)
+    #expect(requests.first?.purpose == .presentation)
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -325,7 +324,7 @@ func projectEvaluationRejectsProviderBoundsThatDoNotMatchTheMesh() throws {
     #expect(error?.code == .invalidResult)
 }
 
-private func objectDefinition(
+func objectDefinition(
     id: ObjectDefinitionID,
     name: String,
     source: GeometrySourceReference
@@ -338,7 +337,7 @@ private func objectDefinition(
     )
 }
 
-private func objectDefinition(
+func objectDefinition(
     id: ObjectDefinitionID,
     name: String,
     modelingSource: GeometrySourceReference,
@@ -390,7 +389,7 @@ private func objectDefinition(
     )
 }
 
-private func triangleSource(
+func triangleSource(
     identity: GeometrySourceID = "mesh.evaluation",
     xOffset: Double = 0
 ) throws -> MeshSource {
@@ -425,7 +424,7 @@ private func expectSharedStorage(_ source: MeshSource, _ evaluated: MeshSource) 
     )
 }
 
-private func translation(x: Double, y: Double, z: Double) throws -> GeometryTransform3D {
+func translation(x: Double, y: Double, z: Double) throws -> GeometryTransform3D {
     try GeometryTransform3D(values: [
         1, 0, 0, x,
         0, 1, 0, y,
@@ -434,7 +433,7 @@ private func translation(x: Double, y: Double, z: Double) throws -> GeometryTran
     ])
 }
 
-private final class RecordingGeometrySourceEvaluationProvider:
+final class RecordingGeometrySourceEvaluationProvider:
     GeometrySourceEvaluationProvider,
     Sendable {
     private struct State: Sendable {
@@ -470,7 +469,9 @@ private final class RecordingGeometrySourceEvaluationProvider:
             state.requests.append(
                 GeometrySourceEvaluationRequestSnapshot(
                     references: request.references,
-                    sourceRevision: request.sourceRevision
+                    sourceRevision: request.sourceRevision,
+                    purpose: request.purpose,
+                    allowance: request.allowance
                 )
             )
         }
@@ -499,7 +500,9 @@ private final class RecordingGeometrySourceEvaluationProvider:
     }
 }
 
-private struct GeometrySourceEvaluationRequestSnapshot: Equatable, Sendable {
+struct GeometrySourceEvaluationRequestSnapshot: Equatable, Sendable {
     let references: [GeometrySourceReference]
     let sourceRevision: DocumentTransactionRevision
+    let purpose: GeometryRepresentationPurpose
+    let allowance: EvaluationAllowance
 }

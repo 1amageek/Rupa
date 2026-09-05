@@ -140,10 +140,11 @@ the isolated source staging path and returns an immutable result to Core/Project
     `withSourceCommandGroup` used by other source mutations, retains its exact
     immutable receipt, and never recompiles, splits, or publishes individual
     steps.
-11. The requested `GeometryRepresentationPurpose` is supplied to the existing
-    `ProjectEvaluatorPreparing` seam before provider construction. Project does
-    not infer or overwrite the purpose-specific configuration returned by
-    RupaKit composition.
+11. The requested `GeometryRepresentationPurpose` is supplied to the evaluator
+    returned by the existing `ProjectEvaluatorPreparing` seam. The seam itself
+    is purpose-independent, because one document evaluates at one fidelity and
+    the purpose selects only the ceiling the result is admitted under. Project
+    does not infer or overwrite the configuration RupaKit composition returned.
 12. Source, separated package sources, immutable projection, and the complete
     purpose-selected bounded evaluation are all staged before publication. An
     over-budget, malformed, cancelled, or failed evaluation publishes none of

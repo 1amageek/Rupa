@@ -75,11 +75,29 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
 
     public func evaluate(
         _ request: GeometrySourceEvaluationRequest,
+        in project: ProjectSourceModel
+    ) throws -> [GeometrySourceReference: GeometryEvaluationResult] {
+        do {
+            return try evaluate(admitted: request, in: project)
+        } catch let error as CADIntegrationError where error.code == .resourceExhausted {
+            // The engine's vocabulary is the provider boundary's contract, so a
+            // refusal is reported as the resource exhaustion it is rather than
+            // as an opaque provider failure the engine cannot classify.
+            throw EvaluationError(
+                code: .resourceExhausted,
+                message: error.message
+            )
+        }
+    }
+
+    private func evaluate(
+        admitted request: GeometrySourceEvaluationRequest,
         in _: ProjectSourceModel
     ) throws -> [GeometrySourceReference: GeometryEvaluationResult] {
         let outputs = try request.references.map { reference in
             try validatedOutput(for: reference)
         }
+        var admission = try CADTessellationAdmission(allowance: request.allowance)
         var sourceOrder: [String] = []
         var outputsBySourceID: [String: [ValidatedOutput]] = [:]
         outputsBySourceID.reserveCapacity(outputs.count)
@@ -118,7 +136,8 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
             let evaluation = try evaluate(
                 source: source,
                 outputs: sourceOutputs,
-                sourceRevision: request.sourceRevision
+                sourceRevision: request.sourceRevision,
+                admission: &admission
             )
             results.merge(evaluation.results) { existing, _ in existing }
             publications.append(evaluation.publication)
@@ -131,11 +150,17 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
     private func evaluate(
         source: CADGeometryEvaluationSource,
         outputs: [ValidatedOutput],
-        sourceRevision: DocumentTransactionRevision
+        sourceRevision: DocumentTransactionRevision,
+        admission: inout CADTessellationAdmission
     ) throws -> SourceEvaluation {
         let evaluator = source.evaluator
+        // One evaluator and one cache serve both representation purposes for the
+        // same document. Both ask for the same fidelity, so they share one
+        // artifact and one incremental evaluation. The request's purpose reaches
+        // this call only as the allowance the result is admitted under.
+        let configuration = evaluator.configuration
         do {
-            try evaluator.configuration.validate()
+            try configuration.validate()
         } catch {
             throw CADIntegrationError(
                 code: .invalidConfiguration,
@@ -148,7 +173,7 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
         do {
             validatedDocument = try ValidatedCADDocument(
                 source.document,
-                tolerance: evaluator.configuration.tolerance
+                tolerance: configuration.tolerance
             )
             sourceFingerprint = try validatedDocument.sourceFingerprint()
         } catch {
@@ -162,7 +187,7 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
             documentID: source.document.id,
             sourceRevision: sourceRevision,
             sourceFingerprint: sourceFingerprint,
-            configuration: evaluator.configuration
+            configuration: configuration
         )
         let evaluatedDocument: EvaluatedDocument
         if lookup.isExactRevision, let exact = lookup.evaluatedDocument {
@@ -171,8 +196,15 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
             do {
                 evaluatedDocument = try evaluator.evaluate(
                     validatedDocument,
-                    reusing: lookup.evaluatedDocument
+                    reusing: lookup.evaluatedDocument,
+                    admitting: admission.limits
                 )
+            } catch let error as CancellationError {
+                // Cancellation is the caller's own decision, not a failure of
+                // this document, so it must reach the caller unchanged.
+                throw error
+            } catch let error as TessellationError {
+                throw makeTessellationFailure(error)
             } catch {
                 throw CADIntegrationError(
                     code: .evaluationFailed,
@@ -181,6 +213,7 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
             }
             try validate(
                 evaluatedDocument: evaluatedDocument,
+                configuration: configuration,
                 sourceFingerprint: sourceFingerprint,
                 source: source
             )
@@ -204,23 +237,28 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
                     message: "CAD evaluation produced no body for output \(output.outputID)."
                 )
             }
+            guard let mesh = evaluatedDocument.meshes[bodyID] else {
+                throw CADIntegrationError(
+                    code: .bodyUnavailable,
+                    message: "CAD evaluation produced no mesh for body \(bodyID.description)."
+                )
+            }
+            // Charged before materialization, and for a cached mesh as well as a
+            // freshly tessellated one, because the engine charges every result
+            // this call returns while the kernel budget covers only what this
+            // invocation tessellated.
+            try admission.admit(mesh)
             let meshSource: MeshSource
             let copyTelemetry: GeometryCopyTelemetry
             if let cached = meshSourcesByBodyID[bodyID] {
                 meshSource = cached.source
                 copyTelemetry = GeometryCopyTelemetry()
             } else {
-                guard let mesh = evaluatedDocument.meshes[bodyID] else {
-                    throw CADIntegrationError(
-                        code: .bodyUnavailable,
-                        message: "CAD evaluation produced no mesh for body \(bodyID.description)."
-                    )
-                }
                 let materialized = try makeMeshSource(
                     sourceID: source.sourceID,
                     bodyID: bodyID,
                     mesh: mesh,
-                    tolerance: evaluator.configuration.tolerance
+                    tolerance: configuration.tolerance
                 )
                 meshSource = materialized.source
                 copyTelemetry = materialized.copyTelemetry
@@ -243,7 +281,7 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
                 documentID: source.document.id,
                 sourceRevision: sourceRevision,
                 sourceFingerprint: sourceFingerprint,
-                configuration: evaluator.configuration,
+                configuration: configuration,
                 evaluatedDocument: evaluatedDocument,
                 meshSourcesByBodyID: meshSourcesByBodyID
             )
@@ -252,10 +290,10 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
 
     private func validate(
         evaluatedDocument: EvaluatedDocument,
+        configuration: CADGeometryEvaluationConfiguration,
         sourceFingerprint: CADDocumentSourceFingerprint,
         source: CADGeometryEvaluationSource
     ) throws {
-        let configuration = source.evaluator.configuration
         guard evaluatedDocument.document.id == source.document.id,
               evaluatedDocument.configuration.tolerance == configuration.tolerance,
               evaluatedDocument.configuration.tessellationOptions
@@ -268,6 +306,34 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
             throw CADIntegrationError(
                 code: .invalidEvaluationResult,
                 message: "CAD evaluator returned a result for different source content or configuration."
+            )
+        }
+    }
+
+    /// The typed provider failure a kernel tessellation error reports as.
+    ///
+    /// Exhaustion is the admitted refusal this request asked for. An invalid
+    /// limit cannot follow from an admitted allowance, so it is a defect in the
+    /// configuration this provider supplied rather than a refusal of the
+    /// geometry, and every other tessellation error is an evaluation failure.
+    private func makeTessellationFailure(
+        _ error: TessellationError
+    ) -> CADIntegrationError {
+        switch error {
+        case .resourceExhausted:
+            CADIntegrationError(
+                code: .resourceExhausted,
+                message: "CAD tessellation exceeded the admitted resources: \(error)"
+            )
+        case .invalidLimit:
+            CADIntegrationError(
+                code: .invalidConfiguration,
+                message: "CAD tessellation limits are invalid: \(error)"
+            )
+        default:
+            CADIntegrationError(
+                code: .evaluationFailed,
+                message: "CAD document evaluation failed: \(error)"
             )
         }
     }

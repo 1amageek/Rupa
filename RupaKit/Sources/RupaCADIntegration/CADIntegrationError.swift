@@ -12,6 +12,7 @@ public struct CADIntegrationError: Error, Equatable, LocalizedError, Sendable {
         case invalidEvaluationResult
         case evaluationFailed
         case sourceRevisionConflict
+        case resourceExhausted
     }
 
     public var code: Code

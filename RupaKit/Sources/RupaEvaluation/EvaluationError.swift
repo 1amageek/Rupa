@@ -10,6 +10,8 @@ public struct EvaluationError: Error, Equatable, LocalizedError, Sendable {
         case hierarchyCycle
         case invalidProject
         case invalidResult
+        case invalidLimit
+        case resourceExhausted
     }
 
     public var code: Code

@@ -78,3 +78,32 @@ public struct GeometryAttributeSet: Codable, Equatable, Sendable {
         }
     }
 }
+
+extension GeometryAttributeSet {
+    /// The resident bytes every layer's values and sparse indices account for.
+    ///
+    /// Attribute storage stays resident for as long as the mesh does, so a
+    /// budget that charges a mesh must charge its layers with it.
+    public func estimatedByteCount() throws -> Int {
+        var byteCount = 0
+        for layer in sortedLayers() {
+            byteCount = try MeshResourceUsage.sum(
+                byteCount,
+                try MeshResourceUsage.product(
+                    layer.values.count,
+                    layer.values.valueType.stride
+                )
+            )
+            if let indices = layer.indices {
+                byteCount = try MeshResourceUsage.sum(
+                    byteCount,
+                    try MeshResourceUsage.product(
+                        indices.count,
+                        MemoryLayout<UInt32>.stride
+                    )
+                )
+            }
+        }
+        return byteCount
+    }
+}

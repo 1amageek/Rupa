@@ -345,6 +345,30 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
         "RupaGeometryBufferBenchmark": [
             "RupaGeometry",
         ],
+        "RupaResponsivenessBaseline": [
+            "RupaCoreTypes",
+            "RupaEvaluation",
+            "RupaGeometry",
+            "RupaProjectModel",
+            "RupaRendering",
+            "RupaViewportScene",
+        ],
+        "RupaResponsivenessBaselineCLI": [
+            "RupaResponsivenessBaseline",
+        ],
+        "RupaResponsivenessFixtureDocument": [
+            "RupaCore",
+            "RupaCoreTypes",
+            "RupaGeometry",
+            "RupaProject",
+            "RupaProjectModel",
+            "RupaProjectPackage",
+            "RupaResponsivenessBaseline",
+        ],
+        "RupaResponsivenessFixtureDocumentCLI": [
+            "RupaResponsivenessBaseline",
+            "RupaResponsivenessFixtureDocument",
+        ],
     ]
 
     var violations: [String] = []
