@@ -20,6 +20,7 @@ enum PreparedAutomationSourceCommandValidation {
              .renameParameter,
              .deleteParameter,
              .setFeatureSuppression,
+             .reorderFeatureGraph,
              .createComponentDefinition,
              .createComponentInstance,
              .createPatternArray,

@@ -154,6 +154,20 @@ the isolated source staging path and returns an immutable result to Core/Project
     cancellation cannot mutate, roll back, republish, or dirty exact project
     source/package/evaluation state.
 
+14. History source commands, including suppression, dependency-safe feature
+    reorder, and parameter edits, enter through `ProjectSourceTransaction` and
+    the existing isolated `EditorSession` source group. All commands in one
+    transaction stage against one base coordinate, encode one coherent package,
+    evaluate once for the proposed revision, and publish as one source-history
+    entry. A stale project/generation/transaction/publication coordinate or any
+    prepublication validation, package, evaluation, cancellation, or view
+    preparation failure discards the candidate and leaves the published state
+    unchanged.
+15. Undo and redo restore the complete staged source snapshot through the same
+    package, reconstruction, evaluation, and publication path. They advance one
+    generation and transaction revision per successful operation, and retain the
+    existing typed history, coordinate, and source-mismatch failures.
+
 ## Runtime Flows
 
 ```mermaid
@@ -181,6 +195,7 @@ sequenceDiagram
         P->>P: discard staged values
         P-->>W: typed failure
     end
+    Note over W,C: History commands use the same source stage; reorder is admitted only after graph dependency validation
     Note over P,E: render-plan preparation is not part of this transaction
 ```
 
@@ -257,6 +272,7 @@ T09-C and T09-IV own the project proof:
 | Derived render isolation | Render-plan failure/cancellation after publication leaves exact source, package, evaluation, coordinates, history, and dirty state unchanged. |
 | Save failure | A post-commit save failure leaves the committed edit and publication intact and preserves dirty state. |
 | History | One revision and one undo entry; undo/redo returns exact views. |
+| History source commands | Suppression, valid dependency-safe reorder, parameter edit, stale-coordinate refusal, invalid-candidate rollback, and one-entry undo/redo are exercised through `ProjectWorkspace` and `ProjectController`, not only direct Core calls. |
 | Source independence | CAD/Product/selection/provenance invariance and shared-source visibility. |
 | Real path | Mesh-only and CAD-plus-Mesh inspect-to-save/load through `ProjectController`. |
 

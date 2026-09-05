@@ -19,6 +19,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case renameParameter(currentName: String, newName: String)
     case deleteParameter(name: String)
     case setFeatureSuppression(featureID: FeatureID, isSuppressed: Bool)
+    case reorderFeatureGraph(featureIDs: [FeatureID])
     case createComponentDefinition(name: String, rootSceneNodeIDs: [SceneNodeID])
     case createComponentInstance(
         name: String,
@@ -442,6 +443,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "deleteParameter"
         case .setFeatureSuppression:
             "setFeatureSuppression"
+        case .reorderFeatureGraph:
+            "reorderFeatureGraph"
         case .createComponentDefinition:
             "createComponentDefinition"
         case .createComponentInstance:
@@ -680,6 +683,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .renameParameter,
              .deleteParameter,
              .setFeatureSuppression,
+             .reorderFeatureGraph,
              .createComponentDefinition,
              .createComponentInstance,
              .createPatternArray,

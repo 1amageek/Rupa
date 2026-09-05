@@ -223,6 +223,23 @@ single history entry remain owned by `withSourceCommandGroup`.
     and navigation identities; presentation consumers omit them without deleting
     CAD features, representations, or Authored Mesh assets.
 
+### Feature history command contract
+
+Feature history mutations use the existing `EditorCommand` and
+`EditorSession` source-transaction boundary. Core owns candidate document
+validation; `ProjectController` remains the only publication owner.
+
+| Command | Core guarantee | Failure and history behavior |
+|---|---|---|
+| `setFeatureSuppression` | Changes only an existing feature and validates the complete staged `DesignDocument`; an active feature may not depend on a suppressed source. | Missing IDs and dependency-invalid suppression return typed failure with no document, generation, or history change. A same-value request is a no-op. |
+| `reorderFeatureGraph(featureIDs:)` | Accepts exactly one permutation of the current feature IDs. Core validates the candidate graph's dependency direction, inputs, operation contracts, Product references, and evaluation before assigning it. | Duplicate, missing, extra, or dependency-unsafe IDs return typed `invalidGraph` failure with no partial order or history entry. A same-order request is a no-op. |
+| `upsertParameter`, `renameParameter`, `deleteParameter` | Applies the existing parameter validation and pattern regeneration path atomically. | Unknown, duplicate, self-referencing, or still-referenced parameters return typed failure and restore the prior source. |
+
+Every successful mutating history command is staged in an isolated
+`EditorSession`, produces one evaluated source mutation and one command-stack
+entry, and is published only by `RupaProject`. Core never publishes a candidate
+or turns a failed candidate into the previous document as a success result.
+
 ### Snap topology demand contract
 
 `SnapResolver` owns the decision to request a topology summary while resolving
@@ -368,7 +385,7 @@ CADAPI-C must additionally prove:
 | Exact sphere | Origin and translated valid spheres retain the requested center/radius, `ObjectTypeID.sphere`, one body role, and exact 8/12/6 analytic B-Rep; zero/negative/tolerance-sized radius and nonfinite center fail without source/Product/history change. |
 | Identity ownership | Repeating the same ID-free sketch plan creates distinct server-owned entity identities; no Core creation input contains `SketchEntityID`. |
 | Constraint materialization | All eight supported relations materialize correctly; missing/out-of-range indices, wrong entity kinds, invalid coincident endpoints, and duplicate/self references fail atomically. |
-| Command admission | Every exhaustive Core/Automation command classification handles the two new source commands, and raw graph/legacy caller-built Sketch does not become a semantic CAD operation. |
+| Command admission | Every exhaustive Core/Automation command classification handles history and CAD source commands, and raw graph/legacy caller-built Sketch does not become a semantic CAD operation. |
 
 Changes to CAD creation, target identity, asset replacement, provenance, or
 Core command decoding require rechecking `RupaAutomation`, `RupaCADDomain`,

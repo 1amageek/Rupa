@@ -486,6 +486,27 @@ public final class CADDocumentStore {
                 }
             }
             try run()
+        case .reorderFeatureGraph:
+            func run() throws {
+                guard case .reorderFeatureGraph(let featureIDs) = command else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "Command dispatch expected reorderFeatureGraph."
+                    )
+                }
+                let changed = featureIDs != document.cadDocument.designGraph.order
+                let updatedDocument = try document.reorderedFeatureGraph(
+                    featureIDs: featureIDs,
+                    objectRegistry: objectRegistry
+                )
+                document = updatedDocument
+                didMutate = changed
+                if changed {
+                    try commitMutation()
+                    evaluateCurrentDocument()
+                }
+            }
+            try run()
         case .appendFeatureGraph:
             func run() throws {
                 guard case .appendFeatureGraph(let transaction) = command else {
