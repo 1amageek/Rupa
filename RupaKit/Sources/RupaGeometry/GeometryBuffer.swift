@@ -170,7 +170,7 @@ public struct GeometryBuffer<Element: Codable & Sendable>: Codable, Sendable,
 
 extension GeometryBuffer: Equatable where Element: Equatable {
     public static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.elementsEqual(rhs)
+        lhs.storage.identity === rhs.storage.identity || lhs.elementsEqual(rhs)
     }
 }
 

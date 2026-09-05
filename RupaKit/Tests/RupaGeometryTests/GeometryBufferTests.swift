@@ -1,6 +1,40 @@
 import Foundation
+import Synchronization
 import Testing
 @testable import RupaGeometry
+
+@Test(.timeLimit(.minutes(1)))
+func geometryBufferEqualityUsesStorageIdentityBeforeElementComparison() throws {
+    GeometryBufferComparisonElement.resetComparisonCount()
+    let original = GeometryBuffer([
+        GeometryBufferComparisonElement(value: 1),
+        GeometryBufferComparisonElement(value: 2),
+        GeometryBufferComparisonElement(value: 3),
+    ])
+    let shared = original
+
+    #expect(shared == original)
+    #expect(GeometryBufferComparisonElement.comparisonCount == 0)
+
+    let independent = GeometryBuffer([
+        GeometryBufferComparisonElement(value: 1),
+        GeometryBufferComparisonElement(value: 2),
+        GeometryBufferComparisonElement(value: 3),
+    ])
+    #expect(independent == original)
+    #expect(GeometryBufferComparisonElement.comparisonCount > 0)
+
+    GeometryBufferComparisonElement.resetComparisonCount()
+    var builder = original.makeBuilder()
+    try builder.replaceSubrange(
+        1..<2,
+        with: [GeometryBufferComparisonElement(value: 20)]
+    )
+    let edited = builder.build()
+
+    #expect(edited != original)
+    #expect(GeometryBufferComparisonElement.comparisonCount > 0)
+}
 
 @Test(.timeLimit(.minutes(1)))
 func geometryBufferViewsAndLeasesRetainStorageWithoutCopies() throws {
@@ -346,5 +380,27 @@ func geometryBufferRejectsOutOfBoundsLeaseAndBuilderRanges() throws {
     }
     #expect(throws: GeometryBufferError.self) {
         try builder.replaceSubrange(3..<4, with: [4])
+    }
+}
+
+private struct GeometryBufferComparisonElement: Codable, Equatable, Sendable {
+    let value: Int
+
+    private static let state = Mutex(0)
+
+    static var comparisonCount: Int {
+        state.withLock { $0 }
+    }
+
+    static func resetComparisonCount() {
+        state.withLock { $0 = 0 }
+    }
+
+    static func == (
+        lhs: GeometryBufferComparisonElement,
+        rhs: GeometryBufferComparisonElement
+    ) -> Bool {
+        state.withLock { $0 += 1 }
+        return lhs.value == rhs.value
     }
 }

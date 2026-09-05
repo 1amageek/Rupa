@@ -165,6 +165,16 @@ full-source traversal.
 
 ## Contracts and Invariants
 
+### Immutable buffer equality
+
+`GeometryBuffer` equality first compares the immutable storage identity. Two
+buffers that share that identity represent the same immutable snapshot and are
+equal without reading any elements. Buffers backed by different storage retain
+the value-semantic `elementsEqual` comparison, so independently materialized
+equal buffers compare equal and a buffer with changed element values compares
+unequal. This is a comparison fast path only; it does not add a cache or change
+builder ownership.
+
 ### Plan structure
 
 1. A plan is non-empty. Its steps have unique stable IDs and execute in array
@@ -409,7 +419,7 @@ The module proof is T09-A:
 | Attribute contract | Attribute-preserving translation and typed topology-remap failure tests. |
 | Atomicity | Mid-plan failure leaves no committed result. |
 | Execution semantics | Exact step roles/order and aliases from direct buffer results, persistent allocation/non-reuse, valid create-then-delete plans, and absence of a second topology replay. |
-| Performance | Unchanged chunk identity, one-buffer telemetry, hard-boundary limits, measured copy ceilings, source-order triangulation counters, convex linear-fan work, and typed non-convex budget failure. |
+| Performance | Unchanged chunk identity, immutable-buffer equality fast path, one-buffer telemetry, hard-boundary limits, measured copy ceilings, source-order triangulation counters, convex linear-fan work, and typed non-convex budget failure. |
 | Renderable triangle count | Exact multi-face count, non-planar and degenerate rejection, budget failure, checked overflow, zero global identifier scans after index construction, and zero source-position materialization. |
 
 Changes to source buffer layout, ID allocation, attribute handling, or executor
