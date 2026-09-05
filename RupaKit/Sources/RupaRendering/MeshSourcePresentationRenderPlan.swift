@@ -11,7 +11,9 @@ import RupaViewportScene
 /// second validating traversal is required. The immutable source buffers are
 /// never copied: the plan retains the source vertex-ID buffer for picking
 /// provenance and allocates only the transformed positions, the triangle
-/// indices, boundary corner indices, and per-triangle face identities. That cost is charged
+/// indices, boundary corner indices, and per-triangle face identities. The
+/// renderer derives one immutable GPU boundary-index buffer from the retained
+/// corner provenance during off-main preparation. All such costs are charged
 /// against `MeshSourcePresentationPlanLimits` before any storage is reserved
 /// or grown.
 public struct MeshSourcePresentationRenderPlan: Sendable {
@@ -24,6 +26,9 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
     public let itemCount: Int
     public let positionCount: Int
     public let triangleCount: Int
+    /// Number of UInt32 indices in the source-face boundary line buffer.
+    /// Boundary pairs are counted twice, once for each endpoint.
+    public let boundaryIndexCount: Int
     /// Bytes of derived storage the plan holds, as charged during construction.
     public let retainedByteCount: Int
     /// Upper-bound admission for retained geometry plus temporary index/face work.
@@ -47,6 +52,7 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
         let faceIDs: [MeshFaceID]
         let vertexIndices: [UInt32]
         let boundaryCornerIndices: [UInt32]
+        let boundaryIndexCount: Int
 
         var triangleCount: Int {
             faceIDs.count
@@ -100,7 +106,7 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
             // Array headers and per-occurrence CPU/GPU draw metadata. The two
             // combined Metal buffers additionally reserve one native page each.
             try chargeBytes(try Self.product(count, MemoryLayout<Occurrence>.stride + 128))
-            if count > 0 { try chargeBytes(32 * 1024) }
+            if count > 0 { try chargeBytes(64 * 1024) }
         }
 
         mutating func chargePositions(_ count: Int) throws {
@@ -128,6 +134,13 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
             // copy; CPU indices and provenance remain the picking authority.
             // Boundary provenance adds one CPU corner index per triangle side.
             try chargeBytes(try Self.sum(try Self.product(indexBytes, 3), faceBytes))
+        }
+
+        mutating func chargeBoundaryIndices(_ count: Int) throws {
+            let indexBytes = try Self.product(count, Self.indexStride)
+            // The renderer derives the line indices from boundaryCornerIndices
+            // once off MainActor and retains only the immutable Metal buffer.
+            try chargeBytes(indexBytes)
         }
 
         mutating func admitScratch(_ bytes: Int) throws {
@@ -217,6 +230,14 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
         self.itemCount = occurrences.count
         self.positionCount = charge.positionCount
         self.triangleCount = charge.triangleCount
+        var boundaryIndexCount = 0
+        for occurrence in occurrences {
+            boundaryIndexCount = try Charge.sum(
+                boundaryIndexCount,
+                occurrence.boundaryIndexCount
+            )
+        }
+        self.boundaryIndexCount = boundaryIndexCount
         self.retainedByteCount = charge.byteCount
         self.workingByteCount = charge.workingByteCount
         self.telemetry = telemetry
@@ -314,6 +335,10 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
             maximumFaceCorners = max(maximumFaceCorners, range.count)
         }
         try charge.chargeTriangles(triangleCount)
+        // Every triangulated triangle has at most three source-face boundary
+        // sides. The checked upper bound admits the derived GPU line indices
+        // before any boundary storage is reserved or filled.
+        try charge.chargeBoundaryIndices(try Charge.product(triangleCount, 6))
 
         let triangulationIndex: MeshSourceTriangulationIndex
         do {
@@ -337,6 +362,7 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
         var faceIDs: [MeshFaceID] = []
         var vertexIndices: [UInt32] = []
         var boundaryCornerIndices: [UInt32] = []
+        var boundaryIndexCount = 0
         faceIDs.reserveCapacity(triangleCount)
         vertexIndices.reserveCapacity(try Charge.product(triangleCount, 3))
         boundaryCornerIndices.reserveCapacity(try Charge.product(triangleCount, 3))
@@ -386,9 +412,21 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
             }
             for triangle in faceTriangles {
                 faceIDs.append(triangle.faceID)
-                boundaryCornerIndices.append(try boundaryCorner(triangle.vertexIDs.0, triangle.vertexIDs.1))
-                boundaryCornerIndices.append(try boundaryCorner(triangle.vertexIDs.1, triangle.vertexIDs.2))
-                boundaryCornerIndices.append(try boundaryCorner(triangle.vertexIDs.2, triangle.vertexIDs.0))
+                let firstBoundary = try boundaryCorner(triangle.vertexIDs.0, triangle.vertexIDs.1)
+                let secondBoundary = try boundaryCorner(triangle.vertexIDs.1, triangle.vertexIDs.2)
+                let thirdBoundary = try boundaryCorner(triangle.vertexIDs.2, triangle.vertexIDs.0)
+                boundaryCornerIndices.append(firstBoundary)
+                boundaryCornerIndices.append(secondBoundary)
+                boundaryCornerIndices.append(thirdBoundary)
+                if firstBoundary != UInt32.max {
+                    boundaryIndexCount = try Charge.sum(boundaryIndexCount, 2)
+                }
+                if secondBoundary != UInt32.max {
+                    boundaryIndexCount = try Charge.sum(boundaryIndexCount, 2)
+                }
+                if thirdBoundary != UInt32.max {
+                    boundaryIndexCount = try Charge.sum(boundaryIndexCount, 2)
+                }
                 vertexIndices.append(
                     try positionIndex(
                         for: triangle.vertexIDs.0,
@@ -423,7 +461,8 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
             positions: positions,
             faceIDs: faceIDs,
             vertexIndices: vertexIndices,
-            boundaryCornerIndices: boundaryCornerIndices
+            boundaryCornerIndices: boundaryCornerIndices,
+            boundaryIndexCount: boundaryIndexCount
         )
         return BuiltOccurrence(
             occurrence: occurrence,

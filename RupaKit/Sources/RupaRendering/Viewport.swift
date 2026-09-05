@@ -65,6 +65,7 @@ public struct Viewport: View {
     private let patternArrayCurvePathReplacementPreviewRequest: ViewportPatternArrayCurvePathReplacementPreviewRequest?
     private let surfaceAnalysis: SurfaceAnalysisResult?
     private let surfaceAnalysisOptions: ViewportSurfaceAnalysisOptions
+    private let displayMode: ViewportDisplayMode
     private let surfaceContinuity: RupaCore.SurfaceContinuityResult?
     private let sectionAnalysis: SectionAnalysisResult?
     private let sectionClippingPlan: SectionAnalysisClippingPlan?
@@ -289,6 +290,7 @@ public struct Viewport: View {
 
     public init(
         document: DesignDocument,
+        displayMode: ViewportDisplayMode = .solid,
         presentationScene: UniversalViewportScene? = nil,
         presentationSceneNodeIDByOccurrenceID: [SceneOccurrenceID: SceneNodeID] = [:],
         workspaceRenderState: ViewportWorkspaceRenderState,
@@ -401,6 +403,7 @@ public struct Viewport: View {
         self.patternArrayCurvePathReplacementPreviewRequest = patternArrayCurvePathReplacementPreviewRequest
         self.surfaceAnalysis = surfaceAnalysis
         self.surfaceAnalysisOptions = surfaceAnalysisOptions
+        self.displayMode = displayMode
         self.surfaceContinuity = surfaceContinuity
         self.sectionAnalysis = sectionAnalysis
         self.sectionClippingPlan = sectionClippingPlan
@@ -554,6 +557,7 @@ public struct Viewport: View {
                     if let presentationSurface, let presentationScene {
                         ViewportSurfaceView(
                             renderer: presentationSurface,
+                            displayMode: displayMode,
                             layout: sceneContext.layout,
                             interaction: presentationInteractionStateResolver,
                             sectionPlane: sectionClippingPlan == nil ? nil : sectionAnalysis?.plane,

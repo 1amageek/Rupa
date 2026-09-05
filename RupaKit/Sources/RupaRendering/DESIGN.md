@@ -12,8 +12,10 @@ and native view are Apple-platform adapters within this existing module.
 The existing snapshot cache owns off-main preparation, cancellation, and atomic
 publication of the CPU picking plan with its immutable GPU resources. The plan
 owns indexed, once-transformed geometry and exact picking provenance. The native
-surface adapter owns depth-tested, lit surface drawing. Canvas owns grids,
-curves, dimensions, and interaction overlays. SwiftUI owns camera and selection.
+surface adapter owns depth-tested, lit surface drawing and the four-value
+`ViewportDisplayMode` contract. Canvas owns grids, curves, dimensions, and
+interaction overlays. SwiftUI owns camera, selection, and the selected display
+mode value.
 
 The viewport also owns the lifetime of transient preview evaluations, delegating
 evaluation itself to RupaCore's existing EvaluationScheduler. Neither preview
@@ -47,6 +49,7 @@ flowchart LR
     Ready --> Picking["Existing picking"]
     Ready --> Surface["Native Metal surface: depth / light / section"]
     Camera["Camera + interaction uniforms"] --> Surface
+    Mode["ViewportDisplayMode"] --> Surface
     Overlay["Grid / dimensions / handles"] --> Canvas["Canvas overlays"]
 ```
 
@@ -54,7 +57,10 @@ Surface drawing replaces the merged triangle-path pass measured at 35.279 ms.
 It does not reuse the identity-picking compute renderer: that adapter has
 different geometry and synchronous readback semantics. The surface renderer is
 one concrete native adapter shared by the viewport and offscreen verification,
-not a new renderer protocol or scene graph.
+not a new renderer protocol or scene graph. `ViewportDisplayMode` is a small
+value contract with `.solid`, `.solidWithEdges`, `.wireframe`, and `.normals`;
+mode changes select draw passes over the same matching ready plan and never
+rebuild or re-evaluate the scene.
 
 ## Contracts and Invariants
 
@@ -92,25 +98,41 @@ synchronous CAD evaluation from Viewport body or input handling.
    identity, including clear/restart with the same snapshot.
 3. Checked count and byte admission precedes reserve, allocation, and growth.
    It includes retained source-ID backing, positions, triangle indices/face
-   provenance, triangulation-index scratch, and immutable GPU geometry.
+   provenance, source-face boundary index pairs, triangulation-index scratch,
+   and immutable GPU geometry. Boundary indices are derived from the retained
+   `boundaryCornerIndices` once during off-main renderer preparation; no
+   per-frame source traversal or line-array copy is permitted.
    Caller limits can only narrow module ceilings. Cancellation is checked
    before work and at bounded item, vertex, face, and buffer-fill intervals.
 4. Each occurrence vertex is world-transformed once. Triangles use checked
    indices and preserve occurrence, definition, representation, source, face,
    and vertex identities. Construction validates before publication; rendering
-   does not repeat validation or triangulation.
+   does not repeat validation or triangulation. Boundary pairs retain source
+   face provenance and exclude every triangulation diagonal.
 5. GPU geometry is one explicit conversion relative to a Double-precision
    local origin. World-space CPU positions remain the picking authority.
    Conversion rejects nonfinite/unrepresentable values instead of distorting
    geometry. Camera changes only update bounded uniforms.
-6. Surface rendering submits at most one indexed draw per admitted occurrence.
+6. Surface rendering submits at most two indexed draws per admitted occurrence.
    Projection, two-sided directional lighting, and depth testing run on the GPU.
    Larger ViewportLayout.projectedDepth is nearer, matching CPU picking.
-   Selection changes surface color, not visibility order. Internal tessellation
-   edges are not painted as a wireframe; shape edges remain readable through
-   lighting and silhouette contrast.
-   Equal-depth fragments keep the first occurrence in source order, matching
-   the CPU picker's strict nearer-than comparison.
+   `.solid` draws lit triangles. `.solidWithEdges` draws those triangles plus
+   source-face boundary segments. `.wireframe` performs a depth-only triangle
+   prepass followed by depth-tested source-face boundary segments, so hidden
+   lines remain occluded and the mode is never x-ray selection. `.normals`
+   draws triangles with an unlit per-face normal color visualization: the
+   geometric normal is encoded as world-space RGB using
+   `rgb = normal * 0.5 + 0.5` (X=red, Y=green, Z=blue), preserving the
+   source-winding sign and never creating normal line geometry. Selection
+   changes surface color in surface and line modes, not visibility order.
+   Boundary lines come only from source-face provenance; CAD boundaries are
+   presentation Mesh boundaries, not exact B-rep edges, and triangulation
+   diagonals are never painted. Equal-depth triangle and line fragments keep
+   the first occurrence in source order, matching the CPU picker's strict
+   nearer-than comparison.
+   The boundary pass moves depth one representable Float step toward the
+   camera to avoid self-occlusion; it retains strict depth comparison and
+   writes so coincident later lines cannot replace the first occurrence.
 7. Section clipping uses the same plane, retained side, and tolerance as CPU
    picking. Clipping does not change the plan or source geometry.
 8. The native view submits at most one command buffer at a time. Further draws
@@ -235,6 +257,7 @@ The boundary/diagonal picking and local/world overlay tests own this contract.
 |---|---|
 | Pre-growth admission | Count/byte boundary-plus-one, overflow, oversized repeated occurrences, and scratch/index cancellation tests. |
 | Immutable indexed geometry | CPU triangle/provenance parity, local-origin projection, and zero geometry rebuild on camera changes. |
+| Display modes | CPU boundary provenance excludes triangulation diagonals; GPU pixels cover solid, solid-with-boundaries, hidden-line wireframe, and world-space RGB face normals without changing picking or section results. |
 | Lifecycle | Replacement, same-snapshot restart, teardown, in-flight cancellation, and stale success/failure tests. |
 | Depth and visibility | GPU pixels for overlapping front/rear surfaces, order reversal, and matching CPU pick. |
 | Readable surfaces | GPU pixels distinguish adjacent face orientations and silhouette; selection preserves depth. |

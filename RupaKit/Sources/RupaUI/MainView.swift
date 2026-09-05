@@ -8,6 +8,47 @@ import RupaPreview
 import RupaRendering
 import SwiftUI
 
+func viewportDisplayModeTitle(_ mode: ViewportDisplayMode) -> String {
+    switch mode {
+    case .solid: "Solid"
+    case .solidWithEdges: "Solid + Mesh Boundaries"
+    case .wireframe: "Wireframe"
+    case .normals: "Normals"
+    }
+}
+
+enum WorkspaceSidebarSection: String, CaseIterable, Identifiable, Sendable {
+    case scene
+    case history
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .scene:
+            "Scene"
+        case .history:
+            "History"
+        }
+    }
+}
+
+enum WorkspaceInspectorTab: String, CaseIterable, Identifiable, Sendable {
+    case properties
+    case definitions
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .properties:
+            "Properties"
+        case .definitions:
+            "Definitions"
+        }
+    }
+}
+
 @MainActor
 public struct MainView: View {
     private let workspace: ProjectWorkspace
@@ -68,6 +109,9 @@ private struct ProjectMainViewContent: View {
     @State private var isPreviewExpanded: Bool
     @State private var columnVisibility: NavigationSplitViewVisibility
     @State private var isInspectorPresented: Bool
+    @State private var sidebarSection: WorkspaceSidebarSection
+    @State private var inspectorTab: WorkspaceInspectorTab
+    @State private var viewportDisplayMode: ViewportDisplayMode
     @State private var sidebarSearchText: String
     @State private var workspacePlaneMode: WorkspacePlaneMode
     @State private var selectionScope: WorkspaceSelectionScope
@@ -154,7 +198,7 @@ private struct ProjectMainViewContent: View {
         snapshot: ProjectViewSnapshot,
         isPreviewExpanded: Bool = false,
         columnVisibility: NavigationSplitViewVisibility = .all,
-        isInspectorPresented: Bool = false,
+        isInspectorPresented: Bool = true,
         isUtilityRailExpanded: Bool = false,
         domainRegistry: DomainRegistry = DomainRegistry(),
         operationSequencer: ProjectWorkspaceOperationSequencer,
@@ -175,6 +219,9 @@ private struct ProjectMainViewContent: View {
         self._isPreviewExpanded = State(initialValue: isPreviewExpanded)
         self._columnVisibility = State(initialValue: columnVisibility)
         self._isInspectorPresented = State(initialValue: isInspectorPresented)
+        self._sidebarSection = State(initialValue: .scene)
+        self._inspectorTab = State(initialValue: .properties)
+        self._viewportDisplayMode = State(initialValue: .solid)
         self._sidebarSearchText = State(initialValue: "")
         self._workspacePlaneMode = State(initialValue: .adaptive)
         self._selectionScope = State(initialValue: .object)
@@ -1060,26 +1107,33 @@ private struct ProjectMainViewContent: View {
     }
 
     private var sidebar: some View {
+        VStack(spacing: 0) {
+            Picker("Browser", selection: $sidebarSection) {
+                ForEach(WorkspaceSidebarSection.allCases) { section in
+                    Text(section.title).tag(section)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .accessibilityIdentifier("WorkspaceSidebar.segmentedControl")
+
+            if sidebarSection == .scene {
+                sceneSidebarList
+            } else {
+                historySidebarList
+            }
+        }
+        .searchable(text: $sidebarSearchText, prompt: "Search Browser")
+        .navigationTitle("Browser")
+    }
+
+    private var sceneSidebarList: some View {
         List(selection: selectedSceneNodeIDsBinding) {
             Section("Scenes") {
                 ForEach(filteredSceneBrowserRows) { row in
                     componentBrowserRow(row.id, depth: row.depth)
                         .tag(row.id)
-                }
-            }
-
-            if !snapshot.document.document.cadDocument.designGraph.order.isEmpty {
-                Section("Feature History") {
-                    FeatureHistoryView(
-                        features: snapshot.document.document.cadDocument.designGraph.order.compactMap { snapshot.document.document.cadDocument.designGraph.nodes[$0] },
-                        isBusy: modelingPreview.isBusy,
-                        onSelect: { featureID in
-                            if let node = snapshot.document.document.productMetadata.sceneNodes.values.first(where: { $0.reference?.featureID == featureID }) {
-                                _ = selectSceneNodes([node.id])
-                            }
-                        },
-                        onPreview: { command, title in previewHistoryOperation(command, title: title) }
-                    )
                 }
             }
 
@@ -1114,8 +1168,71 @@ private struct ProjectMainViewContent: View {
             }
         }
         .listStyle(.sidebar)
-        .searchable(text: $sidebarSearchText, prompt: "Search Browser")
-        .navigationTitle("Browser")
+        .accessibilityIdentifier("WorkspaceSidebar.sceneList")
+    }
+
+    private var historySidebarList: some View {
+        List {
+            if filteredFeatureHistory.isEmpty {
+                Text("No feature history")
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("WorkspaceSidebar.historyEmpty")
+            } else {
+                FeatureHistoryView(
+                    orderedFeatures: featureHistoryFeatures,
+                    visibleFeatureIDs: featureHistoryVisibleIDs,
+                    namesByID: featureHistoryNamesByID,
+                    isBusy: modelingPreview.isBusy,
+                    onSelect: { featureID in
+                        if let node = snapshot.document.document.productMetadata.sceneNodes.values.first(where: { $0.reference?.featureID == featureID }) {
+                            _ = selectSceneNodes([node.id])
+                        }
+                    },
+                    onPreview: { command, title in previewHistoryOperation(command, title: title) }
+                )
+            }
+        }
+        .listStyle(.sidebar)
+        .accessibilityIdentifier("WorkspaceSidebar.historyList")
+    }
+
+    private var filteredFeatureHistory: [FeatureNode] {
+        let graph = snapshot.document.document.cadDocument.designGraph
+        let features = featureHistoryFeatures
+        guard !normalizedSidebarSearchText.isEmpty else {
+            return features
+        }
+        return features.filter { feature in
+            let inputNames = feature.inputs.map { input in
+                graph.nodes[input.featureID]?.name ?? input.featureID.description
+            }
+            return matchesSidebarSearch(
+                feature.name ?? "Feature",
+                feature.isSuppressed ? "Suppressed" : "Active",
+                inputNames.joined(separator: " ")
+            )
+        }
+    }
+
+    private var featureHistoryFeatures: [FeatureNode] {
+        let graph = snapshot.document.document.cadDocument.designGraph
+        return graph.order.compactMap { graph.nodes[$0] }
+    }
+
+    private var featureHistoryVisibleIDs: Set<FeatureID> {
+        Set(filteredFeatureHistory.map(\.id))
+    }
+
+    private var featureHistoryNamesByID: [FeatureID: String] {
+        let graph = snapshot.document.document.cadDocument.designGraph
+        return Dictionary(
+            uniqueKeysWithValues: graph.order.enumerated().compactMap { index, featureID in
+                guard let feature = graph.nodes[featureID] else {
+                    return nil
+                }
+                return (featureID, feature.name ?? "Feature \(index + 1)")
+            }
+        )
     }
 
     private var selectedSceneNodeIDsBinding: Binding<Set<SceneNodeID>> {
@@ -1444,6 +1561,7 @@ private struct ProjectMainViewContent: View {
                 if let payload = modelingPreview.payload {
                     Viewport(
                         document: payload.document,
+                        displayMode: viewportDisplayMode,
                         presentationScene: payload.presentationScene,
                         presentationSceneNodeIDByOccurrenceID: payload.presentationSceneNodeIDByOccurrenceID,
                         workspaceRenderState: ViewportWorkspaceRenderState(
@@ -1521,6 +1639,7 @@ private struct ProjectMainViewContent: View {
         let scaleFitPromptState = workspaceScaleFitPromptState
         return Viewport(
             document: snapshot.document.document,
+            displayMode: viewportDisplayMode,
             presentationScene: snapshot.viewport,
             presentationSceneNodeIDByOccurrenceID: snapshot.sceneNodeIDByOccurrenceID,
             workspaceRenderState: ViewportWorkspaceRenderState(
@@ -1651,7 +1770,28 @@ private struct ProjectMainViewContent: View {
     }
 
     private var inspectorPane: some View {
-        inspectorContent
+        VStack(spacing: 0) {
+            Picker("Inspector", selection: $inspectorTab) {
+                ForEach(WorkspaceInspectorTab.allCases) { tab in
+                    Text(tab.title).tag(tab)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, WorkspaceInspectorLayout.panelHorizontalInset)
+            .padding(.vertical, 8)
+            .accessibilityIdentifier("WorkspaceInspector.tabs")
+
+            Divider()
+
+            Group {
+                switch inspectorTab {
+                case .properties:
+                    inspectorContent
+                case .definitions:
+                    definitionsInspectorContent
+                }
+            }
+        }
             .frame(
                 minWidth: 320,
                 idealWidth: 420,
@@ -1660,6 +1800,23 @@ private struct ProjectMainViewContent: View {
                 alignment: .top
             )
             .accessibilityIdentifier("InspectorPane")
+    }
+
+    private var definitionsInspectorContent: some View {
+        ScrollView(.vertical) {
+            WorkspaceParameterInspectorView(
+                state: workspaceParameterInspectorState,
+                onRename: renameDocumentParameter,
+                onUpsert: upsertParameterExpression,
+                onDelete: deleteDocumentParameter
+            )
+            .padding(.horizontal, WorkspaceInspectorLayout.panelHorizontalInset)
+            .padding(.vertical, WorkspaceInspectorLayout.panelVerticalInset)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        .scrollIndicators(.visible)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .accessibilityIdentifier("DefinitionsInspector")
     }
 
     private var viewportHoverHandler: ((ViewportHit?) -> Void)? {
@@ -2399,28 +2556,91 @@ private struct ProjectMainViewContent: View {
     private func workspaceTopBarContent(
         presentation: WorkspaceTopBarPresentation
     ) -> some View {
-        // Canvas overlay chrome only carries viewport-local state (selection
-        // count and scale). Document/window-level actions (logs, validation,
-        // inspector) live in the Navigation toolbar, so the container is only
-        // rendered when there is viewport-local content to show.
         let scaleFitPromptState = workspaceScaleFitPromptState
-        if presentation.selectionTitle != nil || scaleFitPromptState != nil {
-            HStack(spacing: WorkspaceChromeControlMetrics.itemSpacing) {
-                if let selectionTitle = presentation.selectionTitle {
-                    workspaceStatusChip(
-                        selectionTitle,
-                        systemImage: "scope",
-                        tint: .secondary
-                    )
-                }
+        HStack(spacing: WorkspaceChromeControlMetrics.itemSpacing) {
+            workspaceViewportDisplayModeMenu
 
-                if let scaleFitPromptState {
-                    workspaceScaleFitPromptButton(scaleFitPromptState)
+            if let selectionTitle = presentation.selectionTitle {
+                workspaceStatusChip(
+                    selectionTitle,
+                    systemImage: "scope",
+                    tint: .secondary
+                )
+            }
+
+            if let scaleFitPromptState {
+                workspaceScaleFitPromptButton(scaleFitPromptState)
+            }
+        }
+        .workspaceCanvasTopChromeContainer()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("WorkspaceTopBar")
+    }
+
+    private var workspaceViewportDisplayModeMenu: some View {
+        Menu {
+            viewportDisplayModeButton(.solid)
+            viewportDisplayModeButton(.solidWithEdges)
+            viewportDisplayModeButton(.wireframe)
+            viewportDisplayModeButton(.normals)
+        } label: {
+            Label(
+                viewportDisplayModeTitle(viewportDisplayMode),
+                systemImage: viewportDisplayModeSystemImage(viewportDisplayMode)
+            )
+            .font(.caption.weight(.medium))
+            .lineLimit(1)
+        }
+        .menuStyle(.borderlessButton)
+        .help("Viewport Display Mode")
+        .accessibilityLabel("Viewport Display Mode")
+        .accessibilityValue(viewportDisplayModeTitle(viewportDisplayMode))
+        .accessibilityIdentifier("WorkspaceViewport.displayMode")
+    }
+
+    @ViewBuilder
+    private func viewportDisplayModeButton(_ mode: ViewportDisplayMode) -> some View {
+        Button {
+            viewportDisplayMode = mode
+        } label: {
+            HStack {
+                Label(
+                    viewportDisplayModeTitle(mode),
+                    systemImage: viewportDisplayModeSystemImage(mode)
+                )
+                Spacer(minLength: 12)
+                if viewportDisplayMode == mode {
+                    Image(systemName: "checkmark")
                 }
             }
-            .workspaceCanvasTopChromeContainer()
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("WorkspaceTopBar")
+        }
+        .help(viewportDisplayModeHelp(mode))
+        .accessibilityIdentifier("WorkspaceViewport.displayMode.\(viewportDisplayModeTitle(mode))")
+    }
+
+    private func viewportDisplayModeHelp(_ mode: ViewportDisplayMode) -> String {
+        switch mode {
+        case .solid:
+            "Shaded source face presentation."
+        case .solidWithEdges:
+            "Shaded presentation with source-face Mesh boundaries, not exact B-rep edges."
+        case .wireframe:
+            "Depth-tested source-face Mesh boundaries; not exact B-rep edges or X-ray selection."
+        case .normals:
+            "World-space face normals: X is red, Y is green, Z is blue; source winding determines the sign."
+        }
+    }
+
+    private func viewportDisplayModeSystemImage(_ mode: ViewportDisplayMode) -> String {
+        switch mode {
+        case .solid:
+            "cube.fill"
+        case .solidWithEdges:
+            "cube.transparent"
+        case .wireframe:
+            "square.grid.3x3"
+        case .normals:
+            "arrow.up.and.down.and.arrow.left.and.right"
         }
     }
 

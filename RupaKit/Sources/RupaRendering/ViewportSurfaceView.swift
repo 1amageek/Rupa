@@ -7,6 +7,7 @@ import SwiftUI
 /// Native surface-only layer. Canvas and the input surface retain UI ownership.
 struct ViewportSurfaceView: NSViewRepresentable {
     let renderer: ViewportSurfaceRenderer
+    var displayMode: ViewportDisplayMode = .solid
     let layout: ViewportLayout
     let interaction: MeshSourcePresentationInteractionStateResolver
     let sectionPlane: SectionAnalysisResult.Plane?
@@ -101,6 +102,7 @@ struct ViewportSurfaceView: NSViewRepresentable {
                 }
                 try input.renderer.encode(
                     into: commandBuffer, pass: pass, layout: input.layout,
+                    displayMode: input.displayMode,
                     state: { input.interaction.state(for: $0) },
                     sectionPlane: input.sectionPlane, retainedSide: input.retainedSide,
                     sectionTolerance: input.sectionTolerance

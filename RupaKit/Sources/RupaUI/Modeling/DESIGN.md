@@ -66,6 +66,11 @@ the UI does not silently move dependent features or suppress a dependency tree.
 Named parameter editing remains in the existing document inspector. Selecting a
 history row selects its existing scene presentation when available; a suppressed
 or unpresented feature remains visible in history without a synthetic scene node.
+Each history row presents the feature name, its ordered input/dependency names,
+and an explicit suppressed state. Filtering changes visibility only: reorder
+commands always carry the complete source graph order and swap adjacent nodes
+in that order. Suppression and reorder actions retain the existing preview/apply
+path; the row is not a second source graph or a dynamic definition editor.
 
 ## Contracts and Invariants
 
@@ -83,6 +88,11 @@ or unpresented feature remains visible in history without a synthetic scene node
 - Editing a draft invalidates the parent's previous preview. Apply is enabled
   only for a completed matching preview and while no operation is running.
   Apply and Preview are disabled during work; Cancel remains available.
+- The Definitions inspector exposes existing named parameter expressions and
+  their dependency/dependent summaries through the existing parameter editor.
+  It does not claim that new creation drafts have dynamic expression binding;
+  graph authoring remains outside this component until the product choice is
+  resolved.
 
 ## State, Ownership, and Lifecycle
 

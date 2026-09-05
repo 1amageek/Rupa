@@ -43,6 +43,19 @@ flowchart LR
     Workspace --> Controller["ProjectController"]
 ```
 
+The native workspace chrome is organized as two independent presentation
+paths:
+
+```mermaid
+flowchart LR
+    Main["MainView document lifetime"] --> Sidebar["Scene / History sidebar"]
+    Main --> Detail["HSplitPane"]
+    Detail --> Canvas["Viewport + local mode bar"]
+    Detail --> Inspector["Properties / Definitions inspector"]
+    Inspector --> Props["Selection, object, document properties"]
+    Inspector --> Definitions["Existing named parameters and definitions"]
+```
+
 ## Contracts and Invariants
 
 The object inspector follows the [Core scene placement convention](../RupaCore/DESIGN.md#scene-placement-matrix-convention).
@@ -66,6 +79,24 @@ No old column-major compatibility controls or layout-detection path remain.
    bounded number of visual-state batches, not one path operation per triangle.
 7. Viewport teardown releases the cache, cancels its build task, and discards
    every late completion; no render task or plan is retained by stale UI.
+8. The sidebar exposes Scene and Feature History as explicit navigation
+   segments. Both segments read the same immutable snapshot; selecting a
+   history row routes through the existing scene selection or history preview
+   callback and does not mutate source state directly.
+9. The inspector is visible by default and always provides Properties and
+   Definitions tabs, including when there is no selection. Properties reuses
+   the existing selection/document inspectors; Definitions reuses the existing
+   named-parameter editor. A tab change never changes selection, WorkspaceState,
+   source commands, persistence, or undo history.
+10. `MainView` owns one document-lifetime `ViewportDisplayMode` state. The
+    identical value is passed to the published and preview `Viewport` values;
+    the mode is presentation-only and is not stored in a project snapshot.
+11. The compact viewport-local top bar is always present and displays the
+    active mode label plus a four-case menu (`Solid`, `Solid + Mesh Boundaries`,
+    `Wireframe`, `Normals`). It may also display existing selection and scale
+    status, but it does not become a source or evaluation command surface.
+    Wireframe and normals describe the source face presentation rather than
+    exact B-rep geometry; normals use RGB direction encoding.
 
 ## Runtime Flows
 

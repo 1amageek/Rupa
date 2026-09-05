@@ -352,14 +352,17 @@ private actor PlanBuildGate {
 private func settlePlanCache(
     _ cache: MeshSourcePresentationPlanCache
 ) async throws {
-    for _ in 0..<10_000 {
+    let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+    while ContinuousClock.now < deadline {
         if case .ready = cache.state {
             return
         }
         if case let .failed(_, error) = cache.state {
             throw error
         }
-        await Task.yield()
+        // GPU preparation can include cold shader compilation. Scheduler yield
+        // counts are not a duration budget and can expire before that work runs.
+        try await Task.sleep(for: .milliseconds(1))
     }
     throw MeshSourcePresentationRenderError(
         code: .failed,
