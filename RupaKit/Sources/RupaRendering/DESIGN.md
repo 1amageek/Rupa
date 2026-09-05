@@ -25,9 +25,20 @@ discarded by one rule. Only a matching `ready` exposes a plan to rendering or
 picking; a `preparing` scene renders and picks nothing rather than blocking, and
 a matching `failed` is the only state the on-screen failure overlay shows.
 
-The remaining gap against the target contract is that the Canvas still
-constructs and draws one `Path` per triangle. Closing it replaces neither the
-existing Canvas renderer nor any scene, source, or project authority.
+`ViewportPresentationBatchAccumulator` realizes the bounded consumption
+contract below: the draw pass walks the plan one occurrence at a time through
+`MeshSourcePresentationOccurrenceView`, resolves interaction state once per
+occurrence, projects each retained position once into a reused scratch buffer,
+and appends every triangle into one `Path` per interaction visual state, so the
+pass issues one fill and one stroke per non-empty state instead of one `Path`,
+one fill, and one stroke per triangle. Each polygon is appended with a positive
+screen winding, because a `nonZero` fill of a merged path would otherwise cancel
+a clockwise subpath against an overlapping counter-clockwise one and punch holes
+where a back face sits under a front face. A section resolver produces clipped
+points the plan does not retain, so that path stays per-triangle in its
+projection while still accumulating into the same bounded set of batches. None
+of this replaces the existing Canvas renderer or any scene, source, or project
+authority.
 
 The viewport also owns transient documents that are never published to project
 authority, such as the edge-treatment drag preview it builds from the current
@@ -45,10 +56,12 @@ The module owns:
 
 - one asynchronous `MeshSourcePresentationPlanCache` lifecycle per viewport;
 - cancellable, off-main construction from one immutable scene snapshot;
-- checked item, transformed-position, triangle, index/provenance, batch, and
+- checked item, transformed-position, triangle, index/provenance, and
   retained-byte ceilings before allocation or growth;
 - one transformed position per source vertex per occurrence, indexed triangles,
-  exact picking provenance, and bounded visual-state batch metadata;
+  and exact picking provenance;
+- one draw-time accumulation of projected polygons into a fixed set of
+  visual-state batches;
 - construction-time validation, typed all-or-nothing failure, telemetry, and
   snapshot-identity matching;
 - state-driven viewport invalidation only while a real transition is active;
@@ -81,9 +94,9 @@ flowchart LR
     Cache -->|detached cancellable build| Build["Validate + triangulate + transform once"]
     Geometry["RupaGeometry"] --> Build
     Limits["Plan limits\nitems/positions/triangles/bytes"] --> Build
-    Build --> Plan["Immutable bounded plan\npositions + indices + provenance + batches"]
+    Build --> Plan["Immutable bounded plan\npositions + indices + provenance"]
     Plan -->|matching completion only| State["MainActor atomic state swap"]
-    State --> Canvas["Existing Canvas\nproject each position once + draw batches"]
+    State --> Canvas["Existing Canvas\nproject each position once\naccumulate into visual-state batches"]
     Picking["Picking"] --> Plan
 ```
 
@@ -104,14 +117,16 @@ not copied into another source mesh.
    vertex-range, and face boundaries, and returns either one complete immutable
    plan or one typed failure. No partial plan is visible.
 4. Before reserving or growing storage, checked arithmetic charges cumulative
-   item, transformed-position, triangle, index/provenance, batch, and retained
-   byte counts. Callers may lower limits but cannot widen module hard ceilings.
+   item, transformed-position, triangle, index/provenance, and retained byte
+   counts. Callers may lower limits but cannot widen module hard ceilings. Batch
+   count needs no charge: it is the fixed number of interaction visual states,
+   independent of scene size.
 5. Every source vertex used by one occurrence is world-transformed at most once
    into the plan. Triangles reference that buffer by checked indices and retain
    exact occurrence/definition/representation/source/face provenance required
    by picking.
 6. Construction validates source ranges, triangulation, transforms, finite
-   positions, indices, provenance, and batches once. A ready plan is consumed
+   positions, indices, and provenance once. A ready plan is consumed
    through nonthrowing bounded access; no second full validation/render
    traversal is permitted.
 7. Canvas projects each retained position at most once per draw and appends
@@ -179,8 +194,10 @@ sequenceDiagram
 The existing cache owns the current snapshot identity, one build task, and its
 `idle`/`preparing`/`ready`/`failed` state. The build owns only invocation-local
 triangulation/index scratch. A ready plan owns its bounded transformed positions,
-triangle indices, provenance, and batch metadata; it need not retain duplicate
-source meshes after construction. SwiftUI owns camera and interaction state.
+triangle indices, and provenance; it need not retain duplicate source meshes
+after construction. One draw pass owns its accumulator, its projection scratch
+buffers, and the batch paths built from them, all of which it releases when it
+returns. SwiftUI owns camera and interaction state.
 
 No Geometry borrow, lock, or source pointer crosses a task boundary or is held
 while calling Canvas, picking, an external callback, or I/O.
@@ -253,7 +270,7 @@ instead of weakening the policy.
 | Cancellation and identity | Item/vertex/face cancellation plus rapid snapshot replacement proves stale success/failure never reaches rendering or picking. |
 | Teardown | Viewport/cache destruction cancels preparation, releases the plan, returns to `idle`, and rejects a late completion. |
 | Single preparation pass | Instrumentation proves one triangulation/transform/validation pass, no duplicate full traversal, and one transformed value per retained occurrence vertex. |
-| Batched consumption | Canvas instrumentation proves bounded path/fill/stroke calls by visual-state batch rather than triangle count. |
+| Batched consumption | Accumulator tests prove every polygon of one state merges into a single path, that empty states are never visited, that draw order is normal then hovered then selected, and that winding normalization is what makes one non-zero fill cover an overlap the un-normalized merge leaves uncovered; plan traversal tests prove a per-occurrence view exposes fewer positions than triangle corners and that its indices select the same positions as per-triangle traversal, so the draw pass issues path/fill/stroke calls per visual-state batch rather than per triangle. |
 | MainActor progress | Signposts reject publication/Canvas intervals above the performance table while a progress probe advances during preparation. |
 | Transient preview ownership | Preparing a preview evaluation performs zero evaluations on `MainActor`, and the scene builder receives a matching supplied evaluation for every preview revision it projects. |
 | Preview staleness and coalescing | Advancing the revision or clearing the preview discards the earlier completion; a late completion never replaces current state, and repeated requests during one drag leave at most one evaluation in flight and start only the newest waiting revision. |

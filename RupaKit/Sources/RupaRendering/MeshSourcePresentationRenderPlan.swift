@@ -201,6 +201,18 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
         }
     }
 
+    /// Traverses the plan one occurrence at a time, so a consumer can work in
+    /// the plan's retained shape: one world position per source vertex, indexed
+    /// per triangle. Construction validated every index, so traversal cannot
+    /// fail; this rethrows only what the consumer's own closure throws.
+    public func forEachOccurrence(
+        _ visit: (MeshSourcePresentationOccurrenceView) throws -> Void
+    ) rethrows {
+        for occurrence in occurrences {
+            try visit(MeshSourcePresentationOccurrenceView(occurrence: occurrence))
+        }
+    }
+
     private static func makeOccurrence(
         item: UniversalViewportSceneItem,
         tolerance: Double,

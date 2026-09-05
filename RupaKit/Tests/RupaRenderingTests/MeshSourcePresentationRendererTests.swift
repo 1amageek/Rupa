@@ -887,3 +887,60 @@ private func sourceChunkIdentitySummary(_ source: MeshSource) -> [[ObjectIdentif
         source.cornerEdgeIDs.storage.chunkIdentities,
     ]
 }
+
+// MARK: - Per-occurrence consumption
+
+@Test
+func presentationOccurrenceViewExposesFewerPositionsThanTriangleCorners() throws {
+    let fixture = try presentationScene(
+        references: [.authoredMesh(GeometrySourceID(rawValue: "mesh.presentation"))],
+        transforms: [try translationTransform(x: 0, y: 0, z: 0)]
+    )
+    let plan = try MeshSourcePresentationRenderPlan(scene: fixture.scene)
+
+    var visitedOccurrences = 0
+    plan.forEachOccurrence { occurrence in
+        visitedOccurrences += 1
+        // The quad triangulates into two triangles that share two vertices, so
+        // projecting the retained positions costs fewer projections than
+        // projecting every triangle corner.
+        #expect(occurrence.positions.count < 3 * occurrence.triangleCount)
+        #expect(occurrence.triangleCount == plan.triangleCount)
+    }
+    #expect(visitedOccurrences == plan.itemCount)
+}
+
+@Test
+func presentationOccurrenceIndicesSelectTheSamePositionsAsTriangleTraversal() throws {
+    let fixture = try presentationScene(
+        references: [
+            .authoredMesh(GeometrySourceID(rawValue: "mesh.presentation")),
+            .authoredMesh(GeometrySourceID(rawValue: "mesh.presentation")),
+        ],
+        transforms: [
+            try translationTransform(x: 0, y: 0, z: 0),
+            try translationTransform(x: 4, y: 0, z: 0),
+        ]
+    )
+    let plan = try MeshSourcePresentationRenderPlan(scene: fixture.scene)
+
+    var traversed: [GeometryPoint3D] = []
+    plan.forEachTriangle { triangle in
+        traversed.append(triangle.firstPosition)
+        traversed.append(triangle.secondPosition)
+        traversed.append(triangle.thirdPosition)
+    }
+
+    var indexed: [GeometryPoint3D] = []
+    plan.forEachOccurrence { occurrence in
+        for index in 0..<occurrence.triangleCount {
+            let indices = occurrence.positionIndices(at: index)
+            indexed.append(occurrence.positions[indices.first])
+            indexed.append(occurrence.positions[indices.second])
+            indexed.append(occurrence.positions[indices.third])
+        }
+    }
+
+    #expect(indexed == traversed)
+    #expect(indexed.count == 3 * plan.triangleCount)
+}

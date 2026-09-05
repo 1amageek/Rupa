@@ -1360,10 +1360,59 @@ public struct Viewport: View {
         guard let plan else {
             return
         }
-        plan.forEachTriangle { triangle in
+        var accumulator = ViewportPresentationBatchAccumulator()
+        // Reused across occurrences and triangles so one draw allocates a
+        // bounded number of buffers rather than one per polygon.
+        var projectedPositions: [CGPoint] = []
+        var polygonPoints: [CGPoint] = []
+        polygonPoints.reserveCapacity(4)
+
+        plan.forEachOccurrence { occurrence in
+            // Interaction state belongs to the occurrence, so it is resolved
+            // once here rather than once per triangle.
             let interactionState = presentationInteractionStateResolver.state(
-                for: triangle.occurrenceID
+                for: occurrence.occurrenceID
             )
+            if let sectionGeometryResolver {
+                // Clipping produces points the plan does not retain, so a
+                // clipped draw stays per-triangle. It still accumulates into
+                // the same bounded set of batches.
+                for index in 0..<occurrence.triangleCount {
+                    guard let polygon = sectionGeometryResolver.polygon(
+                        for: occurrence.triangle(at: index)
+                    ) else {
+                        continue
+                    }
+                    polygonPoints.removeAll(keepingCapacity: true)
+                    polygonPoints.append(layout.project(polygon.first))
+                    polygonPoints.append(layout.project(polygon.second))
+                    polygonPoints.append(layout.project(polygon.third))
+                    if let fourth = polygon.fourth {
+                        polygonPoints.append(layout.project(fourth))
+                    }
+                    accumulator.append(polygonPoints, state: interactionState)
+                }
+                return
+            }
+
+            // Each retained position is projected exactly once, then indexed
+            // per triangle, so a shared vertex is not reprojected.
+            projectedPositions.removeAll(keepingCapacity: true)
+            projectedPositions.reserveCapacity(occurrence.positions.count)
+            for position in occurrence.positions {
+                projectedPositions.append(layout.project(point3D(position)))
+            }
+            for index in 0..<occurrence.triangleCount {
+                let indices = occurrence.positionIndices(at: index)
+                polygonPoints.removeAll(keepingCapacity: true)
+                polygonPoints.append(projectedPositions[indices.first])
+                polygonPoints.append(projectedPositions[indices.second])
+                polygonPoints.append(projectedPositions[indices.third])
+                accumulator.append(polygonPoints, state: interactionState)
+            }
+        }
+
+        accumulator.forEachBatch { interactionState, path in
             let color: Color
             switch interactionState {
             case .normal:
@@ -1373,27 +1422,6 @@ public struct Viewport: View {
             case .selected:
                 color = ViewportTheme.selection
             }
-            let polygon: ViewportTrianglePolygon
-            if let sectionGeometryResolver {
-                guard let resolvedPolygon = sectionGeometryResolver.polygon(for: triangle) else {
-                    return
-                }
-                polygon = resolvedPolygon
-            } else {
-                polygon = ViewportTrianglePolygon(
-                    first: point3D(triangle.firstPosition),
-                    second: point3D(triangle.secondPosition),
-                    third: point3D(triangle.thirdPosition)
-                )
-            }
-            var path = Path()
-            path.move(to: layout.project(polygon.first))
-            path.addLine(to: layout.project(polygon.second))
-            path.addLine(to: layout.project(polygon.third))
-            if let fourth = polygon.fourth {
-                path.addLine(to: layout.project(fourth))
-            }
-            path.closeSubpath()
             context.fill(
                 path,
                 with: .color(color.opacity(interactionState == .normal ? 0.24 : 0.34))
