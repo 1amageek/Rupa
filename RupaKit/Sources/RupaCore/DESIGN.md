@@ -116,6 +116,27 @@ unique copy to satisfy a single scene selection.
 
 ## Contracts and Invariants
 
+### Scene placement matrix convention
+
+Scene and component placement use row-major `Matrix4x4` storage with column
+vectors: translation is at indices 3, 7, 11 and world placement is parent times
+local. This agrees with `RupaGeometry.GeometryTransform3D`, the Product bridge
+and CAD semantic lowering. UI, pattern generation, analysis and legacy CAD
+overlays must use this same convention. The old column-major UI convention is
+removed by explicit product decision; no decoder guessing or migration fallback
+is provided. Existing user files are not deleted automatically.
+
+The TRS inspector accepts finite, non-singular affine matrices with orthogonal
+basis columns. It rejects shear and perspective instead of replacing them with
+an identity or diagonal approximation. Rotation uses degrees with the explicit
+local-placement composition `T * Rz * Ry * Rx * S`; mirrored transforms retain
+their reflection in signed X scale. Near a gimbal lock the displayed equivalent
+Euler form fixes Z to zero without changing the represented transform.
+
+`ModelingOperationDraftTests`, `WorkspaceTransformMatrixTests` and viewport
+transform tests own UI intent and geometry agreement; signed-App verification
+must confirm CAD overlays and Mesh rendering coincide after XYZ edits.
+
 For CAD command results, Core guarantees the staged-source phase of the
 [package identity-phase contract](../../DESIGN.md#cad-identity-phases). One
 immutable result delta is derived from the accepted staged document and may

@@ -398,9 +398,9 @@ public struct PatternArrayInstancePlanner: Sendable {
 
     private func translationTransform(_ vector: Vector3D) throws -> Transform3D {
         var values = Matrix4x4.identity.values
-        values[12] = vector.x
-        values[13] = vector.y
-        values[14] = vector.z
+        values[3] = vector.x
+        values[7] = vector.y
+        values[11] = vector.z
         return Transform3D(matrix: try Matrix4x4(values: values))
     }
 
@@ -424,10 +424,10 @@ public struct PatternArrayInstancePlanner: Sendable {
         let binormal = rotated(frame.binormal, rotation: twistRotation)
         let translation = point - origin
         return Transform3D(matrix: try Matrix4x4(values: [
-            frame.tangent.x * scale, frame.tangent.y * scale, frame.tangent.z * scale, 0.0,
-            normal.x * scale, normal.y * scale, normal.z * scale, 0.0,
-            binormal.x * scale, binormal.y * scale, binormal.z * scale, 0.0,
-            translation.x, translation.y, translation.z, 1.0,
+            frame.tangent.x * scale, normal.x * scale, binormal.x * scale, translation.x,
+            frame.tangent.y * scale, normal.y * scale, binormal.y * scale, translation.y,
+            frame.tangent.z * scale, normal.z * scale, binormal.z * scale, translation.z,
+            0.0, 0.0, 0.0, 1.0,
         ]))
     }
 
@@ -443,10 +443,10 @@ public struct PatternArrayInstancePlanner: Sendable {
         let rotatedOffset = rotated(radialOffset, rotation: rotation)
         let translation = centerVector - rotatedCenter + rotatedOffset
         return Transform3D(matrix: try Matrix4x4(values: [
-            rotation.r00, rotation.r10, rotation.r20, 0.0,
-            rotation.r01, rotation.r11, rotation.r21, 0.0,
-            rotation.r02, rotation.r12, rotation.r22, 0.0,
-            translation.x, translation.y, translation.z, 1.0,
+            rotation.r00, rotation.r01, rotation.r02, translation.x,
+            rotation.r10, rotation.r11, rotation.r12, translation.y,
+            rotation.r20, rotation.r21, rotation.r22, translation.z,
+            0.0, 0.0, 0.0, 1.0,
         ]))
     }
 

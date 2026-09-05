@@ -322,7 +322,7 @@ private func translationY(
           node.localTransform.matrix.values.count == 16 else {
         return 0.0
     }
-    return node.localTransform.matrix.values[13]
+    return node.localTransform.matrix.values[7]
 }
 
 private func nearlyEqual(

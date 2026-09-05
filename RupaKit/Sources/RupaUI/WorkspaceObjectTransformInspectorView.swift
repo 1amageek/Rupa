@@ -8,16 +8,62 @@ struct WorkspaceObjectTransformInspectorView: View {
     var materialOptions: [WorkspaceObjectMaterialOption]
     var onSetVisibility: (SceneNodeID, Bool) -> Void
     var onSetLock: (SceneNodeID, Bool) -> Void
-    var onSetTransformComponent: (InspectorTransformComponent, Double) -> Void
     var onSetMaterial: (SceneNodeID, MaterialID?) -> Void
-    var onResetTransform: () -> Void
+    var isBusy: Bool
+    var hasMatchingPreview: Bool
+    var previewError: String?
+    var onDraftChanged: () -> Void
+    var onPreview: ([EditorCommand]) -> Void
+    var onApply: () -> Void
+    var onCancel: () -> Void
+    @State private var transforms: [SceneNodeID: Transform3D] = [:]
+    @State private var transformError: String?
+
+    private var draftNodes: [SceneNode] {
+        nodes.map { node in
+            var draft = node
+            if let transform = transforms[node.id] { draft.localTransform = transform }
+            return draft
+        }
+    }
 
     var body: some View {
         stateSection
-        positionSection
-        scaleSection
+        switch Result(catching: { try draftNodes.map { try WorkspaceTransformMatrix.components(of: $0.localTransform) } }) {
+        case .success(let components):
+            positionSection
+            rotationSection(components)
+            scaleSection(components)
+        case .failure(let error):
+            Text(error.localizedDescription).font(.callout).foregroundStyle(.red)
+        }
         materialSection
         transformSection
+            .onChange(of: nodes) { _, _ in transforms.removeAll(); transformError = nil }
+        if let error = transformError ?? previewError { Text(error).foregroundStyle(.red).font(.callout) }
+        if !transforms.isEmpty {
+            inspectorActionRow {
+                Button("Cancel") { transforms.removeAll(); transformError = nil; onCancel() }
+                Button("Preview") {
+                    onPreview(nodes.compactMap { node in transforms[node.id].map { .setSceneNodeTransform(id: node.id, localTransform: $0) } })
+                }.disabled(isBusy)
+                Button("Apply", action: onApply).disabled(isBusy || !hasMatchingPreview)
+            }
+        }
+    }
+
+    private func onSetTransformComponent(_ component: InspectorTransformComponent, _ value: Double) {
+        guard !isBusy else { return }
+        do {
+            var next = transforms
+            for node in draftNodes {
+                guard !node.isLocked else { throw EditorError(code: .commandInvalid, message: "Unlock selected objects before changing their transforms.") }
+                next[node.id] = try WorkspaceTransformMatrix.replacing(component, with: value, in: node.localTransform)
+            }
+            transforms = next
+            transformError = nil
+            onDraftChanged()
+        } catch { transformError = error.localizedDescription }
     }
 
     private var stateSection: some View {
@@ -42,7 +88,7 @@ struct WorkspaceObjectTransformInspectorView: View {
         inspectorSection("Position") {
             workspaceLengthControl(
                 "X",
-                values: nodes.map { WorkspaceTransformMatrix.translation(for: $0).x },
+                values: draftNodes.map { WorkspaceTransformMatrix.translation(for: $0).x },
                 displayUnit: displayUnit,
                 sliderMetersRange: positionSliderMetersRange
             ) { meters in
@@ -50,7 +96,7 @@ struct WorkspaceObjectTransformInspectorView: View {
             }
             workspaceLengthControl(
                 "Y",
-                values: nodes.map { WorkspaceTransformMatrix.translation(for: $0).y },
+                values: draftNodes.map { WorkspaceTransformMatrix.translation(for: $0).y },
                 displayUnit: displayUnit,
                 sliderMetersRange: positionSliderMetersRange
             ) { meters in
@@ -58,7 +104,7 @@ struct WorkspaceObjectTransformInspectorView: View {
             }
             workspaceLengthControl(
                 "Z",
-                values: nodes.map { WorkspaceTransformMatrix.translation(for: $0).z },
+                values: draftNodes.map { WorkspaceTransformMatrix.translation(for: $0).z },
                 displayUnit: displayUnit,
                 sliderMetersRange: positionSliderMetersRange
             ) { meters in
@@ -67,23 +113,31 @@ struct WorkspaceObjectTransformInspectorView: View {
         }
     }
 
-    private var scaleSection: some View {
+    private func rotationSection(_ components: [WorkspaceTransformMatrix.Components]) -> some View {
+        inspectorSection("Rotation (X → Y → Z)") {
+            numericControl("X", values: components.map { $0.rotationDegrees.x }, sliderRange: -180...180, onChange: { onSetTransformComponent(.rotationX, $0) }, unitLabel: { "°" })
+            numericControl("Y", values: components.map { $0.rotationDegrees.y }, sliderRange: -180...180, onChange: { onSetTransformComponent(.rotationY, $0) }, unitLabel: { "°" })
+            numericControl("Z", values: components.map { $0.rotationDegrees.z }, sliderRange: -180...180, onChange: { onSetTransformComponent(.rotationZ, $0) }, unitLabel: { "°" })
+        }
+    }
+
+    private func scaleSection(_ components: [WorkspaceTransformMatrix.Components]) -> some View {
         inspectorSection("Transform Scale") {
             workspaceScaleFactorControl(
                 "X",
-                values: nodes.map { WorkspaceTransformMatrix.scale(for: $0).x }
+                values: components.map { $0.scale.x }
             ) { value in
                 onSetTransformComponent(.scaleX, value)
             }
             workspaceScaleFactorControl(
                 "Y",
-                values: nodes.map { WorkspaceTransformMatrix.scale(for: $0).y }
+                values: components.map { $0.scale.y }
             ) { value in
                 onSetTransformComponent(.scaleY, value)
             }
             workspaceScaleFactorControl(
                 "Z",
-                values: nodes.map { WorkspaceTransformMatrix.scale(for: $0).z }
+                values: components.map { $0.scale.z }
             ) { value in
                 onSetTransformComponent(.scaleZ, value)
             }
@@ -155,9 +209,10 @@ struct WorkspaceObjectTransformInspectorView: View {
 
             inspectorActionRow {
                 Button("Reset Transform") {
-                    onResetTransform()
+                    transforms = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, Transform3D.identity) })
+                    onDraftChanged()
                 }
-                .disabled(nodes.allSatisfy { $0.localTransform.matrix == .identity })
+                .disabled(isBusy || nodes.contains(where: \.isLocked) || nodes.allSatisfy { $0.localTransform.matrix == .identity })
             }
         }
     }

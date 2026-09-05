@@ -1659,20 +1659,7 @@ public struct ViewportLayout: Equatable {
         _ point: Point3D,
         by transform: Transform3D
     ) -> Point3D {
-        let values = transform.matrix.values
-        guard values.count == 16 else {
-            return point
-        }
-        let w = values[3] * point.x
-            + values[7] * point.y
-            + values[11] * point.z
-            + values[15]
-        let scale = abs(w) > 1.0e-12 ? 1.0 / w : 1.0
-        return Point3D(
-            x: (values[0] * point.x + values[4] * point.y + values[8] * point.z + values[12]) * scale,
-            y: (values[1] * point.x + values[5] * point.y + values[9] * point.z + values[13]) * scale,
-            z: (values[2] * point.x + values[6] * point.y + values[10] * point.z + values[14]) * scale
-        )
+        transform.viewportTransformedPoint(point)
     }
 
     public func bodyProjection(for item: ViewportSceneItem) -> ViewportBodyProjection? {

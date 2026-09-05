@@ -4,16 +4,12 @@
 
 `RupaUI` presents immutable `ProjectViewSnapshot` state and submits user intent
 to the App-owned `ProjectWorkspace`. It is a child of the
-[RupaKit package design](../../DESIGN.md) and has no child designs.
+[RupaKit package design](../../DESIGN.md). Its CAD operation draft component is
+[Modeling](Modeling/DESIGN.md).
 
-The current implementation does not satisfy invariants 5, 6, and 7. The
-viewport body still asks a synchronous cache for a render plan while SwiftUI
-evaluates that body, so Mesh validation, world transformation, triangle-plan
-construction, and one `Path` per triangle still run inside one `MainActor`
-view update, and no cancellable build task exists to release at teardown. The
-invariants below are the target the
-[RupaRendering design](../RupaRendering/DESIGN.md) is being corrected toward;
-they are not a claim about the shipped application.
+The renderer prepares snapshot-bound plans asynchronously and uses the native
+Metal surface path. Source tests and builds are distinct from signed-App live
+acceptance; the latter must be recorded for the integrated application.
 
 ## Responsibilities and Boundaries
 
@@ -31,6 +27,7 @@ document model.
 | [Rupa App](../../../Rupa/Rupa/Rupa/DESIGN.md) | used by | application file lifecycle and composition | Supplies the App-owned workspace and file activation. | File names are not project-title authority. |
 | [RupaKit integration](../RupaKit/DESIGN.md) | depends on | `ProjectWorkspace` and `ProjectViewSnapshot` | Publishes the exact view consumed by `MainView`. | Snapshot coordinates remain immutable evidence. |
 | [RupaRendering](../RupaRendering/DESIGN.md) | depends on | Snapshot-matched asynchronous render-plan state | Supplies bounded ready data or typed preparation failure. | UI never builds or repairs geometry. |
+| [Modeling](Modeling/DESIGN.md) | child | Local CAD operation drafts and native parameter controls | Converts explicit selection and input into existing commands. | A draft is neither a source document nor an evaluated preview. |
 
 ## Architecture
 
@@ -47,6 +44,11 @@ flowchart LR
 ```
 
 ## Contracts and Invariants
+
+The object inspector follows the [Core scene placement convention](../RupaCore/DESIGN.md#scene-placement-matrix-convention).
+XYZ rotation, translation and scale preserve the remaining TRS components.
+Unsupported matrices show an explicit error rather than editable fake values.
+No old column-major compatibility controls or layout-detection path remain.
 
 1. `ProjectViewSnapshot.projectName` is the sole navigation/window title input.
 2. Empty project names display the bounded fallback `Untitled`; CAD metadata,

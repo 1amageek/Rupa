@@ -303,20 +303,20 @@ public struct SectionAnalysisService: Sendable {
 
         let values = node.localTransform.matrix.values
         let origin = Point3D(
-            x: values[12],
-            y: values[13],
-            z: values[14]
+            x: values[3],
+            y: values[7],
+            z: values[11]
         )
         let rawNormal = Vector3D(
-            x: values[8],
-            y: values[9],
+            x: values[2],
+            y: values[6],
             z: values[10]
         )
         let normal = try rawNormal.normalized(tolerance: 1.0e-12)
         let rawU = Vector3D(
             x: values[0],
-            y: values[1],
-            z: values[2]
+            y: values[4],
+            z: values[8]
         )
         let u = resolvedPlaneUAxis(rawU: rawU, normal: normal)
         let v = normal.cross(u)

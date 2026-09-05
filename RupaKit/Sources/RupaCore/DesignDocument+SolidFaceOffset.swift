@@ -272,10 +272,8 @@ extension DesignDocument {
             )
         }
         var values = node.localTransform.matrix.values
-        if values.count != 16 {
-            values = Matrix4x4.identity.values
-        }
-        values[13] += delta
+        try node.localTransform.validate()
+        values[7] += delta
         node.localTransform = Transform3D(matrix: try Matrix4x4(values: values))
         productMetadata.sceneNodes[id] = node
     }

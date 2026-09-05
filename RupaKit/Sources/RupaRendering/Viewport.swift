@@ -94,6 +94,9 @@ public struct Viewport: View {
     private let edgeOffsetDistanceMeters: Double
     private let presentationCADInteractionSceneNodeIDs: Set<SceneNodeID>
     private let onPresentationOccurrencePick: ((SceneOccurrenceID, ViewportSelectionIntent) -> Void)?
+    private let meshSelectionDomain: GeometryAttributeDomain
+    private let meshSelectionOverlay: ViewportMeshSelectionOverlay?
+    private let onMeshElementPick: ((ViewportMeshElementHit?, ViewportSelectionIntent) -> Void)?
     private let onPresentationOccurrenceHover: ((SceneOccurrenceID?) -> Void)?
     private let onPick: ((ViewportCanvasTarget) -> Void)?
     private let onCanvasDrag: ((ViewportModelDrag) -> Void)?
@@ -325,6 +328,9 @@ public struct Viewport: View {
         showsConstructionPlaneHover: Bool = false,
         allowsSelectionRectangle: Bool = false,
         allowsObjectAffordances: Bool = true,
+        meshSelectionDomain: GeometryAttributeDomain = .face,
+        onMeshElementPick: ((ViewportMeshElementHit?, ViewportSelectionIntent) -> Void)? = nil,
+        meshSelectionOverlay: ViewportMeshSelectionOverlay? = nil,
         slotWidthMeters: Double? = nil,
         sketchVertexOffsetDistanceMeters: Double? = nil,
         edgeOffsetDistanceMeters: Double? = nil,
@@ -423,6 +429,9 @@ public struct Viewport: View {
         self.showsConstructionPlaneHover = showsConstructionPlaneHover
         self.allowsSelectionRectangle = allowsSelectionRectangle
         self.allowsObjectAffordances = allowsObjectAffordances
+        self.meshSelectionDomain = meshSelectionDomain
+        self.meshSelectionOverlay = meshSelectionOverlay
+        self.onMeshElementPick = onMeshElementPick
         let interactionScaleDefaults = WorkspaceInteractionScaleDefaults(ruler: workspaceRenderState.ruler)
         self.slotWidthMeters = slotWidthMeters ?? interactionScaleDefaults.slotWidthMeters
         self.sketchVertexOffsetDistanceMeters = sketchVertexOffsetDistanceMeters
@@ -1125,7 +1134,8 @@ public struct Viewport: View {
     private func sceneEvaluationPolicy(
         usesDragPreviewDocument: Bool
     ) -> ViewportSceneEvaluationPolicy {
-        usesDragPreviewDocument && rendersDragPreviewDocument ? .suppliedOnly : .evaluateOnDemand
+        presentationScene != nil || (usesDragPreviewDocument && rendersDragPreviewDocument)
+            ? .suppliedOnly : .evaluateOnDemand
     }
 
     private func sceneDocument(usesDragPreviewDocument: Bool) -> DesignDocument {
@@ -1641,6 +1651,21 @@ public struct Viewport: View {
                     )
                 )
             }
+        }
+
+        if let overlay = meshSelectionOverlay, overlay.snapshotID == presentationScene?.snapshotID {
+            var outline = Path()
+            for segment in overlay.boundarySegments {
+                outline.move(to: layout.project(Point3D(x: segment.start.x, y: segment.start.y, z: segment.start.z)))
+                outline.addLine(to: layout.project(Point3D(x: segment.end.x, y: segment.end.y, z: segment.end.z)))
+            }
+            context.stroke(outline, with: .color(.orange), lineWidth: 2)
+            var vertices = Path()
+            for point in overlay.points {
+                let location = layout.project(Point3D(x: point.position.x, y: point.position.y, z: point.position.z))
+                vertices.addEllipse(in: CGRect(x: location.x - 4, y: location.y - 4, width: 8, height: 8))
+            }
+            context.fill(vertices, with: .color(.orange))
         }
 
         drawPatternArrayPreviews(
@@ -12966,6 +12991,15 @@ public struct Viewport: View {
             guard let plan = currentPresentationPlan(for: presentationScene) else {
                 // A scene that is still preparing, or one whose plan failed,
                 // picks nothing rather than blocking on a synchronous build.
+                return
+            }
+            if let onMeshElementPick {
+                let hit = MeshSourcePresentationScreenHitTester().meshElement(
+                    at: point, domain: meshSelectionDomain, in: plan,
+                    scene: presentationScene, layout: sceneContext.layout,
+                    sectionGeometryResolver: presentationSectionGeometryResolver()
+                )
+                onMeshElementPick(hit, selectionIntent)
                 return
             }
             presentationOccurrenceID = MeshSourcePresentationScreenHitTester().occurrenceID(

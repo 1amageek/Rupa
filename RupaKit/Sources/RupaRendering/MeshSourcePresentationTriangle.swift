@@ -11,6 +11,10 @@ public struct MeshSourcePresentationTriangle: Equatable, Sendable {
     public let firstVertexID: MeshVertexID
     public let secondVertexID: MeshVertexID
     public let thirdVertexID: MeshVertexID
+    /// Original boundary identities for sides 0–1, 1–2 and 2–0; nil for diagonals.
+    public let firstEdgeID: MeshEdgeID?
+    public let secondEdgeID: MeshEdgeID?
+    public let thirdEdgeID: MeshEdgeID?
     public let firstPosition: GeometryPoint3D
     public let secondPosition: GeometryPoint3D
     public let thirdPosition: GeometryPoint3D
@@ -26,7 +30,10 @@ public struct MeshSourcePresentationTriangle: Equatable, Sendable {
         thirdVertexID: MeshVertexID,
         firstPosition: GeometryPoint3D,
         secondPosition: GeometryPoint3D,
-        thirdPosition: GeometryPoint3D
+        thirdPosition: GeometryPoint3D,
+        firstEdgeID: MeshEdgeID? = nil,
+        secondEdgeID: MeshEdgeID? = nil,
+        thirdEdgeID: MeshEdgeID? = nil
     ) {
         self.occurrenceID = occurrenceID
         self.definitionID = definitionID
@@ -36,6 +43,9 @@ public struct MeshSourcePresentationTriangle: Equatable, Sendable {
         self.firstVertexID = firstVertexID
         self.secondVertexID = secondVertexID
         self.thirdVertexID = thirdVertexID
+        self.firstEdgeID = firstEdgeID
+        self.secondEdgeID = secondEdgeID
+        self.thirdEdgeID = thirdEdgeID
         self.firstPosition = firstPosition
         self.secondPosition = secondPosition
         self.thirdPosition = thirdPosition

@@ -9,9 +9,10 @@ designs.
 
 The module projects an already validated `DesignDocument` and its complete,
 resource-admitted evaluation into viewport items, bounds, transforms, and
-optional surface overlays. It does not own CAD or Mesh source authority,
-project publication, package I/O, render-plan triangulation, presentation
-fidelity, or render-task lifecycle.
+optional surface overlays. The same projection accepts either a published
+state or an explicitly supplied source-preview candidate. It does not own CAD
+or Mesh source authority, project publication, package I/O, render-plan
+triangulation, presentation fidelity, or render-task lifecycle.
 
 ## Responsibilities and Boundaries
 
@@ -46,6 +47,7 @@ overlay face. Measurement and inspection APIs own metric requests.
 flowchart LR
     Source["Validated DesignDocument"] --> Builder["ViewportSceneBuilder"]
     Evaluation["Complete bounded evaluation"] --> Builder
+    Preview["Staged preview document + source + evaluation"] --> Builder
     Builder --> Scene["Immutable ViewportScene"]
     Builder --> Overlay["Knot/span surface overlays"]
     Overlay --> Identity["One identity-only topology snapshot\nonly for B-spline surfaces"]
@@ -60,6 +62,12 @@ metrics. The resulting map is passed to both overlay projections, so both
 directions share the same immutable lookup result.
 
 ## Contracts and Invariants
+
+Scene placement follows the [Core matrix contract](../RupaCore/DESIGN.md#scene-placement-matrix-convention).
+The shared transform utility is the only legacy overlay point/vector/composition
+implementation. Builder and layout call it instead of retaining separate
+column-major formulas. Presentation geometry and CAD selection overlays must
+agree on the same row-major source values.
 
 1. A document with no `.bSplineSurface` feature performs zero
    `TopologySnapshotService` calls for surface knot/span overlay lookup.
@@ -80,9 +88,11 @@ directions share the same immutable lookup result.
    the viewport path.
 7. `ViewportSceneBuilder` is a value type with no retained mutable cache. Source
    and evaluation ownership remain with their existing owners.
-8. The scene is a single immutable projection of the published source and
-   evaluation coordinates. It contains no LOD decision, render-preparation
-   task, cache state, or second copy of project authority.
+8. The scene is a single immutable projection of the source and evaluation
+   values supplied for one invocation. For a source preview those values are
+   the canonical staged candidate only; the scene contains no publication
+   coordinate, `ProjectViewSnapshot`, LOD decision, render-preparation task,
+   cache state, or second copy of project authority.
 9. A scene item may reference only a Mesh admitted by the owning evaluation.
    Scene projection cannot truncate, silently omit required geometry, or
    retessellate an over-budget source.
@@ -117,7 +127,9 @@ sequenceDiagram
 
 The builder then resolves evaluated body snapshots and normal scene items using
 the existing generation/evaluation inputs. The downstream renderer consumes the
-finished immutable scene and owns cancellable render-plan preparation.
+finished immutable scene and owns cancellable render-plan preparation. A
+preview scene is discarded by its caller when the preview is cancelled, stale,
+or replaced; the builder never retains it.
 
 ## State, Ownership, and Lifecycle
 
@@ -149,7 +161,7 @@ scene item is never dropped to make projection appear successful.
 | One shared identity-only lookup with B-spline features | Knot/span overlay tests compare exact stable references and use metric-free snapshot behavior. |
 | No optional topology metrics | Core metric-policy test plus scene-build regression prove face-area and edge-length evaluators are not entered. |
 | Geometry and stable references remain unchanged | Existing B-spline knot/span exact tests and scene snapshot identity checks remain green. |
-| Bounded input authority | Boundary tests prove only evaluation-admitted Mesh enters the scene and that projection never retessellates, truncates, or selects fidelity. |
+| Bounded input authority | Boundary tests prove only evaluation-admitted Mesh enters the scene and that projection never retessellates, truncates, or selects fidelity. A source-preview test proves the candidate document/source/evaluation produce the same scene geometry and visibility without a project snapshot. |
 | Explicit evaluation policy | A `.suppliedOnly` build with no matching supplied evaluation performs zero evaluations; the same input under `.evaluateOnDemand` evaluates, proving the policy is observable rather than declarative. |
 | Agent responsiveness | Focused test timing and the restored signed-App `sessions`/`attach`/viewport read path provide runtime evidence. |
 

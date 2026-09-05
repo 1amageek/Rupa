@@ -3,6 +3,7 @@ import MacComponent
 import RupaCore
 import RupaDomainFoundation
 import RupaKit
+import RupaGeometry
 import RupaPreview
 import RupaRendering
 import SwiftUI
@@ -49,6 +50,15 @@ public struct MainView: View {
 private struct ProjectMainViewContent: View {
     private let workspace: ProjectWorkspace
     private let snapshot: ProjectViewSnapshot
+    @State private var modelingDraft: ModelingOperationDraft?
+    @State private var modelingPreview = ModelingPreviewState()
+    @State private var modelingTask: Task<Void, Never>?
+    @State private var meshDraft: MeshOperationDraft?
+    @State private var meshSelectionDomain = GeometryAttributeDomain.face
+    @State private var meshSelectionOverlay: ViewportMeshSelectionOverlay?
+    @State private var meshOverlayError: String?
+    @State private var showsMakeEditableConfirmation = false
+    @State private var historyPreviewTitle: String?
     @State private var selectedTool: ModelingTool
     @State private var polygonToolState: PolygonToolState
     @State private var sketchInputState: SketchInputState
@@ -269,6 +279,227 @@ private struct ProjectMainViewContent: View {
         }
         .navigationSplitViewStyle(.balanced)
         .frame(minWidth: 1_120, minHeight: 720)
+        .onChange(of: modelingDraft) { _, _ in invalidateModelingPreview() }
+        .onChange(of: meshDraft) { _, _ in invalidateModelingPreview() }
+        .task(id: meshOverlayRequest) { await updateMeshSelectionOverlay() }
+        .onChange(of: snapshot.authorityCoordinate) { _, _ in
+            if modelingPreview.phase != .applying { invalidateModelingPreview() }
+            if let draft = meshDraft,
+               snapshot.document.document.authoredMeshAssets[draft.sourceID]?.contentIdentity != draft.contentIdentity {
+                meshDraft = nil
+            }
+        }
+        .onDisappear { modelingTask?.cancel() }
+        .confirmationDialog("Make CAD Editable as Mesh?", isPresented: $showsMakeEditableConfirmation) {
+            Button("Make Editable", action: makeSelectedCADEditable)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Create an independent Mesh from modeling-quality CAD geometry and switch its presentation. The CAD source is retained. This operation is undoable.")
+        }
+    }
+
+    private func invalidateModelingPreview() {
+        modelingTask?.cancel()
+        modelingTask = nil
+        modelingPreview.invalidate()
+    }
+
+    private func cancelModelingOperation() {
+        invalidateModelingPreview()
+        modelingDraft = nil
+        meshDraft = nil
+        historyPreviewTitle = nil
+        if selectedTool == .mesh { selectedTool = .select }
+    }
+
+    private func beginModelingOperation(_ kind: ModelingOperationDraft.Kind) {
+        cancelModelingOperation()
+        selectedTool = .select
+        modelingDraft = ModelingOperationDraft(
+            kind: kind, selection: snapshot.selection,
+            unit: snapshot.workspaceState.ruler.displayUnit,
+            stepMeters: WorkspaceInteractionScaleDefaults(ruler: snapshot.workspaceState.ruler).operationStepMeters
+        )
+    }
+
+    private func previewModelingOperation() {
+        guard let draft = modelingDraft else { return }
+        do {
+            let command = try draft.command(in: snapshot.document.document)
+            let action = try DefaultProjectWorkspaceActionPlanner().source(
+                name: draft.name, commands: [command], from: snapshot
+            )
+            startModelingPreview(.source(action))
+        } catch {
+            invalidateModelingPreview()
+            modelingPreview.errorMessage = error.localizedDescription
+        }
+    }
+
+    private func previewHistoryOperation(_ command: EditorCommand, title: String) {
+        cancelModelingOperation()
+        historyPreviewTitle = title
+        do {
+            let action = try DefaultProjectWorkspaceActionPlanner().source(name: title, commands: [command], from: snapshot)
+            startModelingPreview(.source(action))
+        } catch { modelingPreview.errorMessage = error.localizedDescription }
+    }
+
+    private func handleMeshElementPick(_ hit: ViewportMeshElementHit?, intent: ViewportSelectionIntent) {
+        guard !modelingPreview.isBusy else { return }
+        guard let hit else {
+            if intent == .replace { meshDraft?.elements.removeAll() }
+            return
+        }
+        guard hit.snapshotID == snapshot.viewport.snapshotID,
+              let asset = snapshot.document.document.authoredMeshAssets[hit.sourceID],
+              let nodeID = snapshot.sceneNodeIDByOccurrenceID[hit.occurrenceID],
+              snapshot.document.document.productMetadata.sceneNodes[nodeID]?.isLocked == false else { return }
+        do {
+            var draft = meshDraft ?? MeshOperationDraft(sourceID: hit.sourceID, contentIdentity: asset.contentIdentity, occurrenceID: hit.occurrenceID, unit: snapshot.workspaceState.ruler.displayUnit)
+            if draft.sourceID != hit.sourceID || draft.contentIdentity != asset.contentIdentity || draft.occurrenceID != hit.occurrenceID {
+                draft = MeshOperationDraft(sourceID: hit.sourceID, contentIdentity: asset.contentIdentity, occurrenceID: hit.occurrenceID, unit: snapshot.workspaceState.ruler.displayUnit)
+            }
+            try draft.select(hit.element, toggle: intent == .toggle)
+            updateMeshDraft(draft)
+        } catch {
+            modelingPreview.errorMessage = error.localizedDescription
+        }
+    }
+
+    private var meshElementPickHandler: ((ViewportMeshElementHit?, ViewportSelectionIntent) -> Void)? {
+        guard selectedTool == .mesh else { return nil }
+        return { hit, intent in handleMeshElementPick(hit, intent: intent) }
+    }
+
+    private struct MeshOverlayRequest: Equatable {
+        let snapshotID: EvaluationSnapshotID
+        let occurrenceID: SceneOccurrenceID
+        let elements: [MeshSelectionElement]
+    }
+
+    private var meshOverlayRequest: MeshOverlayRequest? {
+        guard selectedTool == .mesh, let draft = meshDraft else { return nil }
+        return MeshOverlayRequest(snapshotID: snapshot.viewport.snapshotID, occurrenceID: draft.occurrenceID, elements: draft.elements)
+    }
+
+    private func updateMeshSelectionOverlay() async {
+        meshSelectionOverlay = nil
+        meshOverlayError = nil
+        guard let request = meshOverlayRequest,
+              let item = snapshot.viewport.items.first(where: { $0.occurrenceID == request.occurrenceID }) else { return }
+        let worker = Task.detached(priority: .userInitiated) {
+            try ViewportMeshSelectionOverlay.build(snapshotID: request.snapshotID, item: item, selectedElements: request.elements)
+        }
+        do {
+            let overlay = try await withTaskCancellationHandler {
+                try await worker.value
+            } onCancel: { worker.cancel() }
+            try Task.checkCancellation()
+            guard meshOverlayRequest == request else { return }
+            meshSelectionOverlay = overlay
+            if var draft = meshDraft, !modelingPreview.isBusy, draft.coordinates.allSatisfy(\.isEmpty) {
+                prefillMeshPosition(&draft, from: overlay)
+                meshDraft = draft
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            guard !Task.isCancelled, meshOverlayRequest == request else { return }
+            meshOverlayError = error.localizedDescription
+        }
+    }
+
+    private func updateMeshDraft(_ draft: MeshOperationDraft) {
+        var updated = draft
+        if updated.kind == .position,
+           (meshDraft?.kind != .position || meshDraft?.elements != updated.elements) {
+            updated.coordinates = ["", "", ""]
+            prefillMeshPosition(&updated, from: meshSelectionOverlay)
+        }
+        meshDraft = updated
+    }
+
+    private func prefillMeshPosition(_ draft: inout MeshOperationDraft, from overlay: ViewportMeshSelectionOverlay?) {
+        guard draft.kind == .position, draft.elements.count == 1,
+              case .vertex = draft.elements[0], let overlay,
+              overlay.snapshotID == snapshot.viewport.snapshotID,
+              overlay.occurrenceID == draft.occurrenceID,
+              overlay.selectedElements == draft.elements,
+              let point = overlay.points.first?.sourcePosition else { return }
+        draft.coordinates = [point.x, point.y, point.z].map {
+            let field = workspaceLengthFieldPresentation(fromMeters: $0, preferredUnit: draft.unit)
+            return field.text + " " + field.unit.symbol
+        }
+    }
+
+    private func previewMeshOperation() {
+        guard let draft = meshDraft else { return }
+        do { startModelingPreview(.mesh(try draft.request(from: snapshot))) }
+        catch {
+            invalidateModelingPreview()
+            modelingPreview.errorMessage = error.localizedDescription
+        }
+    }
+
+    private func makeSelectedCADEditable() {
+        guard !modelingPreview.isBusy, snapshot.selection.selectedTargets.count == 1,
+              let nodeID = snapshot.selection.selectedTargets.first?.sceneNodeID else { return }
+        let request = ProjectMakeEditableRequest(snapshot: snapshot, sceneNodeID: nodeID, authoredMeshSourceID: GeometrySourceID(), authoredMeshRepresentationID: GeometryRepresentationID())
+        cancelModelingOperation()
+        selectedTool = .mesh
+        let token = modelingPreview.beginConfirmedApply()
+        modelingTask = Task { @MainActor in
+            do {
+                _ = try await runWorkspaceOperation { try await workspace.makeEditable(request) }
+                guard modelingPreview.token == token else { return }
+                modelingPreview.invalidate()
+                selectedTool = .mesh
+            } catch {
+                modelingPreview.fail(error, token: token)
+                reportToolStatus(error.localizedDescription, severity: .warning)
+            }
+        }
+    }
+
+    private func startModelingPreview(_ request: ModelingPreviewState.Request) {
+        modelingTask?.cancel()
+        let token = modelingPreview.begin(request)
+        modelingTask = Task { @MainActor in
+            do {
+                let payload = try await runWorkspaceOperation {
+                    switch request {
+                    case .source(let action): try await workspace.previewRenderPayload(action)
+                    case .mesh(let request): try await workspace.previewRenderPayload(request)
+                    }
+                }
+                try Task.checkCancellation()
+                modelingPreview.complete(payload, token: token)
+            } catch {
+                modelingPreview.fail(error, token: token)
+            }
+        }
+    }
+
+    private func applyModelingOperation() {
+        guard let request = modelingPreview.takeForApply() else { return }
+        let token = modelingPreview.token
+        modelingTask = Task { @MainActor in
+            do {
+                _ = try await runWorkspaceOperation {
+                    switch request {
+                    case .source(let action): _ = try await workspace.perform(action)
+                    case .mesh(let request): _ = try await workspace.commit(request)
+                    }
+                    return true
+                }
+                guard modelingPreview.token == token else { return }
+                cancelModelingOperation()
+            } catch {
+                // A post-commit failure consumes the request too; never replay it.
+                modelingPreview.fail(error, token: token)
+            }
+        }
     }
 
     private var diagnostics: [EditorDiagnostic] {
@@ -837,6 +1068,21 @@ private struct ProjectMainViewContent: View {
                 }
             }
 
+            if !snapshot.document.document.cadDocument.designGraph.order.isEmpty {
+                Section("Feature History") {
+                    FeatureHistoryView(
+                        features: snapshot.document.document.cadDocument.designGraph.order.compactMap { snapshot.document.document.cadDocument.designGraph.nodes[$0] },
+                        isBusy: modelingPreview.isBusy,
+                        onSelect: { featureID in
+                            if let node = snapshot.document.document.productMetadata.sceneNodes.values.first(where: { $0.reference?.featureID == featureID }) {
+                                _ = selectSceneNodes([node.id])
+                            }
+                        },
+                        onPreview: { command, title in previewHistoryOperation(command, title: title) }
+                    )
+                }
+            }
+
             if !filteredComponentDefinitionIDs.isEmpty {
                 Section("Component Definitions") {
                     ForEach(filteredComponentDefinitionIDs, id: \.self) { id in
@@ -1112,10 +1358,72 @@ private struct ProjectMainViewContent: View {
 
     @ViewBuilder
     private var editorDetailPane: some View {
-        if isInspectorPresented {
+        if isInspectorPresented || modelingDraft != nil || historyPreviewTitle != nil || selectedTool == .mesh {
             HSplitPane {
                 workArea
-                inspectorPane
+                if let draft = modelingDraft {
+                    ModelingOperationView(
+                        draft: Binding(get: { modelingDraft ?? draft }, set: { modelingDraft = $0 }),
+                        document: snapshot.document.document,
+                        isBusy: modelingPreview.isBusy,
+                        hasMatchingPreview: modelingPreview.phase == .ready,
+                        errorMessage: modelingPreview.errorMessage,
+                        onUseSelection: { modelingDraft?.targets = snapshot.selection.selectedTargets },
+                        onPreview: previewModelingOperation,
+                        onApply: applyModelingOperation,
+                        onCancel: cancelModelingOperation
+                    )
+                } else if let title = historyPreviewTitle {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text(title).font(.headline)
+                        Text("Review the evaluated result before applying. Dependency-invalid changes leave the document unchanged.")
+                        if modelingPreview.isBusy { ProgressView("Evaluating…") }
+                        if let message = modelingPreview.errorMessage { Text(message).foregroundStyle(.red).textSelection(.enabled) }
+                        HStack {
+                            Button("Cancel", action: cancelModelingOperation).keyboardShortcut(.cancelAction)
+                            Button("Apply", action: applyModelingOperation)
+                                .disabled(modelingPreview.phase != .ready)
+                                .keyboardShortcut(.defaultAction)
+                        }
+                        Spacer()
+                    }.padding(16).frame(minWidth: 320)
+                } else if selectedTool == .mesh {
+                    if let draft = meshDraft {
+                        VStack(alignment: .leading, spacing: 0) {
+                            MeshOperationView(
+                                draft: Binding(get: { meshDraft ?? draft }, set: updateMeshDraft),
+                                domain: $meshSelectionDomain,
+                                isBusy: modelingPreview.isBusy,
+                                hasMatchingPreview: modelingPreview.phase == .ready,
+                                errorMessage: modelingPreview.errorMessage,
+                                onPreview: previewMeshOperation, onApply: applyModelingOperation, onCancel: cancelModelingOperation
+                            )
+                            if let meshOverlayError {
+                                Text(meshOverlayError).foregroundStyle(.red).padding(.horizontal, 16)
+                            } else if let overlay = meshSelectionOverlay, overlay.isTruncated {
+                                Text("Selection outline: \(overlay.visibleBoundarySegmentCount) of \(overlay.sourceBoundarySegmentCount) edges shown. All selected IDs remain active.")
+                                    .font(.caption).padding(.horizontal, 16)
+                            }
+                        }
+                    } else {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Mesh Editing").font(.headline)
+                            Picker("Select", selection: $meshSelectionDomain) {
+                                Text("Vertex").tag(GeometryAttributeDomain.vertex)
+                                Text("Edge").tag(GeometryAttributeDomain.edge)
+                                Text("Face").tag(GeometryAttributeDomain.face)
+                            }.pickerStyle(.segmented)
+                            Text("Click an Authored Mesh in the canvas. CAD bodies must first be made editable as Mesh.")
+                            Button("Make Selected CAD Editable…") { showsMakeEditableConfirmation = true }
+                                .disabled(snapshot.selection.selectedTargets.count != 1 || !selectedPresentationHasExactCADAffordanceContext)
+                            if let message = modelingPreview.errorMessage { Text(message).foregroundStyle(.red) }
+                            Button("Cancel", action: cancelModelingOperation)
+                            Spacer()
+                        }.padding(16).frame(minWidth: 320)
+                    }
+                } else {
+                    inspectorPane
+                }
             }
             .leadingPaneWidth(minimum: 560)
             .trailingPaneWidth(minimum: 320)
@@ -1133,7 +1441,26 @@ private struct ProjectMainViewContent: View {
                 onContextPanelHeightChange: setViewportContextPanelHeight,
                 onExclusionsChange: setViewportOverlayExclusions
             ) {
-                viewportCanvas
+                if let payload = modelingPreview.payload {
+                    Viewport(
+                        document: payload.document,
+                        presentationScene: payload.presentationScene,
+                        presentationSceneNodeIDByOccurrenceID: payload.presentationSceneNodeIDByOccurrenceID,
+                        workspaceRenderState: ViewportWorkspaceRenderState(
+                            revision: snapshot.workspaceState.revision, ruler: snapshot.workspaceState.ruler
+                        ),
+                        objectSelectionIndex: ViewportObjectSelectionIndex(document: payload.document, selection: .empty),
+                        canvasDragPreviewKind: nil,
+                        allowsObjectAffordances: false,
+                        selectedPresentationHasExactCADContext: false
+                    )
+                    .overlay(alignment: .topLeading) {
+                        Label("Preview — not applied", systemImage: "eye")
+                            .padding(8).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8)).padding(12)
+                    }
+                } else {
+                    viewportCanvas
+                }
             } topBar: {
                 workspaceTopBar
             } toolPalette: {
@@ -1241,6 +1568,9 @@ private struct ProjectMainViewContent: View {
             showsConstructionPlaneHover: showsConstructionPlaneHover,
             allowsSelectionRectangle: allowsSelectionRectangle,
             allowsObjectAffordances: allowsObjectAffordances,
+            meshSelectionDomain: meshSelectionDomain,
+            onMeshElementPick: meshElementPickHandler,
+            meshSelectionOverlay: meshSelectionOverlay,
             slotWidthMeters: slotProfileWidthMeters,
             sketchVertexOffsetDistanceMeters: sketchVertexOffsetDistanceMeters,
             edgeOffsetDistanceMeters: edgeOffsetDistanceMeters,
@@ -2103,6 +2433,24 @@ private struct ProjectMainViewContent: View {
                 Image(systemName: "doc.badge.plus")
             }
             .help("New Document")
+
+            Menu {
+                ForEach(ModelingOperationDraft.Kind.allCases) { kind in
+                    Button(kind.rawValue) { beginModelingOperation(kind) }
+                        .accessibilityIdentifier("Modeling.begin.\(kind.rawValue)")
+                }
+                Divider()
+                Button("Edit Mesh Elements") {
+                    cancelModelingOperation()
+                    selectedTool = .mesh
+                }
+                Button("Make Selected CAD Editable as Mesh…") { showsMakeEditableConfirmation = true }
+                    .disabled(snapshot.selection.selectedTargets.count != 1 || !selectedPresentationHasExactCADAffordanceContext)
+            } label: {
+                Label("Model", systemImage: "cube")
+            }
+            .disabled(modelingPreview.isBusy)
+            .accessibilityIdentifier("WorkspaceCommand.model")
 
             Button {
                 isPreviewExpanded.toggle()
@@ -6411,10 +6759,10 @@ private struct ProjectMainViewContent: View {
             },
             onProjectEdges: projectSelectedGeneratedEdgesToConstructionPlane,
             onFilletEdges: { targets, meters in
-                filletSelectedEdges(targets, radius: meters)
+                beginEdgeTreatment(.fillet, targets: targets, meters: meters)
             },
             onChamferEdges: { targets, meters in
-                chamferSelectedEdges(targets, by: meters)
+                beginEdgeTreatment(.chamfer, targets: targets, meters: meters)
             },
             onMoveVertex: { target, deltaX, deltaY in
                 moveSelectedVertex(target, deltaX: deltaX, deltaY: deltaY)
@@ -6443,20 +6791,21 @@ private struct ProjectMainViewContent: View {
             onSetLock: { id, isLocked in
                 submitSource(.setSceneNodeLock(id: id, isLocked: isLocked))
             },
-            onSetTransformComponent: { component, value in
-                setTransformComponent(component, to: value, for: nodes)
-            },
             onSetMaterial: { id, materialID in
                 submitSource(.setSceneNodeMaterial(id: id, materialID: materialID))
             },
-            onResetTransform: {
-                submitSource(
-                    nodes.map { node in
-                        .setSceneNodeTransform(id: node.id, localTransform: .identity)
-                    },
-                    name: "resetObjectInspectorTransform"
-                )
-            }
+            isBusy: modelingPreview.isBusy,
+            hasMatchingPreview: modelingPreview.phase == .ready,
+            previewError: modelingPreview.errorMessage,
+            onDraftChanged: invalidateModelingPreview,
+            onPreview: { commands in
+                do {
+                    let action = try DefaultProjectWorkspaceActionPlanner().source(name: "Transform Objects", commands: commands, from: snapshot)
+                    startModelingPreview(.source(action))
+                } catch { modelingPreview.errorMessage = error.localizedDescription }
+            },
+            onApply: applyModelingOperation,
+            onCancel: invalidateModelingPreview
         )
     }
 
@@ -7275,14 +7624,14 @@ private struct ProjectMainViewContent: View {
                         message: "Object scene node \(shape.id) no longer exists."
                     )
                 }
-                var values = WorkspaceTransformMatrix.normalizedValues(node.localTransform.matrix.values)
+                var values = node.localTransform.matrix.values
                 switch axis {
                 case .x:
-                    values[InspectorTransformComponent.translationX.matrixIndex] = meters - shape.sourceCenter.x
+                    values[3] = meters - shape.sourceCenter.x
                 case .y:
-                    values[InspectorTransformComponent.translationY.matrixIndex] = meters - shape.sourceCenter.y
+                    values[7] = meters - shape.sourceCenter.y
                 case .z:
-                    values[InspectorTransformComponent.translationZ.matrixIndex] = meters - shape.sourceCenter.z
+                    values[11] = meters - shape.sourceCenter.z
                 }
                 let matrix = try Matrix4x4(values: values)
                 commands.append(
@@ -7425,29 +7774,11 @@ private struct ProjectMainViewContent: View {
         }
     }
 
-    private func chamferSelectedEdges(
-        _ targets: [SelectionTarget],
-        by meters: Double
-    ) {
-        submitSource(
-            .chamferBodyEdges(
-                targets: targets,
-                distance: .length(meters, .meter)
-            )
-        )
-    }
-
-    private func filletSelectedEdges(
-        _ targets: [SelectionTarget],
-        radius meters: Double
-    ) {
-        submitSource(
-            .filletBodyEdges(
-                targets: targets,
-                radius: .length(meters, .meter),
-                segmentCount: 8
-            )
-        )
+    private func beginEdgeTreatment(_ kind: ModelingOperationDraft.Kind, targets: [SelectionTarget], meters: Double) {
+        beginModelingOperation(kind)
+        modelingDraft?.targets = targets
+        let value = workspaceLengthFieldPresentation(fromMeters: meters, preferredUnit: snapshot.workspaceState.displayUnit)
+        modelingDraft?.distance = value.text + " " + value.unit.symbol
     }
 
     private func moveSelectedVertex(
@@ -8586,8 +8917,8 @@ private struct ProjectMainViewContent: View {
         }
         let sourceCenterRatio = shape.sourceCenter.y / shape.size.y
         let nextSourceCenterY = sourceCenterRatio * sizeYMeters
-        var values = WorkspaceTransformMatrix.normalizedValues(node.localTransform.matrix.values)
-        values[InspectorTransformComponent.translationY.matrixIndex] = shape.center.y - nextSourceCenterY
+        var values = node.localTransform.matrix.values
+        values[7] = shape.center.y - nextSourceCenterY
         let matrix = try Matrix4x4(values: values)
         return .setSceneNodeTransform(
             id: node.id,
@@ -8603,36 +8934,6 @@ private struct ProjectMainViewContent: View {
     private var sizeSliderMetersRange: ClosedRange<Double> {
         let visibleSpan = snapshot.workspaceState.ruler.normalizedForWorkspaceScale().visibleSpanMeters
         return 0.0 ... visibleSpan
-    }
-
-    private func setTransformComponent(
-        _ component: InspectorTransformComponent,
-        to value: Double,
-        for nodes: [SceneNode]
-    ) {
-        let sceneNodeIDs = nodes.map(\.id)
-        let matrixIndex = component.matrixIndex
-        submitSource(name: "setTransformComponent") { current in
-            var commands: [EditorCommand] = []
-            for sceneNodeID in sceneNodeIDs {
-                guard let node = current.document.document.productMetadata.sceneNodes[sceneNodeID] else {
-                    throw EditorError(
-                        code: .referenceUnresolved,
-                        message: "Scene node \(sceneNodeID) no longer exists."
-                    )
-                }
-                var values = WorkspaceTransformMatrix.normalizedValues(node.localTransform.matrix.values)
-                values[matrixIndex] = value
-                let matrix = try Matrix4x4(values: values)
-                commands.append(
-                    .setSceneNodeTransform(
-                        id: node.id,
-                        localTransform: Transform3D(matrix: matrix)
-                    )
-                )
-            }
-            return commands
-        }
     }
 
     private func extrudeFeatureID(for node: SceneNode) -> FeatureID? {

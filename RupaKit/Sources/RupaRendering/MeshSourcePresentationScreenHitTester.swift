@@ -11,7 +11,16 @@ struct MeshSourcePresentationScreenHitTester {
         layout: ViewportLayout,
         sectionGeometryResolver: MeshSourcePresentationSectionGeometryResolver? = nil
     ) -> SceneOccurrenceID? {
-        var bestOccurrenceID: SceneOccurrenceID?
+        triangle(at: point, in: plan, layout: layout, sectionGeometryResolver: sectionGeometryResolver)?.occurrenceID
+    }
+
+    private func triangle(
+        at point: CGPoint,
+        in plan: MeshSourcePresentationRenderPlan,
+        layout: ViewportLayout,
+        sectionGeometryResolver: MeshSourcePresentationSectionGeometryResolver?
+    ) -> MeshSourcePresentationTriangle? {
+        var bestTriangle: MeshSourcePresentationTriangle?
         var bestDepth: Double?
 
         plan.forEachTriangle { triangle in
@@ -36,11 +45,67 @@ struct MeshSourcePresentationScreenHitTester {
                 return
             }
             if isNearer(depth, than: bestDepth) {
-                bestOccurrenceID = triangle.occurrenceID
+                bestTriangle = triangle
                 bestDepth = depth
             }
         }
-        return bestOccurrenceID
+        return bestTriangle
+    }
+
+    func meshElement(
+        at point: CGPoint,
+        domain: GeometryAttributeDomain,
+        in plan: MeshSourcePresentationRenderPlan,
+        scene: UniversalViewportScene,
+        layout: ViewportLayout,
+        tolerance: CGFloat = 8,
+        sectionGeometryResolver: MeshSourcePresentationSectionGeometryResolver? = nil
+    ) -> ViewportMeshElementHit? {
+        guard plan.snapshotID == scene.snapshotID,
+              let triangle = triangle(at: point, in: plan, layout: layout, sectionGeometryResolver: sectionGeometryResolver),
+              case .authoredMesh(let sourceID) = triangle.sourceReference else { return nil }
+        let element: MeshSelectionElement
+        switch domain {
+        case .face:
+            element = .face(triangle.faceID)
+        case .vertex, .edge:
+            let ids = [triangle.firstVertexID, triangle.secondVertexID, triangle.thirdVertexID]
+            let points = [triangle.firstPosition, triangle.secondPosition, triangle.thirdPosition].map { layout.project(point3D($0)) }
+            if domain == .vertex {
+                guard let index = (0..<3).min(by: { distanceSquared(point, points[$0]) < distanceSquared(point, points[$1]) }),
+                      distanceSquared(point, points[index]) <= tolerance * tolerance else { return nil }
+                element = .vertex(ids[index])
+            } else {
+                let edgeIDs = [triangle.firstEdgeID, triangle.secondEdgeID, triangle.thirdEdgeID]
+                var nearest: (id: MeshEdgeID, distance: CGFloat)?
+                // Only original face-loop edges qualify, never tessellation diagonals.
+                for side in 0..<3 {
+                    guard let edgeID = edgeIDs[side] else { continue }
+                    let next = (side + 1) % 3
+                    let distance = segmentDistanceSquared(point, points[side], points[next])
+                    guard distance <= tolerance * tolerance, distance < (nearest?.distance ?? .infinity) else { continue }
+                    nearest = (edgeID, distance)
+                }
+                guard let nearest else { return nil }
+                element = .edge(nearest.id)
+            }
+        default:
+            return nil
+        }
+        return ViewportMeshElementHit(snapshotID: scene.snapshotID, occurrenceID: triangle.occurrenceID, sourceID: sourceID, element: element)
+    }
+
+    private func distanceSquared(_ a: CGPoint, _ b: CGPoint) -> CGFloat {
+        let x = a.x - b.x, y = a.y - b.y
+        return x * x + y * y
+    }
+
+    private func segmentDistanceSquared(_ point: CGPoint, _ a: CGPoint, _ b: CGPoint) -> CGFloat {
+        let x = b.x - a.x, y = b.y - a.y
+        let length = x * x + y * y
+        guard length > 0 else { return distanceSquared(point, a) }
+        let t = min(1, max(0, ((point.x - a.x) * x + (point.y - a.y) * y) / length))
+        return distanceSquared(point, CGPoint(x: a.x + t * x, y: a.y + t * y))
     }
 
     func occurrenceIDs(

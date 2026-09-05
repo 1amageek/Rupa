@@ -27,26 +27,13 @@ enum InspectorTransformComponent {
     case translationX
     case translationY
     case translationZ
+    case rotationX
+    case rotationY
+    case rotationZ
     case scaleX
     case scaleY
     case scaleZ
 
-    var matrixIndex: Int {
-        switch self {
-        case .translationX:
-            12
-        case .translationY:
-            13
-        case .translationZ:
-            14
-        case .scaleX:
-            0
-        case .scaleY:
-            5
-        case .scaleZ:
-            10
-        }
-    }
 }
 
 enum InspectorMaterialChoice: Hashable, Identifiable {

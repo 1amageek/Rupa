@@ -298,6 +298,7 @@ let package = Package(
             dependencies: [
                 "RupaKit",
                 "RupaCore",
+                "RupaGeometry",
                 "RupaDomainFoundation",
                 "RupaProject",
                 "RupaRendering",
@@ -306,7 +307,7 @@ let package = Package(
                 .product(name: "MacComponent", package: "mac-component"),
                 .product(name: "SwiftCAD", package: "swift-CAD"),
             ],
-            exclude: ["DESIGN.md"]
+            exclude: ["DESIGN.md", "Modeling/DESIGN.md"]
         ),
         .target(
             name: "RupaAgentUI",

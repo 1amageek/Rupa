@@ -4551,11 +4551,11 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
     #expect(source.outputInstanceIDs.count == 11)
     #expect(groupNode.object?.category == .group)
     #expect(groupNode.childIDs.count == source.outputInstanceIDs.count)
-    #expect(firstInstance.localTransform.matrix.values[12] == 0.01)
-    #expect(firstInstance.localTransform.matrix.values[13] == 0.0)
-    #expect(thirdInstance.localTransform.matrix.values[12] == 0.03)
-    #expect(fourthInstance.localTransform.matrix.values[12] == 0.0)
-    #expect(fourthInstance.localTransform.matrix.values[13] == 0.02)
+    #expect(firstInstance.localTransform.matrix.values[3] == 0.01)
+    #expect(firstInstance.localTransform.matrix.values[7] == 0.0)
+    #expect(thirdInstance.localTransform.matrix.values[3] == 0.03)
+    #expect(fourthInstance.localTransform.matrix.values[3] == 0.0)
+    #expect(fourthInstance.localTransform.matrix.values[7] == 0.02)
     #expect(session.evaluationStatus == .valid)
 
     _ = try session.undo()
@@ -4617,11 +4617,11 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
     #expect(result.didMutate)
     #expect(source.outputInstanceIDs.count == 5)
     #expect(commandStackApproximatelyEqual(firstValues[0], 0.0))
-    #expect(commandStackApproximatelyEqual(firstValues[1], 1.0))
-    #expect(commandStackApproximatelyEqual(firstValues[4], -1.0))
+    #expect(commandStackApproximatelyEqual(firstValues[4], 1.0))
+    #expect(commandStackApproximatelyEqual(firstValues[1], -1.0))
     #expect(commandStackApproximatelyEqual(firstValues[5], 0.0))
-    #expect(commandStackApproximatelyEqual(radialValues[12], 0.005))
-    #expect(commandStackApproximatelyEqual(radialValues[13], 0.0))
+    #expect(commandStackApproximatelyEqual(radialValues[3], 0.005))
+    #expect(commandStackApproximatelyEqual(radialValues[7], 0.0))
 }
 
 @MainActor
@@ -4673,9 +4673,9 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
     #expect(result.commandName == "createPatternArray")
     #expect(source.outputInstanceIDs.count == 3)
     #expect(commandStackApproximatelyEqual(firstValues[0], 4.0 / 3.0))
-    #expect(commandStackApproximatelyEqual(firstValues[12], 0.01))
+    #expect(commandStackApproximatelyEqual(firstValues[3], 0.01))
     #expect(commandStackApproximatelyEqual(thirdValues[0], 2.0))
-    #expect(commandStackApproximatelyEqual(thirdValues[12], 0.03))
+    #expect(commandStackApproximatelyEqual(thirdValues[3], 0.03))
 }
 
 @MainActor
@@ -4752,10 +4752,10 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
     let regeneratedFirst = try #require(session.document.productMetadata.componentInstances[outputIDs[0]])
     let regeneratedSecond = try #require(session.document.productMetadata.componentInstances[outputIDs[1]])
     #expect(regeneratedSource.outputInstanceIDs == outputIDs)
-    #expect(commandStackApproximatelyEqual(initialFirst.localTransform.matrix.values[12], 0.01))
-    #expect(commandStackApproximatelyEqual(initialSecond.localTransform.matrix.values[12], 0.02))
-    #expect(commandStackApproximatelyEqual(regeneratedFirst.localTransform.matrix.values[12], 0.02))
-    #expect(commandStackApproximatelyEqual(regeneratedSecond.localTransform.matrix.values[12], 0.04))
+    #expect(commandStackApproximatelyEqual(initialFirst.localTransform.matrix.values[3], 0.01))
+    #expect(commandStackApproximatelyEqual(initialSecond.localTransform.matrix.values[3], 0.02))
+    #expect(commandStackApproximatelyEqual(regeneratedFirst.localTransform.matrix.values[3], 0.02))
+    #expect(commandStackApproximatelyEqual(regeneratedSecond.localTransform.matrix.values[3], 0.04))
 }
 
 @MainActor
@@ -4813,10 +4813,10 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
     let radius = 0.02
     let midpointCoordinate = radius / sqrt(2.0)
 
-    #expect(commandStackApproximatelyEqual(first.localTransform.matrix.values[12], midpointCoordinate - radius))
-    #expect(commandStackApproximatelyEqual(first.localTransform.matrix.values[13], midpointCoordinate))
-    #expect(commandStackApproximatelyEqual(second.localTransform.matrix.values[12], -radius))
-    #expect(commandStackApproximatelyEqual(second.localTransform.matrix.values[13], radius))
+    #expect(commandStackApproximatelyEqual(first.localTransform.matrix.values[3], midpointCoordinate - radius))
+    #expect(commandStackApproximatelyEqual(first.localTransform.matrix.values[7], midpointCoordinate))
+    #expect(commandStackApproximatelyEqual(second.localTransform.matrix.values[3], -radius))
+    #expect(commandStackApproximatelyEqual(second.localTransform.matrix.values[7], radius))
 }
 
 @MainActor
@@ -4925,9 +4925,9 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
         session.document.productMetadata.componentInstances[initialOutputIDs[1]]
     )
     #expect(regeneratedSource.outputInstanceIDs == initialOutputIDs)
-    #expect(initialFirstInstance.localTransform.matrix.values[12] == 0.01)
-    #expect(regeneratedFirstInstance.localTransform.matrix.values[12] == 0.025)
-    #expect(regeneratedSecondInstance.localTransform.matrix.values[12] == 0.05)
+    #expect(initialFirstInstance.localTransform.matrix.values[3] == 0.01)
+    #expect(regeneratedFirstInstance.localTransform.matrix.values[3] == 0.025)
+    #expect(regeneratedSecondInstance.localTransform.matrix.values[3] == 0.05)
 }
 
 @MainActor
@@ -4988,7 +4988,7 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
     #expect(updatedGroupNode.name == "Updated Array")
     #expect(updatedSource.outputInstanceIDs == [initialOutputIDs[0]])
     #expect(session.document.productMetadata.componentInstances[initialSecondOutputID] == nil)
-    #expect(reusedInstance.localTransform.matrix.values[12] == 0.02)
+    #expect(reusedInstance.localTransform.matrix.values[3] == 0.02)
 
     _ = try session.undo()
     let restoredSource = try #require(session.document.productMetadata.patternArrays[source.id])
@@ -5239,7 +5239,7 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
     #expect(updatedSource.outputSceneNodeIDs == initialOutputSceneNodeIDs)
     #expect(updatedSource.outputFeatureIDs.contains(firstCloneBodyFeatureID))
     #expect(updatedExtrude.distance == editedDistance)
-    #expect(secondOutputNode.localTransform.matrix.values[12] == 0.04)
+    #expect(secondOutputNode.localTransform.matrix.values[3] == 0.04)
 }
 
 @MainActor

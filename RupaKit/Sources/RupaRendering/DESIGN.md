@@ -58,6 +58,32 @@ not a new renderer protocol or scene graph.
 
 ## Contracts and Invariants
 
+Authored Mesh element picking consumes only the matching ready presentation
+plan. The nearest visible triangle supplies source provenance; vertex and edge
+picks use a screen-space tolerance, and an edge must exist on the source face
+boundary. A triangulation diagonal is never an editable edge. Hits carry the
+scene snapshot, occurrence, source and persistent element ID; the UI does not
+turn them into CAD subshape IDs. Selection overlays are derived from the same
+retained geometry and never mutate or validate the entire source per frame.
+
+`ViewportMeshSelectionOverlay.build` is the single-value off-main projection
+for one `UniversalViewportSceneItem` and its exact selected Mesh elements. It
+retains the supplied evaluation snapshot, source, and occurrence identities,
+transforms selected vertex/corner points into world space, and emits original
+Mesh edge-boundary segments for selected edges/faces without triangulation
+diagonals. Selected elements are never truncated. A caller-lowerable visible
+segment limit applies only to the derived outline array and reports its full
+source count, visible count, and truncation state; negative or above-ceiling
+limits are rejected. Selection count is bounded by
+`MeshEditLimits.standard.maxSelectedIDs`. The builder linearly scans the
+validated immutable source for requested IDs and retained boundary endpoints,
+materializes world transforms only for selected points and visible segments,
+checks cancellation at bounded traversal points, and does not own a cache or
+repeat source scans per frame.
+When a universal presentation scene is supplied, legacy overlay construction
+uses supplied-only evaluation. A source-preview scene therefore cannot trigger
+synchronous CAD evaluation from Viewport body or input handling.
+
 1. The cache is idle, preparing, ready, or failed for one snapshot. Only matching
    ready state exposes geometry to rendering and picking. Failure is explicit;
    no empty, stale, coarser, or alternate-renderer success is substituted.
@@ -195,6 +221,15 @@ timing. An in-flight cancellation probe measures actual stop, not preparation
 duration or a state reset.
 
 ## Verification and Change Impact
+
+Mesh element picking consumes boundary provenance prepared by the existing
+off-main presentation plan. Each triangle side retains a checked corner index
+or a diagonal sentinel; the source corner-edge buffer stays shared. Three
+UInt32 indices per triangle are charged before allocation, and the bounded
+face-local lookup is included in working-memory admission. Picking resolves
+three sides without searching source faces. Selection overlays also retain
+selected local positions so numeric UI prefill never scans source vertices.
+The boundary/diagonal picking and local/world overlay tests own this contract.
 
 | Invariant | Behavioral evidence |
 |---|---|
