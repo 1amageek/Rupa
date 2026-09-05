@@ -221,6 +221,93 @@ func cadProviderResolvesMultipleDocumentsInOneSourceTransaction() throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cadProviderPassesRemainingKernelLimitsToEachFreshSource() throws {
+    let first = try makeCADProviderFixture()
+    let second = try makeCADProviderFixture()
+    let firstVertexCount = try #require(first.evaluatedDocument.meshes.values.first?.positions.count)
+    let secondVertexCount = try #require(second.evaluatedDocument.meshes.values.first?.positions.count)
+    #expect(firstVertexCount == 24)
+    #expect(secondVertexCount == 24)
+    let baselineProvider = CADGeometrySourceProvider(
+        document: first.document,
+        evaluator: RecordingCADDocumentEvaluator(result: first.evaluatedDocument)
+    )
+    let baseline = try baselineProvider.evaluate(
+        try GeometrySourceEvaluationRequest(
+            references: [first.reference],
+            sourceRevision: DocumentTransactionRevision(30),
+            purpose: .presentation,
+            allowance: EvaluationAllowance(.standard)
+        ),
+        in: first.project
+    )
+    let firstUniversalUsage = try #require(
+        try baseline[first.reference]?.mesh.resourceUsage()
+    )
+
+    let firstEvaluator = RecordingCADDocumentEvaluator(
+        result: first.evaluatedDocument,
+        refusesResultExceedingLimits: true
+    )
+    let secondEvaluator = RecordingCADDocumentEvaluator(
+        result: second.evaluatedDocument,
+        refusesResultExceedingLimits: true
+    )
+    let provider = try CADGeometrySourceProvider(
+        sources: [
+            CADGeometryEvaluationSource(
+                document: first.document,
+                evaluator: firstEvaluator
+            ),
+            CADGeometryEvaluationSource(
+                document: second.document,
+                evaluator: secondEvaluator
+            ),
+        ]
+    )
+    var allowance = EvaluationAllowance(.standard)
+    allowance.vertexCount = 30
+    allowance.cornerCount = TessellationLimits.standard.maximumIndexCount + 1
+    allowance.faceCount = TessellationLimits.standard.maximumTriangleCount + 1
+    allowance.triangleCount = TessellationLimits.standard.maximumTriangleCount + 1
+    allowance.byteCount = firstUniversalUsage.byteCount + 1
+
+    var error: EvaluationError?
+    do {
+        _ = try provider.evaluate(
+            try GeometrySourceEvaluationRequest(
+                references: [first.reference, second.reference],
+                sourceRevision: DocumentTransactionRevision(31),
+                purpose: .presentation,
+                allowance: allowance
+            ),
+            in: first.project
+        )
+    } catch let caught as EvaluationError {
+        error = caught
+    }
+
+    #expect(error?.code == .resourceExhausted)
+    #expect(firstEvaluator.evaluationCount() == 1)
+    #expect(secondEvaluator.evaluationCount() == 1)
+    #expect(firstEvaluator.lastLimits()?.maximumVertexCount == 30)
+    // The first source consumes 24 vertices. The second evaluator must receive
+    // the six-vertex remainder and refuse before returning its 24-vertex mesh.
+    #expect(secondEvaluator.lastLimits()?.maximumVertexCount == 6)
+    #expect(
+        secondEvaluator.lastLimits()?.maximumIndexCount
+            == TessellationLimits.standard.maximumIndexCount
+                - (first.evaluatedDocument.meshes.values.first?.indices.count ?? 0)
+    )
+    #expect(
+        secondEvaluator.lastLimits()?.maximumTriangleCount
+            == TessellationLimits.standard.maximumTriangleCount
+                - ((first.evaluatedDocument.meshes.values.first?.indices.count ?? 0) / 3)
+    )
+    #expect(secondEvaluator.lastLimits()?.maximumByteCount == 1)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cadProviderRejectsInvalidMeshInsteadOfDroppingMalformedAttributes() throws {
     let fixture = try makeCADProviderFixture()
     let bodyID = try #require(fixture.evaluatedDocument.meshes.keys.first)
@@ -907,6 +994,94 @@ func cadProviderRefusesAnExactCachedRevisionTheAllowanceNoLongerAdmits() throws 
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cadProviderPreflightsUniversalStorageBeforeMaterialization() throws {
+    let fixture = try makeCADProviderFixture()
+    let baselineProvider = CADGeometrySourceProvider(
+        document: fixture.document,
+        evaluator: RecordingCADDocumentEvaluator(result: fixture.evaluatedDocument)
+    )
+    let baseline = try baselineProvider.evaluate(
+        try GeometrySourceEvaluationRequest(
+            references: [fixture.reference],
+            sourceRevision: DocumentTransactionRevision(28),
+            purpose: .presentation,
+            allowance: EvaluationAllowance(.standard)
+        ),
+        in: fixture.project
+    )
+    let baselineResult = try #require(baseline[fixture.reference])
+    let usage = try baselineResult.mesh.resourceUsage()
+
+    var exactAllowance = EvaluationAllowance(.standard)
+    exactAllowance.vertexCount = usage.vertexCount
+    exactAllowance.faceCount = usage.faceCount
+    exactAllowance.cornerCount = usage.cornerCount
+    exactAllowance.triangleCount = usage.triangleCount
+    exactAllowance.byteCount = usage.byteCount
+
+    let cache = CADDocumentEvaluationCache()
+    let exactEvaluator = RecordingCADDocumentEvaluator(result: fixture.evaluatedDocument)
+    let exactProvider = CADGeometrySourceProvider(
+        document: fixture.document,
+        evaluator: exactEvaluator,
+        cache: cache
+    )
+    _ = try exactProvider.evaluate(
+        try GeometrySourceEvaluationRequest(
+            references: [fixture.reference],
+            sourceRevision: DocumentTransactionRevision(29),
+            purpose: .presentation,
+            allowance: exactAllowance
+        ),
+        in: fixture.project
+    )
+
+    var oneByteBelow = exactAllowance
+    oneByteBelow.byteCount = usage.byteCount - 1
+    let narrowedProvider = CADGeometrySourceProvider(
+        document: fixture.document,
+        evaluator: exactEvaluator,
+        cache: cache
+    )
+    var error: EvaluationError?
+    do {
+        _ = try narrowedProvider.evaluate(
+            try GeometrySourceEvaluationRequest(
+                references: [fixture.reference],
+                sourceRevision: DocumentTransactionRevision(30),
+                purpose: .presentation,
+                allowance: oneByteBelow
+            ),
+            in: fixture.project
+        )
+    } catch let caught as EvaluationError {
+        error = caught
+    }
+
+    #expect(error?.code == .resourceExhausted)
+    #expect(exactEvaluator.evaluationCount() == 2)
+
+    // The refused request must not publish a replacement cache entry. A probe
+    // with the failed revision therefore has to evaluate again.
+    let probeEvaluator = RecordingCADDocumentEvaluator(result: fixture.evaluatedDocument)
+    let probeProvider = CADGeometrySourceProvider(
+        document: fixture.document,
+        evaluator: probeEvaluator,
+        cache: cache
+    )
+    _ = try probeProvider.evaluate(
+            try GeometrySourceEvaluationRequest(
+                references: [fixture.reference],
+                sourceRevision: DocumentTransactionRevision(30),
+                purpose: .presentation,
+                allowance: exactAllowance
+        ),
+        in: fixture.project
+    )
+    #expect(probeEvaluator.evaluationCount() == 1)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cadProviderReportsAKernelResourceRefusalAsResourceExhaustion() throws {
     let fixture = try makeCADProviderFixture()
     let evaluator = RecordingCADDocumentEvaluator(
@@ -1006,6 +1181,7 @@ private final class RecordingCADDocumentEvaluator: CADDocumentEvaluating, Sendab
     let configuration: CADGeometryEvaluationConfiguration
     private let result: EvaluatedDocument
     private let failure: (any Error)?
+    private let refusesResultExceedingLimits: Bool
     private let state = Mutex(State())
 
     init(
@@ -1014,11 +1190,13 @@ private final class RecordingCADDocumentEvaluator: CADDocumentEvaluating, Sendab
             CADGeometryEvaluationConfiguration(
                 tolerance: DocumentModelingSettings.standard.tolerance
             ),
-        failure: (any Error)? = nil
+        failure: (any Error)? = nil,
+        refusesResultExceedingLimits: Bool = false
     ) {
         self.result = result
         self.configuration = configuration
         self.failure = failure
+        self.refusesResultExceedingLimits = refusesResultExceedingLimits
     }
 
     func evaluate(
@@ -1035,6 +1213,18 @@ private final class RecordingCADDocumentEvaluator: CADDocumentEvaluating, Sendab
         }
         if let failure {
             throw failure
+        }
+        if refusesResultExceedingLimits {
+            for mesh in result.meshes.values {
+                let usage = try TessellationUsage(mesh: mesh)
+                if let exceeded = usage.firstResourceExceeding(limits) {
+                    throw TessellationError.resourceExhausted(
+                        exceeded,
+                        requested: usage.amount(for: exceeded),
+                        limit: limits.limit(for: exceeded)
+                    )
+                }
+            }
         }
         return result
     }

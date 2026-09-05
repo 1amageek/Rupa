@@ -23,6 +23,7 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
         purpose: GeometryRepresentationPurpose,
         revision: DocumentTransactionRevision
     ) throws -> EvaluatedProjectSnapshot {
+        try Task.checkCancellation()
         do {
             try project.validate()
         } catch let error as ProjectModelError {
@@ -31,6 +32,7 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
                 : .invalidProject
             throw EvaluationError(code: code, message: error.message)
         }
+        try Task.checkCancellation()
 
         let occurrenceIDs = project.occurrences.keys.sorted(by: { $0.rawValue < $1.rawValue })
         let resultsByReference = try evaluateGeometrySources(
@@ -43,6 +45,7 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
         var transformCache: [SceneOccurrenceID: GeometryTransform3D] = [:]
         var evaluated: [SceneOccurrenceID: EvaluatedOccurrenceSnapshot] = [:]
         for occurrenceID in occurrenceIDs {
+            try Task.checkCancellation()
             guard let occurrence = project.occurrences[occurrenceID],
                   let definition = project.objectDefinitions[occurrence.definitionID] else {
                 continue
@@ -78,6 +81,7 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
             )
         }
 
+        try Task.checkCancellation()
         let id = EvaluationSnapshotID(
             projectID: project.id,
             purpose: purpose,
@@ -85,8 +89,10 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
         )
         var copyTelemetry = GeometryCopyTelemetry()
         for result in resultsByReference.values {
+            try Task.checkCancellation()
             try copyTelemetry.record(contentsOf: result.copyTelemetry)
         }
+        try Task.checkCancellation()
         return EvaluatedProjectSnapshot(
             id: id,
             projectID: project.id,
@@ -101,11 +107,13 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
         purpose: GeometryRepresentationPurpose,
         sourceRevision: DocumentTransactionRevision
     ) throws -> [GeometrySourceReference: GeometryEvaluationResult] {
+        try Task.checkCancellation()
         var budget = try EvaluationBudget(limits: policy.limits(for: purpose))
         var referencesByProvider: [String: [GeometrySourceReference]] = [:]
         var seenReferences: Set<GeometrySourceReference> = []
 
         for occurrenceID in occurrenceIDs {
+            try Task.checkCancellation()
             guard let occurrence = project.occurrences[occurrenceID],
                   let definition = project.objectDefinitions[occurrence.definitionID],
                   let representation = try selectedRepresentation(
@@ -128,6 +136,7 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
         var resultsByReference: [GeometrySourceReference: GeometryEvaluationResult] = [:]
         resultsByReference.reserveCapacity(seenReferences.count)
         for providerID in referencesByProvider.keys.sorted() {
+            try Task.checkCancellation()
             guard let references = referencesByProvider[providerID] else {
                 continue
             }
@@ -140,7 +149,9 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
                 purpose: purpose,
                 allowance: budget.remaining
             )
+            try Task.checkCancellation()
             let providerResults = try provider.evaluate(request, in: project)
+            try Task.checkCancellation()
             try validate(
                 providerResults,
                 for: request,
@@ -151,6 +162,7 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
             // returned mesh is charged here even when the provider ignored it.
             // Charging follows the request order so exhaustion is deterministic.
             for reference in request.references {
+                try Task.checkCancellation()
                 guard let result = providerResults[reference] else {
                     continue
                 }
@@ -158,6 +170,7 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
                 resultsByReference[reference] = result
             }
         }
+        try Task.checkCancellation()
         return resultsByReference
     }
 
@@ -199,6 +212,7 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
         for request: GeometrySourceEvaluationRequest,
         providerID: String
     ) throws {
+        try Task.checkCancellation()
         let expectedReferences = Set(request.references)
         guard Set(results.keys) == expectedReferences else {
             throw EvaluationError(
@@ -213,6 +227,7 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
             )
         }
         for result in results.values {
+            try Task.checkCancellation()
             do {
                 try result.mesh.validate()
                 guard try result.mesh.bounds() == result.localBounds else {
@@ -237,6 +252,7 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
         in project: ProjectSourceModel,
         cache: inout [SceneOccurrenceID: GeometryTransform3D]
     ) throws -> GeometryTransform3D {
+        try Task.checkCancellation()
         if let cached = cache[occurrenceID] {
             return cached
         }

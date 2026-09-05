@@ -64,14 +64,29 @@ flowchart LR
 4. Mesh artifact reuse is separate and requires the exact source fingerprint
    and the complete tessellation fidelity configuration. A reused artifact is
    charged against the requesting allowance like a freshly produced one,
-   because the kernel carries unchanged bodies forward without consulting the
-   ceiling; an artifact the current allowance does not admit is a typed
-   refusal, not a cache miss.
+   because a reused body may bypass a new kernel tessellation invocation; an
+   artifact the current allowance does not admit is a typed refusal, not a
+   cache miss.
 5. The provider enforces the lower of the module tessellation ceiling and the
    remaining RupaEvaluation allowance before derived Mesh allocation, then
-   returns exactly one validated result for every requested reference. A
-   kernel resource refusal is reported as resource exhaustion, an invalid
-   ceiling as invalid configuration, and a cancellation is rethrown unchanged.
+   returns exactly one validated result for every requested reference. Its
+   admission accounts for final universal `MeshSource` storage (IDs, topology,
+   corners, and converted attributes), not only kernel position/index arrays.
+   For a request containing multiple CAD sources, each fresh source evaluation
+   receives a newly lowered kernel limit derived from the already lowered
+   module/request ceiling after every earlier kernel charge. The byte dimension
+   is additionally capped by the universal allowance remaining after earlier
+   `MeshSource` charges, because kernel and universal byte footprints differ.
+   An exact cache hit skips kernel allocation but is still charged by universal
+   admission. A source that cannot fit that remainder is refused by the
+   evaluator before it allocates its mesh, while the provider's final aggregate
+   guard remains authoritative for returned output.
+   Edge-key preflight scratch is bounded by the byte-derived remaining edge
+   capacity and is never reserved from the full kernel index count.
+   The materialized source is measured again and must match the prediction
+   before it can be cached. A kernel resource refusal is reported as resource
+   exhaustion, an invalid ceiling as invalid configuration, and a cancellation
+   is rethrown unchanged.
 6. Cache publication is atomic for one provider evaluation. Failure,
    cancellation, stale source identity, or limit exhaustion publishes neither
    a partial result nor a reusable Mesh artifact.

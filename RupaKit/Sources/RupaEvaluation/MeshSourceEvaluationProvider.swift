@@ -11,10 +11,12 @@ public struct MeshSourceEvaluationProvider: GeometrySourceEvaluationProvider {
         _ request: GeometrySourceEvaluationRequest,
         in project: ProjectSourceModel
     ) throws -> [GeometrySourceReference: GeometryEvaluationResult] {
+        try Task.checkCancellation()
         var results: [GeometrySourceReference: GeometryEvaluationResult] = [:]
         results.reserveCapacity(request.references.count)
 
         for reference in request.references {
+            try Task.checkCancellation()
             guard case .authoredMesh(let sourceID) = reference else {
                 throw EvaluationError(
                     code: .invalidResult,
@@ -52,6 +54,7 @@ public struct MeshSourceEvaluationProvider: GeometrySourceEvaluationProvider {
                 localBounds: try mesh.bounds()
             )
         }
+        try Task.checkCancellation()
         return results
     }
 }

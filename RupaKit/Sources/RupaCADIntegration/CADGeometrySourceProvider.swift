@@ -77,6 +77,7 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
         _ request: GeometrySourceEvaluationRequest,
         in project: ProjectSourceModel
     ) throws -> [GeometrySourceReference: GeometryEvaluationResult] {
+        try Task.checkCancellation()
         do {
             return try evaluate(admitted: request, in: project)
         } catch let error as CADIntegrationError where error.code == .resourceExhausted {
@@ -94,14 +95,18 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
         admitted request: GeometrySourceEvaluationRequest,
         in _: ProjectSourceModel
     ) throws -> [GeometrySourceReference: GeometryEvaluationResult] {
-        let outputs = try request.references.map { reference in
-            try validatedOutput(for: reference)
+        var outputs: [ValidatedOutput] = []
+        outputs.reserveCapacity(request.references.count)
+        for reference in request.references {
+            try Task.checkCancellation()
+            outputs.append(try validatedOutput(for: reference))
         }
         var admission = try CADTessellationAdmission(allowance: request.allowance)
         var sourceOrder: [String] = []
         var outputsBySourceID: [String: [ValidatedOutput]] = [:]
         outputsBySourceID.reserveCapacity(outputs.count)
         for output in outputs {
+            try Task.checkCancellation()
             if outputsBySourceID[output.sourceID] == nil {
                 sourceOrder.append(output.sourceID)
             }
@@ -113,6 +118,7 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
         results.reserveCapacity(outputs.count)
         publications.reserveCapacity(sourceOrder.count)
         for sourceID in sourceOrder {
+            try Task.checkCancellation()
             guard let sourceOutputs = outputsBySourceID[sourceID] else {
                 continue
             }
@@ -139,10 +145,12 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
                 sourceRevision: request.sourceRevision,
                 admission: &admission
             )
+            try Task.checkCancellation()
             results.merge(evaluation.results) { existing, _ in existing }
             publications.append(evaluation.publication)
         }
 
+        try Task.checkCancellation()
         try cache.publish(publications)
         return results
     }
@@ -153,6 +161,7 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
         sourceRevision: DocumentTransactionRevision,
         admission: inout CADTessellationAdmission
     ) throws -> SourceEvaluation {
+        try Task.checkCancellation()
         let evaluator = source.evaluator
         // One evaluator and one cache serve both representation purposes for the
         // same document. Both ask for the same fidelity, so they share one
@@ -189,15 +198,17 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
             sourceFingerprint: sourceFingerprint,
             configuration: configuration
         )
+        try Task.checkCancellation()
         let evaluatedDocument: EvaluatedDocument
         if lookup.isExactRevision, let exact = lookup.evaluatedDocument {
             evaluatedDocument = exact
         } else {
+            let limits = try admission.limitsForNextSource()
             do {
                 evaluatedDocument = try evaluator.evaluate(
                     validatedDocument,
                     reusing: lookup.evaluatedDocument,
-                    admitting: admission.limits
+                    admitting: limits
                 )
             } catch let error as CancellationError {
                 // Cancellation is the caller's own decision, not a failure of
@@ -211,6 +222,7 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
                     message: "CAD document evaluation failed: \(error)"
                 )
             }
+            try Task.checkCancellation()
             try validate(
                 evaluatedDocument: evaluatedDocument,
                 configuration: configuration,
@@ -228,6 +240,7 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
         results.reserveCapacity(outputs.count)
         meshSourcesByBodyID.reserveCapacity(outputs.count)
         for output in outputs {
+            try Task.checkCancellation()
             guard let bodyID = resolveBodyID(
                 outputID: output.outputID,
                 in: evaluatedDocument
@@ -243,11 +256,18 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
                     message: "CAD evaluation produced no mesh for body \(bodyID.description)."
                 )
             }
+            try validate(mesh: mesh, tolerance: configuration.tolerance)
+            guard mesh.material == nil else {
+                throw CADIntegrationError(
+                    code: .unsupportedFidelity,
+                    message: "CAD material identity cannot be represented by the universal geometry contract."
+                )
+            }
             // Charged before materialization, and for a cached mesh as well as a
             // freshly tessellated one, because the engine charges every result
             // this call returns while the kernel budget covers only what this
             // invocation tessellated.
-            try admission.admit(mesh)
+            let predictedUsage = try admission.admit(mesh)
             let meshSource: MeshSource
             let copyTelemetry: GeometryCopyTelemetry
             if let cached = meshSourcesByBodyID[bodyID] {
@@ -257,14 +277,27 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
                 let materialized = try makeMeshSource(
                     sourceID: source.sourceID,
                     bodyID: bodyID,
-                    mesh: mesh,
-                    tolerance: configuration.tolerance
+                    mesh: mesh
                 )
                 meshSource = materialized.source
                 copyTelemetry = materialized.copyTelemetry
                 meshSourcesByBodyID[bodyID] = CADDocumentEvaluationCache.CachedMeshSource(
                     mesh: mesh,
                     source: meshSource
+                )
+            }
+            try Task.checkCancellation()
+            do {
+                try admission.verify(
+                    actual: meshSource.resourceUsage(),
+                    predicted: predictedUsage
+                )
+            } catch let error as CADIntegrationError {
+                throw error
+            } catch {
+                throw CADIntegrationError(
+                    code: .invalidMesh,
+                    message: "CAD mesh resource usage could not be verified: \(error)"
                 )
             }
             results[output.reference] = GeometryEvaluationResult(
@@ -275,6 +308,7 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
             )
         }
 
+        try Task.checkCancellation()
         return SourceEvaluation(
             results: results,
             publication: CADDocumentEvaluationCache.Publication(
@@ -286,6 +320,17 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
                 meshSourcesByBodyID: meshSourcesByBodyID
             )
         )
+    }
+
+    private func validate(mesh: Mesh, tolerance: ModelingTolerance) throws {
+        do {
+            try mesh.validate(tolerance: tolerance)
+        } catch {
+            throw CADIntegrationError(
+                code: .invalidMesh,
+                message: "CAD body mesh failed validation: \(error)"
+            )
+        }
     }
 
     private func validate(
@@ -398,24 +443,9 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
     private func makeMeshSource(
         sourceID: String,
         bodyID: BodyID,
-        mesh: Mesh,
-        tolerance: ModelingTolerance
+        mesh: Mesh
     ) throws -> MaterializedMeshSource {
-        do {
-            try mesh.validate(tolerance: tolerance)
-        } catch {
-            throw CADIntegrationError(
-                code: .invalidMesh,
-                message: "CAD body mesh failed validation: \(error)"
-            )
-        }
-        guard mesh.material == nil else {
-            throw CADIntegrationError(
-                code: .unsupportedFidelity,
-                message: "CAD material identity cannot be represented by the universal geometry contract."
-            )
-        }
-
+        try Task.checkCancellation()
         do {
             // Universal editable topology owns stable element IDs, so this adapter
             // materializes Swift-CAD arrays once. The cache reuses the result while
@@ -432,7 +462,10 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
             )
             var vertices: [MeshVertexID] = []
             vertices.reserveCapacity(mesh.positions.count)
-            for position in mesh.positions {
+            for (index, position) in mesh.positions.enumerated() {
+                if index.isMultiple(of: 1_024) {
+                    try Task.checkCancellation()
+                }
                 vertices.append(
                     try builder.addVertex(
                         GeometryPoint3D(x: position.x, y: position.y, z: position.z)
@@ -440,6 +473,9 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
                 )
             }
             for triangleStart in stride(from: 0, to: mesh.indices.count, by: 3) {
+                if triangleStart.isMultiple(of: 3 * 1_024) {
+                    try Task.checkCancellation()
+                }
                 _ = try builder.addTriangle(
                     vertices[Int(mesh.indices[triangleStart])],
                     vertices[Int(mesh.indices[triangleStart + 1])],
@@ -456,8 +492,9 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
                             valueType: .vector3,
                             interpolation: .linear
                         ),
-                        values: .vector3(GeometryBuffer(mesh.normals.map {
-                            GeometryPoint3D(x: $0.x, y: $0.y, z: $0.z)
+                        values: .vector3(GeometryBuffer(try mesh.normals.map {
+                            try Task.checkCancellation()
+                            return GeometryPoint3D(x: $0.x, y: $0.y, z: $0.z)
                         }))
                     )
                 )
@@ -472,8 +509,9 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
                             valueType: .vector2,
                             interpolation: .linear
                         ),
-                        values: .vector2(GeometryBuffer(mesh.textureCoordinates.map {
-                            GeometryVector2D(x: $0.x, y: $0.y)
+                        values: .vector2(GeometryBuffer(try mesh.textureCoordinates.map {
+                            try Task.checkCancellation()
+                            return GeometryVector2D(x: $0.x, y: $0.y)
                         }))
                     )
                 )
@@ -488,8 +526,9 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
                             valueType: .vector4,
                             interpolation: .linear
                         ),
-                        values: .vector4(GeometryBuffer(mesh.vertexColors.map {
-                            GeometryVector4D(x: $0.r, y: $0.g, z: $0.b, w: $0.a)
+                        values: .vector4(GeometryBuffer(try mesh.vertexColors.map {
+                            try Task.checkCancellation()
+                            return GeometryVector4D(x: $0.r, y: $0.g, z: $0.b, w: $0.a)
                         }))
                     )
                 )
@@ -500,6 +539,8 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
                 source: source,
                 copyTelemetry: copyTelemetry
             )
+        } catch let error as CancellationError {
+            throw error
         } catch {
             throw CADIntegrationError(
                 code: .invalidMesh,

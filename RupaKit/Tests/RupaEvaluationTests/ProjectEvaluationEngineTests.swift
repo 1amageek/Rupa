@@ -1,3 +1,4 @@
+import Foundation
 import RupaCoreTypes
 import RupaEvaluation
 import RupaProjectModel
@@ -40,6 +41,88 @@ func projectEvaluationProducesImmutableOccurrenceSnapshotsWithWorldBounds() thro
     #expect(evaluated.representationID == definition.representations.selection?.presentation)
     #expect(evaluated.worldBounds.minimum == GeometryPoint3D(x: 2, y: 3, z: 0))
     #expect(evaluated.worldBounds.maximum == GeometryPoint3D(x: 3, y: 4, z: 0))
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectEvaluationRejectsPreCancelledEmptyProject() async throws {
+    let project = try ProjectSourceModel(id: "project.cancelled", name: "Cancelled")
+    let task = Task { () throws -> EvaluatedProjectSnapshot in
+        try ProjectEvaluationEngine().evaluate(
+            project: project,
+            purpose: .presentation,
+            revision: DocumentTransactionRevision(1)
+        )
+    }
+    task.cancel()
+
+    let result = await task.result
+    guard case .failure(let error) = result else {
+        Issue.record("A pre-cancelled evaluation unexpectedly returned a snapshot.")
+        return
+    }
+    #expect(error is CancellationError)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func projectEvaluationRejectsCancellationAfterProviderReturnsNormally() async throws {
+    let mesh = try triangleSource(identity: "mesh.cancelled-after-provider")
+    let provider = RecordingGeometrySourceEvaluationProvider(
+        providerID: "fixture.cancelled-after-provider",
+        mesh: mesh,
+        gate: GeometryProviderEvaluationGate()
+    )
+    let gate = try #require(provider.gate)
+    let registry = try GeometrySourceEvaluationProviderRegistry(providers: [provider])
+    let reference = GeometrySourceReference.external(
+        providerID: provider.providerID,
+        sourceID: "cancelled-after-provider.source",
+        outputID: "cancelled-after-provider.output"
+    )
+    let definition = objectDefinition(
+        id: "cancelled-after-provider.definition",
+        name: "Cancelled After Provider",
+        source: reference
+    )
+    let occurrence = SceneOccurrence(
+        id: "cancelled-after-provider.occurrence",
+        definitionID: definition.id
+    )
+    let project = try ProjectSourceModel(
+        id: "project.cancelled-after-provider",
+        name: "Cancelled After Provider",
+        objectDefinitions: [definition.id: definition],
+        occurrences: [occurrence.id: occurrence],
+        rootOccurrenceIDs: [occurrence.id]
+    )
+    let task = Task { () throws -> EvaluatedProjectSnapshot in
+        try ProjectEvaluationEngine(registry: registry).evaluate(
+            project: project,
+            purpose: .presentation,
+            revision: DocumentTransactionRevision(2)
+        )
+    }
+    defer { gate.release() }
+
+    for _ in 0..<2_000 where !gate.hasStarted {
+        try await Task.sleep(for: .milliseconds(1))
+    }
+    guard gate.hasStarted else {
+        Issue.record("The provider did not reach its in-flight gate.")
+        task.cancel()
+        return
+    }
+
+    task.cancel()
+    // The provider intentionally ignores cancellation and returns a normal
+    // result. The engine's checkpoint after the provider must still reject it.
+    gate.release()
+
+    let result = await task.result
+    guard case .failure(let error) = result else {
+        Issue.record("Cancellation after provider completion unexpectedly returned a snapshot.")
+        return
+    }
+    #expect(error is CancellationError)
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -445,6 +528,7 @@ final class RecordingGeometrySourceEvaluationProvider:
     private let localBounds: GeometryBounds3D?
     private let copyTelemetry: GeometryCopyTelemetry
     private let returnsResults: Bool
+    let gate: GeometryProviderEvaluationGate?
     private let state = Mutex(State())
 
     init(
@@ -452,13 +536,15 @@ final class RecordingGeometrySourceEvaluationProvider:
         mesh: MeshSource,
         localBounds: GeometryBounds3D? = nil,
         copyTelemetry: GeometryCopyTelemetry = GeometryCopyTelemetry(),
-        returnsResults: Bool = true
+        returnsResults: Bool = true,
+        gate: GeometryProviderEvaluationGate? = nil
     ) {
         self.providerID = providerID
         self.mesh = mesh
         self.localBounds = localBounds
         self.copyTelemetry = copyTelemetry
         self.returnsResults = returnsResults
+        self.gate = gate
     }
 
     func evaluate(
@@ -475,6 +561,8 @@ final class RecordingGeometrySourceEvaluationProvider:
                 )
             )
         }
+        gate?.markStarted()
+        gate?.waitUntilReleased()
 
         guard returnsResults else {
             return [:]
@@ -497,6 +585,33 @@ final class RecordingGeometrySourceEvaluationProvider:
 
     func requests() -> [GeometrySourceEvaluationRequestSnapshot] {
         state.withLock { $0.requests }
+    }
+}
+
+final class GeometryProviderEvaluationGate: Sendable {
+    private struct State: Sendable {
+        var hasStarted = false
+        var isReleased = false
+    }
+
+    private let state = Mutex(State())
+
+    var hasStarted: Bool {
+        state.withLock { $0.hasStarted }
+    }
+
+    func markStarted() {
+        state.withLock { $0.hasStarted = true }
+    }
+
+    func release() {
+        state.withLock { $0.isReleased = true }
+    }
+
+    func waitUntilReleased() {
+        while state.withLock({ $0.isReleased }) == false {
+            Thread.sleep(forTimeInterval: 0.001)
+        }
     }
 }
 

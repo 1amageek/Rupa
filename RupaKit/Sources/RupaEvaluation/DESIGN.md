@@ -98,8 +98,9 @@ value; it is not an actor, coordinator, or second evaluator factory.
    former is governed by exact source/evaluator/modeling compatibility; the
    latter additionally requires full Mesh artifact fidelity configuration and
    admitted measured usage.
-8. Cancellation is checked before provider work, at each provider/reference
-   boundary, and before returning the snapshot. Cancellation and provider
+8. Cancellation is checked before project validation, before each provider,
+   before and after each provider/reference batch, during occurrence projection,
+   and immediately before returning the snapshot. Cancellation and provider
    failure discard the local budget/results and return typed failure; no empty,
    stale, or lower-fidelity fallback is successful.
 9. The engine owns no project publication or cache lifecycle. `ProjectController`

@@ -40,6 +40,57 @@ public struct MeshResourceUsage: Equatable, Hashable, Sendable {
         byteCount: 0
     )
 
+    /// Estimates the resident bytes for buffers a `MeshSource` materializes.
+    ///
+    /// Adapters use this before allocating universal IDs and topology. Keeping
+    /// the byte model here makes the preflight and final `resourceUsage()` check
+    /// share the same strides and checked arithmetic.
+    public static func materializedStorage(
+        vertexCount: Int,
+        edgeCount: Int,
+        faceCount: Int,
+        cornerCount: Int,
+        triangleCount: Int,
+        attributeByteCount: Int = 0
+    ) throws -> MeshResourceUsage {
+        guard vertexCount >= 0,
+              edgeCount >= 0,
+              faceCount >= 0,
+              cornerCount >= 0,
+              triangleCount >= 0,
+              attributeByteCount >= 0 else {
+            throw MeshSourceError(
+                code: .invalidBuffer,
+                message: "Mesh resource usage counts cannot be negative."
+            )
+        }
+
+        var byteCount = 0
+        for bytes in [
+            try product(vertexCount, MemoryLayout<MeshVertexID>.stride),
+            try product(vertexCount, MemoryLayout<GeometryPoint3D>.stride),
+            try product(edgeCount, MemoryLayout<MeshEdgeID>.stride),
+            try product(edgeCount, MemoryLayout<MeshEdgeEndpoints>.stride),
+            try product(faceCount, MemoryLayout<MeshFaceID>.stride),
+            try product(faceCount, MemoryLayout<MeshIndexRange>.stride),
+            try product(cornerCount, MemoryLayout<MeshCornerID>.stride),
+            try product(cornerCount, MemoryLayout<MeshVertexID>.stride),
+            try product(cornerCount, MemoryLayout<MeshEdgeID>.stride),
+            attributeByteCount,
+        ] {
+            byteCount = try sum(byteCount, bytes)
+        }
+
+        return MeshResourceUsage(
+            vertexCount: vertexCount,
+            edgeCount: edgeCount,
+            faceCount: faceCount,
+            cornerCount: cornerCount,
+            triangleCount: triangleCount,
+            byteCount: byteCount
+        )
+    }
+
     /// Adds another mesh's usage, refusing a total no process could hold.
     public func adding(_ other: MeshResourceUsage) throws -> MeshResourceUsage {
         MeshResourceUsage(
@@ -84,6 +135,32 @@ extension MeshSource {
     /// element buffer and every attribute layer, because attribute storage is
     /// resident for as long as the mesh is.
     public func resourceUsage() throws -> MeshResourceUsage {
+        guard vertexIDs.count == vertexPositions.count else {
+            throw MeshSourceError(
+                code: .invalidBuffer,
+                message: "Vertex ID and position buffers must have equal counts before resource accounting."
+            )
+        }
+        guard edgeIDs.count == edgeEndpoints.count else {
+            throw MeshSourceError(
+                code: .invalidBuffer,
+                message: "Edge ID and endpoint buffers must have equal counts before resource accounting."
+            )
+        }
+        guard faceIDs.count == faceCornerRanges.count else {
+            throw MeshSourceError(
+                code: .invalidBuffer,
+                message: "Face ID and corner range buffers must have equal counts before resource accounting."
+            )
+        }
+        guard cornerIDs.count == cornerVertexIDs.count,
+              cornerIDs.count == cornerEdgeIDs.count else {
+            throw MeshSourceError(
+                code: .invalidBuffer,
+                message: "Corner buffers must have equal counts before resource accounting."
+            )
+        }
+
         var triangleCount = 0
         for range in faceCornerRanges {
             guard range.count >= 3 else {
@@ -95,41 +172,13 @@ extension MeshSource {
             triangleCount = try MeshResourceUsage.sum(triangleCount, range.count - 2)
         }
 
-        var byteCount = 0
-        for bytes in [
-            try MeshResourceUsage.product(vertexIDs.count, MemoryLayout<MeshVertexID>.stride),
-            try MeshResourceUsage.product(
-                vertexPositions.count,
-                MemoryLayout<GeometryPoint3D>.stride
-            ),
-            try MeshResourceUsage.product(edgeIDs.count, MemoryLayout<MeshEdgeID>.stride),
-            try MeshResourceUsage.product(
-                edgeEndpoints.count,
-                MemoryLayout<MeshEdgeEndpoints>.stride
-            ),
-            try MeshResourceUsage.product(faceIDs.count, MemoryLayout<MeshFaceID>.stride),
-            try MeshResourceUsage.product(
-                faceCornerRanges.count,
-                MemoryLayout<MeshIndexRange>.stride
-            ),
-            try MeshResourceUsage.product(cornerIDs.count, MemoryLayout<MeshCornerID>.stride),
-            try MeshResourceUsage.product(
-                cornerVertexIDs.count,
-                MemoryLayout<MeshVertexID>.stride
-            ),
-            try MeshResourceUsage.product(cornerEdgeIDs.count, MemoryLayout<MeshEdgeID>.stride),
-            try attributes.estimatedByteCount(),
-        ] {
-            byteCount = try MeshResourceUsage.sum(byteCount, bytes)
-        }
-
-        return MeshResourceUsage(
+        return try MeshResourceUsage.materializedStorage(
             vertexCount: vertexIDs.count,
             edgeCount: edgeIDs.count,
             faceCount: faceIDs.count,
             cornerCount: cornerIDs.count,
             triangleCount: triangleCount,
-            byteCount: byteCount
+            attributeByteCount: try attributes.estimatedByteCount()
         )
     }
 }

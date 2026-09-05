@@ -1,3 +1,4 @@
+import Foundation
 import RupaCoreTypes
 import Testing
 @testable import RupaGeometry
@@ -129,5 +130,56 @@ struct MeshResourceUsageTests {
             _ = try saturated.adding(saturated)
         }
         #expect(error?.code == .resourceLimitExceeded)
+    }
+
+    @Test("Preflight storage uses the same footprint as a materialized source", .timeLimit(.minutes(1)))
+    func preflightStorageMatchesMaterializedSource() throws {
+        let usage = try Self.triangle().resourceUsage()
+        let estimate = try MeshResourceUsage.materializedStorage(
+            vertexCount: usage.vertexCount,
+            edgeCount: usage.edgeCount,
+            faceCount: usage.faceCount,
+            cornerCount: usage.cornerCount,
+            triangleCount: usage.triangleCount
+        )
+
+        #expect(estimate == usage)
+    }
+
+    @Test("Preflight storage overflow is typed", .timeLimit(.minutes(1)))
+    func preflightStorageOverflowIsTyped() throws {
+        let error = #expect(throws: MeshSourceError.self) {
+            _ = try MeshResourceUsage.materializedStorage(
+                vertexCount: Int.max,
+                edgeCount: 0,
+                faceCount: 0,
+                cornerCount: 0,
+                triangleCount: 0
+            )
+        }
+
+        #expect(error?.code == .resourceLimitExceeded)
+    }
+
+    @Test("Malformed paired buffers are rejected before accounting", .timeLimit(.minutes(1)))
+    func malformedPairedBuffersAreRejectedBeforeAccounting() throws {
+        let encoded = try JSONEncoder().encode(Self.triangle())
+        guard var object = try JSONSerialization.jsonObject(with: encoded) as? [String: Any],
+              var positions = object["vertexPositions"] as? [[String: Any]],
+              !positions.isEmpty else {
+            Issue.record("The triangle fixture did not encode vertex positions as an array.")
+            return
+        }
+        positions.removeLast()
+        object["vertexPositions"] = positions
+        let malformed = try JSONDecoder().decode(
+            MeshSource.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
+
+        let error = #expect(throws: MeshSourceError.self) {
+            _ = try malformed.resourceUsage()
+        }
+        #expect(error?.code == .invalidBuffer)
     }
 }

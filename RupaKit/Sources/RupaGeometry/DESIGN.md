@@ -33,6 +33,9 @@ through the package's native target graph.
   budgeted non-convex triangulation;
 - a checked renderable-triangle count that shares the same triangulation path
   without retaining the emitted triangle topology.
+- the checked resident-storage model used both after `MeshSource` materialization
+  and by adapters that must admit IDs, topology, and attributes before allocating
+  them.
 
 It does not own Product Objects, representation selection, Authored Mesh
 provenance, CAD evaluation, project revisions, package paths, UI selection, or
@@ -42,6 +45,13 @@ Presentation triangulation is a read-only operation. It borrows the immutable
 `MeshSource` buffers, builds one bounded vertex-ID-to-source-index map per
 source, and uses source-order face/corner indices for all subsequent reads. It
 does not materialize a replacement `GeometryBuffer` or mutate source storage.
+
+`MeshResourceUsage.materializedStorage` is the adapter-facing preflight for the
+same buffer strides that `MeshSource.resourceUsage()` measures after
+materialization. It accepts checked element counts and converted attribute bytes;
+it does not own provider policy or a project-wide allowance. Final accounting
+also rejects malformed decoded sources whose paired element buffers have
+different counts, rather than silently under-counting one side.
 
 The operation/output vocabulary is local to this module:
 
