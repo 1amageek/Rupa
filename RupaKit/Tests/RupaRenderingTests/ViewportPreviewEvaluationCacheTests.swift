@@ -475,8 +475,9 @@ private final class PreviewEvaluationWorkerProbe: Sendable {
             return state.callCount
         }
         if call == 1 {
-            let deadline = Date().addingTimeInterval(5)
-            while !Task.isCancelled && Date() < deadline {
+            // Cancellation, not elapsed host load, releases the worker. Every
+            // caller owns a time-limited cache whose teardown cancels this task.
+            while !Task.isCancelled {
                 Thread.sleep(forTimeInterval: 0.001)
             }
             if Task.isCancelled {
@@ -484,10 +485,8 @@ private final class PreviewEvaluationWorkerProbe: Sendable {
             }
             return firstResult
         }
-        let deadline = Date().addingTimeInterval(5)
         while state.withLock({ $0.releaseSecondWorker }) == false,
-              !Task.isCancelled,
-              Date() < deadline {
+              !Task.isCancelled {
             Thread.sleep(forTimeInterval: 0.001)
         }
         return subsequentResult
@@ -515,8 +514,9 @@ private final class BlockingFeatureEvaluator: FeatureEvaluating, Sendable {
         context _: EvaluationContext
     ) throws -> EvaluationResult {
         state.withLock { $0.hasStarted = true }
-        let deadline = Date().addingTimeInterval(5)
-        while !Task.isCancelled && Date() < deadline {
+        // The owning cache cancels on clear/teardown; the test's time limit
+        // bounds failures without manufacturing a completed worker first.
+        while !Task.isCancelled {
             Thread.sleep(forTimeInterval: 0.001)
         }
         if Task.isCancelled {

@@ -190,9 +190,9 @@ private func viewportSectionMeshClipperTranslationTransform(
     x: Double
 ) throws -> Transform3D {
     Transform3D(matrix: try Matrix4x4(values: [
-        1.0, 0.0, 0.0, 0.0,
+        1.0, 0.0, 0.0, x,
         0.0, 1.0, 0.0, 0.0,
         0.0, 0.0, 1.0, 0.0,
-        x, 0.0, 0.0, 1.0,
+        0.0, 0.0, 0.0, 1.0,
     ]))
 }

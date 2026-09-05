@@ -55,7 +55,7 @@ func viewportSceneBuilderCreatesDistinctRootOccurrencesForSharedCADFeature() thr
     ])
     #expect(Set(sharedItems.map(\.id)).count == 2)
     #expect(sharedItems.first { $0.sceneNodeID == fixture.visibleSceneNodeID }?
-        .modelTransform.matrix.values[12] == 0.25)
+        .modelTransform.matrix.values[3] == 0.25)
 }
 
 @MainActor
@@ -168,9 +168,9 @@ private func sharedCADFeatureOccurrenceFixture() throws -> (
 
 private func occurrenceTranslationTransform(x: Double) throws -> Transform3D {
     Transform3D(matrix: try Matrix4x4(values: [
-        1.0, 0.0, 0.0, 0.0,
+        1.0, 0.0, 0.0, x,
         0.0, 1.0, 0.0, 0.0,
         0.0, 0.0, 1.0, 0.0,
-        x, 0.0, 0.0, 1.0,
+        0.0, 0.0, 0.0, 1.0,
     ]))
 }

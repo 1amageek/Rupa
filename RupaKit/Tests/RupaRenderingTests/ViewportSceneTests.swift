@@ -388,8 +388,8 @@ private func viewportSceneSnapshotTestKey(
 
     #expect(instanceItems.count == 2)
     #expect(Set(instanceItems.compactMap(\.componentInstanceID)) == Set(source.outputInstanceIDs))
-    #expect(abs(instanceItems[0].modelTransform.matrix.values[12] - 0.1) < 1.0e-12)
-    #expect(abs(instanceItems[1].modelTransform.matrix.values[12] - 0.2) < 1.0e-12)
+    #expect(abs(instanceItems[0].modelTransform.matrix.values[3] - 0.1) < 1.0e-12)
+    #expect(abs(instanceItems[1].modelTransform.matrix.values[3] - 0.2) < 1.0e-12)
     #expect(abs(instanceItems[0].modelBounds.midX - (baseBody.modelBounds.midX + 0.1)) < 1.0e-12)
     #expect(abs(instanceItems[1].modelBounds.midX - (baseBody.modelBounds.midX + 0.2)) < 1.0e-12)
 
@@ -464,7 +464,7 @@ private func viewportSceneSnapshotTestKey(
         item.componentInstanceID == outputInstanceID && item.featureID == bodyFeatureID
     })
 
-    #expect(abs(instanceBody.modelTransform.matrix.values[12] - 0.13) < 1.0e-12)
+    #expect(abs(instanceBody.modelTransform.matrix.values[3] - 0.13) < 1.0e-12)
     #expect(abs(instanceBody.modelBounds.midX - (baseBody.modelBounds.midX + 0.1)) < 1.0e-12)
 }
 
@@ -514,7 +514,7 @@ private func viewportSceneSnapshotTestKey(
         return outputSubtreeIDs.contains(sceneNodeID) && source.outputFeatureIDs.contains(item.featureID)
     })
 
-    #expect(abs(outputBody.modelTransform.matrix.values[12] - 0.1) < 1.0e-12)
+    #expect(abs(outputBody.modelTransform.matrix.values[3] - 0.1) < 1.0e-12)
     #expect(abs(outputBody.modelBounds.midX - (baseBody.modelBounds.midX + 0.1)) < 1.0e-12)
 }
 
@@ -580,7 +580,7 @@ private func viewportSceneSnapshotTestKey(
     }
 
     #expect(outputItems.count == 1)
-    #expect(abs((outputItems.first?.modelTransform.matrix.values[12] ?? 0.0) - 0.05) < 1.0e-12)
+    #expect(abs((outputItems.first?.modelTransform.matrix.values[3] ?? 0.0) - 0.05) < 1.0e-12)
 }
 
 @MainActor
@@ -5087,10 +5087,10 @@ private func translationTransform(
     z: Double
 ) throws -> Transform3D {
     Transform3D(matrix: try Matrix4x4(values: [
-        1.0, 0.0, 0.0, 0.0,
-        0.0, 1.0, 0.0, 0.0,
-        0.0, 0.0, 1.0, 0.0,
-        x, y, z, 1.0,
+        1.0, 0.0, 0.0, x,
+        0.0, 1.0, 0.0, y,
+        0.0, 0.0, 1.0, z,
+        0.0, 0.0, 0.0, 1.0,
     ]))
 }
 
