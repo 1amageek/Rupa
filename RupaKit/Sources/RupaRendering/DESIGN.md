@@ -40,6 +40,13 @@ projection while still accumulating into the same bounded set of batches. None
 of this replaces the existing Canvas renderer or any scene, source, or project
 authority.
 
+The accumulator and its batch key `MeshSourcePresentationVisualState` are
+public, because the responsiveness measurement module must reproduce this draw
+pass rather than reimplement it: a harness that built its own batching would
+stop bounding the interval the Canvas actually spends the moment the two
+diverged. Publishing them makes the draw pass one contract with one
+implementation and one owner.
+
 The viewport also owns transient documents that are never published to project
 authority, such as the edge-treatment drag preview it builds from the current
 selection. Because these documents have no published generation, no project
@@ -84,6 +91,7 @@ protocol is introduced by this correction.
 | [RupaViewportScene](../RupaViewportScene/DESIGN.md) | depends on | Immutable scene and snapshot identity | Supplies selected bounded presentation results and transforms. | Rendering cannot reevaluate or select LOD. |
 | [RupaUI](../RupaUI/DESIGN.md) | used by | MainActor publication and Canvas consumption | Displays only a plan matching the current snapshot. | UI must not perform plan construction. |
 | [Swift-CAD package](../../../swift-CAD/DESIGN.md) | depends on | Exact CAD document and evaluated value types | Supplies the CAD value types this module reads directly through its declared `SwiftCAD` dependency. | Rendering never tessellates CAD, evaluates a document, or selects kernel limits. |
+| [RupaResponsivenessBaseline](../RupaResponsivenessBaseline/DESIGN.md) | used by | `MeshSourcePresentationRenderPlan.forEachOccurrence`, `MeshSourcePresentationOccurrenceView`, `ViewportPresentationBatchAccumulator`, `MeshSourcePresentationVisualState`, performance acceptance table | Reproduces this module's batched draw pass offline and reports one verdict per acceptance row. | It is a measurement module, never a production dependency; the batching contract it drives must stay the one the Canvas draw pass uses, or its Canvas figure stops bounding the real interval. |
 | [RupaRendering tests](../../Tests/RupaRenderingTests) | verification owner | Plan, limit, cancellation, stale-result, and batching behavior | Proves the actual derived-data path. | Type/build checks are not behavior evidence. |
 
 ## Architecture

@@ -3,12 +3,21 @@ import Foundation
 /// One measured iteration of the production preparation and draw work.
 public struct ResponsivenessIterationSample: Equatable, Sendable, Codable {
     public let index: Int
-    /// The cost of publishing one plan, measured as the single
+    /// The cost of building one plan, measured around the single
     /// `MeshSourcePresentationRenderPlan(scene:)` construction the cache
-    /// performs. Construction validates every range, transform, and index
-    /// exactly once, so publication no longer contains a second traversal to
-    /// attribute separately.
-    public let preparationSeconds: Double
+    /// performs inside a detached task. Construction validates every range,
+    /// transform, and index exactly once. It is charged here and never to
+    /// `MainActor`, because the cache does not run it there.
+    public let constructionSeconds: Double
+    /// The `MainActor` interval that publishes one completed plan, measured
+    /// around the state assignment alone. It excludes the observation
+    /// invalidation a live SwiftUI scope adds, so it is a lower bound of what
+    /// the application pays.
+    public let publicationSeconds: Double
+    /// The interval from requesting a plan to its publication, spanning the
+    /// detached construction and the scheduling around it. This is what the
+    /// plan-readiness row compares against its two-second threshold.
+    public let readinessSeconds: Double
     /// World-transformed positions the published plan retains. Construction
     /// transforms each source vertex once, so this stays far below three times
     /// `triangleCount` whenever a vertex is shared between triangles.
@@ -16,9 +25,14 @@ public struct ResponsivenessIterationSample: Equatable, Sendable, Codable {
     /// Derived bytes the published plan retains, as charged against
     /// `MeshSourcePresentationPlanLimits` during construction.
     public let retainedByteCount: Int
-    /// Time spent reproducing the Canvas closure's per-triangle work.
+    /// Time spent reproducing the Canvas draw pass, which projects each
+    /// retained position once and accumulates every triangle into one path per
+    /// visual state.
     public let drawWorkSeconds: Double
-    /// The total uninterruptible MainActor interval one scene change causes.
+    /// The total `MainActor` interval one scene change causes, as the sum of
+    /// the publication and the draw pass. These are two separate `MainActor`
+    /// turns, not one uninterruptible interval, because construction now
+    /// suspends between them.
     public let mainActorBlockedSeconds: Double
     public let triangleCount: Int
     public let projectedPointCount: Int
@@ -107,8 +121,16 @@ public struct ResponsivenessBaselineReport: Equatable, Sendable, Codable {
         rows.allSatisfy { $0.verdict == .accepts }
     }
 
-    public var worstPreparationSeconds: Double {
-        samples.map(\.preparationSeconds).max() ?? 0.0
+    public var worstConstructionSeconds: Double {
+        samples.map(\.constructionSeconds).max() ?? 0.0
+    }
+
+    public var worstPublicationSeconds: Double {
+        samples.map(\.publicationSeconds).max() ?? 0.0
+    }
+
+    public var worstReadinessSeconds: Double {
+        samples.map(\.readinessSeconds).max() ?? 0.0
     }
 
     public var worstDrawWorkSeconds: Double {

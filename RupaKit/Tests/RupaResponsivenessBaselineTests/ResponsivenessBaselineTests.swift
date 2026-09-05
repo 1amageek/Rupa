@@ -6,9 +6,10 @@ import Testing
 /// Verifies the contracts the module design owns. The measured durations are
 /// host dependent and are therefore never asserted; what is asserted is that
 /// the fixture is deterministic, that the plan admits the whole fixture, that
-/// publication is the single construction that transforms each source vertex
-/// once, and that a measure the implementation cannot establish is reported as
-/// `notMeasured` with a reason.
+/// construction is charged to readiness rather than to `MainActor`, that the
+/// draw pass charges one fill and one stroke per visual-state batch, and that a
+/// measure this process cannot observe is reported as `notMeasured` with a
+/// reason.
 @Suite("Responsiveness baseline contracts")
 struct ResponsivenessBaselineTests {
     /// A fixture small enough to measure inside a test while exercising the
@@ -75,16 +76,31 @@ struct ResponsivenessBaselineTests {
         #expect(report.planTriangleCount > 0)
     }
 
-    @Test("Publication is one construction that transforms each source vertex once")
+    @Test("Construction is charged to readiness and never to MainActor")
     @MainActor
-    func publicationIsASingleTransformingPass() async throws {
+    func constructionIsChargedToReadinessAndNotToMainActor() async throws {
         let report = try await Self.makeReport(iterationCount: 2)
         #expect(report.samples.count == 2)
         for sample in report.samples {
-            #expect(sample.preparationSeconds > 0.0)
-            // A second traversal would be measured inside publication, so the
-            // reported interval can only be the construction itself.
-            #expect(sample.preparationSeconds <= sample.mainActorBlockedSeconds)
+            #expect(sample.constructionSeconds > 0.0)
+            // The blocked interval is exactly publication plus draw. A run that
+            // charged construction to MainActor could not satisfy this, so the
+            // assertion fails the moment construction moves back on-actor.
+            #expect(
+                sample.mainActorBlockedSeconds
+                    == sample.publicationSeconds + sample.drawWorkSeconds
+            )
+            // Readiness spans the detached construction, so it can never be the
+            // shorter of the two.
+            #expect(sample.readinessSeconds >= sample.constructionSeconds)
+        }
+    }
+
+    @Test("Publication carries one plan that transformed each source vertex once")
+    @MainActor
+    func publicationIsASingleTransformingPass() async throws {
+        let report = try await Self.makeReport(iterationCount: 2)
+        for sample in report.samples {
             // The fixture shares vertices between triangles, so transforming
             // each source vertex once retains fewer positions than a plan that
             // transforms every triangle corner would.
@@ -94,7 +110,7 @@ struct ResponsivenessBaselineTests {
         }
     }
 
-    @Test("The Canvas row states the submissions it excludes")
+    @Test("The Canvas row states the submissions it excludes and charges them per batch")
     @MainActor
     func honestExclusion() async throws {
         let report = try await Self.makeReport(iterationCount: 2)
@@ -102,8 +118,15 @@ struct ResponsivenessBaselineTests {
         #expect(canvas.detail.contains("fill"))
         #expect(canvas.detail.contains("stroke"))
         for sample in report.samples {
-            #expect(sample.fillCount == sample.triangleCount)
-            #expect(sample.strokeCount == sample.triangleCount)
+            #expect(sample.fillCount == sample.pathCount)
+            #expect(sample.strokeCount == sample.pathCount)
+            // The fixture carries no selection or hover, so every occurrence
+            // accumulates into the one normal batch. A pass that reverted to one
+            // path per triangle would report the triangle count here.
+            #expect(sample.pathCount == 1)
+            #expect(sample.pathCount < sample.triangleCount)
+            // Each retained position is projected once, not once per corner.
+            #expect(sample.projectedPointCount == sample.positionCount)
         }
     }
 
@@ -133,14 +156,19 @@ struct ResponsivenessBaselineTests {
         #expect(canvas.verdict != .accepts)
     }
 
-    @Test("The rows the table defines over one publication are decided by any run")
+    @Test("A measure this process cannot observe is reported as not measured")
     @MainActor
-    func singleRunRowsAreDecided() async throws {
+    func unobservedMeasuresAreNotMeasured() async throws {
         let report = try await Self.makeReport(iterationCount: 2)
-        for row in [ResponsivenessAcceptanceRow.mainActorStatePublication, .cancellation] {
-            let result = try #require(report.rows.first { $0.row == row })
-            #expect(result.verdict != .notMeasured)
-        }
+        let cancellation = try #require(report.rows.first { $0.row == .cancellation })
+        // Reporting the preparation interval here would let a run that cancels
+        // nothing accept the row.
+        #expect(cancellation.verdict == .notMeasured)
+        #expect(cancellation.detail.contains("No cancellation was requested"))
+        let publication = try #require(
+            report.rows.first { $0.row == .mainActorStatePublication }
+        )
+        #expect(publication.detail.contains("MainActor"))
     }
 
     @Test("A lower-bound row never accepts")
@@ -148,6 +176,7 @@ struct ResponsivenessBaselineTests {
     func lowerBoundRowsNeverAccept() async throws {
         let report = try await Self.makeReport(iterationCount: 2)
         let lowerBoundRows: [ResponsivenessAcceptanceRow] = [
+            .mainActorStatePublication,
             .canvasConsumption,
             .planRetainedBytes,
             .planWorkingBytes,

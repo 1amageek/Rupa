@@ -2,11 +2,9 @@ import RupaCore
 import RupaCoreTypes
 
 struct MeshSourcePresentationInteractionStateResolver {
-    enum State: Equatable {
-        case normal
-        case hovered
-        case selected
-    }
+    /// The resolver names the state it produces; the batch key itself is the
+    /// module's public `MeshSourcePresentationVisualState`.
+    typealias State = MeshSourcePresentationVisualState
 
     let sceneNodeIDByOccurrenceID: [SceneOccurrenceID: SceneNodeID]
     let selectedSceneNodeIDs: Set<SceneNodeID>

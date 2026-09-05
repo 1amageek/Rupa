@@ -93,34 +93,35 @@ public struct ResponsivenessBaselineRunner {
         // initialized runtime state are not attributed to a measured iteration.
         var planTriangleCount = 0
         for _ in 0..<configuration.warmupCount {
-            let plan = try preparePlan(scene: fixture.scene)
-            planTriangleCount = plan.triangleCount
-            _ = try measureDrawWork(plan: plan, layout: layout)
+            // The warm-up mirrors the measured shape, detached construction
+            // included, so first-touch faults land where the measured
+            // iterations will pay them rather than in a different context.
+            let preparation = try await measurePreparation(scene: fixture.scene)
+            planTriangleCount = preparation.plan.triangleCount
+            _ = try measureDrawWork(plan: preparation.plan, layout: layout)
         }
 
         var samples: [ResponsivenessIterationSample] = []
         samples.reserveCapacity(configuration.iterationCount)
         for index in 0..<configuration.iterationCount {
-            let clock = ContinuousClock()
-            // Publication is exactly one construction. Construction validates
-            // every range, transform, and index while it transforms each source
-            // vertex once, so the cache publishes the result without a second
-            // traversal to measure.
-            let constructionStart = clock.now
-            let plan = try MeshSourcePresentationRenderPlan(scene: fixture.scene)
-            let constructionEnd = clock.now
+            // Construction runs off `MainActor` and publication is the state
+            // assignment that follows it, so the two are timed separately and
+            // only the publication is charged to a frame.
+            let preparation = try await measurePreparation(scene: fixture.scene)
+            let plan = preparation.plan
             let draw = try measureDrawWork(plan: plan, layout: layout)
 
-            let preparation = seconds(constructionStart.duration(to: constructionEnd))
             planTriangleCount = plan.triangleCount
             samples.append(
                 ResponsivenessIterationSample(
                     index: index,
-                    preparationSeconds: preparation,
+                    constructionSeconds: preparation.constructionSeconds,
+                    publicationSeconds: preparation.publicationSeconds,
+                    readinessSeconds: preparation.readinessSeconds,
                     positionCount: plan.positionCount,
                     retainedByteCount: plan.retainedByteCount,
                     drawWorkSeconds: draw.seconds,
-                    mainActorBlockedSeconds: preparation + draw.seconds,
+                    mainActorBlockedSeconds: preparation.publicationSeconds + draw.seconds,
                     triangleCount: plan.triangleCount,
                     projectedPointCount: draw.projectedPointCount,
                     pathCount: draw.pathCount,
@@ -156,10 +157,74 @@ public struct ResponsivenessBaselineRunner {
 
     // MARK: - Measurement
 
-    private func preparePlan(
+    private struct PreparationMeasurement {
+        var plan: MeshSourcePresentationRenderPlan
+        var constructionSeconds: Double
+        var publicationSeconds: Double
+        var readinessSeconds: Double
+    }
+
+    /// Holds one published plan so the timed assignment stores the same enum
+    /// payload the production cache stores, and so the store stays observable
+    /// to the read that follows it.
+    @MainActor
+    private final class PublicationTarget {
+        enum State {
+            case idle
+            case ready(MeshSourcePresentationRenderPlan)
+        }
+
+        var state: State = .idle
+    }
+
+    /// Reproduces the production preparation shape: the cache starts a detached
+    /// task that constructs the plan off `MainActor`, then publishes the
+    /// completed plan with one `MainActor` state assignment.
+    ///
+    /// Construction is timed inside the detached closure, so task scheduling is
+    /// not charged to it. Readiness spans the request through the publication,
+    /// so that scheduling is charged somewhere rather than nowhere. The
+    /// publication measured here is a plain stored-property assignment; the
+    /// production cache assigns an `@Observable` property inside a live
+    /// observation scope, whose invalidation this process cannot drive, so the
+    /// publication figure is a lower bound of the production interval.
+    private func measurePreparation(
         scene: UniversalViewportScene
-    ) throws -> MeshSourcePresentationRenderPlan {
-        try MeshSourcePresentationRenderPlan(scene: scene)
+    ) async throws -> PreparationMeasurement {
+        let clock = ContinuousClock()
+        let requestStart = clock.now
+        let construction = Task.detached(priority: .userInitiated) {
+            let start = clock.now
+            let plan = try MeshSourcePresentationRenderPlan(scene: scene)
+            return (plan: plan, duration: start.duration(to: clock.now))
+        }
+        let constructed: (plan: MeshSourcePresentationRenderPlan, duration: Duration)
+        do {
+            constructed = try await construction.value
+        } catch {
+            throw ResponsivenessBaselineError(
+                code: .planPreparationFailed,
+                message: "Detached plan construction failed: \(error)"
+            )
+        }
+
+        let target = PublicationTarget()
+        let publicationStart = clock.now
+        target.state = .ready(constructed.plan)
+        let publicationEnd = clock.now
+        guard case let .ready(published) = target.state else {
+            throw ResponsivenessBaselineError(
+                code: .planPreparationFailed,
+                message: "The published state did not hold the constructed plan."
+            )
+        }
+
+        return PreparationMeasurement(
+            plan: published,
+            constructionSeconds: seconds(constructed.duration),
+            publicationSeconds: seconds(publicationStart.duration(to: publicationEnd)),
+            readinessSeconds: seconds(requestStart.duration(to: publicationEnd))
+        )
     }
 
     private struct DrawWorkMeasurement {
@@ -170,7 +235,15 @@ public struct ResponsivenessBaselineRunner {
         var strokeCount: Int
     }
 
-    /// Reproduces the Canvas closure's per-triangle work.
+    /// Reproduces the Canvas draw pass.
+    ///
+    /// The pass walks the plan one occurrence at a time, projects each retained
+    /// position exactly once, and accumulates every triangle into one path per
+    /// visual state, so it builds one path and charges one fill and one stroke
+    /// per non-empty batch instead of per triangle. It drives the module's own
+    /// `ViewportPresentationBatchAccumulator` rather than a copy of it, because
+    /// a copy would stop bounding the production interval the moment the two
+    /// diverged.
     ///
     /// `GraphicsContext` exists only inside a live `Canvas`, so the fill and
     /// stroke submissions are counted rather than issued. The reported duration
@@ -179,49 +252,56 @@ public struct ResponsivenessBaselineRunner {
         plan: MeshSourcePresentationRenderPlan,
         layout: ViewportLayout
     ) throws -> DrawWorkMeasurement {
+        var accumulator = ViewportPresentationBatchAccumulator()
         var projectedPointCount = 0
+        // Reused across occurrences and triangles so the pass allocates a
+        // bounded number of buffers rather than one per polygon.
+        var projectedPositions: [CGPoint] = []
+        var polygonPoints: [CGPoint] = []
+        polygonPoints.reserveCapacity(3)
+        let clock = ContinuousClock()
+        let start = clock.now
+        plan.forEachOccurrence { occurrence in
+            // The production pass resolves interaction state once per
+            // occurrence. This fixture carries no selection or hover, so every
+            // occurrence accumulates into the normal batch.
+            projectedPositions.removeAll(keepingCapacity: true)
+            projectedPositions.reserveCapacity(occurrence.positions.count)
+            for position in occurrence.positions {
+                projectedPositions.append(
+                    layout.project(Point3D(x: position.x, y: position.y, z: position.z))
+                )
+            }
+            projectedPointCount += occurrence.positions.count
+            for index in 0..<occurrence.triangleCount {
+                let indices = occurrence.positionIndices(at: index)
+                polygonPoints.removeAll(keepingCapacity: true)
+                polygonPoints.append(projectedPositions[indices.first])
+                polygonPoints.append(projectedPositions[indices.second])
+                polygonPoints.append(projectedPositions[indices.third])
+                accumulator.append(polygonPoints, state: .normal)
+            }
+        }
+
         var pathCount = 0
         var fillCount = 0
         var strokeCount = 0
         var boundsChecksum = 0.0
-        let clock = ContinuousClock()
-        let start = clock.now
-        try MeshSourcePresentationRenderer().render(plan: plan) { triangle in
-            let first = Point3D(
-                x: triangle.firstPosition.x,
-                y: triangle.firstPosition.y,
-                z: triangle.firstPosition.z
-            )
-            let second = Point3D(
-                x: triangle.secondPosition.x,
-                y: triangle.secondPosition.y,
-                z: triangle.secondPosition.z
-            )
-            let third = Point3D(
-                x: triangle.thirdPosition.x,
-                y: triangle.thirdPosition.y,
-                z: triangle.thirdPosition.z
-            )
-            var path = Path()
-            path.move(to: layout.project(first))
-            path.addLine(to: layout.project(second))
-            path.addLine(to: layout.project(third))
-            path.closeSubpath()
-            projectedPointCount += 3
+        accumulator.forEachBatch { _, path in
             pathCount += 1
-            // The production closure submits one fill and one stroke per
-            // triangle. Both are counted here.
+            // The production pass submits one fill and one stroke per non-empty
+            // batch. Both are counted here.
             fillCount += 1
             strokeCount += 1
-            // Consuming the path keeps the construction observable so it is not
+            // Consuming the path keeps its construction observable so it is not
             // eliminated as dead work.
             boundsChecksum += path.boundingRect.width
         }
         let end = clock.now
-        guard boundsChecksum.isFinite else {
+        guard pathCount > 0, boundsChecksum.isFinite else {
             throw ResponsivenessBaselineError(
                 code: .planConsumptionFailed,
-                message: "Projected triangle bounds were not finite."
+                message: "The accumulated presentation batches were empty or not finite."
             )
         }
         return DrawWorkMeasurement(
@@ -241,7 +321,10 @@ public struct ResponsivenessBaselineRunner {
             intervalSeconds: configuration.footprintSamplingIntervalSeconds
         )
         sampler.start()
-        let plan = try preparePlan(scene: scene)
+        // The footprint pass prepares through the same detached path the timed
+        // iterations use, so the peak the sampler observes is the peak of the
+        // allocation production actually performs. Its timings are discarded.
+        let plan = try await measurePreparation(scene: scene).plan
         await sampler.stop()
         let peak = try sampler.peakBytes()
         let retained = try ResponsivenessFootprintProbe.physicalFootprintBytes()
@@ -262,7 +345,8 @@ public struct ResponsivenessBaselineRunner {
         footprint: ResponsivenessFootprintSample
     ) -> [ResponsivenessRowResult] {
         let frameInterval = configuration.environment.frameIntervalSeconds
-        let worstPreparation = samples.map(\.preparationSeconds).max() ?? 0.0
+        let worstPublication = samples.map(\.publicationSeconds).max() ?? 0.0
+        let worstReadiness = samples.map(\.readinessSeconds).max() ?? 0.0
         let worstDraw = samples.map(\.drawWorkSeconds).max() ?? 0.0
         let byteCeiling = configuration.environment.planByteCeiling
         // The Canvas consumption and plan readiness rows are the two the
@@ -280,18 +364,33 @@ public struct ResponsivenessBaselineRunner {
 
         var rows: [ResponsivenessRowResult] = []
 
+        let publicationRejects = worstPublication > frameInterval / 2.0
         rows.append(
             ResponsivenessRowResult(
                 row: .mainActorStatePublication,
-                verdict: worstPreparation > frameInterval / 2.0 ? .rejects : .accepts,
-                measured: Self.milliseconds(worstPreparation),
+                verdict: publicationRejects ? .rejects : .notMeasured,
+                measured: Self.milliseconds(worstPublication),
                 threshold: Self.milliseconds(frameInterval / 2.0),
-                detail: """
-                    Worst of \(samples.count) measured iterations. Publication is the \
-                    single synchronous plan construction the cache performs before \
-                    it returns a result. The row is defined over one uninterrupted \
-                    publication, so a single measured iteration decides it.
-                    """
+                detail: publicationRejects
+                    ? """
+                        Worst of \(samples.count) measured iterations. Publication is \
+                        the state assignment that stores one already-constructed plan; \
+                        construction itself ran off MainActor and is reported \
+                        separately. The measured interval excludes the observation \
+                        invalidation a live SwiftUI scope adds, so it is a lower bound \
+                        and the row rejects on the lower bound alone.
+                        """
+                    : """
+                        Worst of \(samples.count) measured iterations, against a \
+                        construction interval of \
+                        \(Self.milliseconds(samples.map(\.constructionSeconds).max() ?? 0.0)) \
+                        that no longer runs on MainActor. The measured interval \
+                        excludes the observation invalidation a live SwiftUI scope \
+                        adds, because no observation scope exists in this process. A \
+                        lower bound below the threshold cannot establish acceptance; \
+                        the signed-application PresentationPlanPublication signpost \
+                        owns this row.
+                        """
             )
         )
 
@@ -323,15 +422,17 @@ public struct ResponsivenessBaselineRunner {
             ResponsivenessRowResult(
                 row: .planReadiness,
                 verdict: Self.verdict(
-                    exceeds: worstPreparation > 2.0,
+                    exceeds: worstReadiness > 2.0,
                     hasFullRunSeries: hasFullRunSeries
                 ),
-                measured: Self.milliseconds(worstPreparation),
+                measured: Self.milliseconds(worstReadiness),
                 threshold: Self.milliseconds(2.0),
                 detail: """
-                    Readiness is measured from the first request for a plan to its \
-                    availability. The production cache prepares synchronously, so \
-                    readiness equals the preparation interval.\(seriesNote)
+                    Readiness is measured from the request for a plan to its \
+                    publication, spanning the detached construction and the \
+                    scheduling around it. Unlike the two MainActor intervals it is \
+                    a whole measured span rather than a lower bound of one, so this \
+                    row can be established here.\(seriesNote)
                     """
             )
         )
@@ -340,15 +441,16 @@ public struct ResponsivenessBaselineRunner {
         rows.append(
             ResponsivenessRowResult(
                 row: .cancellation,
-                verdict: worstPreparation > cancellationThreshold ? .rejects : .accepts,
-                measured: Self.milliseconds(worstPreparation),
+                verdict: .notMeasured,
+                measured: "not measured",
                 threshold: Self.milliseconds(cancellationThreshold),
                 detail: """
-                    The production preparation is a synchronous MainActor call with no \
-                    cancellation point, so the earliest a cancellation request can take \
-                    effect is when that call returns. The measured value is therefore \
-                    the preparation interval itself, not a separately observed \
-                    cancellation latency.
+                    No cancellation was requested and no cancellation latency was \
+                    observed. Construction now runs in a cancellable detached task, so \
+                    the latency is a property of that task rather than of the \
+                    preparation interval, and reporting the preparation interval in its \
+                    place would let a run that cancels nothing accept. A dedicated \
+                    cancellation experiment owns this row.
                     """
             )
         )

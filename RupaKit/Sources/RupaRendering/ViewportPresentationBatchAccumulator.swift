@@ -15,8 +15,10 @@ import SwiftUI
 /// it, which would punch holes wherever a back face sits under a front face.
 /// Each polygon is therefore appended with a positive screen winding, so every
 /// subpath contributes the same sign and one fill covers their union.
-struct ViewportPresentationBatchAccumulator {
-    typealias State = MeshSourcePresentationInteractionStateResolver.State
+public struct ViewportPresentationBatchAccumulator {
+    public typealias State = MeshSourcePresentationVisualState
+
+    public init() {}
 
     private var normalPath = Path()
     private var hoveredPath = Path()
@@ -25,7 +27,7 @@ struct ViewportPresentationBatchAccumulator {
     /// Appends one convex screen polygon of three or four points. Fewer than
     /// three points bound no area and are dropped rather than drawn as a
     /// degenerate subpath.
-    mutating func append(_ points: [CGPoint], state: State) {
+    public mutating func append(_ points: [CGPoint], state: State) {
         guard points.count >= 3 else {
             return
         }
@@ -48,7 +50,7 @@ struct ViewportPresentationBatchAccumulator {
 
     /// Visits every non-empty batch in draw order, so a selected surface is
     /// drawn over the hovered and normal surfaces it overlaps.
-    func forEachBatch(_ visit: (State, Path) -> Void) {
+    public func forEachBatch(_ visit: (State, Path) -> Void) {
         if normalPath.isEmpty == false {
             visit(.normal, normalPath)
         }

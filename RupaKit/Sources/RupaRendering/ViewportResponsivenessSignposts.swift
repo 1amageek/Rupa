@@ -5,14 +5,19 @@ import OSLog
 /// against in a signed build.
 ///
 /// The table charges two `MainActor` intervals to a frame: the presentation
-/// plan publication the view body performs, and the Canvas consumption SwiftUI
-/// drives. Both are emitted under one subsystem and category so a single
-/// `xctrace` or Instruments filter selects them together.
+/// plan publication the cache performs when a completed plan reaches its
+/// observable state, and the Canvas consumption SwiftUI drives. Plan
+/// construction is not one of them, because it runs off `MainActor`. Both are
+/// emitted under one subsystem and category so a single `xctrace` or
+/// Instruments filter selects them together.
 ///
-/// The offline harness in `RupaResponsivenessBaseline` measures only the
-/// presentation portion of a Canvas pass, so its Canvas figure is a lower bound
-/// of the interval recorded here. A harness rejection therefore stays valid for
-/// the application, while a harness acceptance does not.
+/// The offline harness in `RupaResponsivenessBaseline` measures neither
+/// interval as the application pays it: its publication figure excludes the
+/// observation invalidation a live SwiftUI scope adds, and its Canvas figure
+/// excludes the fill and stroke submissions a live `GraphicsContext` performs.
+/// Both are therefore lower bounds of the intervals recorded here. A harness
+/// rejection stays valid for the application, while a harness acceptance does
+/// not.
 enum ViewportResponsivenessSignposts {
     /// The subsystem an Instruments filter selects.
     static let subsystem = "RupaRendering"
